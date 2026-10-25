@@ -514,3 +514,26 @@ summary:focus-visible {
   width: 14px;
   height: 16px;
 }
+
+.preset-library {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.preset-library li {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.preset-library h3 {
+  margin: 0;
+}
+.preset-library a {
+  display: inline-block;
+  padding: 0.75rem 0;
+  text-decoration: underline;
+}
+input[type='file'] {
+  max-width: 100%;
+}

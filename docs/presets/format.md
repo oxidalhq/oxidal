@@ -1,6 +1,6 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.2. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. No Oxidal preset importer, exporter, stripping operation or sync transport is implemented by this document. Normative MUST/MUST NOT requirements describe the intended implementation.
+**Status:** draft proposal, revision 0.2. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). It does not yet implement this `.oxpreset` bundle importer, authoring, exporter, stripping operation or sync transport. Normative MUST/MUST NOT requirements describe the intended implementation.
 
 ## Purpose and choice
 

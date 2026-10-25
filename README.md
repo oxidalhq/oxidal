@@ -1,14 +1,14 @@
 # Oxidal
 
-Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation and shared web/MIDI control state; it does not process live guitar audio. Owned NAM Linear/LSTM inference is tested separately; WaveNet/A2 and native audio hosting remain unimplemented.
+Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation, shared web/MIDI control state and an immutable native preset library; it does not process live guitar audio. Owned NAM Linear/LSTM inference is tested separately; WaveNet/A2 and native audio hosting remain unimplemented.
 
-| Path        | Content                                                               |
-| ----------- | --------------------------------------------------------------------- |
-| `crates/`   | Graph validation, control state, HTTP/SSE API and owned NAM inference |
-| `apps/web/` | React/TypeScript interface and browser integration tests              |
-| `os/`       | Pinned Trixie base manifest and safe provisioning recipe              |
-| `scripts/`  | Reproducible development, verification and packaging commands         |
-| `docs/`     | Product architecture and contributor documentation                    |
+| Path        | Content                                                                                      |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| `crates/`   | Graph validation, control state, HTTP/SSE API, native preset storage and owned NAM inference |
+| `apps/web/` | React/TypeScript interface and browser integration tests                                     |
+| `os/`       | Pinned Trixie base manifest and safe provisioning recipe                                     |
+| `scripts/`  | Reproducible development, verification and packaging commands                                |
+| `docs/`     | Product architecture and contributor documentation                                           |
 
 ## Run the local PoC
 
@@ -38,7 +38,9 @@ Try this:
 5. Open the rig validation inspector, remove the nodes, and validate: the Rust service rejects it.
 6. Disconnect/reconnect the browser: editing disables, and the current daemon snapshot returns. MIDI simulation can run through the API with no browser open.
 
-MIDI mappings persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/imports, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
+Open **Library** to import a `.t3kpreset`, retain its original bytes and download it unchanged. This does not load or play the preset.
+
+MIDI mappings and imported originals persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/downloads, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
 
 ## Verify and prepare releases
 

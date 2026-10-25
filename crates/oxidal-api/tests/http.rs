@@ -17,6 +17,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
         shutdown: None,
         simulator,
         mapping_path: path.clone(),
+        preset_dir: path.with_extension("presets"),
         ui_dir: PathBuf::from("nonexistent"),
     })
     .unwrap();
@@ -145,6 +146,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
         shutdown: None,
         simulator: false,
         mapping_path: path.clone(),
+        preset_dir: path.with_extension("presets"),
         ui_dir: "none".into(),
     });
     assert!(app.is_ok());
@@ -165,6 +167,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
             shutdown: None,
             simulator: false,
             mapping_path: path.clone(),
+            preset_dir: path.with_extension("presets"),
             ui_dir: "none".into()
         })
         .is_err()
@@ -185,6 +188,10 @@ async fn native_binary_stops_with_an_open_event_subscription() {
     use std::time::{Duration, Instant};
     let mut child = Command::new(env!("CARGO_BIN_EXE_oxidald"))
         .env("OXIDAL_ADDR", "127.0.0.1:0")
+        .env(
+            "OXIDAL_PRESET_DIR",
+            std::env::temp_dir().join(format!("oxidal-shutdown-presets-{}", std::process::id())),
+        )
         .env(
             "OXIDAL_MAPPING_PATH",
             std::env::temp_dir().join(format!("oxidal-shutdown-{}.json", std::process::id())),
@@ -270,4 +277,241 @@ async fn concurrent_relative_commands_do_not_lose_updates() {
     assert!((final_state["parameters"][0]["value"].as_f64().unwrap() - 0.7).abs() < 1e-9);
     assert_eq!(final_state["request_id"], highest["request_id"]);
     task.abort();
+}
+
+const CURRENT_PRESET: &[u8] =
+    include_bytes!("../../oxidal-presets/tests/fixtures/authored-current.t3kpreset");
+const LEGACY_PRESET: &[u8] =
+    include_bytes!("../../oxidal-presets/tests/fixtures/authored-legacy.t3kpreset");
+
+#[tokio::test]
+async fn native_library_import_preserves_originals_and_never_mutates_the_rig() {
+    let (url, task, path) = start(true).await;
+    let client = reqwest::Client::new();
+    let before: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut ids = Vec::new();
+    for bytes in [CURRENT_PRESET, LEGACY_PRESET, CURRENT_PRESET] {
+        let response = client
+            .post(format!("{url}/presets"))
+            .header("content-type", "application/octet-stream")
+            .body(bytes)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 201);
+        let info: Value = response.json().await.unwrap();
+        assert_eq!(info["playback_available"], false);
+        let id = info["sha256"].as_str().unwrap();
+        let download = client
+            .get(format!("{url}/presets/{id}/original"))
+            .send()
+            .await
+            .unwrap();
+        assert!(
+            download.headers()["content-disposition"]
+                .to_str()
+                .unwrap()
+                .starts_with("attachment;")
+        );
+        assert_eq!(download.bytes().await.unwrap().as_ref(), bytes);
+        ids.push(id.to_owned());
+    }
+    assert_eq!(ids[0], ids[2]);
+    let library: Value = client
+        .get(format!("{url}/presets"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(library["presets"].as_array().unwrap().len(), 2);
+    for bytes in [
+        b"not a preset".to_vec(),
+        CURRENT_PRESET[..CURRENT_PRESET.len() - 1].to_vec(),
+        [CURRENT_PRESET, b"extra"].concat(),
+    ] {
+        assert_eq!(
+            client
+                .post(format!("{url}/presets"))
+                .body(bytes)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            422
+        );
+    }
+    assert_eq!(
+        client
+            .post(format!("{url}/presets"))
+            .header("origin", "https://evil.example")
+            .body(CURRENT_PRESET)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/presets"))
+            .body(vec![0u8; oxidal_presets::MAX_FILE_BYTES + 1])
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        413
+    );
+    assert_eq!(
+        client
+            .get(format!("{url}/presets/invalid/original"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    let after: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(before, after);
+    let after_library: Value = client
+        .get(format!("{url}/presets"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(library, after_library);
+    task.abort();
+    std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
+}
+
+#[tokio::test]
+async fn preset_disk_failure_leaves_control_and_import_status_honest() {
+    let (url, task, path) = start(false).await;
+    let root = path.with_extension("presets");
+    std::fs::write(&root, b"not a directory").unwrap();
+    let client = reqwest::Client::new();
+    let before: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .post(format!("{url}/presets"))
+            .body(CURRENT_PRESET)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        500
+    );
+    let after: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(before, after);
+    assert_eq!(std::fs::read(&root).unwrap(), b"not a directory");
+    task.abort();
+    std::fs::remove_file(root).unwrap();
+}
+
+#[tokio::test]
+async fn native_binary_recovers_the_same_original_after_restart() {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Child, Command, Stdio};
+    struct Daemon(Child);
+    impl Drop for Daemon {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-preset-restart-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let launch = || {
+        let mut child = Daemon(
+            Command::new(env!("CARGO_BIN_EXE_oxidald"))
+                .env("OXIDAL_ADDR", "127.0.0.1:0")
+                .env("OXIDAL_MAPPING_PATH", root.join("mappings.json"))
+                .env("OXIDAL_PRESET_DIR", root.join("presets"))
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut line = String::new();
+        BufReader::new(child.0.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let address = line
+            .split("http://")
+            .nth(1)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap();
+        (child, format!("http://{address}/api/v1"))
+    };
+    let client = reqwest::Client::new();
+    let (first, url) = launch();
+    let info: Value = client
+        .post(format!("{url}/presets"))
+        .body(CURRENT_PRESET)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    drop(first); // A real process termination, not a second in-memory store object.
+    let (second, url) = launch();
+    let library: Value = client
+        .get(format!("{url}/presets"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(library["presets"][0], info);
+    let id = info["sha256"].as_str().unwrap();
+    let bytes = client
+        .get(format!("{url}/presets/{id}/original"))
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    assert_eq!(bytes.as_ref(), CURRENT_PRESET);
+    drop(second);
+    std::fs::remove_dir_all(root).unwrap();
 }

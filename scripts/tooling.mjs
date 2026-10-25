@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { root, run, rustEnv } from './process.mjs';
 
 const cargo = (...args) =>
@@ -81,6 +81,7 @@ if (mode === 'bootstrap') {
     ...process.env,
     OXIDAL_SIMULATOR: '1',
     OXIDAL_MAPPING_PATH: mappingPath,
+    OXIDAL_PRESET_DIR: join(dirname(mappingPath), 'presets'),
     OXIDAL_UI_DIR: join(root, 'apps/web/dist'),
   };
   const children = [

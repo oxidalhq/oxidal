@@ -6,6 +6,6 @@ From the repository root, `pnpm dev` starts both service and Vite. Open http://1
 
 `src/generated/` is generated from Rust wire types. Use `pnpm contract:generate`; `pnpm contract:check` detects drift. Ajv validates incoming snapshots/capabilities at runtime. The generated TypeScript file is excluded from unused-export analysis because the schema intentionally includes contracts used by other clients; application source is still checked. Knip follows CSS so Tailwind imports are analyzed.
 
-Perform controls, routing, mapping, learn and feedback are functional control-plane features. The MIDI panel is explicitly a simulator. There is no physical MIDI port, provider login, model library, or live audio connection yet. Persisted mappings reload when opening Settings; audio/model selection and real hardware settings must not be simulated as working.
+Perform controls, routing, mapping, learn and feedback are functional control-plane features. The MIDI panel is explicitly a simulator. Library imports native preset originals through the real API and offers byte-exact downloads; playback/editing remain explicitly unavailable. There is no physical MIDI port, provider login, model download catalog, or live audio connection yet. Persisted mappings reload when opening Settings; audio/model selection and real hardware settings must not be simulated as working.
 
 Target-phone usability and deployment qualification remain pending. Automated axe checks complement keyboard/screenshot checks; they do not establish complete accessibility conformance.

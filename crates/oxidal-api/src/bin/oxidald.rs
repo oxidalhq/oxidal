@@ -15,6 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mapping_path: PathBuf::from(
             std::env::var("OXIDAL_MAPPING_PATH").unwrap_or_else(|_| ".local/mappings.json".into()),
         ),
+        preset_dir: PathBuf::from(
+            std::env::var("OXIDAL_PRESET_DIR").unwrap_or_else(|_| ".local/presets".into()),
+        ),
         ui_dir: PathBuf::from(
             std::env::var("OXIDAL_UI_DIR").unwrap_or_else(|_| "apps/web/dist".into()),
         ),

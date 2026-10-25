@@ -34,6 +34,7 @@ export type BlockKind = "input" | "nam" | "cabinet" | "delay" | "reverb" | "outp
  */
 export type MidiCurve = "linear" | "logarithmic";
 export type MidiMode = "absolute" | "relative_twos_complement";
+export type Framing = "legacy" | "current";
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -43,6 +44,8 @@ export interface Contract {
   capabilities: Capabilities;
   command: Command;
   error: ApiError;
+  library: Library;
+  preset: Inspection;
   rig: Rig;
   snapshot: Snapshot;
   validation: Validation;
@@ -114,6 +117,23 @@ export interface MidiInput {
 }
 export interface ApiError {
   error: string;
+}
+export interface Library {
+  presets: Inspection[];
+}
+/**
+ * Structural inspection only. Original bytes, not this summary, remain authoritative.
+ */
+export interface Inspection {
+  block_count: number;
+  embedded_bytes: number;
+  framing: Framing;
+  name: string;
+  parameter_count: number;
+  playback_available: boolean;
+  sha256: string;
+  size_bytes: number;
+  source_id?: string | null;
 }
 /**
  * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.

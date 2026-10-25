@@ -13,6 +13,12 @@
     "error": {
       "$ref": "#/$defs/ApiError"
     },
+    "library": {
+      "$ref": "#/$defs/Library"
+    },
+    "preset": {
+      "$ref": "#/$defs/Inspection"
+    },
     "rig": {
       "$ref": "#/$defs/Rig"
     },
@@ -29,7 +35,9 @@
     "rig",
     "validation",
     "capabilities",
-    "error"
+    "error",
+    "library",
+    "preset"
   ],
   "$defs": {
     "Action": {
@@ -256,6 +264,83 @@
       "required": [
         "from",
         "to"
+      ]
+    },
+    "Framing": {
+      "type": "string",
+      "enum": [
+        "legacy",
+        "current"
+      ]
+    },
+    "Inspection": {
+      "description": "Structural inspection only. Original bytes, not this summary, remain authoritative.",
+      "type": "object",
+      "properties": {
+        "block_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "embedded_bytes": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "framing": {
+          "$ref": "#/$defs/Framing"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parameter_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "playback_available": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "name",
+        "framing",
+        "size_bytes",
+        "parameter_count",
+        "block_count",
+        "embedded_bytes",
+        "playback_available"
+      ]
+    },
+    "Library": {
+      "type": "object",
+      "properties": {
+        "presets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Inspection"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "presets"
       ]
     },
     "MappingFile": {

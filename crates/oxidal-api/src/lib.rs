@@ -1,3 +1,4 @@
+mod presets;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State, rejection::JsonRejection},
@@ -44,6 +45,8 @@ pub struct Contract {
     pub validation: Validation,
     pub capabilities: Capabilities,
     pub error: ApiError,
+    pub library: oxidal_presets::Library,
+    pub preset: oxidal_presets::Inspection,
 }
 
 /// Local-only service settings. LAN access requires separate pairing/security design.
@@ -52,6 +55,7 @@ pub struct Contract {
 pub struct Config {
     pub simulator: bool,
     pub mapping_path: PathBuf,
+    pub preset_dir: PathBuf,
     pub ui_dir: PathBuf,
     pub shutdown: Option<watch::Receiver<bool>>,
 }
@@ -59,6 +63,7 @@ pub struct Config {
 #[derive(Debug)]
 struct Shared {
     control: Mutex<Control>,
+    presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
     config: Config,
 }
@@ -93,11 +98,21 @@ pub fn router(config: Config) -> Result<Router, String> {
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let shared = Arc::new(Shared {
         control: Mutex::new(control),
+        presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
+            config.preset_dir.clone(),
+        ))),
         events,
         config,
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route(
+            "/presets",
+            get(presets::list)
+                .post(presets::import)
+                .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
+        )
+        .route("/presets/{id}/original", get(presets::original))
         .route("/state", get(snapshot))
         .route("/commands", post(command))
         .route("/rig/validate", post(validate))

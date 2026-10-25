@@ -8,6 +8,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Library } from './Library';
 import {
   capabilities,
   parseSnapshot,
@@ -24,7 +25,7 @@ export default function App() {
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
-  const [view, setView] = useState<'rig' | 'settings'>('rig');
+  const [view, setView] = useState<'rig' | 'settings' | 'library'>('rig');
   const [error, setError] = useState('');
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
@@ -220,6 +221,9 @@ export default function App() {
           {connected ? 'Device connected' : 'Reconnecting…'}
         </div>
         <nav aria-label="Instrument navigation">
+          <Button variant="outline" onClick={() => setView('library')}>
+            Library
+          </Button>
           <Button
             variant="outline"
             onClick={() => (view === 'rig' ? showSettings() : setView('rig'))}
@@ -234,7 +238,11 @@ export default function App() {
           <div className="page-heading">
             <div>
               <span className="eyebrow">
-                {view === 'rig' ? 'Example rig / control preview' : 'Settings'}
+                {view === 'rig'
+                  ? 'Example rig / control preview'
+                  : view === 'library'
+                    ? 'Library'
+                    : 'Settings'}
               </span>
               <h1 data-testid="active-preset">
                 {view === 'rig'
@@ -245,7 +253,9 @@ export default function App() {
                       : state.preset === 'parallel'
                         ? 'Parallel rig'
                         : 'Serial rig'
-                  : 'Controls & MIDI'}
+                  : view === 'library'
+                    ? 'Preset library'
+                    : 'Controls & MIDI'}
               </h1>
             </div>
             {state && view === 'rig' && (
@@ -307,6 +317,8 @@ export default function App() {
           )}
           {!state ? (
             <p className="empty">Waiting for the local Rust service…</p>
+          ) : view === 'library' ? (
+            <Library connected={connected} />
           ) : view === 'rig' ? (
             <>
               <section className="panel chain-panel" aria-label="Signal chain">

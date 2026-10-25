@@ -67,3 +67,41 @@ export async function capabilities() {
     throw new Error('Incompatible device capabilities');
   return body;
 }
+
+export type Preset = Contract['preset'];
+const libraryValidator = ajv.compile<Contract['library']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Library',
+});
+const presetValidator = ajv.compile<Preset>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Inspection',
+});
+async function presetResponse(response: Response): Promise<unknown> {
+  const body: unknown = await response.json();
+  if (!response.ok)
+    throw new Error(
+      typeof body === 'object' && body !== null && 'error' in body
+        ? String(body.error)
+        : 'Preset operation failed',
+    );
+  return body;
+}
+export async function presetLibrary(): Promise<Preset[]> {
+  const body = await presetResponse(await fetch('/api/v1/presets'));
+  if (!libraryValidator(body)) throw new Error('Incompatible preset library');
+  return body.presets;
+}
+export async function importPreset(file: File): Promise<Preset> {
+  if (file.size > 32 * 1024 * 1024)
+    throw new Error('Preset exceeds the 32 MiB limit');
+  const body = await presetResponse(
+    await fetch('/api/v1/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    }),
+  );
+  if (!presetValidator(body)) throw new Error('Incompatible preset response');
+  return body;
+}

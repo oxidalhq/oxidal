@@ -1,16 +1,19 @@
 # Architecture and control contract
 
-The Rust workspace starts with four crates that have concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, and `oxidal-nam` owns bounded inference. Asset/catalog storage and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
+The Rust workspace has five crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, and `oxidal-presets` inspects and stores immutable native preset originals. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
-| Endpoint                    | Behavior                                                                                                               |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/health`        | Protocol/build version, audio unavailable, MIDI simulator enabled/disabled                                             |
-| `GET /api/v1/state`         | Authoritative session/revision snapshot, parameters/actions, rig, mappings, latest feedback                            |
-| `GET /api/v1/events`        | SSE `state` snapshots, including a fresh snapshot on reconnect; bounded watch channel coalesces intermediate revisions |
-| `POST /api/v1/commands`     | Typed command envelope: protocol, session, request ID, expected revision or null, action                               |
-| `POST /api/v1/rig/validate` | Bounded generic graph validation; does not instantiate a plugin or run sound                                           |
+| Endpoint                                | Behavior                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/health`                    | Protocol/build version, audio unavailable, MIDI simulator enabled/disabled                                             |
+| `GET /api/v1/state`                     | Authoritative session/revision snapshot, parameters/actions, rig, mappings, latest feedback                            |
+| `GET /api/v1/events`                    | SSE `state` snapshots, including a fresh snapshot on reconnect; bounded watch channel coalesces intermediate revisions |
+| `POST /api/v1/commands`                 | Typed command envelope: protocol, session, request ID, expected revision or null, action                               |
+| `GET /api/v1/presets`                   | List structurally inspected originals; does not assert playback compatibility                                          |
+| `POST /api/v1/presets`                  | Import raw native preset bytes, up to 32 MiB; deduplicate by SHA-256                                                   |
+| `GET /api/v1/presets/{sha256}/original` | Download the byte-exact original as an attachment                                                                      |
+| `POST /api/v1/rig/validate`             | Bounded generic graph validation; does not instantiate a plugin or run sound                                           |
 
 All commands require the current daemon session. Structural changes (routing, mappings, preset selection) require a matching revision; continuous changes are serialized and may omit it. Relative edits operate on current state. A daemon restart creates a new session, so a stale edit cannot accidentally match a reset revision. Browser controls render confirmed state and disable on disconnect. Failed commands do not change state. Routing application currently accepts the PoC block identities; generic validation does not imply arbitrary audio layouts are hosted.
 
@@ -24,4 +27,12 @@ Public package licensing and namespace checks are pending owner/release decision
 
 ## Preset interchange contract
 
-The [draft preset format](presets/format.md) defines a versioned JSON manifest, preserved native TONE3000 payloads and separate Oxidal/LV2 state. [Its JSON Schema](presets/manifest.schema.json) and examples are checked with `pnpm presets:check`. This is a draft design contract; native decoding, export/sync eligibility, conversion and audio fidelity are not implemented by the schema checks.
+The [draft preset format](presets/format.md) defines a versioned JSON manifest, preserved native TONE3000 payloads and separate Oxidal/LV2 state. [Its JSON Schema](presets/manifest.schema.json) and examples are checked with `pnpm presets:check`. This is a draft design contract; the runtime now provides bounded structural native inspection and immutable original storage, but `.oxpreset` authoring, export/sync eligibility, conversion and audio fidelity remain unimplemented.
+
+## Native original library
+
+`oxidal-presets` reads legacy `T3KB` and current `T3KH` JUCE ValueTree framing. It validates schema 1, header/body identity, unique sections/parameter/block IDs, finite numbers and bounded binary structure. It rejects trailing data and malformed/truncated lengths. Unknown native fields remain in the untouched original, not in a lossy reconstructed file. Successful inspection is **not** semantic qualification of unknown DSP settings or embedded models. `playback_available` is always false; import and download cannot mutate the active rig.
+
+Parsing and filesystem operations run on blocking workers behind a separate store mutex, never the control-state mutex or an audio callback. The store admits 32 MiB per file, 128 originals and 256 MiB total. Structural limits are 64 nesting levels, 65,536 nodes/values per tree and 1 MiB strings; identifiers have tighter limits. Files use full lowercase SHA-256 names, never upload names or user paths. Each read checks regular-file status, framing and content hash. Corrupt entries fail visibly rather than disappearing from the list. A private, daemon-owned storage directory is required; this is not a defense against another process concurrently altering that directory.
+
+A successful write syncs a temporary file and publishes it through a same-filesystem, no-clobber hard link. Reimporting identical bytes retains one original; failure does not overwrite an existing original. This has process-restart coverage, but directory sync/power-loss durability, multi-daemon writers, deletion and library migrations remain unqualified. Local filesystems must support hard links. Interrupted temporary files are excluded from listings. The service retains its loopback/origin restrictions; no provider credentials or cloud submission are involved.
