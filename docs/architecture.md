@@ -25,6 +25,18 @@ The service accepts loopback listeners and loopback browser origins only. It doe
 
 Public package licensing and namespace checks are pending owner/release decisions. Cargo packages are unpublished; third-party Rust licenses/advisories are checked without assigning a new license to the owner's code.
 
+## Owned control previews
+
+`Action::Edit` provides `begin`, `preview`, `commit` and `cancel` for the current PoC numeric controls. Begin requires the current session and revision, a fresh token and an editor owner ID. One target can be previewed at a time. Ownership IDs prevent accidental cross-client edits; they are not authentication and do not authorize LAN exposure. The token is not broadcast in snapshots. `Snapshot.edit` exposes the owner/target so other editors can disable conflicting controls.
+
+Preview/commit requests carry strictly increasing sequence numbers. A terminal commit sends the exact final value, independent of dropped/coalesced intermediate previews. The browser queue retains at most one in-flight request and one replacement preview. Cancellation waits behind in-flight work and restores only that target's baseline; other parameter changes survive. The daemon retains 32 terminal receipts: identical repeated commits and late cancels leave revision/state unchanged, while changed or stale terminal requests fail. Tokens must never be reused. No automatic retry/replay of failed edits occurs.
+
+Ordinary web writes to an owned target are rejected. MIDI mapped to that target supersedes the preview; routing/preset replacement also cancels it before applying the new state. Old commits/cancels cannot overwrite that new state. Unrelated controls remain available. Mapping changes retain their existing revision/persistence rules.
+
+A 30-second monotonic idle lease rolls back abandoned previews, refreshes MIDI feedback and publishes an SSE snapshot. The daemon checks expiration before commands and every 250 ms. Navigation requests cancellation; a lost tab/network cannot strand ownership indefinitely. A surviving editor retains its local draft after disconnect/expiry but requires explicit reopening rather than replay. Snapshot/status reads remain available during edits.
+
+This ports transaction policy into the shared control plane, **not native TONE3000 block DSP or opaque-state capture**. No editable imported preset or audio processing is implied. The future native adapter must bind these semantics to instance/rig identity and readiness, capture final state once, keep model-size changes staged, and qualify native failure/rollback. These are remaining integration gates, not behaviours supplied by this UI alone.
+
 ## Preset interchange contract
 
 The [draft preset format](presets/format.md) defines a versioned JSON manifest, preserved native TONE3000 payloads and separate Oxidal/LV2 state. [Its JSON Schema](presets/manifest.schema.json) and examples are checked with `pnpm presets:check`. This is a draft design contract; the runtime now provides bounded structural native inspection and immutable original storage, but `.oxpreset` authoring, export/sync eligibility, conversion and audio fidelity remain unimplemented.

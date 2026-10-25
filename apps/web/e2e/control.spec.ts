@@ -243,3 +243,113 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     'rig.bypass',
   );
 });
+
+test('owned previews cancel, commit exactly, and preserve independent client changes', async ({
+  page,
+  context,
+  request,
+}) => {
+  await page.goto('/');
+  const second = await context.newPage();
+  await second.goto('/');
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  await expect(
+    page.getByRole('group', { name: 'Preview NAM A level' }),
+  ).toBeVisible();
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('81');
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('81%');
+  await expect(
+    second.getByRole('slider', { name: 'NAM A level' }),
+  ).toBeDisabled();
+  await expect(
+    second.getByRole('button', { name: 'Edit Delay mix' }),
+  ).toBeDisabled();
+  await second
+    .getByRole('slider', { name: 'Delay mix', exact: true })
+    .fill('0.62');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('50%');
+  await expect(second.getByTestId('value-delay.mix')).toHaveText('62%');
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('73');
+  await page.getByRole('button', { name: 'Commit', exact: true }).click();
+  await expect(
+    page.getByRole('group', { name: 'Preview NAM A level' }),
+  ).toHaveCount(0);
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('73%');
+  await page.reload();
+  await expect(page.getByTestId('value-nam-a.level')).toHaveText('73%');
+  // Navigation cancels after any in-flight preview, rather than leaving its value behind.
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('90');
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('90%');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('73%');
+  const state = (await (await request.get('/api/v1/state')).json()) as {
+    edit: unknown;
+  };
+  expect(state.edit).toBeNull();
+});
+
+test('an abandoned browser preview rolls back; reconnect retains draft without replay', async ({
+  page,
+  context,
+  request,
+}) => {
+  test.setTimeout(50000);
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('91');
+  await expect(page.getByTestId('value-nam-a.level')).toHaveText('91%');
+  await context.setOffline(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(
+    page.getByRole('button', { name: 'Commit', exact: true }),
+  ).toBeDisabled();
+  await expect
+    .poll(
+      async () => {
+        const state = (await (await request.get('/api/v1/state')).json()) as {
+          edit: unknown;
+          parameters: { value: number }[];
+        };
+        return state.edit === null && state.parameters[0]?.value === 0.5;
+      },
+      { timeout: 35000, intervals: [500, 1000] },
+    )
+    .toBe(true);
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(page.getByTestId('value-nam-a.level')).toHaveText('50%');
+  await expect(
+    page.getByLabel('Draft NAM A level (%)', { exact: true }),
+  ).toHaveValue('91');
+  await expect(
+    page.getByRole('button', { name: 'Commit', exact: true }),
+  ).toBeDisabled();
+  await page.getByRole('button', { name: 'Close editor', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Edit NAM A level', exact: true }),
+  ).toBeEnabled();
+});

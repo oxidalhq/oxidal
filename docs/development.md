@@ -27,3 +27,7 @@ VS Code settings enable Markdown format-on-save and recommend `esbenp.prettier-v
 The committed native fixtures are tiny project-authored JUCE files without model weights. An optional, ignored-by-default Rust test qualifies all eight hash-pinned upstream factory files when separately available; see [fixture provenance and the repeatable command](../crates/oxidal-presets/tests/fixtures/README.md). Ordinary checks require neither those assets nor an upstream checkout. A skipped external-corpus test is not factory qualification; record its explicit run separately.
 
 `pnpm dev` and `pnpm preview` retain originals in `.local/presets`. Direct daemon launches can set `OXIDAL_PRESET_DIR`; the default is `.local/presets` relative to the working directory. Do not point tests at a user's library. These flows qualify storage and control behavior, not native preset editing/playback or physical audio.
+
+## Control-preview regression coverage
+
+The ordinary `pnpm check` suite exercises edit ownership, sequence conflicts, exact terminal values, bounded receipts, cancel/expiry rollback, MIDI/preset takeover and recovery after transport failure. Browser cases use two clients and the real daemon, and deliberately wait for the real 30-second lease on desktop and mobile emulation. They cover navigation cancellation, a disconnected preview, retained local draft without replay, and accessibility/overflow with the editor open. The lease tests add about one minute to the suite; no test-only timeout setting or separate test script is needed.

@@ -2,7 +2,7 @@
 
 Oxidal is a software monorepo containing Rust crates (`crates/`), a React/TypeScript web interface (`apps/web/`), OS recipes (`os/`), and shared tooling (`scripts/`). Product architecture is documented in `docs/architecture.md`; setup and commands are in README.md and `docs/development.md`.
 
-The daemon provides loopback HTTP/SSE control, rig validation, simulated MIDI synchronization, and immutable native preset import/list/download. Preset playback/editing remain unavailable. NAM Linear/LSTM inference has independent parity/allocation tests. Live audio, LV2 hosting, physical MIDI and WaveNet/A2 are not implemented.
+The daemon provides loopback HTTP/SSE control, rig validation, simulated MIDI synchronization, owned numeric preview/commit/cancel transactions, and immutable native preset import/list/download. Preset playback/editing remain unavailable. NAM Linear/LSTM inference has independent parity/allocation tests. Live audio, LV2 hosting, physical MIDI and WaveNet/A2 are not implemented.
 
 Commands from this repository root: `pnpm bootstrap`, `pnpm hooks:install`, `pnpm dev`, `pnpm preview`, `pnpm check`, `pnpm guardrails:prove`, `pnpm release:dry-run`. Check toolchain pins before running. Browser tests require free ports 3210 and 5173.
 

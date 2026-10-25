@@ -104,6 +104,20 @@ pub fn router(config: Config) -> Result<Router, String> {
         events,
         config,
     });
+    let weak = Arc::downgrade(&shared);
+    tokio::spawn(async move {
+        let mut timer = tokio::time::interval(std::time::Duration::from_millis(250));
+        loop {
+            timer.tick().await;
+            let Some(shared) = weak.upgrade() else {
+                break;
+            };
+            let mut control = shared.control.lock().await;
+            if let Some(state) = control.expire_edit(std::time::Instant::now()) {
+                shared.events.send_replace(state);
+            }
+        }
+    });
     let api = Router::new()
         .route("/health", get(health))
         .route(
@@ -196,6 +210,9 @@ async fn command(
     };
     let persist = matches!(command.action, Action::Mappings { .. });
     let mut control = shared.control.lock().await;
+    if let Some(state) = control.expire_edit(std::time::Instant::now()) {
+        shared.events.send_replace(state);
+    }
     let mut candidate = control.clone();
     match candidate.apply(command, shared.config.simulator) {
         Ok(state) => {
@@ -219,12 +236,15 @@ async fn command(
                     );
                 }
             }
+            let changed = control.snapshot().revision != state.revision;
             *control = candidate;
-            shared.events.send_replace(state.clone());
+            if changed {
+                shared.events.send_replace(state.clone());
+            }
             Json(state).into_response()
         }
         Err(e) => failure(
-            if e == "revision_conflict" || e == "session_conflict" {
+            if e == "revision_conflict" || e == "session_conflict" || e.starts_with("edit_") {
                 StatusCode::CONFLICT
             } else {
                 StatusCode::UNPROCESSABLE_ENTITY

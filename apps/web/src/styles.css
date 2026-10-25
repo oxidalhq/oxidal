@@ -537,3 +537,19 @@ summary:focus-visible {
 input[type='file'] {
   max-width: 100%;
 }
+
+.control-editor {
+  margin-top: 0.75rem;
+}
+.control-editor fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid #cecfc5;
+}
+.editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}

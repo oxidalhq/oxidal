@@ -1,3 +1,5 @@
+mod edit;
+pub use edit::{EDIT_LEASE, Edit, EditStatus};
 use oxidal_graph::Rig;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -99,6 +101,7 @@ pub enum Action {
     Routing { rig: Rig },
     Mappings { file: MappingFile },
     Midi { input: MidiInput },
+    Edit { edit: Edit },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -131,6 +134,7 @@ pub struct Snapshot {
     pub parameters: Vec<Parameter>,
     pub mappings: MappingFile,
     pub feedback: Vec<MidiFeedback>,
+    pub edit: Option<EditStatus>,
 }
 
 /// Serialized non-real-time control model. No networking or MIDI I/O runs in an audio callback.
@@ -139,6 +143,8 @@ pub struct Snapshot {
 pub struct Control {
     state: Snapshot,
     pickup: BTreeMap<String, (bool, Option<f64>)>,
+    active_edit: Option<edit::ActiveEdit>,
+    edit_receipts: std::collections::VecDeque<edit::Receipt>,
 }
 
 impl Default for Control {
@@ -212,8 +218,11 @@ impl Default for Control {
                     }],
                 },
                 feedback: vec![],
+                edit: None,
             },
             pickup: BTreeMap::new(),
+            active_edit: None,
+            edit_receipts: std::collections::VecDeque::new(),
         }
     }
 }
@@ -244,7 +253,11 @@ impl Control {
         }
         if matches!(
             command.action,
-            Action::Routing { .. } | Action::Mappings { .. }
+            Action::Routing { .. }
+                | Action::Mappings { .. }
+                | Action::Edit {
+                    edit: Edit::Begin { .. }
+                }
         ) && command.expected_revision.is_none()
         {
             return Err("revision_required".into());
@@ -257,11 +270,25 @@ impl Control {
         let mut candidate = self.clone();
         let mut origin = "web";
         match &command.action {
+            Action::Edit { edit } => {
+                if !candidate.edit(edit, std::time::Instant::now())? {
+                    return Ok(self.snapshot());
+                }
+            }
             Action::Set { target, value } => {
+                if candidate.editing(target) {
+                    return Err("edit_busy".into());
+                }
+                if target == "rig.preset" {
+                    candidate.cancel_edit()?;
+                }
                 candidate.set(target, *value)?;
                 candidate.reset_pickup(target);
             }
             Action::Adjust { target, delta } => {
+                if candidate.editing(target) {
+                    return Err("edit_busy".into());
+                }
                 if !delta.is_finite() {
                     return Err("invalid_value".into());
                 }
@@ -284,6 +311,7 @@ impl Control {
                 {
                     return Err("unsupported_poc_layout".into());
                 }
+                candidate.cancel_edit()?;
                 candidate.state.rig = rig.clone();
                 candidate.state.preset = "custom".into();
                 // Controls remain authoritative when changing only topology.
@@ -313,17 +341,20 @@ impl Control {
             .ok_or("revision_exhausted")?;
         candidate.state.origin = origin.into();
         candidate.state.request_id = command.request_id;
-        // At most 32 latest outputs, coalesced by mapping. No unbounded event backlog.
-        candidate.state.feedback = candidate
+        candidate.feedback();
+        let result = candidate.snapshot();
+        *self = candidate;
+        Ok(result)
+    }
+    fn feedback(&mut self) {
+        self.state.feedback = self
             .state
             .mappings
             .mappings
             .iter()
-            .filter(|m| {
-                m.feedback && (m.target != "rig.preset" || candidate.state.preset != "custom")
-            })
+            .filter(|m| m.feedback && (m.target != "rig.preset" || self.state.preset != "custom"))
             .map(|m| {
-                let value = candidate.value(&m.target).expect("validated mapping");
+                let value = self.value(&m.target).expect("validated mapping");
                 let normalized = if m.curve == MidiCurve::Logarithmic {
                     (value.max(m.min) / m.min).ln() / (m.max / m.min).ln()
                 } else {
@@ -338,9 +369,6 @@ impl Control {
                 }
             })
             .collect();
-        let result = candidate.snapshot();
-        *self = candidate;
-        Ok(result)
     }
     fn parameter(&self, id: &str) -> Result<&Parameter, String> {
         self.state
@@ -461,6 +489,10 @@ impl Control {
         else {
             return Ok(false);
         };
+        // Physical control takes priority over a browser preview, without stale rollback.
+        if self.editing(&mapping.target) || mapping.target == "rig.preset" {
+            self.cancel_edit()?;
+        }
         let current = self.value(&mapping.target)?;
         match mapping.mode {
             MidiMode::Absolute => {

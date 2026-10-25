@@ -137,6 +137,23 @@
             "type",
             "input"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edit": {
+              "$ref": "#/$defs/Edit"
+            },
+            "type": {
+              "type": "string",
+              "const": "edit"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "edit"
+          ]
         }
       ]
     },
@@ -264,6 +281,136 @@
       "required": [
         "from",
         "to"
+      ]
+    },
+    "Edit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "begin"
+            },
+            "target": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "preview"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "commit"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "cancel"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token"
+          ]
+        }
+      ]
+    },
+    "EditStatus": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "target"
       ]
     },
     "Framing": {
@@ -621,6 +768,16 @@
         },
         "bypassed": {
           "type": "boolean"
+        },
+        "edit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EditStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "feedback": {
           "type": "array",

@@ -9,6 +9,7 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { Library } from './Library';
+import { ControlEditor } from './ControlEditor';
 import {
   capabilities,
   parseSnapshot,
@@ -405,7 +406,7 @@ export default function App() {
                 </div>
                 <div className="parameters">
                   {state.parameters.map((parameter) => (
-                    <label className="parameter" key={parameter.id}>
+                    <div className="parameter" key={parameter.id}>
                       <span>
                         {parameter.label}
                         <output data-testid={`value-${parameter.id}`}>
@@ -419,7 +420,9 @@ export default function App() {
                         max={parameter.max}
                         step={parameter.step}
                         value={parameter.value}
-                        disabled={!connected}
+                        disabled={
+                          !connected || state.edit?.target === parameter.id
+                        }
                         onChange={(event) =>
                           void run({
                             type: 'set',
@@ -428,7 +431,13 @@ export default function App() {
                           })
                         }
                       />
-                    </label>
+                      <ControlEditor
+                        parameter={parameter}
+                        state={state}
+                        connected={connected}
+                        accept={accept}
+                      />
+                    </div>
                   ))}
                 </div>
               </section>

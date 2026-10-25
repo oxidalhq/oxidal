@@ -515,3 +515,68 @@ async fn native_binary_recovers_the_same_original_after_restart() {
     drop(second);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn owned_edit_commands_reject_competitors_and_retain_terminal_receipts() {
+    let (url, task, _) = start(true).await;
+    let client = reqwest::Client::new();
+    let initial: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let post = |action: Value, revision: Option<u64>| {
+        client.post(format!("{url}/commands")).json(&serde_json::json!({
+            "protocol":1,"session":initial["session"],"request_id":"edit-test","expected_revision":revision,"action":action
+        })).send()
+    };
+    let begin = serde_json::json!({"type":"edit","edit":{"phase":"begin","owner":"one","token":"first","target":"nam-a.level"}});
+    assert_eq!(
+        post(begin, initial["revision"].as_u64())
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    let preview = serde_json::json!({"type":"edit","edit":{"phase":"preview","owner":"one","token":"first","sequence":1,"value":0.8}});
+    assert_eq!(post(preview.clone(), None).await.unwrap().status(), 200);
+    assert_eq!(post(preview, None).await.unwrap().status(), 409);
+    let cancel =
+        serde_json::json!({"type":"edit","edit":{"phase":"cancel","owner":"two","token":"first"}});
+    assert_eq!(post(cancel, None).await.unwrap().status(), 409);
+    assert_eq!(
+        post(
+            serde_json::json!({"type":"set","target":"nam-a.level","value":0.2}),
+            None
+        )
+        .await
+        .unwrap()
+        .status(),
+        409
+    );
+    let commit = serde_json::json!({"type":"edit","edit":{"phase":"commit","owner":"one","token":"first","sequence":2,"value":0.73}});
+    let committed: Value = post(commit.clone(), None)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(committed["parameters"][0]["value"], 0.73);
+    assert!(committed["edit"].is_null());
+    let duplicate: Value = post(commit, None).await.unwrap().json().await.unwrap();
+    assert_eq!(duplicate, committed);
+    let late_cancel: Value = post(
+        serde_json::json!({"type":"edit","edit":{"phase":"cancel","owner":"one","token":"first"}}),
+        None,
+    )
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    assert_eq!(late_cancel, committed);
+    task.abort();
+}

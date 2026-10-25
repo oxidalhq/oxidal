@@ -26,6 +26,10 @@ export type Action =
   | {
       input: MidiInput;
       type: "midi";
+    }
+  | {
+      edit: Edit;
+      type: "edit";
     };
 export type BlockKind = "input" | "nam" | "cabinet" | "delay" | "reverb" | "output";
 /**
@@ -34,6 +38,32 @@ export type BlockKind = "input" | "nam" | "cabinet" | "delay" | "reverb" | "outp
  */
 export type MidiCurve = "linear" | "logarithmic";
 export type MidiMode = "absolute" | "relative_twos_complement";
+export type Edit =
+  | {
+      owner: string;
+      phase: "begin";
+      target: string;
+      token: string;
+    }
+  | {
+      owner: string;
+      phase: "preview";
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      owner: string;
+      phase: "commit";
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      owner: string;
+      phase: "cancel";
+      token: string;
+    };
 export type Framing = "legacy" | "current";
 
 /**
@@ -143,6 +173,7 @@ export interface Snapshot {
   actions: ActionDescriptor[];
   audio_available: boolean;
   bypassed: boolean;
+  edit?: EditStatus | null;
   feedback: MidiFeedback[];
   last_midi?: MidiInput | null;
   mappings: MappingFile;
@@ -164,6 +195,10 @@ export interface ActionDescriptor {
   id: string;
   label: string;
   options: string[];
+}
+export interface EditStatus {
+  owner: string;
+  target: string;
 }
 export interface MidiFeedback {
   cc: number;

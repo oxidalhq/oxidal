@@ -35,8 +35,9 @@ Try this:
 2. Open **Settings**, send MIDI value **127**, then return to the rig: NAM A becomes 100%. A second browser tab updates too.
 3. Change NAM A on the web; Settings shows the confirmed MIDI feedback value.
 4. Try MIDI learn, pickup, range/scaling, or map a CC to bypass/preset selection. These are control-state operations; they process no audio.
-5. Open the rig validation inspector, remove the nodes, and validate: the Rust service rejects it.
-6. Disconnect/reconnect the browser: editing disables, and the current daemon snapshot returns. MIDI simulation can run through the API with no browser open.
+5. Use **Edit** beside a numeric control to preview an exact percentage, then **Commit** or **Cancel**. Another browser sees the preview and cannot overwrite its target.
+6. Open the rig validation inspector, remove the nodes, and validate: the Rust service rejects it.
+7. Disconnect/reconnect the browser: editing disables, and the current daemon snapshot returns. MIDI simulation can run through the API with no browser open.
 
 Open **Library** to import a `.t3kpreset`, retain its original bytes and download it unchanged. This does not load or play the preset.
 
