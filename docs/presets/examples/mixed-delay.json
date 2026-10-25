@@ -1,0 +1,156 @@
+{
+  "format": "oxidal.preset",
+  "formatVersion": 1,
+  "id": "4bf6d07b-60f1-4efb-b991-b51809ef7012",
+  "name": "Clean tone with external delay",
+  "tone3000": {
+    "instances": [
+      {
+        "id": "tone",
+        "preset": "currentTone",
+        "profile": "tone3000-plugin:ef6f178ae1ac6412b55fec6f058d86e640e5aaaf",
+        "origin": {
+          "resource": "sourceTone",
+          "sourcePresetId": "example-source"
+        }
+      }
+    ]
+  },
+  "oxidal": {
+    "graph": {
+      "nodes": [
+        {
+          "id": "input",
+          "audioInputs": 0,
+          "audioOutputs": 2,
+          "kind": "input"
+        },
+        {
+          "id": "amp",
+          "audioInputs": 2,
+          "audioOutputs": 2,
+          "kind": "tone3000",
+          "instance": "tone",
+          "bypassed": false
+        },
+        {
+          "id": "echo",
+          "audioInputs": 2,
+          "audioOutputs": 2,
+          "kind": "lv2",
+          "instance": "delay",
+          "bypassed": false
+        },
+        {
+          "id": "output",
+          "audioInputs": 2,
+          "audioOutputs": 0,
+          "kind": "output"
+        }
+      ],
+      "edges": [
+        {
+          "from": {
+            "node": "input",
+            "port": 0
+          },
+          "to": {
+            "node": "amp",
+            "port": 0
+          }
+        },
+        {
+          "from": {
+            "node": "input",
+            "port": 1
+          },
+          "to": {
+            "node": "amp",
+            "port": 1
+          }
+        },
+        {
+          "from": {
+            "node": "amp",
+            "port": 0
+          },
+          "to": {
+            "node": "echo",
+            "port": 0
+          }
+        },
+        {
+          "from": {
+            "node": "amp",
+            "port": 1
+          },
+          "to": {
+            "node": "echo",
+            "port": 1
+          }
+        },
+        {
+          "from": {
+            "node": "echo",
+            "port": 0
+          },
+          "to": {
+            "node": "output",
+            "port": 0
+          }
+        },
+        {
+          "from": {
+            "node": "echo",
+            "port": 1
+          },
+          "to": {
+            "node": "output",
+            "port": 1
+          }
+        }
+      ]
+    },
+    "lv2": [
+      {
+        "id": "delay",
+        "pluginUri": "urn:oxidal:example:delay",
+        "controls": {
+          "mix": 0.25,
+          "time": 0.5
+        },
+        "state": "delayState",
+        "assets": [],
+        "requiredFeatures": []
+      }
+    ],
+    "recall": {
+      "tails": "preserve"
+    }
+  },
+  "resources": [
+    {
+      "id": "currentTone",
+      "path": "tone3000/current.t3kpreset",
+      "kind": "tone3000-preset",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "bytes": 512
+    },
+    {
+      "id": "sourceTone",
+      "path": "origins/source.t3kpreset",
+      "kind": "tone3000-source",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "bytes": 512
+    },
+    {
+      "id": "delayState",
+      "path": "lv2/delay/state.ttl",
+      "kind": "lv2-state",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "bytes": 256
+    }
+  ],
+  "extensions": {},
+  "requiredExtensions": []
+}

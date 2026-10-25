@@ -56,6 +56,7 @@ if (mode === 'bootstrap') {
       'test_*.py',
     ]);
     run('node', ['scripts/config-check.mjs']);
+    run('pnpm', ['presets:check']);
     run('pnpm', ['format:check']);
     run('pnpm', ['lint:tooling']);
     run('pnpm', ['contract:check']);

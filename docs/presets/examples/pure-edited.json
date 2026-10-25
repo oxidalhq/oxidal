@@ -1,0 +1,38 @@
+{
+  "format": "oxidal.preset",
+  "formatVersion": 1,
+  "id": "46f93019-e92a-4e39-a90e-0af5a763a5d0",
+  "name": "Edited clean tone",
+  "tone3000": {
+    "instances": [
+      {
+        "id": "tone",
+        "preset": "currentTone",
+        "profile": "tone3000-plugin:ef6f178ae1ac6412b55fec6f058d86e640e5aaaf",
+        "origin": {
+          "resource": "sourceTone",
+          "sourcePresetId": "example-source"
+        }
+      }
+    ]
+  },
+  "oxidal": null,
+  "resources": [
+    {
+      "id": "currentTone",
+      "path": "tone3000/current.t3kpreset",
+      "kind": "tone3000-preset",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "bytes": 512
+    },
+    {
+      "id": "sourceTone",
+      "path": "origins/source.t3kpreset",
+      "kind": "tone3000-source",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "bytes": 512
+    }
+  ],
+  "extensions": {},
+  "requiredExtensions": []
+}

@@ -50,3 +50,5 @@ pnpm release:dry-run
 ```
 
 Stop `pnpm dev` before e2e/aggregate checks; tests own their local service and ports. Run the negative-fixture proof separately from other checks. See [development and release policy](docs/development.md) for checks and versioning. Nothing is pushed or published by these local commands.
+
+The [draft Oxidal preset specification](docs/presets/format.md) describes native TONE3000 preservation, mixed rigs and explicit conversion/export rules. Run `pnpm presets:check` for manifest/schema checks; this does not establish runtime compatibility.

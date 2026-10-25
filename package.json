@@ -17,10 +17,11 @@
     "test:tooling": "node --test scripts/*.test.mjs",
     "release:dry-run": "node scripts/release.mjs --dry-run",
     "lint:tooling": "eslint scripts eslint.config.mjs --max-warnings 0",
-    "format:check": "prettier --check \"scripts/**/*.mjs\" \"*.mjs\" \".github/**/*.{yml,yaml,json}\" \"package.json\" \"pnpm-workspace.yaml\" \".release-please*.json\"",
+    "format:check": "prettier --check \"scripts/**/*.mjs\" \"*.mjs\" \".github/**/*.{yml,yaml,json}\" \"package.json\" \"pnpm-workspace.yaml\" \".release-please*.json\" \"docs/presets/**/*.json\"",
     "guardrails:prove": "node scripts/guardrails.mjs",
     "release:artifacts": "node scripts/artifacts.mjs",
-    "preview": "pnpm --dir apps/web build && node scripts/tooling.mjs preview"
+    "preview": "pnpm --dir apps/web build && node scripts/tooling.mjs preview",
+    "presets:check": "node --test scripts/presets.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

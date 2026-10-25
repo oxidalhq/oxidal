@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:oxidal:preset:manifest:1",
+  "title": "Oxidal preset manifest \u2014 draft format 1",
+  "description": "Manifest shape only; native payload, graph, resources and export eligibility require the semantic checks in format.md.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "const": "oxidal.preset"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "tone3000": {
+      "type": "object",
+      "properties": {
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/toneInstance"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": ["instances"],
+      "additionalProperties": false
+    },
+    "oxidal": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/host"
+        }
+      ]
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/resource"
+      },
+      "minItems": 1,
+      "maxItems": 4096
+    },
+    "extensions": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048,
+        "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "requiredExtensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/uri"
+      },
+      "maxItems": 32,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "format",
+    "formatVersion",
+    "id",
+    "name",
+    "tone3000",
+    "oxidal",
+    "resources",
+    "extensions",
+    "requiredExtensions"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "localId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 63
+    },
+    "uri": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+    },
+    "endpoint": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "$ref": "#/$defs/localId"
+        },
+        "port": {
+          "$ref": "#/$defs/port"
+        }
+      },
+      "required": ["node", "port"],
+      "additionalProperties": false
+    },
+    "toneInstance": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/localId"
+        },
+        "preset": {
+          "$ref": "#/$defs/localId"
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "resource": {
+              "$ref": "#/$defs/localId"
+            },
+            "sourcePresetId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": ["resource"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "preset", "profile"],
+      "additionalProperties": false
+    },
+    "lv2": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/localId"
+        },
+        "pluginUri": {
+          "$ref": "#/$defs/uri"
+        },
+        "controls": {
+          "type": "object",
+          "maxProperties": 1024,
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "state": {
+          "$ref": "#/$defs/localId"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/localId"
+          },
+          "minItems": 0,
+          "maxItems": 1024
+        },
+        "requiredFeatures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uri"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        }
+      },
+      "required": ["id", "pluginUri", "controls", "assets", "requiredFeatures"],
+      "additionalProperties": false
+    },
+    "host": {
+      "type": "object",
+      "properties": {
+        "graph": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "input"
+                      }
+                    },
+                    "required": ["id", "audioInputs", "audioOutputs", "kind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "output"
+                      }
+                    },
+                    "required": ["id", "audioInputs", "audioOutputs", "kind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "tone3000"
+                      },
+                      "instance": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "bypassed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "audioInputs",
+                      "audioOutputs",
+                      "kind",
+                      "instance",
+                      "bypassed"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "lv2"
+                      },
+                      "instance": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "bypassed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "audioInputs",
+                      "audioOutputs",
+                      "kind",
+                      "instance",
+                      "bypassed"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "split"
+                      }
+                    },
+                    "required": ["id", "audioInputs", "audioOutputs", "kind"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "audioOutputs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "kind": {
+                        "const": "merge"
+                      },
+                      "inputGains": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "minItems": 1,
+                        "maxItems": 64
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "audioInputs",
+                      "audioOutputs",
+                      "kind",
+                      "inputGains"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "minItems": 3,
+              "maxItems": 256
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "$ref": "#/$defs/endpoint"
+                  },
+                  "to": {
+                    "$ref": "#/$defs/endpoint"
+                  }
+                },
+                "required": ["from", "to"],
+                "additionalProperties": false
+              },
+              "minItems": 2,
+              "maxItems": 2048
+            }
+          },
+          "required": ["nodes", "edges"],
+          "additionalProperties": false
+        },
+        "lv2": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lv2"
+          },
+          "minItems": 0,
+          "maxItems": 128
+        },
+        "recall": {
+          "type": "object",
+          "properties": {
+            "tails": {
+              "enum": ["cut", "preserve"]
+            }
+          },
+          "required": ["tails"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["graph", "lv2", "recall"],
+      "additionalProperties": false
+    },
+    "resource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/localId"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "kind": {
+          "enum": [
+            "tone3000-preset",
+            "tone3000-source",
+            "lv2-state",
+            "lv2-asset"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        }
+      },
+      "required": ["id", "path", "kind", "sha256", "bytes"],
+      "additionalProperties": false
+    }
+  }
+}

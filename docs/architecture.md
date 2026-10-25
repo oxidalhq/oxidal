@@ -21,3 +21,7 @@ MIDI mappings persist with atomic file replacement. Rig/parameter/bypass state r
 The service accepts loopback listeners and loopback browser origins only. It does not expose LAN writes, provider login, arbitrary privileged commands, or a physical MIDI port. Pairing/authorization and target-device permissions must be designed before LAN/hardware operation. The staged systemd unit is not enabled by the OS recipe.
 
 Public package licensing and namespace checks are pending owner/release decisions. Cargo packages are unpublished; third-party Rust licenses/advisories are checked without assigning a new license to the owner's code.
+
+## Preset interchange contract
+
+The [draft preset format](presets/format.md) defines a versioned JSON manifest, preserved native TONE3000 payloads and separate Oxidal/LV2 state. [Its JSON Schema](presets/manifest.schema.json) and examples are checked with `pnpm presets:check`. This is a draft design contract; native decoding, export/sync eligibility, conversion and audio fidelity are not implemented by the schema checks.
