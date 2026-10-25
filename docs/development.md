@@ -11,3 +11,11 @@ Release-please prepares separate core (`.`), UI (`apps/web`) and OS (`os`) versi
 `pnpm release:dry-run` checks version consistency locally. `pnpm release:artifacts` packages a native-host preview, web assets and OS recipe with checksums and source revision. This is not a flashable Pi image. Remote workflows, branch protection and bot activation require remote configuration; local checks do not establish them.
 
 Physical audio, gapless switching/trails, real MIDI transport, target-phone performance, image boot and recovery require independent qualification. Use a fresh SD card for Pi tests and preserve any existing working installation.
+
+## Automatic Markdown formatting
+
+Prettier 3.9.10 formats Markdown and tables consistently. `pnpm format:md` formats the documentation tree; `pnpm format:md:check` checks it. The aggregate `pnpm check` includes Markdown formatting checks.
+
+Installed pre-commit hooks automatically format staged Markdown with pinned `git-format-staged` 4.0.2. Only staged content enters the commit; unstaged edits remain unstaged, including in partially staged files. Formatting conflicts leave the working file intact. Run `pnpm install --frozen-lockfile` and `pnpm hooks:install` in each new checkout/worktree before committing. This requires Node, pnpm and Python 3, already part of the development environment.
+
+VS Code settings enable Markdown format-on-save and recommend `esbenp.prettier-vscode`. Install that recommended extension for editor formatting; the Git hook works independently of the editor. Generated/dependency/build trees are excluded. Never replace formatting with a manual table-alignment step.

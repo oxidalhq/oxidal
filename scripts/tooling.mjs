@@ -64,6 +64,7 @@ if (mode === 'bootstrap') {
     run('sh', ['os/scripts/check.sh']);
     run('node', [
       '--test',
+      'scripts/markdown.test.mjs',
       'scripts/commits.test.mjs',
       'scripts/release.test.mjs',
     ]);

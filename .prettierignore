@@ -1,0 +1,9 @@
+node_modules/
+target/
+.local/
+.tools/
+.pnpm-store/
+coverage/
+**/dist/
+**/playwright-report/
+**/test-results/

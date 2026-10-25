@@ -4,13 +4,13 @@ The Rust workspace starts with four crates that have concrete jobs: `oxidal-grap
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
-| Endpoint | Behavior |
-| --- | --- |
-| `GET /api/v1/health` | Protocol/build version, audio unavailable, MIDI simulator enabled/disabled |
-| `GET /api/v1/state` | Authoritative session/revision snapshot, parameters/actions, rig, mappings, latest feedback |
-| `GET /api/v1/events` | SSE `state` snapshots, including a fresh snapshot on reconnect; bounded watch channel coalesces intermediate revisions |
-| `POST /api/v1/commands` | Typed command envelope: protocol, session, request ID, expected revision or null, action |
-| `POST /api/v1/rig/validate` | Bounded generic graph validation; does not instantiate a plugin or run sound |
+| Endpoint                    | Behavior                                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/health`        | Protocol/build version, audio unavailable, MIDI simulator enabled/disabled                                             |
+| `GET /api/v1/state`         | Authoritative session/revision snapshot, parameters/actions, rig, mappings, latest feedback                            |
+| `GET /api/v1/events`        | SSE `state` snapshots, including a fresh snapshot on reconnect; bounded watch channel coalesces intermediate revisions |
+| `POST /api/v1/commands`     | Typed command envelope: protocol, session, request ID, expected revision or null, action                               |
+| `POST /api/v1/rig/validate` | Bounded generic graph validation; does not instantiate a plugin or run sound                                           |
 
 All commands require the current daemon session. Structural changes (routing, mappings, preset selection) require a matching revision; continuous changes are serialized and may omit it. Relative edits operate on current state. A daemon restart creates a new session, so a stale edit cannot accidentally match a reset revision. Browser controls render confirmed state and disable on disconnect. Failed commands do not change state. Routing application currently accepts the PoC block identities; generic validation does not imply arbitrary audio layouts are hosted.
 

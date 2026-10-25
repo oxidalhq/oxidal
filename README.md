@@ -2,13 +2,13 @@
 
 Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation and shared web/MIDI control state; it does not process live guitar audio. Owned NAM Linear/LSTM inference is tested separately; WaveNet/A2 and native audio hosting remain unimplemented.
 
-| Path | Content |
-| --- | --- |
-| `crates/` | Graph validation, control state, HTTP/SSE API and owned NAM inference |
-| `apps/web/` | React/TypeScript interface and browser integration tests |
-| `os/` | Pinned Trixie base manifest and safe provisioning recipe |
-| `scripts/` | Reproducible development, verification and packaging commands |
-| `docs/` | Product architecture and contributor documentation |
+| Path        | Content                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| `crates/`   | Graph validation, control state, HTTP/SSE API and owned NAM inference |
+| `apps/web/` | React/TypeScript interface and browser integration tests              |
+| `os/`       | Pinned Trixie base manifest and safe provisioning recipe              |
+| `scripts/`  | Reproducible development, verification and packaging commands         |
+| `docs/`     | Product architecture and contributor documentation                    |
 
 ## Run the local PoC
 

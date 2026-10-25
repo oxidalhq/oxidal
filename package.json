@@ -17,11 +17,14 @@
     "test:tooling": "node --test scripts/*.test.mjs",
     "release:dry-run": "node scripts/release.mjs --dry-run",
     "lint:tooling": "eslint scripts eslint.config.mjs --max-warnings 0",
-    "format:check": "prettier --check \"scripts/**/*.mjs\" \"*.mjs\" \".github/**/*.{yml,yaml,json}\" \"package.json\" \"pnpm-workspace.yaml\" \".release-please*.json\" \"docs/presets/**/*.json\"",
+    "format:check": "prettier --check \"scripts/**/*.mjs\" \"*.mjs\" \".github/**/*.{yml,yaml,json}\" \"package.json\" \"pnpm-workspace.yaml\" \".release-please*.json\" \"docs/presets/**/*.json\" && pnpm format:md:check",
     "guardrails:prove": "node scripts/guardrails.mjs",
     "release:artifacts": "node scripts/artifacts.mjs",
     "preview": "pnpm --dir apps/web build && node scripts/tooling.mjs preview",
-    "presets:check": "node --test scripts/presets.test.mjs"
+    "presets:check": "node --test scripts/presets.test.mjs",
+    "format:md": "prettier --write \"**/*.{md,mdx,markdown}\"",
+    "format:md:check": "prettier --check \"**/*.{md,mdx,markdown}\"",
+    "format:staged": "git-format-staged -f 'prettier --ignore-unknown --stdin-filepath \"{}\"' '*.md' '*.mdx' '*.markdown' '!reference/**' '!.afx/**' '!.agents/**' '!.claude/**'"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -30,6 +33,7 @@
     "globals": "17.13.0",
     "json-schema-to-typescript": "16.0.0",
     "prettier": "3.9.10",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "git-format-staged": "4.0.2"
   }
 }

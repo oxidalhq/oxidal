@@ -2,14 +2,14 @@
 
 Project-owned pure Rust NAM inference, currently unpublished. This crate is not a wrapper around `nam-rs`, not an asset catalog, and not yet wired to the appliance audio path. Runtime dependencies are serde and serde_json; allocation-counter is test-only.
 
-| Supported initial scope | Bounds |
-| --- | --- |
-| File version | NAM 0.5.4 only |
-| Linear | Mono causal FIR, 1–65,536 taps, optional bias |
-| LSTM | Mono, input size 1, 1–4 layers, hidden size 1–64, serialized initial hidden/cell state, scalar head |
-| Sample rate | Exact model/training rate, 8–192 kHz; no automatic resampling |
-| Buffer | Caller-provided mono f32 slices, configured maximum 1–8192 samples |
-| Unsupported | WaveNet, ConvNet, SlimmableContainer, TONE3000 A2, other versions/channel layouts |
+| Supported initial scope | Bounds                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| File version            | NAM 0.5.4 only                                                                                      |
+| Linear                  | Mono causal FIR, 1–65,536 taps, optional bias                                                       |
+| LSTM                    | Mono, input size 1, 1–4 layers, hidden size 1–64, serialized initial hidden/cell state, scalar head |
+| Sample rate             | Exact model/training rate, 8–192 kHz; no automatic resampling                                       |
+| Buffer                  | Caller-provided mono f32 slices, configured maximum 1–8192 samples                                  |
+| Unsupported             | WaveNet, ConvNet, SlimmableContainer, TONE3000 A2, other versions/channel layouts                   |
 
 Loading validates the bounded document, shapes, exact weight counts and finite weights. It allocates all inference state before processing. `reset()` restores serialized initial state/history. `warm_up(samples)` is explicit, bounded, and non-real-time; the loader does not silently choose readiness or calibration behavior. `process()` performs no parsing, resizing, locking, I/O, or allocation. Invalid input is rejected before advancing state; output is silenced on error, and numeric overflow resets state. Metadata loudness/calibration is not automatically applied.
 

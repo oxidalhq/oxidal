@@ -8,11 +8,11 @@ An edited TONE3000 preset belongs to Oxidal. It can return to TONE3000 only if t
 
 Use **composition**: a versioned JSON manifest references an unchanged native TONE3000 preset payload and a separate Oxidal host section. A portable `.oxpreset` ZIP bundle holds the manifest and its resources. Do not translate TONE3000's full state into a competing JSON tone model, append fields to its native payload, or pretend `.t3kpreset` is JSON.
 
-| Approach | Assessment |
-| --- | --- |
-| Extend the TONE3000 ValueTree with Oxidal children | Close to the upstream tree, but external fields can be ignored/pruned by upstream writers and the file can falsely look like a playable TONE3000 preset. Rejected for the interchange format. |
-| Reimplement every TONE3000 setting as JSON | Readable, but requires an additional lossless typed-ValueTree codec and ongoing field/version migrations. Risks unknown fields and embedded model bytes. Not the canonical tone store. |
-| JSON manifest + native payloads + separate host state | Recommended. Keeps upstream format and its state authority intact, provides inspectable routing/metadata, and supports explicit removal of non-native processing. |
+| Approach                                              | Assessment                                                                                                                                                                                    |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extend the TONE3000 ValueTree with Oxidal children    | Close to the upstream tree, but external fields can be ignored/pruned by upstream writers and the file can falsely look like a playable TONE3000 preset. Rejected for the interchange format. |
+| Reimplement every TONE3000 setting as JSON            | Readable, but requires an additional lossless typed-ValueTree codec and ongoing field/version migrations. Risks unknown fields and embedded model bytes. Not the canonical tone store.        |
+| JSON manifest + native payloads + separate host state | Recommended. Keeps upstream format and its state authority intact, provides inspectable routing/metadata, and supports explicit removal of non-native processing.                             |
 
 This is an Oxidal design choice informed by established patterns, not an existing cross-vendor preset standard. [OpenTimelineIO bundles](https://opentimelineio.readthedocs.io/en/v0.14/tutorials/otio-filebundles.html) demonstrate packaging a structured document alongside referenced media. [LV2 State](https://lv2plug.in/ns/ext/state) defines plugin state as port values plus typed properties, including mapped file resources. [JSON Schema 2020-12](https://json-schema.org/draft/2020-12) provides the manifest contract. These precedents do not establish audio equivalence.
 
@@ -26,14 +26,14 @@ Upstream compatibility identifiers are preserved exactly: `.t3kpreset`, `T3KB`, 
 
 Inspected source revision: `ef6f178ae1ac6412b55fec6f058d86e640e5aaaf`. Source profile identifier: `tone3000-plugin:ef6f178ae1ac6412b55fec6f058d86e640e5aaaf`. This labels a codec/semantic baseline; it is not a binary signature or evidence that a patched build is equivalent. Maintain an installed compatibility registry with actual build hashes, dependency/patch pins and qualification results; do not treat a manifest's profile string as permission to execute a backend.
 
-| Upstream construct | Meaning Oxidal preserves |
-| --- | --- |
-| `T3KB` + binary body | Legacy framing |
-| `T3KH` + signed little-endian 32-bit header length + header + body | Headered framing; baseline reader limits the header to 64 KiB |
-| `T3KPresetHeader` | Header `id` and `name` |
-| `T3KPreset` | Complete preset body; its `schemaVersion` is distinct from file framing and Oxidal `formatVersion` |
-| `ChainSnapshot` | `stereoEnabled`, `branchSide`, `branchAfterBlockId`, ordered `ChainBlocks` / `RightChainBlocks`, block settings and embedded model data |
-| `Params` / `Param` | Upstream parameter IDs and denormalized values, including gate, pitch, tone stack, balance, Spread/Align and pan/polarity |
+| Upstream construct                                                 | Meaning Oxidal preserves                                                                                                                |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `T3KB` + binary body                                               | Legacy framing                                                                                                                          |
+| `T3KH` + signed little-endian 32-bit header length + header + body | Headered framing; baseline reader limits the header to 64 KiB                                                                           |
+| `T3KPresetHeader`                                                  | Header `id` and `name`                                                                                                                  |
+| `T3KPreset`                                                        | Complete preset body; its `schemaVersion` is distinct from file framing and Oxidal `formatVersion`                                      |
+| `ChainSnapshot`                                                    | `stereoEnabled`, `branchSide`, `branchAfterBlockId`, ordered `ChainBlocks` / `RightChainBlocks`, block settings and embedded model data |
+| `Params` / `Param`                                                 | Upstream parameter IDs and denormalized values, including gate, pitch, tone stack, balance, Spread/Align and pan/polarity               |
 
 The authoritative sources are [PresetFile.h](https://github.com/tone-3000/tone3000-plugin/blob/ef6f178ae1ac6412b55fec6f058d86e640e5aaaf/plugin/include/PresetFile.h), [PresetFile.cpp](https://github.com/tone-3000/tone3000-plugin/blob/ef6f178ae1ac6412b55fec6f058d86e640e5aaaf/plugin/src/PresetFile.cpp), [ProcessorPresets.cpp](https://github.com/tone-3000/tone3000-plugin/blob/ef6f178ae1ac6412b55fec6f058d86e640e5aaaf/plugin/src/ProcessorPresets.cpp) and [ProcessorHistory.cpp](https://github.com/tone-3000/tone3000-plugin/blob/ef6f178ae1ac6412b55fec6f058d86e640e5aaaf/plugin/src/ProcessorHistory.cpp). JUCE documents ValueTree's [binary serialization](https://docs.juce.com/master/classjuce_1_1ValueTree.html).
 
@@ -55,14 +55,14 @@ An unpacked directory with the same contents is permitted for local storage/deve
 
 The [JSON Schema](manifest.schema.json) defines field shapes, bounds, enum values and unknown-field rejection. The semantic rules below are equally mandatory. A schema-valid manifest is not a valid preset or an export authorization.
 
-| Field | Contract |
-| --- | --- |
-| `format`, `formatVersion` | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting. |
-| `id`, `name` | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID. |
-| `tone3000.instances` | One or more native tone instances, each with a stable local ID, a resource ID for its current `.t3kpreset`, a compatibility-profile ID, and optional original import provenance. Multiple instances make a rig Oxidal-only. |
-| `oxidal` | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described. |
-| `resources` | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths. |
-| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. V1 defines no extension semantics. |
+| Field                              | Contract                                                                                                                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                       |
+| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                     |
+| `tone3000.instances`               | One or more native tone instances, each with a stable local ID, a resource ID for its current `.t3kpreset`, a compatibility-profile ID, and optional original import provenance. Multiple instances make a rig Oxidal-only. |
+| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                         |
+| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                    |
+| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. V1 defines no extension semantics.                   |
 
 Top-level metadata is intentionally small. Accounts, credentials, machine paths, device identifiers, live CPU/meter readings, authentication/session tokens and export-eligibility flags MUST NOT be serialized. Format extensions require an explicit capability/version contract, not arbitrary unknown top-level fields. Unknown optional extensions may be preserved as opaque metadata but MUST NOT silently affect sound. Any unrecognized extension blocks TONE3000 export until explicitly removed in a separate copy or qualified as non-sonic.
 
@@ -143,13 +143,13 @@ Eligibility and conversion previews bind to the active document revision, SHA-25
 
 `pnpm presets:check` validates the schema and examples and rejects representative invalid manifest shapes; it does not decode native payloads or implement eligibility. Before format 1 is frozen or runtime compatibility is claimed, implement and pass:
 
-| Gate | Required evidence |
-| --- | --- |
-| Native framing/body | Both T3KB/T3KH; invalid/truncated/oversized headers; schema versions; duplicate IDs; unknown fields; full pinned factory corpus and project-owned licensed assets |
-| Tone fidelity | No-op byte preservation; every serialized tone setting; embedded NAM/IR bytes; edited semantic round trips; state/audio comparison against the pinned backend at defined rates/channel settings and tolerances |
-| Mixed restoration | Serial and parallel/split/merge; portable LV2 properties/control values/assets; missing plugin/features; out-of-range ports, fan-in and cycles; failed prepare leaves playing rig intact |
+| Gate                    | Required evidence                                                                                                                                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native framing/body     | Both T3KB/T3KH; invalid/truncated/oversized headers; schema versions; duplicate IDs; unknown fields; full pinned factory corpus and project-owned licensed assets                                              |
+| Tone fidelity           | No-op byte preservation; every serialized tone setting; embedded NAM/IR bytes; edited semantic round trips; state/audio comparison against the pinned backend at defined rates/channel settings and tolerances |
+| Mixed restoration       | Serial and parallel/split/merge; portable LV2 properties/control values/assets; missing plugin/features; out-of-range ports, fan-in and cycles; failed prepare leaves playing rig intact                       |
 | Ownership and stripping | Imported originals unchanged; independent source/current bytes; mixed and bypassed-plugin export/sync blocked; selection/removal preview; new copy ID; post-conversion eligibility and revision-race rejection |
-| Container failure | Wrong hash/size, duplicate JSON keys, unsafe/duplicate ZIP paths, decompression limits, native parse bounds, symlinks, unknown extensions/versions and interrupted save |
-| Scope boundaries | Device/global settings untouched; no credentials/executables/private source paths in exported bundles; offline restoration with no provider token |
+| Container failure       | Wrong hash/size, duplicate JSON keys, unsafe/duplicate ZIP paths, decompression limits, native parse bounds, symlinks, unknown extensions/versions and interrupted save                                        |
+| Scope boundaries        | Device/global settings untouched; no credentials/executables/private source paths in exported bundles; offline restoration with no provider token                                                              |
 
 Full product behavior also requires gapless/trails, hardware performance and provider integration qualification outside this format spec. Promotion from draft requires the format/codecs and acceptance evidence to be reviewed together; a schema-only pass is not approval of those capabilities.

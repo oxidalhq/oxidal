@@ -17,6 +17,9 @@ importers:
       eslint:
         specifier: 10.13.0
         version: 10.13.0(jiti@2.7.0)
+      git-format-staged:
+        specifier: 4.0.2
+        version: 4.0.2
       globals:
         specifier: 17.13.0
         version: 17.13.0
@@ -1257,6 +1260,10 @@ packages:
 
   get-tsconfig@4.14.3:
     resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
+
+  git-format-staged@4.0.2:
+    resolution: {integrity: sha512-0fHxU5ZyxeCrTL+8BWugZKxqqS2Ba6OGCdyTeZW7kQJVuLbmxWJ2eNGZTjPxVQ8FGovBZsXZCmPRD2VSOWE82g==}
+    hasBin: true
 
   glob-parent@6.0.2:
     resolution: {integrity: sha512-XxwI8EOhVQgWp6iDL+3b0r86f4d6AX6zSU55HfB4ydCEuXLXc5FcYeOu+nnGftS4TEju/11rt4KJPTMgbfmv4A==}
@@ -2933,6 +2940,8 @@ snapshots:
   get-tsconfig@4.14.3:
     dependencies:
       resolve-pkg-maps: 1.0.0
+
+  git-format-staged@4.0.2: {}
 
   glob-parent@6.0.2:
     dependencies:
