@@ -7,12 +7,26 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { root, run, rustEnv } from './process.mjs';
 import { checkVersions } from './release.mjs';
 
 // @see docs/architecture.md
 const versions = checkVersions();
+const buildEnv = rustEnv();
+// Encoded flags support spaces in checkout paths without shell interpretation.
+if (buildEnv.RUSTFLAGS && !buildEnv.CARGO_ENCODED_RUSTFLAGS)
+  throw new Error(
+    'Use CARGO_ENCODED_RUSTFLAGS for custom artifact build flags.',
+  );
+buildEnv.CARGO_ENCODED_RUSTFLAGS = [
+  ...(buildEnv.CARGO_ENCODED_RUSTFLAGS?.split('\x1f') ?? []),
+  '--remap-path-prefix',
+  `${homedir()}=/build/user`,
+  '--remap-path-prefix',
+  `${root}=/build/oxidal`,
+].join('\x1f');
 run(
   'cargo',
   [
@@ -24,7 +38,7 @@ run(
     '--bin',
     'oxidald',
   ],
-  { env: rustEnv() },
+  { env: buildEnv },
 );
 run('pnpm', ['--dir', 'apps/web', 'build']);
 const target = `${process.platform}-${process.arch}`;
@@ -33,6 +47,12 @@ mkdirSync(output, { recursive: true });
 const staging = join(output, `oxidal-${target}`);
 mkdirSync(staging, { recursive: true });
 copyFileSync(join(root, 'target/release/oxidald'), join(staging, 'oxidald'));
+if (
+  /\/(?:Users|home)\/[A-Za-z0-9_.-]+\//.test(
+    readFileSync(join(staging, 'oxidald')).toString('latin1'),
+  )
+)
+  throw new Error('Native artifact contains an unremapped private build path.');
 cpSync(join(root, 'apps/web/dist'), join(staging, 'ui'), { recursive: true });
 cpSync(join(root, 'os/config'), join(staging, 'os/config'), {
   recursive: true,
