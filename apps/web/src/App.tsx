@@ -3,10 +3,8 @@ import {
   ArrowRight,
   ArrowsSplit,
   CheckCircle,
-  Faders,
   GearSix,
-  Guitar,
-  PlugsConnected,
+  Power,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
@@ -20,7 +18,6 @@ import {
 } from './api';
 
 /** Quiet rig control over a single authoritative Rust state model.
- * @see docs/architecture.md
  * @see docs/architecture.md
  */
 export default function App() {
@@ -202,7 +199,10 @@ export default function App() {
   const parallel = state?.rig.nodes.some((node) => node.id === 'nam-b');
   const named = (id: string) => state?.rig.nodes.find((node) => node.id === id);
   const block = (id: string, name: string, detail: string) => (
-    <div className="block" data-testid={`block-${id}`}>
+    <div
+      className={`block${id === 'input' || id === 'output' ? ' endpoint' : ''}`}
+      data-testid={`block-${id}`}
+    >
       <span className="eyebrow">{named(id)?.kind ?? 'block'}</span>
       <strong>{name}</strong>
       <span>{detail}</span>
@@ -219,53 +219,79 @@ export default function App() {
           <span className={connected ? 'dot online' : 'dot'} />
           {connected ? 'Device connected' : 'Reconnecting…'}
         </div>
-        <Button
-          variant="outline"
-          onClick={() => (view === 'rig' ? showSettings() : setView('rig'))}
-        >
-          <GearSix size={18} />
-          {view === 'rig' ? 'Settings' : 'Back to rig'}
-        </Button>
+        <nav aria-label="Instrument navigation">
+          <Button
+            variant="outline"
+            onClick={() => (view === 'rig' ? showSettings() : setView('rig'))}
+          >
+            <GearSix size={18} aria-hidden="true" />
+            {view === 'rig' ? 'Settings' : 'Back to rig'}
+          </Button>
+        </nav>
       </header>
       <div className="workspace">
-        <aside className="sidebar">
-          <span className="eyebrow">Instrument workspace</span>
-          <button
-            className={view === 'rig' ? 'nav-item selected' : 'nav-item'}
-            onClick={() => setView('rig')}
-          >
-            <Guitar size={20} />
-            Rig
-          </button>
-          <button
-            className={view === 'settings' ? 'nav-item selected' : 'nav-item'}
-            onClick={showSettings}
-          >
-            <Faders size={20} />
-            Controls & MIDI
-          </button>
-          <div className="sidebar-note">
-            <PlugsConnected size={22} />
-            <p>Local control PoC</p>
-            <small>NAM / LV2 engine qualification comes next.</small>
-          </div>
-        </aside>
         <main>
           <div className="page-heading">
             <div>
-              <span className="eyebrow">OXIDAL / FOUNDATION 01</span>
-              <h1>
+              <span className="eyebrow">
+                {view === 'rig' ? 'Example rig / control preview' : 'Settings'}
+              </span>
+              <h1 data-testid="active-preset">
                 {view === 'rig'
-                  ? 'A little room to play.'
-                  : 'Every control, one rig.'}
+                  ? !state
+                    ? 'Connecting'
+                    : state.preset === 'custom'
+                      ? 'Custom routing'
+                      : state.preset === 'parallel'
+                        ? 'Parallel rig'
+                        : 'Serial rig'
+                  : 'Controls & MIDI'}
               </h1>
-              <p>
-                {view === 'rig'
-                  ? 'A clear signal path. A shared state for your browser and controller.'
-                  : 'Map a controller to the same parameters you use on the web.'}
-              </p>
             </div>
-            <span className="revision">REV {state?.revision ?? '—'}</span>
+            {state && view === 'rig' && (
+              <div className="performance-actions preset-controls">
+                <label className="field">
+                  Example preset
+                  <select
+                    aria-label="Example preset"
+                    disabled={!connected}
+                    value={state.preset}
+                    onChange={(e) =>
+                      void run(
+                        {
+                          type: 'set',
+                          target: 'rig.preset',
+                          value: e.target.value === 'parallel' ? 1 : 0,
+                        },
+                        true,
+                      )
+                    }
+                  >
+                    <option value="custom" disabled>
+                      Custom routing
+                    </option>
+                    <option value="serial">Serial</option>
+                    <option value="parallel">Parallel</option>
+                  </select>
+                </label>
+                <Button
+                  className="bypass-switch"
+                  variant={state.bypassed ? 'default' : 'outline'}
+                  disabled={!connected}
+                  aria-pressed={state.bypassed}
+                  onClick={() =>
+                    void run({
+                      type: 'set',
+                      target: 'rig.bypass',
+                      value: state.bypassed ? 0 : 1,
+                    })
+                  }
+                >
+                  <Power size={20} aria-hidden="true" />
+                  {state.bypassed ? 'Bypass on' : 'Bypass off'}
+                </Button>
+              </div>
+            )}
           </div>
           <div className="notice">
             <WarningCircle size={20} />
@@ -283,11 +309,10 @@ export default function App() {
             <p className="empty">Waiting for the local Rust service…</p>
           ) : view === 'rig' ? (
             <>
-              <section className="panel">
+              <section className="panel chain-panel" aria-label="Signal chain">
                 <div className="section-heading">
                   <div>
-                    <span className="eyebrow">01 / Signal path</span>
-                    <h2>Quiet current</h2>
+                    <h2>Signal chain</h2>
                   </div>
                   <div className="segmented" aria-label="Routing mode">
                     <Button
@@ -311,7 +336,14 @@ export default function App() {
                 </div>
                 <div className="signal-path">
                   {block('input', 'Input', 'Instrument')}
-                  <ArrowRight className="route-arrow" />
+                  {parallel ? (
+                    <div className="route-junction" aria-label="Split input">
+                      <span>SPLIT</span>
+                      <ArrowRight aria-hidden="true" />
+                    </div>
+                  ) : (
+                    <ArrowRight className="route-arrow" aria-hidden="true" />
+                  )}
                   <div className="branches">
                     <div className="branch">
                       <span className="path-label">PATH A</span>
@@ -324,11 +356,16 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  <ArrowRight className="route-arrow" />
+                  {parallel ? (
+                    <div className="route-junction" aria-label="Merge A and B">
+                      <span>MERGE</span>
+                      <strong>A + B</strong>
+                      <ArrowRight aria-hidden="true" />
+                    </div>
+                  ) : (
+                    <ArrowRight className="route-arrow" aria-hidden="true" />
+                  )}
                   <div className="wet-path">
-                    {parallel && (
-                      <span className="merge-label">A + B / MERGE</span>
-                    )}
                     {block('delay', 'Delay', 'Shared wet path')}
                     <ArrowRight className="wet-arrow" aria-hidden="true" />
                     {block('reverb', 'Reverb', 'Shared wet path')}
@@ -347,53 +384,12 @@ export default function App() {
               <section className="panel">
                 <div className="section-heading">
                   <div>
-                    <span className="eyebrow">02 / Shared controls</span>
-                    <h2>Make it yours</h2>
+                    <h2>Rig controls</h2>
                   </div>
                   <span className="muted">
                     Last source:{' '}
                     <strong data-testid="last-origin">{state.origin}</strong>
                   </span>
-                </div>
-                <div className="performance-actions">
-                  <Button
-                    variant="outline"
-                    disabled={!connected}
-                    aria-pressed={state.bypassed}
-                    onClick={() =>
-                      void run({
-                        type: 'set',
-                        target: 'rig.bypass',
-                        value: state.bypassed ? 0 : 1,
-                      })
-                    }
-                  >
-                    {state.bypassed ? 'Bypass on' : 'Bypass off'}
-                  </Button>
-                  <label className="field">
-                    Example preset
-                    <select
-                      aria-label="Example preset"
-                      disabled={!connected}
-                      value={state.preset}
-                      onChange={(e) =>
-                        void run(
-                          {
-                            type: 'set',
-                            target: 'rig.preset',
-                            value: e.target.value === 'parallel' ? 1 : 0,
-                          },
-                          true,
-                        )
-                      }
-                    >
-                      <option value="custom" disabled>
-                        Custom routing
-                      </option>
-                      <option value="serial">Serial</option>
-                      <option value="parallel">Parallel</option>
-                    </select>
-                  </label>
                 </div>
                 <div className="parameters">
                   {state.parameters.map((parameter) => (
@@ -420,7 +416,6 @@ export default function App() {
                           })
                         }
                       />
-                      <small>{parameter.id}</small>
                     </label>
                   ))}
                 </div>
@@ -452,8 +447,7 @@ export default function App() {
               <section className="panel">
                 <div className="section-heading">
                   <div>
-                    <span className="eyebrow">01 / Device</span>
-                    <h2>Control surface</h2>
+                    <h2>Device status</h2>
                   </div>
                   <CheckCircle size={24} />
                 </div>
@@ -481,8 +475,7 @@ export default function App() {
                 </dl>
               </section>
               <section className="panel">
-                <span className="eyebrow">02 / MIDI mapping</span>
-                <h2>One knob, any parameter</h2>
+                <h2>MIDI mapping</h2>
                 <p className="muted">
                   Current mapping:{' '}
                   {state.mappings.mappings
@@ -630,7 +623,6 @@ export default function App() {
                 </p>
               </section>
               <section className="panel">
-                <span className="eyebrow">03 / Development transport</span>
                 <h2>MIDI simulator</h2>
                 <p>
                   Inject a CC message through the native control service. The
@@ -682,9 +674,10 @@ export default function App() {
             </>
           )}
           <footer>
-            <span>OXIDAL · INDEPENDENT BY DESIGN</span>
+            <span>OXIDAL · LOCAL CONTROL PREVIEW</span>
             <span>
-              Local first / {connected ? 'connected' : 'reconnecting'}
+              REV {state?.revision ?? '—'} /{' '}
+              {connected ? 'connected' : 'reconnecting'}
             </span>
           </footer>
         </main>

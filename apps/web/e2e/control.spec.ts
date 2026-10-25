@@ -56,8 +56,13 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   await expect(
     page.getByText('Audio unavailable.', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Serial rig' })).toBeVisible();
+  await expect(page.getByRole('complementary')).toHaveCount(0);
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Custom routing' }),
+  ).toBeVisible();
   await page.getByText('Rig validation inspector').click();
   await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
   await expect(page.getByText('Rig is valid', { exact: true })).toBeVisible();
@@ -156,13 +161,26 @@ test('quiet interface has no detected WCAG AA violations', async ({
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  const delay = await page.getByTestId('block-delay').boundingBox();
+  const reverb = await page.getByTestId('block-reverb').boundingBox();
+  expect(delay && reverb && delay.x < reverb.x).toBe(true);
+  expect(Math.abs((delay?.y ?? 0) - (reverb?.y ?? 0))).toBeLessThan(2);
+  await page.getByRole('button', { name: 'Bypass off', exact: true }).focus();
+  await page.keyboard.press('Space');
+  await expect(
+    page.getByRole('button', { name: 'Bypass on', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Space');
+  await expect(
+    page.getByRole('button', { name: 'Bypass off', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
     .analyze();
   expect(results.violations).toEqual([]);
-  mkdirSync('../.local/previews', { recursive: true });
+  mkdirSync('../../.local/previews', { recursive: true });
   await page.screenshot({
-    path: `../.local/previews/${testInfo.project.name}-rig.png`,
+    path: `../../.local/previews/${testInfo.project.name}-rig.png`,
     fullPage: true,
   });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -171,7 +189,7 @@ test('quiet interface has no detected WCAG AA violations', async ({
     .analyze();
   expect(settings.violations).toEqual([]);
   await page.screenshot({
-    path: `../.local/previews/${testInfo.project.name}-settings.png`,
+    path: `../../.local/previews/${testInfo.project.name}-settings.png`,
     fullPage: true,
   });
 });
@@ -208,6 +226,9 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     .getByLabel('Example preset', { exact: true })
     .selectOption('parallel');
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Parallel rig' }),
+  ).toBeVisible();
   const state = (await (await request.get('/api/v1/state')).json()) as {
     preset: string;
     feedback: { value: number }[];
