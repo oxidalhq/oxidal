@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["cargo", "npm", "github-actions"],
+  "ignorePaths": ["docs/**"],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "build",
+  "semanticCommitScope": "deps",
+  "commitBody": "",
+  "commitBodyTable": false,
+  "commitTrailers": [],
+  "automerge": false,
+  "prConcurrentLimit": 3,
+  "minimumReleaseAge": "1 day",
+  "pinDigests": true,
+  "rangeStrategy": "pin",
+  "timezone": "Pacific/Auckland",
+  "schedule": ["before 5am on monday"]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "oxidal",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.21.0 <23"
+  },
+  "scripts": {
+    "bootstrap": "pnpm install --frozen-lockfile && node scripts/tooling.mjs bootstrap",
+    "dev": "node scripts/tooling.mjs dev",
+    "check": "node scripts/tooling.mjs check",
+    "test:e2e": "pnpm --dir apps/web test:e2e",
+    "contract:generate": "node scripts/contract.mjs",
+    "contract:check": "node scripts/contract.mjs --check",
+    "hooks:install": "node scripts/commits.mjs install",
+    "test:tooling": "node --test scripts/*.test.mjs",
+    "release:dry-run": "node scripts/release.mjs --dry-run",
+    "lint:tooling": "eslint scripts eslint.config.mjs --max-warnings 0",
+    "format:check": "prettier --check \"scripts/**/*.mjs\" \"*.mjs\" \".github/**/*.{yml,yaml,json}\" \"package.json\" \"pnpm-workspace.yaml\" \".release-please*.json\"",
+    "guardrails:prove": "node scripts/guardrails.mjs",
+    "release:artifacts": "node scripts/artifacts.mjs",
+    "preview": "pnpm --dir apps/web build && node scripts/tooling.mjs preview"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "ajv": "8.20.0",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "json-schema-to-typescript": "16.0.0",
+    "prettier": "3.9.10",
+    "yaml": "2.9.1"
+  }
+}

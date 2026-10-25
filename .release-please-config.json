@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "packages": {
+    ".": {
+      "release-type": "rust",
+      "component": "core"
+    },
+    "apps/web": {
+      "release-type": "node",
+      "component": "ui"
+    },
+    "os": {
+      "release-type": "simple",
+      "component": "os",
+      "version-file": "VERSION",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "manifests/base.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

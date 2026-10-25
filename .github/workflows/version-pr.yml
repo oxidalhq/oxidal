@@ -1,0 +1,29 @@
+name: Version PR
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'scripts/**'
+      - 'apps/web/**'
+      - 'os/**'
+      - '.release-please*'
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: version-pr
+  cancel-in-progress: false
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4
+        with:
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-release: true

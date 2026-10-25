@@ -1,0 +1,44 @@
+name: Tagged artifacts
+on:
+  push:
+    tags: ['core-v*', 'ui-v*', 'os-v*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Existing qualified core-v*, ui-v*, or os-v* tag'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+      - name: Require a component version tag
+        run: git describe --tags --exact-match | grep -E '^(core|ui|os)-v[0-9]+\.[0-9]+\.[0-9]+$'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+      - run: npm install --global pnpm@10.32.1
+      - run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+      - run: pnpm install --frozen-lockfile
+      - name: Verify and package native Linux x64 preview (not a Pi image)
+        run: |
+          node scripts/tooling.mjs core-check
+          pnpm contract:check
+          pnpm --dir apps/web check
+          pnpm test:tooling
+          python3 -m unittest discover -s os/tests -v
+          node scripts/artifacts.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: oxidal-linux-x64-preview
+          path: .local/artifacts/
+          retention-days: 14

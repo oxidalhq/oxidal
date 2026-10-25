@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "version": "0.1.0",
+  "distribution": "raspberry-pi-os-lite",
+  "debian_codename": "trixie",
+  "architecture": "arm64",
+  "image": {
+    "release": "2026-10-06",
+    "url": "https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2026-10-06/2026-10-06-raspios-trixie-arm64-lite.img.xz",
+    "sha256": "483db18a48da399b5b7022ffae9a07bc6d99daab30e593aedac09b69ff422843",
+    "source": "https://www.raspberrypi.com/software/operating-systems/"
+  },
+  "packages": {
+    "install": [],
+    "remove": [],
+    "policy": "Use pinned Lite image contents; capture installed package versions on target before qualification. No apt changes in this PoC."
+  },
+  "services": {
+    "stage": [
+      "oxidald.service"
+    ],
+    "enable": [],
+    "disable": []
+  },
+  "hardware_qualified": false,
+  "requires_fresh_sd_card": true
+}

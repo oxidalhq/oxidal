@@ -1,0 +1,694 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowRight,
+  ArrowsSplit,
+  CheckCircle,
+  Faders,
+  GearSix,
+  Guitar,
+  PlugsConnected,
+  WarningCircle,
+} from '@phosphor-icons/react';
+import { Button } from './components/ui/button';
+import {
+  capabilities,
+  parseSnapshot,
+  sendCommand,
+  type Action,
+  type MappingFile,
+  type Snapshot,
+} from './api';
+
+/** Quiet rig control over a single authoritative Rust state model.
+ * @see docs/architecture.md
+ * @see docs/architecture.md
+ */
+export default function App() {
+  const [state, setState] = useState<Snapshot | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [simulator, setSimulator] = useState(false);
+  const [view, setView] = useState<'rig' | 'settings'>('rig');
+  const [error, setError] = useState('');
+  const [validation, setValidation] = useState('');
+  const [draft, setDraft] = useState('');
+  const [midiValue, setMidiValue] = useState(64);
+  const [cc, setCc] = useState(21);
+  const [channel, setChannel] = useState(1);
+  const [target, setTarget] = useState('nam-a.level');
+  const [mode, setMode] = useState<'absolute' | 'relative_twos_complement'>(
+    'absolute',
+  );
+  const [minimum, setMinimum] = useState(0);
+  const [maximum, setMaximum] = useState(1);
+  const [curve, setCurve] = useState<'linear' | 'logarithmic'>('linear');
+  const [learning, setLearning] = useState(false);
+  const learnArmed = useRef(false);
+  const [pickup, setPickup] = useState(false);
+  const [feedback, setFeedback] = useState(true);
+  const accept = useCallback((next: Snapshot, expectedSession?: string) => {
+    setState((previous) => {
+      if (previous && expectedSession && previous.session !== expectedSession)
+        return previous;
+      return !previous ||
+        previous.session !== next.session ||
+        next.revision >= previous.revision
+        ? next
+        : previous;
+    });
+    if (learnArmed.current && next.origin === 'midi' && next.last_midi) {
+      setCc(next.last_midi.cc);
+      setChannel(next.last_midi.channel);
+      learnArmed.current = false;
+      setLearning(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let events: EventSource | null = null;
+    const open = () => {
+      events?.close();
+      const source = new EventSource('/api/v1/events');
+      events = source;
+      source.addEventListener('state', (event: MessageEvent<string>) => {
+        try {
+          const next = parseSnapshot(JSON.parse(event.data));
+          if (active && events === source) {
+            accept(next);
+            setConnected(true);
+          }
+        } catch {
+          if (active) {
+            setError('Device sent incompatible state');
+            setConnected(false);
+          }
+        }
+      });
+      events.onerror = () => {
+        if (active) setConnected(false);
+      };
+      void capabilities()
+        .then((info) => {
+          if (active) setSimulator(info.midi_transport === 'simulator');
+        })
+        .catch((e: unknown) => {
+          if (active) setError(String(e));
+        });
+    };
+    const offline = () => {
+      events?.close();
+      if (active) setConnected(false);
+    };
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', open);
+    open();
+    return () => {
+      active = false;
+      events?.close();
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', open);
+    };
+  }, [accept]);
+
+  function showSettings() {
+    const mapping = state?.mappings.mappings[0];
+    if (mapping) {
+      setCc(mapping.cc);
+      setChannel(mapping.channel);
+      setTarget(mapping.target);
+      setMode(mapping.mode);
+      setMinimum(mapping.min);
+      setMaximum(mapping.max);
+      setCurve(mapping.curve);
+      setPickup(mapping.pickup);
+      setFeedback(mapping.feedback);
+    }
+    setView('settings');
+  }
+
+  async function run(action: Action, structural = false) {
+    setError('');
+    try {
+      const next = await sendCommand(
+        action,
+        structural ? (state?.revision ?? null) : null,
+        state?.session ?? '',
+      );
+      accept(next, state?.session);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to update device');
+    }
+  }
+  async function routing(parallel: boolean) {
+    if (!state) return;
+    const rig = structuredClone(state.rig);
+    rig.nodes = rig.nodes.filter((node) => node.id !== 'nam-b');
+    rig.edges = rig.edges.filter(
+      (edge) => edge.from !== 'nam-b' && edge.to !== 'nam-b',
+    );
+    if (parallel) {
+      rig.nodes.splice(2, 0, { id: 'nam-b', kind: 'nam', level: 0.5 });
+      rig.edges.push(
+        { from: 'input', to: 'nam-b' },
+        { from: 'nam-b', to: 'delay' },
+      );
+    }
+    await run({ type: 'routing', rig }, true);
+  }
+  async function validateDraft() {
+    try {
+      const rig: unknown = JSON.parse(draft || JSON.stringify(state?.rig));
+      const response = await fetch('/api/v1/rig/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rig),
+      });
+      const result: unknown = await response.json();
+      if (
+        !response.ok ||
+        !result ||
+        typeof result !== 'object' ||
+        !('valid' in result) ||
+        !('errors' in result) ||
+        !Array.isArray(result.errors)
+      )
+        throw new Error('Invalid rig payload');
+      setValidation(result.valid ? 'Rig is valid' : result.errors.join(' · '));
+    } catch {
+      setValidation('Invalid JSON or rig payload');
+    }
+  }
+  function saveMapping() {
+    const file: MappingFile = {
+      version: 1,
+      mappings: [
+        {
+          id: 'knob-1',
+          device: 'simulator',
+          channel,
+          cc,
+          target,
+          mode,
+          pickup,
+          feedback,
+          min: minimum,
+          max: maximum,
+          curve,
+        },
+      ],
+    };
+    void run({ type: 'mappings', file }, true);
+  }
+  const parallel = state?.rig.nodes.some((node) => node.id === 'nam-b');
+  const named = (id: string) => state?.rig.nodes.find((node) => node.id === id);
+  const block = (id: string, name: string, detail: string) => (
+    <div className="block" data-testid={`block-${id}`}>
+      <span className="eyebrow">{named(id)?.kind ?? 'block'}</span>
+      <strong>{name}</strong>
+      <span>{detail}</span>
+    </div>
+  );
+
+  return (
+    <div className="app-shell">
+      <header className="masthead">
+        <a className="wordmark" href="/" aria-label="Oxidal home">
+          <span className="brand-mark">ø</span> oxidal
+        </a>
+        <div className="connection" role="status">
+          <span className={connected ? 'dot online' : 'dot'} />
+          {connected ? 'Device connected' : 'Reconnecting…'}
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => (view === 'rig' ? showSettings() : setView('rig'))}
+        >
+          <GearSix size={18} />
+          {view === 'rig' ? 'Settings' : 'Back to rig'}
+        </Button>
+      </header>
+      <div className="workspace">
+        <aside className="sidebar">
+          <span className="eyebrow">Instrument workspace</span>
+          <button
+            className={view === 'rig' ? 'nav-item selected' : 'nav-item'}
+            onClick={() => setView('rig')}
+          >
+            <Guitar size={20} />
+            Rig
+          </button>
+          <button
+            className={view === 'settings' ? 'nav-item selected' : 'nav-item'}
+            onClick={showSettings}
+          >
+            <Faders size={20} />
+            Controls & MIDI
+          </button>
+          <div className="sidebar-note">
+            <PlugsConnected size={22} />
+            <p>Local control PoC</p>
+            <small>NAM / LV2 engine qualification comes next.</small>
+          </div>
+        </aside>
+        <main>
+          <div className="page-heading">
+            <div>
+              <span className="eyebrow">OXIDAL / FOUNDATION 01</span>
+              <h1>
+                {view === 'rig'
+                  ? 'A little room to play.'
+                  : 'Every control, one rig.'}
+              </h1>
+              <p>
+                {view === 'rig'
+                  ? 'A clear signal path. A shared state for your browser and controller.'
+                  : 'Map a controller to the same parameters you use on the web.'}
+              </p>
+            </div>
+            <span className="revision">REV {state?.revision ?? '—'}</span>
+          </div>
+          <div className="notice">
+            <WarningCircle size={20} />
+            <span>
+              <strong>Audio unavailable.</strong> This build validates routing
+              and synchronizes controls. It does not process sound.
+            </span>
+          </div>
+          {error && (
+            <div className="error" role="alert">
+              {error}
+            </div>
+          )}
+          {!state ? (
+            <p className="empty">Waiting for the local Rust service…</p>
+          ) : view === 'rig' ? (
+            <>
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">01 / Signal path</span>
+                    <h2>Quiet current</h2>
+                  </div>
+                  <div className="segmented" aria-label="Routing mode">
+                    <Button
+                      variant={!parallel ? 'default' : 'outline'}
+                      aria-pressed={!parallel}
+                      disabled={!connected}
+                      onClick={() => void routing(false)}
+                    >
+                      Serial
+                    </Button>
+                    <Button
+                      variant={parallel ? 'default' : 'outline'}
+                      aria-pressed={parallel}
+                      disabled={!connected}
+                      onClick={() => void routing(true)}
+                    >
+                      <ArrowsSplit size={17} />
+                      Parallel
+                    </Button>
+                  </div>
+                </div>
+                <div className="signal-path">
+                  {block('input', 'Input', 'Instrument')}
+                  <ArrowRight className="route-arrow" />
+                  <div className="branches">
+                    <div className="branch">
+                      <span className="path-label">PATH A</span>
+                      {block('nam-a', 'NAM A', 'Model adapter pending')}
+                    </div>
+                    {parallel && (
+                      <div className="branch">
+                        <span className="path-label">PATH B</span>
+                        {block('nam-b', 'NAM B', 'Model adapter pending')}
+                      </div>
+                    )}
+                  </div>
+                  <ArrowRight className="route-arrow" />
+                  <div className="wet-path">
+                    {parallel && (
+                      <span className="merge-label">A + B / MERGE</span>
+                    )}
+                    {block('delay', 'Delay', 'Shared wet path')}
+                    <ArrowRight className="wet-arrow" aria-hidden="true" />
+                    {block('reverb', 'Reverb', 'Shared wet path')}
+                  </div>
+                  <ArrowRight className="route-arrow" />
+                  {block('output', 'Output', 'Engine unavailable')}
+                </div>
+                <p className="caption">
+                  {parallel
+                    ? 'Input splits into A and B, then merges before the shared delay and reverb.'
+                    : 'One NAM path feeds the shared delay and reverb.'}{' '}
+                  Routing validation is active; audio and tails are pending
+                  qualification.
+                </p>
+              </section>
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">02 / Shared controls</span>
+                    <h2>Make it yours</h2>
+                  </div>
+                  <span className="muted">
+                    Last source:{' '}
+                    <strong data-testid="last-origin">{state.origin}</strong>
+                  </span>
+                </div>
+                <div className="performance-actions">
+                  <Button
+                    variant="outline"
+                    disabled={!connected}
+                    aria-pressed={state.bypassed}
+                    onClick={() =>
+                      void run({
+                        type: 'set',
+                        target: 'rig.bypass',
+                        value: state.bypassed ? 0 : 1,
+                      })
+                    }
+                  >
+                    {state.bypassed ? 'Bypass on' : 'Bypass off'}
+                  </Button>
+                  <label className="field">
+                    Example preset
+                    <select
+                      aria-label="Example preset"
+                      disabled={!connected}
+                      value={state.preset}
+                      onChange={(e) =>
+                        void run(
+                          {
+                            type: 'set',
+                            target: 'rig.preset',
+                            value: e.target.value === 'parallel' ? 1 : 0,
+                          },
+                          true,
+                        )
+                      }
+                    >
+                      <option value="custom" disabled>
+                        Custom routing
+                      </option>
+                      <option value="serial">Serial</option>
+                      <option value="parallel">Parallel</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="parameters">
+                  {state.parameters.map((parameter) => (
+                    <label className="parameter" key={parameter.id}>
+                      <span>
+                        {parameter.label}
+                        <output data-testid={`value-${parameter.id}`}>
+                          {Math.round(parameter.value * 100)}%
+                        </output>
+                      </span>
+                      <input
+                        type="range"
+                        aria-label={parameter.label}
+                        min={parameter.min}
+                        max={parameter.max}
+                        step={parameter.step}
+                        value={parameter.value}
+                        disabled={!connected}
+                        onChange={(event) =>
+                          void run({
+                            type: 'set',
+                            target: parameter.id,
+                            value: Number(event.target.value),
+                          })
+                        }
+                      />
+                      <small>{parameter.id}</small>
+                    </label>
+                  ))}
+                </div>
+              </section>
+              <details className="panel">
+                <summary>Rig validation inspector</summary>
+                <label className="field">
+                  Rig JSON
+                  <textarea
+                    aria-label="Rig JSON"
+                    rows={8}
+                    value={draft || JSON.stringify(state.rig, null, 2)}
+                    onChange={(event) => setDraft(event.target.value)}
+                    spellCheck={false}
+                  />
+                </label>
+                <Button
+                  variant="outline"
+                  onClick={() => void validateDraft()}
+                  disabled={!connected}
+                >
+                  Validate rig
+                </Button>
+                <p role="status">{validation}</p>
+              </details>
+            </>
+          ) : (
+            <>
+              <section className="panel">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">01 / Device</span>
+                    <h2>Control surface</h2>
+                  </div>
+                  <CheckCircle size={24} />
+                </div>
+                <dl className="device-info">
+                  <div>
+                    <dt>Control service</dt>
+                    <dd>Native Rust · protocol {state.protocol}</dd>
+                  </div>
+                  <div>
+                    <dt>Audio engine</dt>
+                    <dd>Unavailable in this PoC</dd>
+                  </div>
+                  <div>
+                    <dt>MIDI transport</dt>
+                    <dd>
+                      {simulator
+                        ? 'Simulator · physical controller pending'
+                        : 'Disabled'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Persistence</dt>
+                    <dd>MIDI mappings only; rig controls reset on restart</dd>
+                  </div>
+                </dl>
+              </section>
+              <section className="panel">
+                <span className="eyebrow">02 / MIDI mapping</span>
+                <h2>One knob, any parameter</h2>
+                <p className="muted">
+                  Current mapping:{' '}
+                  {state.mappings.mappings
+                    .map((mapping) => `CC ${mapping.cc} → ${mapping.target}`)
+                    .join(', ') || 'none'}
+                  . This form replaces the PoC knob mapping.
+                </p>
+                <div className="form-grid">
+                  <label className="field">
+                    Target
+                    <select
+                      aria-label="Target"
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value)}
+                    >
+                      {state.parameters.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                      {state.actions.map((action) => (
+                        <option key={action.id} value={action.id}>
+                          {action.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    MIDI channel
+                    <input
+                      type="number"
+                      min="1"
+                      max="16"
+                      value={channel}
+                      onChange={(e) => setChannel(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="field">
+                    CC number
+                    <input
+                      type="number"
+                      min="0"
+                      max="127"
+                      value={cc}
+                      onChange={(e) => setCc(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="field">
+                    Knob mode
+                    <select
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as typeof mode)}
+                    >
+                      <option value="absolute">Absolute</option>
+                      <option value="relative_twos_complement">
+                        Relative · two’s complement
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <div className="form-grid">
+                  <label className="field">
+                    Mapped minimum (0–1)
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={minimum}
+                      onChange={(e) => setMinimum(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="field">
+                    Mapped maximum (0–1)
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={maximum}
+                      onChange={(e) => setMaximum(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="field">
+                    Scaling curve
+                    <select
+                      value={curve}
+                      onChange={(e) => setCurve(e.target.value as typeof curve)}
+                    >
+                      <option value="linear">Linear</option>
+                      <option value="logarithmic">
+                        Logarithmic (minimum above zero)
+                      </option>
+                    </select>
+                  </label>
+                </div>
+                <div className="performance-actions">
+                  <Button
+                    variant="outline"
+                    disabled={!connected || !simulator}
+                    onClick={() => {
+                      learnArmed.current = !learnArmed.current;
+                      setLearning(learnArmed.current);
+                    }}
+                  >
+                    {learning ? 'Cancel MIDI learn' : 'Learn next MIDI message'}
+                  </Button>
+                  <span role="status">
+                    {learning
+                      ? 'Move a knob or send a simulator message…'
+                      : state.last_midi
+                        ? `Last input: CH ${state.last_midi.channel} / CC ${state.last_midi.cc} (${state.midi_mapped ? 'mapped' : 'unmapped'})`
+                        : 'No MIDI input yet'}
+                  </span>
+                </div>
+                <p className="caption">
+                  Bypass and preset targets use absolute CC, linear 0–1 range,
+                  and no pickup. Values below 64 select off/serial; 64–127
+                  select on/parallel.
+                </p>
+                <div className="checkboxes">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={pickup}
+                      onChange={(e) => setPickup(e.target.checked)}
+                    />
+                    Pickup / soft takeover
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={feedback}
+                      onChange={(e) => setFeedback(e.target.checked)}
+                    />
+                    Send controller feedback
+                  </label>
+                </div>
+                <Button disabled={!connected} onClick={saveMapping}>
+                  Save mapping
+                </Button>
+                <p className="caption">
+                  Feedback updates supported displays, LEDs, or motors. Ordinary
+                  knobs use pickup; they cannot physically follow web edits.
+                </p>
+              </section>
+              <section className="panel">
+                <span className="eyebrow">03 / Development transport</span>
+                <h2>MIDI simulator</h2>
+                <p>
+                  Inject a CC message through the native control service. The
+                  simulator does not require a connected controller.
+                </p>
+                <label className="field">
+                  MIDI value
+                  <input
+                    aria-label="MIDI value"
+                    type="number"
+                    min="0"
+                    max="127"
+                    value={midiValue}
+                    onChange={(e) => setMidiValue(Number(e.target.value))}
+                  />
+                </label>
+                <Button
+                  disabled={!connected || !simulator}
+                  onClick={() =>
+                    void run({
+                      type: 'midi',
+                      input: {
+                        device: 'simulator',
+                        channel,
+                        cc,
+                        value: midiValue,
+                      },
+                    })
+                  }
+                >
+                  Send MIDI CC
+                </Button>
+                <div className="feedback" aria-label="MIDI feedback">
+                  <span className="eyebrow">
+                    Confirmed output / isolated feedback route
+                  </span>
+                  {state.feedback.length ? (
+                    state.feedback.map((item) => (
+                      <code key={item.mapping}>
+                        CH {item.channel} · CC {item.cc} · VALUE{' '}
+                        <span data-testid="feedback-value">{item.value}</span>
+                      </code>
+                    ))
+                  ) : (
+                    <span>No feedback yet</span>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
+          <footer>
+            <span>OXIDAL · INDEPENDENT BY DESIGN</span>
+            <span>
+              Local first / {connected ? 'connected' : 'reconnecting'}
+            </span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
+}

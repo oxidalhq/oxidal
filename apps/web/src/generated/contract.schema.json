@@ -1,0 +1,633 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contract",
+  "description": "Schema generation root. Rust wire types are the contract source of truth.\n@see docs/architecture.md",
+  "type": "object",
+  "properties": {
+    "capabilities": {
+      "$ref": "#/$defs/Capabilities"
+    },
+    "command": {
+      "$ref": "#/$defs/Command"
+    },
+    "error": {
+      "$ref": "#/$defs/ApiError"
+    },
+    "rig": {
+      "$ref": "#/$defs/Rig"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "validation": {
+      "$ref": "#/$defs/Validation"
+    }
+  },
+  "required": [
+    "snapshot",
+    "command",
+    "rig",
+    "validation",
+    "capabilities",
+    "error"
+  ],
+  "$defs": {
+    "Action": {
+      "description": "One command entry point; relative edits are applied to current authoritative state.\n@see docs/architecture.md",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "set"
+            },
+            "value": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delta": {
+              "type": "number",
+              "format": "double"
+            },
+            "target": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "adjust"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "target",
+            "delta"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "rig": {
+              "$ref": "#/$defs/Rig"
+            },
+            "type": {
+              "type": "string",
+              "const": "routing"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "rig"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/MappingFile"
+            },
+            "type": {
+              "type": "string",
+              "const": "mappings"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "file"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "input": {
+              "$ref": "#/$defs/MidiInput"
+            },
+            "type": {
+              "type": "string",
+              "const": "midi"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "input"
+          ]
+        }
+      ]
+    },
+    "ActionDescriptor": {
+      "description": "Enumerated commands are discoverable alongside numeric parameters.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "options"
+      ]
+    },
+    "ApiError": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ]
+    },
+    "BlockKind": {
+      "type": "string",
+      "enum": [
+        "input",
+        "nam",
+        "cabinet",
+        "delay",
+        "reverb",
+        "output"
+      ]
+    },
+    "Capabilities": {
+      "description": "Development appliance capabilities; audio is deliberately unavailable.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "audio_available": {
+          "type": "boolean"
+        },
+        "midi_transport": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "version",
+        "audio_available",
+        "midi_transport"
+      ]
+    },
+    "Command": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "expected_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "protocol": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "protocol",
+        "request_id",
+        "action"
+      ]
+    },
+    "Edge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "MappingFile": {
+      "type": "object",
+      "properties": {
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MidiMapping"
+          }
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "mappings"
+      ]
+    },
+    "MidiCurve": {
+      "description": "Scaling policy for a mapped absolute knob.\n@see docs/architecture.md",
+      "type": "string",
+      "enum": [
+        "linear",
+        "logarithmic"
+      ]
+    },
+    "MidiFeedback": {
+      "type": "object",
+      "properties": {
+        "cc": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "device": {
+          "type": "string"
+        },
+        "mapping": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mapping",
+        "device",
+        "channel",
+        "cc",
+        "value"
+      ]
+    },
+    "MidiInput": {
+      "type": "object",
+      "properties": {
+        "cc": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "device": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "channel",
+        "cc",
+        "value"
+      ]
+    },
+    "MidiMapping": {
+      "description": "Versioned MIDI mapping. Feedback uses a separate output route, never an input route.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "cc": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "curve": {
+          "$ref": "#/$defs/MidiCurve"
+        },
+        "device": {
+          "type": "string"
+        },
+        "feedback": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number",
+          "format": "double"
+        },
+        "min": {
+          "type": "number",
+          "format": "double"
+        },
+        "mode": {
+          "$ref": "#/$defs/MidiMode"
+        },
+        "pickup": {
+          "type": "boolean"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "device",
+        "channel",
+        "cc",
+        "target",
+        "mode",
+        "pickup",
+        "feedback",
+        "min",
+        "max",
+        "curve"
+      ]
+    },
+    "MidiMode": {
+      "type": "string",
+      "enum": [
+        "absolute",
+        "relative_twos_complement"
+      ]
+    },
+    "Node": {
+      "description": "Stable block identity and a declared PoC block kind.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/BlockKind"
+        },
+        "level": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "level"
+      ]
+    },
+    "Parameter": {
+      "description": "Discoverable controls share stable IDs across MIDI and web adapters.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "number",
+          "format": "double"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number",
+          "format": "double"
+        },
+        "min": {
+          "type": "number",
+          "format": "double"
+        },
+        "step": {
+          "type": "number",
+          "format": "double"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        },
+        "writable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "unit",
+        "min",
+        "max",
+        "default",
+        "step",
+        "value",
+        "writable"
+      ]
+    },
+    "Rig": {
+      "description": "Persisted routing data, independent of UI layout and audio resources.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Edge"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Node"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "edges"
+      ]
+    },
+    "Snapshot": {
+      "description": "Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.\n@see docs/architecture.md",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ActionDescriptor"
+          }
+        },
+        "audio_available": {
+          "type": "boolean"
+        },
+        "bypassed": {
+          "type": "boolean"
+        },
+        "feedback": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MidiFeedback"
+          }
+        },
+        "last_midi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidiInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mappings": {
+          "$ref": "#/$defs/MappingFile"
+        },
+        "midi_mapped": {
+          "type": "boolean"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          }
+        },
+        "preset": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "rig": {
+          "$ref": "#/$defs/Rig"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "protocol",
+        "revision",
+        "origin",
+        "request_id",
+        "audio_available",
+        "bypassed",
+        "preset",
+        "actions",
+        "midi_mapped",
+        "rig",
+        "parameters",
+        "mappings",
+        "feedback"
+      ]
+    },
+    "Validation": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "valid",
+        "errors"
+      ]
+    }
+  }
+}

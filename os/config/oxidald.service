@@ -1,0 +1,27 @@
+[Unit]
+Description=Oxidal native rig control
+After=local-fs.target
+ConditionPathIsExecutable=/opt/oxidal/bin/oxidald
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=oxidal
+WorkingDirectory=/var/lib/oxidal
+ExecStart=/opt/oxidal/bin/oxidald
+Environment=OXIDAL_ADDR=127.0.0.1:3210
+Environment=OXIDAL_SIMULATOR=0
+Environment=OXIDAL_MAPPING_PATH=/var/lib/oxidal/mappings.json
+Environment=OXIDAL_UI_DIR=/opt/oxidal/ui
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

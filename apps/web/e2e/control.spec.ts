@@ -1,0 +1,224 @@
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { mkdirSync } from 'node:fs';
+
+test.beforeEach(async ({ request }) => {
+  let state = (await (await request.get('/api/v1/state')).json()) as {
+    session: string;
+    revision: number;
+  };
+  const actions = [
+    {
+      type: 'mappings',
+      file: {
+        version: 1,
+        mappings: [
+          {
+            id: 'knob-1',
+            device: 'simulator',
+            channel: 1,
+            cc: 21,
+            target: 'nam-a.level',
+            mode: 'absolute',
+            pickup: false,
+            feedback: true,
+            min: 0,
+            max: 1,
+            curve: 'linear',
+          },
+        ],
+      },
+    },
+    { type: 'set', target: 'rig.preset', value: 0 },
+    { type: 'set', target: 'rig.bypass', value: 0 },
+  ];
+  for (const action of actions) {
+    const result = await request.post('/api/v1/commands', {
+      data: {
+        protocol: 1,
+        session: state.session,
+        request_id: crypto.randomUUID(),
+        expected_revision: state.revision,
+        action,
+      },
+    });
+    expect(result.ok()).toBe(true);
+    state = (await result.json()) as typeof state;
+  }
+});
+
+test('parallel rig validation and MIDI/web state converge across browsers', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByText('Audio unavailable.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Parallel', exact: true }).click();
+  await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  await page.getByText('Rig validation inspector').click();
+  await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
+  await expect(page.getByText('Rig is valid', { exact: true })).toBeVisible();
+  await page
+    .getByLabel('Rig JSON')
+    .fill(JSON.stringify({ nodes: [], edges: [] }));
+  await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
+  await expect(
+    page.getByText('A rig needs 1–64 nodes and at most 128 edges'),
+  ).toBeVisible();
+  const second = await context.newPage();
+  await second.goto('/');
+  await expect(second.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('MIDI value', { exact: true }).fill('127');
+  await page.getByRole('button', { name: 'Send MIDI CC' }).click();
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('100%');
+  await expect(second.getByTestId('last-origin')).toHaveText('midi');
+  await second.getByRole('slider', { name: 'NAM A level' }).fill('0.25');
+  await expect(page.getByTestId('feedback-value')).toHaveText('32');
+  await second.reload();
+  await expect(second.getByTestId('value-nam-a.level')).toHaveText('25%');
+  const live = (await (await page.request.get('/api/v1/state')).json()) as {
+    session: string;
+  };
+  const stale = await page.request.post('/api/v1/commands', {
+    data: {
+      protocol: 1,
+      session: live.session,
+      request_id: 'stale',
+      expected_revision: 0,
+      action: { type: 'set', target: 'nam-a.level', value: 0.1 },
+    },
+  });
+  expect(stale.status()).toBe(409);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test('MIDI continues with browsers closed; simulator feedback cannot loop into input', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.close();
+  const live = (await (await request.get('/api/v1/state')).json()) as {
+    session: string;
+  };
+  const command = {
+    session: live.session,
+    protocol: 1,
+    request_id: 'headless-midi',
+    expected_revision: null,
+    action: {
+      type: 'midi',
+      input: { device: 'simulator', channel: 1, cc: 21, value: 0 },
+    },
+  };
+  const response = await request.post('/api/v1/commands', { data: command });
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as {
+    parameters: { value: number }[];
+    feedback: { device: string }[];
+  };
+  expect(body.parameters[0]?.value).toBe(0);
+  command.action.input.device = body.feedback[0]?.device ?? '';
+  expect(
+    (await request.post('/api/v1/commands', { data: command })).status(),
+  ).toBe(422);
+});
+
+test('disconnect disables edits and reconnect restores the authoritative snapshot', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await context.setOffline(true);
+  await expect(page.getByText('Reconnecting…', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('slider', { name: 'NAM A level' }),
+  ).toBeDisabled();
+  await context.setOffline(false);
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(page.getByRole('slider', { name: 'NAM A level' })).toBeEnabled();
+});
+
+test('quiet interface has no detected WCAG AA violations', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Parallel', exact: true }).click();
+  await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+  mkdirSync('../.local/previews', { recursive: true });
+  await page.screenshot({
+    path: `../.local/previews/${testInfo.project.name}-rig.png`,
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const settings = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  expect(settings.violations).toEqual([]);
+  await page.screenshot({
+    path: `../.local/previews/${testInfo.project.name}-settings.png`,
+    fullPage: true,
+  });
+});
+
+test('MIDI learn persists a bypass mapping and preset controls reflect both ways', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Target', { exact: true }).selectOption('rig.bypass');
+  await page.getByRole('button', { name: 'Learn next MIDI message' }).click();
+  await page.getByLabel('CC number', { exact: true }).fill('99');
+  await page.getByLabel('MIDI value', { exact: true }).fill('127');
+  await page.getByRole('button', { name: 'Send MIDI CC' }).click();
+  await expect(
+    page.getByText('Last input: CH 1 / CC 99 (unmapped)', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Save mapping' }).click();
+  await expect(
+    page.getByText(/Current mapping: CC 99 → rig.bypass/),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Send MIDI CC' }).click();
+  await page.getByRole('button', { name: 'Back to rig' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Bypass on', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Bypass on', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Bypass off', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'false');
+  await page
+    .getByLabel('Example preset', { exact: true })
+    .selectOption('parallel');
+  await expect(page.getByTestId('block-nam-b')).toBeVisible();
+  const state = (await (await request.get('/api/v1/state')).json()) as {
+    preset: string;
+    feedback: { value: number }[];
+  };
+  expect(state.preset).toBe('parallel');
+  expect(state.feedback[0]?.value).toBe(0);
+  await page.reload();
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
+  await expect(page.getByLabel('Target', { exact: true })).toHaveValue(
+    'rig.bypass',
+  );
+});
