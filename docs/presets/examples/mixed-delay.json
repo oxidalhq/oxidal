@@ -2,15 +2,15 @@
   "format": "oxidal.preset",
   "formatVersion": 1,
   "id": "4bf6d07b-60f1-4efb-b991-b51809ef7012",
-  "name": "Clean tone with external delay",
+  "name": "TONE3000 preset with external delay",
   "tone3000": {
     "instances": [
       {
-        "id": "tone",
-        "preset": "currentTone",
+        "id": "tone3000Main",
+        "preset": "currentTone3000Preset",
         "profile": "tone3000-plugin:ef6f178ae1ac6412b55fec6f058d86e640e5aaaf",
         "origin": {
-          "resource": "sourceTone",
+          "resource": "sourceTone3000Preset",
           "sourcePresetId": "example-source"
         }
       }
@@ -26,11 +26,11 @@
           "kind": "input"
         },
         {
-          "id": "amp",
+          "id": "tone3000Node",
           "audioInputs": 2,
           "audioOutputs": 2,
           "kind": "tone3000",
-          "instance": "tone",
+          "instance": "tone3000Main",
           "bypassed": false
         },
         {
@@ -55,7 +55,7 @@
             "port": 0
           },
           "to": {
-            "node": "amp",
+            "node": "tone3000Node",
             "port": 0
           }
         },
@@ -65,13 +65,13 @@
             "port": 1
           },
           "to": {
-            "node": "amp",
+            "node": "tone3000Node",
             "port": 1
           }
         },
         {
           "from": {
-            "node": "amp",
+            "node": "tone3000Node",
             "port": 0
           },
           "to": {
@@ -81,7 +81,7 @@
         },
         {
           "from": {
-            "node": "amp",
+            "node": "tone3000Node",
             "port": 1
           },
           "to": {
@@ -130,15 +130,15 @@
   },
   "resources": [
     {
-      "id": "currentTone",
+      "id": "currentTone3000Preset",
       "path": "tone3000/current.t3kpreset",
       "kind": "tone3000-preset",
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
       "bytes": 512
     },
     {
-      "id": "sourceTone",
-      "path": "origins/source.t3kpreset",
+      "id": "sourceTone3000Preset",
+      "path": "origins/tone3000-source.t3kpreset",
       "kind": "tone3000-source",
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
       "bytes": 512

@@ -1,6 +1,6 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.1. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. No Oxidal preset importer, exporter, stripping operation or sync transport is implemented by this document. Normative MUST/MUST NOT requirements describe the intended implementation.
+**Status:** draft proposal, revision 0.2. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. No Oxidal preset importer, exporter, stripping operation or sync transport is implemented by this document. Normative MUST/MUST NOT requirements describe the intended implementation.
 
 ## Purpose and choice
 
@@ -15,6 +15,12 @@ Use **composition**: a versioned JSON manifest references an unchanged native TO
 | JSON manifest + native payloads + separate host state | Recommended. Keeps upstream format and its state authority intact, provides inspectable routing/metadata, and supports explicit removal of non-native processing. |
 
 This is an Oxidal design choice informed by established patterns, not an existing cross-vendor preset standard. [OpenTimelineIO bundles](https://opentimelineio.readthedocs.io/en/v0.14/tutorials/otio-filebundles.html) demonstrate packaging a structured document alongside referenced media. [LV2 State](https://lv2plug.in/ns/ext/state) defines plugin state as port values plus typed properties, including mapped file resources. [JSON Schema 2020-12](https://json-schema.org/draft/2020-12) provides the manifest contract. These precedents do not establish audio equivalence.
+
+## Naming
+
+Use `tone3000` in Oxidal-owned identifiers specific to the TONE3000 integration, and **TONE3000** for the brand in user-facing text. For example, the schema definition is `tone3000Instance`, instance IDs in these examples use `tone3000Main`, and resource IDs use `currentTone3000Preset` / `sourceTone3000Preset`. These example IDs remain references, not mandatory prefixes for user-created IDs.
+
+Upstream compatibility identifiers are preserved exactly: `.t3kpreset`, `T3KB`, `T3KH`, `T3KPreset` and `T3KPresetHeader` are native format names, not Oxidal branding abbreviations to rename. Plugin URIs and original preset IDs retain their upstream/user-defined spelling.
 
 ## TONE3000 compatibility baseline
 
@@ -39,7 +45,7 @@ Presets and full processor/session state are different. Interface calibration, o
 Example.oxpreset                    ZIP container; extension does not imply JSON
 ├── manifest.json                   UTF-8 JSON; manifest.schema.json applies
 ├── tone3000/current.t3kpreset       Current authoritative native tone
-├── origins/source.t3kpreset        Optional immutable original import
+├── origins/tone3000-source.t3kpreset        Optional immutable original import
 └── lv2/delay/                      Present only for a mixed rig
     ├── state.ttl                   Portable LV2 state when required
     └── files/...                   Mapped plugin assets, if any
@@ -111,7 +117,7 @@ A pure Oxidal preset stays an Oxidal preset locally even after export. Export wr
 
 Sync MUST use the same full validation/eligibility result immediately before submission, bound to the same saved revision/resource hashes. Concurrent edits invalidate an earlier result. Authorization, provider terms, network transport and conflicts are a separate design; this spec does not assert a public sync API exists. A mixed-preset sync request MUST fail before constructing/submitting provider data.
 
-Recommended structured reasons: `UNSUPPORTED_FORMAT`, `INVALID_RESOURCE`, `UNSUPPORTED_NATIVE_STATE`, `MULTIPLE_TONES`, `HOST_PROCESSING_PRESENT`, `UNKNOWN_EXTENSION`, `UNSUPPORTED_PLUGIN_FEATURE`, `REVISION_CHANGED`. Report the affected instance/resource and remediation without exposing credentials or native binary blobs.
+Recommended structured reasons: `UNSUPPORTED_FORMAT`, `INVALID_RESOURCE`, `UNSUPPORTED_NATIVE_STATE`, `MULTIPLE_TONE3000_INSTANCES`, `HOST_PROCESSING_PRESENT`, `UNKNOWN_EXTENSION`, `UNSUPPORTED_PLUGIN_FEATURE`, `REVISION_CHANGED`. Report the affected instance/resource and remediation without exposing credentials or native binary blobs.
 
 ## Explicit stripping: create a compatible copy
 

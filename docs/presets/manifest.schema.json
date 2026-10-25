@@ -28,7 +28,7 @@
         "instances": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/toneInstance"
+            "$ref": "#/$defs/tone3000Instance"
           },
           "minItems": 1,
           "maxItems": 16
@@ -120,7 +120,7 @@
       "required": ["node", "port"],
       "additionalProperties": false
     },
-    "toneInstance": {
+    "tone3000Instance": {
       "type": "object",
       "properties": {
         "id": {

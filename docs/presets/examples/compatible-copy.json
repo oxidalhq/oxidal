@@ -2,15 +2,15 @@
   "format": "oxidal.preset",
   "formatVersion": 1,
   "id": "48e50d4e-0795-479a-8fbf-a7ab8b1a0043",
-  "name": "Clean tone \u2014 compatible copy",
+  "name": "TONE3000 preset \u2014 compatible copy",
   "tone3000": {
     "instances": [
       {
-        "id": "tone",
-        "preset": "currentTone",
+        "id": "tone3000Main",
+        "preset": "currentTone3000Preset",
         "profile": "tone3000-plugin:ef6f178ae1ac6412b55fec6f058d86e640e5aaaf",
         "origin": {
-          "resource": "sourceTone",
+          "resource": "sourceTone3000Preset",
           "sourcePresetId": "example-source"
         }
       }
@@ -19,15 +19,15 @@
   "oxidal": null,
   "resources": [
     {
-      "id": "currentTone",
+      "id": "currentTone3000Preset",
       "path": "tone3000/current.t3kpreset",
       "kind": "tone3000-preset",
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
       "bytes": 512
     },
     {
-      "id": "sourceTone",
-      "path": "origins/source.t3kpreset",
+      "id": "sourceTone3000Preset",
+      "path": "origins/tone3000-source.t3kpreset",
       "kind": "tone3000-source",
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
       "bytes": 512
