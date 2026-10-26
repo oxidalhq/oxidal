@@ -34,6 +34,16 @@ try:
     pid = subprocess.check_output(['systemctl', 'show', '-p', 'MainPID', '--value', 'oxidald'], text=True).strip()
     with open('/proc/' + pid + '/status') as file:
         assert not any(line.startswith('Uid:\t0\t') for line in file), 'Daemon must be unprivileged'
+    import pwd, grp
+    account = pwd.getpwnam('oxidal-admin')
+    assert account.pw_uid >= 1000 and account.pw_shell == '/bin/bash'
+    assert 'oxidal-admin' in grp.getgrnam('sudo').gr_mem
+    with open('/etc/shadow') as shadow:
+        recovery = next(line.split(':')[1] for line in shadow if line.startswith('oxidal-admin:'))
+    assert recovery.startswith('$6$') and len(recovery) > 50
+    ssh_config = subprocess.check_output(['/usr/sbin/sshd', '-T'], text=True)
+    assert 'passwordauthentication yes' in ssh_config
+    subprocess.run(['systemctl', 'is-active', '--quiet', 'ssh'], check=True)
     assert get('/api/v1/audio')['phase'] == 'stopped'
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
     # A real TLS listener must reject unauthenticated access after systemd starts nginx.
