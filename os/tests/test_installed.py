@@ -12,6 +12,18 @@ import urllib.request
 
 @unittest.skipUnless(os.environ.get('OXIDAL_TEST_INSTALLED') == '1', 'Run by the disposable image builder')
 class InstalledTests(unittest.TestCase):
+    def test_firmware_mount_and_optional_boot_branding(self):
+        # Kernel package hooks and splash rebuilds must reach the real FAT partition.
+        subprocess.run(['mountpoint', '-q', '/boot/firmware'], check=True)
+        firmware = Path('/boot/firmware')
+        command = (firmware / 'cmdline.txt').read_text().split()
+        self.assertTrue(any(item.startswith('root=PARTUUID=') for item in command))
+        self.assertTrue((firmware / 'kernel_2712.img').is_file())
+        if 'splash' in command:
+            contents = subprocess.check_output(['lsinitramfs', str(firmware / 'initramfs_2712')], text=True)
+            self.assertIn('usr/share/plymouth/themes/oxidal/boot-splash.png', contents)
+            self.assertIn('usr/share/plymouth/themes/oxidal/oxidal.script', contents)
+
     def test_relocated_workers_ui_and_shutdown(self):
         home = Path('/opt/oxidal')
         for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
