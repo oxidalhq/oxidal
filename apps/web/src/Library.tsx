@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { importPreset, presetLibrary, type Preset } from './api';
+import { NativeEditor } from './NativeEditor';
 import { Button } from './components/ui/button';
 
 /** Immutable native originals; playback is a separate, unavailable capability.
@@ -60,7 +61,7 @@ export function Library({ connected }: { connected: boolean }) {
       <h2>Native preset library</h2>
       <p>
         Keep your TONE3000 originals here. Importing does not change the current
-        rig. Playback and editing are not available in this build.
+        rig. Originals are kept unchanged.
       </p>
       <div className="form-grid">
         <label className="field">
@@ -110,6 +111,7 @@ export function Library({ connected }: { connected: boolean }) {
           </li>
         ))}
       </ul>
+      <NativeEditor presets={presets} connected={connected} />
     </section>
   );
 }

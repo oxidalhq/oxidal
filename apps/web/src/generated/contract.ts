@@ -65,6 +65,41 @@ export type Edit =
       token: string;
     };
 export type Framing = "legacy" | "current";
+export type EditorAction =
+  | {
+      id: string;
+      kind: "load";
+      owned: boolean;
+    }
+  | {
+      kind: "begin";
+      owner: string;
+      target: string;
+      token: string;
+    }
+  | {
+      kind: "preview";
+      owner: string;
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      kind: "commit";
+      owner: string;
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      kind: "cancel";
+      owner: string;
+      token: string;
+    }
+  | {
+      kind: "save";
+      name: string;
+    };
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -75,6 +110,8 @@ export interface Contract {
   command: Command;
   error: ApiError;
   library: Library;
+  native_command: EditorCommand;
+  native_editor: EditorSnapshot;
   preset: Inspection;
   rig: Rig;
   snapshot: Snapshot;
@@ -87,6 +124,7 @@ export interface Contract {
 export interface Capabilities {
   audio_available: boolean;
   midi_transport: string;
+  native_editor: boolean;
   protocol: number;
   version: string;
 }
@@ -164,6 +202,45 @@ export interface Inspection {
   sha256: string;
   size_bytes: number;
   source_id?: string | null;
+}
+export interface EditorCommand {
+  action: EditorAction;
+  expected_revision: number;
+  request_id: string;
+  session: string;
+}
+export interface EditorSnapshot {
+  dirty: boolean;
+  edit?: Editing | null;
+  live_audio: boolean;
+  loaded?: string | null;
+  owned: OwnedPreset[];
+  parameters: Parameter2[];
+  revision: number;
+  session: string;
+  source_sha256?: string | null;
+  state_captures: number;
+}
+export interface Editing {
+  owner: string;
+  target: string;
+}
+export interface OwnedPreset {
+  id: string;
+  preset: Inspection;
+  source_sha256: string;
+}
+export interface Parameter2 {
+  automatable: boolean;
+  default: number;
+  id: string;
+  interval: number;
+  machine_default: boolean;
+  maximum: number;
+  minimum: number;
+  normalized: number;
+  tone: boolean;
+  value: number;
 }
 /**
  * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.

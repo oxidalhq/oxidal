@@ -16,6 +16,14 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_load_preset(engine: *mut c_void, bytes: *const u8, length: usize) -> i32;
+    fn oxidal_t3k_save_preset(
+        engine: *mut c_void,
+        name: *const c_char,
+        out: *mut u8,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
     fn oxidal_t3k_error() -> *const c_char;
     fn oxidal_t3k_create(rate: f64, frames: i32, result: *mut *mut c_void) -> i32;
     fn oxidal_t3k_destroy(engine: *mut c_void) -> i32;
@@ -173,6 +181,78 @@ impl Engine {
     pub fn restore(&mut self, state: &State) -> Result<()> {
         // SAFETY: State is only constructible from this backend's bounded capture, and lives through call.
         checked(unsafe { oxidal_t3k_restore(self.ptr.as_ptr(), state.0.as_ptr(), state.0.len()) })
+    }
+    pub fn load_preset(&mut self, bytes: &[u8]) -> Result<()> {
+        oxidal_presets::inspect(bytes).map_err(|e| NativeError(e.to_string()))?;
+        // SAFETY: structurally validated, bounded bytes remain live for this synchronous call.
+        checked(unsafe { oxidal_t3k_load_preset(self.ptr.as_ptr(), bytes.as_ptr(), bytes.len()) })
+    }
+    pub fn save_preset(&mut self, name: &str) -> Result<Vec<u8>> {
+        if name.trim().is_empty() || name.len() > 100 || name.chars().any(char::is_control) {
+            return Err(NativeError(
+                "Name must contain 1–100 bytes without control characters".into(),
+            ));
+        }
+        let name = string(name.trim())?;
+        let mut length = 0;
+        // SAFETY: null buffer requests one native snapshot into its private buffer.
+        checked(unsafe {
+            oxidal_t3k_save_preset(
+                self.ptr.as_ptr(),
+                name.as_ptr(),
+                std::ptr::null_mut(),
+                0,
+                &mut length,
+            )
+        })?;
+        if length == 0 || length > oxidal_presets::MAX_FILE_BYTES {
+            return Err(NativeError("invalid preset size".into()));
+        }
+        let mut bytes = vec![0; length];
+        let capacity = length;
+        // SAFETY: live unique handle, output sized by the immediately preceding capture.
+        checked(unsafe {
+            oxidal_t3k_save_preset(
+                self.ptr.as_ptr(),
+                name.as_ptr(),
+                bytes.as_mut_ptr(),
+                capacity,
+                &mut length,
+            )
+        })?;
+        if length != capacity {
+            return Err(NativeError("preset size changed".into()));
+        }
+        oxidal_presets::inspect(&bytes).map_err(|e| NativeError(e.to_string()))?;
+        Ok(bytes)
+    }
+    /// Pump queued loaders and process silent offline blocks until every native block is ready.
+    /// No readiness claim is based on a fixed delay alone.
+    pub fn wait_ready(&mut self) -> Result<()> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        loop {
+            self.pump()?;
+            self.process(&mut vec![0.0; self.frames], &mut vec![0.0; self.frames])?;
+            let state = self.runtime()?;
+            let blocks = state["blocks"]
+                .as_array()
+                .ok_or_else(|| NativeError("missing runtime blocks".into()))?;
+            if state["truncated"] == true || blocks.iter().any(|b| b["loadFailed"] == true) {
+                return Err(NativeError(
+                    "native load failed or runtime exceeded bounds".into(),
+                ));
+            }
+            if blocks
+                .iter()
+                .all(|b| b["loaded"] == true && b["modelLoading"] != true)
+            {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(NativeError("native readiness timeout".into()));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
     }
     pub fn pump(&mut self) -> Result<()> {
         // SAFETY: !Send/!Sync and exclusive borrow retain owner-thread message dispatch.

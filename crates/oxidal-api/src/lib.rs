@@ -1,3 +1,4 @@
+mod native_editor;
 mod presets;
 use axum::{
     Json, Router,
@@ -27,6 +28,7 @@ pub struct Capabilities {
     pub version: String,
     pub audio_available: bool,
     pub midi_transport: String,
+    pub native_editor: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -47,6 +49,8 @@ pub struct Contract {
     pub error: ApiError,
     pub library: oxidal_presets::Library,
     pub preset: oxidal_presets::Inspection,
+    pub native_editor: oxidal_tone3000::protocol::EditorSnapshot,
+    pub native_command: oxidal_tone3000::protocol::EditorCommand,
 }
 
 /// Local-only service settings. LAN access requires separate pairing/security design.
@@ -54,6 +58,7 @@ pub struct Contract {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub simulator: bool,
+    pub native_worker: Option<PathBuf>,
     pub mapping_path: PathBuf,
     pub preset_dir: PathBuf,
     pub ui_dir: PathBuf,
@@ -63,6 +68,7 @@ pub struct Config {
 #[derive(Debug)]
 struct Shared {
     control: Mutex<Control>,
+    native: Mutex<Option<native_editor::Worker>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
     config: Config,
@@ -98,6 +104,7 @@ pub fn router(config: Config) -> Result<Router, String> {
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let shared = Arc::new(Shared {
         control: Mutex::new(control),
+        native: Mutex::new(native_editor::Worker::start(&config)?),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
             config.preset_dir.clone(),
         ))),
@@ -120,6 +127,10 @@ pub fn router(config: Config) -> Result<Router, String> {
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route(
+            "/native",
+            get(native_editor::state).post(native_editor::command),
+        )
         .route(
             "/presets",
             get(presets::list)
@@ -183,6 +194,7 @@ async fn health(State(shared): State<Arc<Shared>>) -> Json<Capabilities> {
         protocol: 1,
         version: env!("CARGO_PKG_VERSION").into(),
         audio_available: false,
+        native_editor: shared.native.lock().await.is_some(),
         midi_transport: if shared.config.simulator {
             "simulator"
         } else {

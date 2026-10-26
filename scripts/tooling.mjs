@@ -36,6 +36,10 @@ if (mode === 'bootstrap') {
   const env = {
     ...rustEnv(),
     OXIDAL_TONE3000_LIB_DIR: join(root, '.local/tone3000/build'),
+    OXIDAL_TONE3000_FACTORY_DIR: join(
+      root,
+      '.local/tone3000/source/resources/factory-presets',
+    ),
     OXIDAL_TONE3000_TEST_MODEL: join(
       root,
       '.local/tone3000/source/test/files/a2-amp-test.nam',
@@ -47,10 +51,9 @@ if (mode === 'bootstrap') {
     [
       'clippy',
       '--locked',
-      '-p',
-      'oxidal-tone3000',
+      '--workspace',
       '--features',
-      'native',
+      'oxidal-tone3000/native',
       '--all-targets',
       '--',
       '-D',
@@ -72,6 +75,16 @@ if (mode === 'bootstrap') {
     ],
     { env },
   );
+  run('pnpm', ['test:e2e', '--grep', 'native editor'], {
+    env: {
+      ...env,
+      OXIDAL_NATIVE_EDITOR: '1',
+      OXIDAL_NATIVE_TEST_PRESET: join(
+        env.OXIDAL_QUALIFICATION_DATA,
+        'a2-preset.t3kpreset',
+      ),
+    },
+  });
 } else if (mode === 'check' || mode === 'core-check') {
   run('python3', ['scripts/check_repository.py']);
   cargo('fmt', ...workspace, '--all', '--check');
@@ -124,6 +137,27 @@ if (mode === 'bootstrap') {
   }
 } else if (mode === 'dev' || mode === 'preview' || mode === 'e2e-server') {
   cargo('build', '--locked', ...workspace, '--bin', 'oxidald');
+  if (process.env.OXIDAL_NATIVE_EDITOR === '1') {
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-tone3000',
+        '--features',
+        'native',
+        '--bin',
+        'oxidal-native-worker',
+      ],
+      {
+        env: {
+          ...rustEnv(),
+          OXIDAL_TONE3000_LIB_DIR: join(root, '.local/tone3000/build'),
+        },
+      },
+    );
+  }
   const mappingPath =
     mode === 'e2e-server'
       ? join(mkdtempSync(join(tmpdir(), 'oxidal-e2e-')), 'mappings.json')
@@ -131,6 +165,14 @@ if (mode === 'bootstrap') {
   const env = {
     ...process.env,
     OXIDAL_SIMULATOR: '1',
+    ...(process.env.OXIDAL_NATIVE_EDITOR === '1'
+      ? {
+          OXIDAL_NATIVE_WORKER: join(root, 'target/debug/oxidal-native-worker'),
+          OXIDAL_QUALIFICATION_DATA: mkdtempSync(
+            join(tmpdir(), 'oxidal-editor-'),
+          ),
+        }
+      : {}),
     OXIDAL_MAPPING_PATH: mappingPath,
     OXIDAL_PRESET_DIR: join(dirname(mappingPath), 'presets'),
     OXIDAL_UI_DIR: join(root, 'apps/web/dist'),

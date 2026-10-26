@@ -1,5 +1,6 @@
 // Offline qualification bridge. See docs/native-tone3000.md.
 #include "Processor.h"
+#include "PresetFile.h"
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -50,6 +51,8 @@ EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
     try {
       auto e = std::make_unique<Engine>(frames);
       e->processor.setMultiCoreEnabled(false, false);
+      // JUCE host contract: publish rate/block metadata before preparation and callbacks.
+      e->processor.setRateAndBufferSizeDetails(rate, frames);
       e->processor.prepareToPlay(rate, frames);
       *result = e.release();
     } catch (...) { occupied.store(false); throw; }
@@ -71,6 +74,7 @@ EXPORT int oxidal_t3k_catalog(void* ptr, char* out, size_t capacity, size_t* wri
       row->setProperty("maximum", range.end); row->setProperty("interval", range.interval);
       row->setProperty("default", p->convertFrom0to1(p->getDefaultValue()));
       row->setProperty("value", p->convertFrom0to1(p->getValue()));
+      row->setProperty("normalized", p->getValue());
       row->setProperty("automatable", p->isAutomatable());
       row->setProperty("tone", !nonTone.contains(p->paramID));
       row->setProperty("machine_default", TONE3000Processor::isMachineDefaultParameter(p->paramID));
@@ -132,4 +136,51 @@ EXPORT int oxidal_t3k_load_model(void* ptr, const char* path, char* out, size_t 
 }
 EXPORT int oxidal_t3k_runtime(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] { json(engine(ptr).processor.getStageRuntime(), out, capacity, written); });
+}
+
+// Input was structurally bounded by oxidal-presets before entering this ABI.
+EXPORT int oxidal_t3k_load_preset(void* ptr, const unsigned char* bytes, size_t length) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!bytes || length < 5 || length > 32 * 1024 * 1024) throw std::runtime_error("preset size");
+    const auto root = juce::File(juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {})).getChildFile("adapter-presets");
+    if (!root.createDirectory()) throw std::runtime_error("preset staging directory");
+    const auto file = root.getChildFile("input.t3kpreset");
+    if (!file.replaceWithData(bytes, length)) throw std::runtime_error("preset staging write");
+    auto tree = t3k::presetfile::read(file);
+    if (!tree.isValid()) throw std::runtime_error("native preset parse failed");
+    // Staging identity is never the imported/provider identity, and never leaves this cache.
+    tree.setProperty("id", "oxidal-input", nullptr);
+    if (!t3k::presetfile::write(file, tree)) throw std::runtime_error("preset staging write");
+    e.processor.setPresetStoreForTesting(root);
+    if (!e.processor.loadPreset("user:oxidal-input")) throw std::runtime_error("native preset load failed");
+  });
+}
+EXPORT int oxidal_t3k_save_preset(void* ptr, const char* name, unsigned char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!written || !name || juce::String::fromUTF8(name).trim().isEmpty()) throw std::runtime_error("preset name required");
+    if (!out) {
+      // New empty scratch store prevents upstream's same-name overwrite rule from touching originals.
+      const auto base = juce::File(juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {})).getChildFile("adapter-export");
+      const auto root = base.getChildFile(juce::Uuid().toString());
+      if (!root.createDirectory()) throw std::runtime_error("export staging directory");
+      e.processor.setPresetStoreForTesting(root);
+      const auto result = e.processor.savePreset(name);
+      if (result.isVoid()) throw std::runtime_error("native preset save failed");
+      const auto files = root.findChildFiles(juce::File::findFiles, false, "*.t3kpreset");
+      if (files.size() != 1) throw std::runtime_error("native preset save ambiguous");
+      auto tree = t3k::presetfile::read(files[0]);
+      tree.setProperty("id", "oxidal-" + juce::Uuid().toString(), nullptr);
+      e.captured.reset();
+      if (!t3k::presetfile::write(files[0], tree) || !files[0].loadFileAsData(e.captured)) throw std::runtime_error("export read failed");
+      if (!root.deleteRecursively()) throw std::runtime_error("export staging cleanup failed");
+    }
+    *written = e.captured.getSize();
+    if (*written == 0 || *written > 32 * 1024 * 1024) throw std::runtime_error("preset size limit");
+    if (out) {
+      if (capacity < *written) throw std::runtime_error("preset capacity");
+      std::memcpy(out, e.captured.getData(), *written);
+    }
+  });
 }

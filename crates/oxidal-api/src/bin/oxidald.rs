@@ -11,6 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (stop, shutdown) = tokio::sync::watch::channel(false);
     let config = Config {
         shutdown: Some(shutdown),
+        native_worker: std::env::var_os("OXIDAL_NATIVE_WORKER").map(PathBuf::from),
         simulator: std::env::var("OXIDAL_SIMULATOR").is_ok_and(|v| v == "1"),
         mapping_path: PathBuf::from(
             std::env::var("OXIDAL_MAPPING_PATH").unwrap_or_else(|_| ".local/mappings.json".into()),

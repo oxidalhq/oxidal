@@ -16,6 +16,12 @@
     "library": {
       "$ref": "#/$defs/Library"
     },
+    "native_command": {
+      "$ref": "#/$defs/EditorCommand"
+    },
+    "native_editor": {
+      "$ref": "#/$defs/EditorSnapshot"
+    },
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
@@ -37,7 +43,9 @@
     "capabilities",
     "error",
     "library",
-    "preset"
+    "preset",
+    "native_editor",
+    "native_command"
   ],
   "$defs": {
     "Action": {
@@ -214,6 +222,9 @@
         "midi_transport": {
           "type": "string"
         },
+        "native_editor": {
+          "type": "boolean"
+        },
         "protocol": {
           "type": "integer",
           "format": "uint8",
@@ -229,7 +240,8 @@
         "protocol",
         "version",
         "audio_available",
-        "midi_transport"
+        "midi_transport",
+        "native_editor"
       ]
     },
     "Command": {
@@ -411,6 +423,268 @@
       "required": [
         "owner",
         "target"
+      ]
+    },
+    "Editing": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "target"
+      ]
+    },
+    "EditorAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "load"
+            },
+            "owned": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id",
+            "owned"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "begin"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "token",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "preview"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "commit"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cancel"
+            },
+            "owner": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "owner",
+            "token"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "EditorCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/EditorAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "request_id",
+        "action"
+      ]
+    },
+    "EditorSnapshot": {
+      "type": "object",
+      "properties": {
+        "dirty": {
+          "type": "boolean"
+        },
+        "edit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Editing"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "live_audio": {
+          "type": "boolean"
+        },
+        "loaded": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owned": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OwnedPreset"
+          }
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Parameter2"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        },
+        "source_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state_captures": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "dirty",
+        "parameters",
+        "owned",
+        "state_captures",
+        "live_audio"
       ]
     },
     "Framing": {
@@ -680,6 +954,26 @@
         "level"
       ]
     },
+    "OwnedPreset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/Inspection"
+        },
+        "source_sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_sha256",
+        "preset"
+      ]
+    },
     "Parameter": {
       "description": "Discoverable controls share stable IDs across MIDI and web adapters.\n@see docs/architecture.md",
       "type": "object",
@@ -728,6 +1022,60 @@
         "step",
         "value",
         "writable"
+      ]
+    },
+    "Parameter2": {
+      "type": "object",
+      "properties": {
+        "automatable": {
+          "type": "boolean"
+        },
+        "default": {
+          "type": "number",
+          "format": "double"
+        },
+        "id": {
+          "type": "string"
+        },
+        "interval": {
+          "type": "number",
+          "format": "double"
+        },
+        "machine_default": {
+          "type": "boolean"
+        },
+        "maximum": {
+          "type": "number",
+          "format": "double"
+        },
+        "minimum": {
+          "type": "number",
+          "format": "double"
+        },
+        "normalized": {
+          "type": "number",
+          "format": "double"
+        },
+        "tone": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "minimum",
+        "maximum",
+        "interval",
+        "default",
+        "value",
+        "normalized",
+        "automatable",
+        "tone",
+        "machine_default"
       ]
     },
     "Rig": {

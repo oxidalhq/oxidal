@@ -2,7 +2,7 @@
 
 The control/runtime foundation has five crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, and `oxidal-presets` inspects and stores immutable native preset originals. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
 
-A sixth crate, `oxidal-tone3000`, contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its real processor/state/audio checks are separate from the daemon; there is no live native host or native browser editing yet. The adapter is currently macOS-only and must be extended/qualified for Linux before appliance use.
+A sixth crate, `oxidal-tone3000`, contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its optional worker connects real native preset loading, bounded edits, and immutable owned-copy save/reload to the browser. There is no live audio host. The adapter is currently macOS-only and must be extended/qualified for Linux before appliance use.
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
@@ -37,7 +37,7 @@ Ordinary web writes to an owned target are rejected. MIDI mapped to that target 
 
 A 30-second monotonic idle lease rolls back abandoned previews, refreshes MIDI feedback and publishes an SSE snapshot. The daemon checks expiration before commands and every 250 ms. Navigation requests cancellation; a lost tab/network cannot strand ownership indefinitely. A surviving editor retains its local draft after disconnect/expiry but requires explicit reopening rather than replay. Snapshot/status reads remain available during edits.
 
-This ports transaction policy into the shared control plane, **not native TONE3000 block DSP or opaque-state capture**. No editable imported preset or audio processing is implied. The future native adapter must bind these semantics to instance/rig identity and readiness, capture final state once, keep model-size changes staged, and qualify native failure/rollback. These are remaining integration gates, not behaviours supplied by this UI alone.
+This generic control path is separate from native TONE3000 block DSP. The optional native editor below now captures native state on final commit, restores it on cancel/expiry, and checks native readiness. Unifying physical MIDI, per-block gestures and model-size staging with the live graph remains required; the generic UI alone does not provide that integration.
 
 ## Preset interchange contract
 
@@ -50,3 +50,9 @@ The [draft preset format](presets/format.md) defines a versioned JSON manifest, 
 Parsing and filesystem operations run on blocking workers behind a separate store mutex, never the control-state mutex or an audio callback. The store admits 32 MiB per file, 128 originals and 256 MiB total. Structural limits are 64 nesting levels, 65,536 nodes/values per tree and 1 MiB strings; identifiers have tighter limits. Files use full lowercase SHA-256 names, never upload names or user paths. Each read checks regular-file status, framing and content hash. Corrupt entries fail visibly rather than disappearing from the list. A private, daemon-owned storage directory is required; this is not a defense against another process concurrently altering that directory.
 
 A successful write syncs a temporary file and publishes it through a same-filesystem, no-clobber hard link. Reimporting identical bytes retains one original; failure does not overwrite an existing original. This has process-restart coverage, but directory sync/power-loss durability, multi-daemon writers, deletion and library migrations remain unqualified. Local filesystems must support hard links. Interrupted temporary files are excluded from listings. The service retains its loopback/origin restrictions; no provider credentials or cloud submission are involved.
+
+## Optional native preset editor
+
+`GET /api/v1/native` reads the worker snapshot; `POST /api/v1/native` accepts the generated `EditorCommand` contract. Both return 503 when the optional worker is unavailable. Health includes `native_editor`; `audio_available` stays false. The worker is enabled explicitly with an absolute `OXIDAL_NATIVE_WORKER` executable and an isolated native data directory. `OXIDAL_NATIVE_EDITOR=1 pnpm preview` configures both for local review.
+
+The [native editor lifecycle](native-tone3000.md) keeps JUCE on the worker main thread, bounds IPC, validates original bytes before native loading, gates readiness, preserves global settings and saves immutable owned tone copies. A failed/unknown IPC outcome disables the worker without replay. Source originals retain their exact bytes. This workflow is independent of the existing simulated rig/MIDI controls; native per-block editing, physical MIDI, full settings parity, mixed rigs and live audio remain explicit integration work.

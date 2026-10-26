@@ -19,6 +19,8 @@ oxidal-graph.workspace = true
 oxidal-control.workspace = true
 oxidal-presets = { path = "../oxidal-presets", version = "0.1.0" }
 
+oxidal-tone3000 = { path = "../oxidal-tone3000", version = "0.1.0" }
+
 async-stream = "0.3"
 
 [dev-dependencies]

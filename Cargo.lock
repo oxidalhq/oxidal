@@ -541,6 +541,7 @@ dependencies = [
  "oxidal-control",
  "oxidal-graph",
  "oxidal-presets",
+ "oxidal-tone3000",
  "reqwest",
  "schemars",
  "serde",
@@ -581,6 +582,7 @@ version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
+ "serde_json",
  "sha2",
 ]
 
@@ -588,6 +590,9 @@ dependencies = [
 name = "oxidal-tone3000"
 version = "0.1.0"
 dependencies = [
+ "oxidal-presets",
+ "schemars",
+ "serde",
  "serde_json",
 ]
 

@@ -2,6 +2,8 @@
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
 mod native;
+mod owned;
+pub use owned::{OwnedPreset, OwnedStore};
 mod store;
 pub use native::{Framing, Inspection, MAX_FILE_BYTES, inspect};
 pub use store::{Library, Store};

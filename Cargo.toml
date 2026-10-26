@@ -13,7 +13,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 schemars = "1.2"
 axum = { version = "0.8", features = ["json"] }
-tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "process", "io-util"] }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 oxidal-graph = { path = "crates/oxidal-graph", version = "0.1.0" }
 oxidal-control = { path = "crates/oxidal-control", version = "0.1.0" }

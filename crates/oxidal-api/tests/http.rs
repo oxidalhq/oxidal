@@ -14,6 +14,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let app = router(Config {
+        native_worker: None,
         shutdown: None,
         simulator,
         mapping_path: path.clone(),
@@ -143,6 +144,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     );
     assert!(path.is_file());
     let app = router(Config {
+        native_worker: None,
         shutdown: None,
         simulator: false,
         mapping_path: path.clone(),
@@ -164,6 +166,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     std::fs::write(&path, b"bad data").unwrap();
     assert!(
         router(Config {
+            native_worker: None,
             shutdown: None,
             simulator: false,
             mapping_path: path.clone(),

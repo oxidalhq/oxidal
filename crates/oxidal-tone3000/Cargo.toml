@@ -10,6 +10,9 @@ native = []
 
 [dependencies]
 serde_json.workspace = true
+serde.workspace = true
+schemars.workspace = true
+oxidal-presets = { path = "../oxidal-presets", version = "0.1.0" }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
@@ -20,4 +23,8 @@ all = "warn"
 
 [[example]]
 name = "qualify"
+required-features = ["native"]
+
+[[bin]]
+name = "oxidal-native-worker"
 required-features = ["native"]

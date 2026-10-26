@@ -105,3 +105,36 @@ export async function importPreset(file: File): Promise<Preset> {
   if (!presetValidator(body)) throw new Error('Incompatible preset response');
   return body;
 }
+
+export type NativeSnapshot = Contract['native_editor'];
+export type NativeAction = Contract['native_command']['action'];
+const nativeValidator = ajv.compile<NativeSnapshot>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/EditorSnapshot',
+});
+export async function nativeState(): Promise<NativeSnapshot> {
+  const body = await presetResponse(await fetch('/api/v1/native'));
+  if (!nativeValidator(body))
+    throw new Error('Incompatible native editor state');
+  return body;
+}
+export async function nativeCommand(
+  state: NativeSnapshot,
+  action: NativeAction,
+): Promise<NativeSnapshot> {
+  const body = await presetResponse(
+    await fetch('/api/v1/native', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: state.session,
+        expected_revision: state.revision,
+        request_id: crypto.randomUUID(),
+        action,
+      }),
+    }),
+  );
+  if (!nativeValidator(body))
+    throw new Error('Incompatible native editor state');
+  return body;
+}

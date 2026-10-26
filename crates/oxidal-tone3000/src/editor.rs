@@ -1,0 +1,303 @@
+//! Single native owner with bounded transactions. No live audio thread is used by this offline editor.
+use crate::{Engine, State, protocol::*};
+use oxidal_presets::{OwnedStore, Store};
+use std::{
+    collections::VecDeque,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+
+type Result<T> = std::result::Result<T, String>;
+fn identity(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 80 && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-')
+}
+#[derive(Debug)]
+struct Gesture {
+    owner: String,
+    token: String,
+    target: String,
+    sequence: u32,
+    touched: Instant,
+}
+#[derive(Debug)]
+pub struct Editor {
+    engine: Engine,
+    originals: Store,
+    owned: OwnedStore,
+    state: EditorSnapshot,
+    committed: State,
+    gesture: Option<Gesture>,
+    finished: VecDeque<String>,
+    receipts: VecDeque<(String, String)>,
+    failed: bool,
+}
+impl Editor {
+    pub fn new(root: PathBuf) -> Result<Self> {
+        let mut engine = Engine::new(48000.0, 128).map_err(|e| e.to_string())?;
+        engine.wait_ready().map_err(|e| e.to_string())?;
+        let committed = engine.capture().map_err(|e| e.to_string())?;
+        let session = format!(
+            "native-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| e.to_string())?
+                .as_nanos()
+        );
+        Ok(Self {
+            engine,
+            committed,
+            originals: Store::new(root.clone()),
+            owned: OwnedStore::new(root.join("owned")),
+            state: EditorSnapshot {
+                session,
+                revision: 0,
+                loaded: None,
+                source_sha256: None,
+                dirty: false,
+                edit: None,
+                parameters: vec![],
+                owned: vec![],
+                state_captures: 0,
+                live_audio: false,
+            },
+            gesture: None,
+            finished: VecDeque::new(),
+            receipts: VecDeque::new(),
+            failed: false,
+        })
+    }
+    fn finish(&mut self) {
+        if let Some(g) = self.gesture.take() {
+            if self.finished.len() == 32 {
+                self.finished.pop_front();
+            }
+            self.finished.push_back(g.token);
+        }
+        self.state.edit = None;
+    }
+    fn rollback(&mut self) -> Result<()> {
+        if let Err(e) = self
+            .engine
+            .restore(&self.committed)
+            .and_then(|_| self.engine.wait_ready())
+        {
+            self.failed = true;
+            return Err(format!("Native rollback failed; restart required: {e}"));
+        }
+        Ok(())
+    }
+    fn capture(&mut self) -> Result<()> {
+        self.committed = self.engine.capture().map_err(|e| e.to_string())?;
+        self.state.state_captures += 1;
+        Ok(())
+    }
+    pub fn tick(&mut self) -> Result<()> {
+        if self.failed {
+            return Err("Native editor unavailable; restart required".into());
+        }
+        self.engine.pump().map_err(|e| e.to_string())?;
+        if self
+            .gesture
+            .as_ref()
+            .is_some_and(|g| g.touched.elapsed() >= Duration::from_secs(30))
+        {
+            self.rollback()?;
+            self.finish();
+            self.state.revision += 1;
+        }
+        Ok(())
+    }
+    pub fn snapshot(&mut self) -> Result<EditorSnapshot> {
+        self.tick()?;
+        self.state.parameters =
+            serde_json::from_value(self.engine.catalog().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
+        Ok(self.state.clone())
+    }
+    pub fn command(&mut self, command: EditorCommand) -> Result<EditorSnapshot> {
+        self.tick()?;
+        if command.session != self.state.session {
+            return Err("native_session_conflict".into());
+        }
+        if !identity(&command.request_id) {
+            return Err("invalid_request_id".into());
+        }
+        let fingerprint = serde_json::to_string(&command).map_err(|e| e.to_string())?;
+        if let Some((_, old)) = self
+            .receipts
+            .iter()
+            .find(|(id, _)| id == &command.request_id)
+        {
+            if old != &fingerprint {
+                return Err("request_id_conflict".into());
+            }
+            return self.snapshot();
+        }
+        if command.expected_revision != self.state.revision {
+            return Err("native_revision_conflict".into());
+        }
+        self.apply(command.action)?;
+        self.state.revision += 1;
+        if self.receipts.len() == 32 {
+            self.receipts.pop_front();
+        }
+        self.receipts.push_back((command.request_id, fingerprint));
+        self.snapshot()
+    }
+    fn apply(&mut self, action: EditorAction) -> Result<()> {
+        match action {
+            EditorAction::Load { id, owned } => {
+                if self.gesture.is_some() {
+                    return Err("edit_busy".into());
+                }
+                let (source, bytes) = if owned {
+                    let (info, bytes) = self.owned.read(&id).map_err(|e| e.to_string())?;
+                    (info.source_sha256, bytes)
+                } else {
+                    (
+                        id.clone(),
+                        self.originals.original(&id).map_err(|e| e.to_string())?,
+                    )
+                };
+                if let Err(error) = self
+                    .engine
+                    .load_preset(&bytes)
+                    .and_then(|_| self.engine.wait_ready())
+                {
+                    self.rollback()?;
+                    return Err(error.to_string());
+                }
+                if let Err(error) = self.capture() {
+                    self.rollback()?;
+                    return Err(error);
+                }
+                self.state.source_sha256 = Some(source);
+                self.state.loaded = Some(id);
+                self.state.dirty = false;
+            }
+            EditorAction::Save { name } => {
+                if self.gesture.is_some() {
+                    return Err("edit_busy".into());
+                }
+                let source = self
+                    .state
+                    .source_sha256
+                    .clone()
+                    .ok_or("Load a preset first")?;
+                let bytes = self.engine.save_preset(&name).map_err(|e| e.to_string());
+                // Upstream save changes native active-preset identity. Restore the exact working
+                // session before storage, so a storage failure never changes our committed state.
+                self.rollback()?;
+                let info = self
+                    .owned
+                    .save(&source, &bytes?)
+                    .map_err(|e| e.to_string())?;
+                self.state.loaded = Some(info.id);
+                self.state.dirty = false;
+            }
+            EditorAction::Begin {
+                owner,
+                token,
+                target,
+            } => {
+                if self.state.loaded.is_none() {
+                    return Err("Load a preset first".into());
+                }
+                if !identity(&owner) || !identity(&token) {
+                    return Err("invalid_edit_identity".into());
+                }
+                if self.finished.contains(&token) {
+                    return Err("edit_finished".into());
+                }
+                if self.gesture.is_some() {
+                    return Err("edit_busy".into());
+                }
+                if !writable(&target) {
+                    return Err("Native control is not qualified for editing".into());
+                }
+                self.state.edit = Some(Editing {
+                    owner: owner.clone(),
+                    target: target.clone(),
+                });
+                self.gesture = Some(Gesture {
+                    owner,
+                    token,
+                    target,
+                    sequence: 0,
+                    touched: Instant::now(),
+                });
+            }
+            EditorAction::Cancel { owner, token } => {
+                self.check_owner(&owner, &token)?;
+                self.rollback()?;
+                self.finish();
+            }
+            EditorAction::Preview {
+                owner,
+                token,
+                sequence,
+                value,
+            } => self.change(owner, token, sequence, value, false)?,
+            EditorAction::Commit {
+                owner,
+                token,
+                sequence,
+                value,
+            } => self.change(owner, token, sequence, value, true)?,
+        }
+        Ok(())
+    }
+    fn check_owner(&self, owner: &str, token: &str) -> Result<()> {
+        let g = self.gesture.as_ref().ok_or("edit_stale")?;
+        if g.owner != owner || g.token != token {
+            return Err("edit_owner_conflict".into());
+        }
+        Ok(())
+    }
+    fn change(
+        &mut self,
+        owner: String,
+        token: String,
+        sequence: u32,
+        value: f32,
+        commit: bool,
+    ) -> Result<()> {
+        self.check_owner(&owner, &token)?;
+        let g = self.gesture.as_ref().expect("checked owner");
+        if sequence <= g.sequence || !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err("invalid_edit_sequence_or_value".into());
+        }
+        let target = g.target.clone();
+        if staged(&target) && !commit {
+            return Err("Processing changes apply only on commit".into());
+        }
+        let result = self.engine.set_normalized(&target, value).and_then(|_| {
+            if staged(&target) {
+                self.engine.wait_ready()
+            } else {
+                Ok(())
+            }
+        });
+        if let Err(error) = result {
+            self.rollback()?;
+            self.finish();
+            return Err(error.to_string());
+        }
+        if commit {
+            if let Err(error) = self.capture() {
+                self.rollback()?;
+                self.finish();
+                return Err(error);
+            }
+            self.state.dirty |= target == "toneBass" || target == "outputLevel";
+            self.finish();
+        } else {
+            let g = self.gesture.as_mut().unwrap();
+            g.sequence = sequence;
+            g.touched = Instant::now();
+        }
+        Ok(())
+    }
+}

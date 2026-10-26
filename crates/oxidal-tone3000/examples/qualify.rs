@@ -191,9 +191,297 @@ fn main() -> Result<(), Box<dyn Error>> {
         restore_error < 1e-5,
         "restored native model differs: {restore_error}"
     );
+    eprintln!("qualify: export tone");
+    engine.set_normalized("toneEqEnabled", 1.0)?;
+    engine.set_normalized("toneBass", 0.4)?;
+    let preset = engine.save_preset("Authored A2 workflow")?;
+    std::fs::write(root.join("a2-preset.t3kpreset"), &preset)?;
+    // Tone loads preserve device/session calibration and oversampling.
+    engine.set_normalized("inputCalibrationLevel", 0.7)?;
+    engine.set_normalized("osEnabled", 1.0)?;
+    engine.set_normalized("osFactor", 0.5)?;
+    engine.wait_ready()?;
+    eprintln!("qualify: staged device settings ready");
+    let device_before = engine.catalog()?;
+    engine.load_preset(&preset)?;
+    engine.wait_ready()?;
+    let device_after = engine.catalog()?;
+    for id in ["inputCalibrationLevel", "osEnabled", "osFactor"] {
+        let value = |catalog: &Value| {
+            catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == id)
+                .unwrap()["value"]
+                .clone()
+        };
+        assert_eq!(value(&device_before), value(&device_after), "preserve {id}");
+    }
+    // Each whole-tone save has a fresh owned identity, including same-name saves.
+    let second = engine.save_preset("Authored A2 workflow")?;
+    assert_ne!(
+        oxidal_presets::inspect(&preset)?.source_id,
+        oxidal_presets::inspect(&second)?.source_id
+    );
+    drop(engine);
+    eprintln!("qualify: owned editor workflow");
+    qualify_editor(&root, &preset)?;
+    qualify_factories()?;
     println!(
         "{}",
         serde_json::json!({"parameters":43,"tone_parameters":36,"machine_defaults":4,"dry_max_error":dry_error,"restored_a2_max_error":restore_error,"state_bytes":model_state.byte_len(),"non_a2_local_load_rejected":true,"live_audio_qualified":false})
+    );
+    Ok(())
+}
+
+fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
+    use oxidal_tone3000::{
+        editor::Editor,
+        protocol::{EditorAction as A, EditorCommand, EditorSnapshot},
+    };
+    let store_root = root.join("editor-library");
+    let mut originals = oxidal_presets::Store::new(store_root.clone());
+    let original = originals.import(bytes)?;
+    let mut editor = Editor::new(store_root.clone())?;
+    let send = |editor: &mut Editor, action: A| -> Result<EditorSnapshot, Box<dyn Error>> {
+        eprintln!("qualify editor: {action:?}");
+        let s = editor.snapshot()?;
+        Ok(editor.command(EditorCommand {
+            session: s.session,
+            expected_revision: s.revision,
+            request_id: format!("request-{}", s.revision),
+            action,
+        })?)
+    };
+    let value =
+        |s: &EditorSnapshot, id: &str| s.parameters.iter().find(|p| p.id == id).unwrap().normalized;
+    let loaded = send(
+        &mut editor,
+        A::Load {
+            id: original.sha256.clone(),
+            owned: false,
+        },
+    )?;
+    send(
+        &mut editor,
+        A::Begin {
+            owner: "owner".into(),
+            token: "cancel".into(),
+            target: "toneBass".into(),
+        },
+    )?;
+    let preview = send(
+        &mut editor,
+        A::Preview {
+            owner: "owner".into(),
+            token: "cancel".into(),
+            sequence: 1,
+            value: 0.8,
+        },
+    )?;
+    assert!((value(&preview, "toneBass") - 0.8).abs() < 1e-5);
+    assert_eq!(
+        preview.state_captures, loaded.state_captures,
+        "preview must not capture opaque state"
+    );
+    assert!(
+        send(
+            &mut editor,
+            A::Commit {
+                owner: "intruder".into(),
+                token: "cancel".into(),
+                sequence: 2,
+                value: 0.9
+            }
+        )
+        .is_err()
+    );
+    let cancelled = send(
+        &mut editor,
+        A::Cancel {
+            owner: "owner".into(),
+            token: "cancel".into(),
+        },
+    )?;
+    assert!((value(&loaded, "toneBass") - value(&cancelled, "toneBass")).abs() < 1e-6);
+    for (token, target, value) in [
+        ("commit", "toneBass", 0.75),
+        ("level", "outputLevel", 0.6),
+        ("calibration", "inputCalibrationLevel", 0.65),
+        ("os", "osEnabled", 1.0),
+        ("factor", "osFactor", 0.5),
+    ] {
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.into(),
+                target: target.into(),
+            },
+        )?;
+        if target == "osFactor" {
+            assert!(
+                send(
+                    &mut editor,
+                    A::Preview {
+                        owner: "owner".into(),
+                        token: token.into(),
+                        sequence: 1,
+                        value
+                    }
+                )
+                .is_err()
+            );
+        }
+        send(
+            &mut editor,
+            A::Commit {
+                owner: "owner".into(),
+                token: token.into(),
+                sequence: 2,
+                value,
+            },
+        )?;
+    }
+    let committed = editor.snapshot()?;
+    assert_eq!(committed.state_captures, loaded.state_captures + 5);
+    // A real filesystem failure must not report success or change native working state.
+    std::fs::write(store_root.join("owned"), b"not a directory")?;
+    assert!(
+        editor
+            .command(EditorCommand {
+                session: committed.session.clone(),
+                expected_revision: committed.revision,
+                request_id: "failed-save".into(),
+                action: A::Save {
+                    name: "Must fail".into()
+                }
+            })
+            .is_err()
+    );
+    std::fs::remove_file(store_root.join("owned"))?;
+    assert!((value(&editor.snapshot()?, "toneBass") - value(&committed, "toneBass")).abs() < 1e-6);
+    let saved = send(
+        &mut editor,
+        A::Save {
+            name: "Owned A2".into(),
+        },
+    )?;
+    let owned = saved.owned.last().unwrap();
+    assert_eq!(owned.source_sha256, original.sha256);
+    assert_ne!(owned.preset.source_id, original.source_id);
+    let id = owned.id.clone();
+    assert_eq!(originals.original(&original.sha256)?, bytes);
+    send(
+        &mut editor,
+        A::Load {
+            id: original.sha256.clone(),
+            owned: false,
+        },
+    )?;
+    let reloaded = send(
+        &mut editor,
+        A::Load {
+            id: id.clone(),
+            owned: true,
+        },
+    )?;
+    for id in [
+        "toneBass",
+        "outputLevel",
+        "inputCalibrationLevel",
+        "osEnabled",
+        "osFactor",
+    ] {
+        assert!((value(&reloaded, id) - value(&committed, id)).abs() < 1e-6);
+    }
+    // Persisted owned file survives both worker and engine destruction; original remains exact.
+    drop(editor);
+    let mut editor = Editor::new(store_root)?;
+    let restarted = send(&mut editor, A::Load { id, owned: true })?;
+    assert!((value(&restarted, "toneBass") - 0.75).abs() < 1e-5);
+    assert!((value(&restarted, "outputLevel") - 0.6).abs() < 1e-5);
+    assert_eq!(originals.original(&original.sha256)?, bytes);
+    drop(editor);
+    let (_, owned_bytes) = oxidal_presets::OwnedStore::new(root.join("editor-library/owned"))
+        .read(&restarted.loaded.clone().unwrap())?;
+    let render = |payload: &[u8]| -> Result<Vec<f32>, Box<dyn Error>> {
+        let mut engine = Engine::new(48000.0, 128)?;
+        engine.load_preset(payload)?;
+        engine.wait_ready()?;
+        settle(&mut engine)?;
+        let mut rendered = vec![];
+        for block in 0..12 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| (((block * 128 + i) as f32) * 0.01).sin() * 0.1)
+                .collect();
+            let mut right = left.clone();
+            engine.process(&mut left, &mut right)?;
+            rendered.extend(left);
+            rendered.extend(right);
+        }
+        Ok(rendered)
+    };
+    let first = render(&owned_bytes)?;
+    let second = render(&owned_bytes)?;
+    let error = first
+        .iter()
+        .zip(second)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(first.iter().any(|x| x.abs() > 0.001));
+    assert!(error < 1e-5, "owned preset recreated audio error {error}");
+    println!("owned_preset_recreated_audio_max_error: {error}");
+    println!(
+        "native_editor: live preview/cancel, five commits, staged rejection, device scope, owned save/reload/restart and immutable source pass"
+    );
+    Ok(())
+}
+
+fn qualify_factories() -> Result<(), Box<dyn Error>> {
+    let Some(root) = std::env::var_os("OXIDAL_TONE3000_FACTORY_DIR") else {
+        eprintln!("native factory workflow not run: source corpus not configured");
+        return Ok(());
+    };
+    let files: Vec<_> = std::fs::read_dir(root)?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter(|e| e.path().extension().is_some_and(|e| e == "t3kpreset"))
+        .collect();
+    assert_eq!(files.len(), 8, "pinned factory corpus");
+    for file in files {
+        let bytes = std::fs::read(file.path())?;
+        let source = oxidal_presets::inspect(&bytes)?;
+        let mut engine = Engine::new(48000.0, 128)?;
+        engine.load_preset(&bytes)?;
+        engine.wait_ready()?;
+        let before = engine.catalog()?;
+        let saved = engine.save_preset("Owned factory qualification")?;
+        assert_ne!(oxidal_presets::inspect(&saved)?.source_id, source.source_id);
+        engine.load_preset(&saved)?;
+        engine.wait_ready()?;
+        let after = engine.catalog()?;
+        for row in before.as_array().unwrap() {
+            let got = after
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == row["id"])
+                .unwrap();
+            assert!(
+                (got["value"].as_f64().unwrap() - row["value"].as_f64().unwrap()).abs() < 1e-5,
+                "factory parameter {}",
+                row["id"]
+            );
+        }
+        settle(&mut engine)?;
+        engine.process(&mut [0.01; 128], &mut [0.01; 128])?;
+        assert_eq!(std::fs::read(file.path())?, bytes);
+        eprintln!("factory native load/save/reload: {}", source.name);
+    }
+    println!(
+        "native_factory_workflows: 8 passed (state/readiness/finite render; not independent full audio parity)"
     );
     Ok(())
 }
