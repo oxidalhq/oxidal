@@ -617,6 +617,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidal-lv2"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "oxidal-nam"
 version = "0.1.0"
 dependencies = [

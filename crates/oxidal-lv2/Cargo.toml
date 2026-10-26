@@ -1,0 +1,17 @@
+[package]
+name = "oxidal-lv2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+native = []
+
+[dependencies]
+serde.workspace = true
+
+[lints.rust]
+missing_debug_implementations = "warn"
+[lints.clippy]
+all = "warn"

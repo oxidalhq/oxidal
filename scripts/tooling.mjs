@@ -42,6 +42,37 @@ if (mode === 'bootstrap') {
   run('pnpm', ['exec', 'playwright', 'install', 'chromium', 'webkit'], {
     cwd: join(root, 'apps/web'),
   });
+} else if (mode === 'lv2-check') {
+  if (process.platform !== 'linux')
+    throw new Error(
+      'LV2 qualification requires Linux with liblilv-dev, lv2-dev and swh-lv2.',
+    );
+  const env = {
+    ...rustEnv(),
+    OXIDAL_LV2_EXTERNAL_DIR:
+      process.env.OXIDAL_LV2_EXTERNAL_DIR ?? '/usr/lib/lv2',
+  };
+  run(
+    'cargo',
+    [
+      'clippy',
+      '--locked',
+      '-p',
+      'oxidal-lv2',
+      '--features',
+      'native',
+      '--all-targets',
+      '--',
+      '-D',
+      'warnings',
+    ],
+    { env },
+  );
+  run(
+    'cargo',
+    ['test', '--locked', '-p', 'oxidal-lv2', '--features', 'native'],
+    { env },
+  );
 } else if (mode === 'native-check') {
   run('python3', ['native/tone3000/build.py']);
   const env = {

@@ -25,7 +25,8 @@
     "format:md": "prettier --write \"**/*.{md,mdx,markdown}\"",
     "format:md:check": "prettier --check \"**/*.{md,mdx,markdown}\"",
     "format:staged": "git-format-staged -f 'prettier --ignore-unknown --stdin-filepath \"{}\"' '*.md' '*.mdx' '*.markdown' '!reference/**' '!.afx/**' '!.agents/**' '!.claude/**'",
-    "native:check": "node scripts/tooling.mjs native-check"
+    "native:check": "node scripts/tooling.mjs native-check",
+    "lv2:check": "node scripts/tooling.mjs lv2-check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
