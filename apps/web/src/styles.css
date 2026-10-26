@@ -919,3 +919,275 @@ main {
   max-width: 100%;
   min-width: 0;
 }
+
+/* Mira-inspired density: compact chrome, full-size instrument touch targets. */
+.app-shell[data-view='rig'] .page-heading {
+  padding-bottom: var(--control-gap);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--control-gap);
+}
+.app-shell[data-view='rig'] .page-heading .field {
+  gap: 3px;
+}
+.rig-status {
+  margin-bottom: var(--control-gap);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  flex-wrap: wrap;
+}
+.rig-status button {
+  margin-left: auto;
+}
+.chain-panel {
+  margin-bottom: 0;
+  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+  box-shadow: none;
+}
+.chain-panel .section-heading {
+  margin-bottom: var(--rack-gap);
+}
+.chain-panel .segmented {
+  padding: 0;
+  border: 0;
+}
+.signal-path {
+  gap: var(--rack-gap);
+  padding-block: var(--rack-gap);
+}
+.block,
+.branch .block {
+  min-height: 80px;
+  gap: 4px;
+  padding: 10px;
+  width: 100%;
+  text-align: left;
+  position: relative;
+}
+.block strong {
+  font-size: 20px;
+}
+.block-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+}
+.block-value {
+  font: 12px var(--font-mono);
+}
+button.block[aria-pressed='true'] {
+  outline: var(--selected-edge) solid var(--control-accent);
+  outline-offset: -3px;
+  background: var(--lcd-card);
+}
+button.block:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.block:not(.endpoint) {
+  border-top-width: 1px;
+  border-color: var(--lcd-border);
+  box-shadow: none;
+}
+.routing-details summary {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  justify-content: flex-end;
+}
+.routing-details summary::after {
+  content: '+';
+  font: 18px var(--font-mono);
+  margin-left: 8px;
+}
+.routing-details[open] summary::after {
+  content: '−';
+}
+.controls-panel {
+  border-top: 0;
+  border-radius: 0 0 var(--panel-radius) var(--panel-radius);
+}
+.controls-panel .section-heading {
+  margin-bottom: var(--control-gap);
+}
+.controls-panel .parameters {
+  gap: var(--rack-gap);
+}
+.controls-panel h2 {
+  font-size: 20px;
+}
+.parameter {
+  border-radius: var(--display-radius);
+}
+.parameter[data-selected='true'] {
+  border-color: var(--control-accent);
+  box-shadow: inset 0 var(--selected-edge) var(--control-accent);
+}
+.parameter > span {
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 14px;
+  gap: 2px;
+}
+.parameter output {
+  font-size: var(--readout-size);
+}
+.control-editor {
+  margin-top: 4px;
+}
+.app-shell[data-view='rig'] .panel:has(> summary) {
+  padding-block: 0;
+  box-shadow: none;
+  background: transparent;
+}
+/* Keep the chain together on tablets; phones wrap its routing into two rows. */
+@media (min-width: 680px) and (max-width: 1050px) {
+  .signal-path {
+    flex-direction: row;
+    align-items: center;
+  }
+  .branches {
+    flex-direction: column;
+  }
+  .branch {
+    flex: auto;
+    padding-left: 4px;
+  }
+  .endpoint {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .endpoint .eyebrow {
+    display: block;
+  }
+  .endpoint > span:last-child {
+    margin-left: 0;
+  }
+  .route-arrow,
+  .route-junction svg {
+    transform: none;
+  }
+  .route-junction {
+    align-self: center;
+    font-size: 8px;
+  }
+  .block,
+  .branch .block {
+    padding: 8px;
+  }
+  .block strong {
+    font-size: 17px;
+  }
+  .parameters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 679px) {
+  .signal-path {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(
+        0,
+        1fr
+      );
+    gap: 8px;
+  }
+  .signal-path > .endpoint {
+    grid-column: 1;
+  }
+  .signal-path > .branches {
+    grid-column: 3 / 6;
+  }
+  .signal-path > .route-arrow,
+  .signal-path > .route-junction {
+    transform: none;
+    justify-self: center;
+  }
+  .signal-path > :nth-child(4) {
+    grid-column: 4;
+    grid-row: 2;
+    transform: rotate(90deg);
+    min-height: 20px;
+  }
+  .signal-path > .route-junction:nth-child(4) {
+    transform: none;
+  }
+  .signal-path > .route-junction:nth-child(4) svg {
+    transform: rotate(90deg);
+  }
+  .signal-path > .route-junction:nth-child(2) svg {
+    transform: none;
+  }
+  .signal-path > .wet-path {
+    grid-column: 1 / 4;
+    grid-row: 3;
+  }
+  .signal-path > :nth-child(6) {
+    grid-column: 4;
+    grid-row: 3;
+    transform: none;
+  }
+  .signal-path > :last-child {
+    grid-column: 5;
+    grid-row: 3;
+    min-height: 80px;
+  }
+  .endpoint {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .endpoint > span:last-child {
+    margin-left: 0;
+  }
+  .endpoint .eyebrow {
+    display: block;
+  }
+  .signal-path .block {
+    padding: 7px;
+  }
+  .signal-path .block-meta {
+    flex-wrap: wrap;
+  }
+  .branches {
+    gap: 6px;
+  }
+  .branch {
+    padding-left: 6px;
+  }
+  .block strong {
+    font-size: 18px;
+  }
+  .block-meta .eyebrow {
+    letter-spacing: 0.04em;
+  }
+  .block-value {
+    font-size: 11px;
+  }
+  .page-heading {
+    gap: 8px;
+  }
+  .masthead {
+    gap: 8px;
+  }
+  .masthead nav {
+    width: auto;
+    flex: 1;
+  }
+  .display-mode {
+    order: initial;
+    flex: 1 1 8rem;
+  }
+  .connection {
+    margin-left: auto;
+  }
+  .parameters {
+    gap: 8px;
+  }
+}
+
+.masthead .field select {
+  background-color: var(--enclosure);
+  color: var(--enclosure-foreground);
+}

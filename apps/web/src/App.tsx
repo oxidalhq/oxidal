@@ -56,6 +56,7 @@ export default function App() {
       /* The selection still works when browser storage is unavailable. */
     }
   }, [displayMode]);
+  const [focusedBlock, setFocusedBlock] = useState('nam-a');
   const [error, setError] = useState('');
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
@@ -229,19 +230,58 @@ export default function App() {
   }
   const parallel = state?.rig.nodes.some((node) => node.id === 'nam-b');
   const named = (id: string) => state?.rig.nodes.find((node) => node.id === id);
-  const block = (id: string, name: string, detail: string) => (
-    <div
-      className={`block${id === 'input' || id === 'output' ? ' endpoint' : ''}`}
-      data-testid={`block-${id}`}
-    >
-      <span className="eyebrow">{named(id)?.kind ?? 'block'}</span>
-      <strong>{name}</strong>
-      <span>{detail}</span>
-    </div>
-  );
+  const selectedBlock = named(focusedBlock) ? focusedBlock : 'nam-a';
+  const blockNames: Record<string, string> = {
+    'nam-a': 'NAM A',
+    'nam-b': 'NAM B',
+    delay: 'Delay',
+    reverb: 'Reverb',
+    output: 'Output',
+  };
+  const block = (id: string, name: string, detail: string) => {
+    const parameter = state?.parameters.find((p) => p.id.startsWith(`${id}.`));
+    const content = (
+      <>
+        <span className="block-meta">
+          <span className="eyebrow">{named(id)?.kind ?? 'block'}</span>
+          {parameter && (
+            <span className="block-value">
+              {Math.round(parameter.value * 100)}%
+            </span>
+          )}
+        </span>
+        <strong>{name}</strong>
+        <span>{detail}</span>
+      </>
+    );
+    return parameter ? (
+      <button
+        type="button"
+        className="block"
+        data-testid={`block-${id}`}
+        aria-label={`Focus ${name} controls`}
+        aria-pressed={selectedBlock === id}
+        onClick={() => {
+          setFocusedBlock(id);
+          document
+            .getElementById(`control-${parameter.id}`)
+            ?.scrollIntoView({ block: 'nearest' });
+        }}
+      >
+        {content}
+      </button>
+    ) : (
+      <div
+        className={`block${id === 'input' || id === 'output' ? ' endpoint' : ''}`}
+        data-testid={`block-${id}`}
+      >
+        {content}
+      </div>
+    );
+  };
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-view={view}>
       <header className="masthead">
         <a className="wordmark" href="/" aria-label="Oxidal home">
           <span className="brand-mark">ø</span> oxidal
@@ -281,7 +321,7 @@ export default function App() {
             <div>
               <span className="eyebrow">
                 {view === 'rig'
-                  ? 'Example rig / control preview'
+                  ? 'Control preview'
                   : view === 'library'
                     ? 'Library'
                     : 'Settings'}
@@ -345,14 +385,17 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="notice">
-            <WarningCircle size={20} />
-            <span>
-              <strong>Rig preview is silent.</strong> This view validates
-              routing and synchronizes controls. Separate saved-preset playback
-              is managed in Settings.
-            </span>
-          </div>
+          {view === 'rig' && (
+            <div className="notice rig-status">
+              <WarningCircle size={18} aria-hidden="true" />
+              <span>
+                <strong>Rig preview is silent.</strong>
+              </span>
+              <Button variant="outline" onClick={showSettings}>
+                Audio setup
+              </Button>
+            </div>
+          )}
           {error && (
             <div className="error" role="alert">
               {error}
@@ -402,12 +445,12 @@ export default function App() {
                   <div className="branches">
                     <div className="branch">
                       <span className="path-label">PATH A</span>
-                      {block('nam-a', 'NAM A', 'Model adapter pending')}
+                      {block('nam-a', 'NAM A', 'Level')}
                     </div>
                     {parallel && (
                       <div className="branch">
                         <span className="path-label">PATH B</span>
-                        {block('nam-b', 'NAM B', 'Model adapter pending')}
+                        {block('nam-b', 'NAM B', 'Level')}
                       </div>
                     )}
                   </div>
@@ -421,25 +464,35 @@ export default function App() {
                     <ArrowRight className="route-arrow" aria-hidden="true" />
                   )}
                   <div className="wet-path">
-                    {block('delay', 'Delay', 'Shared wet path')}
+                    {block('delay', 'Delay', 'Mix')}
                     <ArrowRight className="wet-arrow" aria-hidden="true" />
-                    {block('reverb', 'Reverb', 'Shared wet path')}
+                    {block('reverb', 'Reverb', 'Mix')}
                   </div>
                   <ArrowRight className="route-arrow" />
-                  {block('output', 'Output', 'Engine unavailable')}
+                  {block('output', 'Output', 'Level')}
                 </div>
-                <p className="caption">
-                  {parallel
-                    ? 'Input splits into A and B, then merges before the shared delay and reverb.'
-                    : 'One NAM path feeds the shared delay and reverb.'}{' '}
-                  Routing validation is active; audio and tails are pending
-                  qualification.
-                </p>
+                <details className="routing-details">
+                  <summary>Routing details</summary>
+                  <p className="caption">
+                    {parallel
+                      ? 'Input splits into A and B, then merges before the shared delay and reverb.'
+                      : 'One NAM path feeds the shared delay and reverb.'}{' '}
+                    Routing validation is active; this preview does not process
+                    audio.
+                  </p>
+                </details>
               </section>
-              <section className="panel">
+              <section
+                className="panel controls-panel"
+                aria-label="Rig controls"
+              >
                 <div className="section-heading">
                   <div>
-                    <h2>Rig controls</h2>
+                    <span className="eyebrow">Quick controls</span>
+                    <h2>
+                      {blockNames[selectedBlock]}{' '}
+                      <span className="muted">/ selected</span>
+                    </h2>
                   </div>
                   <span className="muted">
                     Last source:{' '}
@@ -448,7 +501,17 @@ export default function App() {
                 </div>
                 <div className="parameters">
                   {state.parameters.map((parameter) => (
-                    <div className="parameter" key={parameter.id}>
+                    <div
+                      className="parameter"
+                      key={parameter.id}
+                      id={`control-${parameter.id}`}
+                      data-selected={parameter.id.startsWith(
+                        `${selectedBlock}.`,
+                      )}
+                      onFocusCapture={() =>
+                        setFocusedBlock(parameter.id.split('.')[0] ?? 'nam-a')
+                      }
+                    >
                       <span>
                         {parameter.label}
                         <output data-testid={`value-${parameter.id}`}>

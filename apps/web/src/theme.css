@@ -42,22 +42,24 @@
   --lcd-action: var(--brand);
   --lcd-action-foreground: var(--brand-foreground);
   --lcd-shadow: inset 0 2px 6px #34312e12;
-  --panel-shadow: 0 4px 18px #29232e05;
+  --panel-shadow: none;
   --effect-shadow: 0 2px 4px #34312e08;
   --effect-accent: var(--brand);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  --radius: 0.75rem;
-  --panel-radius: 1.25rem;
-  --display-radius: 0.75rem;
+  --radius: 0.5rem;
+  --panel-radius: 0.5rem;
+  --display-radius: 0.5rem;
   --content-width: 80rem;
-  --page-space: clamp(1rem, 3vw, 2.5rem);
-  --panel-space: clamp(1rem, 2vw, 1.5rem);
-  --control-gap: 1rem;
+  --page-space: clamp(0.75rem, 2vw, 1.5rem);
+  --panel-space: clamp(0.75rem, 1.5vw, 1.125rem);
+  --control-gap: 0.75rem;
   --touch-target: 2.75rem;
-  --title-size: clamp(1.8rem, 3vw, 2.375rem);
-  --readout-size: 1.875rem;
+  --title-size: clamp(1.5rem, 2.5vw, 2rem);
+  --readout-size: 2rem;
+  --rack-gap: 0.5rem;
+  --selected-edge: 3px;
 }
 
 /* Tailwind v4 / shadcn bridge. Components use semantic utilities, never hues. */

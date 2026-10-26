@@ -16,8 +16,12 @@ Edit `src/theme.css` to change the look without editing TSX. The default
 **Orchid LCD** theme takes visual cues from the original
 [Zoom MS-70CDR](https://zoomcorp.com/en/gb/multi-effects/multistomp-pedals/ms-70cdr/):
 a monochrome LCD-style chain and clear numeric readouts. Ink chrome, electric
-orchid accents, modern sans-serif headings and softer effect tiles give it an
-independent old-and-new character.
+orchid accents, modern sans-serif headings and compact effect tiles give it an
+independent old-and-new character. The instrument layout now uses
+[Mira-inspired density](https://ui.shadcn.com/docs/changelog/2025-12-shadcn-create):
+tighter padding, modest radii and joined chain/control surfaces. This adapts our
+existing shadcn-style primitives; it does not install or regenerate a stock Mira
+preset. Primary touch targets remain 44px (48px in stage/sunlight/e-paper modes).
 Oxidal keeps its own layout, labels and behavior. The semantic colour pairs follow
 [shadcn CSS-variable theming](https://ui.shadcn.com/docs/theming).
 
@@ -35,7 +39,7 @@ Oxidal keeps its own layout, labels and behavior. The semantic colour pairs foll
   including button, border and focus colours, so components remain reusable.
 - **Shape and density:** `--radius`, `--panel-radius`, `--display-radius`,
   `--page-space`, `--panel-space`, `--control-gap`, `--content-width` and
-  `--touch-target`. Keep primary touch targets at least 44px.
+  `--touch-target`, `--rack-gap` and `--selected-edge`. Keep primary touch targets at least 44px.
 - **Typography:** `--font-sans`, `--font-mono`, `--title-size` and
   `--readout-size`. Defaults use local system fonts, with no font download.
 - **Depth:** `--panel-shadow`, `--effect-shadow` and `--lcd-shadow`; set these to `none` for a flatter
@@ -59,7 +63,7 @@ The responsive UI targets the iPhone XR, Galaxy Z Fold4 (cover and unfolded),
 and BOOX Note Air3 C in portrait and landscape. Layout follows available CSS
 width/height, not device names. Rotation and fold resizing keep an active edit
 mounted. Wide landscape views use a compact horizontal chain; narrower views
-stack it. Controls stay scrollable when a keyboard reduces available height.
+wrap it into ordered rows with explicit split/merge indicators. Controls stay scrollable when a keyboard reduces available height.
 Inputs use 16px text, primary controls have 44px minimum height, and landscape
 safe areas keep content clear of cutouts. Zoom remains enabled.
 
@@ -136,3 +140,15 @@ settings remain staged until commit. Native values are shown as normalized range
 percentages, not invented dB units; full native descriptor/display mapping is
 still pending. These gestures are an independent implementation of the preserved
 behaviour, not a copied source UI. Live audio remains unavailable.
+
+### Instrument control surface
+
+The preset/bypass bar, compact signal path and quick controls form one workspace.
+Tap a controllable effect to highlight its corresponding parameter and bring it
+into view. Confirmed values also appear on chain blocks. Selection changes no
+sound or control state, does not create an edit, and leaves an existing draft
+mounted. All quick parameters remain visible; keyboard focus also updates the
+selection. Use Edit for relative/Fine adjustment, exact entry and cancellation.
+The silent-preview status remains explicit, with a direct Audio setup button;
+routing explanation is available under Routing details. There are no decorative
+meters or implied processing indicators.

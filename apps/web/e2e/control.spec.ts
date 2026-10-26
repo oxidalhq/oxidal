@@ -378,3 +378,51 @@ test('audio inspection keeps the authoring service connected', async ({
     page.getByText('Rig preview is silent.', { exact: true }),
   ).toBeVisible();
 });
+
+test('effect focus keeps quick controls reachable without changing the rig', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  const before = await (await request.get('/api/v1/state')).json();
+  const delay = page.getByRole('button', { name: 'Focus Delay controls' });
+  await delay.click();
+  await expect(delay).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('heading', { name: 'Delay / selected' }),
+  ).toBeVisible();
+  await expect(page.locator('[id="control-delay.mix"]')).toHaveAttribute(
+    'data-selected',
+    'true',
+  );
+  const after = await (await request.get('/api/v1/state')).json();
+  expect(after.revision).toBe(before.revision);
+  expect(after.parameters).toEqual(before.parameters);
+  await page
+    .getByRole('button', { name: 'Edit Delay mix', exact: true })
+    .click();
+  await page.getByLabel('Draft Delay mix (%)').fill('38');
+  await page.getByRole('button', { name: 'Focus Reverb controls' }).click();
+  await expect(page.getByLabel('Draft Delay mix (%)')).toHaveValue('38');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByTestId('value-delay.mix')).toHaveText('25%');
+  await page.getByRole('button', { name: 'Focus Reverb controls' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('heading', { name: 'Reverb / selected' }),
+  ).toBeVisible();
+  mkdirSync('../../.local/previews/instrument', { recursive: true });
+  for (const mode of ['orchid', 'stage']) {
+    await page.getByLabel('Display mode').selectOption(mode);
+    await page.screenshot({
+      path: `../../.local/previews/instrument/${testInfo.project.name}-${mode}.png`,
+      fullPage: true,
+      animations: 'disabled',
+    });
+  }
+  await page.getByRole('button', { name: 'Audio setup', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Controls & MIDI' }),
+  ).toBeVisible();
+});
