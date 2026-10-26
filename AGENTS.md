@@ -8,4 +8,4 @@ Commands from this repository root: `pnpm bootstrap`, `pnpm hooks:install`, `pnp
 
 Generated API types/schema are derived from Rust: use `pnpm contract:generate`; CI verifies with `pnpm contract:check`. Commit messages are title-only Conventional Commits. Cargo/npm publication is disabled. No private workspace, planning or reference checkout is required for normal builds and checks.
 
-An optional `oxidal-tone3000` crate isolates native FFI for offline macOS qualification (`pnpm native:check`). Its dedicated main-thread worker connects to the daemon with bounded IPC when explicitly enabled. See `docs/native-tone3000.md`; native Linux/audio and full settings/preset behavior remain pending.
+An optional `oxidal-tone3000` crate isolates native FFI for offline macOS/Linux qualification (`pnpm native:check`). Its dedicated main-thread worker connects to the daemon with bounded IPC when explicitly enabled. See `docs/native-tone3000.md`; streaming Linux audio and full settings/preset behavior remain pending.

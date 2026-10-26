@@ -1,14 +1,22 @@
 # Native TONE3000 adapter qualification
 
-`oxidal-tone3000` provides an **optional offline native editor** connected to the daemon through a dedicated worker process. It calls the real pinned TONE3000 processor through a bounded C ABI. It is not an ALSA driver, LV2 host, real-time-safe callback implementation, complete settings editor or shipping audio engine. Its first supported qualification host is macOS; Linux native integration remains required.
+`oxidal-tone3000` provides an **optional offline native editor** connected to the daemon through a dedicated worker process. It calls the real pinned TONE3000 processor through a bounded C ABI. It is not an ALSA driver, LV2 host, real-time-safe callback implementation, complete settings editor or shipping audio engine. The same offline adapter builds on macOS and Linux. Native execution has been qualified on macOS ARM64 and Debian Bookworm ARM64 without a display server; Linux streaming and physical-device qualification remain required.
 
 ## Build and repeat the qualification
 
-Install CMake, the platform C++ SDK and the repository's pinned Rust/Node toolchains, then run:
+Install CMake 3.24 or newer, the platform C++ SDK and the repository's pinned Rust/Node toolchains, then run:
 
 ```sh
 pnpm native:check
 ```
+
+For Debian/Ubuntu Linux builds, install the development packages below. No X server or desktop login is needed to run the offline worker; JUCE still has graphics/font library build dependencies. Qualify the dependency closure for a shipping image separately.
+
+```sh
+sudo apt-get install cmake build-essential pkg-config libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libxi-dev
+```
+
+Linux builds default to `.local/tone3000/build-linux/liboxidal_tone3000.so`; macOS builds retain `.local/tone3000/build/liboxidal_tone3000.dylib`. An absolute `OXIDAL_TONE3000_LIB_DIR` can select an isolated output directory for the builder and Rust/tools together. Never reuse one CMake directory across operating systems. Tooling also honours `CARGO_TARGET_DIR` when launching daemon/worker executables. `python3 native/tone3000/build.py --prepare-only` verifies and prepares source without compiling; it is not a qualification pass.
 
 The native builder clones exact revisions and recursive dependencies into `.local/tone3000/source`, verifies them, applies hash-checked native-stage/isolation patches and builds a shared library. It never edits an installed plugin or external checkout. Downloads require network access on the first run. To reuse an already downloaded checkout at the pinned revision, copy it through the build command once:
 
@@ -35,22 +43,22 @@ Owned copies use fresh `oxidal-` identities and preserve the source SHA-256 in m
 
 Calibration and oversampling survive tone loads and are excluded from saved tones. The preview starts a fresh isolated native settings directory each time; durable device profiles are still future work. Owned copies persist in `.local/presets/owned`. Native preset selection itself is not restored automatically on daemon restart.
 
-The normal `pnpm check` invokes this gate on macOS when the native dependency cache is prepared; otherwise it explicitly reports native qualification as not run. Platform-independent checks and configured Linux CI do not imply that this optional native gate ran. The `native` Cargo feature must be enabled explicitly and requires the built library directory; there is no simulated native fallback.
+The normal `pnpm check` invokes this gate on macOS or Linux when the native dependency cache is prepared; otherwise it explicitly reports native qualification as not run. Platform-independent checks and configured Linux CI do not imply that this optional native gate ran. The `native` Cargo feature must be enabled explicitly and requires the built library directory; there is no simulated native fallback.
 
 ## State, threads and bounds
 
 - The Rust wrapper owns one native handle, is neither `Send` nor `Sync`, and uses exclusive mutable borrows. The native bridge additionally checks the owning thread and rejects a second concurrent instance. This is a temporary qualification limit, not the intended multi-instance host architecture.
 - All native exports catch C++ exceptions. Input sample-rate, block-size, parameter-value, string and buffer bounds are validated. Audio is stereo, at most 2048 frames, with finite input/output checks. Control JSON is bounded to 256 KiB and captured state to 32 MiB.
 - `State` can only be constructed from a native capture. Arbitrary imported bytes are not accepted through that safe Rust type. Complete native session state is different from a tone preset: this gate does not replace the bounded `.t3kpreset` importer or establish its audio fidelity.
-- Native settings, logs, model stash and preset discovery use a newly created `OXIDAL_QUALIFICATION_DATA` directory. A required isolation patch redirects macOS JUCE special folders and factory discovery. This is explicitly test-only filesystem behavior; do not ship this library as a production plugin. No environment changes are made to `HOME` or the installed TONE3000 data.
+- Native settings, logs, model stash and preset discovery use a newly created `OXIDAL_QUALIFICATION_DATA` directory. Required isolation patches redirect macOS/Linux JUCE special folders and factory discovery. Linux uses `user/.config` inside the isolated root; macOS uses `user/Library`. This is explicitly test-only filesystem behavior; do not ship this library as a production plugin. No environment changes are made to `HOME` or the installed TONE3000 data.
 - The native worker owns JUCE on its process main thread. A one-slot input queue lets it continue pumping and expire edits while idle. The daemon serializes bounded IPC, rejects contention, and kills/disables the worker on a protocol failure or 25-second timeout. It does not replay uncertain operations or restart silently. A fresh worker session invalidates stale commands. Native startup supplies JUCE's rate/block metadata before `prepareToPlay`, including for EQ coefficient calculations.
 - Edit requests carry session/revision, owner/token, sequence and request ID. Preview changes never capture full state; final commit captures once. Cancel/30-second inactivity restores the committed native state. Only one native gesture exists at a time. Successful request IDs retain 32 exact fingerprints for replay safety; changed payloads with the same ID fail. This coarse offline editor is separate from the generic MIDI/control preview; the future live graph must unify those paths and add per-block stage operations.
-- Message pumping, model loading, capture and restore are non-real-time operations. The native processor's existing locks/threads have not been audited into an Oxidal real-time guarantee. Streaming ALSA, graph swaps, Linux isolation, physical MIDI, per-block stage-command dispatch and full settings bindings remain pending.
+- Message pumping, model loading, capture and restore are non-real-time operations. The native processor's existing locks/threads have not been audited into an Oxidal real-time guarantee. Streaming ALSA, graph swaps, physical MIDI, per-block stage-command dispatch and full settings bindings remain pending.
 
 ## Dependency and patch provenance
 
-`sources.json` pins TONE3000 v0.0.12, JUCE 9.0.3 and recursive AudioDSPTools/NAM dependencies. `patches/` retains the existing native stage extension and two qualification filesystem changes. Stage-addon comments reference this public document instead of private development notes; code semantics are preserved. Patch inputs, outputs and addons are hashed. The original LV2 JUCE readback correction is not compiled by this direct-processor bridge: F18/F31 still require a real LV2-host test and cannot be inferred from direct parameter access.
+`sources.json` pins TONE3000 v0.0.12, JUCE 9.0.3 and recursive AudioDSPTools/NAM dependencies. `patches/` retains the existing native stage extension and platform-specific qualification filesystem changes. The AudioDSPTools overlay qualifies a `LanczosResampler` alias with its namespace so GCC can compile the unchanged underlying type; no DSP algorithm is altered. Dependency edits remain restricted to exact before/after hashes. The standard Python suite checks repeat preparation, patch/artifact tampering, unreviewed dependency edits and external Git pointers. Stage-addon comments reference this public document instead of private development notes; code semantics are preserved. Patch inputs, outputs and addons are hashed. The original LV2 JUCE readback correction is not compiled by this direct-processor bridge: F18/F31 still require a real LV2-host test and cannot be inferred from direct parameter access.
 
 TONE3000 and the contributed stage bridge are MIT-licensed; accompanying notices are retained. JUCE and recursive dependencies retain their upstream licensing in the downloaded trees. JUCE licensing and complete distribution notices must be settled before publishing a native artifact; no binary publication is part of this spike. The non-A2 rejection fixture is project-authored. The A2 qualification model remains in the pinned upstream checkout and is hash-verified; no factory/model weights are copied into this repository.
 
-The native build record in `.local/tone3000/build/qualification-build.json` identifies source pins, overlay digest and library hash. Do not treat a successful build or finite audio as full TONE3000 compatibility. The full settings/operation inventory, exhaustive native preset/setting parity, real-time/Linux qualification and existing state/readiness regressions remain delivery gates.
+The native build record `qualification-build.json` in the selected output directory identifies host OS/architecture, source pins, overlay digest and library hash. Do not treat a successful build or finite audio as full TONE3000 compatibility. The full settings/operation inventory, exhaustive native preset/setting parity, real-time/physical Linux qualification and existing state/readiness regressions remain delivery gates.

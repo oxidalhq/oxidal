@@ -1,8 +1,8 @@
 # Architecture and control contract
 
-The control/runtime foundation has five crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, and `oxidal-presets` inspects and stores immutable native preset originals. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
+The control/runtime foundation has six crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, `oxidal-presets` inspects and stores immutable native preset originals, and `oxidal-audio` inspects Linux audio devices. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
 
-A sixth crate, `oxidal-tone3000`, contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its optional worker connects real native preset loading, bounded edits, and immutable owned-copy save/reload to the browser. There is no live audio host. The adapter is currently macOS-only and must be extended/qualified for Linux before appliance use.
+The `oxidal-tone3000` crate contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its optional worker connects real native preset loading, bounded edits, and immutable owned-copy save/reload to the browser. There is no live audio host. The adapter executes offline on macOS and ARM64 Linux without a display server; physical audio, real-time scheduling and appliance packaging remain unqualified.
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 

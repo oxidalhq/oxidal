@@ -1,0 +1,11 @@
+--- a/dsp/ResamplingContainer/ResamplingContainer.h
++++ b/dsp/ResamplingContainer/ResamplingContainer.h
+@@ -86,7 +86,7 @@
+ {
+ public:
+   using BlockProcessFunc = std::function<void(T**, T**, int)>;
+-  using LanczosResampler = LanczosResampler<T, NCHANS, A>;
++  using LanczosResampler = dsp::LanczosResampler<T, NCHANS, A>;
+ 
+   // :param renderingSampleRate: The sample rate required by the code to be encapsulated.
+   ResamplingContainer(double renderingSampleRate)

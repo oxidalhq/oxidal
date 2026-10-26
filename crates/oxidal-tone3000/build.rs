@@ -4,7 +4,16 @@ fn main() {
         let dir = std::env::var("OXIDAL_TONE3000_LIB_DIR")
             .expect("Build the verified offline adapter with pnpm native:check first");
         let path = std::path::Path::new(&dir);
-        assert!(path.is_absolute() && path.join("liboxidal_tone3000.dylib").is_file());
+        let file = match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
+            Ok("macos") => "liboxidal_tone3000.dylib",
+            Ok("linux") => "liboxidal_tone3000.so",
+            _ => panic!("Native adapter supports macOS and Linux targets"),
+        };
+        assert!(
+            path.is_absolute() && path.join(file).is_file(),
+            "Native adapter library missing for target OS"
+        );
+        println!("cargo:rerun-if-changed={}", path.join(file).display());
         println!("cargo:rustc-link-search=native={dir}");
         println!("cargo:rustc-link-lib=dylib=oxidal_tone3000");
         println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");

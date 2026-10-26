@@ -1,9 +1,9 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.24)
 project(OxidalTone3000 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(NOT APPLE)
-  message(FATAL_ERROR "This offline adapter spike currently requires macOS isolation; Linux qualification is pending.")
+if(NOT APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "Native qualification supports macOS and Linux")
 endif()
 if(NOT TONE3000_SOURCE)
   message(FATAL_ERROR "Use the repository native build command to supply verified dependencies")
@@ -40,7 +40,7 @@ target_compile_definitions(oxidal_tone3000 PRIVATE HEADLESS=1 JUCE_WEB_BROWSER=0
   JUCE_USE_WEBP=0 JUCE_USE_CURL=0 JUCE_MODAL_LOOPS_PERMITTED=1 NAM_ENABLE_A2_FAST)
 target_compile_options(oxidal_tone3000 PRIVATE -fsigned-char)
 target_link_libraries(oxidal_tone3000 PRIVATE juce::juce_dsp juce::juce_audio_formats
-  juce::juce_audio_processors "-Wl,-force_load,$<TARGET_FILE:NAM>"
+  juce::juce_audio_processors "$<LINK_LIBRARY:WHOLE_ARCHIVE,NAM>"
   juce::juce_recommended_config_flags)
 add_dependencies(oxidal_tone3000 NAM)
 set_target_properties(oxidal_tone3000 PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN TRUE)

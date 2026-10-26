@@ -166,7 +166,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Preserve the old stash separately and remove only our temporary input copy.
     // The next instance must rebuild from embedded state, not these disk paths.
     std::fs::remove_file(&path)?;
-    let stash = root.join("user/Library/Application Support/TONE3000/LocalModels");
+    let stash = root.join(if cfg!(target_os = "linux") {
+        "user/.config/TONE3000/LocalModels"
+    } else {
+        "user/Library/Application Support/TONE3000/LocalModels"
+    });
     std::fs::rename(&stash, root.join("stash-before-restore"))?;
     let mut engine = Engine::new(48000.0, 128)?;
     engine.restore(&model_state)?;

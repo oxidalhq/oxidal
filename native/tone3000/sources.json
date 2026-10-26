@@ -47,6 +47,22 @@
       "before": "0015243aa29b7bbf7886f2f9708b658513c7f07fed1f1ae898d5dca771d14d9a",
       "after": "eb60fd0ffdb4f876e16e91fd7084dcd219f8d6e18efb94b8bcec2d5f7073a059",
       "patch_sha256": "000f251ea5ba1137b9d27bda04f4f52bfffa5b50c0f9d510406c468b6c5581e4"
+    },
+    {
+      "namespace": "juce",
+      "path": "modules/juce_core/native/juce_Files_linux.cpp",
+      "patch": "juce-juce_Files_linux.cpp.patch",
+      "before": "cc4be3488102e0bbbdfc796dee88f9d2d956ed3b212f4b69b566c02a915d67b4",
+      "after": "cac753ac39139f34ce871214758d28b46e28c65e4b53437526896943a2288997",
+      "patch_sha256": "13ddbf3c019373550cc68a838c6277c88d7bc54362dd582a9d0fe7f334a68b67"
+    },
+    {
+      "namespace": "audiodsp",
+      "path": "dsp/ResamplingContainer/ResamplingContainer.h",
+      "patch": "audiodsp-ResamplingContainer.h.patch",
+      "before": "4a6016bcc90ca22d12eb639f40ab74639f2d7d0edf276bb4054ce4711da9a805",
+      "after": "98431a8b587dffd8ec16d9227daa92b155635416597e4ab1735197378410340b",
+      "patch_sha256": "394c66c29afb8782e0e15861b8c6a4ca5f9484011736120166ae69f241c7d01a"
     }
   ],
   "addons": [

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { root, run, rustEnv } from './process.mjs';
 
 const cargo = (...args) =>
@@ -10,6 +10,14 @@ const workspace = ['--manifest-path', 'Cargo.toml'];
 // Portable builds keep ALSA optional; native Linux checks and previews exercise the real backend.
 const audioFeatures =
   process.platform === 'linux' ? ['--features', 'oxidal-api/alsa'] : [];
+const nativeLibrary =
+  process.env.OXIDAL_TONE3000_LIB_DIR ??
+  join(
+    root,
+    '.local/tone3000',
+    process.platform === 'linux' ? 'build-linux' : 'build',
+  );
+const targetDir = resolve(root, process.env.CARGO_TARGET_DIR ?? 'target');
 const mode = process.argv[2];
 if (mode === 'bootstrap') {
   cargo('fetch', '--locked', ...workspace);
@@ -38,7 +46,7 @@ if (mode === 'bootstrap') {
   run('python3', ['native/tone3000/build.py']);
   const env = {
     ...rustEnv(),
-    OXIDAL_TONE3000_LIB_DIR: join(root, '.local/tone3000/build'),
+    OXIDAL_TONE3000_LIB_DIR: nativeLibrary,
     OXIDAL_TONE3000_FACTORY_DIR: join(
       root,
       '.local/tone3000/source/resources/factory-presets',
@@ -129,13 +137,13 @@ if (mode === 'bootstrap') {
     run('node', ['scripts/dependencies.mjs']);
     run('pnpm', ['test:e2e']);
     if (
-      process.platform === 'darwin' &&
+      ['darwin', 'linux'].includes(process.platform) &&
       existsSync(join(root, '.local/tone3000/source'))
     ) {
       run('node', ['scripts/tooling.mjs', 'native-check']);
     } else {
       console.log(
-        'Native TONE3000 qualification not run: use pnpm native:check on a supported macOS build host. Live Linux audio remains pending.',
+        'Native TONE3000 qualification not run: use pnpm native:check on a supported macOS/Linux build host. Live audio remains pending.',
       );
     }
   }
@@ -164,7 +172,7 @@ if (mode === 'bootstrap') {
       {
         env: {
           ...rustEnv(),
-          OXIDAL_TONE3000_LIB_DIR: join(root, '.local/tone3000/build'),
+          OXIDAL_TONE3000_LIB_DIR: nativeLibrary,
         },
       },
     );
@@ -178,7 +186,7 @@ if (mode === 'bootstrap') {
     OXIDAL_SIMULATOR: '1',
     ...(process.env.OXIDAL_NATIVE_EDITOR === '1'
       ? {
-          OXIDAL_NATIVE_WORKER: join(root, 'target/debug/oxidal-native-worker'),
+          OXIDAL_NATIVE_WORKER: join(targetDir, 'debug/oxidal-native-worker'),
           OXIDAL_QUALIFICATION_DATA: mkdtempSync(
             join(tmpdir(), 'oxidal-editor-'),
           ),
@@ -189,7 +197,7 @@ if (mode === 'bootstrap') {
     OXIDAL_UI_DIR: join(root, 'apps/web/dist'),
   };
   const children = [
-    spawn(join(root, 'target/debug/oxidald'), [], {
+    spawn(join(targetDir, 'debug/oxidald'), [], {
       cwd: root,
       stdio: 'inherit',
       env,

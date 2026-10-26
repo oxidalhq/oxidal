@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ ROOT = HERE.parent.parent
 BASE = ROOT / '.local' / 'tone3000'
 SOURCE = BASE / 'source'
 PINS = json.loads((HERE / 'sources.json').read_text())
+REPOSITORIES = {'tone3000': SOURCE, 'juce': SOURCE / 'libs/juce', 'audiodsp': SOURCE / 'plugin/AudioDSPTools'}
 
 
 def run(*args, cwd=None):
@@ -74,11 +76,15 @@ def prepare(seed=None):
     for module in PINS['submodules']:
         if revision(SOURCE / module['path']) != module['revision']:
             raise ValueError(f"Submodule revision differs: {module['path']}")
-        # Third-party module source modifications are not accepted.
-        if subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'], cwd=SOURCE / module['path']).strip():
-            raise ValueError(f"Dirty submodule: {module['path']}")
+        # Only exact, reviewed patch paths may differ in a dependency. Their bytes are checked below.
+        repo = SOURCE / module['path']
+        allowed = {p['path'] for p in PINS['patches'] if REPOSITORIES[p['namespace']] == repo}
+        changed = subprocess.check_output(['git', 'diff', '--name-only', 'HEAD', '--ignore-submodules=all'], cwd=repo, text=True).splitlines()
+        if set(changed) - allowed:
+            raise ValueError(f"Unreviewed submodule modifications: {module['path']}")
     for patch in PINS['patches']:
-        repo = SOURCE if patch['namespace'] == 'tone3000' else SOURCE / 'libs/juce'
+        repo = REPOSITORIES[patch['namespace']]
+        owned_checkout(repo)
         path = repo / patch['path']
         artifact = HERE / 'patches' / patch['patch']
         if digest(artifact.read_bytes()) != patch['patch_sha256']:
@@ -101,8 +107,7 @@ def prepare(seed=None):
         if not target.exists() or target.read_bytes() != data:
             target.write_bytes(data)
     # Refuse tracked changes outside the reviewed overlay.
-    for namespace in ('tone3000', 'juce'):
-        repo = SOURCE if namespace == 'tone3000' else SOURCE / 'libs/juce'
+    for namespace, repo in REPOSITORIES.items():
         changed = subprocess.check_output(['git', 'diff', '--name-only', 'HEAD', '--ignore-submodules=all'], cwd=repo, text=True).splitlines()
         allowed = {p['path'] for p in PINS['patches'] if p['namespace'] == namespace}
         if set(changed) - allowed:
@@ -116,15 +121,25 @@ def prepare(seed=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seed', type=Path, help='Optional already downloaded pinned checkout; copied, never changed')
+    parser.add_argument('--prepare-only', action='store_true', help='Verify and patch owned source without compiling')
     args = parser.parse_args()
-    if os.uname().sysname != 'Darwin':
-        raise SystemExit('Offline adapter qualification currently supports macOS only; Linux integration is pending.')
+    system = platform.system()
+    if system not in ('Darwin', 'Linux'):
+        raise SystemExit('Native qualification supports macOS and Linux build hosts.')
     source = prepare(args.seed)
-    run('cmake', '-S', str(HERE), '-B', str(BASE / 'build'),
-        f'-DTONE3000_SOURCE={source}', '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0')
-    run('cmake', '--build', str(BASE / 'build'), '--target', 'oxidal_tone3000', '-j', '4')
-    library = BASE / 'build/liboxidal_tone3000.dylib'
-    (BASE / 'build/qualification-build.json').write_text(json.dumps({
+    if args.prepare_only:
+        return
+    build = Path(os.environ.get('OXIDAL_TONE3000_LIB_DIR', str(BASE / ('build-linux' if system == 'Linux' else 'build'))))
+    if not build.is_absolute() or build.is_symlink() or build.resolve() != build:
+        raise ValueError('Native build output must be an absolute path without symlinks')
+    options = ['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'] if system == 'Darwin' else []
+    run('cmake', '-S', str(HERE), '-B', str(build),
+        f'-DTONE3000_SOURCE={source}', '-DCMAKE_BUILD_TYPE=Release', *options)
+    run('cmake', '--build', str(build), '--target', 'oxidal_tone3000', '-j', '4')
+    library = build / ('liboxidal_tone3000.so' if system == 'Linux' else 'liboxidal_tone3000.dylib')
+    (build / 'qualification-build.json').write_text(json.dumps({
+        'host_os': system,
+        'host_arch': platform.machine(),
         'source_revision': PINS['tone3000']['revision'],
         'juce_revision': PINS['juce']['revision'],
         'overlay_manifest_sha256': digest((HERE / 'sources.json').read_bytes()),

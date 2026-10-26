@@ -1,0 +1,29 @@
+--- a/modules/juce_core/native/juce_Files_linux.cpp
++++ b/modules/juce_core/native/juce_Files_linux.cpp
+@@ -114,6 +114,26 @@
+ 
+ File File::getSpecialLocation (const SpecialLocationType type)
+ {
++    // Oxidal qualification only: isolate user data without changing HOME or XDG settings.
++    const auto qualificationRoot = SystemStats::getEnvironmentVariable ("OXIDAL_QUALIFICATION_DATA", {});
++    if (qualificationRoot.isNotEmpty())
++    {
++        const File root (qualificationRoot);
++        switch (type)
++        {
++            case userHomeDirectory: return root.getChildFile ("user");
++            case userApplicationDataDirectory: return root.getChildFile ("user/.config");
++            case commonApplicationDataDirectory: return root.getChildFile ("common");
++            case commonDocumentsDirectory: return root.getChildFile ("common/Documents");
++            case tempDirectory:
++            {
++                const auto temp = root.getChildFile ("tmp");
++                temp.createDirectory();
++                return temp;
++            }
++            default: break;
++        }
++    }
+     switch (type)
+     {
+         case userHomeDirectory:
