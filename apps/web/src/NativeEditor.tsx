@@ -7,6 +7,8 @@ import {
   type NativeAction,
   type Preset,
 } from './api';
+import { EditQueue } from './editQueue';
+import { TouchAdjust } from './TouchAdjust';
 import { Button } from './components/ui/button';
 
 /** Confirmed native state only; failed operations are refreshed, never automatically replayed. */
@@ -26,9 +28,18 @@ export function NativeEditor({
   const [value, setValue] = useState('0.5');
   const [name, setName] = useState('My preset');
   const [owner] = useState(() => crypto.randomUUID());
-  const token = useRef('');
-  const sequence = useRef(0);
+  const queue = useRef<EditQueue<NativeSnapshot> | null>(null);
+  const alive = useRef(false);
+  const [baseline, setBaseline] = useState(0.5);
   const running = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    const pending = queue;
+    return () => {
+      alive.current = false;
+      void pending.current?.cancel().catch(() => {});
+    };
+  }, []);
   useEffect(() => {
     let active = true;
     void capabilities()
@@ -74,31 +85,129 @@ export function NativeEditor({
       clearInterval(timer);
     };
   }, [available]);
+  function publish(next: NativeSnapshot, expectedSession?: string) {
+    if (alive.current)
+      setState((previous) =>
+        previous && expectedSession && previous.session !== expectedSession
+          ? previous
+          : previous?.session === next.session &&
+              previous.revision > next.revision
+            ? previous
+            : next,
+      );
+  }
+  function fail(cause: unknown) {
+    if (!alive.current) return;
+    setError(String(cause));
+    void nativeState()
+      .then(publish)
+      .catch(() => {
+        if (alive.current) setState(null);
+      });
+  }
   async function send(action: NativeAction) {
     if (!state || running.current) return;
     running.current = true;
     setBusy(true);
     setError('');
     try {
-      setState(await nativeCommand(state, action));
+      publish(await nativeCommand(state, action), state.session);
     } catch (cause) {
-      setError(String(cause));
-      try {
-        setState(await nativeState());
-      } catch {
-        setState(null);
-      }
+      fail(cause);
     } finally {
       running.current = false;
-      setBusy(false);
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function begin() {
+    if (!state || running.current || state.edit) return;
+    setError('');
+    setBusy(true);
+    running.current = true;
+    const token = crypto.randomUUID();
+    const starting =
+      state.parameters.find((p) => p.id === target)?.normalized ?? 0.5;
+    setValue(String(starting));
+    setBaseline(starting);
+    const session = state.session;
+    let cursor = state;
+    const ready = nativeCommand(cursor, { kind: 'begin', owner, token, target })
+      .then((next) => {
+        cursor = next;
+        publish(next, session);
+      })
+      .finally(() => {
+        running.current = false;
+      });
+    const next = new EditQueue<NativeSnapshot>(
+      owner,
+      token,
+      ready,
+      async (edit) => {
+        running.current = true;
+        try {
+          // A lost preview reply may leave our cursor behind the daemon. Refresh
+          // before recovery cancellation; the owner/token still guard the edit.
+          if (edit.phase === 'cancel') {
+            const latest = await nativeState();
+            if (latest.session !== session)
+              throw new Error('Native session changed; reopen the editor.');
+            cursor = latest;
+          }
+          const action: NativeAction =
+            edit.phase === 'cancel'
+              ? { kind: 'cancel', owner, token }
+              : {
+                  kind: edit.phase,
+                  owner,
+                  token,
+                  sequence: edit.sequence,
+                  value: edit.value,
+                };
+          cursor = await nativeCommand(cursor, action);
+          return cursor;
+        } finally {
+          running.current = false;
+        }
+      },
+      (next) => publish(next, session),
+      fail,
+    );
+    queue.current = next;
+    try {
+      await ready;
+    } catch (cause) {
+      if (queue.current === next) queue.current = null;
+      fail(cause);
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function finish(cancel: boolean) {
+    const current = queue.current;
+    if (!current) return;
+    setBusy(true);
+    try {
+      if (cancel) await current.cancel();
+      else await current.finish(Number(value));
+      if (queue.current === current) queue.current = null;
+    } catch (cause) {
+      fail(cause);
+    } finally {
+      if (alive.current) setBusy(false);
     }
   }
   if (!available)
     return <p>Playback and editing are not available in this build.</p>;
   const parameter = state?.parameters.find((p) => p.id === target);
-  const ours = state?.edit?.owner === owner;
+  const ours = state?.edit?.owner === owner && state.edit.target === target;
   const staged = target === 'osEnabled' || target === 'osFactor';
   const blocked = busy || !connected || !state;
+  const valid =
+    value.trim() !== '' &&
+    Number.isFinite(Number(value)) &&
+    Number(value) >= 0 &&
+    Number(value) <= 1;
   return (
     <section aria-label="Native preset editor">
       <h3>Native preset editor</h3>
@@ -188,15 +297,31 @@ export function NativeEditor({
         </p>
         <Button
           disabled={blocked || !state?.loaded || !!state.edit}
-          onClick={() => {
-            token.current = crypto.randomUUID();
-            sequence.current = 0;
-            setValue(String(parameter?.normalized ?? 0.5));
-            void send({ kind: 'begin', owner, token: token.current, target });
-          }}
+          onClick={() => void begin()}
         >
           Begin native edit
         </Button>
+        {ours && (
+          <div className="native-touch">
+            <TouchAdjust
+              key={`${state.session}:${target}`}
+              label="native value"
+              value={valid ? Number(value) : NaN}
+              baseline={baseline}
+              min={0}
+              max={1}
+              step={
+                target === 'osEnabled' ? 1 : target === 'osFactor' ? 0.5 : 0.01
+              }
+              disabled={blocked}
+              format={(v) => `${Number((v * 100).toFixed(2))}% of range`}
+              onChange={(v) => {
+                setValue(String(v));
+                if (!staged) queue.current?.preview(v);
+              }}
+            />
+          </div>
+        )}
         <label className="field">
           Normalized value (0–1)
           <input
@@ -210,39 +335,18 @@ export function NativeEditor({
           />
         </label>
         <Button
-          disabled={blocked || !ours || staged || value === ''}
-          onClick={() =>
-            void send({
-              kind: 'preview',
-              owner,
-              token: token.current,
-              sequence: ++sequence.current,
-              value: Number(value),
-            })
-          }
+          disabled={blocked || !ours || staged || !valid}
+          onClick={() => queue.current?.preview(Number(value))}
         >
           Preview native change
         </Button>
         <Button
-          disabled={blocked || !ours || value === ''}
-          onClick={() =>
-            void send({
-              kind: 'commit',
-              owner,
-              token: token.current,
-              sequence: ++sequence.current,
-              value: Number(value),
-            })
-          }
+          disabled={blocked || !ours || !valid}
+          onClick={() => void finish(false)}
         >
           Commit native change
         </Button>
-        <Button
-          disabled={blocked || !ours}
-          onClick={() =>
-            void send({ kind: 'cancel', owner, token: token.current })
-          }
-        >
+        <Button disabled={blocked || !ours} onClick={() => void finish(true)}>
           Cancel native edit
         </Button>
       </div>

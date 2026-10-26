@@ -1,10 +1,13 @@
 import type { Action, Snapshot } from './api';
 
-type Edit = Extract<Action, { type: 'edit' }>['edit'];
-type Send = (edit: Edit) => Promise<Snapshot>;
+type Edit = Exclude<
+  Extract<Action, { type: 'edit' }>['edit'],
+  { phase: 'begin' }
+>;
+type Send<T> = (edit: Edit) => Promise<T>;
 
 /** One in-flight request plus one replaceable preview; a terminal value is never coalesced away. */
-export class EditQueue {
+export class EditQueue<T = Snapshot> {
   private pending: number | null = null;
   private running = false;
   private sequence = 0;
@@ -19,8 +22,8 @@ export class EditQueue {
     private readonly owner: string,
     private readonly token: string,
     private readonly ready: Promise<unknown>,
-    private readonly send: Send,
-    private readonly accept: (state: Snapshot) => void,
+    private readonly send: Send<T>,
+    private readonly accept: (state: T) => void,
     private readonly fail: (error: unknown) => void,
   ) {}
   preview(value: number) {

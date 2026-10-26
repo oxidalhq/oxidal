@@ -119,10 +119,47 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   const before = await editor.getByTestId('native-readback').textContent();
   await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  const touch = editor.getByRole('slider', { name: 'Adjust native value' });
+  const starting = await editor
+    .getByLabel('Normalized value (0–1)')
+    .inputValue();
+  await touch.click({ position: { x: 20, y: 20 } });
+  await expect(editor.getByLabel('Normalized value (0–1)')).toHaveValue(
+    starting,
+  );
+  await editor.getByRole('button', { name: 'Increase native value' }).click();
+  await expect(editor.getByLabel('Normalized value (0–1)')).toHaveValue(
+    String(Math.min(1, Number((Number(starting) + 0.01).toFixed(12)))),
+  );
+  await editor.getByRole('button', { name: 'Restore starting value' }).click();
+  await touch.press('End');
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 1',
+  );
+  await editor.getByRole('button', { name: 'Restore starting value' }).click();
+  await expect(editor.getByTestId('native-readback')).toHaveText(before!);
   await editor.getByLabel('Normalized value (0–1)').fill('0.8');
   await editor.getByRole('button', { name: 'Preview native change' }).click();
   await expect(editor.getByTestId('native-readback')).not.toHaveText(before!);
+  // The server applies this preview, but its reply is lost. Cancel must refresh
+  // the revision and restore the baseline rather than replaying the preview.
+  let loseReply = true;
+  await page.route('**/api/v1/native', async (route) => {
+    if (
+      loseReply &&
+      route.request().method() === 'POST' &&
+      route.request().postDataJSON().action.kind === 'preview'
+    ) {
+      loseReply = false;
+      await route.fetch();
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await editor.getByLabel('Normalized value (0–1)').fill('0.9');
+  await editor.getByRole('button', { name: 'Preview native change' }).click();
+  await expect(editor.getByRole('alert')).toBeVisible();
   await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await page.unroute('**/api/v1/native');
   await expect(editor.getByTestId('native-readback')).toHaveText(before!);
   await editor.getByRole('button', { name: 'Begin native edit' }).click();
   await editor.getByLabel('Normalized value (0–1)').fill('0.75');
@@ -133,7 +170,13 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   const edited = await editor.getByTestId('native-readback').textContent();
   await editor.getByLabel('Native control').selectOption('osEnabled');
   await editor.getByRole('button', { name: 'Begin native edit' }).click();
-  await editor.getByLabel('Normalized value (0–1)').fill('1');
+  const stagedBefore = await editor
+    .getByTestId('native-readback')
+    .textContent();
+  await touch.press('End');
+  await expect(editor.getByLabel('Normalized value (0–1)')).toHaveValue('1');
+  await expect(editor.getByTestId('native-readback')).toHaveText(stagedBefore!);
+
   await expect(
     editor.getByRole('button', { name: 'Preview native change' }),
   ).toBeDisabled();
@@ -162,6 +205,17 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await editor.getByLabel('Preset to load').selectOption(`owned:${owned.id}`);
   await editor.getByRole('button', { name: 'Load into native editor' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await touch.press('Home');
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 0',
+  );
+  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/v1/native')).json()).edit)
+    .toBeNull();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
   const original = await request.get(
     `/api/v1/presets/${preset.sha256}/original`,

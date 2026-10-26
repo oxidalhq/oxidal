@@ -223,3 +223,90 @@ test('stage display modes persist and stay accessible in both orientations', asy
     }
   }
 });
+
+test('touch adjustment keeps taps steady, slows fine drags and rolls back interrupted gestures', async ({
+  page,
+  request,
+}, testInfo) => {
+  await page.getByLabel('Display mode').selectOption('stage');
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  const track = page.getByRole('slider', {
+    name: 'Adjust NAM A level',
+    exact: true,
+  });
+  const draft = page.getByLabel('Draft NAM A level (%)');
+  await expect(draft).toHaveValue('50');
+  await track.scrollIntoViewIfNeeded();
+  await track.click({ position: { x: 20, y: 20 } });
+  await expect(draft).toHaveValue('50');
+  await track.evaluate((el) =>
+    el.addEventListener('pointerdown', (event) => {
+      (el as HTMLElement).dataset.pointerId = String(
+        (event as PointerEvent).pointerId,
+      );
+    }),
+  );
+  async function drag(interrupt?: 'pointercancel' | 'capture') {
+    await track.scrollIntoViewIfNeeded();
+    const box = (await track.boundingBox())!;
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 20 + (box.width - 32) * 0.2, box.y + 20, {
+      steps: 8,
+    });
+    if (interrupt === 'pointercancel')
+      await track.dispatchEvent('pointercancel', {
+        pointerId: Number(await track.getAttribute('data-pointer-id')),
+      });
+    if (interrupt === 'capture')
+      await track.evaluate((el) =>
+        el.releasePointerCapture(Number((el as HTMLElement).dataset.pointerId)),
+      );
+    await page.mouse.up();
+  }
+  await drag();
+  await expect(draft).toHaveValue('70');
+  expect(
+    (await (await request.get('/api/v1/state')).json()).edit,
+  ).not.toBeNull();
+  await page.getByRole('button', { name: 'Restore starting value' }).click();
+  await expect(draft).toHaveValue('50');
+  await page.getByRole('button', { name: 'Fine', exact: true }).click();
+  await drag();
+  await expect(draft).toHaveValue('52');
+  await page.getByRole('button', { name: 'Restore starting value' }).click();
+  await drag('pointercancel');
+  await expect(draft).toHaveValue('50');
+  await drag('capture');
+  await expect(draft).toHaveValue('50');
+  await expect(page.getByTestId('value-nam-a.level')).toHaveText('50%');
+  await track.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(draft).toHaveValue('51');
+  await accessible(page);
+  await fits(page);
+  mkdirSync('../../.local/previews/touch', { recursive: true });
+  await page.screenshot({
+    path: `../../.local/previews/touch/${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  await draft.fill('42.37');
+  await page.getByRole('button', { name: 'Commit', exact: true }).click();
+  await expect
+    .poll(async () => {
+      const state = await (await request.get('/api/v1/state')).json();
+      return state.parameters.find(
+        (p: { id: string }) => p.id === 'nam-a.level',
+      ).value;
+    })
+    .toBeCloseTo(0.4237, 5);
+  await page
+    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Increase NAM A level' }).click();
+  await page.getByRole('button', { name: 'Restore starting value' }).click();
+  await expect(draft).toHaveValue('42.37');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+});

@@ -862,3 +862,49 @@ main {
 :root[data-display='stage'] .caption {
   font-size: 14px;
 }
+
+.touch-adjust {
+  margin-block: 0.75rem;
+}
+.touch-track {
+  min-height: 80px;
+  border: 2px solid var(--input);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+}
+.touch-track:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+}
+.touch-track[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+.touch-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--readout-size);
+  color: var(--readout-foreground);
+}
+.touch-rail {
+  display: block;
+  height: 6px;
+  background: var(--border);
+  margin-block: 8px;
+}
+.touch-rail > span {
+  display: block;
+  height: 100%;
+  background: var(--control-accent);
+}
+.touch-adjust button,
+.editor-actions button {
+  min-width: 48px;
+  min-height: 48px;
+}
+.native-touch {
+  grid-column: 1 / -1;
+}

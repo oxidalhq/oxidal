@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { sendCommand, type Snapshot } from './api';
+import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
 import { Button } from './components/ui/button';
 
@@ -19,6 +20,7 @@ export function ControlEditor({
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(parameter.value);
+  const [baseline, setBaseline] = useState(parameter.value);
   const [error, setError] = useState('');
   const queue = useRef<EditQueue | null>(null);
   const alive = useRef(false);
@@ -37,6 +39,7 @@ export function ControlEditor({
     setError('');
     setBusy(true);
     setDraft(parameter.value);
+    setBaseline(parameter.value);
     const token = crypto.randomUUID();
     const session = state.session;
     const report = (next: Snapshot) => {
@@ -113,6 +116,17 @@ export function ControlEditor({
       ) : (
         <fieldset aria-label={`Preview ${parameter.label}`}>
           <legend>Preview {parameter.label}</legend>
+          <TouchAdjust
+            label={parameter.label}
+            value={draft}
+            baseline={baseline}
+            min={parameter.min}
+            max={parameter.max}
+            step={parameter.step}
+            disabled={unavailable}
+            onChange={preview}
+            format={(value) => `${Number((value * 100).toFixed(2))}%`}
+          />
           <label className="field">
             Draft {parameter.label} (%)
             <input
@@ -134,38 +148,6 @@ export function ControlEditor({
             />
           </label>
           <div className="editor-actions">
-            <Button
-              variant="outline"
-              aria-label={`Decrease ${parameter.label}`}
-              disabled={unavailable}
-              onClick={() =>
-                preview(
-                  Math.max(
-                    parameter.min,
-                    (Number.isFinite(draft) ? draft : parameter.value) -
-                      parameter.step,
-                  ),
-                )
-              }
-            >
-              −
-            </Button>
-            <Button
-              variant="outline"
-              aria-label={`Increase ${parameter.label}`}
-              disabled={unavailable}
-              onClick={() =>
-                preview(
-                  Math.min(
-                    parameter.max,
-                    (Number.isFinite(draft) ? draft : parameter.value) +
-                      parameter.step,
-                  ),
-                )
-              }
-            >
-              +
-            </Button>
             <Button
               disabled={
                 unavailable ||

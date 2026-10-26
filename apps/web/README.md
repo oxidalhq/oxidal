@@ -117,3 +117,22 @@ bright values and Orchid accents. Both use 48px primary-control heights.
 there is no automatic theme switch during performance. All modes are CSS tokens
 in `theme.css`. Actual sunlight/glare and venue readability still need physical
 checks; the app cannot set screen brightness.
+
+### Precise touch adjustment
+
+Open **Edit** on a rig parameter or **Begin native edit** in the preset editor.
+The large adjustment surface uses relative motion: touching alone does not move
+the value. **Fine** makes the next drag ten times slower. **Restore starting value**
+recovers the exact baseline, including values between normal step increments.
+Arrow keys, plus/minus and direct numeric entry remain available in both editors.
+Pointer cancellation or capture loss restores the start of that drag. Release
+keeps a preview; **Commit** saves the exact draft, and **Cancel** restores the
+transaction baseline. Navigation cancels an unfinished edit; the server lease
+also rolls back abandoned edits.
+
+Rig and native editors share the existing coalescing queue: one request in flight,
+one replaceable preview, and an ordered terminal commit/cancel. Native processing
+settings remain staged until commit. Native values are shown as normalized range
+percentages, not invented dB units; full native descriptor/display mapping is
+still pending. These gestures are an independent implementation of the preserved
+behaviour, not a copied source UI. Live audio remains unavailable.
