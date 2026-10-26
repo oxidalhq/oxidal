@@ -35,6 +35,10 @@ try:
     with open('/proc/' + pid + '/status') as file:
         assert not any(line.startswith('Uid:\t0\t') for line in file), 'Daemon must be unprivileged'
     import pwd, grp
+    daemon_uid = pwd.getpwnam('oxidald').pw_uid
+    assert daemon_uid != 0, 'The dynamic daemon identity must resolve through NSS'
+    network = get('/api/v1/device/network')
+    assert network['available'], network
     account = pwd.getpwnam('oxidal-admin')
     assert account.pw_uid >= 1000 and account.pw_shell == '/bin/bash'
     assert 'oxidal-admin' in grp.getgrnam('sudo').gr_mem
@@ -69,8 +73,12 @@ try:
         request = urllib.request.Request('http://127.0.0.1:3210/api/v1/debug', data=json.dumps(command).encode(), headers={'Content-Type':'application/json'}, method='POST')
         with urllib.request.urlopen(request, timeout=5) as reply:
             return json.loads(reply.read())
-    debug = get('/api/v1/debug')
-    assert debug['available'] and not debug['enabled']
+    for attempt in range(20):
+        debug = get('/api/v1/debug')
+        if debug['available']:
+            break
+        time.sleep(.2)
+    assert debug['available'] and not debug['enabled'], debug
     assert 'oxidal-debug' in debug['identity']
     post({'type':'enable'})
     before = subprocess.check_output(['systemctl','show','-p','MainPID','--value','oxidal-debug'],text=True).strip()

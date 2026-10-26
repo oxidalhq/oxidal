@@ -39,7 +39,8 @@
       "rfkill",
       "swh-lv2",
       "python3",
-      "tzdata"
+      "tzdata",
+      "libnss-systemd"
     ],
     "enabled_services": [
       "oxidald.service",
