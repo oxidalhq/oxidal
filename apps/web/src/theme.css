@@ -1,0 +1,80 @@
+/* Oxidal / Multistomp — edit this file to restyle the entire interface.
+   Standard shadcn semantic colours + instrument layout tokens.
+   Keep foreground/background pairs readable; touch targets stay at least 44px. */
+:root {
+  color-scheme: light;
+  --background: #edf1f3;
+  --foreground: #1d2c34;
+  --card: #fcfdfd;
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #175b82;
+  --primary-foreground: #ffffff;
+  --secondary: #e1e9ed;
+  --secondary-foreground: #243b48;
+  --muted: #e8eef1;
+  --muted-foreground: #526570;
+  --accent: #d5e6ef;
+  --accent-foreground: #163f58;
+  --destructive: #a32d28;
+  --destructive-foreground: #ffffff;
+  --border: #b8c6ce;
+  --input: #899da9;
+  --ring: #175b82;
+  --success: #26704c;
+  --warning: #f3ebd8;
+  --warning-foreground: #654a1b;
+
+  /* The blue enclosure and monochrome LCD are independent of app surfaces. */
+  --enclosure: #164f70;
+  --enclosure-foreground: #f3f8fb;
+  --enclosure-border: #487996;
+  --lcd: #e7eccd;
+  --lcd-foreground: #283324;
+  --lcd-muted: #515d44;
+  --lcd-border: #8e9c78;
+  --lcd-card: #f0f3df;
+  --lcd-shadow: inset 0 2px 6px #28332412;
+  --panel-shadow: 0 2px 3px #21364306;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --radius: 0.75rem;
+  --panel-radius: 1rem;
+  --display-radius: 0.375rem;
+  --content-width: 80rem;
+  --page-space: clamp(1rem, 3vw, 2.5rem);
+  --panel-space: clamp(1rem, 2vw, 1.5rem);
+  --control-gap: 1rem;
+  --touch-target: 2.75rem;
+  --title-size: clamp(1.7rem, 3vw, 2.25rem);
+  --readout-size: 1.875rem;
+}
+
+/* Tailwind v4 / shadcn bridge. Components use semantic utilities, never hues. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+}

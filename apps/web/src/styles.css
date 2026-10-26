@@ -1,14 +1,10 @@
 @import 'tailwindcss';
+@import './theme.css';
 
 :root {
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    sans-serif;
-  color: #262923;
-  background: #f5f3ed;
+  font-family: var(--font-sans);
+  color: var(--foreground);
+  background: var(--background);
   font-synthesis: none;
   line-height: 1.45;
 }
@@ -32,7 +28,7 @@ select {
 button,
 select,
 input:not([type='checkbox']) {
-  min-height: 44px;
+  min-height: var(--touch-target);
 }
 a {
   color: inherit;
@@ -41,10 +37,10 @@ a {
 .masthead {
   min-height: 64px;
   padding: 8px 28px;
-  border-bottom: 1px solid #cecfc5;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--control-gap);
 }
 .wordmark {
   font-weight: 650;
@@ -68,11 +64,11 @@ a {
 .dot {
   width: 7px;
   height: 7px;
-  background: #92948b;
+  background: var(--muted-foreground);
   border-radius: 50%;
 }
 .online {
-  background: #343e31;
+  background: var(--success);
 }
 .workspace {
   min-height: calc(100vh - 64px);
@@ -82,17 +78,17 @@ a {
   font-weight: 650;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: #5d6358;
+  color: var(--muted-foreground);
 }
 main {
   width: 100%;
-  max-width: 1280px;
+  max-width: var(--content-width);
   margin: 0 auto;
-  padding: 24px 28px;
+  padding: var(--page-space);
   min-width: 0;
 }
 h1 {
-  font-size: 30px;
+  font-size: var(--title-size);
   font-weight: 650;
   letter-spacing: -0.8px;
   margin: 6px 0 0;
@@ -115,26 +111,30 @@ h2 {
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
-  border-left: 2px solid #62695b;
+  border-left: 2px solid var(--muted-foreground);
   font-size: 12px;
   line-height: 1.6;
   margin-bottom: 20px;
-  background: #eeefe7;
+  background: var(--muted);
 }
 .notice svg {
   flex-shrink: 0;
 }
 .error {
-  border: 1px solid #813e31;
-  color: #70392e;
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
   padding: 14px;
   margin-bottom: 20px;
   overflow-wrap: anywhere;
 }
 .panel {
-  padding: 20px 0;
-  border-top: 1px solid #b8bfb0;
-  margin-bottom: 4px;
+  padding: var(--panel-space);
+  border: 1px solid var(--border);
+  border-radius: var(--panel-radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--panel-shadow);
+  margin-bottom: var(--control-gap);
 }
 .section-heading {
   display: flex;
@@ -157,15 +157,15 @@ h2 {
   padding: 12px 0;
 }
 .block {
-  border: 1px solid #b8bfb0;
-  border-radius: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--display-radius);
   min-width: 0;
   min-height: 110px;
   padding: 18px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #fbfaf6;
+  background: var(--card);
   flex: 1;
 }
 .block strong {
@@ -175,7 +175,7 @@ h2 {
 .block > span:last-child {
   font-size: 10px;
   line-height: 1.5;
-  color: #58614f;
+  color: var(--muted-foreground);
 }
 .block .eyebrow {
   font-size: 9px;
@@ -195,7 +195,7 @@ h2 {
   flex: 1.3;
 }
 .branch {
-  border-left: 2px solid #8d9783;
+  border-left: 2px solid var(--border);
   padding-left: 9px;
 }
 .branch .block {
@@ -232,14 +232,14 @@ h2 {
 }
 .caption {
   font-size: 11px;
-  color: #5a6354;
+  color: var(--muted-foreground);
   line-height: 1.7;
   margin: 12px 0 0;
 }
 .parameters {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
+  gap: var(--control-gap);
 }
 .parameter > span {
   display: flex;
@@ -251,15 +251,15 @@ h2 {
 .parameter output {
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-  font-size: 26px;
+  font-size: var(--readout-size);
 }
 .parameter input {
   width: 100%;
-  accent-color: #3c4934;
+  accent-color: var(--primary);
 }
 .muted {
   font-size: 12px;
-  color: #62695b;
+  color: var(--muted-foreground);
   line-height: 1.8;
 }
 .field {
@@ -273,14 +273,14 @@ h2 {
 .field select,
 .field textarea {
   width: 100%;
-  background: #f8f8f2;
-  border: 1px solid #aeb7a4;
-  border-radius: 4px;
+  background: var(--card);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
   padding: 10px;
-  color: #262923;
+  color: var(--foreground);
 }
 .field textarea {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 .form-grid {
@@ -299,19 +299,19 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: var(--touch-target);
 }
 .checkboxes input {
   width: 18px;
   height: 18px;
-  accent-color: #3c4934;
+  accent-color: var(--primary);
 }
 .feedback {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 20px;
-  background: #eeefe7;
+  background: var(--muted);
   margin-top: 24px;
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -323,11 +323,11 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  border-top: 1px solid #d9ddd2;
+  border-top: 1px solid var(--border);
   padding: 16px 0;
 }
 .device-info dt {
-  color: #62695b;
+  color: var(--muted-foreground);
 }
 .device-info dd {
   text-align: right;
@@ -335,7 +335,7 @@ h2 {
 }
 summary {
   font-size: 13px;
-  min-height: 44px;
+  min-height: var(--touch-target);
   display: flex;
   align-items: center;
 }
@@ -345,14 +345,14 @@ footer {
   gap: 12px;
   font-size: 9px;
   letter-spacing: 1px;
-  color: #646c5d;
+  color: var(--muted-foreground);
   padding: 20px 0 0;
 }
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #3c4934;
+  outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
 .empty {
@@ -360,7 +360,7 @@ summary:focus-visible {
 }
 @media (max-width: 1100px) {
   main {
-    padding: 24px;
+    padding: var(--page-space);
   }
   .signal-path {
     gap: 6px;
@@ -388,7 +388,7 @@ summary:focus-visible {
     height: 8px;
   }
   main {
-    padding: 20px 16px;
+    padding: var(--page-space);
   }
   .page-heading {
     flex-direction: column;
@@ -396,7 +396,7 @@ summary:focus-visible {
     gap: 16px;
   }
   h1 {
-    font-size: 27px;
+    font-size: var(--title-size);
   }
   .section-heading {
     flex-wrap: wrap;
@@ -545,11 +545,114 @@ input[type='file'] {
   min-width: 0;
   margin: 0;
   padding: 0.75rem;
-  border: 1px solid #cecfc5;
+  border: 1px solid var(--border);
 }
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+/* Instrument surfaces. All adjustable values live in theme.css. */
+.masthead {
+  background: var(--enclosure);
+  color: var(--enclosure-foreground);
+  border-color: var(--enclosure-border);
+  padding-inline: var(--page-space);
+  --background: var(--enclosure);
+  --foreground: var(--enclosure-foreground);
+  --input: var(--enclosure-border);
+  --accent: var(--enclosure-border);
+  --accent-foreground: var(--enclosure-foreground);
+  --ring: var(--enclosure-foreground);
+}
+.masthead nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.masthead .online {
+  background: var(--enclosure-foreground);
+}
+h1,
+.parameter output,
+.block strong,
+.path-label {
+  font-family: var(--font-mono);
+}
+.notice {
+  border-color: var(--warning-foreground);
+  border-radius: var(--radius-sm);
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+.chain-panel {
+  --background: var(--lcd);
+  --foreground: var(--lcd-foreground);
+  --card: var(--lcd-card);
+  --card-foreground: var(--lcd-foreground);
+  --muted-foreground: var(--lcd-muted);
+  --border: var(--lcd-border);
+  --input: var(--lcd-border);
+  --primary: var(--lcd-foreground);
+  --primary-foreground: var(--lcd);
+  --accent: var(--lcd-card);
+  --accent-foreground: var(--lcd-foreground);
+  --ring: var(--lcd-foreground);
+  background: var(--lcd);
+  box-shadow: var(--lcd-shadow);
+}
+.chain-panel h2 {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.block:not(.endpoint) {
+  border-width: 2px;
+  border-color: var(--lcd-foreground);
+}
+.block:not(.endpoint) .eyebrow {
+  color: var(--lcd-foreground);
+  border-bottom: 1px solid var(--lcd-border);
+  padding-bottom: 6px;
+}
+.parameter {
+  min-width: 0;
+  padding: var(--control-gap);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.parameter > span {
+  flex-wrap: wrap;
+}
+.parameter output {
+  color: var(--primary);
+  letter-spacing: -0.05em;
+}
+.parameter input[type='range'] {
+  cursor: pointer;
+}
+.control-editor fieldset {
+  border-radius: var(--radius-sm);
+}
+input[type='range']:focus-visible {
+  outline-color: var(--ring);
+}
+@media (max-width: 760px) {
+  .masthead {
+    flex-wrap: wrap;
+  }
+  .masthead nav {
+    width: 100%;
+  }
+  .masthead nav > button {
+    flex: 1;
+  }
+  .parameter > span {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
