@@ -19,8 +19,9 @@ Experimental Pi image assembly now packages all workers and web assets, enables 
 The optional `oxidal-device` helper exposes browser Wi-Fi scan/join, hotspot credentials/country/channel, five automatic hotspot policies, inactive managed-network removal, confirmed rollback and separate system Reboot/Shut down. It remains separate from the unprivileged daemon and uses a root-verified, UID-restricted Unix socket. See docs/device-service.md for recovery tests and the remaining physical radio/power requirements. Real native/LV2 stereo meters and Linux host history are described in docs/monitoring.md. Settings → Maintenance offers persistent unprivileged and password-sudo administrator interactive PTYs and a separate bounded diagnostic command runner through isolated systemd services; see docs/debug-console.md. None of these features establishes physical audio or real-time qualification.
 
 Native playback now has session/revision-checked scalar controls and confirmed
-readback. The rig page shows actual sounding blocks while that worker runs and hides
-the silent example chain. A separate export worker saves verified named copies of
+readback. The rig page shows actual sounding blocks while that worker runs and never falls back to
+the silent example chain. Example controls require an explicit development URL and
+server simulator capability. A separate export worker saves verified named copies of
 confirmed scalar settings without changing audio/editor state; full native authoring,
 prepared switching and physical timing remain unqualified. The adapter also ports
 guarded amp/cab partitioning as an offline preparation API; see docs/native-tone3000.md.

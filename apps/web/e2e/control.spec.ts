@@ -52,10 +52,10 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   page,
   context,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await expect(
-    page.getByText('Rig preview is silent.', { exact: true }),
+    page.getByText('Development simulator · no audio.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Serial rig' })).toBeVisible();
   await expect(page.getByRole('complementary')).toHaveCount(1);
@@ -83,7 +83,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
     page.getByText('A rig needs 1–64 nodes and at most 128 edges'),
   ).toBeVisible();
   const second = await context.newPage();
-  await second.goto('/');
+  await second.goto('/?development=simulator');
   await expect(second.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
@@ -126,7 +126,7 @@ test('MIDI continues with browsers closed; simulator feedback cannot loop into i
   page,
   request,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.close();
   const live = (await (await request.get('/api/v1/state')).json()) as {
@@ -159,7 +159,7 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
   page,
   context,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByText('Reconnecting…', { exact: true })).toBeVisible();
@@ -176,7 +176,7 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
 test('quiet interface has no detected WCAG AA violations', async ({
   page,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
@@ -217,7 +217,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   page,
   request,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
@@ -276,9 +276,9 @@ test('owned previews cancel, commit exactly, and preserve independent client cha
   context,
   request,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   const second = await context.newPage();
-  await second.goto('/');
+  await second.goto('/?development=simulator');
   await page
     .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
@@ -366,7 +366,7 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
   request,
 }) => {
   test.setTimeout(50000);
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await page
     .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
@@ -409,7 +409,7 @@ test('audio inspection keeps the authoring service connected', async ({
   page,
   request,
 }) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
@@ -426,7 +426,7 @@ test('audio inspection keeps the authoring service connected', async ({
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(
-    page.getByText('Rig preview is silent.', { exact: true }),
+    page.getByText('Development simulator · no audio.', { exact: true }),
   ).toBeVisible();
 });
 
@@ -434,7 +434,7 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   page,
   request,
 }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
   const before = await (await request.get('/api/v1/state')).json();
   const delay = page.getByRole('button', { name: 'Focus Delay controls' });

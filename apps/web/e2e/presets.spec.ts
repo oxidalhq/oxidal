@@ -8,6 +8,120 @@ const fixtures = new URL(
   import.meta.url,
 );
 
+test('rig controls follow the actual session without example effects', async ({
+  page,
+  request,
+}) => {
+  // Presentation contract fixture; the real worker lifecycle below verifies the same boundary.
+  const baseline = await (await request.get('/api/v1/audio')).json();
+  let audio = {
+    ...baseline,
+    phase: 'stopped',
+    controls: [],
+    configured: null,
+    preset_name: null,
+  };
+  await page.route('**/api/v1/audio', (route) =>
+    route.fulfill({ json: audio }),
+  );
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { name: 'Audio stopped', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('Quick controls', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByLabel('Example preset', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.locator('[data-testid^="block-"]')).toHaveCount(0);
+  await page
+    .getByRole('button', { name: 'Browse presets', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Preset library', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  audio = {
+    ...audio,
+    phase: 'running',
+    preset_name: 'Amp only',
+    controls: [
+      {
+        target: 'outputLevel',
+        label: 'Output',
+        display: '0 dB',
+        value: 0.5,
+        toggle: false,
+      },
+      {
+        target: 'block:amp-one:enabled',
+        label: 'My amp · enabled',
+        display: 'On',
+        value: 1,
+        toggle: true,
+      },
+      {
+        target: 'block:amp-one:level',
+        label: 'My amp level',
+        display: '-3 dB',
+        value: 0.4,
+        toggle: false,
+      },
+    ],
+  };
+  const rig = page.getByRole('region', { name: 'Sounding rig' });
+  await expect(rig).toBeVisible();
+  await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
+  await expect(rig.locator('.live-effect')).toHaveCount(1);
+  await rig.getByRole('button', { name: 'My amp', exact: true }).click();
+  await expect(
+    rig.getByRole('button', {
+      name: 'Adjust sounding My amp level',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
+  // A recalled session may not contain the previously selected block.
+  audio = {
+    ...audio,
+    session: 'replacement-session',
+    preset_name: 'Output only',
+    controls: [audio.controls[0]],
+  };
+  await expect(page.getByTestId('active-preset')).toHaveText('Output only');
+  await expect(rig.locator('.live-effect')).toHaveCount(0);
+  await expect(
+    rig.getByRole('button', { name: 'Adjust sounding Output', exact: true }),
+  ).toBeVisible();
+  await expect(
+    rig.getByRole('button', {
+      name: 'Adjust sounding My amp level',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  audio = { ...audio, phase: 'stopped', controls: [] };
+  await expect(rig).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: 'Audio stopped', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
+  // A URL cannot enable development controls on an appliance without the capability.
+  await page.route('**/api/v1/health', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      json: { ...(await response.json()), midi_transport: 'unavailable' },
+    });
+  });
+  await page.goto('/?development=simulator');
+  await expect(
+    page.getByRole('heading', { name: 'Audio stopped', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Example preset', { exact: true })).toHaveCount(
+    0,
+  );
+});
+
 test('native preset upload, durable library, exact download and rejected replacement', async ({
   page,
   context,
@@ -670,6 +784,15 @@ test('playback lifecycle keeps native authoring available after stop and restart
       true,
     );
     await page.getByRole('button', { name: 'Rig', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Audio stopped', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Quick controls', { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByLabel('Example preset', { exact: true }),
+    ).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await audio.getByRole('button', { name: 'Resume saved session' }).click();
     await expect(audio.getByRole('status')).toContainText('Audio: running');

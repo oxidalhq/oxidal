@@ -42,6 +42,12 @@ export default function App() {
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
+  // Example state is never a fallback for a stopped or unavailable audio engine.
+  // Both an explicit development URL and server capability are required.
+  const developmentSimulator =
+    simulator &&
+    new URLSearchParams(window.location.search).get('development') ===
+      'simulator';
   const [view, setView] = useState<'rig' | 'settings' | 'library' | 'monitor'>(
     'rig',
   );
@@ -313,7 +319,9 @@ export default function App() {
                 {view === 'rig'
                   ? audioRunning
                     ? 'Sounding rig'
-                    : 'Control preview'
+                    : developmentSimulator
+                      ? 'Development simulator'
+                      : 'Rig'
                   : view === 'monitor'
                     ? 'Monitor'
                     : view === 'library'
@@ -323,13 +331,15 @@ export default function App() {
               <h1 data-testid="active-preset">
                 {view === 'rig'
                   ? (playingName ??
-                    (!state
-                      ? 'Connecting'
-                      : state.preset === 'custom'
-                        ? 'Custom routing'
-                        : state.preset === 'parallel'
-                          ? 'Parallel rig'
-                          : 'Serial rig'))
+                    (!developmentSimulator
+                      ? 'Your rig'
+                      : !state
+                        ? 'Connecting'
+                        : state.preset === 'custom'
+                          ? 'Custom routing'
+                          : state.preset === 'parallel'
+                            ? 'Parallel rig'
+                            : 'Serial rig'))
                   : view === 'monitor'
                     ? 'Signal & system'
                     : view === 'library'
@@ -337,56 +347,59 @@ export default function App() {
                       : settingsLabels[settingsSection]}
               </h1>
             </div>
-            {state && view === 'rig' && !audioRunning && (
-              <div className="performance-actions preset-controls">
-                <label className="field">
-                  Example preset
-                  <select
-                    aria-label="Example preset"
+            {state &&
+              view === 'rig' &&
+              developmentSimulator &&
+              !audioRunning && (
+                <div className="performance-actions preset-controls">
+                  <label className="field">
+                    Example preset
+                    <select
+                      aria-label="Example preset"
+                      disabled={!connected}
+                      value={state.preset}
+                      onChange={(e) =>
+                        void run(
+                          {
+                            type: 'set',
+                            target: 'rig.preset',
+                            value: e.target.value === 'parallel' ? 1 : 0,
+                          },
+                          true,
+                        )
+                      }
+                    >
+                      <option value="custom" disabled>
+                        Custom routing
+                      </option>
+                      <option value="serial">Serial</option>
+                      <option value="parallel">Parallel</option>
+                    </select>
+                  </label>
+                  <Button
+                    className="bypass-switch"
+                    variant={state.bypassed ? 'default' : 'outline'}
                     disabled={!connected}
-                    value={state.preset}
-                    onChange={(e) =>
-                      void run(
-                        {
-                          type: 'set',
-                          target: 'rig.preset',
-                          value: e.target.value === 'parallel' ? 1 : 0,
-                        },
-                        true,
-                      )
+                    aria-pressed={state.bypassed}
+                    onClick={() =>
+                      void run({
+                        type: 'set',
+                        target: 'rig.bypass',
+                        value: state.bypassed ? 0 : 1,
+                      })
                     }
                   >
-                    <option value="custom" disabled>
-                      Custom routing
-                    </option>
-                    <option value="serial">Serial</option>
-                    <option value="parallel">Parallel</option>
-                  </select>
-                </label>
-                <Button
-                  className="bypass-switch"
-                  variant={state.bypassed ? 'default' : 'outline'}
-                  disabled={!connected}
-                  aria-pressed={state.bypassed}
-                  onClick={() =>
-                    void run({
-                      type: 'set',
-                      target: 'rig.bypass',
-                      value: state.bypassed ? 0 : 1,
-                    })
-                  }
-                >
-                  <Power size={20} aria-hidden="true" />
-                  {state.bypassed ? 'Bypass on' : 'Bypass off'}
-                </Button>
-              </div>
-            )}
+                    <Power size={20} aria-hidden="true" />
+                    {state.bypassed ? 'Bypass on' : 'Bypass off'}
+                  </Button>
+                </div>
+              )}
           </div>
-          {view === 'rig' && !audioRunning && (
+          {view === 'rig' && developmentSimulator && !audioRunning && (
             <div className="notice rig-status">
               <WarningCircle size={18} aria-hidden="true" />
               <span>
-                <strong>Rig preview is silent.</strong>
+                <strong>Development simulator · no audio.</strong>
               </span>
               <Button variant="outline" onClick={showSettings}>
                 Audio setup
@@ -410,8 +423,14 @@ export default function App() {
             </Suspense>
           ) : view === 'rig' ? (
             <>
-              <LiveRig connected={connected} onPlaying={setPlayingName} />
-              {!audioRunning && (
+              <LiveRig
+                connected={connected}
+                onPlaying={setPlayingName}
+                onLibrary={() => setView('library')}
+                onAudioSetup={showSettings}
+                hideInactive={developmentSimulator}
+              />
+              {developmentSimulator && !audioRunning && (
                 <>
                   <section
                     className="panel chain-panel"
@@ -581,30 +600,41 @@ export default function App() {
                     <WebTerminal />
                   </Suspense>
                   <DebugConsole />
-                  <details className="panel">
-                    <summary>Rig validation inspector</summary>
-                    <label className="field">
-                      Rig JSON
-                      <textarea
-                        aria-label="Rig JSON"
-                        rows={8}
-                        value={draft || JSON.stringify(state.rig, null, 2)}
-                        onChange={(event) => setDraft(event.target.value)}
-                        spellCheck={false}
-                      />
-                    </label>
-                    <Button
-                      variant="outline"
-                      onClick={() => void validateDraft()}
-                      disabled={!connected}
-                    >
-                      Validate rig
-                    </Button>
-                    <p role="status">{validation}</p>
-                  </details>
+                  {developmentSimulator && (
+                    <details className="panel">
+                      <summary>Rig validation inspector</summary>
+                      <label className="field">
+                        Rig JSON
+                        <textarea
+                          aria-label="Rig JSON"
+                          rows={8}
+                          value={draft || JSON.stringify(state.rig, null, 2)}
+                          onChange={(event) => setDraft(event.target.value)}
+                          spellCheck={false}
+                        />
+                      </label>
+                      <Button
+                        variant="outline"
+                        onClick={() => void validateDraft()}
+                        disabled={!connected}
+                      >
+                        Validate rig
+                      </Button>
+                      <p role="status">{validation}</p>
+                    </details>
+                  )}
                 </>
               )}
-              {settingsSection === 'midi' && (
+              {settingsSection === 'midi' && !developmentSimulator && (
+                <section className="panel">
+                  <h2>MIDI controls</h2>
+                  <p>
+                    Physical MIDI control of the sounding rig is not available
+                    yet.
+                  </p>
+                </section>
+              )}
+              {settingsSection === 'midi' && developmentSimulator && (
                 <>
                   <section className="panel">
                     <h2>MIDI mapping</h2>

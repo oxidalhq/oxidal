@@ -2,7 +2,7 @@
 
 Oxidal uses a shared shadcn-style Button primitive, Radix composition and Tailwind v4 semantic tokens. The custom Orchid theme is defined in `apps/web/src/theme.css`; it is not an imported Mira preset. Colours, surface pairs, radius, spacing, type scale and touch-target size can be changed there without editing component markup. Tailwind classes are sorted by the pinned Prettier plugin.
 
-- Rig is the playing/control surface. Actual native playback shows confirmed sounding blocks; the separate silent preview remains labelled as such.
+- Rig is the playing/control surface. Actual native playback shows confirmed sounding blocks and only controls reported by that session. Stopping audio shows playback status and library/audio actions, never example effects. The isolated control simulator requires both `?development=simulator` and a server advertising the simulator capability; its mapping/validation tools are not the physical MIDI feature.
 - Library separates Browse (import, originals and artwork) from Author (offline native editing and saved copies).
 - Monitor owns detailed signal/system graphs; the compact resource strip stays visible everywhere.
 - Settings separates Audio, Connections, MIDI, Display and Maintenance. Only the selected section is mounted. Maintenance holds interactive terminals and the restricted diagnostic runner; it does not crowd performance controls.

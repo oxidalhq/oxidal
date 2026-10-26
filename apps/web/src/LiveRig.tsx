@@ -9,9 +9,15 @@ import { TouchAdjust } from './TouchAdjust';
 export function LiveRig({
   connected,
   onPlaying,
+  onLibrary,
+  onAudioSetup,
+  hideInactive = false,
 }: {
   connected: boolean;
   onPlaying: (name: string | null) => void;
+  onLibrary: () => void;
+  onAudioSetup: () => void;
+  hideInactive?: boolean;
 }) {
   const [state, setState] = useState<AudioState | null>(null);
   const [error, setError] = useState('');
@@ -40,6 +46,7 @@ export function LiveRig({
           !sending.current &&
           requested === generation.current
         ) {
+          setError('');
           setState((old) =>
             old?.session === next.session && old.revision > next.revision
               ? old
@@ -127,9 +134,41 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
-  if (state?.phase !== 'running') return null;
+  if (state?.phase !== 'running') {
+    if (hideInactive) return null;
+    return (
+      <section className="panel space-y-3" aria-label="Rig playback">
+        <h2>
+          {!state
+            ? 'Checking audio…'
+            : state.phase === 'unavailable'
+              ? 'Audio playback unavailable'
+              : state.phase === 'starting'
+                ? 'Preparing sound…'
+                : state.phase === 'stopping'
+                  ? 'Stopping audio…'
+                  : state.phase === 'failed'
+                    ? 'Audio needs attention'
+                    : 'Audio stopped'}
+        </h2>
+        {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
+        <p>
+          Open a preset in the library to author it, or use Audio setup to play
+          a saved preset. Live controls appear here when its audio session is
+          running.
+        </p>
+        <div className="toolbar">
+          <Button onClick={onLibrary}>Browse presets</Button>
+          <Button variant="outline" onClick={onAudioSetup}>
+            Audio setup
+          </Button>
+        </div>
+      </section>
+    );
+  }
   const control =
     state.controls.find((c) => c.target === target) ?? state.controls[0];
+  const selectedTarget = control?.target ?? '';
   const activeDraft = draft?.target === control?.target ? draft : null;
   const stale =
     !!activeDraft &&
@@ -216,9 +255,12 @@ export function LiveRig({
           .filter(
             (item) =>
               !item.target.endsWith(':enabled') &&
-              (target.startsWith('block:')
+              (selectedTarget.startsWith('block:')
                 ? item.target.startsWith(
-                    target.slice(0, target.lastIndexOf(':') + 1),
+                    selectedTarget.slice(
+                      0,
+                      selectedTarget.lastIndexOf(':') + 1,
+                    ),
                   )
                 : !item.target.startsWith('block:')),
           )
@@ -247,7 +289,7 @@ export function LiveRig({
       <output className="sr-only" data-testid="live-readback">
         Confirmed: {control?.display ?? '—'}
       </output>
-      {adjusting && control && (
+      {adjusting && control && control.target === target && (
         <AdjustmentDialog
           title={control.label}
           onCancel={() => {

@@ -100,7 +100,7 @@ test.beforeEach(async ({ page, request }, testInfo) => {
     expect(response.ok(), await response.text()).toBe(true);
     state = await response.json();
   }
-  await page.goto('/');
+  await page.goto('/?development=simulator');
   await expect(page.getByText('Device connected')).toBeVisible();
 });
 
