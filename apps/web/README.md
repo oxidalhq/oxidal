@@ -152,3 +152,9 @@ selection. Use Edit for relative/Fine adjustment, exact entry and cancellation.
 The silent-preview status remains explicit, with a direct Audio setup button;
 routing explanation is available under Routing details. There are no decorative
 meters or implied processing indicators.
+
+## Branding and chain layout
+
+The supplied Balanced wordmark lives in `public/brand/` as font-free SVG masters. The header uses a CSS mask so it follows each display mode, including e-paper. `pnpm brand:render` from the repository root derives the PNG touch icon, wordmark and Linux boot splash using the pinned browser. It never needs the private design folder. The mark is also the browser favicon.
+
+`SignalChain` uses the shared shadcn-style Button and one responsive grid. At narrow widths the input/NAM and effects occupy separate rows; the merge arrow preserves direction. Effect tiles have equal heights and unbroken names. The device E2E matrix checks geometry, accessibility and portrait/landscape editing. `prettier-plugin-tailwindcss` sorts JSX and `cva`/`clsx` utilities automatically against the stylesheet; run the normal formatter.

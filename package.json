@@ -26,16 +26,18 @@
     "format:md:check": "prettier --check \"**/*.{md,mdx,markdown}\"",
     "format:staged": "git-format-staged -f 'prettier --ignore-unknown --stdin-filepath \"{}\"' '*.md' '*.mdx' '*.markdown' '!reference/**' '!.afx/**' '!.agents/**' '!.claude/**'",
     "native:check": "node scripts/tooling.mjs native-check",
-    "lv2:check": "node scripts/tooling.mjs lv2-check"
+    "lv2:check": "node scripts/tooling.mjs lv2-check",
+    "brand:render": "node scripts/branding.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "ajv": "8.20.0",
     "eslint": "10.13.0",
+    "git-format-staged": "4.0.2",
     "globals": "17.13.0",
     "json-schema-to-typescript": "16.0.0",
     "prettier": "3.9.10",
-    "yaml": "2.9.1",
-    "git-format-staged": "4.0.2"
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "yaml": "2.9.1"
   }
 }

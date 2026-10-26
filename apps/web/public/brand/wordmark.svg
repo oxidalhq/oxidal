@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" role="img" aria-labelledby="title">
+  <title id="title">Oxidal wordmark</title>
+  <g fill="#161616">
+    <path fill-rule="evenodd" d="M128 85C57 85 3 137 3 202s54 118 125 118 125-53 125-118S199 85 128 85Zm0 32c52 0 91 37 91 85s-39 86-91 86-91-38-91-86 39-85 91-85Z"/>
+    <path d="M10 320h34L244 85h-34L10 320Z"/>
+    <path d="M272 85h44l204 235h-44L272 85Z"/>
+    <path d="M258 320h44l94-100h-44l-94 100ZM365 206h44L520 85h-44L365 206Z"/>
+    <circle cx="572" cy="28" r="20"/>
+    <path d="M555 85h34v235h-34V85Z"/>
+    <path fill-rule="evenodd" d="M745 85c-70 0-124 52-124 117s54 118 124 118 124-53 124-118S815 85 745 85Zm0 32c51 0 90 37 90 85s-39 86-90 86-90-38-90-86 39-85 90-85Z"/>
+    <path d="M856 0h34v320h-34V0Z"/>
+    <path fill-rule="evenodd" d="M1034 85c-69 0-122 52-122 117s53 118 122 118 122-53 122-118-53-117-122-117Zm0 32c51 0 88 37 88 85s-37 86-88 86-88-38-88-86 37-85 88-85Z"/>
+    <path d="M1144 85h34v235h-34V85ZM1220 0h34v320h-34V0Z"/>
+  </g>
+</svg>

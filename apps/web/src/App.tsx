@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight,
   ArrowsSplit,
   CheckCircle,
   GearSix,
@@ -8,6 +7,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { SignalChain } from './SignalChain';
 import { Library } from './Library';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
@@ -238,53 +238,12 @@ export default function App() {
     reverb: 'Reverb',
     output: 'Output',
   };
-  const block = (id: string, name: string, detail: string) => {
-    const parameter = state?.parameters.find((p) => p.id.startsWith(`${id}.`));
-    const content = (
-      <>
-        <span className="block-meta">
-          <span className="eyebrow">{named(id)?.kind ?? 'block'}</span>
-          {parameter && (
-            <span className="block-value">
-              {Math.round(parameter.value * 100)}%
-            </span>
-          )}
-        </span>
-        <strong>{name}</strong>
-        <span>{detail}</span>
-      </>
-    );
-    return parameter ? (
-      <button
-        type="button"
-        className="block"
-        data-testid={`block-${id}`}
-        aria-label={`Focus ${name} controls`}
-        aria-pressed={selectedBlock === id}
-        onClick={() => {
-          setFocusedBlock(id);
-          document
-            .getElementById(`control-${parameter.id}`)
-            ?.scrollIntoView({ block: 'nearest' });
-        }}
-      >
-        {content}
-      </button>
-    ) : (
-      <div
-        className={`block${id === 'input' || id === 'output' ? ' endpoint' : ''}`}
-        data-testid={`block-${id}`}
-      >
-        {content}
-      </div>
-    );
-  };
 
   return (
     <div className="app-shell" data-view={view}>
       <header className="masthead">
         <a className="wordmark" href="/" aria-label="Oxidal home">
-          <span className="brand-mark">ø</span> oxidal
+          <span className="brand-wordmark" aria-hidden="true" />
         </a>
         <div className="connection" role="status">
           <span className={connected ? 'dot online' : 'dot'} />
@@ -432,45 +391,18 @@ export default function App() {
                     </Button>
                   </div>
                 </div>
-                <div className="signal-path">
-                  {block('input', 'Input', 'Instrument')}
-                  {parallel ? (
-                    <div className="route-junction" aria-label="Split input">
-                      <span>SPLIT</span>
-                      <ArrowRight aria-hidden="true" />
-                    </div>
-                  ) : (
-                    <ArrowRight className="route-arrow" aria-hidden="true" />
-                  )}
-                  <div className="branches">
-                    <div className="branch">
-                      <span className="path-label">PATH A</span>
-                      {block('nam-a', 'NAM A', 'Level')}
-                    </div>
-                    {parallel && (
-                      <div className="branch">
-                        <span className="path-label">PATH B</span>
-                        {block('nam-b', 'NAM B', 'Level')}
-                      </div>
-                    )}
-                  </div>
-                  {parallel ? (
-                    <div className="route-junction" aria-label="Merge A and B">
-                      <span>MERGE</span>
-                      <strong>A + B</strong>
-                      <ArrowRight aria-hidden="true" />
-                    </div>
-                  ) : (
-                    <ArrowRight className="route-arrow" aria-hidden="true" />
-                  )}
-                  <div className="wet-path">
-                    {block('delay', 'Delay', 'Mix')}
-                    <ArrowRight className="wet-arrow" aria-hidden="true" />
-                    {block('reverb', 'Reverb', 'Mix')}
-                  </div>
-                  <ArrowRight className="route-arrow" />
-                  {block('output', 'Output', 'Level')}
-                </div>
+                <SignalChain
+                  state={state}
+                  parallel={!!parallel}
+                  selectedBlock={selectedBlock}
+                  connected={connected}
+                  onSelect={(id, parameter) => {
+                    setFocusedBlock(id);
+                    document
+                      .getElementById(`control-${parameter}`)
+                      ?.scrollIntoView({ block: 'nearest' });
+                  }}
+                />
                 <details className="routing-details">
                   <summary>Routing details</summary>
                   <p className="caption">

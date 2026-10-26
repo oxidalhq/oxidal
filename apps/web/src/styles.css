@@ -1191,3 +1191,88 @@ button.block:focus-visible {
   background-color: var(--enclosure);
   color: var(--enclosure-foreground);
 }
+
+/* Chain grid owns geometry; shadcn primitives own interaction and focus. */
+.brand-wordmark {
+  display: block;
+  width: 108px;
+  height: 31px;
+  background: currentColor;
+  mask: url('/brand/wordmark.svg') center / contain no-repeat;
+}
+.chain-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 1.35fr);
+  align-items: center;
+  padding-block: var(--rack-gap);
+}
+.chain-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+}
+.chain-branches {
+  display: grid;
+  gap: var(--rack-gap);
+}
+.chain-effects {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.25rem minmax(0, 1fr) 1.25rem minmax(
+      0,
+      1fr
+    );
+  align-items: stretch;
+  min-width: 0;
+}
+.chain-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  justify-self: center;
+  font-size: 9px;
+  gap: 3px;
+}
+.chain-tile {
+  color: var(--lcd-foreground);
+  background: var(--lcd-card);
+  border-color: var(--lcd-border);
+  overflow-wrap: anywhere;
+}
+.chain-tile[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 var(--selected-edge) var(--control-accent);
+}
+@media (max-width: 850px) {
+  .chain-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chain-source {
+    grid-template-columns: minmax(0, 1fr) 2rem minmax(0, 2fr);
+  }
+  .chain-branches {
+    grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  }
+  .chain-merge {
+    min-height: 2rem;
+    flex-direction: row;
+  }
+  .chain-merge svg {
+    transform: rotate(90deg);
+  }
+}
+@media (max-width: 380px) {
+  .chain-effects {
+    grid-template-columns: minmax(0, 1fr) 1rem minmax(0, 1fr) 1rem minmax(
+        0,
+        1fr
+      );
+  }
+  .chain-tile {
+    padding-inline: 6px;
+  }
+  .chain-tile strong {
+    font-size: 14px;
+  }
+}

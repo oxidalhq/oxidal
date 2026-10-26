@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Oxidal mark</title>
+  <g fill="#161616">
+    <path fill-rule="evenodd" d="M128 5C57 5 3 57 3 122s54 118 125 118 125-53 125-118S199 5 128 5Zm0 32c52 0 91 37 91 85s-39 86-91 86-91-38-91-86 39-85 91-85Z"/>
+    <path d="M10 240h34L244 5h-34L10 240Z"/>
+  </g>
+</svg>

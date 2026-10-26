@@ -1,5 +1,7 @@
 # Oxidal
 
+![Oxidal](apps/web/public/brand/wordmark.svg)
+
 Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation, shared web/MIDI control state and an immutable native preset library; the generic rig preview is silent. Opt-in Linux playback can run a saved native TONE3000 preset in a separate process, with Stop/Start/Restart preserving authoring. Its tests use ALSA null; physical audio and real-time performance remain unqualified. Owned NAM Linear/LSTM inference is tested separately; owned WaveNet/A2 and general LV2 hosting remain unimplemented.
 
 | Path        | Content                                                                                      |

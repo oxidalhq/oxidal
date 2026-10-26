@@ -10,7 +10,7 @@ async function fits(page: Page) {
     if (document.documentElement.scrollWidth > window.innerWidth + 1)
       problems.push('Page has horizontal overflow');
     for (const element of document.querySelectorAll<HTMLElement>(
-      'button, input, select, textarea, summary, .block',
+      'button, input, select, textarea, summary, .chain-tile',
     )) {
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
@@ -28,7 +28,7 @@ async function fits(page: Page) {
       )
         problems.push(`${name}: touch target shorter than 44px`);
       if (
-        element.matches('.block') &&
+        element.matches('.chain-tile') &&
         element.scrollWidth > element.clientWidth + 1
       )
         problems.push(`${name}: effect content overflows`);
@@ -36,6 +36,19 @@ async function fits(page: Page) {
     return problems;
   });
   expect(failures).toEqual([]);
+  const effects = page.locator('.chain-effects .chain-tile');
+  if (await effects.count()) {
+    const boxes = await effects.evaluateAll((tiles) =>
+      tiles.map((tile) => {
+        const { top, height } = tile.getBoundingClientRect();
+        return { top, height };
+      }),
+    );
+    for (const box of boxes) {
+      expect(Math.abs(box.top - boxes[0]!.top)).toBeLessThan(1);
+      expect(Math.abs(box.height - boxes[0]!.height)).toBeLessThan(1);
+    }
+  }
 }
 
 async function accessible(page: Page) {
