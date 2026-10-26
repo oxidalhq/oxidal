@@ -255,7 +255,7 @@ h2 {
 }
 .parameter input {
   width: 100%;
-  accent-color: var(--primary);
+  accent-color: var(--control-accent);
 }
 .muted {
   font-size: 12px;
@@ -304,7 +304,7 @@ h2 {
 .checkboxes input {
   width: 18px;
   height: 18px;
-  accent-color: var(--primary);
+  accent-color: var(--control-accent);
 }
 .feedback {
   display: flex;
@@ -593,8 +593,8 @@ input[type='file'] {
   --muted-foreground: var(--lcd-muted);
   --border: var(--lcd-border);
   --input: var(--lcd-border);
-  --primary: var(--lcd-foreground);
-  --primary-foreground: var(--lcd);
+  --primary: var(--lcd-action);
+  --primary-foreground: var(--lcd-action-foreground);
   --accent: var(--lcd-card);
   --accent-foreground: var(--lcd-foreground);
   --ring: var(--lcd-foreground);
@@ -628,7 +628,7 @@ input[type='file'] {
   flex-wrap: wrap;
 }
 .parameter output {
-  color: var(--primary);
+  color: var(--readout-foreground);
   letter-spacing: -0.05em;
 }
 .parameter input[type='range'] {
@@ -689,4 +689,12 @@ h1 {
 }
 .parameter output {
   font-weight: 500;
+}
+
+/* Signature colour is an identity accent; status still has explicit text. */
+.masthead {
+  border-bottom: 2px solid var(--brand);
+}
+.brand-mark {
+  color: var(--brand);
 }

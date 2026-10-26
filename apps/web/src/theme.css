@@ -1,44 +1,50 @@
-/* Oxidal / Studio LCD — edit this file to restyle the entire interface.
+/* Oxidal / Orchid LCD — edit this file to restyle the entire interface.
    Standard shadcn semantic colours + instrument layout tokens.
    Keep foreground/background pairs readable; touch targets stay at least 44px. */
 :root {
   color-scheme: light;
-  --background: #f1f2ee;
-  --foreground: #202e30;
+  --background: #f4f1eb;
+  --foreground: #29232e;
   --card: #ffffff;
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
-  --primary: #246762;
-  --primary-foreground: #ffffff;
-  --secondary: #e3eae7;
-  --secondary-foreground: #29413d;
-  --muted: #eaeeeb;
-  --muted-foreground: #576763;
-  --accent: #dcece6;
-  --accent-foreground: #234e45;
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --brand: #e363f7;
+  --brand-foreground: #291332;
+  --control-accent: #8b279e;
+  --readout-foreground: var(--control-accent);
+  --secondary: #ebe3ee;
+  --secondary-foreground: #48344f;
+  --muted: #eee8ee;
+  --muted-foreground: #6a5d6d;
+  --accent: #f3d9f8;
+  --accent-foreground: #632372;
   --destructive: #a32d28;
   --destructive-foreground: #ffffff;
-  --border: #ccd5cf;
-  --input: #8c9e95;
-  --ring: #246762;
+  --border: #d7ccd8;
+  --input: #a18da5;
+  --ring: var(--control-accent);
   --success: #26704c;
   --warning: #eee9dc;
   --warning-foreground: #64542f;
 
   /* The graphite enclosure and monochrome LCD are independent of app surfaces. */
-  --enclosure: #202e30;
-  --enclosure-foreground: #f5f7f3;
-  --enclosure-border: #526966;
-  --lcd: #e6ece0;
-  --lcd-foreground: #273a31;
-  --lcd-muted: #52644f;
-  --lcd-border: #a4b39b;
-  --lcd-card: #f6f8ef;
-  --lcd-shadow: inset 0 2px 6px #273a3112;
-  --panel-shadow: 0 4px 18px #202e3005;
-  --effect-shadow: 0 2px 4px #273a3108;
-  --effect-accent: #527d67;
+  --enclosure: #241b2b;
+  --enclosure-foreground: #faf5fc;
+  --enclosure-border: #695371;
+  --lcd: #eeece4;
+  --lcd-foreground: #34312e;
+  --lcd-muted: #655f55;
+  --lcd-border: #b8b0a1;
+  --lcd-card: #faf8f1;
+  --lcd-action: var(--brand);
+  --lcd-action-foreground: var(--brand-foreground);
+  --lcd-shadow: inset 0 2px 6px #34312e12;
+  --panel-shadow: 0 4px 18px #29232e05;
+  --effect-shadow: 0 2px 4px #34312e08;
+  --effect-accent: var(--brand);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;

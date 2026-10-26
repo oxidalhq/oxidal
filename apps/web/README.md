@@ -13,10 +13,10 @@ Target-phone usability and deployment qualification remain pending. Automated ax
 ## Theme
 
 Edit `src/theme.css` to change the look without editing TSX. The default
-**Studio LCD** theme takes visual cues from the original
+**Orchid LCD** theme takes visual cues from the original
 [Zoom MS-70CDR](https://zoomcorp.com/en/gb/multi-effects/multistomp-pedals/ms-70cdr/):
-a monochrome LCD-style chain and clear numeric readouts. Graphite chrome, muted
-teal accents, modern sans-serif headings and softer effect tiles give it an
+a monochrome LCD-style chain and clear numeric readouts. Ink chrome, electric
+orchid accents, modern sans-serif headings and softer effect tiles give it an
 independent old-and-new character.
 Oxidal keeps its own layout, labels and behavior. The semantic colour pairs follow
 [shadcn CSS-variable theming](https://ui.shadcn.com/docs/theming).
@@ -26,6 +26,10 @@ Oxidal keeps its own layout, labels and behavior. The semantic colour pairs foll
   `--input`, `--ring` and their foreground counterparts. Values are complete CSS
   colours, not bare HSL channels. The `@theme inline` bridge exposes standard
   utilities such as `bg-primary` and `text-primary-foreground` to components.
+- **Signature colour:** `--brand` and `--primary` supply electric orchid with dark
+  text (`--primary-foreground`). Deeper `--control-accent`, `--readout-foreground`
+  and `--ring` keep sliders, small readouts and focus outlines readable on light
+  surfaces. `--lcd-action` and its foreground pair style selected routing controls.
 - **Instrument surfaces:** `--enclosure*` controls the header; `--lcd*` controls
   the chain display. These surfaces locally remap the same semantic tokens,
   including button, border and focus colours, so components remain reusable.
@@ -37,8 +41,9 @@ Oxidal keeps its own layout, labels and behavior. The semantic colour pairs foll
 - **Depth:** `--panel-shadow`, `--effect-shadow` and `--lcd-shadow`; set these to `none` for a flatter
   presentation. Status and selections also have text/pressed-state cues.
 
-For example, change `--primary` and `--ring` together to retune the control
-accent; change `--lcd`, `--lcd-card`, `--lcd-foreground`, `--lcd-muted` and
+For example, change `--brand` to retune the signature accent (primary buttons,
+effect edges and routing selection inherit it), paired with `--brand-foreground`.
+Use `--control-accent` for the deeper slider/readout/focus shade; change `--lcd`, `--lcd-card`, `--lcd-foreground`, `--lcd-muted` and
 `--lcd-border` together for a different screen palette. Avoid putting fixed
 colour utilities into TSX. Structural responsive rules live in `src/styles.css`.
 
