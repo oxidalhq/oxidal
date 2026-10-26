@@ -471,6 +471,17 @@ test('playback lifecycle keeps native authoring available after stop and restart
       await page.getByLabel('Display mode').selectOption('epaper');
     const sounding = page.getByRole('region', { name: 'Sounding rig' });
     await expect(sounding).toBeVisible();
+    const art = sounding.locator(
+      '[data-artwork-density="compact"] [data-artwork-image]',
+    );
+    await expect(art.first()).toBeVisible();
+    for (const width of await art.evaluateAll((items) =>
+      items.map((item) => item.getBoundingClientRect().width),
+    ))
+      expect(width).toBeLessThanOrEqual(41);
+    await expect(
+      sounding.getByRole('button', { name: 'Save artwork offline' }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole('region', { name: 'Signal chain', exact: true }),
     ).toHaveCount(0);

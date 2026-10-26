@@ -177,6 +177,7 @@ export function LiveRig({
             </Button>
             {state.configured && (
               <ArtworkDeck
+                compact
                 key={state.configured.preset_id}
                 id={state.configured.preset_id}
                 owned={state.configured.owned}

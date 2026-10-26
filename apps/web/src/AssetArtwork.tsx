@@ -12,10 +12,12 @@ export function ArtworkDeck({
   id,
   owned = false,
   blockId,
+  compact = false,
 }: {
   id: string;
   owned?: boolean;
   blockId?: string;
+  compact?: boolean;
 }) {
   const [items, setItems] = useState<AssetArtwork[]>([]);
   const [busy, setBusy] = useState(false);
@@ -64,26 +66,43 @@ export function ArtworkDeck({
   if (!shown.length) return null;
   const pending = shown.some((item) => item.key && !item.cached);
   return (
-    <div className="space-y-2" aria-label="Asset artwork">
+    <div
+      className="space-y-2"
+      aria-label="Asset artwork"
+      data-artwork-density={compact ? 'compact' : 'gallery'}
+    >
       <div className="flex flex-wrap gap-2">
         {shown.map((item) => (
           <figure
             key={item.block_id}
-            className="max-w-36 min-w-0 flex-1 basis-24"
+            className={
+              compact
+                ? 'flex min-w-0 items-center gap-2 py-1'
+                : 'max-w-36 min-w-0 flex-1 basis-24'
+            }
           >
-            <ArtworkImage
-              key={`${item.block_id}-${item.key}-${item.cached}`}
-              src={
-                item.cached && item.key
-                  ? artworkPath(id, owned, item.key)
-                  : undefined
-              }
-              title={item.title}
-              gear={item.gear}
-            />
+            <div
+              className={compact ? 'w-10 shrink-0' : undefined}
+              data-artwork-image
+            >
+              <ArtworkImage
+                key={`${item.block_id}-${item.key}-${item.cached}`}
+                src={
+                  item.cached && item.key
+                    ? artworkPath(id, owned, item.key)
+                    : undefined
+                }
+                title={item.title}
+                gear={item.gear}
+              />
+            </div>
             <figcaption className="mt-1 text-xs wrap-anywhere">
-              <strong>{item.title}</strong>
-              <br />
+              {!compact && (
+                <>
+                  <strong>{item.title}</strong>
+                  <br />
+                </>
+              )}
               {item.gear}
               <span className="flex">
                 {item.cached
@@ -96,7 +115,7 @@ export function ArtworkDeck({
           </figure>
         ))}
       </div>
-      {pending && (
+      {pending && !compact && (
         <Button
           variant="outline"
           className="h-auto min-h-11 w-full whitespace-normal"
