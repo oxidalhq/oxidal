@@ -306,6 +306,7 @@ export interface EditorCommand {
   session: string;
 }
 export interface EditorSnapshot {
+  block_controls: BlockControl[];
   dirty: boolean;
   edit?: Editing | null;
   live_audio: boolean;
@@ -316,6 +317,18 @@ export interface EditorSnapshot {
   session: string;
   source_sha256?: string | null;
   state_captures: number;
+}
+/**
+ * Native block readback, with a server-issued edit target. Values are normalized 0–1.
+ */
+export interface BlockControl {
+  block_id: string;
+  id: string;
+  lane: string;
+  name: string;
+  parameter: string;
+  step: number;
+  value: number;
 }
 export interface Editing {
   owner: string;

@@ -57,6 +57,7 @@ impl Editor {
                 dirty: false,
                 edit: None,
                 parameters: vec![],
+                block_controls: vec![],
                 owned: vec![],
                 state_captures: 0,
                 live_audio: false,
@@ -113,6 +114,7 @@ impl Editor {
         self.state.parameters =
             serde_json::from_value(self.engine.catalog().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        self.state.block_controls = self.engine.block_controls().map_err(|e| e.to_string())?;
         self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
         Ok(self.state.clone())
     }
@@ -165,6 +167,8 @@ impl Editor {
                     .engine
                     .load_preset(&bytes)
                     .and_then(|_| self.engine.wait_ready())
+                    // Reject an unrepresentable control catalog before committing a load.
+                    .and_then(|_| self.engine.block_controls().map(|_| ()))
                 {
                     self.rollback()?;
                     return Err(error.to_string());
@@ -214,7 +218,8 @@ impl Editor {
                 if self.gesture.is_some() {
                     return Err("edit_busy".into());
                 }
-                if !writable(&target) {
+                let blocks = self.engine.block_controls().map_err(|e| e.to_string())?;
+                if !writable(&target) && !blocks.iter().any(|p| p.id == target) {
                     return Err("Native control is not qualified for editing".into());
                 }
                 self.state.edit = Some(Editing {
@@ -273,7 +278,21 @@ impl Editor {
         if staged(&target) && !commit {
             return Err("Processing changes apply only on commit".into());
         }
-        let result = self.engine.set_normalized(&target, value).and_then(|_| {
+        let block = self
+            .engine
+            .block_controls()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|p| p.id == target);
+        if block.as_ref().is_some_and(|p| p.step == 1.0) && value != 0.0 && value != 1.0 {
+            return Err("Block toggles require 0 or 1".into());
+        }
+        let changed = if let Some(p) = &block {
+            self.engine.set_block(&p.block_id, &p.parameter, value)
+        } else {
+            self.engine.set_normalized(&target, value)
+        };
+        let result = changed.and_then(|_| {
             if staged(&target) {
                 self.engine.wait_ready()
             } else {
@@ -291,7 +310,7 @@ impl Editor {
                 self.finish();
                 return Err(error);
             }
-            self.state.dirty |= target == "toneBass" || target == "outputLevel";
+            self.state.dirty |= block.is_some() || target == "toneBass" || target == "outputLevel";
             self.finish();
         } else {
             let g = self.gesture.as_mut().unwrap();

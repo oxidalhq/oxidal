@@ -16,6 +16,18 @@ pub struct Parameter {
     pub tone: bool,
     pub machine_default: bool,
 }
+/// Native block readback, with a server-issued edit target. Values are normalized 0–1.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BlockControl {
+    pub id: String,
+    pub block_id: String,
+    pub lane: String,
+    pub name: String,
+    pub parameter: String,
+    pub value: f64,
+    pub step: f64,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Editing {
@@ -32,6 +44,7 @@ pub struct EditorSnapshot {
     pub dirty: bool,
     pub edit: Option<Editing>,
     pub parameters: Vec<Parameter>,
+    pub block_controls: Vec<BlockControl>,
     pub owned: Vec<oxidal_presets::OwnedPreset>,
     pub state_captures: u32,
     pub live_audio: bool,

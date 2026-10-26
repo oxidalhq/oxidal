@@ -195,6 +195,40 @@ fn main() -> Result<(), Box<dyn Error>> {
         restore_error < 1e-5,
         "restored native model differs: {restore_error}"
     );
+    // Prove that a block gain mutation reaches DSP, not just its JSON readback.
+    let block = engine
+        .block_controls()?
+        .into_iter()
+        .find(|p| p.parameter == "outputGain")
+        .unwrap();
+    for (parameter, value) in [("mix", f32::NAN), ("enabled", 0.5), ("unknown", 0.5)] {
+        assert!(engine.set_block(&block.block_id, parameter, value).is_err());
+    }
+    assert!(engine.set_block("missing", "mix", 0.5).is_err());
+    let mut energy = Vec::new();
+    for gain in [0.3, 0.7] {
+        engine.restore(&model_state)?;
+        engine.wait_ready()?;
+        engine.set_block(&block.block_id, "outputGain", gain)?;
+        settle(&mut engine)?;
+        let mut sum = 0.0_f64;
+        for chunk in 0..12 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| (((chunk * 128 + i) as f32) * 0.01).sin() * 0.02)
+                .collect();
+            let mut right = left.clone();
+            engine.process(&mut left, &mut right)?;
+            sum += left.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>();
+        }
+        energy.push(sum);
+    }
+    assert!(
+        energy[0] > 0.0 && energy[1] > energy[0] * 4.0,
+        "block output gain must change rendered level: {energy:?}"
+    );
+    println!("block_gain_render_energy_ratio: {}", energy[1] / energy[0]);
+    engine.restore(&model_state)?;
+    engine.wait_ready()?;
     eprintln!("qualify: export tone");
     engine.set_normalized("toneEqEnabled", 1.0)?;
     engine.set_normalized("toneBass", 0.4)?;
@@ -348,8 +382,121 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
             },
         )?;
     }
+    let globals = editor.snapshot()?;
+    assert_eq!(globals.state_captures, loaded.state_captures + 5);
+    assert_eq!(
+        globals.block_controls.len(),
+        5,
+        "one A2 block with five controls"
+    );
+    assert!(
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: "missing".into(),
+                target: "block:missing:mix".into()
+            }
+        )
+        .is_err()
+    );
+    for (index, control) in globals.block_controls.iter().enumerate() {
+        let token = format!("block-cancel-{index}");
+        let baseline = editor.snapshot()?;
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.clone(),
+                target: control.id.clone(),
+            },
+        )?;
+        let changed = if control.step == 1.0 {
+            1.0 - control.value as f32
+        } else {
+            0.23
+        };
+        if control.step == 1.0 {
+            assert!(
+                send(
+                    &mut editor,
+                    A::Preview {
+                        owner: "owner".into(),
+                        token: token.clone(),
+                        sequence: 1,
+                        value: 0.5
+                    }
+                )
+                .is_err()
+            );
+        }
+        let preview = send(
+            &mut editor,
+            A::Preview {
+                owner: "owner".into(),
+                token: token.clone(),
+                sequence: 1,
+                value: changed,
+            },
+        )?;
+        assert!((preview.block_controls[index].value - f64::from(changed)).abs() < 1e-6);
+        assert_eq!(preview.state_captures, baseline.state_captures);
+        assert!(
+            send(
+                &mut editor,
+                A::Commit {
+                    owner: "intruder".into(),
+                    token: token.clone(),
+                    sequence: 2,
+                    value: changed
+                }
+            )
+            .is_err()
+        );
+        let cancelled = send(
+            &mut editor,
+            A::Cancel {
+                owner: "owner".into(),
+                token,
+            },
+        )?;
+        for (a, b) in baseline
+            .block_controls
+            .iter()
+            .zip(&cancelled.block_controls)
+        {
+            assert_eq!(a.value, b.value, "cancel restores every block parameter");
+        }
+        let token = format!("block-commit-{index}");
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.clone(),
+                target: control.id.clone(),
+            },
+        )?;
+        let committed = send(
+            &mut editor,
+            A::Commit {
+                owner: "owner".into(),
+                token,
+                sequence: 1,
+                value: changed,
+            },
+        )?;
+        assert!(committed.dirty);
+        assert_eq!(committed.state_captures, baseline.state_captures + 1);
+        assert!((committed.block_controls[index].value - f64::from(changed)).abs() < 1e-6);
+        for (a, b) in globals.parameters.iter().zip(&committed.parameters) {
+            assert_eq!(
+                a.value, b.value,
+                "block edit must not change global/device settings"
+            );
+        }
+    }
     let committed = editor.snapshot()?;
-    assert_eq!(committed.state_captures, loaded.state_captures + 5);
+    assert_eq!(committed.state_captures, loaded.state_captures + 10);
     // A real filesystem failure must not report success or change native working state.
     std::fs::write(store_root.join("owned"), b"not a directory")?;
     assert!(
@@ -400,12 +547,31 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
     ] {
         assert!((value(&reloaded, id) - value(&committed, id)).abs() < 1e-6);
     }
+    for (a, b) in committed
+        .block_controls
+        .iter()
+        .zip(&reloaded.block_controls)
+    {
+        assert_eq!(a.parameter, b.parameter);
+        assert_eq!(a.value, b.value, "owned block readback after reload");
+    }
     // Persisted owned file survives both worker and engine destruction; original remains exact.
     drop(editor);
     let mut editor = Editor::new(store_root)?;
     let restarted = send(&mut editor, A::Load { id, owned: true })?;
     assert!((value(&restarted, "toneBass") - 0.75).abs() < 1e-5);
     assert!((value(&restarted, "outputLevel") - 0.6).abs() < 1e-5);
+    assert_eq!(
+        restarted.block_controls.len(),
+        committed.block_controls.len()
+    );
+    for (a, b) in committed
+        .block_controls
+        .iter()
+        .zip(&restarted.block_controls)
+    {
+        assert_eq!(a.value, b.value, "owned blocks survive process recreation");
+    }
     assert_eq!(originals.original(&original.sha256)?, bytes);
     drop(editor);
     let (_, owned_bytes) = oxidal_presets::OwnedStore::new(root.join("editor-library/owned"))
@@ -438,7 +604,7 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
     assert!(error < 1e-5, "owned preset recreated audio error {error}");
     println!("owned_preset_recreated_audio_max_error: {error}");
     println!(
-        "native_editor: live preview/cancel, five commits, staged rejection, device scope, owned save/reload/restart and immutable source pass"
+        "native_editor: live preview/cancel, five global and five block commits, exact toggles, staged rejection, device scope, owned save/reload/restart and immutable source pass"
     );
     Ok(())
 }
@@ -461,11 +627,20 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
         engine.load_preset(&bytes)?;
         engine.wait_ready()?;
         let before = engine.catalog()?;
+        let blocks = engine.block_controls()?;
         let saved = engine.save_preset("Owned factory qualification")?;
         assert_ne!(oxidal_presets::inspect(&saved)?.source_id, source.source_id);
         engine.load_preset(&saved)?;
         engine.wait_ready()?;
         let after = engine.catalog()?;
+        let restored_blocks = engine.block_controls()?;
+        assert_eq!(blocks.len(), restored_blocks.len());
+        for (a, b) in blocks.iter().zip(&restored_blocks) {
+            assert_eq!(
+                (&a.parameter, &a.lane, a.value),
+                (&b.parameter, &b.lane, b.value)
+            );
+        }
         for row in before.as_array().unwrap() {
             let got = after
                 .as_array()

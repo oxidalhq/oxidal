@@ -39,6 +39,18 @@ unsafe extern "C" {
         capacity: usize,
         written: *mut usize,
     ) -> i32;
+    fn oxidal_t3k_block_controls(
+        engine: *mut c_void,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_set_block(
+        engine: *mut c_void,
+        id: *const c_char,
+        parameter: *const c_char,
+        value: f32,
+    ) -> i32;
     fn oxidal_t3k_set(engine: *mut c_void, id: *const c_char, normalized: f32) -> i32;
     fn oxidal_t3k_process(
         engine: *mut c_void,
@@ -135,6 +147,20 @@ impl Engine {
     pub fn runtime(&mut self) -> Result<serde_json::Value> {
         // SAFETY: same bounded JSON contract.
         self.json(|p, b, n, w| unsafe { oxidal_t3k_runtime(p, b, n, w) })
+    }
+    pub fn block_controls(&mut self) -> Result<Vec<crate::protocol::BlockControl>> {
+        // SAFETY: json supplies the live owner handle and bounded writable buffer.
+        let rows = self.json(|p, b, n, w| unsafe { oxidal_t3k_block_controls(p, b, n, w) })?;
+        serde_json::from_value(rows).map_err(|e| NativeError(e.to_string()))
+    }
+    pub fn set_block(&mut self, id: &str, parameter: &str, value: f32) -> Result<()> {
+        let id = string(id)?;
+        let parameter = string(parameter)?;
+        // SAFETY: both strings and owner handle outlive the call. The native boundary
+        // validates identity, control allowlist, finite unit values and exact toggles.
+        checked(unsafe {
+            oxidal_t3k_set_block(self.ptr.as_ptr(), id.as_ptr(), parameter.as_ptr(), value)
+        })
     }
     pub fn set_normalized(&mut self, id: &str, value: f32) -> Result<()> {
         if !value.is_finite() || !(0.0..=1.0).contains(&value) {

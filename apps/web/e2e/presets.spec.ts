@@ -184,6 +184,38 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 1',
   );
+  // Select a native block, exercise exact toggles and cancellable mix on every
+  // device project, then include the committed block change in the saved copy.
+  const blockState = await (await request.get('/api/v1/native')).json();
+  const blockMix = blockState.block_controls.find(
+    (p: { parameter: string }) => p.parameter === 'mix',
+  );
+  const blockEnabled = blockState.block_controls.find(
+    (p: { parameter: string }) => p.parameter === 'enabled',
+  );
+  expect(blockMix).toBeTruthy();
+  await editor.getByLabel('Native control').selectOption(blockEnabled.id);
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor.getByLabel('Normalized value (0–1)').fill('0.5');
+  await expect(
+    editor.getByRole('button', { name: 'Commit native change' }),
+  ).toBeDisabled();
+  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await editor.getByLabel('Native control').selectOption(blockMix.id);
+  const mixBefore = await editor.getByTestId('native-readback').textContent();
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await touch.press('Home');
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 0',
+  );
+  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await expect(editor.getByTestId('native-readback')).toHaveText(mixBefore!);
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor.getByLabel('Normalized value (0–1)').fill('0.375');
+  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 0.375',
+  );
   await editor
     .getByLabel('Owned preset name')
     .fill(`Browser owned ${test.info().project.name}`);
@@ -206,6 +238,15 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await editor.getByRole('button', { name: 'Load into native editor' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
+  const restored = await (await request.get('/api/v1/native')).json();
+  const restoredMix = restored.block_controls.find(
+    (p: { parameter: string }) => p.parameter === 'mix',
+  );
+  await editor.getByLabel('Native control').selectOption(restoredMix.id);
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 0.375',
+  );
+  await editor.getByLabel('Native control').selectOption('toneBass');
   await editor.getByRole('button', { name: 'Begin native edit' }).click();
   await touch.press('Home');
   await expect(editor.getByTestId('native-readback')).toContainText(

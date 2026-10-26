@@ -467,6 +467,45 @@
         "experimental"
       ]
     },
+    "BlockControl": {
+      "description": "Native block readback, with a server-issued edit target. Values are normalized 0–1.",
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lane": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parameter": {
+          "type": "string"
+        },
+        "step": {
+          "type": "number",
+          "format": "double"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "block_id",
+        "lane",
+        "name",
+        "parameter",
+        "value",
+        "step"
+      ]
+    },
     "BlockKind": {
       "type": "string",
       "enum": [
@@ -895,6 +934,12 @@
     "EditorSnapshot": {
       "type": "object",
       "properties": {
+        "block_controls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BlockControl"
+          }
+        },
         "dirty": {
           "type": "boolean"
         },
@@ -955,6 +1000,7 @@
         "revision",
         "dirty",
         "parameters",
+        "block_controls",
         "owned",
         "state_captures",
         "live_audio"

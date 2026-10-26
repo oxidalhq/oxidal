@@ -11,6 +11,21 @@ import { EditQueue } from './editQueue';
 import { TouchAdjust } from './TouchAdjust';
 import { Button } from './components/ui/button';
 
+const blockLabels: Record<string, string> = {
+  enabled: 'Enabled',
+  normalize: 'Normalise',
+  inputGain: 'Input gain',
+  outputGain: 'Output gain',
+  mix: 'Mix',
+};
+function controlValue(state: NativeSnapshot | null, target: string) {
+  return (
+    state?.block_controls.find((p) => p.id === target)?.value ??
+    state?.parameters.find((p) => p.id === target)?.normalized ??
+    0.5
+  );
+}
+
 /** Confirmed native state only; failed operations are refreshed, never automatically replayed. */
 export function NativeEditor({
   presets,
@@ -24,7 +39,12 @@ export function NativeEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [selection, setSelection] = useState('');
-  const [target, setTarget] = useState('toneBass');
+  const [requestedTarget, setTarget] = useState('toneBass');
+  const target =
+    requestedTarget.startsWith('block:') &&
+    !state?.block_controls.some((p) => p.id === requestedTarget)
+      ? 'toneBass'
+      : requestedTarget;
   const [value, setValue] = useState('0.5');
   const [name, setName] = useState('My preset');
   const [owner] = useState(() => crypto.randomUUID());
@@ -125,8 +145,7 @@ export function NativeEditor({
     setBusy(true);
     running.current = true;
     const token = crypto.randomUUID();
-    const starting =
-      state.parameters.find((p) => p.id === target)?.normalized ?? 0.5;
+    const starting = controlValue(state, target);
     setValue(String(starting));
     setBaseline(starting);
     const session = state.session;
@@ -200,6 +219,10 @@ export function NativeEditor({
   if (!available)
     return <p>Playback and editing are not available in this build.</p>;
   const parameter = state?.parameters.find((p) => p.id === target);
+  const blockControl = state?.block_controls.find((p) => p.id === target);
+  const step =
+    blockControl?.step ??
+    (target === 'osEnabled' ? 1 : target === 'osFactor' ? 0.5 : 0.01);
   const ours = state?.edit?.owner === owner && state.edit.target === target;
   const staged = target === 'osEnabled' || target === 'osFactor';
   const blocked = busy || !connected || !state;
@@ -207,13 +230,14 @@ export function NativeEditor({
     value.trim() !== '' &&
     Number.isFinite(Number(value)) &&
     Number(value) >= 0 &&
-    Number(value) <= 1;
+    Number(value) <= 1 &&
+    (blockControl?.step !== 1 || Number(value) === 0 || Number(value) === 1);
   return (
     <section aria-label="Native preset editor">
       <h3>Native preset editor</h3>
       <p>
-        Offline editing with the TONE3000 engine. Live audio output is
-        unavailable.
+        Silent authoring with the TONE3000 engine. Edits do not change the saved
+        preset currently playing; save a copy and start playback to hear it.
       </p>
       {error && (
         <p role="alert" className="error">
@@ -270,12 +294,7 @@ export function NativeEditor({
             disabled={blocked || !!state?.edit}
             onChange={(e) => {
               setTarget(e.target.value);
-              setValue(
-                String(
-                  state?.parameters.find((p) => p.id === e.target.value)
-                    ?.normalized ?? 0.5,
-                ),
-              );
+              setValue(String(controlValue(state, e.target.value)));
             }}
           >
             <option value="toneBass">Bass · tone</option>
@@ -289,11 +308,19 @@ export function NativeEditor({
             <option value="osFactor">
               Oversampling factor · device, staged
             </option>
+            <optgroup label="Tone blocks">
+              {state?.block_controls.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.lane} · {p.block_id.slice(0, 8)} ·{' '}
+                  {blockLabels[p.parameter]}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <p data-testid="native-readback">
-          Confirmed value: {parameter?.value ?? '—'} · normalized{' '}
-          {parameter?.normalized ?? '—'}
+          Confirmed value: {blockControl?.value ?? parameter?.value ?? '—'} ·
+          normalized {blockControl?.value ?? parameter?.normalized ?? '—'}
         </p>
         <Button
           disabled={blocked || !state?.loaded || !!state.edit}
@@ -310,11 +337,15 @@ export function NativeEditor({
               baseline={baseline}
               min={0}
               max={1}
-              step={
-                target === 'osEnabled' ? 1 : target === 'osFactor' ? 0.5 : 0.01
-              }
+              step={step}
               disabled={blocked}
-              format={(v) => `${Number((v * 100).toFixed(2))}% of range`}
+              format={(v) =>
+                blockControl?.step === 1
+                  ? v === 1
+                    ? 'On'
+                    : 'Off'
+                  : `${Number((v * 100).toFixed(2))}% of range`
+              }
               onChange={(v) => {
                 setValue(String(v));
                 if (!staged) queue.current?.preview(v);
@@ -328,7 +359,7 @@ export function NativeEditor({
             type="number"
             min="0"
             max="1"
-            step="0.01"
+            step={step}
             value={value}
             disabled={blocked || !ours}
             onChange={(e) => setValue(e.target.value)}

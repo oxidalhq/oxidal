@@ -93,6 +93,55 @@ EXPORT int oxidal_t3k_set(void* ptr, const char* id, float normalized) noexcept 
     p->setValueNotifyingHost(p->convertTo0to1(p->convertFrom0to1(normalized)));
   });
 }
+// Only named non-structural block controls cross this boundary. Never forward arbitrary
+// browser method names or raw chain payloads into the native processor.
+EXPORT int oxidal_t3k_block_controls(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] {
+    const auto state = engine(ptr).processor.getChainState(-1);
+    juce::Array<juce::var> controls;
+    int count = 0;
+    for (const auto& lane : {"chain", "chainRight"}) {
+      const auto rows = state.getProperty(lane, {});
+      if (const auto* blocks = rows.getArray()) for (const auto& block : *blocks) {
+        if (block.getProperty("kind", {}).toString() != "tone") continue;
+        const auto id = block.getProperty("blockId", {}).toString();
+        if (++count > 32 || id.isEmpty() || id.length() > 128)
+          throw std::runtime_error("block catalog bounds");
+        const auto params = block.getProperty("params", {});
+        const auto title = block.getProperty("tone", {}).getProperty("title", "Tone").toString().substring(0, 128);
+        for (const auto& name : {"enabled", "normalize", "inputGain", "outputGain", "mix"}) {
+          const bool toggle = std::strcmp(name, "enabled") == 0 || std::strcmp(name, "normalize") == 0;
+          const auto raw = params.getProperty(name, {});
+          if (!(raw.isBool() || raw.isDouble() || raw.isInt())) throw std::runtime_error("invalid block readback");
+          const double value = static_cast<double>(raw);
+          if (!std::isfinite(value) || value < 0 || value > 1) throw std::runtime_error("invalid block readback");
+          auto* row = new juce::DynamicObject();
+          row->setProperty("id", "block:" + id + ":" + name);
+          row->setProperty("block_id", id);
+          row->setProperty("lane", std::strcmp(lane, "chain") == 0 ? "left" : "right");
+          row->setProperty("name", title);
+          row->setProperty("parameter", name);
+          row->setProperty("value", value);
+          row->setProperty("step", toggle ? 1.0 : 0.01);
+          controls.add(juce::var(row));
+        }
+      }
+    }
+    json(controls, out, capacity, written);
+  });
+}
+EXPORT int oxidal_t3k_set_block(void* ptr, const char* id, const char* parameter, float value) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!id || !parameter || std::strlen(id) == 0 || std::strlen(id) > 128 || !std::isfinite(value) || value < 0 || value > 1)
+      throw std::runtime_error("invalid block control");
+    const juce::String name(parameter);
+    const bool toggle = name == "enabled" || name == "normalize";
+    if (!(toggle || name == "inputGain" || name == "outputGain" || name == "mix") || (toggle && value != 0 && value != 1))
+      throw std::runtime_error("unsupported block control or value");
+    if (!e.processor.setBlockParam(id, name, value)) throw std::runtime_error("block control rejected");
+  });
+}
 EXPORT int oxidal_t3k_process(void* ptr, float* left, float* right, size_t frames) noexcept {
   return guard([&] {
     auto& e = engine(ptr);
