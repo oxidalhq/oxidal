@@ -10,6 +10,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     available: true,
     wireless_enabled: true,
     policy: null,
+    radio: { country: 'NZ', channels: [1, 6, 11] },
     interfaces: [
       {
         name: 'wlan0',
@@ -75,6 +76,10 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     .getByRole('button', { name: 'Edit hotspot', exact: true })
     .click();
   await expect(panel.getByLabel('New hotspot password')).toBeVisible();
+  await expect(panel.getByLabel('Wireless country')).toHaveValue('NZ');
+  await panel
+    .getByRole('combobox', { name: 'Hotspot channel' })
+    .selectOption('6');
   await panel.getByText('Automatic hotspot', { exact: true }).click();
   await panel
     .getByRole('combobox', { name: 'Start hotspot', exact: true })

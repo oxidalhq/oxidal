@@ -857,6 +857,23 @@
         {
           "type": "object",
           "properties": {
+            "channel": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint8",
+              "default": null,
+              "maximum": 255,
+              "minimum": 0
+            },
+            "country": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
             "interface": {
               "type": "string"
             },
@@ -2023,6 +2040,16 @@
             }
           ]
         },
+        "radio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Radio"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "saved": {
           "type": "array",
           "items": {
@@ -2216,6 +2243,28 @@
       "enum": [
         "reboot",
         "shutdown"
+      ]
+    },
+    "Radio": {
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "country": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "country",
+        "channels"
       ]
     },
     "Rig": {

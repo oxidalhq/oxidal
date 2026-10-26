@@ -180,6 +180,12 @@ struct Journal {
     policy_change: bool,
     #[serde(default)]
     previous_policy: Option<Vec<u8>>,
+    #[serde(default)]
+    previous_region: Option<Vec<u8>>,
+    #[serde(default)]
+    radio_interface: Option<String>,
+    #[serde(default)]
+    channel: Option<u8>,
 }
 struct Transaction {
     id: String,
@@ -200,6 +206,7 @@ pub struct Network {
     message: String,
     policy_checked: Instant,
     policy_candidate: Option<bool>,
+    region: PathBuf,
 }
 impl Default for Network {
     fn default() -> Self {
@@ -210,6 +217,7 @@ impl Default for Network {
             message: String::new(),
             policy_checked: Instant::now(),
             policy_candidate: None,
+            region: "/etc/default/oxidal-wireless".into(),
         }
     }
 }
@@ -247,6 +255,10 @@ impl Network {
             self.policy_checked = Instant::now();
             self.policy_candidate = None;
         }
+        if let Some(bytes) = &journal.previous_region {
+            atomic(&self.region, bytes)?;
+            self.apply_region().await?;
+        }
         let path = self.connections.as_path().join(&journal.file);
         if let Some(bytes) = journal.previous {
             atomic(&path, &bytes)?;
@@ -277,6 +289,42 @@ impl Network {
             .map_err(|_| "Cannot clear recovery journal")?;
         self.message = "Previous network restored".into();
         Ok(())
+    }
+    async fn apply_region(&self) -> Result<()> {
+        let value = fs::read_to_string(&self.region)
+            .ok()
+            .and_then(|v| crate::radio::country(&v))
+            .ok_or("Wireless country is unavailable")?;
+        run("/usr/sbin/iw", &["reg", "set", &value]).await?;
+        for _ in 0..5 {
+            let actual = run("/usr/sbin/iw", &["reg", "get"]).await?;
+            if actual
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("country "))
+                .is_some_and(|line| line.starts_with(&format!("{value}:")))
+            {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        Err("Kernel did not accept the requested wireless country")
+    }
+    async fn radio(&self, interface: &str) -> Result<crate::radio::Radio> {
+        let country = fs::read_to_string(&self.region)
+            .ok()
+            .and_then(|v| crate::radio::country(&v))
+            .ok_or("Wireless country is unavailable")?;
+        let info = run("/usr/sbin/iw", &["dev", interface, "info"]).await?;
+        let phy = info
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("wiphy "))
+            .and_then(|s| s.parse::<u16>().ok())
+            .ok_or("Wireless PHY is unavailable")?;
+        let caps = run("/usr/sbin/iw", &["phy", &format!("phy{phy}"), "info"]).await?;
+        Ok(crate::radio::Radio {
+            country,
+            channels: crate::radio::channels(&caps),
+        })
     }
     fn policy(&self) -> Result<Option<crate::policy::Settings>> {
         match fs::read(self.state_dir.join("policy.json")) {
@@ -422,7 +470,7 @@ impl Network {
             "status",
         ])
         .await?;
-        let interfaces = devices
+        let interfaces: Vec<Interface> = devices
             .lines()
             .filter_map(|line| {
                 let f = fields(line);
@@ -492,8 +540,18 @@ impl Network {
                 })
             })
             .collect();
+        let radio = if self.region.is_file() {
+            if let Some(interface) = interfaces.iter().find(|d| d.kind == "wifi") {
+                self.radio(&interface.name).await.ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ok(NetworkState {
             available: true,
+            radio,
             wireless_enabled,
             policy: self.policy()?,
             interfaces,
@@ -528,8 +586,28 @@ impl Network {
                 interface,
                 ssid,
                 password,
+                ..
             } => (interface, ssid, password, true),
             _ => return Err("Not a network change"),
+        };
+        let (country, channel) = match command {
+            Command::Hotspot {
+                country, channel, ..
+            } => (country.as_ref(), *channel),
+            _ => (None, None),
+        };
+        let previous_region = if let Some(country) = country {
+            let known = fs::read_to_string("/usr/share/zoneinfo/iso3166.tab")
+                .map_err(|_| "Country database is unavailable")?;
+            if !known
+                .lines()
+                .any(|line| line.starts_with(&format!("{country}\t")))
+            {
+                return Err("Unknown wireless country");
+            }
+            Some(fs::read(&self.region).map_err(|_| "Managed wireless country is unavailable")?)
+        } else {
+            None
         };
         let mut state = self.status(false).await?;
         if !state
@@ -591,6 +669,13 @@ impl Network {
             previous,
             uuid,
             checkpoint,
+            previous_region,
+            radio_interface: if country.is_some() || channel.is_some() {
+                Some(interface.clone())
+            } else {
+                None
+            },
+            channel,
             policy_change: policy_settings.is_some(),
             previous_policy: if policy_settings.is_some() {
                 match fs::read(self.state_dir.join("policy.json")) {
@@ -607,16 +692,26 @@ impl Network {
             &self.state_dir.as_path().join("pending.json"),
             &serde_json::to_vec(&journal).map_err(|_| "Cannot save recovery journal")?,
         )?;
+        if let Some(country) = country
+            && let Err(error) = atomic(&self.region, format!("COUNTRY={country}\n").as_bytes())
+        {
+            self.rollback(journal).await?;
+            return Err(error);
+        }
         let write = if let Some(settings) = policy_settings {
             atomic(
                 &self.state_dir.join("policy.json"),
                 &serde_json::to_vec(settings).map_err(|_| "Cannot encode hotspot policy")?,
             )
         } else {
-            atomic(
-                &path,
-                profile(interface, ssid, password, ap, &journal.uuid).as_bytes(),
-            )
+            let mut candidate = profile(interface, ssid, password, ap, &journal.uuid);
+            if let Some(channel) = channel
+                && channel > 0
+            {
+                candidate =
+                    candidate.replace("band=bg\n", &format!("band=bg\nchannel={channel}\n"));
+            }
+            atomic(&path, candidate.as_bytes())
         };
         if let Err(error) = write {
             self.rollback(journal).await?;
@@ -641,6 +736,9 @@ impl Network {
         let path = self.connections.clone().join(&pending.journal.file);
         let uuid = pending.journal.uuid.clone();
         let policy_change = pending.journal.policy_change;
+        let region_changed = pending.journal.previous_region.is_some();
+        let radio_interface = pending.journal.radio_interface.clone();
+        let channel = pending.journal.channel;
         let result = if policy_change {
             // Automatic decisions belong to this helper; do not let NM immediately
             // autoconnect the AP again after a deliberate policy-driven disconnect.
@@ -659,6 +757,18 @@ impl Network {
             }
         } else {
             async {
+                if region_changed {
+                    self.apply_region().await?;
+                }
+                if let Some(interface) = radio_interface {
+                    let radio = self.radio(&interface).await?;
+                    if let Some(channel) = channel
+                        && channel != 0
+                        && !radio.channels.contains(&channel)
+                    {
+                        return Err("Channel is not allowed by this radio and country");
+                    }
+                }
                 nm(&["connection", "load", path.to_str().unwrap()]).await?;
                 nm(&["radio", "wifi", "on"]).await?;
                 nm(&["connection", "up", "uuid", &uuid]).await
@@ -723,7 +833,13 @@ impl Network {
                             "uuid",
                             &pending.journal.uuid,
                             "connection.autoconnect",
-                            "yes",
+                            if pending.journal.file == "oxidal.nmconnection"
+                                && self.policy()?.is_some()
+                            {
+                                "no"
+                            } else {
+                                "yes"
+                            },
                         ])
                         .await?;
                     }
@@ -807,6 +923,7 @@ mod tests {
             Network {
                 connections: self.root.join("connections"),
                 state_dir: self.root.join("state"),
+                region: self.root.join("region"),
                 ..Default::default()
             }
         }
@@ -938,6 +1055,8 @@ mod tests {
                         interface: "wlan0".into(),
                         ssid: "New AP".into(),
                         password: "new-password".into(),
+                        country: None,
+                        channel: None,
                     })
                     .await
                     .unwrap();
@@ -1049,6 +1168,45 @@ mod tests {
             .scope(RefCell::new(commands), async {
                 network.reconcile_policy(false).await.unwrap();
                 network.reconcile_policy(false).await.unwrap();
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn rollback_restores_persisted_country_before_reactivating_hotspot() {
+        let fixture = Fixture::new();
+        let mut network = fixture.network();
+        atomic(&network.region, b"COUNTRY=AU\n").unwrap();
+        let journal = Journal {
+            file: "oxidal.nmconnection".into(),
+            previous: Some(b"old hotspot".to_vec()),
+            uuid: "12345678-1234-4234-8234-123456789012".into(),
+            checkpoint: "/org/freedesktop/NetworkManager/Checkpoint/1".into(),
+            policy_change: false,
+            previous_policy: None,
+            previous_region: Some(b"COUNTRY=NZ\n".to_vec()),
+            radio_interface: Some("wlan0".into()),
+            channel: Some(6),
+        };
+        atomic(
+            &network.state_dir.join("pending.json"),
+            &serde_json::to_vec(&journal).unwrap(),
+        )
+        .unwrap();
+        let commands = responses(&[
+            ("iw reg set NZ", Ok("")),
+            ("iw reg get", Ok("global\ncountry NZ: DFS-ETSI\n")),
+            ("connection load", Ok("")),
+            ("CheckpointRollback", Ok("")),
+            ("CheckpointDestroy", Ok("")),
+            ("connection up id oxidal-hotspot", Ok("")),
+            ("TYPE,STATE", Ok("wifi:connected\n")),
+        ]);
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                network.rollback(journal).await.unwrap();
+                assert_eq!(fs::read_to_string(&network.region).unwrap(), "COUNTRY=NZ\n");
+                assert!(!network.state_dir.join("pending.json").exists());
                 COMMANDS.with(|q| assert!(q.borrow().is_empty()));
             })
             .await;

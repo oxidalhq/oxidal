@@ -38,7 +38,8 @@
       "iw",
       "rfkill",
       "swh-lv2",
-      "python3"
+      "python3",
+      "tzdata"
     ],
     "enabled_services": [
       "oxidald.service",

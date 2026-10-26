@@ -7,6 +7,7 @@ pub mod network;
 pub mod policy;
 #[cfg(unix)]
 pub mod power;
+pub mod radio;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +31,10 @@ pub enum Command {
         interface: String,
         ssid: String,
         password: String,
+        #[serde(default)]
+        country: Option<String>,
+        #[serde(default)]
+        channel: Option<u8>,
     },
     Policy {
         settings: policy::Settings,
@@ -61,6 +66,20 @@ impl std::fmt::Debug for Command {
 }
 impl Command {
     pub fn validate(&self) -> Result<(), &'static str> {
+        if let Self::Hotspot {
+            country, channel, ..
+        } = self
+        {
+            if country
+                .as_ref()
+                .is_some_and(|s| s.len() != 2 || !s.bytes().all(|b| b.is_ascii_uppercase()))
+            {
+                return Err("Use a two-letter country code");
+            }
+            if channel.is_some_and(|c| c > 13) {
+                return Err("Use automatic or a supported 2.4 GHz channel");
+            }
+        }
         match self {
             Self::Policy { settings } => return settings.validate(),
             Self::Join {
@@ -72,6 +91,7 @@ impl Command {
                 interface,
                 ssid,
                 password,
+                ..
             } => {
                 if interface.is_empty()
                     || interface.len() > 15
@@ -156,6 +176,7 @@ pub struct Pending {
 pub struct NetworkState {
     pub available: bool,
     pub wireless_enabled: bool,
+    pub radio: Option<radio::Radio>,
     pub policy: Option<policy::Settings>,
     pub interfaces: Vec<Interface>,
     pub networks: Vec<AccessPoint>,

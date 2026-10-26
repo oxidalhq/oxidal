@@ -169,6 +169,8 @@ export type Command3 =
       type: "join";
     }
   | {
+      channel?: number | null;
+      country?: string | null;
       interface: string;
       password: string;
       ssid: string;
@@ -605,6 +607,7 @@ export interface NetworkState {
   networks: AccessPoint[];
   pending?: Pending | null;
   policy?: Settings | null;
+  radio?: Radio | null;
   saved: SavedNetwork[];
   wireless_enabled: boolean;
 }
@@ -624,6 +627,10 @@ export interface Pending {
   phase: string;
   seconds_remaining: number;
   transaction: string;
+}
+export interface Radio {
+  channels: number[];
+  country: string;
 }
 export interface SavedNetwork {
   active: boolean;

@@ -170,7 +170,8 @@ method=disabled
 """.encode()
         # Vendor images may persist radio-off independently of rfkill.
         files['var/lib/NetworkManager/NetworkManager.state'] = b'[main]\nWirelessEnabled=true\n'
-        files['etc/systemd/system/oxidal-regdomain.service'] = b"[Unit]\nDescription=Oxidal NZ wireless region\nBefore=NetworkManager.service\n[Service]\nType=oneshot\nExecStartPre=/usr/sbin/rfkill unblock wifi\nExecStart=/usr/sbin/iw reg set NZ\nRemainAfterExit=yes\n[Install]\nWantedBy=multi-user.target\n"
+        files['etc/default/oxidal-wireless'] = b'COUNTRY=NZ\n'
+        files['etc/systemd/system/oxidal-regdomain.service'] = b"[Unit]\nDescription=Oxidal wireless region\nBefore=NetworkManager.service\n[Service]\nType=oneshot\nEnvironmentFile=/etc/default/oxidal-wireless\nExecStartPre=/usr/sbin/rfkill unblock wifi\nExecStart=/usr/sbin/iw reg set ${COUNTRY}\nRemainAfterExit=yes\n[Install]\nWantedBy=multi-user.target\n"
     return files, data
 
 

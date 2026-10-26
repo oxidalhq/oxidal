@@ -19,6 +19,8 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
   >('always');
   const [home, setHome] = useState('');
   const [policyReview, setPolicyReview] = useState(false);
+  const [country, setCountry] = useState('');
+  const [channel, setChannel] = useState(0);
   const [power, setPower] = useState<'reboot' | 'shutdown' | null>(null);
   useEffect(() => {
     let active = true;
@@ -270,6 +272,9 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                     interface: interfaceName,
                     ssid,
                     password,
+                    ...(mode === 'hotspot' && state.radio
+                      ? { country: country || state.radio.country, channel }
+                      : {}),
                   };
                   setPassword('');
                   void run(command);
@@ -323,6 +328,50 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                     disabled={busy}
                   />
                 </label>
+                {mode === 'hotspot' && state.radio && (
+                  <>
+                    <label className="field">
+                      Wireless country
+                      <input
+                        value={country || state.radio.country}
+                        onChange={(e) => {
+                          setCountry(e.target.value.toUpperCase());
+                          setReview(false);
+                        }}
+                        required
+                        pattern="[A-Z]{2}"
+                        maxLength={2}
+                        aria-describedby="wireless-country-note"
+                      />
+                    </label>
+                    <label className="field">
+                      Hotspot channel
+                      <select
+                        value={channel}
+                        onChange={(e) => {
+                          setChannel(Number(e.target.value));
+                          setReview(false);
+                        }}
+                      >
+                        <option value={0}>Automatic</option>
+                        {state.radio.channels.map((c) => (
+                          <option key={c} value={c}>
+                            {c} · 2.4 GHz
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p
+                      id="wireless-country-note"
+                      className="caption sm:col-span-2"
+                    >
+                      Use the country where the device is operating, such as NZ.
+                      The kernel and radio validate the channel again when
+                      applying. Country changes affect wireless operation and
+                      roll back if not confirmed.
+                    </p>
+                  </>
+                )}
                 <p className="caption">
                   WPA2 Personal, 8–63 printable characters. Open and enterprise
                   Wi-Fi are not supported yet. This changes the wireless link;
