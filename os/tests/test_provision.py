@@ -66,7 +66,7 @@ class ApplianceTests(ProvisionTests):
         elf = bytearray(32)
         elf[:6] = b'\x7fELF\x02\x01'
         elf[18:20] = (183).to_bytes(2, 'little')
-        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
+        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
             file = self.bundle / name
             file.parent.mkdir(exist_ok=True)
             file.write_bytes(bytes(elf) if name != 'ui/index.html' else b'<html>fixture</html>')
@@ -85,6 +85,16 @@ class ApplianceTests(ProvisionTests):
         self.assertIn('RestrictAddressFamilies=AF_UNIX', helper)
         self.assertIn('NoNewPrivileges=yes', helper)
         self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
+        terminal = (self.root / 'etc/systemd/system/oxidal-terminal.service').read_text()
+        self.assertIn('User=oxidal-debug', terminal)
+        self.assertIn('NoNewPrivileges=yes', terminal)
+        self.assertIn('KillMode=control-group', terminal)
+        self.assertNotIn('RuntimeMaxSec=', terminal)
+        admin = (self.root / 'etc/systemd/system/oxidal-admin-terminal.service').read_text()
+        self.assertIn('User=oxidal-admin', admin)
+        self.assertIn('KillMode=control-group', admin)
+        self.assertNotIn('NoNewPrivileges=', admin)
+        self.assertNotIn('RuntimeMaxSec=', admin)
         (self.bundle / 'bin/oxidald').write_bytes(b'corrupted')
         with self.assertRaisesRegex(ValueError, 'checksum'):
             provision.provision(self.root, True, self.bundle)

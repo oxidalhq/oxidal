@@ -50,7 +50,9 @@
       "oxidal-regdomain.service",
       "ssh.service",
       "oxidal-device.service",
-      "oxidal-debug.service"
+      "oxidal-debug.service",
+      "oxidal-terminal.service",
+      "oxidal-admin-terminal.service"
     ],
     "default_target": "multi-user.target",
     "wifi_country": "NZ",

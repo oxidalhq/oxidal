@@ -89,6 +89,7 @@ const binaries = appliance
       'oxidald',
       'oxidal-device-service',
       'oxidal-debug-service',
+      'oxidal-terminal-service',
       'oxidal-preset-seed',
       'oxidal-native-worker',
       'oxidal-audio-worker',
@@ -140,6 +141,9 @@ cpSync(
   join(staging, 'licenses/artwork-https'),
   { recursive: true },
 );
+cpSync(join(root, 'licenses/terminal'), join(staging, 'licenses/terminal'), {
+  recursive: true,
+});
 cpSync(join(root, 'apps/web/dist'), join(staging, 'ui'), { recursive: true });
 cpSync(join(root, 'os/config'), join(staging, 'os/config'), {
   recursive: true,

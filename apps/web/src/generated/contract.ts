@@ -203,6 +203,34 @@ export type Command3 =
     };
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
+export type TerminalCommand =
+  | {
+      cursor: number;
+      id?: string | null;
+      type: "read";
+    }
+  | {
+      cols: number;
+      id: string;
+      rows: number;
+      type: "start";
+    }
+  | {
+      bytes: number[];
+      id: string;
+      sequence: number;
+      type: "input";
+    }
+  | {
+      cols: number;
+      id: string;
+      rows: number;
+      type: "resize";
+    }
+  | {
+      id: string;
+      type: "end";
+    };
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -231,6 +259,8 @@ export interface Contract {
   preset: Inspection;
   rig: Rig;
   snapshot: Snapshot;
+  terminal_command: TerminalCommand;
+  terminal_state: TerminalState;
   validation: Validation;
 }
 export interface AssetArtwork {
@@ -683,6 +713,22 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface TerminalState {
+  available: boolean;
+  directory: string;
+  identity: string;
+  session?: TerminalSession | null;
+}
+export interface TerminalSession {
+  bytes: number[];
+  cursor: number;
+  dropped: boolean;
+  exit_code?: number | null;
+  id: string;
+  next_input: number;
+  running: boolean;
+  start: number;
 }
 export interface Validation {
   errors: string[];

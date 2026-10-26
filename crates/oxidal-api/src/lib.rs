@@ -7,6 +7,7 @@ mod monitor;
 mod native_editor;
 mod playback;
 mod presets;
+mod terminal;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State, rejection::JsonRejection},
@@ -53,6 +54,8 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub terminal_state: oxidal_debug::terminal::State,
+    pub terminal_command: oxidal_debug::terminal::Command,
     pub debug_state: oxidal_debug::State,
     pub debug_command: oxidal_debug::Command,
     pub monitoring: monitor::Monitoring,
@@ -189,6 +192,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/health", get(health))
         .route("/monitor", get(monitor::state))
         .route("/debug", get(debug::state).post(debug::command))
+        .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
         .route(

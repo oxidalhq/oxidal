@@ -76,7 +76,7 @@ def bundle_files(path):
         if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != checksum:
             raise ValueError(f'Bundle checksum mismatch: {name}')
         result['opt/oxidal/' + name] = source.read_bytes()
-    required = ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html']
+    required = ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html']
     if any('opt/oxidal/' + name not in result for name in required):
         raise ValueError('Incomplete appliance bundle')
     machine = 183 if data['target'] == 'linux-arm64' else 62
@@ -142,6 +142,8 @@ def create_access(path):
 def appliance_files(bundle, access, hotspot):
     files, data = bundle_files(bundle)
     files['etc/systemd/system/oxidald.service'] = (HERE / 'config/oxidald.service').read_bytes()
+    files['etc/systemd/system/oxidal-admin-terminal.service'] = (HERE / 'config/oxidal-admin-terminal.service').read_bytes()
+    files['etc/systemd/system/oxidal-terminal.service'] = (HERE / 'config/oxidal-terminal.service').read_bytes()
     files['etc/systemd/system/oxidal-debug.service'] = (HERE / 'config/oxidal-debug.service').read_bytes()
     files['etc/systemd/system/oxidal-device.service'] = (HERE / 'config/oxidal-device.service').read_bytes()
     banner = (HERE / 'config/branding/banner.txt').read_bytes()

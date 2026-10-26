@@ -985,3 +985,34 @@ async fn source_artwork_download_is_persisted_without_changing_audio_or_original
     let _ = task.await;
     std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
 }
+
+#[tokio::test]
+async fn terminal_is_optional_and_rejects_foreign_origin() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let payload = serde_json::json!({"type":"start","id":"a".repeat(32),"cols":80,"rows":24});
+    for mode in ["unprivileged", "admin"] {
+        assert_eq!(
+            client
+                .post(format!("{url}/terminal/{mode}"))
+                .json(&payload)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            reqwest::StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            client
+                .post(format!("{url}/terminal/{mode}"))
+                .header("Origin", "https://foreign.invalid")
+                .json(&payload)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            reqwest::StatusCode::FORBIDDEN
+        );
+    }
+    task.abort();
+}

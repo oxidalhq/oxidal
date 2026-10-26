@@ -1,0 +1,21 @@
+[Unit]
+Description=Oxidal administrator interactive terminal
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+User=oxidal-admin
+Group=oxidal-control
+RuntimeDirectory=oxidal-admin-terminal
+RuntimeDirectoryMode=0750
+WorkingDirectory=/home/oxidal-admin
+ExecStart=/opt/oxidal/bin/oxidal-terminal-service admin
+Restart=always
+RestartSec=0.2
+KillMode=control-group
+TimeoutStopSec=2
+SendSIGKILL=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

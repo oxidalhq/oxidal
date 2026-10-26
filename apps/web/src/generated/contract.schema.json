@@ -73,6 +73,12 @@
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
+    "terminal_command": {
+      "$ref": "#/$defs/TerminalCommand"
+    },
+    "terminal_state": {
+      "$ref": "#/$defs/TerminalState"
+    },
     "validation": {
       "$ref": "#/$defs/Validation"
     }
@@ -83,6 +89,8 @@
     "rig",
     "validation",
     "capabilities",
+    "terminal_state",
+    "terminal_command",
     "debug_state",
     "debug_command",
     "monitoring",
@@ -2772,6 +2780,233 @@
         "output",
         "input_map",
         "output_map"
+      ]
+    },
+    "TerminalCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "type": "string",
+              "const": "read"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "cursor"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cols": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "id": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "start"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "cols",
+            "rows"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bytes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0
+              }
+            },
+            "id": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "input"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "sequence",
+            "bytes"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cols": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "id": {
+              "type": "string"
+            },
+            "rows": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "resize"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "cols",
+            "rows"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "end"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ]
+        }
+      ]
+    },
+    "TerminalSession": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          }
+        },
+        "cursor": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "dropped": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "next_input": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "running",
+        "next_input",
+        "start",
+        "cursor",
+        "dropped",
+        "bytes"
+      ]
+    },
+    "TerminalState": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "identity": {
+          "type": "string"
+        },
+        "session": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TerminalSession"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "identity",
+        "directory"
       ]
     },
     "Validation": {

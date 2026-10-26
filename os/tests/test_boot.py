@@ -13,6 +13,7 @@ import unittest
 
 PROBE = r'''
 import json, subprocess, time, urllib.request
+from pathlib import Path
 
 def get(path):
     with urllib.request.urlopen('http://127.0.0.1:3210' + path, timeout=3) as reply:
@@ -30,7 +31,7 @@ try:
     else:
         raise AssertionError('Daemon/native editor not ready after real systemd boot')
     assert health['native_editor'] and 'session' in native
-    for service in ('oxidald', 'nginx', 'NetworkManager', 'avahi-daemon', 'oxidal-device', 'oxidal-debug'):
+    for service in ('oxidald', 'nginx', 'NetworkManager', 'avahi-daemon', 'oxidal-device', 'oxidal-debug', 'oxidal-terminal', 'oxidal-admin-terminal'):
         subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
     pid = subprocess.check_output(['systemctl', 'show', '-p', 'MainPID', '--value', 'oxidald'], text=True).strip()
     with open('/proc/' + pid + '/status') as file:
@@ -67,6 +68,92 @@ try:
                 data = reply.read()
             assert len(data) == original['bytes']
             assert hashlib.sha256(data).hexdigest() == original['sha256']
+    # Full unprivileged PTY: actual identity, retained state, output, Ctrl-C and cgroup cleanup.
+    import os, re
+    terminal_mode = 'unprivileged'
+    def terminal(command):
+        request = urllib.request.Request('http://127.0.0.1:3210/api/v1/terminal/' + terminal_mode,
+            data=json.dumps(command).encode(), headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(request, timeout=5) as reply:
+            return json.loads(reply.read())
+    for attempt in range(30):
+        try:
+            terminal({'type': 'read', 'id': None, 'cursor': 0})
+            break
+        except Exception:
+            time.sleep(.2)
+    else:
+        raise AssertionError('Terminal service unavailable')
+    terminal_id = 'c' * 32
+    terminal({'type': 'start', 'id': terminal_id, 'cols': 80, 'rows': 24})
+    terminal_cursor = 0
+    terminal_sequence = 0
+    def type_terminal(text):
+        global terminal_sequence
+        terminal({'type': 'input', 'id': terminal_id, 'sequence': terminal_sequence, 'bytes': list(text.encode())})
+        terminal_sequence += 1
+    def read_terminal(marker, seconds=10):
+        global terminal_cursor
+        deadline = time.monotonic() + seconds
+        output = ''
+        while time.monotonic() < deadline:
+            session = terminal({'type': 'read', 'id': terminal_id, 'cursor': terminal_cursor})['session']
+            terminal_cursor = session['cursor']
+            output += bytes(session['bytes']).decode(errors='replace')
+            if re.search(marker, output):
+                return output
+            time.sleep(.1)
+        raise AssertionError('Terminal marker missing: ' + marker + ': ' + output)
+    type_terminal("cd /tmp; export OXIDAL_SESSION_TEST=retained; id -un; grep NoNewPrivs /proc/$$/status; printf 'READY_%s\n' done\r")
+    output = read_terminal('READY_done')
+    assert 'oxidal-debug' in output and re.search(r'NoNewPrivs:\s+1', output), output
+    terminal({'type':'resize','id':terminal_id,'cols':97,'rows':29})
+    type_terminal("stty size; printf 'STATE_%s\n' \"$OXIDAL_SESSION_TEST\"\r")
+    output = read_terminal('STATE_retained')
+    assert '29 97' in output, output
+    type_terminal("head -c 20000 /dev/zero | base64; sleep 31; printf '\nLONG_%s\n' done\r")
+    output = read_terminal('LONG_done', 45)
+    assert len(output) > 8192
+    type_terminal('sleep 60\r')
+    time.sleep(.2)
+    type_terminal('\x03')
+    type_terminal("setsid sh -c 'echo ESCAPED=$$; exec sleep 60' &\r")
+    output = read_terminal(r'ESCAPED=\d+')
+    match = re.search(r'ESCAPED=(\d+)', output)
+    assert match, output
+    escaped = int(match.group(1))
+    os.kill(escaped, 0)
+    terminal({'type': 'end', 'id': terminal_id})
+    for attempt in range(100):
+        if not os.path.exists('/proc/' + str(escaped)):
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('Terminal descendant survived cgroup cleanup')
+    # This credential is created only in the throwaway boot-test overlay and restored.
+    # Never use or log the image's actual administrator password.
+    import secrets
+    original_hash = next(line.split(':')[1] for line in Path('/etc/shadow').read_text().splitlines() if line.startswith('oxidal-admin:'))
+    test_password = secrets.token_hex(16)
+    try:
+        subprocess.run(['chpasswd'], input='oxidal-admin:' + test_password + '\n', text=True, check=True, capture_output=True)
+        terminal_mode = 'admin'
+        terminal_id = 'd' * 32
+        terminal_cursor = 0
+        terminal_sequence = 0
+        terminal({'type': 'start', 'id': terminal_id, 'cols': 80, 'rows': 24})
+        type_terminal("id -un; sudo -k; sudo -p 'ADMIN_PASSWORD: ' sh -c 'id -u; printf ROOT_%s done'\r")
+        output = read_terminal('ADMIN_PASSWORD: $')
+        assert 'oxidal-admin' in output
+        type_terminal(test_password + '\r')
+        output = read_terminal('ROOT_done')
+        assert re.search(r'(^|[\r\n])0[\r\n]', output), 'sudo did not obtain root'
+        assert test_password not in output, 'Password was echoed'
+        type_terminal("sudo -k; printf 'ADMIN_%s\n' finished\r")
+        read_terminal('ADMIN_finished')
+        terminal({'type': 'end', 'id': terminal_id})
+    finally:
+        subprocess.run(['chpasswd', '-e'], input='oxidal-admin:' + original_hash + '\n', text=True, check=True, capture_output=True)
     monitor = get('/api/v1/monitor')
     assert monitor['audio'] is None, 'Stopped audio must not invent meter readings'
     # Exercise the installed unprivileged debug executor through the real daemon.

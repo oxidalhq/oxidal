@@ -62,3 +62,6 @@ pub struct Reply {
     pub state: Option<State>,
     pub error: Option<String>,
 }
+
+#[cfg(unix)]
+pub mod terminal;

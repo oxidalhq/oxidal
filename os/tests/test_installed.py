@@ -33,7 +33,7 @@ class InstalledTests(unittest.TestCase):
             for relative, digest in entry['licenses'].items():
                 contents = (notices / (name + '-' + entry['version']) / relative).read_bytes()
                 self.assertEqual(hashlib.sha256(contents).hexdigest(), digest)
-        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
+        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
             output = subprocess.check_output(['ldd', str(home / binary)], text=True)
             self.assertNotIn('not found', output)
             self.assertNotIn('/tmp/oxidal-', output)
