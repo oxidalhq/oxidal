@@ -28,7 +28,7 @@ if (mode === 'bootstrap') {
     '--version',
     '0.9.2',
   );
-  run('pnpm', ['exec', 'playwright', 'install', 'chromium'], {
+  run('pnpm', ['exec', 'playwright', 'install', 'chromium', 'webkit'], {
     cwd: join(root, 'apps/web'),
   });
 } else if (mode === 'native-check') {

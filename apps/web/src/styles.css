@@ -401,42 +401,6 @@ summary:focus-visible {
   .section-heading {
     flex-wrap: wrap;
   }
-  .signal-path {
-    flex-direction: column;
-    align-items: stretch;
-    padding-top: 0;
-    gap: 8px;
-  }
-  .route-arrow {
-    align-self: center;
-    transform: rotate(90deg);
-    width: 18px;
-  }
-  .route-junction {
-    align-self: center;
-    gap: 4px;
-  }
-  .route-junction svg {
-    transform: rotate(90deg);
-  }
-  .branches {
-    flex-direction: row;
-  }
-  .branch {
-    flex: 1;
-  }
-  .endpoint {
-    flex-direction: row;
-    align-items: center;
-    min-height: 48px;
-    gap: 16px;
-  }
-  .endpoint .eyebrow {
-    display: none;
-  }
-  .endpoint > span:last-child {
-    margin-left: auto;
-  }
   .parameters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
@@ -697,4 +661,183 @@ h1 {
 }
 .brand-mark {
   color: var(--brand);
+}
+
+@media (max-width: 1050px) {
+  .signal-path {
+    flex-direction: column;
+    align-items: stretch;
+    padding-top: 0;
+    gap: 8px;
+  }
+  .route-arrow {
+    align-self: center;
+    transform: rotate(90deg);
+    width: 18px;
+  }
+  .route-junction {
+    align-self: center;
+    gap: 4px;
+  }
+  .route-junction svg {
+    transform: rotate(90deg);
+  }
+  .branches {
+    flex-direction: row;
+  }
+  .branch {
+    flex: 1;
+  }
+  .endpoint {
+    flex-direction: row;
+    align-items: center;
+    min-height: 48px;
+    gap: 16px;
+  }
+  .endpoint .eyebrow {
+    display: none;
+  }
+  .endpoint > span:last-child {
+    margin-left: auto;
+  }
+}
+
+/* Safe areas apply in both orientations, including an iPhone landscape notch. */
+:root {
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+main {
+  padding-left: max(var(--page-space), var(--safe-left));
+  padding-right: max(var(--page-space), var(--safe-right));
+  padding-bottom: max(var(--page-space), var(--safe-bottom));
+}
+.masthead {
+  padding-left: max(var(--page-space), var(--safe-left));
+  padding-right: max(var(--page-space), var(--safe-right));
+  padding-top: max(8px, var(--safe-top));
+}
+.field,
+.branch,
+.branches,
+.wet-path,
+.form-grid > * {
+  min-width: 0;
+}
+.field input,
+.field select,
+.field textarea {
+  min-width: 0;
+  font-size: 16px;
+}
+.block,
+.device-info dd,
+.control-editor legend {
+  overflow-wrap: anywhere;
+}
+.parameter:has(fieldset) {
+  grid-column: 1 / -1;
+}
+@media (min-width: 761px) and (max-width: 1050px) {
+  .parameters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 380px) {
+  .preset-controls {
+    flex-wrap: wrap;
+  }
+  .preset-controls .field {
+    flex-basis: 100%;
+  }
+  .bypass-switch {
+    width: 100%;
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  main {
+    padding-top: 16px;
+  }
+  .block,
+  .branch .block {
+    min-height: 72px;
+  }
+  .page-heading,
+  .section-heading {
+    margin-bottom: 12px;
+  }
+}
+:root[data-display='epaper'] *,
+:root[data-display='epaper'] *::before,
+:root[data-display='epaper'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+:root[data-display='epaper'] .caption,
+:root[data-display='epaper'] .block > span:last-child,
+:root[data-display='epaper'] .muted {
+  font-size: 14px;
+}
+
+/* Keep the native picker, but give Safari the same predictable hit area. */
+.field select {
+  appearance: none;
+  height: var(--touch-target);
+  padding-right: 2.5rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--foreground) 50%),
+    linear-gradient(135deg, var(--foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) center,
+    calc(100% - 14px) center;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.page-heading > div:first-child {
+  min-width: 0;
+}
+@media (min-width: 761px) {
+  .preset-controls {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+  }
+}
+/* Wide phones get a compact horizontal chain when rotated. */
+@media (orientation: landscape) and (min-width: 800px) and (max-width: 1050px) {
+  .signal-path {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .branches {
+    flex-direction: column;
+  }
+  .branch {
+    flex: auto;
+  }
+  .block strong {
+    font-size: 18px;
+  }
+  .endpoint {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .endpoint .eyebrow {
+    display: block;
+  }
+  .endpoint > span:last-child {
+    margin-left: 0;
+  }
+  .route-arrow,
+  .route-junction svg {
+    transform: none;
+  }
+  .route-junction {
+    align-self: center;
+  }
 }

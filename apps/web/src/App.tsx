@@ -27,6 +27,21 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
   const [view, setView] = useState<'rig' | 'settings' | 'library'>('rig');
+  const [ePaper, setEPaper] = useState(() => {
+    try {
+      return localStorage.getItem('oxidal.display') === 'epaper';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.display = ePaper ? 'epaper' : 'orchid';
+    try {
+      localStorage.setItem('oxidal.display', ePaper ? 'epaper' : 'orchid');
+    } catch {
+      /* The selection still works when browser storage is unavailable. */
+    }
+  }, [ePaper]);
   const [error, setError] = useState('');
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
@@ -465,6 +480,23 @@ export default function App() {
             </>
           ) : (
             <>
+              <section className="panel" aria-label="Display preferences">
+                <h2>Display</h2>
+                <div className="checkboxes">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={ePaper}
+                      onChange={(event) => setEPaper(event.target.checked)}
+                    />
+                    E-paper display
+                  </label>
+                </div>
+                <p className="muted">
+                  High contrast, plain surfaces and no transitions for e-paper
+                  screens. Saved on this browser.
+                </p>
+              </section>
               <section className="panel">
                 <div className="section-heading">
                   <div>

@@ -52,3 +52,58 @@ Vite updates CSS while `pnpm dev` runs. For the built preview, run
 and `pnpm test:e2e`: the existing accessibility test saves desktop/mobile rig and
 settings screenshots in `.local/previews/`. Inspect them alongside the automated
 contrast/keyboard checks; physical phone and e-paper qualification is separate.
+
+## Device layouts
+
+The responsive UI targets the iPhone XR, Galaxy Z Fold4 (cover and unfolded),
+and BOOX Note Air3 C in portrait and landscape. Layout follows available CSS
+width/height, not device names. Rotation and fold resizing keep an active edit
+mounted. Wide landscape views use a compact horizontal chain; narrower views
+stack it. Controls stay scrollable when a keyboard reduces available height.
+Inputs use 16px text, primary controls have 44px minimum height, and landscape
+safe areas keep content clear of cutouts. Zoom remains enabled.
+
+On BOOX, enable **Settings → Display → E-paper display**. This browser-local
+preference survives reloads and uses plain black/white surfaces, stronger borders,
+larger supporting text and no transitions/shadows. It can be disabled to restore
+Orchid. It does not control the device's refresh mode or claim to eliminate
+physical e-ink ghosting. Browser storage denial leaves the current selection
+usable but prevents persistence.
+
+The existing `pnpm test:e2e` suite includes these representative CSS viewports:
+
+| Profile        | Portrait   | Landscape  | Engine                       |
+| -------------- | ---------- | ---------- | ---------------------------- |
+| iPhone XR      | 414 × 896  | 896 × 414  | WebKit                       |
+| Fold4 cover    | 345 × 883  | 883 × 345  | Chromium                     |
+| Fold4 unfolded | 690 × 829  | 829 × 690  | Chromium                     |
+| BOOX Air3 C    | 930 × 1240 | 1240 × 930 | Chromium, e-paper preference |
+
+The XR uses a 2× scale. Fold4 uses representative 2.625× Android scaling; BOOX
+uses a representative 2× browser scale plus a 768 × 1024 density stress check.
+Android display size, browser chrome and zoom can change these CSS dimensions.
+BOOX colour-pixel resolution is not assumed to be its browser viewport.
+Manufacturer references: [Apple XR display](https://developer.apple.com/videos/play/tech-talks/207/),
+[Samsung Fold4 displays](https://news.samsung.com/us/samsung-galaxy-z-flip4-galaxy-z-fold4-unpacked-2022-most-versatile-smartphones/),
+[BOOX specifications](https://shop.boox.com/en-au/products/boox-note-air3).
+Safe-area treatment follows [WebKit guidance](https://webkit.org/blog/7929/designing-websites-for-iphone-x/).
+
+For only the device matrix, run from the repository root:
+
+```sh
+pnpm test:e2e --project=iphone-xr --project=fold4-cover --project=fold4-open --project=boox-air3c
+```
+
+Bootstrap/CI installs Chromium and WebKit. Existing installations can run
+`pnpm --dir apps/web exec playwright install chromium webkit`. Screenshots land
+in `.local/previews/devices/`. Tests cover both orientations across rig, settings
+and library, touch height, horizontal overflow, accessibility, rotating/folding
+an owned edit, reduced keyboard height, synthetic notch insets and persistent
+(easily reversible) e-paper mode. The existing native preset load/edit/save test
+also runs on device profiles via `pnpm native:check` when the native worker is
+available. The default build explicitly skips native workflows.
+
+Emulation uses current browser engines; it is not the Safari/Chrome build installed
+on a physical device. Final checks on the actual phones/tablet still need browser
+version, zoom/display settings, on-screen keyboard, notch and e-ink refresh/readability.
+Live audio and physical MIDI remain outside this UI qualification.

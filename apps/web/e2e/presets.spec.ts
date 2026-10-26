@@ -105,6 +105,10 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   expect(imported.ok()).toBeTruthy();
   const preset = await imported.json();
   await page.goto('/');
+  if (test.info().project.name === 'boox-air3c') {
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByLabel('E-paper display').check();
+  }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
@@ -163,18 +167,30 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     `/api/v1/presets/${preset.sha256}/original`,
   );
   expect(await original.body()).toEqual(bytes);
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
+  const portrait = page.viewportSize()!;
+  const viewports = [portrait];
+  if (
+    ['iphone-xr', 'fold4-cover', 'fold4-open', 'boox-air3c'].includes(
+      test.info().project.name,
+    )
+  )
+    viewports.push({ width: portrait.height, height: portrait.width });
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
 });
 
 test('native editor rejects stale ownership and replay then expires abandoned edits', async ({

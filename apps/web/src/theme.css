@@ -86,3 +86,35 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.5);
 }
+
+/* Explicit browser preference for BOOX and other e-paper displays. */
+:root[data-display='epaper'] {
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --brand: #222222;
+  --brand-foreground: #ffffff;
+  --control-accent: #111111;
+  --secondary: #eeeeee;
+  --secondary-foreground: #111111;
+  --muted: #ffffff;
+  --muted-foreground: #333333;
+  --accent: #eeeeee;
+  --accent-foreground: #111111;
+  --border: #555555;
+  --input: #555555;
+  --enclosure: #ffffff;
+  --enclosure-foreground: #111111;
+  --enclosure-border: #555555;
+  --lcd: #ffffff;
+  --lcd-foreground: #111111;
+  --lcd-muted: #333333;
+  --lcd-border: #555555;
+  --lcd-card: #ffffff;
+  --warning: #ffffff;
+  --warning-foreground: #111111;
+  --destructive: #111111;
+  --lcd-shadow: none;
+  --panel-shadow: none;
+  --effect-shadow: none;
+}
