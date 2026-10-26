@@ -275,3 +275,39 @@ export async function debugCommand(
   if (!debugValidator(body)) throw new Error('Incompatible debug service');
   return body;
 }
+
+export type AssetArtwork = Contract['artwork'][number];
+const artworkValidator = ajv.compile<AssetArtwork[]>({
+  $defs: schema.$defs,
+  type: 'array',
+  items: { $ref: '#/$defs/AssetArtwork' },
+});
+export function artworkPath(id: string, owned: boolean, key?: string) {
+  return `/api/v1/presets/${encodeURIComponent(id)}/artwork${key ? `/${encodeURIComponent(key)}` : ''}?owned=${owned}`;
+}
+export async function presetArtwork(
+  id: string,
+  owned: boolean,
+  signal: AbortSignal,
+) {
+  const response = await fetch(artworkPath(id, owned), { signal });
+  const body: unknown = await response.json();
+  if (!response.ok || !artworkValidator(body))
+    throw new Error('Artwork is unavailable');
+  return body;
+}
+export async function saveArtwork(
+  id: string,
+  owned: boolean,
+  key: string,
+  signal: AbortSignal,
+) {
+  const response = await fetch(artworkPath(id, owned, key), {
+    method: 'POST',
+    signal,
+  });
+  if (!response.ok) {
+    const body = (await response.json()) as { error?: string };
+    throw new Error(body.error ?? 'Artwork download failed');
+  }
+}

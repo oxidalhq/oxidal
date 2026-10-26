@@ -1,3 +1,4 @@
+import { ArtworkDeck } from './AssetArtwork';
 import { useEffect, useRef, useState } from 'react';
 import {
   capabilities,
@@ -288,6 +289,13 @@ export function NativeEditor({
             ? `Native preset ready${state.dirty ? ' · Unsaved tone changes' : ''}`
             : 'No native preset loaded'}
       </p>
+      {state?.loaded && (
+        <ArtworkDeck
+          key={state.loaded}
+          id={state.loaded}
+          owned={state.owned.some((p) => p.id === state.loaded)}
+        />
+      )}
       <div className="form-grid">
         <label className="field">
           Native control

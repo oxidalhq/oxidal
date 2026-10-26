@@ -893,3 +893,95 @@ async fn debug_is_disabled_optional_and_rejects_foreign_origins_and_unknown_fiel
     );
     task.abort();
 }
+
+/// Opt-in source-download check; ordinary CI is entirely offline/deterministic.
+#[tokio::test]
+#[ignore = "requires OXIDAL_ARTWORK_PRESET pointing to an owned preset with public artwork and internet access"]
+async fn source_artwork_download_is_persisted_without_changing_audio_or_original() {
+    let file =
+        std::env::var_os("OXIDAL_ARTWORK_PRESET").expect("Set OXIDAL_ARTWORK_PRESET explicitly");
+    let bytes = std::fs::read(file).unwrap();
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let info: Value = client
+        .post(format!("{url}/presets"))
+        .body(bytes.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = info["sha256"].as_str().unwrap();
+    let base = format!("{url}/presets/{id}/artwork");
+    let rows: Value = client
+        .get(&base)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let item = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["key"].is_string())
+        .expect("Preset must supply an image");
+    let key = item["key"].as_str().unwrap();
+    let response = client.post(format!("{base}/{key}")).send().await.unwrap();
+    assert_eq!(response.status(), 204, "{}", response.text().await.unwrap());
+    let image = client.get(format!("{base}/{key}")).send().await.unwrap();
+    assert_eq!(image.status(), 200);
+    assert_eq!(image.headers()["content-type"], "image/png");
+    let png = image.bytes().await.unwrap();
+    assert!(image::load_from_memory(&png).is_ok());
+    let saved: Value = client
+        .get(&base)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        saved
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["key"] == key && a["cached"] == true)
+    );
+    assert_eq!(
+        client
+            .get(format!("{url}/audio"))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        state
+    );
+    assert_eq!(
+        &client
+            .get(format!("{url}/presets/{id}/original"))
+            .send()
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap()[..],
+        bytes
+    );
+    task.abort();
+    let _ = task.await;
+    std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
+}

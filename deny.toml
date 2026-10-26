@@ -4,6 +4,13 @@ ignore = []
 [licenses]
 allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Unicode-3.0"]
 confidence-threshold = 0.8
+# HTTPS artwork dependencies; exact notices ship in licenses/artwork-https.
+exceptions = [
+    { name = "ring", version = "=0.17.14", allow = ["ISC"] },
+    { name = "rustls-webpki", version = "=0.103.16", allow = ["ISC"] },
+    { name = "untrusted", version = "=0.9.0", allow = ["ISC"] },
+    { name = "webpki-roots", version = "=1.0.11", allow = ["CDLA-Permissive-2.0"] },
+]
 
 [licenses.private]
 # Licensing of Oxidal's unpublished code is an owner decision before extraction/publication.

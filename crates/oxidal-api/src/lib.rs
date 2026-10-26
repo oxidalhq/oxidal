@@ -1,3 +1,4 @@
+mod artwork;
 mod audio;
 mod debug;
 mod device;
@@ -67,6 +68,7 @@ pub struct Contract {
     pub error: ApiError,
     pub library: oxidal_presets::Library,
     pub preset: oxidal_presets::Inspection,
+    pub artwork: Vec<artwork::AssetArtwork>,
     pub native_editor: oxidal_tone3000::protocol::EditorSnapshot,
     pub native_command: oxidal_tone3000::protocol::EditorCommand,
 }
@@ -89,6 +91,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    artwork_work: Arc<tokio::sync::Semaphore>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
     playback: playback::Playback,
@@ -150,6 +153,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
     let shared = Arc::new(Shared {
+        artwork_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
         playback: playback::Playback::new(&config)?,
@@ -204,6 +208,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
         )
         .route("/presets/{id}/original", get(presets::original))
+        .route("/presets/{id}/artwork", get(artwork::list))
+        .route(
+            "/presets/{id}/artwork/{key}",
+            get(artwork::read).post(artwork::download),
+        )
         .route("/state", get(snapshot))
         .route("/commands", post(command))
         .route("/rig/validate", post(validate))

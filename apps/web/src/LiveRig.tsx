@@ -1,3 +1,4 @@
+import { ArtworkDeck } from './AssetArtwork';
 import { useEffect, useRef, useState } from 'react';
 import { playbackCommand, playbackState, type AudioState } from './api';
 import { Button } from './components/ui/button';
@@ -174,6 +175,14 @@ export function LiveRig({
             >
               {c.label.replace(/ · enabled$/, '')}
             </Button>
+            {state.configured && (
+              <ArtworkDeck
+                key={state.configured.preset_id}
+                id={state.configured.preset_id}
+                owned={state.configured.owned}
+                blockId={c.target.slice(6, -8)}
+              />
+            )}
             <Button
               className="mt-2 w-full"
               variant={c.value === 1 ? 'default' : 'outline'}

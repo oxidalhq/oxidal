@@ -4,6 +4,12 @@
   "description": "Schema generation root. Rust wire types are the contract source of truth.\n@see docs/architecture.md",
   "type": "object",
   "properties": {
+    "artwork": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AssetArtwork"
+      }
+    },
     "audio_command": {
       "$ref": "#/$defs/AudioCommand"
     },
@@ -92,6 +98,7 @@
     "error",
     "library",
     "preset",
+    "artwork",
     "native_editor",
     "native_command"
   ],
@@ -274,6 +281,37 @@
       "additionalProperties": false,
       "required": [
         "error"
+      ]
+    },
+    "AssetArtwork": {
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "cached": {
+          "type": "boolean"
+        },
+        "gear": {
+          "type": "string"
+        },
+        "key": {
+          "description": "Hash of the metadata URL; URLs (potentially signed) never reach the browser or logs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "title",
+        "gear",
+        "cached"
       ]
     },
     "AudioAction": {

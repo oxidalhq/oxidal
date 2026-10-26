@@ -153,3 +153,47 @@ Eligibility and conversion previews bind to the active document revision, SHA-25
 | Scope boundaries        | Device/global settings untouched; no credentials/executables/private source paths in exported bundles; offline restoration with no provider token                                                              |
 
 Full product behavior also requires gapless/trails, hardware performance and provider integration qualification outside this format spec. Promotion from draft requires the format/codecs and acceptance evidence to be reviewed together; a schema-only pass is not approval of those capabilities.
+
+## Offline artwork
+
+Preset display metadata is inspected independently from the stored original:
+`ChainBlock.toneJson` supplies the title, gear and first image URL. NAM, cab, IR,
+space and other gear labels share this path; absent/malformed optional metadata
+does not reject a valid preset. Model artwork belongs to its parent tone/block,
+never to another asset just because their titles match.
+
+Library, the native editor and sounding blocks show this metadata and locally
+saved images. **Save artwork offline** downloads supplied images onto the device;
+it requires internet access on that device once. It never changes the sounding
+rig. Subsequent views and daemon/browser restarts use device storage, without
+contacting the source. Files are shared by URL hash and checksum-verified; corrupt
+or missing files show a fallback and can be downloaded again. A provider account,
+model browser and automatic artwork downloads during future provider imports are
+not implemented by this feature. Structural authoring must refresh the metadata
+association when it becomes supported.
+
+The authenticated appliance proxy also protects these same-origin API paths:
+`GET /api/v1/presets/{id}/artwork?owned=false` lists block metadata and cached status;
+`GET` on its `/{key}` child reads only cached PNG bytes; `POST` downloads the image
+already associated with that exact preset/key. Owned copies use `owned=true`.
+Arbitrary client URLs are not accepted. Public HTTPS only, checked/pinned DNS,
+no ambient proxy or redirects, MIME plus raster decoding checks, 4 MiB downloads,
+4096-pixel side and 64 MiB decode limits, one concurrent download and a 256 MiB
+cache budget bound this non-audio work. PNG/JPEG/WebP become at-most-384-pixel PNG
+thumbnails. Unsupported/redirected/expired sources remain readable text fallbacks.
+Only new artwork saving stops when the cache is full; audio/model assets remain
+untouched. Cache-management UI, broader provider metadata and automatic refresh
+of expired signed URLs remain pending.
+
+An opt-in maintained HTTP test checks a real source download without bundling
+third-party images in the repository:
+
+```sh
+OXIDAL_ARTWORK_PRESET=/path/to/your/preset.t3kpreset cargo test -p oxidal-api \
+  --test http source_artwork_download -- --ignored --nocapture
+```
+
+The preset must supply a reachable public image and the test machine needs
+internet access. Ordinary unit/HTTP tests exercise offline restart, integrity,
+wrong-asset rejection and response limits without contacting outside services.
+Browser tests identify their presentation fixtures explicitly.

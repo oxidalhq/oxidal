@@ -135,6 +135,11 @@ if (appliance) {
     join(staging, 'native-build.json'),
   );
 }
+cpSync(
+  join(root, 'licenses/artwork-https'),
+  join(staging, 'licenses/artwork-https'),
+  { recursive: true },
+);
 cpSync(join(root, 'apps/web/dist'), join(staging, 'ui'), { recursive: true });
 cpSync(join(root, 'os/config'), join(staging, 'os/config'), {
   recursive: true,

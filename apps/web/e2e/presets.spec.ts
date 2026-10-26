@@ -611,3 +611,129 @@ test('playback lifecycle keeps native authoring available after stop and restart
     }
   }
 });
+
+test('asset artwork stays identifiable offline in portrait and landscape', async ({
+  page,
+}, testInfo) => {
+  // Presentation fixture; Rust HTTP tests cover real cache publication/restart/integrity.
+  const id = 'a'.repeat(64);
+  const amp = 'b'.repeat(64);
+  const cab = 'c'.repeat(64);
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  );
+  await page.route('**/api/v1/presets', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({
+      json: {
+        presets: [
+          {
+            sha256: id,
+            name: 'Artwork fixture',
+            source_id: 'fixture',
+            framing: 'legacy',
+            size_bytes: 600,
+            parameter_count: 0,
+            block_count: 3,
+            embedded_bytes: 0,
+            playback_available: false,
+          },
+        ],
+      },
+    });
+  });
+  await page.route(`**/api/v1/presets/${id}/artwork**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'POST')
+      return route.fulfill({
+        status: 502,
+        json: { error: 'Artwork source is unavailable' },
+      });
+    if (url.pathname.endsWith(`/${amp}`))
+      return route.fulfill({ contentType: 'image/png', body: png });
+    if (url.pathname.endsWith(`/${cab}`)) return route.fulfill({ status: 404 });
+    return route.fulfill({
+      json: [
+        {
+          block_id: 'amp-a',
+          title: 'Shared name',
+          gear: 'amp',
+          key: amp,
+          cached: true,
+        },
+        {
+          block_id: 'cab-b',
+          title: 'Shared name',
+          gear: 'cab',
+          key: cab,
+          cached: false,
+        },
+        {
+          block_id: 'space-c',
+          title: 'Room IR',
+          gear: 'space',
+          key: null,
+          cached: false,
+        },
+      ],
+    });
+  });
+  const external: string[] = [];
+  page.on('request', (request) => {
+    if (!new URL(request.url()).hostname.match(/^(127\.0\.0\.1|localhost)$/))
+      external.push(request.url());
+  });
+  await page.goto('/');
+  if (testInfo.project.name === 'boox-air3c') {
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByLabel('Display mode').selectOption('epaper');
+  }
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  const image = page.getByRole('img', {
+    name: 'Shared name · amp',
+    exact: true,
+  });
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
+    .toBe(1);
+  await expect(
+    page.getByText('No image supplied', { exact: true }),
+  ).toBeVisible();
+  const status = await page
+    .getByText('Saved offline', { exact: true })
+    .boundingBox();
+  expect(status!.height).toBeLessThan(30);
+  await page
+    .getByRole('button', { name: 'Save artwork offline', exact: true })
+    .click();
+  await expect(page.getByText(/Audio is unaffected/)).toBeVisible();
+  await expect(image).toBeVisible();
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({
+    width: viewport.height,
+    height: viewport.width,
+  });
+  await expect(image).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.screenshot({
+    path: testInfo.outputPath('artwork-landscape.png'),
+    fullPage: true,
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(image).toBeVisible();
+  expect(external).toEqual([]);
+});

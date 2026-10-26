@@ -349,3 +349,60 @@ pub fn inspect(bytes: &[u8]) -> Result<Inspection> {
         playback_available: false,
     })
 }
+
+/// Display metadata only; originals remain authoritative and URLs are never executed here.
+#[derive(Debug, Clone)]
+pub struct ArtworkSource {
+    pub block_id: String,
+    pub title: String,
+    pub gear: String,
+    pub url: Option<String>,
+}
+pub fn artwork(bytes: &[u8]) -> Result<Vec<ArtworkSource>> {
+    inspect(bytes)?;
+    let offset = if &bytes[..4] == b"T3KH" {
+        8 + u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize
+    } else {
+        4
+    };
+    let (tree, _) = parse(&bytes[offset..])?;
+    let snapshot = unique_child(&tree, "ChainSnapshot")?;
+    let mut result = vec![];
+    for lane in snapshot
+        .children
+        .iter()
+        .filter(|c| matches!(c.kind, "ChainBlocks" | "RightChainBlocks"))
+    {
+        for block in lane.children.iter().filter(|c| c.kind == "ChainBlock") {
+            // Optional/corrupt display metadata must never prevent audio import.
+            let tone: serde_json::Value = block
+                .text("toneJson")
+                .ok()
+                .flatten()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default();
+            let text = |key: &str, fallback: &str| {
+                tone.get(key)
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or(fallback)
+                    .chars()
+                    .take(256)
+                    .collect::<String>()
+            };
+            result.push(ArtworkSource {
+                block_id: block.text("id")?.unwrap_or_default().into(),
+                title: text("title", "Local asset"),
+                gear: text("gear", "Tone"),
+                url: tone
+                    .get("images")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty() && s.len() <= 4096)
+                    .map(str::to_owned),
+            });
+        }
+    }
+    Ok(result)
+}

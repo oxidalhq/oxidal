@@ -16,3 +16,13 @@ OXIDAL_TONE3000_FACTORY_DIR=/path/to/factory-presets cargo test --locked -p oxid
 ```
 
 Ordinary `cargo test` reports this test as ignored; it never silently reports a missing corpus as passed. Factory structural/storage success still does not imply DSP compatibility, edited round-trip fidelity or audio parity.
+
+## Artwork metadata fixture
+
+`authored-artwork.t3kpreset` is independently serialized project test data with
+three blocks: amp, cab and space. The amp and cab deliberately share a title but
+have different `artwork.example` image URLs; the space has no image. It contains
+no model weights, third-party artwork or credentials. Rust tests use it to check
+parent-block identity, offline cache restart/integrity and immutable originals.
+No test contacts these example URLs. Browser presentation fixtures are separate
+from the real HTTP/cache tests and do not claim provider connectivity.

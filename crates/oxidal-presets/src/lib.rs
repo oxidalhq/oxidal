@@ -5,7 +5,7 @@ mod native;
 mod owned;
 pub use owned::{OwnedPreset, OwnedStore};
 mod store;
-pub use native::{Framing, Inspection, MAX_FILE_BYTES, inspect};
+pub use native::{ArtworkSource, Framing, Inspection, MAX_FILE_BYTES, artwork, inspect};
 pub use store::{Library, Store};
 
 #[derive(Debug)]

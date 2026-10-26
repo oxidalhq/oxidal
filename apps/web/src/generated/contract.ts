@@ -209,6 +209,7 @@ export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "
  * @see docs/architecture.md
  */
 export interface Contract {
+  artwork: AssetArtwork[];
   audio_command: AudioCommand;
   audio_devices: AudioDevices;
   audio_probe: AudioProbe;
@@ -231,6 +232,16 @@ export interface Contract {
   rig: Rig;
   snapshot: Snapshot;
   validation: Validation;
+}
+export interface AssetArtwork {
+  block_id: string;
+  cached: boolean;
+  gear: string;
+  /**
+   * Hash of the metadata URL; URLs (potentially signed) never reach the browser or logs.
+   */
+  key?: string | null;
+  title: string;
 }
 export interface AudioCommand {
   action: AudioAction;

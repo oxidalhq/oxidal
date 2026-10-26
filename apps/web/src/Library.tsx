@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { importPreset, presetLibrary, type Preset } from './api';
+import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { Button } from './components/ui/button';
 
@@ -95,6 +96,7 @@ export function Library({ connected }: { connected: boolean }) {
         {presets.map((preset) => (
           <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
             <h3>{preset.name}</h3>
+            <ArtworkDeck id={preset.sha256} />
             <p>
               {preset.framing === 'legacy' ? 'Legacy format' : 'Current format'}{' '}
               · {preset.parameter_count} parameters · {preset.block_count} chain
