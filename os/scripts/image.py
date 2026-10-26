@@ -48,6 +48,7 @@ def build(base, bundle, access, destination):
         with raw.open('xb') as output:
             subprocess.run(['xz', '-dc', str(base)], stdout=output, check=True)
         with destination.open('xb') as output:
+            os.fchmod(output.fileno(), 0o600)
             output.truncate(8 * 1024**3)
         run('virt-resize', '--expand', '/dev/sda2', str(raw), str(destination))
         root = work / 'overlay'
