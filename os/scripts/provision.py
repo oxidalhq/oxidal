@@ -157,6 +157,8 @@ address1=10.42.0.1/24
 [ipv6]
 method=disabled
 """.encode()
+        # Vendor images may persist radio-off independently of rfkill.
+        files['var/lib/NetworkManager/NetworkManager.state'] = b'[main]\nWirelessEnabled=true\n'
         files['etc/systemd/system/oxidal-regdomain.service'] = b"[Unit]\nDescription=Oxidal NZ wireless region\nBefore=NetworkManager.service\n[Service]\nType=oneshot\nExecStartPre=/usr/sbin/rfkill unblock wifi\nExecStart=/usr/sbin/iw reg set NZ\nRemainAfterExit=yes\n[Install]\nWantedBy=multi-user.target\n"
     return files, data
 
@@ -188,7 +190,7 @@ def provision(path, apply=False, bundle=None, access=None, hotspot=False):
                 stream.write(files[name])
                 stream.flush()
                 os.fsync(stream.fileno())
-            temporary.chmod(0o755 if name.startswith('opt/oxidal/bin/') else (0o600 if name.endswith('.key') or name.endswith('.nmconnection') else 0o644))
+            temporary.chmod(0o755 if name.startswith('opt/oxidal/bin/') else (0o600 if name.endswith('.key') or name.endswith('.nmconnection') or name == 'var/lib/NetworkManager/NetworkManager.state' else 0o644))
             os.replace(temporary, target)
     return {'mode': 'apply' if apply else 'dry-run', 'root': str(root), 'changes': changes, 'services_enabled': [], 'device_writes': False}
 

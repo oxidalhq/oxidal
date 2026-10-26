@@ -100,3 +100,20 @@ class ApplianceTests(ProvisionTests):
         with self.assertRaisesRegex(ValueError, 'Symlink'):
             provision.provision(self.root, True, self.bundle)
         self.assertFalse((self.root / 'etc/systemd').exists())
+
+    def test_hotspot_image_clears_vendor_radio_disabled_state(self):
+        import json
+        access = self.root / 'access'
+        access.mkdir()
+        for name in ('server.crt', 'server.key', 'access.htpasswd'):
+            (access / name).write_text('fixture')
+        (access / 'hotspot.json').write_text(json.dumps({'ssid': 'Oxidal-abcdef', 'password': 'test-only-password-123', 'country': 'NZ'}))
+        state = self.root / 'var/lib/NetworkManager/NetworkManager.state'
+        state.parent.mkdir(parents=True)
+        state.write_text('[main]\nWirelessEnabled=false\n')
+        provision.provision(self.root, bundle=self.bundle, access=access, hotspot=True)
+        self.assertIn('WirelessEnabled=false', state.read_text())
+        provision.provision(self.root, True, self.bundle, access, True)
+        self.assertIn('WirelessEnabled=true', state.read_text())
+        self.assertEqual(state.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(provision.provision(self.root, True, self.bundle, access, True)['changes'], [])
