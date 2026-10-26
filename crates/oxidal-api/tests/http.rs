@@ -14,6 +14,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let app = router(Config {
+        device_socket: None,
         graph_worker: None,
         audio_worker: None,
         native_worker: None,
@@ -146,6 +147,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     );
     assert!(path.is_file());
     let app = router(Config {
+        device_socket: None,
         graph_worker: None,
         audio_worker: None,
         native_worker: None,
@@ -170,6 +172,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     std::fs::write(&path, b"bad data").unwrap();
     assert!(
         router(Config {
+            device_socket: None,
             graph_worker: None,
             audio_worker: None,
             native_worker: None,
@@ -776,5 +779,41 @@ async fn graph_playback_is_explicitly_unavailable_without_a_configured_worker() 
         .await
         .unwrap();
     assert_eq!(after, state);
+    task.abort();
+}
+
+#[tokio::test]
+async fn network_boundary_is_optional_strict_and_redacts_invalid_credentials() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/device/network"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["available"], false);
+    for (body, status) in [
+        (json!({"type":"status","shell":"reboot"}), 400),
+        (
+            json!({"type":"join","interface":"../bad","ssid":"Test","password":"do-not-echo-this"}),
+            422,
+        ),
+        (
+            json!({"type":"join","interface":"wlan0","ssid":"Test","password":"do-not-echo-this"}),
+            503,
+        ),
+    ] {
+        let response = client
+            .post(format!("{url}/device/network"))
+            .json(&body)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), status);
+        assert!(!response.text().await.unwrap().contains("do-not-echo-this"));
+    }
     task.abort();
 }

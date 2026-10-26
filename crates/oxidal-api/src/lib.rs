@@ -1,4 +1,5 @@
 mod audio;
+mod device;
 mod graph_playback;
 mod native_editor;
 mod playback;
@@ -49,6 +50,8 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub network_state: oxidal_device::NetworkState,
+    pub network_command: oxidal_device::Command,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
     pub graph_audio_state: oxidal_lv2::protocol::GraphAudioState,
     pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
@@ -67,6 +70,7 @@ pub struct Contract {
 /// @see docs/architecture.md
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub device_socket: Option<PathBuf>,
     pub simulator: bool,
     pub native_worker: Option<PathBuf>,
     pub audio_worker: Option<PathBuf>,
@@ -167,6 +171,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
         .route(
             "/graph-audio",

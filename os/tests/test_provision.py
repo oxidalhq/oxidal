@@ -55,7 +55,7 @@ class ApplianceTests(ProvisionTests):
         elf = bytearray(32)
         elf[:6] = b'\x7fELF\x02\x01'
         elf[18:20] = (183).to_bytes(2, 'little')
-        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
+        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
             file = self.bundle / name
             file.parent.mkdir(exist_ok=True)
             file.write_bytes(bytes(elf) if name != 'ui/index.html' else b'<html>fixture</html>')
@@ -69,6 +69,10 @@ class ApplianceTests(ProvisionTests):
         provision.provision(self.root, True, self.bundle)
         self.assertEqual((self.root / 'opt/oxidal/bin/oxidald').stat().st_mode & 0o777, 0o755)
         self.assertEqual(provision.provision(self.root, True, self.bundle)['changes'], [])
+        helper = (self.root / 'etc/systemd/system/oxidal-device.service').read_text()
+        self.assertIn('RestrictAddressFamilies=AF_UNIX', helper)
+        self.assertIn('NoNewPrivileges=yes', helper)
+        self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         (self.bundle / 'bin/oxidald').write_bytes(b'corrupted')
         with self.assertRaisesRegex(ValueError, 'checksum'):
             provision.provision(self.root, True, self.bundle)

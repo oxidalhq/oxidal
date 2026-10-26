@@ -200,3 +200,28 @@ export async function playbackCommand(
     throw new Error('Incompatible playback state');
   return body;
 }
+
+export type NetworkState = Contract['network_state'];
+export type NetworkCommand = Contract['network_command'];
+const networkValidator = ajv.compile<NetworkState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/NetworkState',
+});
+export async function deviceNetwork(
+  command?: NetworkCommand,
+): Promise<NetworkState> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/device/network',
+      command
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(command),
+          }
+        : { cache: 'no-store' },
+    ),
+  );
+  if (!networkValidator(body)) throw new Error('Incompatible network response');
+  return body;
+}

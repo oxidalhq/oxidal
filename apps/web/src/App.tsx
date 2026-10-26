@@ -9,6 +9,7 @@ import {
 import { Button } from './components/ui/button';
 import { SignalChain } from './SignalChain';
 import { Library } from './Library';
+import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
 import {
@@ -546,6 +547,7 @@ export default function App() {
                   </div>
                 </dl>
               </section>
+              <NetworkSettings connected={connected} />
               <AudioSettings connected={connected} />
               <section className="panel">
                 <h2>MIDI mapping</h2>

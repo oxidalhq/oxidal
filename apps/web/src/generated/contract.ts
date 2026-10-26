@@ -133,6 +133,37 @@ export type EditorAction =
       kind: "save";
       name: string;
     };
+export type Command2 =
+  | {
+      type: "status";
+    }
+  | {
+      type: "scan";
+    }
+  | {
+      interface: string;
+      password: string;
+      ssid: string;
+      type: "join";
+    }
+  | {
+      interface: string;
+      password: string;
+      ssid: string;
+      type: "hotspot";
+    }
+  | {
+      transaction: string;
+      type: "confirm";
+    }
+  | {
+      transaction: string;
+      type: "cancel";
+    }
+  | {
+      type: "forget";
+      uuid: string;
+    };
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -152,6 +183,8 @@ export interface Contract {
   library: Library;
   native_command: EditorCommand;
   native_editor: EditorSnapshot;
+  network_command: Command2;
+  network_state: NetworkState;
   preset: Inspection;
   rig: Rig;
   snapshot: Snapshot;
@@ -463,6 +496,38 @@ export interface Parameter2 {
   normalized: number;
   tone: boolean;
   value: number;
+}
+export interface NetworkState {
+  available: boolean;
+  interfaces: Interface[];
+  message: string;
+  networks: AccessPoint[];
+  pending?: Pending | null;
+  saved: SavedNetwork[];
+  wireless_enabled: boolean;
+}
+export interface Interface {
+  connection: string;
+  kind: string;
+  name: string;
+  state: string;
+}
+export interface AccessPoint {
+  active: boolean;
+  security: string;
+  signal: number;
+  ssid: string;
+}
+export interface Pending {
+  phase: string;
+  seconds_remaining: number;
+  transaction: string;
+}
+export interface SavedNetwork {
+  active: boolean;
+  managed: boolean;
+  name: string;
+  uuid: string;
 }
 export interface Validation {
   errors: string[];

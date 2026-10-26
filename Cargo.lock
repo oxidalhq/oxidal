@@ -579,6 +579,7 @@ dependencies = [
  "axum",
  "oxidal-audio",
  "oxidal-control",
+ "oxidal-device",
  "oxidal-graph",
  "oxidal-lv2",
  "oxidal-presets",
@@ -607,6 +608,17 @@ dependencies = [
  "oxidal-graph",
  "schemars",
  "serde",
+]
+
+[[package]]
+name = "oxidal-device"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
 ]
 
 [[package]]

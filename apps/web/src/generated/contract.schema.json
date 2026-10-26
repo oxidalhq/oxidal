@@ -43,6 +43,12 @@
     "native_editor": {
       "$ref": "#/$defs/EditorSnapshot"
     },
+    "network_command": {
+      "$ref": "#/$defs/Command2"
+    },
+    "network_state": {
+      "$ref": "#/$defs/NetworkState"
+    },
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
@@ -62,6 +68,8 @@
     "rig",
     "validation",
     "capabilities",
+    "network_state",
+    "network_command",
     "audio_state",
     "graph_audio_state",
     "graph_audio_command",
@@ -76,6 +84,33 @@
     "native_command"
   ],
   "$defs": {
+    "AccessPoint": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "security": {
+          "type": "string"
+        },
+        "signal": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "ssid": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "ssid",
+        "signal",
+        "security",
+        "active"
+      ]
+    },
     "Action": {
       "description": "One command entry point; relative edits are applied to current authoritative state.\n@see docs/architecture.md",
       "oneOf": [
@@ -633,6 +668,137 @@
         "protocol",
         "request_id",
         "action"
+      ]
+    },
+    "Command2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "status"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "scan"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interface": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "ssid": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "join"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "interface",
+            "ssid",
+            "password"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "interface": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "ssid": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "hotspot"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "interface",
+            "ssid",
+            "password"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "transaction": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "confirm"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "transaction"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "transaction": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "cancel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "transaction"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "forget"
+            },
+            "uuid": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "uuid"
+          ]
+        }
       ]
     },
     "Direction": {
@@ -1274,6 +1440,30 @@
         "playback_available"
       ]
     },
+    "Interface": {
+      "type": "object",
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "kind",
+        "state",
+        "connection"
+      ]
+    },
     "Library": {
       "type": "object",
       "properties": {
@@ -1474,6 +1664,57 @@
         "value"
       ]
     },
+    "NetworkState": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Interface"
+          }
+        },
+        "message": {
+          "type": "string"
+        },
+        "networks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AccessPoint"
+          }
+        },
+        "pending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pending"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "saved": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavedNetwork"
+          }
+        },
+        "wireless_enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "wireless_enabled",
+        "interfaces",
+        "networks",
+        "saved",
+        "message"
+      ]
+    },
     "Node": {
       "description": "Stable block identity and a declared PoC block kind.\n@see docs/architecture.md",
       "type": "object",
@@ -1620,6 +1861,28 @@
         "machine_default"
       ]
     },
+    "Pending": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string"
+        },
+        "seconds_remaining": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "transaction": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transaction",
+        "seconds_remaining",
+        "phase"
+      ]
+    },
     "Rig": {
       "description": "Persisted routing data, independent of UI layout and audio resources.\n@see docs/architecture.md",
       "type": "object",
@@ -1651,6 +1914,30 @@
         "s24_packed",
         "s32",
         "float"
+      ]
+    },
+    "SavedNetwork": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "managed": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uuid",
+        "name",
+        "active",
+        "managed"
       ]
     },
     "Snapshot": {

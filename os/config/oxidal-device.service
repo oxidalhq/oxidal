@@ -1,0 +1,26 @@
+[Unit]
+Description=Oxidal device administration
+After=NetworkManager.service
+Requires=NetworkManager.service
+
+[Service]
+User=root
+Group=oxidal-control
+RuntimeDirectory=oxidal-device
+RuntimeDirectoryMode=0750
+StateDirectory=oxidal-device
+StateDirectoryMode=0700
+ExecStart=/opt/oxidal/bin/oxidal-device-service
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/NetworkManager/system-connections
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

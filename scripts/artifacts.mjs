@@ -87,6 +87,7 @@ mkdirSync(staging, { recursive: true });
 const binaries = appliance
   ? [
       'oxidald',
+      'oxidal-device-service',
       'oxidal-native-worker',
       'oxidal-audio-worker',
       'oxidal-graph-worker',

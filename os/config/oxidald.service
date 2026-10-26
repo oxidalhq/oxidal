@@ -6,12 +6,13 @@ ConditionFileIsExecutable=/opt/oxidal/bin/oxidald
 [Service]
 Type=simple
 DynamicUser=yes
-SupplementaryGroups=audio
+SupplementaryGroups=audio oxidal-control
 StateDirectory=oxidal
 WorkingDirectory=/var/lib/oxidal
 ExecStart=/opt/oxidal/bin/oxidald
 Environment=OXIDAL_ADDR=127.0.0.1:3210
 Environment=OXIDAL_SIMULATOR=0
+Environment=OXIDAL_DEVICE_SOCKET=/run/oxidal-device/control.sock
 Environment=OXIDAL_MAPPING_PATH=/var/lib/oxidal/mappings.json
 Environment=OXIDAL_PRESET_DIR=/var/lib/oxidal/presets
 Environment=OXIDAL_UI_DIR=/opt/oxidal/ui

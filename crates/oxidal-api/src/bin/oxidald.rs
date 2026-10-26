@@ -10,6 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()?;
     let (stop, shutdown) = tokio::sync::watch::channel(false);
     let config = Config {
+        device_socket: std::env::var_os("OXIDAL_DEVICE_SOCKET").map(PathBuf::from),
         shutdown: Some(shutdown),
         graph_worker: std::env::var_os("OXIDAL_GRAPH_WORKER").map(PathBuf::from),
         audio_worker: std::env::var_os("OXIDAL_AUDIO_WORKER").map(PathBuf::from),

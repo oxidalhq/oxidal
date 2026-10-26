@@ -17,6 +17,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let config = Config {
+        device_socket: None,
         graph_worker: None,
         audio_worker: Some(audio_worker.into()),
         native_worker: Some(native_worker.into()),
@@ -193,6 +194,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     stopped.wait().await.unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
+        device_socket: None,
         shutdown: Some(signal),
         ..config.clone()
     })
@@ -226,6 +228,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     std::fs::write(root.join("presets/boot-audio.json"), b"invalid").unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
+        device_socket: None,
         shutdown: Some(signal),
         ..config
     })

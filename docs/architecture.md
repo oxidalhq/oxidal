@@ -64,3 +64,7 @@ The optional Linux ALSA backend adds hardware discovery and exact non-streaming 
 ## Experimental graph playback API
 
 `GET/POST /api/v1/graph-audio` controls the optional isolated LV2 worker. Its lifecycle session/revision is separate from the worker's shared-control snapshot; native values and processed frame counts come from the worker. The saved-preset player, graph player and hardware probes share one device permit, held until reaping. The browser `/state` and `/commands` remain the simulator; they do not silently retarget an audible graph. See [LV2 hosting](lv2.md) for commands, restart defaults, isolation limits and the repeatable Linux HTTP/PCM test gate.
+
+## Device administration
+
+The optional `oxidal-device` crate owns bounded Unix IPC and recoverable NetworkManager operations, separated from the unprivileged HTTP/audio service. See [device service](device-service.md) for the implemented network workflow, privilege boundary, tests and remaining v1 requirements.
