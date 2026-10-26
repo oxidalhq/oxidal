@@ -18,6 +18,7 @@ def get(path):
     with urllib.request.urlopen('http://127.0.0.1:3210' + path, timeout=3) as reply:
         return json.loads(reply.read())
 
+qualified = False
 try:
     for attempt in range(150):
         try:
@@ -164,6 +165,12 @@ try:
             time.sleep(.2)
     else:
         raise AssertionError('Service restart failed')
+    # Shutdown must travel through the real daemon/helper instead of the probe
+    # directly powering off a successful VM. A stalled shutdown fails host timeout.
+    request = urllib.request.Request('http://127.0.0.1:3210/api/v1/device/network', data=json.dumps({'type':'power','action':'shutdown'}).encode(), headers={'Content-Type':'application/json'}, method='POST')
+    with urllib.request.urlopen(request, timeout=8) as reply:
+        assert reply.status == 200
+    qualified = True
     print('OXIDAL_BOOT_QUALIFIED', flush=True)
 except Exception:
     import traceback
@@ -171,7 +178,8 @@ except Exception:
     subprocess.run(['journalctl', '-b', '-u', 'oxidald', '-u', 'nginx', '-u', 'oxidal-debug', '-u', 'oxidal-device', '--no-pager', '-n', '60'])
     print('OXIDAL_BOOT_FAILED', flush=True)
 finally:
-    subprocess.run(['systemctl', 'poweroff'])
+    if not qualified:
+        subprocess.run(['systemctl', 'poweroff'])
 '''
 
 
@@ -212,4 +220,5 @@ class BootTests(unittest.TestCase):
             (evidence / 'qemu-boot.log').write_text(text)
             self.assertTrue('OXIDAL_BOOT_QUALIFIED' in text, text[max(0, text.find('Traceback')):][:6000] if 'Traceback' in text else text[-6000:])
             self.assertNotIn('OXIDAL_BOOT_FAILED', text)
-            (evidence / 'qemu-boot.json').write_text(json.dumps({'systemd_boot': 'passed', 'hardware_qualified': False, 'image_modified': False, 'kernel': kernel.name}) + '\n')
+            self.assertEqual(process.returncode, 0, 'Helper shutdown must end QEMU cleanly')
+            (evidence / 'qemu-boot.json').write_text(json.dumps({'systemd_boot': 'passed', 'helper_shutdown': 'passed', 'hardware_qualified': False, 'image_modified': False, 'kernel': kernel.name}) + '\n')
