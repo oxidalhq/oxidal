@@ -469,6 +469,20 @@ test('playback lifecycle keeps native authoring available after stop and restart
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audio = page.getByRole('region', { name: 'Playback controls' });
   await expect(audio.getByRole('status')).toContainText('Audio: running');
+  await audio.getByRole('button', { name: 'Use this session on boot' }).click();
+  await expect(
+    audio.getByRole('button', { name: 'Disable boot playback' }),
+  ).toBeVisible();
+  expect(
+    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+  ).toBe(true);
+  await audio.getByRole('button', { name: 'Disable boot playback' }).click();
+  await expect(
+    audio.getByRole('button', { name: 'Use this session on boot' }),
+  ).toBeVisible();
+  expect(
+    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+  ).toBe(false);
   await audio.getByRole('button', { name: 'Stop audio', exact: true }).click();
   await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
   await expect(page.getByText('Device connected')).toBeVisible();

@@ -10,6 +10,10 @@ export type AudioAction =
     }
   | {
       kind: "restart";
+    }
+  | {
+      enabled: boolean;
+      kind: "set_boot";
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -229,6 +233,10 @@ export interface AudioState {
   phase: AudioPhase;
   revision: number;
   session: string;
+  /**
+   * Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
+   */
+  start_on_boot: boolean;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.

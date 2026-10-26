@@ -1,5 +1,5 @@
 //! Real HTTP/process regression. Native qualification uses ALSA null, never a physical output.
-use oxidal_api::{Config, router};
+use oxidal_api::{Config, router_with_shutdown};
 use serde_json::{Value, json};
 
 #[tokio::test]
@@ -16,7 +16,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .import(&bytes)
         .unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
-    let app = router(Config {
+    let config = Config {
         graph_worker: None,
         audio_worker: Some(audio_worker.into()),
         native_worker: Some(native_worker.into()),
@@ -25,8 +25,8 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         mapping_path: root.join("mappings.json"),
         preset_dir: root.join("presets"),
         ui_dir: root.join("ui"),
-    })
-    .unwrap();
+    };
+    let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
@@ -167,6 +167,21 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .is_success()
     );
     state = get(&client, &url, "audio").await;
+    assert!(!state["start_on_boot"].as_bool().unwrap());
+    assert!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_boot","enabled":true})
+        )
+        .await
+        .status()
+        .is_success()
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["start_on_boot"], true);
+    assert!(root.join("presets/boot-audio.json").is_file());
     assert!(
         send(&client, &url, &state, json!({"kind":"stop"}))
             .await
@@ -175,7 +190,75 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     );
     shutdown.send_replace(true);
     task.abort();
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    stopped.wait().await.unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    state = wait_phase(&client, &url, "running").await;
+    assert_eq!(state["start_on_boot"], true);
+    assert_eq!(state["configured"], settings);
+    assert!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_boot","enabled":false})
+        )
+        .await
+        .status()
+        .is_success()
+    );
+    assert!(!root.join("presets/boot-audio.json").exists());
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "running"); // Preference changes do not interrupt the live worker.
+    shutdown.send_replace(true);
+    task.abort();
+    stopped.wait().await.unwrap();
+    // Corrupt persistence must leave the library/authoring reachable, without silently starting audio.
+    std::fs::write(root.join("presets/boot-audio.json"), b"invalid").unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    for _ in 0..100 {
+        state = get(&client, &url, "audio").await;
+        if state["phase"] == "failed" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(state["phase"], "failed");
+    assert_eq!(state["device_owned"], false);
+    assert!(get(&client, &url, "native").await["session"].is_string());
+    assert!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_boot","enabled":false})
+        )
+        .await
+        .status()
+        .is_success()
+    );
+    shutdown.send_replace(true);
+    task.abort();
+    stopped.wait().await.unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }
 async fn get(client: &reqwest::Client, url: &str, path: &str) -> Value {

@@ -29,8 +29,11 @@ impl Worker {
         }
         std::fs::create_dir_all(&config.preset_dir).map_err(|e| e.to_string())?;
         let root = std::fs::canonicalize(&config.preset_dir).map_err(|e| e.to_string())?;
+        let runtime = root.join("native-runtime");
+        std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(path)
             .env("OXIDAL_PRESET_DIR", root)
+            .env("OXIDAL_QUALIFICATION_DATA", runtime)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

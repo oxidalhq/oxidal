@@ -273,6 +273,23 @@
           "required": [
             "kind"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_boot"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
         }
       ]
     },
@@ -464,6 +481,10 @@
         },
         "session": {
           "type": "string"
+        },
+        "start_on_boot": {
+          "description": "Explicitly opt in to restoring this saved preset/device configuration after daemon startup.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -472,7 +493,8 @@
         "revision",
         "phase",
         "device_owned",
-        "experimental"
+        "experimental",
+        "start_on_boot"
       ]
     },
     "Binding": {

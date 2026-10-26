@@ -119,7 +119,7 @@ export function PlaybackSettings({
         <>
           <p className="muted">
             Experimental playback — physical audio and live performance are not
-            qualified yet. No automatic start or device fallback.
+            qualified yet. Boot playback is opt-in; there is no device fallback.
           </p>
           <div className="toolbar">
             <Button
@@ -156,6 +156,28 @@ export function PlaybackSettings({
               Resume saved session
             </Button>
           </div>
+          <Button
+            variant="outline"
+            disabled={
+              !connected ||
+              busy ||
+              transitioning ||
+              (!state?.start_on_boot && state?.phase !== 'running')
+            }
+            onClick={() =>
+              void command({ kind: 'set_boot', enabled: !state?.start_on_boot })
+            }
+          >
+            {state?.start_on_boot
+              ? 'Disable boot playback'
+              : 'Use this session on boot'}
+          </Button>
+          <p className="muted">
+            Boot playback restores the preset and device settings saved when
+            enabled. Later edits and session changes do not overwrite it.
+            Disable and enable again to replace it. Stop audio keeps this boot
+            preference.
+          </p>
           <p>
             To hand the interface to another application, stop audio and wait
             for “stopped”. Launch the application separately; close its audio

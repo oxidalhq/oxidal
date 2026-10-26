@@ -41,6 +41,8 @@ pub struct AudioState {
     /// Remains true until the worker is reaped, including failed shutdowns.
     pub device_owned: bool,
     pub experimental: bool,
+    /// Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
+    pub start_on_boot: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -48,6 +50,7 @@ pub enum AudioAction {
     Start { settings: StartAudio },
     Stop,
     Restart,
+    SetBoot { enabled: bool },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

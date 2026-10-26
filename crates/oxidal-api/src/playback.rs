@@ -34,6 +34,59 @@ struct Owner {
     state: AudioState,
     updates: watch::Sender<AudioState>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BootConfig {
+    schema: u32,
+    settings: StartAudio,
+}
+fn read_boot(path: &std::path::Path) -> Result<Option<StartAudio>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => {
+            if bytes.len() > 65536 {
+                return Err("Boot audio configuration exceeds 64 KiB".into());
+            }
+            let config: BootConfig = serde_json::from_slice(&bytes)
+                .map_err(|e| format!("Invalid boot audio configuration: {e}"))?;
+            if config.schema != 1 {
+                return Err("Unsupported boot audio configuration".into());
+            }
+            config.settings.validate()?;
+            Ok(Some(config.settings))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Cannot read boot audio configuration: {e}")),
+    }
+}
+fn write_boot(path: &std::path::Path, settings: Option<StartAudio>) -> Result<(), String> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .ok_or("Boot audio configuration has no directory")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    if let Some(settings) = settings {
+        let temporary = path.with_extension("tmp");
+        let bytes = serde_json::to_vec(&BootConfig {
+            schema: 1,
+            settings,
+        })
+        .map_err(|e| e.to_string())?;
+        let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
+        file.write_all(&bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(|e| e.to_string())?;
+        std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+    } else {
+        match std::fs::remove_file(path) {
+            Ok(()) => (),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    std::fs::File::open(parent)
+        .and_then(|f| f.sync_all())
+        .map_err(|e| e.to_string())
+}
 impl Owner {
     fn publish(&mut self, phase: AudioPhase, error: Option<String>) {
         self.state.revision += 1;
@@ -169,6 +222,20 @@ impl Owner {
                     Err(e) => Err(e),
                 }
             }
+            AudioAction::SetBoot { enabled } => {
+                let settings = if enabled {
+                    if self.state.phase != AudioPhase::Running {
+                        return Err("Start and verify audio before enabling boot playback".into());
+                    }
+                    self.state.configured.clone()
+                } else {
+                    None
+                };
+                write_boot(&self.preset_dir.join("boot-audio.json"), settings)?;
+                self.state.start_on_boot = enabled;
+                self.publish(self.state.phase, self.state.error.clone());
+                Ok(())
+            }
             AudioAction::Restart => {
                 let settings = self
                     .state
@@ -216,6 +283,7 @@ impl Playback {
         {
             return Err("Audio worker must be a configured absolute executable".into());
         }
+        let boot = read_boot(&config.preset_dir.join("boot-audio.json"));
         let initial = AudioState {
             session: format!(
                 "audio-{}-{}",
@@ -235,6 +303,7 @@ impl Playback {
             error: None,
             device_owned: false,
             experimental: true,
+            start_on_boot: matches!(boot, Ok(Some(_))),
         };
         let (updates, state) = watch::channel(initial.clone());
         let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
@@ -248,6 +317,15 @@ impl Playback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         tokio::spawn(async move {
+            match boot {
+                Ok(Some(settings)) if owner.executable.is_some() => {
+                    if let Err(error) = owner.start(settings).await {
+                        owner.publish(AudioPhase::Failed, Some(error));
+                    }
+                }
+                Err(error) => owner.publish(AudioPhase::Failed, Some(error)),
+                _ => (),
+            }
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             loop {
                 tokio::select! {
