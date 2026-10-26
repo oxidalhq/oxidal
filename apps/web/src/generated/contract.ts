@@ -191,6 +191,7 @@ export interface Contract {
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
   library: Library;
+  monitoring: Monitoring;
   native_command: EditorCommand;
   native_editor: EditorSnapshot;
   network_command: Command2;
@@ -375,6 +376,7 @@ export interface GraphAudioState {
   processed_frames: number;
   revision: number;
   session: string;
+  telemetry?: Snapshot2 | null;
 }
 /**
  * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.
@@ -437,6 +439,32 @@ export interface NativeValue {
   target: string;
   value: number;
 }
+export interface Snapshot2 {
+  deadline_us: number;
+  frames: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  input: [Channel, Channel];
+  invalid_samples: number;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  output: [Channel, Channel];
+  process_us_max: number;
+  process_us_p50: number;
+  process_us_p95: number;
+}
+export interface Channel {
+  /**
+   * Samples at or above full scale, cumulative for this worker lifetime.
+   */
+  clips: number;
+  peak_dbfs: number;
+  rms_dbfs: number;
+}
 export interface Library {
   presets: Inspection[];
 }
@@ -453,6 +481,28 @@ export interface Inspection {
   sha256: string;
   size_bytes: number;
   source_id?: string | null;
+}
+export interface Monitoring {
+  audio?: Snapshot2 | null;
+  audio_age_ms?: number | null;
+  audio_phase: string;
+  error?: string | null;
+  graph_phase: string;
+  host: Host;
+  sequence: number;
+  source?: string | null;
+  stream?: StreamConfig | null;
+  /**
+   * Transport currently fails closed on xruns; a cumulative recovery counter is not available.
+   */
+  xruns?: number | null;
+}
+export interface Host {
+  cpu_percent?: number | null;
+  memory_total_bytes?: number | null;
+  memory_used_bytes?: number | null;
+  temperature_c?: number | null;
+  temperature_sensor?: string | null;
 }
 export interface EditorCommand {
   action: EditorAction;

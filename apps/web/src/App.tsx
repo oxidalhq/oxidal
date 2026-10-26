@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   ArrowsSplit,
   CheckCircle,
@@ -9,6 +16,9 @@ import {
 import { Button } from './components/ui/button';
 import { SignalChain } from './SignalChain';
 import { Library } from './Library';
+const Monitoring = lazy(() =>
+  import('./Monitoring').then((m) => ({ default: m.Monitoring })),
+);
 import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
@@ -28,7 +38,9 @@ export default function App() {
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
-  const [view, setView] = useState<'rig' | 'settings' | 'library'>('rig');
+  const [view, setView] = useState<'rig' | 'settings' | 'library' | 'monitor'>(
+    'rig',
+  );
   const [displayMode, setDisplayMode] = useState(() => {
     try {
       const saved = localStorage.getItem('oxidal.display');
@@ -263,6 +275,9 @@ export default function App() {
           </select>
         </label>
         <nav aria-label="Instrument navigation">
+          <Button variant="outline" onClick={() => setView('monitor')}>
+            Monitor
+          </Button>
           <Button variant="outline" onClick={() => setView('library')}>
             Library
           </Button>
@@ -282,9 +297,11 @@ export default function App() {
               <span className="eyebrow">
                 {view === 'rig'
                   ? 'Control preview'
-                  : view === 'library'
-                    ? 'Library'
-                    : 'Settings'}
+                  : view === 'monitor'
+                    ? 'Monitor'
+                    : view === 'library'
+                      ? 'Library'
+                      : 'Settings'}
               </span>
               <h1 data-testid="active-preset">
                 {view === 'rig'
@@ -295,9 +312,11 @@ export default function App() {
                       : state.preset === 'parallel'
                         ? 'Parallel rig'
                         : 'Serial rig'
-                  : view === 'library'
-                    ? 'Preset library'
-                    : 'Controls & MIDI'}
+                  : view === 'monitor'
+                    ? 'Signal & system'
+                    : view === 'library'
+                      ? 'Preset library'
+                      : 'Controls & MIDI'}
               </h1>
             </div>
             {state && view === 'rig' && (
@@ -363,6 +382,10 @@ export default function App() {
           )}
           {!state ? (
             <p className="empty">Waiting for the local Rust service…</p>
+          ) : view === 'monitor' ? (
+            <Suspense fallback={<p>Loading monitor…</p>}>
+              <Monitoring displayMode={displayMode} />
+            </Suspense>
           ) : view === 'library' ? (
             <Library connected={connected} />
           ) : view === 'rig' ? (

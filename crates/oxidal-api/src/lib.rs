@@ -1,6 +1,7 @@
 mod audio;
 mod device;
 mod graph_playback;
+mod monitor;
 mod native_editor;
 mod playback;
 mod presets;
@@ -50,6 +51,7 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub monitoring: monitor::Monitoring,
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
@@ -83,6 +85,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    monitor: watch::Receiver<monitor::Monitoring>,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
     control: Mutex<Control>,
@@ -140,7 +143,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let (events, _) = watch::channel(control.snapshot());
     let ui = ServeDir::new(&config.ui_dir)
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
+    let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
     let shared = Arc::new(Shared {
+        monitor,
         playback: playback::Playback::new(&config)?,
         graph_playback: graph_playback::GraphPlayback::new(&config)?,
         control: Mutex::new(control),
@@ -151,6 +156,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         events,
         config,
     });
+    monitor::start(Arc::downgrade(&shared), monitor_updates);
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -171,6 +177,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route("/monitor", get(monitor::state))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
         .route(

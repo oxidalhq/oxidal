@@ -76,6 +76,7 @@ pub struct NativeValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkerReply {
+    pub telemetry: oxidal_audio::meter::Snapshot,
     pub control: Snapshot,
     pub native_values: Vec<NativeValue>,
     pub processed_frames: u64,
@@ -84,6 +85,7 @@ pub struct WorkerReply {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GraphAudioState {
+    pub telemetry: Option<oxidal_audio::meter::Snapshot>,
     pub session: String,
     pub revision: u64,
     pub phase: AudioPhase,

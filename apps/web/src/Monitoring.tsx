@@ -1,0 +1,365 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { monitoring, type Monitoring as Readings } from './api';
+import { Button } from './components/ui/button';
+import { ChartContainer } from './components/ui/chart';
+type Point = {
+  time: string;
+  left: number | null;
+  right: number | null;
+  deadline: number | null;
+  cpu: number | null;
+};
+const colour = {
+  left: { label: 'Left', color: 'var(--control-accent)' },
+  right: { label: 'Right', color: 'var(--chart-secondary)' },
+};
+const tooltipStyle = {
+  background: 'var(--popover)',
+  color: 'var(--popover-foreground)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+};
+const number = (value: number | null | undefined, suffix = '') =>
+  value == null ? 'Unavailable' : `${value.toFixed(1)}${suffix}`;
+function Meter({
+  label,
+  channel,
+  clips,
+  stale,
+}: {
+  label: string;
+  channel: NonNullable<Readings['audio']>['input'][number] | undefined;
+  clips: number;
+  stale: boolean;
+}) {
+  const level =
+    channel && !stale
+      ? Math.max(0, Math.min(100, ((channel.peak_dbfs + 60) / 60) * 100))
+      : 0;
+  return (
+    <div className="grid min-w-0 gap-1 rounded-md border border-border p-3">
+      <div className="flex justify-between gap-2 text-sm">
+        <strong>{label}</strong>
+        <span
+          className={clips > 0 ? 'text-destructive' : 'text-muted-foreground'}
+        >
+          {clips > 0
+            ? `CLIP · ${clips}`
+            : stale
+              ? 'No live reading'
+              : 'No clips'}
+        </span>
+      </div>
+      <div
+        role="meter"
+        aria-label={`${label} peak`}
+        aria-valuemin={-60}
+        aria-valuemax={0}
+        aria-valuenow={
+          channel && !stale
+            ? Math.max(-60, Math.min(0, channel.peak_dbfs))
+            : undefined
+        }
+        aria-valuetext={
+          stale ? 'No live reading' : number(channel?.peak_dbfs, ' dBFS')
+        }
+        className="h-4 overflow-hidden rounded-sm bg-muted"
+      >
+        <div
+          className="h-full"
+          style={{
+            width: `${level}%`,
+            background:
+              clips > 0 ? 'var(--destructive)' : 'var(--control-accent)',
+          }}
+        />
+      </div>
+      <div className="flex flex-wrap justify-between gap-2 font-mono text-xs">
+        <span>Peak {stale ? '—' : number(channel?.peak_dbfs, ' dBFS')}</span>
+        <span>RMS {stale ? '—' : number(channel?.rms_dbfs, ' dBFS')}</span>
+      </div>
+    </div>
+  );
+}
+export function Monitoring({ displayMode }: { displayMode: string }) {
+  const [state, setState] = useState<Readings | null>(null);
+  const [history, setHistory] = useState<Point[]>([]);
+  const [error, setError] = useState('');
+  const [frozen, setFrozen] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [baseline, setBaseline] = useState([0, 0, 0, 0]);
+  const latest = useRef(0);
+  const lastAudio = useRef<{
+    source: string | null | undefined;
+    frames: number;
+  } | null>(null);
+  useEffect(() => {
+    if (frozen) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const abort = new AbortController();
+    async function poll() {
+      try {
+        const next = await monitoring(abort.signal);
+        if (!active) return;
+        setState(next);
+        setError('');
+        if (next.audio) {
+          if (
+            lastAudio.current &&
+            (lastAudio.current.source !== next.source ||
+              next.audio.frames < lastAudio.current.frames)
+          )
+            setBaseline([0, 0, 0, 0]);
+          lastAudio.current = {
+            source: next.source,
+            frames: next.audio.frames,
+          };
+        }
+        if (next.sequence !== latest.current) {
+          latest.current = next.sequence;
+          const valid =
+            next.audio && next.audio_age_ms != null && next.audio_age_ms < 3000;
+          setHistory((h) => [
+            ...h.slice(-119),
+            {
+              time: new Date().toLocaleTimeString(),
+              left: valid ? next.audio!.output[0].peak_dbfs : null,
+              right: valid ? next.audio!.output[1].peak_dbfs : null,
+              deadline:
+                valid && next.audio!.deadline_us > 0
+                  ? (100 * next.audio!.process_us_p95) / next.audio!.deadline_us
+                  : null,
+              cpu: next.host.cpu_percent ?? null,
+            },
+          ]);
+        }
+      } catch {
+        if (active) setError('Disconnected · readings are stale');
+      } finally {
+        if (active)
+          timer = setTimeout(
+            () => void poll(),
+            slow || displayMode === 'epaper' ? 5000 : 1000,
+          );
+      }
+    }
+    void poll();
+    return () => {
+      active = false;
+      abort.abort();
+      clearTimeout(timer);
+    };
+  }, [frozen, slow, displayMode]);
+  const stale =
+    !!error ||
+    !state?.audio ||
+    state.audio_age_ms == null ||
+    state.audio_age_ms >= 3000;
+  const channels = [
+    ...(state?.audio?.input ?? []),
+    ...(state?.audio?.output ?? []),
+  ];
+  const stream = state?.stream;
+  return (
+    <section
+      className="panel grid gap-4"
+      aria-label="Audio and system monitoring"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p role="status" className="text-sm">
+          {frozen
+            ? 'Frozen readings'
+            : error ||
+              (state?.source
+                ? `${state.source} · ${stale ? 'waiting for live readings' : 'live'}`
+                : 'No audio worker running')}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            aria-pressed={frozen}
+            onClick={() => setFrozen((v) => !v)}
+          >
+            {frozen ? 'Resume readings' : 'Freeze readings'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setBaseline(channels.map((c) => c.clips));
+              setHistory([]);
+            }}
+          >
+            Reset view
+          </Button>
+          <Button
+            variant="outline"
+            aria-pressed={slow || displayMode === 'epaper'}
+            disabled={displayMode === 'epaper'}
+            onClick={() => setSlow((v) => !v)}
+          >
+            Slow refresh
+          </Button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {['Input L', 'Input R', 'Output L', 'Output R'].map((label, i) => (
+          <Meter
+            key={label}
+            label={label}
+            channel={channels[i]}
+            clips={Math.max(0, (channels[i]?.clips ?? 0) - (baseline[i] ?? 0))}
+            stale={stale}
+          />
+        ))}
+      </div>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <ChartContainer label="Output peak · dBFS" config={colour}>
+          <LineChart
+            accessibilityLayer
+            data={history}
+            margin={{ left: 0, right: 5 }}
+          >
+            <CartesianGrid vertical={false} stroke="var(--border)" />
+            <XAxis dataKey="time" hide />
+            <YAxis
+              width={38}
+              domain={[-60, 0]}
+              ticks={[-60, -30, 0]}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+            />
+            <ReferenceLine y={0} stroke="var(--destructive)" />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line
+              name="Left dBFS"
+              type="linear"
+              dataKey="left"
+              stroke="var(--color-left)"
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              name="Right dBFS"
+              type="linear"
+              dataKey="right"
+              stroke="var(--color-right)"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartContainer>
+        <ChartContainer
+          label="Processing budget · %"
+          config={{
+            deadline: { label: 'DSP p95', color: 'var(--control-accent)' },
+            cpu: { label: 'System CPU', color: 'var(--chart-secondary)' },
+          }}
+        >
+          <AreaChart accessibilityLayer data={history}>
+            <CartesianGrid vertical={false} stroke="var(--border)" />
+            <XAxis dataKey="time" hide />
+            <YAxis
+              width={38}
+              domain={[0, 100]}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+            />
+            <ReferenceLine y={100} stroke="var(--destructive)" />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Area
+              name="DSP deadline %"
+              type="linear"
+              dataKey="deadline"
+              stroke="var(--color-deadline)"
+              fill="var(--color-deadline)"
+              fillOpacity={0.12}
+              isAnimationActive={false}
+            />
+            <Line
+              name="System CPU %"
+              type="linear"
+              dataKey="cpu"
+              stroke="var(--color-cpu)"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ChartContainer>
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+        <div>
+          <dt className="text-muted-foreground">Process p50 / p95 / max</dt>
+          <dd className="font-mono">
+            {stale
+              ? 'Unavailable'
+              : `${number(state?.audio?.process_us_p50)} / ${number(state?.audio?.process_us_p95)} / ${number(state?.audio?.process_us_max)} µs`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Sample rate / period</dt>
+          <dd>
+            {stream
+              ? `${stream.input.sample_rate} Hz / ${stream.input.period_frames} frames`
+              : 'Unavailable'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Capture / playback buffer</dt>
+          <dd>
+            {stream
+              ? `${stream.input.period_frames * stream.input.periods} / ${stream.output.period_frames * stream.output.periods} frames`
+              : 'Unavailable'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">System CPU</dt>
+          <dd>{number(state?.host.cpu_percent, '%')}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">CPU temperature</dt>
+          <dd>{number(state?.host.temperature_c, ' °C')}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Memory used</dt>
+          <dd>
+            {state?.host.memory_used_bytes != null
+              ? `${Math.round(state.host.memory_used_bytes / 1048576)} / ${Math.round((state.host.memory_total_bytes ?? 0) / 1048576)} MiB`
+              : 'Unavailable'}
+          </dd>
+        </div>
+      </dl>
+      <p className="caption break-words">
+        Saved preset worker: {state?.audio_phase || 'reading'} · Graph worker:{' '}
+        {state?.graph_phase || 'reading'}
+        {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
+      </p>
+      {state?.error && (
+        <p role="alert" className="error">
+          {state.error}
+        </p>
+      )}
+      <details>
+        <summary>About these measurements</summary>
+        <p className="caption">
+          Levels measure the mapped DSP input/output, before physical output
+          mixing. −120 dBFS is the display floor. Clip counts are full-scale
+          samples; Reset view clears only this browser’s history and clip hold.
+          ALSA accepts these settings exactly or refuses to start. Processing
+          statistics cover the latest 128 blocks and exclude device I/O. Buffer
+          sizes are not a round-trip latency measurement. Xrun counters and
+          throttling flags are not available yet.
+        </p>
+      </details>
+    </section>
+  );
+}

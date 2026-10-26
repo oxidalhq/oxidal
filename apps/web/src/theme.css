@@ -166,3 +166,14 @@
   --touch-target: 3rem;
   --readout-size: 2rem;
 }
+
+/* Monitoring colour remains legible in stage and monochrome modes. */
+:root {
+  --chart-secondary: #26704c;
+}
+:root[data-display='stage'] {
+  --chart-secondary: #66d9ab;
+}
+:root[data-display='epaper'] {
+  --chart-secondary: #222222;
+}

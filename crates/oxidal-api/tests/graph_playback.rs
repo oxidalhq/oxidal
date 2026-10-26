@@ -107,6 +107,8 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     s = wait(&c, &url, "running").await;
     assert_eq!(s["device_owned"], true);
     assert!(s["processed_frames"].as_u64().unwrap() > 0);
+    assert!(s["telemetry"]["frames"].as_u64().unwrap() > 0);
+    assert!(s["telemetry"]["deadline_us"].as_f64().unwrap() > 0.0);
     let session = s["control"]["session"].clone();
     let action = control(&s, json!({"type":"set","target":"amp.gain","value":0.25}));
     apply(&c, &url, &mut s, action.clone()).await;

@@ -61,6 +61,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(not(feature = "audio-qualification"))]
         Duplex::open(settings.stream.clone())?
     };
+    let (meter_send, meter_recv) =
+        std::sync::mpsc::sync_channel::<oxidal_audio::meter::Snapshot>(1);
+    // A bounded writer isolates JSON/pipe backpressure from processing. Overflow drops
+    // intermediate views; cumulative clipping counts survive the next delivered snapshot.
+    std::thread::spawn(move || {
+        while let Ok(snapshot) = meter_recv.recv() {
+            let mut output = std::io::stdout().lock();
+            let Ok(mut bytes) = serde_json::to_vec(&snapshot) else {
+                break;
+            };
+            bytes.push(b'\n');
+            if output
+                .write_all(&bytes)
+                .and_then(|()| output.flush())
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
+    let mut last_meter = Instant::now();
     let mut blocks = 0;
     let mut last_block = Instant::now();
     while !stop.load(Ordering::Acquire) {
@@ -72,6 +93,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{{\"running\":true}}");
                     std::io::stdout().flush()?;
                 }
+            }
+            if blocks >= settings.stream.output.periods - 1
+                && last_meter.elapsed() >= Duration::from_millis(200)
+            {
+                let _ = meter_send.try_send(stream.telemetry());
+                last_meter = Instant::now();
             }
             // ALSA null has no clock; pace only that explicit software fixture.
             if null {

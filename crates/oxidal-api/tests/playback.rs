@@ -75,6 +75,22 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     pending.abort(); // Accepted command remains owned by the supervisor, not the disconnected HTTP task.
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["device_owned"], true);
+    let mut measured = false;
+    for _ in 0..30 {
+        let m = get(&client, &url, "monitor").await;
+        if m["audio"]["frames"].as_u64().is_some_and(|f| f > 0) {
+            assert_eq!(m["source"], "Saved preset");
+            assert!(m["audio"]["process_us_max"].as_f64().unwrap().is_finite());
+            assert!(m["audio_age_ms"].as_u64().unwrap() < 3000);
+            measured = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(
+        measured,
+        "Actual audio worker must deliver measurements to HTTP"
+    );
     assert_eq!(
         get(&client, &url, "native").await["session"],
         editor["session"]

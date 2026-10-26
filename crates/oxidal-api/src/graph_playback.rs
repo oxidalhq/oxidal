@@ -73,6 +73,7 @@ impl Owner {
         self.publish();
     }
     fn readback(&mut self, reply: WorkerReply) {
+        self.state.telemetry = Some(reply.telemetry);
         self.state.control = Some(reply.control);
         self.state.native_values = reply.native_values;
         self.state.processed_frames = reply.processed_frames;
@@ -141,6 +142,7 @@ impl Owner {
         self.state.control = None;
         self.state.native_values.clear();
         self.state.processed_frames = 0;
+        self.state.telemetry = None;
         self.phase(AudioPhase::Starting, None);
         let result = tokio::time::timeout(Duration::from_secs(15), async {
             let worker = self.worker.as_mut().unwrap();
@@ -249,6 +251,7 @@ impl GraphPlayback {
             return Err("Graph worker must be a configured absolute executable".into());
         }
         let initial = GraphAudioState {
+            telemetry: None,
             session: format!(
                 "graph-{}-{}",
                 std::process::id(),

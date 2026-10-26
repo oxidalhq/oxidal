@@ -20,12 +20,22 @@ pub(super) struct Playback {
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(AudioCommand, oneshot::Sender<Reply>)>,
     state: watch::Receiver<AudioState>,
+    meters: watch::Receiver<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
 #[derive(Debug)]
 struct Worker {
     child: Child,
     input: Option<ChildStdin>,
+    output: Option<BufReader<tokio::process::ChildStdout>>,
+    meter_reader: Option<tokio::task::JoinHandle<()>>,
     _permit: tokio::sync::SemaphorePermit<'static>,
+}
+impl Drop for Worker {
+    fn drop(&mut self) {
+        if let Some(reader) = self.meter_reader.take() {
+            reader.abort();
+        }
+    }
 }
 struct Owner {
     worker: Option<Worker>,
@@ -33,6 +43,7 @@ struct Owner {
     preset_dir: PathBuf,
     state: AudioState,
     updates: watch::Sender<AudioState>,
+    meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -91,6 +102,9 @@ impl Owner {
     fn publish(&mut self, phase: AudioPhase, error: Option<String>) {
         self.state.revision += 1;
         self.state.phase = phase;
+        if phase != AudioPhase::Running {
+            self.meters.send_replace(None);
+        }
         self.state.error = error;
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
@@ -146,6 +160,8 @@ impl Owner {
         self.worker = Some(Worker {
             child,
             input: Some(input),
+            output: Some(BufReader::new(output)),
+            meter_reader: None,
             _permit: permit,
         });
         self.state.configured = Some(settings.clone());
@@ -166,7 +182,12 @@ impl Owner {
                 .await
                 .map_err(|e| e.to_string())?;
             let mut response = vec![];
-            BufReader::new(output)
+            self.worker
+                .as_mut()
+                .unwrap()
+                .output
+                .as_mut()
+                .unwrap()
                 .take(1025)
                 .read_until(b'\n', &mut response)
                 .await
@@ -191,6 +212,25 @@ impl Owner {
             return Err(error);
         }
         self.publish(AudioPhase::Running, None);
+        let mut output = self.worker.as_mut().unwrap().output.take().unwrap();
+        let meters = self.meters.clone();
+        self.worker.as_mut().unwrap().meter_reader = Some(tokio::spawn(async move {
+            loop {
+                let mut bytes = Vec::new();
+                let read = (&mut output).take(8193).read_until(b'\n', &mut bytes).await;
+                if read.is_err() || bytes.len() > 8192 || bytes.last() != Some(&b'\n') {
+                    break;
+                }
+                let Ok(snapshot) = serde_json::from_slice::<oxidal_audio::meter::Snapshot>(&bytes)
+                else {
+                    break;
+                };
+                if !snapshot.valid() {
+                    break;
+                }
+                meters.send_replace(Some((snapshot, std::time::Instant::now())));
+            }
+        }));
         Ok(())
     }
     async fn command(&mut self, command: AudioCommand) -> Reply {
@@ -306,6 +346,7 @@ impl Playback {
             start_on_boot: matches!(boot, Ok(Some(_))),
         };
         let (updates, state) = watch::channel(initial.clone());
+        let (meters, meter_state) = watch::channel(None);
         let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
             worker: None,
@@ -313,6 +354,7 @@ impl Playback {
             preset_dir: config.preset_dir.clone(),
             state: initial,
             updates,
+            meters,
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
@@ -350,7 +392,11 @@ impl Playback {
             commands,
             state,
             finished,
+            meters: meter_state,
         })
+    }
+    pub fn telemetry(&self) -> Option<(oxidal_audio::meter::Snapshot, std::time::Instant)> {
+        *self.meters.borrow()
     }
     pub fn snapshot(&self) -> AudioState {
         self.state.borrow().clone()

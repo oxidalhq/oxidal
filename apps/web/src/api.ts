@@ -225,3 +225,21 @@ export async function deviceNetwork(
   if (!networkValidator(body)) throw new Error('Incompatible network response');
   return body;
 }
+
+export type Monitoring = Contract['monitoring'];
+const monitoringValidator = ajv.compile<Monitoring>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Monitoring',
+});
+export async function monitoring(signal?: AbortSignal): Promise<Monitoring> {
+  const response = await fetch('/api/v1/monitor', {
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(4000)])
+      : AbortSignal.timeout(4000),
+    cache: 'no-store',
+  });
+  const body: unknown = await response.json();
+  if (!response.ok || !monitoringValidator(body))
+    throw new Error('Monitoring unavailable');
+  return body;
+}

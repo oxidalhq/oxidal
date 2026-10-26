@@ -817,3 +817,25 @@ async fn network_boundary_is_optional_strict_and_redacts_invalid_credentials() {
     }
     task.abort();
 }
+
+#[tokio::test]
+async fn monitor_reports_real_availability_without_inventing_audio() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+    let response = client.get(format!("{url}/monitor")).send().await.unwrap();
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let value: Value = response.json().await.unwrap();
+    assert!(value["audio"].is_null());
+    assert!(value["xruns"].is_null());
+    assert_eq!(value["audio_phase"], "unavailable");
+    assert_eq!(value["graph_phase"], "unavailable");
+    let foreign = client
+        .get(format!("{url}/monitor"))
+        .header("origin", "https://foreign.invalid")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(foreign.status(), 403);
+    task.abort();
+}

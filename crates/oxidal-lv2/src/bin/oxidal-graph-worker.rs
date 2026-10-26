@@ -22,7 +22,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(bytes)
     }
-    fn reply(g: &PreparedGraph, frames: u64, error: Option<String>) -> Result<WorkerReply, String> {
+    fn reply(
+        g: &PreparedGraph,
+        frames: u64,
+        telemetry: oxidal_audio::meter::Snapshot,
+        error: Option<String>,
+    ) -> Result<WorkerReply, String> {
         let control = g.snapshot();
         let native_values = control
             .parameters
@@ -35,6 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect::<Result<_, _>>()?;
         Ok(WorkerReply {
+            telemetry,
             control,
             native_values,
             processed_frames: frames,
@@ -117,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         settings.stream.input.period_frames * (settings.stream.output.periods - 1),
                     )
             {
-                responses.try_send(reply(&graph, processed, None)?)?;
+                responses.try_send(reply(&graph, processed, stream.telemetry(), None)?)?;
                 ready = true;
             }
             if null {
@@ -141,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     WorkerRequest::Status => None,
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),
                 };
-                responses.try_send(reply(&graph, processed, error)?)?;
+                responses.try_send(reply(&graph, processed, stream.telemetry(), error)?)?;
             }
         }
     }

@@ -21,6 +21,7 @@ pub struct Duplex {
     written: usize,
     pending: bool,
     faulted: bool,
+    meter: crate::meter::Meter,
 }
 
 impl Duplex {
@@ -69,6 +70,7 @@ impl Duplex {
             ],
             left: vec![0.0; frames],
             right: vec![0.0; frames],
+            meter: crate::meter::Meter::new(config.input.period_frames, config.input.sample_rate),
             capture,
             playback,
             config,
@@ -138,7 +140,11 @@ impl Duplex {
                     samples::decode(&self.input[start..start + width], self.config.input.format)?;
             }
         }
+        self.meter.input(&self.left, &self.right);
+        let started = std::time::Instant::now();
         process(&mut self.left, &mut self.right)?;
+        let process_us = started.elapsed().as_secs_f64() * 1_000_000.0;
+        self.meter.output(&self.left, &self.right, process_us);
         self.output.fill(0);
         let width = samples::width(self.config.output.format);
         let out_stride = self.config.output.channels as usize * width;
@@ -168,6 +174,9 @@ impl Duplex {
         self.written = 0;
         self.pending = true;
         self.write_pending()
+    }
+    pub fn telemetry(&mut self) -> crate::meter::Snapshot {
+        self.meter.snapshot()
     }
     fn write_pending(&mut self) -> Result<Step, String> {
         let stride =

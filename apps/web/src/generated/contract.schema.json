@@ -37,6 +37,9 @@
     "library": {
       "$ref": "#/$defs/Library"
     },
+    "monitoring": {
+      "$ref": "#/$defs/Monitoring"
+    },
     "native_command": {
       "$ref": "#/$defs/EditorCommand"
     },
@@ -68,6 +71,7 @@
     "rig",
     "validation",
     "capabilities",
+    "monitoring",
     "network_state",
     "network_command",
     "audio_state",
@@ -633,6 +637,31 @@
         "audio_available",
         "midi_transport",
         "native_editor"
+      ]
+    },
+    "Channel": {
+      "type": "object",
+      "properties": {
+        "clips": {
+          "description": "Samples at or above full scale, cumulative for this worker lifetime.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "peak_dbfs": {
+          "type": "number",
+          "format": "double"
+        },
+        "rms_dbfs": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "peak_dbfs",
+        "rms_dbfs",
+        "clips"
       ]
     },
     "Command": {
@@ -1406,6 +1435,16 @@
         },
         "session": {
           "type": "string"
+        },
+        "telemetry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Snapshot2"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -1418,6 +1457,48 @@
         "device_owned",
         "experimental"
       ]
+    },
+    "Host": {
+      "type": "object",
+      "properties": {
+        "cpu_percent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "memory_total_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "memory_used_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "temperature_c": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "temperature_sensor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "Inspection": {
       "description": "Structural inspection only. Original bytes, not this summary, remain authoritative.",
@@ -1689,6 +1770,81 @@
         "not_at_home",
         "no_remembered",
         "always"
+      ]
+    },
+    "Monitoring": {
+      "type": "object",
+      "properties": {
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Snapshot2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio_age_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "audio_phase": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "graph_phase": {
+          "type": "string"
+        },
+        "host": {
+          "$ref": "#/$defs/Host"
+        },
+        "sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stream": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "xruns": {
+          "description": "Transport currently fails closed on xruns; a cumulative recovery counter is not available.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "host",
+        "audio_phase",
+        "graph_phase"
       ]
     },
     "NativeValue": {
@@ -2118,6 +2274,64 @@
         "parameters",
         "mappings",
         "feedback"
+      ]
+    },
+    "Snapshot2": {
+      "type": "object",
+      "properties": {
+        "deadline_us": {
+          "type": "number",
+          "format": "double"
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "input": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Channel"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "invalid_samples": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Channel"
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "process_us_max": {
+          "type": "number",
+          "format": "double"
+        },
+        "process_us_p50": {
+          "type": "number",
+          "format": "double"
+        },
+        "process_us_p95": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "frames",
+        "input",
+        "output",
+        "process_us_p50",
+        "process_us_p95",
+        "process_us_max",
+        "deadline_us",
+        "invalid_samples"
       ]
     },
     "StartAudio": {
