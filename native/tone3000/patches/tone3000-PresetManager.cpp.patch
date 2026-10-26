@@ -1,0 +1,13 @@
+--- a/plugin/src/PresetManager.cpp
++++ b/plugin/src/PresetManager.cpp
+@@ -49,6 +49,10 @@
+ }
+ 
+ juce::File PresetManager::defaultSystemFactoryDir() {
++  // Oxidal qualification only: do not discover machine-installed factories.
++  const auto qualificationRoot = juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {});
++  if (qualificationRoot.isNotEmpty())
++    return juce::File(qualificationRoot).getChildFile("common/Library/Application Support/TONE3000/Presets/Factory");
+   // Shared all-users location the installers write to. A missing dir just
+   // means no shipped presets; scans treat it as empty.
+ #if JUCE_IOS

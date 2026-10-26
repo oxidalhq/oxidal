@@ -1,0 +1,29 @@
+--- a/modules/juce_core/native/juce_Files_mac.mm
++++ b/modules/juce_core/native/juce_Files_mac.mm
+@@ -172,6 +172,26 @@
+ 
+ File File::getSpecialLocation (const SpecialLocationType type)
+ {
++    // Oxidal qualification only: isolate user data without changing HOME.
++    const auto qualificationRoot = SystemStats::getEnvironmentVariable ("OXIDAL_QUALIFICATION_DATA", {});
++    if (qualificationRoot.isNotEmpty())
++    {
++        const File root (qualificationRoot);
++        switch (type)
++        {
++            case userHomeDirectory: return root.getChildFile ("user");
++            case userApplicationDataDirectory: return root.getChildFile ("user/Library");
++            case commonApplicationDataDirectory: return root.getChildFile ("common/Library");
++            case commonDocumentsDirectory: return root.getChildFile ("common/Documents");
++            case tempDirectory:
++            {
++                const auto temp = root.getChildFile ("tmp");
++                temp.createDirectory();
++                return temp;
++            }
++            default: break;
++        }
++    }
+     JUCE_AUTORELEASEPOOL
+     {
+         String resultPath;

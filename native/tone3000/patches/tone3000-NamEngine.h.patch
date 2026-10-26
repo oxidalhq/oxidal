@@ -1,0 +1,11 @@
+--- a/plugin/include/NamEngine.h
++++ b/plugin/include/NamEngine.h
+@@ -139,6 +139,8 @@
+   void setSlimmableSize(double val);
+ 
+   double getSlimmableSize() const noexcept { return requestedSlimmableSize; }
++  bool stageSupportsSlim() const;
++  std::vector<double> stageSlimBreakpoints() const;
+ 
+ private:
+   /** Instance 0: the reference for metadata queries (all instances share

@@ -45,6 +45,8 @@ Open **Library** to import a `.t3kpreset`, retain its original bytes and downloa
 
 MIDI mappings and imported originals persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/downloads, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
 
+The optional [native TONE3000 adapter](docs/native-tone3000.md) is an offline integration spike. `pnpm native:check` builds and qualifies the real processor separately; it does not enable audio in this preview.
+
 ## Verify and prepare releases
 
 ```sh

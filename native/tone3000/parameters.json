@@ -1,0 +1,432 @@
+[
+  {
+    "id": "inputLevel",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "toneBass",
+    "type": "float",
+    "min": 0.0,
+    "max": 10.0,
+    "default": 5.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "toneMid",
+    "type": "float",
+    "min": 0.0,
+    "max": 10.0,
+    "default": 5.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "toneTreble",
+    "type": "float",
+    "min": 0.0,
+    "max": 10.0,
+    "default": 5.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "outputLevel",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "gateThreshold",
+    "type": "float",
+    "min": -100.0,
+    "max": 0.0,
+    "default": -80.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "targetLoudness",
+    "type": "float",
+    "min": -60.0,
+    "max": 0.0,
+    "default": -18.0,
+    "interval": 0.01,
+    "scope": "instance",
+    "apply": "live"
+  },
+  {
+    "id": "calibrateInput",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "instance; machine default on explicit settings edit",
+    "apply": "live"
+  },
+  {
+    "id": "inputCalibrationLevel",
+    "type": "float",
+    "min": -60.0,
+    "max": 60.0,
+    "default": 12.0,
+    "interval": 0.01,
+    "scope": "instance; machine default on explicit settings edit",
+    "apply": "live"
+  },
+  {
+    "id": "gateEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "toneEqEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "outputBalance",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadOffset",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.8125,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadWobble",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.25,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadWobbleEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadCrossover",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadCrossoverEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "spreadDiffuseEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignOffset",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignWobble",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.25,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignWobbleEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignCrossover",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.5,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignCrossoverEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "alignDiffuseEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainPanLeft",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 0.0,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainPanRight",
+    "type": "normalized",
+    "min": 0,
+    "max": 1,
+    "default": 1.0,
+    "interval": 0.0001,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainPanLinked",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainSoloLeft",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainSoloRight",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainInvertLeft",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "chainInvertRight",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "osEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "instance; machine default on explicit settings edit",
+    "apply": "staged/reprepare"
+  },
+  {
+    "id": "osFactor",
+    "type": "choice",
+    "min": 0,
+    "max": 2,
+    "default": 0,
+    "interval": 1,
+    "scope": "instance; machine default on explicit settings edit",
+    "apply": "staged/reprepare"
+  },
+  {
+    "id": "gateRelease",
+    "type": "float",
+    "min": 5,
+    "max": 500,
+    "default": 50,
+    "interval": null,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "gateHold",
+    "type": "float",
+    "min": 0.0,
+    "max": 200.0,
+    "default": 20.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "gateRange",
+    "type": "float",
+    "min": 20.0,
+    "max": 80.0,
+    "default": 80.0,
+    "interval": 0.01,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "pitchEnabled",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": false,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "latency-aware"
+  },
+  {
+    "id": "pitchSemitones",
+    "type": "float",
+    "min": -24,
+    "max": 24,
+    "default": 0,
+    "interval": null,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "pitchStep",
+    "type": "bool",
+    "min": 0,
+    "max": 1,
+    "default": true,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "pitchTonality",
+    "type": "float",
+    "min": 1000,
+    "max": 20000,
+    "default": 20000,
+    "interval": null,
+    "scope": "tone+instance",
+    "apply": "live"
+  },
+  {
+    "id": "pitchWindow",
+    "type": "choice",
+    "min": 0,
+    "max": 3,
+    "default": 1,
+    "interval": 1,
+    "scope": "tone+instance",
+    "apply": "latency-aware"
+  }
+]

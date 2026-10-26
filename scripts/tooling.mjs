@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { root, run, rustEnv } from './process.mjs';
@@ -31,6 +31,47 @@ if (mode === 'bootstrap') {
   run('pnpm', ['exec', 'playwright', 'install', 'chromium'], {
     cwd: join(root, 'apps/web'),
   });
+} else if (mode === 'native-check') {
+  run('python3', ['native/tone3000/build.py']);
+  const env = {
+    ...rustEnv(),
+    OXIDAL_TONE3000_LIB_DIR: join(root, '.local/tone3000/build'),
+    OXIDAL_TONE3000_TEST_MODEL: join(
+      root,
+      '.local/tone3000/source/test/files/a2-amp-test.nam',
+    ),
+    OXIDAL_QUALIFICATION_DATA: mkdtempSync(join(tmpdir(), 'oxidal-native-')),
+  };
+  run(
+    'cargo',
+    [
+      'clippy',
+      '--locked',
+      '-p',
+      'oxidal-tone3000',
+      '--features',
+      'native',
+      '--all-targets',
+      '--',
+      '-D',
+      'warnings',
+    ],
+    { env },
+  );
+  run(
+    'cargo',
+    [
+      'run',
+      '--locked',
+      '-p',
+      'oxidal-tone3000',
+      '--features',
+      'native',
+      '--example',
+      'qualify',
+    ],
+    { env },
+  );
 } else if (mode === 'check' || mode === 'core-check') {
   run('python3', ['scripts/check_repository.py']);
   cargo('fmt', ...workspace, '--all', '--check');
@@ -70,6 +111,16 @@ if (mode === 'bootstrap') {
     ]);
     run('node', ['scripts/dependencies.mjs']);
     run('pnpm', ['test:e2e']);
+    if (
+      process.platform === 'darwin' &&
+      existsSync(join(root, '.local/tone3000/source'))
+    ) {
+      run('node', ['scripts/tooling.mjs', 'native-check']);
+    } else {
+      console.log(
+        'Native TONE3000 qualification not run: use pnpm native:check on a supported macOS build host. Live Linux audio remains pending.',
+      );
+    }
   }
 } else if (mode === 'dev' || mode === 'preview' || mode === 'e2e-server') {
   cargo('build', '--locked', ...workspace, '--bin', 'oxidald');

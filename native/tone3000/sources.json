@@ -1,0 +1,104 @@
+{
+  "tone3000": {
+    "url": "https://github.com/tone-3000/tone3000-plugin.git",
+    "revision": "ab5e5ae4388753184687d67816815aa481f2cea9"
+  },
+  "juce": {
+    "url": "https://github.com/juce-framework/JUCE.git",
+    "revision": "be29c81492b6151c8ea8d14c840e1311963b3a83"
+  },
+  "patches": [
+    {
+      "namespace": "tone3000",
+      "path": "plugin/include/Processor.h",
+      "patch": "tone3000-Processor.h.patch",
+      "before": "f394ff0050f2c9423d89363871f47cb811cd63df546dbd059063600811edd43e",
+      "after": "4e066c42d6112c096836768c78f9adac881a34f1a1a1aecf882067d3c61a4939",
+      "patch_sha256": "026aaa60ca81e59567056bd13a4f57ee38843858c6fccb2f529cb3c41c87365b"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/src/Processor.cpp",
+      "patch": "tone3000-Processor.cpp.patch",
+      "before": "83e4d870ab68c4a766f470823318d80df05be86b52501a24145c4758f02d94fe",
+      "after": "08bf920fa94a75514b0a5325df5a0ba4751b951a5c241f240dcb62c25a6f152e",
+      "patch_sha256": "2dd380dcdf0fbb4b9b62befa6918ea172b90f47ec0b620ab66aef8af278f5c02"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/include/NamEngine.h",
+      "patch": "tone3000-NamEngine.h.patch",
+      "before": "05e1e9b16c228c74e1a4c79ceae2de8199a505b17fac8cc6217b3a5bbfdd4eb6",
+      "after": "5f9ddd2230477bc5947369b19ad3a2150b016e7f8075d39be7754d8f64e4b4f4",
+      "patch_sha256": "2371324e6111a281464521818010677f3e5b6655333174cf1622dd5409133f79"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/src/PresetManager.cpp",
+      "patch": "tone3000-PresetManager.cpp.patch",
+      "before": "0b88b88456356567985b08edb7c95f31021aac52f37b663013f34e9c6df4b10f",
+      "after": "5846fd29702039bff0d4ef736d7045d929c813b2de8ded428bd64caa26e0cf18",
+      "patch_sha256": "824ceb9bfb9dd4bf57fa6856904515f1716d2f20469746338b15c585db003bbd"
+    },
+    {
+      "namespace": "juce",
+      "path": "modules/juce_core/native/juce_Files_mac.mm",
+      "patch": "juce-juce_Files_mac.mm.patch",
+      "before": "0015243aa29b7bbf7886f2f9708b658513c7f07fed1f1ae898d5dca771d14d9a",
+      "after": "eb60fd0ffdb4f876e16e91fd7084dcd219f8d6e18efb94b8bcec2d5f7073a059",
+      "patch_sha256": "000f251ea5ba1137b9d27bda04f4f52bfffa5b50c0f9d510406c468b6c5581e4"
+    }
+  ],
+  "addons": [
+    {
+      "path": "plugin/include/Tone3000StageBridge.hpp",
+      "file": "Tone3000StageBridge.hpp",
+      "sha256": "02114d5ee7c4315850960e6fedead611d085a8a1f6b6b6812b1809b8a27deae5"
+    },
+    {
+      "path": "plugin/include/Tone3000StageMeter.hpp",
+      "file": "Tone3000StageMeter.hpp",
+      "sha256": "6553e17406aea86f0d8193195dee7eef7f18c1397d4270d80fab160422b0bf73"
+    },
+    {
+      "path": "plugin/include/Tone3000StageSession.h",
+      "file": "Tone3000StageSession.h",
+      "sha256": "ffefcd8119c34d16e199f968bd2df046dcdd08ae8e285d131a745b87dd03140e"
+    },
+    {
+      "path": "plugin/src/Tone3000StageSession.cpp",
+      "file": "Tone3000StageSession.cpp",
+      "sha256": "c93e8ef9b6be1ce67bb02311fa08655c3c9a70896c2ec1ea1feacdc947c7713f"
+    }
+  ],
+  "submodules": [
+    {
+      "path": "plugin/AudioDSPTools",
+      "revision": "0827c6c2fc0deced568536142ea86f189e0b98a1"
+    },
+    {
+      "path": "plugin/AudioDSPTools/Dependencies/eigen",
+      "revision": "6d829e766ff1b1ab867d93631163cbc63ed5798f"
+    },
+    {
+      "path": "plugin/NeuralAmpModelerCore",
+      "revision": "1f42f88535884450104b8711d7595019afa0495b"
+    },
+    {
+      "path": "plugin/NeuralAmpModelerCore/Dependencies/AudioDSPTools",
+      "revision": "0827c6c2fc0deced568536142ea86f189e0b98a1"
+    },
+    {
+      "path": "plugin/NeuralAmpModelerCore/Dependencies/AudioDSPTools/Dependencies/eigen",
+      "revision": "6d829e766ff1b1ab867d93631163cbc63ed5798f"
+    },
+    {
+      "path": "plugin/NeuralAmpModelerCore/Dependencies/eigen",
+      "revision": "bc3b39870ecb690a623a3f49149a358b95c5781d"
+    }
+  ],
+  "qualification_model": {
+    "path": "test/files/a2-amp-test.nam",
+    "sha256": "0c09c293df07f6e0871b4215f6bfc788f57509bf08b0b5a5ed2bbac04fc70967"
+  }
+}

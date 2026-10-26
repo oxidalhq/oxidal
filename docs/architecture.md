@@ -1,6 +1,8 @@
 # Architecture and control contract
 
-The Rust workspace has five crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, and `oxidal-presets` inspects and stores immutable native preset originals. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
+The control/runtime foundation has five crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, and `oxidal-presets` inspects and stores immutable native preset originals. Full asset/catalog management and native ALSA/LV2 hosting are later layers; no empty crates imply they exist today.
+
+A sixth crate, `oxidal-tone3000`, contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its real processor/state/audio checks are separate from the daemon; there is no live native host or native browser editing yet. The adapter is currently macOS-only and must be extended/qualified for Linux before appliance use.
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
