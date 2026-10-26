@@ -14,6 +14,12 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'join' | 'hotspot'>('join');
   const [review, setReview] = useState(false);
+  const [policyMode, setPolicyMode] = useState<
+    'always' | 'never' | 'no_ethernet' | 'not_at_home' | 'no_remembered'
+  >('always');
+  const [home, setHome] = useState('');
+  const [policyReview, setPolicyReview] = useState(false);
+  const [power, setPower] = useState<'reboot' | 'shutdown' | null>(null);
   useEffect(() => {
     let active = true;
     let pending = false;
@@ -88,6 +94,61 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
               </li>
             ))}
           </ul>
+          <details className="my-4">
+            <summary>System power</summary>
+            <p className="caption">
+              Audio Stop keeps the editor running. System power stops the audio
+              workers and closes the web interface. Save your preset edits
+              first.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={busy || !connected || !!state.pending}
+                onClick={() => setPower('reboot')}
+              >
+                Reboot device
+              </Button>
+              <Button
+                variant="outline"
+                disabled={busy || !connected || !!state.pending}
+                onClick={() => setPower('shutdown')}
+              >
+                Shut down device
+              </Button>
+            </div>
+            {power && (
+              <div
+                className="mt-3 grid gap-2"
+                role="group"
+                aria-label="Confirm system power"
+              >
+                <p>
+                  {power === 'reboot'
+                    ? 'Restart the whole device?'
+                    : 'Power off the whole device?'}{' '}
+                  Unsaved edits will be lost.{' '}
+                  {power === 'shutdown' &&
+                    'Leave power connected until shutdown has finished.'}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={busy || !connected}
+                    onClick={() => {
+                      const action = power;
+                      setPower(null);
+                      void run({ type: 'power', action });
+                    }}
+                  >
+                    Confirm {power === 'reboot' ? 'reboot' : 'shutdown'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setPower(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </details>
           <p className="caption">
             Wi-Fi radio: {state.wireless_enabled ? 'on' : 'off'}. Access the
             device at <strong>https://oxidal.local</strong>; the hotspot also
@@ -282,6 +343,90 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   {review ? 'Apply network change' : 'Review network change'}
                 </Button>
               </form>
+              <details className="mt-4">
+                <summary>Automatic hotspot</summary>
+                <p className="caption">
+                  Saved policy:{' '}
+                  {state.policy?.mode.replaceAll('_', ' ') ??
+                    'Appliance default'}
+                  . Changes are tested for 90 seconds before you keep them.
+                </p>
+                <form
+                  className="mt-3 grid gap-3 sm:grid-cols-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!policyReview) {
+                      setPolicyReview(true);
+                      return;
+                    }
+                    setPolicyReview(false);
+                    void run({
+                      type: 'policy',
+                      settings: {
+                        interface: interfaceName,
+                        mode: policyMode,
+                        home_ssid: home,
+                      },
+                    });
+                  }}
+                >
+                  <label className="field">
+                    Start hotspot
+                    <select
+                      value={policyMode}
+                      onChange={(e) => {
+                        setPolicyMode(e.target.value as typeof policyMode);
+                        setPolicyReview(false);
+                      }}
+                    >
+                      <option value="always">Always</option>
+                      <option value="never">Never</option>
+                      <option value="no_ethernet">
+                        When Ethernet is disconnected
+                      </option>
+                      <option value="not_at_home">
+                        When home Wi-Fi is out of range
+                      </option>
+                      <option value="no_remembered">
+                        When no saved Wi-Fi is in range
+                      </option>
+                    </select>
+                  </label>
+                  {policyMode === 'not_at_home' && (
+                    <label className="field">
+                      Home Wi-Fi name
+                      <input
+                        required
+                        value={home}
+                        onChange={(e) => {
+                          setHome(e.target.value);
+                          setPolicyReview(false);
+                        }}
+                      />
+                    </label>
+                  )}
+                  <p className="caption sm:col-span-2">
+                    Automatic changes wait for stable network observations. If a
+                    remembered router fails to connect, the recovery hotspot
+                    stays available. Never may require Ethernet for access.
+                  </p>
+                  {policyReview && (
+                    <p className="notice sm:col-span-2">
+                      Your phone may disconnect. Reconnect through the router or
+                      Ethernet and confirm within 90 seconds. Without
+                      confirmation, the previous policy and hotspot return.
+                    </p>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={busy || !connected || !interfaceName}
+                  >
+                    {policyReview
+                      ? 'Apply hotspot policy'
+                      : 'Review hotspot policy'}
+                  </Button>
+                </form>
+              </details>
               <details className="mt-4">
                 <summary>Saved networks</summary>
                 <ul className="grid gap-2">

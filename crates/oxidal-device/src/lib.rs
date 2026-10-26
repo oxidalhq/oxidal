@@ -4,6 +4,9 @@
 pub mod ipc;
 #[cfg(unix)]
 pub mod network;
+pub mod policy;
+#[cfg(unix)]
+pub mod power;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +16,9 @@ pub const SOCKET: &str = "/run/oxidal-device/control.sock";
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    Power {
+        action: PowerAction,
+    },
     Status {},
     Scan {},
     Join {
@@ -24,6 +30,9 @@ pub enum Command {
         interface: String,
         ssid: String,
         password: String,
+    },
+    Policy {
+        settings: policy::Settings,
     },
     Confirm {
         transaction: String,
@@ -38,10 +47,12 @@ pub enum Command {
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::Power { .. } => "Power",
             Self::Status {} => "Status",
             Self::Scan {} => "Scan",
             Self::Join { .. } => "Join [redacted]",
             Self::Hotspot { .. } => "Hotspot [redacted]",
+            Self::Policy { .. } => "Policy",
             Self::Confirm { .. } => "Confirm",
             Self::Cancel { .. } => "Cancel",
             Self::Forget { .. } => "Forget",
@@ -51,6 +62,7 @@ impl std::fmt::Debug for Command {
 impl Command {
     pub fn validate(&self) -> Result<(), &'static str> {
         match self {
+            Self::Policy { settings } => return settings.validate(),
             Self::Join {
                 interface,
                 ssid,
@@ -102,6 +114,12 @@ impl Command {
         Ok(())
     }
 }
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerAction {
+    Reboot,
+    Shutdown,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Interface {
@@ -138,6 +156,7 @@ pub struct Pending {
 pub struct NetworkState {
     pub available: bool,
     pub wireless_enabled: bool,
+    pub policy: Option<policy::Settings>,
     pub interfaces: Vec<Interface>,
     pub networks: Vec<AccessPoint>,
     pub saved: Vec<SavedNetwork>,

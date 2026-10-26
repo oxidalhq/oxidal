@@ -176,6 +176,10 @@ struct Journal {
     previous: Option<Vec<u8>>,
     uuid: String,
     checkpoint: String,
+    #[serde(default)]
+    policy_change: bool,
+    #[serde(default)]
+    previous_policy: Option<Vec<u8>>,
 }
 struct Transaction {
     id: String,
@@ -194,6 +198,8 @@ pub struct Network {
     state_dir: PathBuf,
     pending: Option<Transaction>,
     message: String,
+    policy_checked: Instant,
+    policy_candidate: Option<bool>,
 }
 impl Default for Network {
     fn default() -> Self {
@@ -202,6 +208,8 @@ impl Default for Network {
             state_dir: STATE.into(),
             pending: None,
             message: String::new(),
+            policy_checked: Instant::now(),
+            policy_candidate: None,
         }
     }
 }
@@ -226,6 +234,18 @@ impl Network {
             && journal.file != format!("oxidal-{}.nmconnection", journal.uuid)
         {
             return Err("Invalid recovery profile");
+        }
+        if journal.policy_change {
+            let path = self.state_dir.join("policy.json");
+            match &journal.previous_policy {
+                Some(bytes) => atomic(&path, bytes)?,
+                None if path.exists() => {
+                    fs::remove_file(path).map_err(|_| "Cannot restore hotspot policy")?
+                }
+                None => {}
+            }
+            self.policy_checked = Instant::now();
+            self.policy_candidate = None;
         }
         let path = self.connections.as_path().join(&journal.file);
         if let Some(bytes) = journal.previous {
@@ -258,6 +278,113 @@ impl Network {
         self.message = "Previous network restored".into();
         Ok(())
     }
+    fn policy(&self) -> Result<Option<crate::policy::Settings>> {
+        match fs::read(self.state_dir.join("policy.json")) {
+            Ok(bytes) => {
+                let settings: crate::policy::Settings =
+                    serde_json::from_slice(&bytes).map_err(|_| "Invalid hotspot policy")?;
+                settings.validate()?;
+                Ok(Some(settings))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err("Cannot read hotspot policy"),
+        }
+    }
+    async fn reconcile_policy(&mut self, immediate: bool) -> Result<()> {
+        let Some(settings) = self.policy()? else {
+            return Ok(());
+        };
+        // Never take over arbitrary Linux installations or change a different radio.
+        if !self.connections.join("oxidal.nmconnection").is_file() {
+            return Err("Recovery hotspot is unavailable");
+        }
+        let state = self.status(true).await?;
+        let radio = state
+            .interfaces
+            .iter()
+            .find(|d| d.name == settings.interface && d.kind == "wifi")
+            .ok_or("Wireless interface is unavailable")?;
+        let ethernet = state
+            .interfaces
+            .iter()
+            .any(|d| d.kind == "ethernet" && d.state == "connected");
+        let home = state.networks.iter().any(|n| n.ssid == settings.home_ssid);
+        let mut visible = Vec::new();
+        for saved in state.saved.iter().filter(|s| s.managed).take(32) {
+            let ssid = nm(&[
+                "--escape",
+                "no",
+                "--get-values",
+                "802-11-wireless.ssid",
+                "connection",
+                "show",
+                "uuid",
+                &saved.uuid,
+            ])
+            .await?;
+            if state
+                .networks
+                .iter()
+                .any(|n| n.ssid == ssid.trim_end_matches('\n'))
+            {
+                visible.push(saved.uuid.clone());
+            }
+        }
+        let wanted = settings.wants_hotspot(ethernet, home, !visible.is_empty());
+        let previous = self.policy_candidate.replace(wanted);
+        // Two observations spaced 30 seconds apart avoid flapping at the edge of coverage.
+        if !immediate && previous != Some(wanted) {
+            return Ok(());
+        }
+        let ap = radio.state == "connected" && radio.connection == "oxidal-hotspot";
+        if wanted && !ap {
+            nm(&["radio", "wifi", "on"]).await?;
+            nm(&[
+                "connection",
+                "up",
+                "id",
+                "oxidal-hotspot",
+                "ifname",
+                &settings.interface,
+            ])
+            .await?;
+        } else if !wanted && (ap || radio.state != "connected") {
+            for id in visible {
+                if nm(&[
+                    "connection",
+                    "up",
+                    "uuid",
+                    &id,
+                    "ifname",
+                    &settings.interface,
+                ])
+                .await
+                .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+            if ethernet || settings.mode == crate::policy::Mode::Never {
+                if ap {
+                    nm(&["connection", "down", "id", "oxidal-hotspot"]).await?;
+                }
+            } else {
+                // A visible router with a failed authentication must not strand the owner.
+                nm(&[
+                    "connection",
+                    "up",
+                    "id",
+                    "oxidal-hotspot",
+                    "ifname",
+                    &settings.interface,
+                ])
+                .await?;
+                self.message =
+                    "Remembered Wi-Fi could not connect; recovery hotspot remains available".into();
+            }
+        }
+        Ok(())
+    }
     pub async fn tick(&mut self) {
         if self.pending.is_none() && self.state_dir.join("pending.json").exists() {
             if self.recover().await.is_err() {
@@ -275,6 +402,15 @@ impl Network {
                 self.message =
                     "Network recovery needs attention; recovery will retry after service restart"
                         .into();
+            }
+        }
+        if self.pending.is_none()
+            && !self.state_dir.join("pending.json").exists()
+            && self.policy_checked.elapsed() >= Duration::from_secs(30)
+        {
+            self.policy_checked = Instant::now();
+            if self.reconcile_policy(false).await.is_err() {
+                self.message = "Automatic hotspot check will retry".into();
             }
         }
     }
@@ -359,6 +495,7 @@ impl Network {
         Ok(NetworkState {
             available: true,
             wireless_enabled,
+            policy: self.policy()?,
             interfaces,
             networks,
             saved,
@@ -375,7 +512,13 @@ impl Network {
         if self.pending.is_some() || self.state_dir.as_path().join("pending.json").exists() {
             return Err("A network change or recovery is already pending");
         }
+        let policy_settings = match command {
+            Command::Policy { settings } => Some(settings),
+            _ => None,
+        };
+        let empty = String::new();
         let (interface, ssid, password, ap) = match command {
+            Command::Policy { settings } => (&settings.interface, &empty, &empty, true),
             Command::Join {
                 interface,
                 ssid,
@@ -448,14 +591,34 @@ impl Network {
             previous,
             uuid,
             checkpoint,
+            policy_change: policy_settings.is_some(),
+            previous_policy: if policy_settings.is_some() {
+                match fs::read(self.state_dir.join("policy.json")) {
+                    Ok(bytes) => Some(bytes),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(_) => return Err("Cannot read previous policy"),
+                }
+            } else {
+                None
+            },
         };
         let transaction = token()?;
         atomic(
             &self.state_dir.as_path().join("pending.json"),
             &serde_json::to_vec(&journal).map_err(|_| "Cannot save recovery journal")?,
         )?;
-        let candidate = profile(interface, ssid, password, ap, &journal.uuid);
-        if let Err(error) = atomic(&path, candidate.as_bytes()) {
+        let write = if let Some(settings) = policy_settings {
+            atomic(
+                &self.state_dir.join("policy.json"),
+                &serde_json::to_vec(settings).map_err(|_| "Cannot encode hotspot policy")?,
+            )
+        } else {
+            atomic(
+                &path,
+                profile(interface, ssid, password, ap, &journal.uuid).as_bytes(),
+            )
+        };
+        if let Err(error) = write {
             self.rollback(journal).await?;
             return Err(error);
         }
@@ -477,12 +640,31 @@ impl Network {
         let Some(pending) = &self.pending else { return };
         let path = self.connections.clone().join(&pending.journal.file);
         let uuid = pending.journal.uuid.clone();
-        let result = async {
-            nm(&["connection", "load", path.to_str().unwrap()]).await?;
-            nm(&["radio", "wifi", "on"]).await?;
-            nm(&["connection", "up", "uuid", &uuid]).await
-        }
-        .await;
+        let policy_change = pending.journal.policy_change;
+        let result = if policy_change {
+            // Automatic decisions belong to this helper; do not let NM immediately
+            // autoconnect the AP again after a deliberate policy-driven disconnect.
+            match nm(&[
+                "connection",
+                "modify",
+                "id",
+                "oxidal-hotspot",
+                "connection.autoconnect",
+                "no",
+            ])
+            .await
+            {
+                Ok(_) => self.reconcile_policy(true).await.map(|()| String::new()),
+                Err(error) => Err(error),
+            }
+        } else {
+            async {
+                nm(&["connection", "load", path.to_str().unwrap()]).await?;
+                nm(&["radio", "wifi", "on"]).await?;
+                nm(&["connection", "up", "uuid", &uuid]).await
+            }
+            .await
+        };
         if result.is_ok() {
             self.pending.as_mut().unwrap().phase = "awaiting_confirmation".into();
         } else {
@@ -515,27 +697,36 @@ impl Network {
                     if pending.phase != "awaiting_confirmation" {
                         return Err("Network connection is not ready");
                     }
-                    let state = nm(&[
-                        "--get-values",
-                        "GENERAL.STATE",
-                        "connection",
-                        "show",
-                        "uuid",
-                        &pending.journal.uuid,
-                    ])
-                    .await?;
-                    if state.trim() != "activated" {
-                        return Err("Network connection is no longer active");
+                    if pending.journal.policy_change {
+                        let state = self.status(false).await?;
+                        if !state.interfaces.iter().any(|d| {
+                            (d.kind == "wifi" || d.kind == "ethernet") && d.state == "connected"
+                        }) {
+                            return Err("No active network connection");
+                        }
+                    } else {
+                        let state = nm(&[
+                            "--get-values",
+                            "GENERAL.STATE",
+                            "connection",
+                            "show",
+                            "uuid",
+                            &pending.journal.uuid,
+                        ])
+                        .await?;
+                        if state.trim() != "activated" {
+                            return Err("Network connection is no longer active");
+                        }
+                        nm(&[
+                            "connection",
+                            "modify",
+                            "uuid",
+                            &pending.journal.uuid,
+                            "connection.autoconnect",
+                            "yes",
+                        ])
+                        .await?;
                     }
-                    nm(&[
-                        "connection",
-                        "modify",
-                        "uuid",
-                        &pending.journal.uuid,
-                        "connection.autoconnect",
-                        "yes",
-                    ])
-                    .await?;
                     checkpoint("CheckpointDestroy", "o", &[&pending.journal.checkpoint]).await?;
                     fs::remove_file(self.state_dir.as_path().join("pending.json"))
                         .map_err(|_| "Cannot finalize network settings")?;
@@ -786,6 +977,82 @@ mod tests {
             .await;
     }
 
+    #[tokio::test]
+    async fn policy_expiry_restores_previous_settings_and_keyfile() {
+        let fixture = Fixture::new();
+        let old = crate::policy::Settings {
+            interface: "wlan0".into(),
+            mode: crate::policy::Mode::Always,
+            home_ssid: String::new(),
+        };
+        atomic(
+            &fixture.root.join("state/policy.json"),
+            &serde_json::to_vec(&old).unwrap(),
+        )
+        .unwrap();
+        let mut network = fixture.network();
+        let mut commands = status();
+        commands.push_back((
+            "connection.uuid".into(),
+            Ok("12345678-1234-4234-8234-123456789012"),
+        ));
+        commands.extend(begin().into_iter().skip(4));
+        commands.extend(responses(&[
+            ("connection load", Ok("")),
+            ("CheckpointRollback", Ok("")),
+            ("CheckpointDestroy", Ok("")),
+            ("connection up id oxidal-hotspot", Ok("")),
+            ("TYPE,STATE", Ok("wifi:connected\n")),
+        ]));
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                network
+                    .begin(&Command::Policy {
+                        settings: crate::policy::Settings {
+                            mode: crate::policy::Mode::Never,
+                            ..old.clone()
+                        },
+                    })
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    network.policy().unwrap().unwrap().mode,
+                    crate::policy::Mode::Never
+                );
+                network.pending.as_mut().unwrap().started =
+                    Instant::now() - Duration::from_secs(91);
+                network.tick().await;
+                assert_eq!(network.policy().unwrap().unwrap(), old);
+                assert!(!fixture.root.join("state/pending.json").exists());
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
+    #[tokio::test]
+    async fn automatic_policy_waits_for_two_observations() {
+        let fixture = Fixture::new();
+        let settings = crate::policy::Settings {
+            interface: "wlan0".into(),
+            mode: crate::policy::Mode::Never,
+            home_ssid: String::new(),
+        };
+        atomic(
+            &fixture.root.join("state/policy.json"),
+            &serde_json::to_vec(&settings).unwrap(),
+        )
+        .unwrap();
+        let mut network = fixture.network();
+        let mut commands = status();
+        commands.extend(status());
+        commands.extend(responses(&[("connection down id oxidal-hotspot", Ok(""))]));
+        COMMANDS
+            .scope(RefCell::new(commands), async {
+                network.reconcile_policy(false).await.unwrap();
+                network.reconcile_policy(false).await.unwrap();
+                COMMANDS.with(|q| assert!(q.borrow().is_empty()));
+            })
+            .await;
+    }
     #[tokio::test]
     #[ignore = "requires root and NetworkManager in explicitly disposable Linux"]
     async fn real_networkmanager_keyfile_roundtrip() {

@@ -675,6 +675,23 @@
         {
           "type": "object",
           "properties": {
+            "action": {
+              "$ref": "#/$defs/PowerAction"
+            },
+            "type": {
+              "type": "string",
+              "const": "power"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "action"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "type": {
               "type": "string",
               "const": "status"
@@ -746,6 +763,23 @@
             "interface",
             "ssid",
             "password"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "settings": {
+              "$ref": "#/$defs/Settings"
+            },
+            "type": {
+              "type": "string",
+              "const": "policy"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "settings"
           ]
         },
         {
@@ -1647,6 +1681,16 @@
         "relative_twos_complement"
       ]
     },
+    "Mode": {
+      "type": "string",
+      "enum": [
+        "never",
+        "no_ethernet",
+        "not_at_home",
+        "no_remembered",
+        "always"
+      ]
+    },
     "NativeValue": {
       "type": "object",
       "properties": {
@@ -1689,6 +1733,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Pending"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Settings"
             },
             {
               "type": "null"
@@ -1883,6 +1937,13 @@
         "phase"
       ]
     },
+    "PowerAction": {
+      "type": "string",
+      "enum": [
+        "reboot",
+        "shutdown"
+      ]
+    },
     "Rig": {
       "description": "Persisted routing data, independent of UI layout and audio resources.\n@see docs/architecture.md",
       "type": "object",
@@ -1938,6 +1999,26 @@
         "name",
         "active",
         "managed"
+      ]
+    },
+    "Settings": {
+      "type": "object",
+      "properties": {
+        "home_ssid": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "interface",
+        "mode",
+        "home_ssid"
       ]
     },
     "Snapshot": {

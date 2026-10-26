@@ -135,6 +135,10 @@ export type EditorAction =
     };
 export type Command2 =
   | {
+      action: PowerAction;
+      type: "power";
+    }
+  | {
       type: "status";
     }
   | {
@@ -153,6 +157,10 @@ export type Command2 =
       type: "hotspot";
     }
   | {
+      settings: Settings;
+      type: "policy";
+    }
+  | {
       transaction: string;
       type: "confirm";
     }
@@ -164,6 +172,8 @@ export type Command2 =
       type: "forget";
       uuid: string;
     };
+export type PowerAction = "reboot" | "shutdown";
+export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -497,12 +507,18 @@ export interface Parameter2 {
   tone: boolean;
   value: number;
 }
+export interface Settings {
+  home_ssid: string;
+  interface: string;
+  mode: Mode;
+}
 export interface NetworkState {
   available: boolean;
   interfaces: Interface[];
   message: string;
   networks: AccessPoint[];
   pending?: Pending | null;
+  policy?: Settings | null;
   saved: SavedNetwork[];
   wireless_enabled: boolean;
 }

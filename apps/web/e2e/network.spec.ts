@@ -9,6 +9,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   const state: NetworkState = {
     available: true,
     wireless_enabled: true,
+    policy: null,
     interfaces: [
       {
         name: 'wlan0',
@@ -29,7 +30,8 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     if (route.request().method() === 'POST') {
       const command = route.request().postDataJSON() as NetworkCommand;
       commands.push(command);
-      if (command.type === 'join')
+      if (command.type === 'policy') state.policy = command.settings;
+      if (command.type === 'join' || command.type === 'policy')
         state.pending = {
           transaction: 'a'.repeat(32),
           seconds_remaining: 89,
@@ -73,6 +75,30 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     .getByRole('button', { name: 'Edit hotspot', exact: true })
     .click();
   await expect(panel.getByLabel('New hotspot password')).toBeVisible();
+  await panel.getByText('Automatic hotspot', { exact: true }).click();
+  await panel
+    .getByRole('combobox', { name: 'Start hotspot', exact: true })
+    .selectOption('not_at_home');
+  await panel.getByLabel('Home Wi-Fi name').fill('Studio: Wi-Fi');
+  await panel.getByRole('button', { name: 'Review hotspot policy' }).click();
+  expect(commands.filter((c) => c.type === 'policy')).toHaveLength(0);
+  await panel.getByRole('button', { name: 'Apply hotspot policy' }).click();
+  await panel.getByRole('button', { name: 'Keep this connection' }).click();
+  expect(commands.find((c) => c.type === 'policy')).toMatchObject({
+    settings: { mode: 'not_at_home', home_ssid: 'Studio: Wi-Fi' },
+  });
+  await panel.getByText('System power', { exact: true }).click();
+  await panel
+    .getByRole('button', { name: 'Reboot device', exact: true })
+    .click();
+  expect(commands.filter((c) => c.type === 'power')).toHaveLength(0);
+  await panel
+    .getByRole('button', { name: 'Confirm reboot', exact: true })
+    .click();
+  expect(commands.find((c) => c.type === 'power')).toEqual({
+    type: 'power',
+    action: 'reboot',
+  });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
