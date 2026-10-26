@@ -107,7 +107,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await page.goto('/');
   if (test.info().project.name === 'boox-air3c') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('E-paper display').check();
+    await page.getByLabel('Display mode').selectOption('epaper');
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   const editor = page.getByRole('region', { name: 'Native preset editor' });

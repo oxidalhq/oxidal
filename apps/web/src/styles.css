@@ -841,3 +841,24 @@ main {
     align-self: center;
   }
 }
+
+.display-mode {
+  margin: 0;
+  flex: 0 1 10rem;
+}
+.masthead {
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .display-mode {
+    order: 2;
+    flex: 1 1 100%;
+  }
+  .display-mode select {
+    width: 100%;
+  }
+}
+:root[data-display='sunlight'] .caption,
+:root[data-display='stage'] .caption {
+  font-size: 14px;
+}

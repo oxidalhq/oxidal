@@ -84,7 +84,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
   const epaper = testInfo.project.name === 'boox-air3c';
   if (epaper) {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('E-paper display').check();
+    await page.getByLabel('Display mode').selectOption('epaper');
     await page
       .getByRole('button', { name: 'Back to rig', exact: true })
       .click();
@@ -148,8 +148,8 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await page.setViewportSize({ width: 768, height: 1024 });
     await fits(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByLabel('E-paper display')).toBeChecked();
-    await page.getByLabel('E-paper display').uncheck();
+    await expect(page.getByLabel('Display mode')).toHaveValue('epaper');
+    await page.getByLabel('Display mode').selectOption('orchid');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
       'data-display',
@@ -183,4 +183,43 @@ test('folding and unfolding preserves the active draft without reloading', async
   }
   await page.getByRole('button', { name: 'Commit', exact: true }).click();
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('37%');
+});
+
+test('stage display modes persist and stay accessible in both orientations', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120000);
+  const portrait = page.viewportSize()!;
+  mkdirSync('../../.local/previews/stage', { recursive: true });
+  for (const mode of ['sunlight', 'stage']) {
+    await page.getByLabel('Display mode').selectOption(mode);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-display', mode);
+    for (const [orientation, viewport] of [
+      ['portrait', portrait],
+      ['landscape', { width: portrait.height, height: portrait.width }],
+    ] as const) {
+      await page.setViewportSize(viewport);
+      await fits(page);
+      await accessible(page);
+      expect(
+        await page
+          .getByRole('button', { name: 'Bypass off' })
+          .evaluate((el) => el.getBoundingClientRect().height),
+      ).toBeGreaterThanOrEqual(48);
+      await page.screenshot({
+        path: `../../.local/previews/stage/${testInfo.project.name}-${mode}-${orientation}.png`,
+        fullPage: true,
+      });
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await fits(page);
+      await accessible(page);
+      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      await fits(page);
+      await accessible(page);
+      await page
+        .getByRole('button', { name: 'Back to rig', exact: true })
+        .click();
+    }
+  }
 });

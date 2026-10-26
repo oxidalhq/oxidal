@@ -63,7 +63,7 @@ stack it. Controls stay scrollable when a keyboard reduces available height.
 Inputs use 16px text, primary controls have 44px minimum height, and landscape
 safe areas keep content clear of cutouts. Zoom remains enabled.
 
-On BOOX, enable **Settings → Display → E-paper display**. This browser-local
+On BOOX, enable **Display mode → E-paper** in the header. This browser-local
 preference survives reloads and uses plain black/white surfaces, stronger borders,
 larger supporting text and no transitions/shadows. It can be disabled to restore
 Orchid. It does not control the device's refresh mode or claim to eliminate
@@ -107,3 +107,13 @@ Emulation uses current browser engines; it is not the Safari/Chrome build instal
 on a physical device. Final checks on the actual phones/tablet still need browser
 version, zoom/display settings, on-screen keyboard, notch and e-ink refresh/readability.
 Live audio and physical MIDI remain outside this UI qualification.
+
+### Live display modes
+
+The header's **Display mode** selector is available on every view. **Sunlight**
+uses white surfaces and strong borders; **Dark stage** uses dark surfaces with
+bright values and Orchid accents. Both use 48px primary-control heights.
+**E-paper** adds monochrome and removes transitions. Choices persist locally;
+there is no automatic theme switch during performance. All modes are CSS tokens
+in `theme.css`. Actual sunlight/glare and venue readability still need physical
+checks; the app cannot set screen brightness.

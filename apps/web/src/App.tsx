@@ -27,21 +27,34 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
   const [view, setView] = useState<'rig' | 'settings' | 'library'>('rig');
-  const [ePaper, setEPaper] = useState(() => {
+  const [displayMode, setDisplayMode] = useState(() => {
     try {
-      return localStorage.getItem('oxidal.display') === 'epaper';
+      const saved = localStorage.getItem('oxidal.display');
+      return saved && ['orchid', 'sunlight', 'stage', 'epaper'].includes(saved)
+        ? saved
+        : 'orchid';
     } catch {
-      return false;
+      return 'orchid';
     }
   });
   useEffect(() => {
-    document.documentElement.dataset.display = ePaper ? 'epaper' : 'orchid';
+    document.documentElement.dataset.display = displayMode;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        'content',
+        displayMode === 'stage'
+          ? '#151219'
+          : displayMode === 'orchid'
+            ? '#241b2b'
+            : '#ffffff',
+      );
     try {
-      localStorage.setItem('oxidal.display', ePaper ? 'epaper' : 'orchid');
+      localStorage.setItem('oxidal.display', displayMode);
     } catch {
       /* The selection still works when browser storage is unavailable. */
     }
-  }, [ePaper]);
+  }, [displayMode]);
   const [error, setError] = useState('');
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
@@ -236,6 +249,18 @@ export default function App() {
           <span className={connected ? 'dot online' : 'dot'} />
           {connected ? 'Device connected' : 'Reconnecting…'}
         </div>
+        <label className="field display-mode">
+          <span className="sr-only">Display mode</span>
+          <select
+            value={displayMode}
+            onChange={(event) => setDisplayMode(event.target.value)}
+          >
+            <option value="orchid">Orchid</option>
+            <option value="sunlight">Sunlight</option>
+            <option value="stage">Dark stage</option>
+            <option value="epaper">E-paper</option>
+          </select>
+        </label>
         <nav aria-label="Instrument navigation">
           <Button variant="outline" onClick={() => setView('library')}>
             Library
@@ -482,19 +507,16 @@ export default function App() {
             <>
               <section className="panel" aria-label="Display preferences">
                 <h2>Display</h2>
-                <div className="checkboxes">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={ePaper}
-                      onChange={(event) => setEPaper(event.target.checked)}
-                    />
-                    E-paper display
-                  </label>
-                </div>
+                <p>
+                  Use Display mode in the header to switch between Orchid,
+                  Sunlight, Dark stage and E-paper. Your choice is saved on this
+                  browser.
+                </p>
                 <p className="muted">
-                  High contrast, plain surfaces and no transitions for e-paper
-                  screens. Saved on this browser.
+                  Sunlight strengthens contrast; Dark stage reduces bright
+                  surfaces. E-paper uses plain monochrome surfaces without
+                  transitions. Screen brightness and e-paper refresh remain
+                  device settings.
                 </p>
               </section>
               <section className="panel">

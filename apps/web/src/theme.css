@@ -88,6 +88,7 @@
 }
 
 /* Explicit browser preference for BOOX and other e-paper displays. */
+:root[data-display='sunlight'],
 :root[data-display='epaper'] {
   --background: #ffffff;
   --foreground: #111111;
@@ -117,4 +118,49 @@
   --lcd-shadow: none;
   --panel-shadow: none;
   --effect-shadow: none;
+}
+
+/* Stage modes preserve status labels; colour never carries state alone. */
+:root[data-display='sunlight'] {
+  --brand: #811b92;
+  --brand-foreground: #ffffff;
+  --control-accent: #701180;
+}
+:root[data-display='stage'] {
+  color-scheme: dark;
+  --background: #151219;
+  --foreground: #f4edf7;
+  --card: #211b27;
+  --brand: #e363f7;
+  --brand-foreground: #291332;
+  --control-accent: #ef9bfc;
+  --secondary: #352a40;
+  --secondary-foreground: #f4edf7;
+  --muted: #211b27;
+  --muted-foreground: #cabed0;
+  --accent: #47324e;
+  --accent-foreground: #fff4ff;
+  --border: #87718e;
+  --input: #a58aad;
+  --enclosure: #151219;
+  --enclosure-foreground: #f4edf7;
+  --enclosure-border: #87718e;
+  --lcd: #211b27;
+  --lcd-foreground: #f4edf7;
+  --lcd-muted: #cabed0;
+  --lcd-border: #87718e;
+  --lcd-card: #2a2231;
+  --warning: #30271b;
+  --warning-foreground: #f5d5a2;
+  --destructive: #ffb4aa;
+  --destructive-foreground: #291312;
+  --lcd-shadow: none;
+  --panel-shadow: none;
+  --effect-shadow: none;
+}
+:root[data-display='sunlight'],
+:root[data-display='stage'],
+:root[data-display='epaper'] {
+  --touch-target: 3rem;
+  --readout-size: 2rem;
 }
