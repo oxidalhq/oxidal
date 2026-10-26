@@ -33,4 +33,5 @@ static void connect(LV2_Handle h,uint32_t p,void* data){if(p<6)((Test*)h)->p[p]=
 static void run(LV2_Handle h,uint32_t n){Test* t=h;if(n!=t->frames)abort();for(uint32_t c=0;c<2;c++)for(uint32_t i=0;i<n;i++){float v=t->p[c][i]*(*t->p[4])+t->history[c][i]*(*t->p[5]);t->history[c][i]=v;t->p[2+c][i]=v;}}
 static void cleanup(LV2_Handle h){free(h);}
 static const LV2_Descriptor descriptor={"urn:oxidal:test:contract",create,connect,NULL,run,NULL,cleanup,NULL};
-LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index?NULL:&descriptor;}
+static const LV2_Descriptor quantized={"urn:oxidal:test:quantized",create,connect,NULL,run,NULL,cleanup,NULL};
+LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:NULL;}

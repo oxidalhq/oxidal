@@ -31,3 +31,7 @@ The committed native fixtures are tiny project-authored JUCE files without model
 ## Control-preview regression coverage
 
 The ordinary `pnpm check` suite exercises edit ownership, sequence conflicts, exact terminal values, bounded receipts, cancel/expiry rollback, MIDI/preset takeover and recovery after transport failure. Browser cases use two clients and the real daemon, and deliberately wait for the real 30-second lease on desktop and mobile emulation. They cover navigation cancellation, a disconnected preview, retained local draft without replay, and accessibility/overflow with the editor open. The lease tests add about one minute to the suite; no test-only timeout setting or separate test script is needed.
+
+## Optional Linux LV2 qualification
+
+Install `liblilv-dev lv2-dev swh-lv2` on Debian/Ubuntu and run `pnpm lv2:check` for the native host and control-to-DSP graph suite. Linux CI runs the same gate after the standard checks. See [LV2 hosting](lv2.md) for supported plugins, graph semantics and current integration limits. Default macOS and cross-compilation checks keep the native feature disabled.

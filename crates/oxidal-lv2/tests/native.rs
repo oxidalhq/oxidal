@@ -6,7 +6,7 @@ const URI: &str = "urn:oxidal:test:contract";
 fn contract_features_lifetime_bounds_readback_and_poison() {
     let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
     let catalog = world.plugins(48000.0).unwrap();
-    assert_eq!(catalog.len(), 2);
+    assert_eq!(catalog.len(), 3);
     let info = catalog.iter().find(|p| p.uri == URI).unwrap();
     assert!(info.unsupported.is_none());
     assert_eq!(info.ports.len(), 6);

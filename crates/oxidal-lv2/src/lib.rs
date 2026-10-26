@@ -77,3 +77,46 @@ pub struct PluginInfo {
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
 }
+
+#[cfg(feature = "native")]
+mod graph;
+#[cfg(feature = "native")]
+pub use graph::{Binding, PreparedGraph};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn native_controls_preserve_logarithmic_and_discrete_ranges() {
+        let mut p = Port {
+            index: 0,
+            symbol: "control".into(),
+            audio: false,
+            control: true,
+            input: true,
+            output: false,
+            integer: false,
+            toggled: false,
+            logarithmic: true,
+            latency: false,
+            minimum: Some(20.0),
+            maximum: Some(20000.0),
+            default: Some(1000.0),
+        };
+        let value = p.denormalize(0.5).unwrap();
+        assert!((value - (20.0_f32 * 20000.0).sqrt()).abs() < 0.001);
+        assert!((p.normalize(value).unwrap() - 0.5).abs() < 1e-6);
+        assert!(p.denormalize(f32::NAN).is_err());
+        assert!(p.normalize(0.0).is_err());
+        p.logarithmic = false;
+        p.minimum = Some(0.0);
+        p.maximum = Some(4.0);
+        p.integer = true;
+        assert_eq!(p.denormalize(0.7).unwrap(), 3.0);
+        p.integer = false;
+        p.toggled = true;
+        p.maximum = Some(1.0);
+        assert_eq!(p.denormalize(0.49).unwrap(), 0.0);
+        assert_eq!(p.denormalize(0.5).unwrap(), 1.0);
+    }
+}

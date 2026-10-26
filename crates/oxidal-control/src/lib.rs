@@ -142,6 +142,7 @@ pub struct Snapshot {
 #[derive(Debug, Clone)]
 pub struct Control {
     state: Snapshot,
+    prepared: bool,
     pickup: BTreeMap<String, (bool, Option<f64>)>,
     active_edit: Option<edit::ActiveEdit>,
     edit_receipts: std::collections::VecDeque<edit::Receipt>,
@@ -156,6 +157,7 @@ impl Default for Control {
             ("output.level", "Output level", 0.7),
         ];
         Self {
+            prepared: false,
             state: Snapshot {
                 session: format!(
                     "{}-{}",
@@ -227,6 +229,69 @@ impl Default for Control {
     }
 }
 impl Control {
+    /// Construct controls for a prepared processor. Topology may change between the same
+    /// nodes, but simulator presets cannot replace native resources. Values are normalized.
+    pub fn prepared(rig: Rig, parameters: Vec<Parameter>) -> Result<Self, String> {
+        if !rig.validate().valid || parameters.len() > 256 {
+            return Err("invalid_prepared_controls".into());
+        }
+        let mut ids = BTreeSet::new();
+        for p in &parameters {
+            let Some((node, symbol)) = p.id.split_once('.') else {
+                return Err("invalid_parameter_id".into());
+            };
+            if p.id.starts_with("rig.")
+                || !rig.nodes.iter().any(|n| n.id == node)
+                || symbol.is_empty()
+                || symbol.len() > 128
+                || !symbol
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                || !ids.insert(&p.id)
+                || p.min != 0.0
+                || p.max != 1.0
+                || !p.value.is_finite()
+                || !(0.0..=1.0).contains(&p.value)
+                || !p.default.is_finite()
+                || !(0.0..=1.0).contains(&p.default)
+                || !p.step.is_finite()
+                || p.step <= 0.0
+                || p.step > 1.0
+                || !p.writable
+                || p.label.len() > 128
+                || p.unit.len() > 32
+            {
+                return Err("invalid_prepared_parameter".into());
+            }
+        }
+        let mut c = Self {
+            prepared: true,
+            ..Self::default()
+        };
+        c.state.rig = rig;
+        c.state.parameters = parameters;
+        c.state.preset = "prepared".into();
+        c.state.actions.retain(|a| a.id == "rig.bypass");
+        c.state.mappings.mappings.clear();
+        Ok(c)
+    }
+
+    /// Processor adapter readback after quantization, before publishing a successful command.
+    /// Does not advance the revision or release an owned edit. Call outside the audio callback.
+    pub fn confirm_parameters(&mut self, values: &[(String, f64)]) -> Result<Snapshot, String> {
+        if !self.prepared {
+            return Err("not_prepared".into());
+        }
+        let mut candidate = self.clone();
+        for (id, value) in values {
+            candidate.parameter(id)?;
+            candidate.set(id, *value)?;
+        }
+        candidate.feedback();
+        let snapshot = candidate.snapshot();
+        *self = candidate;
+        Ok(snapshot)
+    }
     /// Current confirmed state for HTTP/SSE clients and transport adapters.
     /// @see docs/architecture.md
     pub fn snapshot(&self) -> Snapshot {
@@ -301,7 +366,11 @@ impl Control {
                 if !validation.valid {
                     return Err(format!("invalid_rig: {}", validation.errors.join("; ")));
                 }
-                let template = Rig::example(rig.nodes.iter().any(|n| n.id == "nam-b"));
+                let template = if candidate.prepared {
+                    candidate.state.rig.clone()
+                } else {
+                    Rig::example(rig.nodes.iter().any(|n| n.id == "nam-b"))
+                };
                 if rig.nodes.len() != template.nodes.len()
                     || template.nodes.iter().any(|required| {
                         !rig.nodes
@@ -378,6 +447,9 @@ impl Control {
             .ok_or_else(|| "unknown_target".into())
     }
     fn value(&self, id: &str) -> Result<f64, String> {
+        if self.prepared && id == "rig.preset" {
+            return Err("unsupported_prepared_action".into());
+        }
         match id {
             "rig.bypass" => Ok(if self.state.bypassed { 1.0 } else { 0.0 }),
             "rig.preset" => Ok(if self.state.preset == "parallel" {
@@ -389,6 +461,9 @@ impl Control {
         }
     }
     fn set(&mut self, id: &str, value: f64) -> Result<(), String> {
+        if self.prepared && id == "rig.preset" {
+            return Err("unsupported_prepared_action".into());
+        }
         if id == "rig.bypass" || id == "rig.preset" {
             if value != 0.0 && value != 1.0 {
                 return Err("invalid_action_value".into());
@@ -416,7 +491,9 @@ impl Control {
         }
         p.value = value;
         let (block, _) = id.split_once('.').ok_or("unknown_target")?;
-        if let Some(n) = self.state.rig.nodes.iter_mut().find(|n| n.id == block) {
+        if !self.prepared
+            && let Some(n) = self.state.rig.nodes.iter_mut().find(|n| n.id == block)
+        {
             n.level = value;
         }
         Ok(())
@@ -567,6 +644,34 @@ mod tests {
                 value,
             },
         }
+    }
+    #[test]
+    fn prepared_controls_reject_invalid_banks_and_confirm_quantized_feedback() {
+        let default = Control::default().snapshot();
+        let mut invalid = default.parameters.clone();
+        invalid[0].value = f64::NAN;
+        assert!(Control::prepared(default.rig.clone(), invalid).is_err());
+        let mut duplicate = default.parameters.clone();
+        duplicate.push(duplicate[0].clone());
+        assert!(Control::prepared(default.rig.clone(), duplicate).is_err());
+        let mut c = Control::prepared(default.rig, default.parameters).unwrap();
+        let mut file = default.mappings;
+        file.mappings[0].target = "rig.preset".into();
+        assert!(c.apply(cmd(&c, Action::Mappings { file }), true).is_err());
+        assert!(c.confirm_parameters(&[("rig.bypass".into(), 1.0)]).is_err());
+        assert!(
+            c.confirm_parameters(&[("nam-a.level".into(), f64::INFINITY)])
+                .is_err()
+        );
+        let file = Control::default().snapshot().mappings;
+        c.apply(cmd(&c, Action::Mappings { file }), true).unwrap();
+        let revision = c.snapshot().revision;
+        let s = c
+            .confirm_parameters(&[("nam-a.level".into(), 0.25)])
+            .unwrap();
+        assert_eq!(s.revision, revision);
+        assert_eq!(s.feedback[0].value, 32);
+        assert_eq!(s.parameters[0].value, 0.25);
     }
     #[test]
     fn edits_share_state_and_emit_feedback() {

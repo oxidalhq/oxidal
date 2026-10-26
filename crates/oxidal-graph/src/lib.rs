@@ -27,6 +27,7 @@ pub enum BlockKind {
     Input,
     Nam,
     Cabinet,
+    Lv2,
     Delay,
     Reverb,
     Output,

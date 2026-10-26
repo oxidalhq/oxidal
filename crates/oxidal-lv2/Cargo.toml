@@ -6,10 +6,12 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-native = []
+native = ["dep:oxidal-control", "dep:oxidal-graph"]
 
 [dependencies]
 serde.workspace = true
+oxidal-control = { workspace = true, optional = true }
+oxidal-graph = { workspace = true, optional = true }
 
 [lints.rust]
 missing_debug_implementations = "warn"

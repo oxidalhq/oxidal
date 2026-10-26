@@ -620,6 +620,8 @@ dependencies = [
 name = "oxidal-lv2"
 version = "0.1.0"
 dependencies = [
+ "oxidal-control",
+ "oxidal-graph",
  "serde",
 ]
 
