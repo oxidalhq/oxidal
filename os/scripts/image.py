@@ -54,11 +54,11 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         # Older guestfs cannot resolve this base's PARTUUID firmware entry. Use the
         # existing FAT UUID instead, before package hooks write kernel/initramfs files.
         fstab = work / 'fstab'
-        firmware_uuid = subprocess.check_output([
+        firmware_uuid, root_uuid = subprocess.check_output([
             'guestfish', '--ro', '-a', str(destination), '-i', 'vfs-uuid', '/dev/sda1',
-            ':', 'download', '/etc/fstab', str(fstab),
-        ], text=True, env={**os.environ, 'LIBGUESTFS_BACKEND': 'direct'}).strip()
-        fstab.write_text(provision.firmware_fstab(fstab.read_text(), firmware_uuid))
+            ':', 'vfs-uuid', '/dev/sda2', ':', 'download', '/etc/fstab', str(fstab),
+        ], text=True, env={**os.environ, 'LIBGUESTFS_BACKEND': 'direct'}).splitlines()
+        fstab.write_text(provision.firmware_fstab(fstab.read_text(), firmware_uuid, root_uuid))
         run('guestfish', '-a', str(destination), '-i', 'upload', str(fstab), '/etc/fstab')
         root = work / 'overlay'
         (root / 'etc').mkdir(parents=True)
@@ -121,7 +121,7 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         'schema': 1, 'image_sha256': digest.hexdigest(), 'base': provision.manifest()['image'],
         'bundle_manifest': payload, 'installed_qualification': 'passed',
         'hardware_qualified': False, 'physical_sd_written': False, 'boot_splash': boot_splash,
-        'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid,
+        'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid, 'root_uuid': root_uuid,
         'first_boot': 'Connect to the generated hotspot or wired LAN; trust the supplied CA; open https://oxidal.local.',
         'pending_hardware': ['Pi boot', 'Wi-Fi radio/hotspot', 'physical audio and latency', 'thermal and power-loss testing'],
     }
