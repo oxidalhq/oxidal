@@ -3,7 +3,7 @@ import { importPreset, presetLibrary, type Preset } from './api';
 import { NativeEditor } from './NativeEditor';
 import { Button } from './components/ui/button';
 
-/** Immutable native originals; playback is a separate, unavailable capability.
+/** Immutable native originals; playback has its own explicitly started session.
  * @see docs/presets/format.md
  */
 export function Library({ connected }: { connected: boolean }) {
@@ -100,7 +100,7 @@ export function Library({ connected }: { connected: boolean }) {
               · {preset.parameter_count} parameters · {preset.block_count} chain
               entries
             </p>
-            <p className="caption">Original stored · Playback unavailable</p>
+            <p className="caption">Original stored · Playback is separate</p>
             <a
               href={`/api/v1/presets/${preset.sha256}/original`}
               download

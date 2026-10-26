@@ -351,3 +351,107 @@ test('native editor rejects stale ownership and replay then expires abandoned ed
     ).status(),
   ).toBe(409);
 });
+
+test('playback lifecycle keeps native authoring available after stop and restart', async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    process.env.OXIDAL_AUDIO_QUALIFY_NULL !== '1',
+    'Explicit Linux native/null qualification required',
+  );
+  test.setTimeout(90000);
+  const bytes = readFileSync(process.env.OXIDAL_NATIVE_TEST_PRESET!);
+  const imported = await request.post('/api/v1/presets', {
+    data: bytes,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBe(true);
+  const preset = await imported.json();
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const state = await (await request.get('/api/v1/audio')).json();
+  const started = await request.post('/api/v1/audio', {
+    data: {
+      session: state.session,
+      expected_revision: state.revision,
+      action: {
+        kind: 'start',
+        settings: {
+          stream: {
+            input,
+            output: { ...input, direction: 'playback' },
+            input_map: [0, 1],
+            output_map: [0, 1],
+          },
+          preset_id: preset.sha256,
+          owned: false,
+        },
+      },
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  const nativeBefore = await (await request.get('/api/v1/native')).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const audio = page.getByRole('region', { name: 'Playback controls' });
+  await expect(audio.getByRole('status')).toContainText('Audio: running');
+  await audio.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Native preset editor' });
+  await editor
+    .getByLabel('Preset to load')
+    .selectOption(`original:${preset.sha256}`);
+  await editor.getByRole('button', { name: 'Load into native editor' }).click();
+  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  await editor
+    .getByLabel('Owned preset name')
+    .fill(`Stopped audio ${test.info().project.name}`);
+  await editor.getByRole('button', { name: 'Save owned copy' }).click();
+  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  const saved = await (await request.get('/api/v1/native')).json();
+  expect(saved.session).toBe(nativeBefore.session);
+  expect(saved.owned.some((p: { id: string }) => p.id === saved.loaded)).toBe(
+    true,
+  );
+  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await audio.getByRole('button', { name: 'Resume saved session' }).click();
+  await expect(audio.getByRole('status')).toContainText('Audio: running');
+  await audio
+    .getByRole('button', { name: 'Restart audio', exact: true })
+    .click();
+  await expect(
+    audio.getByRole('button', { name: 'Stop audio', exact: true }),
+  ).toBeEnabled();
+  await expect(audio.getByRole('status')).toContainText('Audio: running');
+  await audio.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+  expect((await (await request.get('/api/v1/native')).json()).loaded).toBe(
+    saved.loaded,
+  );
+  expect((await (await request.get('/api/v1/audio')).json()).device_owned).toBe(
+    false,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+});

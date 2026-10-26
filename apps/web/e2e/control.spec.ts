@@ -54,7 +54,7 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   await page.goto('/');
   await expect(page.getByText('Device connected')).toBeVisible();
   await expect(
-    page.getByText('Audio unavailable.', { exact: true }),
+    page.getByText('Rig preview is silent.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Serial rig' })).toBeVisible();
   await expect(page.getByRole('complementary')).toHaveCount(0);
@@ -366,13 +366,15 @@ test('audio inspection keeps the authoring service connected', async ({
   await expect(
     panel.getByRole('button', { name: 'Refresh audio devices' }),
   ).toBeEnabled();
-  await expect(panel.getByRole('status')).not.toBeEmpty();
-  await expect(panel.getByRole('status')).not.toHaveText('Inspecting audio…');
+  await expect(panel.getByRole('status').last()).not.toBeEmpty();
+  await expect(panel.getByRole('status').last()).not.toHaveText(
+    'Inspecting audio…',
+  );
   const health = await (await request.get('/api/v1/health')).json();
   expect(health.audio_available).toBe(false);
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
   await expect(
-    page.getByText('Audio unavailable.', { exact: true }),
+    page.getByText('Rig preview is silent.', { exact: true }),
   ).toBeVisible();
 });

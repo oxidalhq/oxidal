@@ -639,6 +639,7 @@ dependencies = [
 name = "oxidal-tone3000"
 version = "0.1.0"
 dependencies = [
+ "oxidal-audio",
  "oxidal-presets",
  "schemars",
  "serde",

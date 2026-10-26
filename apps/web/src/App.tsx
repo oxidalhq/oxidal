@@ -348,8 +348,9 @@ export default function App() {
           <div className="notice">
             <WarningCircle size={20} />
             <span>
-              <strong>Audio unavailable.</strong> This build validates routing
-              and synchronizes controls. It does not process sound.
+              <strong>Rig preview is silent.</strong> This view validates
+              routing and synchronizes controls. Separate saved-preset playback
+              is managed in Settings.
             </span>
           </div>
           {error && (

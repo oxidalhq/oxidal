@@ -1,0 +1,203 @@
+//! Real HTTP/process regression. Native qualification uses ALSA null, never a physical output.
+use oxidal_api::{Config, router};
+use serde_json::{Value, json};
+
+#[tokio::test]
+#[ignore = "run by Linux native qualification with the actual audio/editor workers and preset fixture"]
+async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring() {
+    let audio_worker = std::env::var_os("OXIDAL_TEST_AUDIO_WORKER").expect("audio worker");
+    let native_worker = std::env::var_os("OXIDAL_TEST_NATIVE_WORKER").expect("editor worker");
+    assert_eq!(std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").unwrap(), "1");
+    let bytes =
+        std::fs::read(std::env::var_os("OXIDAL_NATIVE_TEST_PRESET").expect("preset")).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-playback-test-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let preset = oxidal_presets::Store::new(root.join("presets"))
+        .import(&bytes)
+        .unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let app = router(Config {
+        audio_worker: Some(audio_worker.into()),
+        native_worker: Some(native_worker.into()),
+        shutdown: Some(signal),
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        ui_dir: root.join("ui"),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let initial = get(&client, &url, "state").await;
+    let editor = get(&client, &url, "native").await;
+    let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0", "direction":"capture", "sample_rate":48000, "channels":2, "format":"s16", "period_frames":128, "periods":3});
+    let mut output = input.clone();
+    output["direction"] = json!("playback");
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false});
+    let mut state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "stopped");
+    // Missing immutable asset fails before PCM ownership and leaves the HTTP/native sessions intact.
+    let mut missing = settings.clone();
+    missing["preset_id"] = json!("0".repeat(64));
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"start","settings":missing})
+        )
+        .await
+        .status(),
+        409
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "failed");
+    assert_eq!(state["device_owned"], false);
+    let request = json!({"session":state["session"],"expected_revision":state["revision"],"action":{"kind":"start","settings":settings}});
+    let starting_client = client.clone();
+    let target = format!("{url}/audio");
+    let pending =
+        tokio::spawn(async move { starting_client.post(target).json(&request).send().await });
+    for _ in 0..150 {
+        state = get(&client, &url, "audio").await;
+        if state["phase"] == "starting" || state["phase"] == "running" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(state["phase"] == "starting" || state["phase"] == "running");
+    pending.abort(); // Accepted command remains owned by the supervisor, not the disconnected HTTP task.
+    state = wait_phase(&client, &url, "running").await;
+    assert_eq!(state["device_owned"], true);
+    assert_eq!(
+        get(&client, &url, "native").await["session"],
+        editor["session"]
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/audio/probe"))
+            .json(&input)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let mut stale = state.clone();
+    stale["session"] = json!("previous-boot");
+    assert_eq!(
+        send(&client, &url, &stale, json!({"kind":"stop"}))
+            .await
+            .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "audio").await["phase"], "running");
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"start","settings":settings})
+        )
+        .await
+        .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "audio").await["phase"], "running");
+    assert!(
+        send(&client, &url, &state, json!({"kind":"restart"}))
+            .await
+            .status()
+            .is_success()
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "running");
+    assert!(
+        send(&client, &url, &state, json!({"kind":"stop"}))
+            .await
+            .status()
+            .is_success()
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "stopped");
+    assert_eq!(state["device_owned"], false);
+    assert_eq!(get(&client, &url, "state").await, initial);
+    assert_eq!(
+        get(&client, &url, "presets").await["presets"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    // Load, edit and save through the real native worker after playback has stopped.
+    let mut editor_after = get(&client, &url, "native").await;
+    assert_eq!(editor_after["session"], editor["session"]);
+    for (id, action) in [
+        (
+            "load",
+            json!({"kind":"load","id":preset.sha256,"owned":false}),
+        ),
+        ("save", json!({"kind":"save","name":"After stopping audio"})),
+    ] {
+        let response = client.post(format!("{url}/native")).json(&json!({"session":editor_after["session"],"expected_revision":editor_after["revision"],"request_id":id,"action":action})).send().await.unwrap();
+        assert!(
+            response.status().is_success(),
+            "{id}: {:?}",
+            response.text().await.unwrap()
+        );
+        editor_after = get(&client, &url, "native").await;
+    }
+    assert_eq!(editor_after["owned"].as_array().unwrap().len(), 1);
+    assert!(root.join("presets/audio-runtime").is_dir());
+    // Another actual open/close proves that the completed stop did not retain the global permit.
+    assert!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"start","settings":settings})
+        )
+        .await
+        .status()
+        .is_success()
+    );
+    state = get(&client, &url, "audio").await;
+    assert!(
+        send(&client, &url, &state, json!({"kind":"stop"}))
+            .await
+            .status()
+            .is_success()
+    );
+    shutdown.send_replace(true);
+    task.abort();
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    std::fs::remove_dir_all(root).unwrap();
+}
+async fn get(client: &reqwest::Client, url: &str, path: &str) -> Value {
+    let response = client.get(format!("{url}/{path}")).send().await.unwrap();
+    assert!(response.status().is_success());
+    response.json().await.unwrap()
+}
+async fn send(
+    client: &reqwest::Client,
+    url: &str,
+    state: &Value,
+    action: Value,
+) -> reqwest::Response {
+    client.post(format!("{url}/audio")).json(&json!({"session":state["session"],"expected_revision":state["revision"],"action":action})).send().await.unwrap()
+}
+async fn wait_phase(client: &reqwest::Client, url: &str, phase: &str) -> Value {
+    for _ in 0..250 {
+        let state = get(client, url, "audio").await;
+        if state["phase"] == phase {
+            return state;
+        }
+        assert_ne!(state["phase"], "failed", "{state}");
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    panic!("audio never reached {phase}");
+}

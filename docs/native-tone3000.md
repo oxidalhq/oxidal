@@ -1,6 +1,6 @@
 # Native TONE3000 adapter qualification
 
-`oxidal-tone3000` provides an **optional offline native editor** connected to the daemon through a dedicated worker process. It calls the real pinned TONE3000 processor through a bounded C ABI. It is not an ALSA driver, LV2 host, real-time-safe callback implementation, complete settings editor or shipping audio engine. The same offline adapter builds on macOS and Linux. Native execution has been qualified on macOS ARM64 and Debian Bookworm ARM64 without a display server; Linux streaming and physical-device qualification remain required.
+`oxidal-tone3000` provides an **optional offline native editor** connected to the daemon through a dedicated worker process. It calls the real pinned TONE3000 processor through a bounded C ABI. The adapter itself is not an ALSA driver, LV2 host, real-time-qualified callback implementation, complete settings editor or shipping audio engine. The same offline adapter builds on macOS and Linux. Native execution has been qualified on macOS ARM64 and Debian Bookworm ARM64 without a display server; A separate experimental Linux playback worker now uses this adapter with ALSA; see [audio lifecycle](audio.md). Physical-device and real-time qualification remain required.
 
 ## Build and repeat the qualification
 

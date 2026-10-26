@@ -1,5 +1,6 @@
 mod audio;
 mod native_editor;
+mod playback;
 mod presets;
 use axum::{
     Json, Router,
@@ -47,6 +48,8 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub audio_state: oxidal_audio::lifecycle::AudioState,
+    pub audio_command: oxidal_audio::lifecycle::AudioCommand,
     pub audio_devices: oxidal_audio::AudioDevices,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
@@ -63,6 +66,7 @@ pub struct Contract {
 pub struct Config {
     pub simulator: bool,
     pub native_worker: Option<PathBuf>,
+    pub audio_worker: Option<PathBuf>,
     pub mapping_path: PathBuf,
     pub preset_dir: PathBuf,
     pub ui_dir: PathBuf,
@@ -71,6 +75,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    playback: playback::Playback,
     control: Mutex<Control>,
     native: Mutex<Option<native_editor::Worker>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
@@ -107,6 +112,7 @@ pub fn router(config: Config) -> Result<Router, String> {
     let ui = ServeDir::new(&config.ui_dir)
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let shared = Arc::new(Shared {
+        playback: playback::Playback::new(&config)?,
         control: Mutex::new(control),
         native: Mutex::new(native_editor::Worker::start(&config)?),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
@@ -131,6 +137,7 @@ pub fn router(config: Config) -> Result<Router, String> {
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route("/audio", get(playback::state).post(playback::command))
         .route("/audio/devices", get(audio::devices))
         .route("/audio/probe", post(audio::probe))
         .route(

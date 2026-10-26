@@ -8,7 +8,7 @@ export type MappingFile = Snapshot['mappings'];
 const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
-  formats: { uint8: true, uint32: true, double: true },
+  formats: { uint8: true, uint32: true, uint64: true, double: true },
 });
 const snapshotValidator = ajv.compile<Snapshot>({
   $defs: schema.$defs,
@@ -165,5 +165,38 @@ export async function probeAudio(request: AudioProbe) {
   );
   if (!audioProbeValidator(body))
     throw new Error('Incompatible audio probe response');
+  return body;
+}
+
+export type AudioState = Contract['audio_state'];
+export type AudioAction = Contract['audio_command']['action'];
+export type StartAudio = NonNullable<AudioState['configured']>;
+const audioStateValidator = ajv.compile<AudioState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AudioState',
+});
+export async function playbackState(): Promise<AudioState> {
+  const body = await presetResponse(await fetch('/api/v1/audio'));
+  if (!audioStateValidator(body))
+    throw new Error('Incompatible playback state');
+  return body;
+}
+export async function playbackCommand(
+  state: AudioState,
+  action: AudioAction,
+): Promise<AudioState> {
+  const body = await presetResponse(
+    await fetch('/api/v1/audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: state.session,
+        expected_revision: state.revision,
+        action,
+      }),
+    }),
+  );
+  if (!audioStateValidator(body))
+    throw new Error('Incompatible playback state');
   return body;
 }

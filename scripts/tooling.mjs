@@ -64,7 +64,9 @@ if (mode === 'bootstrap') {
       '--locked',
       '--workspace',
       '--features',
-      'oxidal-tone3000/native',
+      process.platform === 'linux'
+        ? 'oxidal-tone3000/audio-qualification,oxidal-api/alsa'
+        : 'oxidal-tone3000/native',
       '--all-targets',
       '--',
       '-D',
@@ -86,10 +88,54 @@ if (mode === 'bootstrap') {
     ],
     { env },
   );
-  run('pnpm', ['test:e2e', '--grep', 'native editor'], {
+  if (process.platform === 'linux') {
+    const audioEnv = {
+      ...env,
+      OXIDAL_AUDIO_QUALIFY_NULL: '1',
+      OXIDAL_TEST_AUDIO_WORKER: join(targetDir, 'debug/oxidal-audio-worker'),
+      OXIDAL_TEST_NATIVE_WORKER: join(targetDir, 'debug/oxidal-native-worker'),
+      OXIDAL_NATIVE_TEST_PRESET: join(
+        env.OXIDAL_QUALIFICATION_DATA,
+        'a2-preset.t3kpreset',
+      ),
+    };
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-tone3000',
+        '--features',
+        'audio-qualification',
+        '--bins',
+      ],
+      { env: audioEnv },
+    );
+    run(
+      'cargo',
+      [
+        'test',
+        '--locked',
+        '-p',
+        'oxidal-api',
+        '--features',
+        'alsa',
+        '--test',
+        'playback',
+        '--',
+        '--ignored',
+      ],
+      { env: audioEnv },
+    );
+  }
+  run('pnpm', ['test:e2e', '--grep', 'native editor|playback lifecycle'], {
     env: {
       ...env,
       OXIDAL_NATIVE_EDITOR: '1',
+      ...(process.platform === 'linux'
+        ? { OXIDAL_EXPERIMENTAL_AUDIO: '1', OXIDAL_AUDIO_QUALIFY_NULL: '1' }
+        : {}),
       OXIDAL_NATIVE_TEST_PRESET: join(
         env.OXIDAL_QUALIFICATION_DATA,
         'a2-preset.t3kpreset',
@@ -177,6 +223,29 @@ if (mode === 'bootstrap') {
       },
     );
   }
+  if (process.env.OXIDAL_EXPERIMENTAL_AUDIO === '1') {
+    if (process.platform !== 'linux')
+      throw new Error('Experimental playback requires Linux ALSA.');
+    const qualify = process.env.OXIDAL_AUDIO_QUALIFY_NULL === '1';
+    if (qualify && mode !== 'e2e-server')
+      throw new Error('Null fixture is only enabled by the E2E server.');
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-tone3000',
+        '--features',
+        qualify ? 'audio-qualification' : 'audio-worker',
+        '--bin',
+        'oxidal-audio-worker',
+      ],
+      {
+        env: { ...rustEnv(), OXIDAL_TONE3000_LIB_DIR: nativeLibrary },
+      },
+    );
+  }
   const mappingPath =
     mode === 'e2e-server'
       ? join(mkdtempSync(join(tmpdir(), 'oxidal-e2e-')), 'mappings.json')
@@ -184,6 +253,9 @@ if (mode === 'bootstrap') {
   const env = {
     ...process.env,
     OXIDAL_SIMULATOR: '1',
+    ...(process.env.OXIDAL_EXPERIMENTAL_AUDIO === '1'
+      ? { OXIDAL_AUDIO_WORKER: join(targetDir, 'debug/oxidal-audio-worker') }
+      : {}),
     ...(process.env.OXIDAL_NATIVE_EDITOR === '1'
       ? {
           OXIDAL_NATIVE_WORKER: join(targetDir, 'debug/oxidal-native-worker'),

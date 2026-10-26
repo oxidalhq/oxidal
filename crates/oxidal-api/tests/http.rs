@@ -14,6 +14,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let app = router(Config {
+        audio_worker: None,
         native_worker: None,
         shutdown: None,
         simulator,
@@ -144,6 +145,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     );
     assert!(path.is_file());
     let app = router(Config {
+        audio_worker: None,
         native_worker: None,
         shutdown: None,
         simulator: false,
@@ -166,6 +168,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     std::fs::write(&path, b"bad data").unwrap();
     assert!(
         router(Config {
+            audio_worker: None,
             native_worker: None,
             shutdown: None,
             simulator: false,
@@ -655,5 +658,87 @@ async fn audio_inspection_preserves_authoring_and_rejects_arbitrary_pcm() {
             .status()
             .is_success()
     );
+    task.abort();
+}
+
+#[tokio::test]
+async fn playback_unavailable_rejects_stale_and_foreign_control_without_stopping_ui() {
+    let (url, task, _) = start(true).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["phase"], "unavailable");
+    assert_eq!(state["device_owned"], false);
+    let command = json!({"session":state["session"],"expected_revision":state["revision"],"action":{"kind":"stop"}});
+    assert_eq!(
+        client
+            .post(format!("{url}/audio"))
+            .json(&command)
+            .header("origin", "https://untrusted.example")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/audio"))
+            .json(&command)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let mut stale = command;
+    stale["session"] = json!("previous-boot");
+    assert_eq!(
+        client
+            .post(format!("{url}/audio"))
+            .json(&stale)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/audio"))
+            .header("content-type", "application/json")
+            .body("{")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    let unchanged: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(unchanged, state);
+    for path in ["health", "state", "presets"] {
+        assert!(
+            client
+                .get(format!("{url}/{path}"))
+                .send()
+                .await
+                .unwrap()
+                .status()
+                .is_success()
+        );
+    }
     task.abort();
 }

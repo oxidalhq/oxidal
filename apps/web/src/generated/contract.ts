@@ -1,7 +1,19 @@
 /* Generated from Rust. Run pnpm contract:generate; do not edit. */
 
+export type AudioAction =
+  | {
+      kind: "start";
+      settings: StartAudio;
+    }
+  | {
+      kind: "stop";
+    }
+  | {
+      kind: "restart";
+    };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
+export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
  * One command entry point; relative edits are applied to current authoritative state.
  * @see docs/architecture.md
@@ -108,9 +120,11 @@ export type EditorAction =
  * @see docs/architecture.md
  */
 export interface Contract {
+  audio_command: AudioCommand;
   audio_devices: AudioDevices;
   audio_probe: AudioProbe;
   audio_probe_result: AudioProbeResult;
+  audio_state: AudioState;
   capabilities: Capabilities;
   command: Command;
   error: ApiError;
@@ -121,6 +135,46 @@ export interface Contract {
   rig: Rig;
   snapshot: Snapshot;
   validation: Validation;
+}
+export interface AudioCommand {
+  action: AudioAction;
+  expected_revision: number;
+  session: string;
+}
+export interface StartAudio {
+  owned: boolean;
+  /**
+   * Immutable imported/owned preset identity, never a browser-supplied file path.
+   */
+  preset_id: string;
+  stream: StreamConfig;
+}
+export interface StreamConfig {
+  input: AudioProbe;
+  /**
+   * Zero-based channels; duplicate input indexes copy mono to both processor channels.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  input_map: [number, number];
+  output: AudioProbe;
+  /**
+   * Duplicate output indexes mix the stereo processor output equally into mono.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  output_map: [number, number];
+}
+export interface AudioProbe {
+  channels: number;
+  direction: Direction;
+  endpoint: string;
+  format: SampleFormat;
+  period_frames: number;
+  periods: number;
+  sample_rate: number;
 }
 export interface AudioDevices {
   backend_available: boolean;
@@ -139,15 +193,6 @@ export interface AudioEndpoint {
   id: string;
   name: string;
 }
-export interface AudioProbe {
-  channels: number;
-  direction: Direction;
-  endpoint: string;
-  format: SampleFormat;
-  period_frames: number;
-  periods: number;
-  sample_rate: number;
-}
 export interface AudioProbeResult {
   buffer_frames: number;
   configuration: AudioProbe;
@@ -155,6 +200,18 @@ export interface AudioProbeResult {
    * Only a point-in-time open/configure/readback/close check, never live readiness.
    */
   streaming_available: boolean;
+}
+export interface AudioState {
+  configured?: StartAudio | null;
+  /**
+   * Remains true until the worker is reaped, including failed shutdowns.
+   */
+  device_owned: boolean;
+  error?: string | null;
+  experimental: boolean;
+  phase: AudioPhase;
+  revision: number;
+  session: string;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.

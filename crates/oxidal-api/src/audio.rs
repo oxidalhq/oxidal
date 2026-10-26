@@ -3,7 +3,7 @@ use super::*;
 use oxidal_audio::{AudioDevices, AudioProbe, AudioProbeResult};
 
 // Share one permit across routers: a dropped HTTP request must not free it while ALSA is still running.
-static PROBE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+pub(super) static PROBE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
 
 pub async fn devices() -> Response {
     let Ok(permit) = PROBE.try_acquire() else {

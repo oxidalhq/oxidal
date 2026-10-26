@@ -4,6 +4,9 @@
   "description": "Schema generation root. Rust wire types are the contract source of truth.\n@see docs/architecture.md",
   "type": "object",
   "properties": {
+    "audio_command": {
+      "$ref": "#/$defs/AudioCommand"
+    },
     "audio_devices": {
       "$ref": "#/$defs/AudioDevices"
     },
@@ -12,6 +15,9 @@
     },
     "audio_probe_result": {
       "$ref": "#/$defs/AudioProbeResult"
+    },
+    "audio_state": {
+      "$ref": "#/$defs/AudioState"
     },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
@@ -50,6 +56,8 @@
     "rig",
     "validation",
     "capabilities",
+    "audio_state",
+    "audio_command",
     "audio_devices",
     "audio_probe",
     "audio_probe_result",
@@ -213,6 +221,75 @@
         "error"
       ]
     },
+    "AudioAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "start"
+            },
+            "settings": {
+              "$ref": "#/$defs/StartAudio"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "settings"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "restart"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "AudioCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/AudioAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "action"
+      ]
+    },
     "AudioDevices": {
       "type": "object",
       "properties": {
@@ -263,6 +340,17 @@
         "id",
         "name",
         "direction"
+      ]
+    },
+    "AudioPhase": {
+      "type": "string",
+      "enum": [
+        "unavailable",
+        "stopped",
+        "starting",
+        "running",
+        "stopping",
+        "failed"
       ]
     },
     "AudioProbe": {
@@ -330,6 +418,53 @@
         "configuration",
         "buffer_frames",
         "streaming_available"
+      ]
+    },
+    "AudioState": {
+      "type": "object",
+      "properties": {
+        "configured": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartAudio"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_owned": {
+          "description": "Remains true until the worker is reaped, including failed shutdowns.",
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "experimental": {
+          "type": "boolean"
+        },
+        "phase": {
+          "$ref": "#/$defs/AudioPhase"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "phase",
+        "device_owned",
+        "experimental"
       ]
     },
     "BlockKind": {
@@ -1346,6 +1481,67 @@
         "parameters",
         "mappings",
         "feedback"
+      ]
+    },
+    "StartAudio": {
+      "type": "object",
+      "properties": {
+        "owned": {
+          "type": "boolean"
+        },
+        "preset_id": {
+          "description": "Immutable imported/owned preset identity, never a browser-supplied file path.",
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/StreamConfig"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stream",
+        "preset_id",
+        "owned"
+      ]
+    },
+    "StreamConfig": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/AudioProbe"
+        },
+        "input_map": {
+          "description": "Zero-based channels; duplicate input indexes copy mono to both processor channels.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "output": {
+          "$ref": "#/$defs/AudioProbe"
+        },
+        "output_map": {
+          "description": "Duplicate output indexes mix the stereo processor output equally into mono.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "output",
+        "input_map",
+        "output_map"
       ]
     },
     "Validation": {

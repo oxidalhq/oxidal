@@ -1,6 +1,6 @@
 # Oxidal
 
-Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation, shared web/MIDI control state and an immutable native preset library; it does not process live guitar audio. Owned NAM Linear/LSTM inference is tested separately; WaveNet/A2 and native audio hosting remain unimplemented.
+Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation, shared web/MIDI control state and an immutable native preset library; the generic rig preview is silent. Opt-in Linux playback can run a saved native TONE3000 preset in a separate process, with Stop/Start/Restart preserving authoring. Its tests use ALSA null; physical audio and real-time performance remain unqualified. Owned NAM Linear/LSTM inference is tested separately; owned WaveNet/A2 and general LV2 hosting remain unimplemented.
 
 | Path        | Content                                                                                      |
 | ----------- | -------------------------------------------------------------------------------------------- |
@@ -45,7 +45,7 @@ Open **Library** to import a `.t3kpreset`, retain its original bytes and downloa
 
 MIDI mappings and imported originals persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/downloads, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
 
-The optional [native TONE3000 adapter](docs/native-tone3000.md) is an offline integration spike. `pnpm native:check` builds and qualifies the real processor separately; it does not enable audio in this preview.
+The optional [native TONE3000 adapter](docs/native-tone3000.md) provides real offline authoring on macOS/Linux. `pnpm native:check` qualifies the processor and, on Linux, the isolated playback lifecycle against ALSA null. See [experimental Linux playback](docs/audio.md#experimental-linux-playback) for explicit opt-in and limitations; ordinary previews never start audio automatically.
 
 ## Verify and prepare releases
 

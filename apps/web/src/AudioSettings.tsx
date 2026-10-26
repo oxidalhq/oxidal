@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PlaybackSettings } from './PlaybackSettings';
 import {
   audioDevices,
   probeAudio,
@@ -11,6 +12,8 @@ import { Button } from './components/ui/button';
  * @see docs/audio.md
  */
 export function AudioSettings({ connected }: { connected: boolean }) {
+  const [input, setInput] = useState<AudioProbe | null>(null);
+  const [output, setOutput] = useState<AudioProbe | null>(null);
   const [inventory, setInventory] = useState<AudioDevices | null>(null);
   const [selected, setSelected] = useState('');
   const [request, setRequest] = useState<
@@ -58,6 +61,9 @@ export function AudioSettings({ connected }: { connected: boolean }) {
         endpoint: endpoint.id,
         direction: endpoint.direction,
       });
+      if (result.configuration.direction === 'capture')
+        setInput(result.configuration);
+      else setOutput(result.configuration);
       setMessage(
         `Settings accepted: ${result.configuration.sample_rate} Hz, ${result.configuration.channels} channels, ${result.buffer_frames} buffer frames. Interface released. This is not a playback or latency test.`,
       );
@@ -79,7 +85,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       <h2>Audio devices</h2>
       <p>
         Inspect Linux audio interfaces while keeping the editor available.
-        Playback is not implemented in this build.
+        Configuration checks do not start playback.
       </p>
       <Button
         variant="outline"
@@ -197,6 +203,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             {warning}
           </p>
         ))}
+      <PlaybackSettings connected={connected} input={input} output={output} />
       <p role="status">{busy ? 'Inspecting audio…' : message}</p>
     </section>
   );

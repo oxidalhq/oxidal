@@ -7,8 +7,11 @@ publish.workspace = true
 
 [features]
 native = []
+audio-worker = ["native", "oxidal-audio/alsa"]
+audio-qualification = ["audio-worker", "oxidal-audio/qualification"]
 
 [dependencies]
+oxidal-audio = { path = "../oxidal-audio", version = "0.1.0" }
 serde_json.workspace = true
 serde.workspace = true
 schemars.workspace = true
@@ -28,3 +31,7 @@ required-features = ["native"]
 [[bin]]
 name = "oxidal-native-worker"
 required-features = ["native"]
+
+[[bin]]
+name = "oxidal-audio-worker"
+required-features = ["audio-worker"]
