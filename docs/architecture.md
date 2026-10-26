@@ -68,3 +68,10 @@ The optional Linux ALSA backend adds hardware discovery and exact non-streaming 
 ## Device administration
 
 The optional `oxidal-device` crate owns bounded Unix IPC and recoverable NetworkManager operations, separated from the unprivileged HTTP/audio service. See [device service](device-service.md) for the implemented network workflow, privilege boundary, tests and remaining v1 requirements.
+
+The native player's `AudioAction::SetControl` now reaches the sounding worker and
+returns confirmed controls through `AudioState`. The main rig view uses those real
+blocks while native playback runs. The generic `/state` simulator and offline editor
+retain separate identities; their commands do not target live audio. See
+[audio controls](audio.md#experimental-sounding-controls) for the supported scalar
+controls, failure policy and remaining authoring/real-time limits.

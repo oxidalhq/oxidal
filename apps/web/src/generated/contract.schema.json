@@ -337,6 +337,28 @@
             "kind",
             "enabled"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_control"
+            },
+            "target": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "target",
+            "value"
+          ]
         }
       ]
     },
@@ -505,6 +527,13 @@
             }
           ]
         },
+        "controls": {
+          "description": "Confirmed controls of the sounding worker; cleared whenever it stops.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LiveControl"
+          }
+        },
         "device_owned": {
           "description": "Remains true until the worker is reaped, including failed shutdowns.",
           "type": "boolean"
@@ -518,8 +547,18 @@
         "experimental": {
           "type": "boolean"
         },
+        "modified": {
+          "description": "Session edits are not written back to the immutable starting preset.",
+          "type": "boolean"
+        },
         "phase": {
           "$ref": "#/$defs/AudioPhase"
+        },
+        "preset_name": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "revision": {
           "type": "integer",
@@ -541,7 +580,9 @@
         "phase",
         "device_owned",
         "experimental",
-        "start_on_boot"
+        "start_on_boot",
+        "controls",
+        "modified"
       ]
     },
     "Binding": {
@@ -1729,6 +1770,36 @@
         "presets"
       ]
     },
+    "LiveControl": {
+      "description": "Native playback controls use normalized values; display text comes from the DSP.",
+      "type": "object",
+      "properties": {
+        "display": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "toggle": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "label",
+        "value",
+        "display",
+        "toggle"
+      ]
+    },
     "MappingFile": {
       "type": "object",
       "properties": {
@@ -2172,12 +2243,18 @@
           "type": "number",
           "format": "double"
         },
+        "display": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
         "interval": {
           "type": "number",
           "format": "double"
+        },
+        "label": {
+          "type": "string"
         },
         "machine_default": {
           "type": "boolean"
@@ -2194,6 +2271,9 @@
           "type": "number",
           "format": "double"
         },
+        "toggle": {
+          "type": "boolean"
+        },
         "tone": {
           "type": "boolean"
         },
@@ -2205,6 +2285,9 @@
       "additionalProperties": false,
       "required": [
         "id",
+        "label",
+        "display",
+        "toggle",
         "minimum",
         "maximum",
         "interval",

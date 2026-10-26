@@ -61,3 +61,27 @@ cargo clippy --locked --workspace --all-targets --features oxidal-api/alsa -- -D
 Use the pinned toolchain described in [core](core.md). These commands run in a normal Linux checkout or disposable Linux container with libasound installed; no separate test runner or physical device is required. Existing Playwright coverage checks that inspecting devices keeps the authoring UI connected. Physical acceptance must additionally cover actual USB/built-in devices, negotiated duplex settings, reconnect, channel routing, sustained streaming and performance.
 
 On Linux, `pnpm native:check` additionally builds the `audio-qualification` worker and runs `crates/oxidal-api/tests/playback.rs`, then existing Playwright native/playback cases. The qualification feature and `OXIDAL_AUDIO_QUALIFY_NULL=1` together select ALSA null inside the test worker; neither an API request nor an ordinary `audio-worker` build can enable it. The tool only enables this override for the E2E server. The real HTTP test covers missing assets, cancelled startup clients, exclusive probe ownership, stale commands, restart/reopen, and native preset saving after stop. The browser test covers the same controls and continued authoring on desktop/mobile. Null does not model a real device clock, hotplug, buffer pressure, xruns or audible output. Hardware tests must cover those separately.
+
+## Experimental sounding controls
+
+The native playback worker now returns its actual preset name, tone blocks and a
+bounded control catalog. The rig page shows this sounding session while it runs;
+the silent example chain is hidden. Input/output level, tone stack and gate controls,
+plus each loaded block's bypass, normalization, gains and mix, can be changed through
+`AudioAction::SetControl`. Labels/readbacks use native values and physical gain/gate
+units. Routing, model size, oversampling and pitch latency changes are excluded.
+
+Every request uses the playback session and revision. The supervisor serializes
+accepted commands, waits for matching worker readback, and rejects stale requests.
+Lost replies are refreshed in the browser, never replayed. Invalid requests leave
+the stream unchanged; ambiguous worker failures stop/reap the worker before giving
+up its device permit. Meter updates remain independent of command acknowledgements.
+
+These changes affect audio, but are session-only: restart reloads the saved preset.
+The offline editor remains separate, and live saving, full settings authoring,
+physical MIDI and prepared switching remain pending. Control/catalog work between
+PCM steps can allocate; this is not a real-time or gapless qualification claim.
+
+`pnpm native:check` covers actual DSP gain changes, readback and rejected mutations,
+HTTP/ALSA-null session conflicts and lifecycle, and the sounding panel across the
+target browser profiles. It does not establish physical latency or xrun behavior.

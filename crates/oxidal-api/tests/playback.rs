@@ -76,6 +76,47 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     pending.abort(); // Accepted command remains owned by the supervisor, not the disconnected HTTP task.
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["device_owned"], true);
+    assert!(!state["controls"].as_array().unwrap().is_empty());
+    let stopped_revision = state.clone();
+    let result = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control", "target":"outputLevel", "value":0.23}),
+    )
+    .await;
+    assert_eq!(result.status(), 200);
+    state = result.json().await.unwrap();
+    let level = state["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["target"] == "outputLevel")
+        .unwrap();
+    assert!((level["value"].as_f64().unwrap() - 0.23).abs() < 0.001);
+    assert_eq!(state["modified"], true);
+    assert_eq!(state["phase"], "running");
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &stopped_revision,
+            json!({"kind":"set_control", "target":"outputLevel", "value":0.8})
+        )
+        .await
+        .status(),
+        409
+    );
+    for action in [
+        json!({"kind":"set_control", "target":"osEnabled", "value":1.0}),
+        json!({"kind":"set_control", "target":"gateEnabled", "value":0.5}),
+    ] {
+        assert_eq!(send(&client, &url, &state, action).await.status(), 409);
+        assert_eq!(
+            get(&client, &url, "audio").await["revision"],
+            state["revision"]
+        );
+    }
     let mut measured = false;
     for _ in 0..30 {
         let m = get(&client, &url, "monitor").await;

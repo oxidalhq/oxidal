@@ -11,7 +11,7 @@ export function ChartContainer({
 }: {
   children: ReactElement;
   label: string;
-  config: Record<string, { label: string; color: string }>;
+  config: Record<string, { label: string; color: string; dashed?: boolean }>;
 }) {
   const style = Object.fromEntries(
     Object.entries(config).map(([key, value]) => [
@@ -32,8 +32,11 @@ export function ChartContainer({
             <span key={key} className="flex items-center gap-1">
               <span
                 aria-hidden="true"
-                className="h-2 w-2 rounded-full"
-                style={{ background: value.color }}
+                className="w-5 border-t-2"
+                style={{
+                  borderColor: value.color,
+                  borderStyle: value.dashed ? 'dashed' : 'solid',
+                }}
               />
               {value.label}
             </span>

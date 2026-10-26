@@ -1276,3 +1276,97 @@ button.block:focus-visible {
     font-size: 14px;
   }
 }
+
+/* Keep navigation on one touch-sized row instead of a tall stack beside the theme. */
+@media (max-width: 520px) {
+  .masthead nav {
+    flex: 1 0 100%;
+    width: 100%;
+    order: 3;
+  }
+  .masthead nav > button {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+  .display-mode {
+    flex: 1 0 100%;
+    order: 2;
+  }
+  .masthead .display-mode select {
+    min-height: 44px;
+  }
+}
+.live-rig .caption {
+  margin-block: 0.5rem;
+}
+
+/* Persistent instrument telemetry stays visible while the editing surface scrolls. */
+.resource-strip {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.3rem 0.75rem;
+  background: var(--background);
+  color: var(--foreground);
+  border-block: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.resource-strip-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+.resource-strip-state button {
+  min-height: 44px;
+}
+.resource-strip dl {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0;
+}
+.resource-strip dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.resource-strip dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.resource-strip dd small {
+  font-size: 0.65rem;
+}
+.resource-strip [data-warning='true'] dd {
+  color: var(--destructive);
+  font-weight: 800;
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .resource-strip {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0.2rem 0.5rem 0.4rem;
+  }
+  .resource-strip-state {
+    justify-content: space-between;
+  }
+  .resource-strip dl {
+    gap: 0.35rem;
+  }
+  .resource-strip dd {
+    font-size: 0.75rem;
+  }
+  .resource-strip dd small {
+    display: block;
+  }
+}

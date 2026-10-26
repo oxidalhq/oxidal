@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Reuse the native load/edit/save scenario on each device when explicitly enabled.
 const deviceCoverage = {
-  testMatch: /(device-layout|presets)\.spec\.ts/,
-  grep: /device portrait|folding and unfolding|stage display|touch adjustment|native editor loads/,
+  testMatch: /(device-layout|presets|monitor)\.spec\.ts/,
+  grep: /device portrait|folding and unfolding|stage display|touch adjustment|native editor loads|playback lifecycle|monitor shows/,
 };
 
 export default defineConfig({

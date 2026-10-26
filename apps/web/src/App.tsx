@@ -14,6 +14,8 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { LiveRig } from './LiveRig';
+import { ResourceStrip } from './ResourceStrip';
 import { SignalChain } from './SignalChain';
 import { Library } from './Library';
 const Monitoring = lazy(() =>
@@ -36,6 +38,8 @@ import {
  * @see docs/architecture.md
  */
 export default function App() {
+  const [playingName, setPlayingName] = useState<string | null>(null);
+  const audioRunning = playingName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
@@ -291,13 +295,19 @@ export default function App() {
           </Button>
         </nav>
       </header>
+      <ResourceStrip
+        displayMode={displayMode}
+        onDetails={() => setView('monitor')}
+      />
       <div className="workspace">
         <main>
           <div className="page-heading">
             <div>
               <span className="eyebrow">
                 {view === 'rig'
-                  ? 'Control preview'
+                  ? audioRunning
+                    ? 'Sounding rig'
+                    : 'Control preview'
                   : view === 'monitor'
                     ? 'Monitor'
                     : view === 'library'
@@ -306,13 +316,14 @@ export default function App() {
               </span>
               <h1 data-testid="active-preset">
                 {view === 'rig'
-                  ? !state
-                    ? 'Connecting'
-                    : state.preset === 'custom'
-                      ? 'Custom routing'
-                      : state.preset === 'parallel'
-                        ? 'Parallel rig'
-                        : 'Serial rig'
+                  ? (playingName ??
+                    (!state
+                      ? 'Connecting'
+                      : state.preset === 'custom'
+                        ? 'Custom routing'
+                        : state.preset === 'parallel'
+                          ? 'Parallel rig'
+                          : 'Serial rig'))
                   : view === 'monitor'
                     ? 'Signal & system'
                     : view === 'library'
@@ -320,7 +331,7 @@ export default function App() {
                       : 'Controls & MIDI'}
               </h1>
             </div>
-            {state && view === 'rig' && (
+            {state && view === 'rig' && !audioRunning && (
               <div className="performance-actions preset-controls">
                 <label className="field">
                   Example preset
@@ -365,7 +376,7 @@ export default function App() {
               </div>
             )}
           </div>
-          {view === 'rig' && (
+          {view === 'rig' && !audioRunning && (
             <div className="notice rig-status">
               <WarningCircle size={18} aria-hidden="true" />
               <span>
@@ -391,139 +402,151 @@ export default function App() {
             <Library connected={connected} />
           ) : view === 'rig' ? (
             <>
-              <section className="panel chain-panel" aria-label="Signal chain">
-                <div className="section-heading">
-                  <div>
-                    <h2>Signal chain</h2>
-                  </div>
-                  <div className="segmented" aria-label="Routing mode">
-                    <Button
-                      variant={!parallel ? 'default' : 'outline'}
-                      aria-pressed={!parallel}
-                      disabled={!connected}
-                      onClick={() => void routing(false)}
-                    >
-                      Serial
-                    </Button>
-                    <Button
-                      variant={parallel ? 'default' : 'outline'}
-                      aria-pressed={parallel}
-                      disabled={!connected}
-                      onClick={() => void routing(true)}
-                    >
-                      <ArrowsSplit size={17} />
-                      Parallel
-                    </Button>
-                  </div>
-                </div>
-                <SignalChain
-                  state={state}
-                  parallel={!!parallel}
-                  selectedBlock={selectedBlock}
-                  connected={connected}
-                  onSelect={(id, parameter) => {
-                    setFocusedBlock(id);
-                    document
-                      .getElementById(`control-${parameter}`)
-                      ?.scrollIntoView({ block: 'nearest' });
-                  }}
-                />
-                <details className="routing-details">
-                  <summary>Routing details</summary>
-                  <p className="caption">
-                    {parallel
-                      ? 'Input splits into A and B, then merges before the shared delay and reverb.'
-                      : 'One NAM path feeds the shared delay and reverb.'}{' '}
-                    Routing validation is active; this preview does not process
-                    audio.
-                  </p>
-                </details>
-              </section>
-              <section
-                className="panel controls-panel"
-                aria-label="Rig controls"
-              >
-                <div className="section-heading">
-                  <div>
-                    <span className="eyebrow">Quick controls</span>
-                    <h2>
-                      {blockNames[selectedBlock]}{' '}
-                      <span className="muted">/ selected</span>
-                    </h2>
-                  </div>
-                  <span className="muted">
-                    Last source:{' '}
-                    <strong data-testid="last-origin">{state.origin}</strong>
-                  </span>
-                </div>
-                <div className="parameters">
-                  {state.parameters.map((parameter) => (
-                    <div
-                      className="parameter"
-                      key={parameter.id}
-                      id={`control-${parameter.id}`}
-                      data-selected={parameter.id.startsWith(
-                        `${selectedBlock}.`,
-                      )}
-                      onFocusCapture={() =>
-                        setFocusedBlock(parameter.id.split('.')[0] ?? 'nam-a')
-                      }
-                    >
-                      <span>
-                        {parameter.label}
-                        <output data-testid={`value-${parameter.id}`}>
-                          {Math.round(parameter.value * 100)}%
-                        </output>
-                      </span>
-                      <input
-                        type="range"
-                        aria-label={parameter.label}
-                        min={parameter.min}
-                        max={parameter.max}
-                        step={parameter.step}
-                        value={parameter.value}
-                        disabled={
-                          !connected || state.edit?.target === parameter.id
-                        }
-                        onChange={(event) =>
-                          void run({
-                            type: 'set',
-                            target: parameter.id,
-                            value: Number(event.target.value),
-                          })
-                        }
-                      />
-                      <ControlEditor
-                        parameter={parameter}
-                        state={state}
-                        connected={connected}
-                        accept={accept}
-                      />
+              <LiveRig connected={connected} onPlaying={setPlayingName} />
+              {!audioRunning && (
+                <>
+                  <section
+                    className="panel chain-panel"
+                    aria-label="Signal chain"
+                  >
+                    <div className="section-heading">
+                      <div>
+                        <h2>Signal chain</h2>
+                      </div>
+                      <div className="segmented" aria-label="Routing mode">
+                        <Button
+                          variant={!parallel ? 'default' : 'outline'}
+                          aria-pressed={!parallel}
+                          disabled={!connected}
+                          onClick={() => void routing(false)}
+                        >
+                          Serial
+                        </Button>
+                        <Button
+                          variant={parallel ? 'default' : 'outline'}
+                          aria-pressed={parallel}
+                          disabled={!connected}
+                          onClick={() => void routing(true)}
+                        >
+                          <ArrowsSplit size={17} />
+                          Parallel
+                        </Button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </section>
-              <details className="panel">
-                <summary>Rig validation inspector</summary>
-                <label className="field">
-                  Rig JSON
-                  <textarea
-                    aria-label="Rig JSON"
-                    rows={8}
-                    value={draft || JSON.stringify(state.rig, null, 2)}
-                    onChange={(event) => setDraft(event.target.value)}
-                    spellCheck={false}
-                  />
-                </label>
-                <Button
-                  variant="outline"
-                  onClick={() => void validateDraft()}
-                  disabled={!connected}
-                >
-                  Validate rig
-                </Button>
-                <p role="status">{validation}</p>
-              </details>
+                    <SignalChain
+                      state={state}
+                      parallel={!!parallel}
+                      selectedBlock={selectedBlock}
+                      connected={connected}
+                      onSelect={(id, parameter) => {
+                        setFocusedBlock(id);
+                        document
+                          .getElementById(`control-${parameter}`)
+                          ?.scrollIntoView({ block: 'nearest' });
+                      }}
+                    />
+                    <details className="routing-details">
+                      <summary>Routing details</summary>
+                      <p className="caption">
+                        {parallel
+                          ? 'Input splits into A and B, then merges before the shared delay and reverb.'
+                          : 'One NAM path feeds the shared delay and reverb.'}{' '}
+                        Routing validation is active; this preview does not
+                        process audio.
+                      </p>
+                    </details>
+                  </section>
+                  <section
+                    className="panel controls-panel"
+                    aria-label="Rig controls"
+                  >
+                    <div className="section-heading">
+                      <div>
+                        <span className="eyebrow">Quick controls</span>
+                        <h2>
+                          {blockNames[selectedBlock]}{' '}
+                          <span className="muted">/ selected</span>
+                        </h2>
+                      </div>
+                      <span className="muted">
+                        Last source:{' '}
+                        <strong data-testid="last-origin">
+                          {state.origin}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="parameters">
+                      {state.parameters.map((parameter) => (
+                        <div
+                          className="parameter"
+                          key={parameter.id}
+                          id={`control-${parameter.id}`}
+                          data-selected={parameter.id.startsWith(
+                            `${selectedBlock}.`,
+                          )}
+                          onFocusCapture={() =>
+                            setFocusedBlock(
+                              parameter.id.split('.')[0] ?? 'nam-a',
+                            )
+                          }
+                        >
+                          <span>
+                            {parameter.label}
+                            <output data-testid={`value-${parameter.id}`}>
+                              {Math.round(parameter.value * 100)}%
+                            </output>
+                          </span>
+                          <input
+                            type="range"
+                            aria-label={parameter.label}
+                            min={parameter.min}
+                            max={parameter.max}
+                            step={parameter.step}
+                            value={parameter.value}
+                            disabled={
+                              !connected || state.edit?.target === parameter.id
+                            }
+                            onChange={(event) =>
+                              void run({
+                                type: 'set',
+                                target: parameter.id,
+                                value: Number(event.target.value),
+                              })
+                            }
+                          />
+                          <ControlEditor
+                            parameter={parameter}
+                            state={state}
+                            connected={connected}
+                            accept={accept}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <details className="panel">
+                    <summary>Rig validation inspector</summary>
+                    <label className="field">
+                      Rig JSON
+                      <textarea
+                        aria-label="Rig JSON"
+                        rows={8}
+                        value={draft || JSON.stringify(state.rig, null, 2)}
+                        onChange={(event) => setDraft(event.target.value)}
+                        spellCheck={false}
+                      />
+                    </label>
+                    <Button
+                      variant="outline"
+                      onClick={() => void validateDraft()}
+                      disabled={!connected}
+                    >
+                      Validate rig
+                    </Button>
+                    <p role="status">{validation}</p>
+                  </details>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -774,9 +797,11 @@ export default function App() {
             </>
           )}
           <footer>
-            <span>OXIDAL · LOCAL CONTROL PREVIEW</span>
             <span>
-              REV {state?.revision ?? '—'} /{' '}
+              OXIDAL · {audioRunning ? 'NATIVE AUDIO' : 'LOCAL CONTROL PREVIEW'}
+            </span>
+            <span>
+              {!audioRunning && <>REV {state?.revision ?? '—'} / </>}
               {connected ? 'connected' : 'reconnecting'}
             </span>
           </footer>

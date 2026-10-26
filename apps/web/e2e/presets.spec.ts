@@ -464,74 +464,134 @@ test('playback lifecycle keeps native authoring available after stop and restart
     },
   });
   expect(started.ok(), await started.text()).toBe(true);
-  const nativeBefore = await (await request.get('/api/v1/native')).json();
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const audio = page.getByRole('region', { name: 'Playback controls' });
-  await expect(audio.getByRole('status')).toContainText('Audio: running');
-  await audio.getByRole('button', { name: 'Use this session on boot' }).click();
-  await expect(
-    audio.getByRole('button', { name: 'Disable boot playback' }),
-  ).toBeVisible();
-  expect(
-    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
-  ).toBe(true);
-  await audio.getByRole('button', { name: 'Disable boot playback' }).click();
-  await expect(
-    audio.getByRole('button', { name: 'Use this session on boot' }),
-  ).toBeVisible();
-  expect(
-    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
-  ).toBe(false);
-  await audio.getByRole('button', { name: 'Stop audio', exact: true }).click();
-  await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
-  await expect(page.getByText('Device connected')).toBeVisible();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const editor = page.getByRole('region', { name: 'Native preset editor' });
-  await editor
-    .getByLabel('Preset to load')
-    .selectOption(`original:${preset.sha256}`);
-  await editor.getByRole('button', { name: 'Load into native editor' }).click();
-  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
-  await editor
-    .getByLabel('Owned preset name')
-    .fill(`Stopped audio ${test.info().project.name}`);
-  await editor.getByRole('button', { name: 'Save owned copy' }).click();
-  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
-  const saved = await (await request.get('/api/v1/native')).json();
-  expect(saved.session).toBe(nativeBefore.session);
-  expect(saved.owned.some((p: { id: string }) => p.id === saved.loaded)).toBe(
-    true,
-  );
-  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await audio.getByRole('button', { name: 'Resume saved session' }).click();
-  await expect(audio.getByRole('status')).toContainText('Audio: running');
-  await audio
-    .getByRole('button', { name: 'Restart audio', exact: true })
-    .click();
-  await expect(
-    audio.getByRole('button', { name: 'Stop audio', exact: true }),
-  ).toBeEnabled();
-  await expect(audio.getByRole('status')).toContainText('Audio: running');
-  await audio.getByRole('button', { name: 'Stop audio', exact: true }).click();
-  await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
-  expect((await (await request.get('/api/v1/native')).json()).loaded).toBe(
-    saved.loaded,
-  );
-  expect((await (await request.get('/api/v1/audio')).json()).device_owned).toBe(
-    false,
-  );
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
+  try {
+    const nativeBefore = await (await request.get('/api/v1/native')).json();
+    await page.goto('/');
+    if (test.info().project.name === 'boox-air3c')
+      await page.getByLabel('Display mode').selectOption('epaper');
+    const sounding = page.getByRole('region', { name: 'Sounding rig' });
+    await expect(sounding).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Signal chain', exact: true }),
+    ).toHaveCount(0);
+    await sounding.getByLabel('Sounding control').selectOption('outputLevel');
+    await sounding
+      .getByRole('slider', { name: 'Adjust sounding value' })
+      .press('ArrowLeft');
+    await sounding
+      .getByRole('button', { name: 'Apply to sound', exact: true })
+      .click();
+    await expect(sounding.getByTestId('live-status')).toHaveText(
+      'Session modified',
+    );
+    const live = await (await request.get('/api/v1/audio')).json();
+    expect(live.modified).toBe(true);
+    const liveLevel = live.controls.find(
+      (p: { target: string }) => p.target === 'outputLevel',
+    );
+    await expect(sounding.getByTestId('live-readback')).toContainText(
+      liveLevel.display,
+    );
+    expect((await (await request.get('/api/v1/native')).json()).revision).toBe(
+      nativeBefore.revision,
+    );
+    await expect(
+      sounding.getByRole('button', { name: 'Apply to sound', exact: true }),
+    ).toBeDisabled();
+    await page.screenshot({
+      path: test.info().outputPath('sounding-rig.png'),
+      fullPage: true,
+    });
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const audio = page.getByRole('region', { name: 'Playback controls' });
+    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await audio
+      .getByRole('button', { name: 'Use this session on boot' })
+      .click();
+    await expect(
+      audio.getByRole('button', { name: 'Disable boot playback' }),
+    ).toBeVisible();
+    expect(
+      (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+    ).toBe(true);
+    await audio.getByRole('button', { name: 'Disable boot playback' }).click();
+    await expect(
+      audio.getByRole('button', { name: 'Use this session on boot' }),
+    ).toBeVisible();
+    expect(
+      (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+    ).toBe(false);
+    await audio
+      .getByRole('button', { name: 'Stop audio', exact: true })
+      .click();
+    await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+    await expect(page.getByText('Device connected')).toBeVisible();
+    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    const editor = page.getByRole('region', { name: 'Native preset editor' });
+    await editor
+      .getByLabel('Preset to load')
+      .selectOption(`original:${preset.sha256}`);
+    await editor
+      .getByRole('button', { name: 'Load into native editor' })
+      .click();
+    await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+    await editor
+      .getByLabel('Owned preset name')
+      .fill(`Stopped audio ${test.info().project.name}`);
+    await editor.getByRole('button', { name: 'Save owned copy' }).click();
+    await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+    const saved = await (await request.get('/api/v1/native')).json();
+    expect(saved.session).toBe(nativeBefore.session);
+    expect(saved.owned.some((p: { id: string }) => p.id === saved.loaded)).toBe(
+      true,
+    );
+    await page
+      .getByRole('button', { name: 'Back to rig', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await audio.getByRole('button', { name: 'Resume saved session' }).click();
+    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await audio
+      .getByRole('button', { name: 'Restart audio', exact: true })
+      .click();
+    await expect(
+      audio.getByRole('button', { name: 'Stop audio', exact: true }),
+    ).toBeEnabled();
+    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await audio
+      .getByRole('button', { name: 'Stop audio', exact: true })
+      .click();
+    await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
+    expect((await (await request.get('/api/v1/native')).json()).loaded).toBe(
+      saved.loaded,
+    );
+    expect(
+      (await (await request.get('/api/v1/audio')).json()).device_owned,
+    ).toBe(false);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+  } finally {
+    const finalState = await (await request.get('/api/v1/audio')).json();
+    if (finalState.device_owned) {
+      const stopped = await request.post('/api/v1/audio', {
+        data: {
+          session: finalState.session,
+          expected_revision: finalState.revision,
+          action: { kind: 'stop' },
+        },
+      });
+      expect(stopped.ok()).toBe(true);
+    }
+  }
 });

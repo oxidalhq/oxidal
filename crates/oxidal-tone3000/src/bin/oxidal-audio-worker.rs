@@ -2,7 +2,7 @@
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::{
-        lifecycle::StartAudio,
+        lifecycle::{LiveRequest, PlaybackEvent, StartAudio},
         stream::{Duplex, Step},
     };
     use oxidal_tone3000::Engine;
@@ -25,9 +25,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(input);
     let stop = Arc::new(AtomicBool::new(false));
     let reader_stop = stop.clone();
-    // Any further input or EOF is a stop request. No unbounded input queue or live reload.
+    let (command_send, commands) = std::sync::mpsc::sync_channel::<LiveRequest>(1);
     std::thread::spawn(move || {
-        let _ = std::io::stdin().read(&mut [0u8; 1]);
+        let mut input = std::io::stdin().lock();
+        loop {
+            let mut bytes = vec![];
+            let read = (&mut input).take(4097).read_until(b'\n', &mut bytes);
+            if read.is_err() || bytes.len() > 4096 || bytes.last() != Some(&b'\n') {
+                break;
+            }
+            let Ok(request) = serde_json::from_slice(&bytes) else {
+                break;
+            };
+            if command_send.try_send(request).is_err() {
+                break;
+            }
+        }
         reader_stop.store(true, Ordering::Release);
     });
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
@@ -38,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         oxidal_presets::Store::new(root).original(&settings.preset_id)?
     };
+    let preset_name = oxidal_presets::inspect(&preset)?.name;
     let mut engine = Engine::new(
         settings.stream.input.sample_rate.into(),
         settings.stream.input.period_frames as usize,
@@ -61,8 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(not(feature = "audio-qualification"))]
         Duplex::open(settings.stream.clone())?
     };
-    let (meter_send, meter_recv) =
-        std::sync::mpsc::sync_channel::<oxidal_audio::meter::Snapshot>(1);
+    let (meter_send, meter_recv) = std::sync::mpsc::sync_channel::<PlaybackEvent>(2);
     // A bounded writer isolates JSON/pipe backpressure from processing. Overflow drops
     // intermediate views; cumulative clipping counts survive the next delivered snapshot.
     std::thread::spawn(move || {
@@ -90,14 +103,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if blocks < settings.stream.output.periods - 1 {
                 blocks += 1;
                 if blocks == settings.stream.output.periods - 1 {
-                    println!("{{\"running\":true}}");
-                    std::io::stdout().flush()?;
+                    meter_send.try_send(PlaybackEvent::Ready {
+                        preset_name: preset_name.clone(),
+                        controls: engine.live_controls()?,
+                    })?;
                 }
             }
             if blocks >= settings.stream.output.periods - 1
                 && last_meter.elapsed() >= Duration::from_millis(200)
             {
-                let _ = meter_send.try_send(stream.telemetry());
+                let _ = meter_send.try_send(PlaybackEvent::Meter {
+                    snapshot: stream.telemetry(),
+                });
                 last_meter = Instant::now();
             }
             // ALSA null has no clock; pace only that explicit software fixture.
@@ -109,6 +126,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else if last_block.elapsed() > Duration::from_secs(2) {
             return Err("Audio device made no progress for two seconds".into());
+        }
+        if blocks >= settings.stream.output.periods - 1
+            && let Ok(request) = commands.try_recv()
+        {
+            // Serialization, catalog readback and native control work can allocate.
+            // Kept out of the DSP closure; physical deadline qualification remains required.
+            let error = engine
+                .set_live_control(&request.target, request.value)
+                .err()
+                .map(|e| e.to_string());
+            meter_send.try_send(PlaybackEvent::Control {
+                serial: request.serial,
+                controls: engine.live_controls()?,
+                error,
+            })?;
         }
     }
     drop(stream); // PCM is released before native state destruction and process exit.

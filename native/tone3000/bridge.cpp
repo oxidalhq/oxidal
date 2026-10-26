@@ -88,6 +88,9 @@ EXPORT int oxidal_t3k_catalog(void* ptr, char* out, size_t capacity, size_t* wri
       row->setProperty("default", p->convertFrom0to1(p->getDefaultValue()));
       row->setProperty("value", p->convertFrom0to1(p->getValue()));
       row->setProperty("normalized", p->getValue());
+      row->setProperty("label", p->getName(64));
+      row->setProperty("display", p->getText(p->getValue(), 64));
+      row->setProperty("toggle", p->isBoolean());
       row->setProperty("automatable", p->isAutomatable());
       row->setProperty("tone", !nonTone.contains(p->paramID));
       row->setProperty("machine_default", TONE3000Processor::isMachineDefaultParameter(p->paramID));

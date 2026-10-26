@@ -14,6 +14,11 @@ export type AudioAction =
   | {
       enabled: boolean;
       kind: "set_boot";
+    }
+  | {
+      kind: "set_control";
+      target: string;
+      value: number;
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -291,18 +296,37 @@ export interface AudioProbeResult {
 export interface AudioState {
   configured?: StartAudio | null;
   /**
+   * Confirmed controls of the sounding worker; cleared whenever it stops.
+   */
+  controls: LiveControl[];
+  /**
    * Remains true until the worker is reaped, including failed shutdowns.
    */
   device_owned: boolean;
   error?: string | null;
   experimental: boolean;
+  /**
+   * Session edits are not written back to the immutable starting preset.
+   */
+  modified: boolean;
   phase: AudioPhase;
+  preset_name?: string | null;
   revision: number;
   session: string;
   /**
    * Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
    */
   start_on_boot: boolean;
+}
+/**
+ * Native playback controls use normalized values; display text comes from the DSP.
+ */
+export interface LiveControl {
+  display: string;
+  label: string;
+  target: string;
+  toggle: boolean;
+  value: number;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.
@@ -586,12 +610,15 @@ export interface OwnedPreset {
 export interface Parameter2 {
   automatable: boolean;
   default: number;
+  display: string;
   id: string;
   interval: number;
+  label: string;
   machine_default: boolean;
   maximum: number;
   minimum: number;
   normalized: number;
+  toggle: boolean;
   tone: boolean;
   value: number;
 }

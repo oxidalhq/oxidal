@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct Parameter {
     pub id: String,
+    pub label: String,
+    pub display: String,
+    pub toggle: bool,
     pub minimum: f64,
     pub maximum: f64,
     pub interval: f64,
@@ -111,4 +114,23 @@ pub fn writable(id: &str) -> bool {
 }
 pub fn staged(id: &str) -> bool {
     matches!(id, "osEnabled" | "osFactor")
+}
+
+/// Scalar controls without routing, model, calibration or latency changes.
+/// Qualified separately from prepared structural transitions.
+pub fn live_writable(id: &str) -> bool {
+    matches!(
+        id,
+        "inputLevel"
+            | "outputLevel"
+            | "toneBass"
+            | "toneMid"
+            | "toneTreble"
+            | "toneEqEnabled"
+            | "gateEnabled"
+            | "gateThreshold"
+            | "gateRelease"
+            | "gateHold"
+            | "gateRange"
+    )
 }

@@ -5,12 +5,13 @@ import type { Monitoring } from '../src/api';
 test('monitor shows measured stereo data, freezes, resets and marks stale readings', async ({
   page,
 }, info) => {
+  test.setTimeout(90000);
   let sequence = 1;
   let stale = false;
-  let requests = 0;
+  let disconnected = false;
   const channel = { peak_dbfs: -6, rms_dbfs: -12, clips: 2 };
   await page.route('**/api/v1/monitor', async (route) => {
-    requests++;
+    if (disconnected) return route.abort('failed');
     const state: Monitoring = {
       sequence: sequence++,
       host: {
@@ -65,7 +66,17 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     await route.fulfill({ json: state });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Monitor', exact: true }).click();
+  const strip = page.getByRole('complementary', {
+    name: 'DSP and system resources',
+  });
+  await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
+  await expect(strip).toContainText('17%');
+  await expect(strip).toContainText('23%');
+  await expect(strip).toContainText('0.5/4.0 GiB');
+  await expect(strip).toContainText('N/A');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(strip).toBeVisible();
+  await strip.getByRole('button', { name: 'Open resource details' }).click();
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
@@ -75,9 +86,14 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   ).toHaveAttribute('aria-valuenow', '-3');
   await expect(panel.getByText('CLIP · 2')).toHaveCount(3);
   await panel.getByRole('button', { name: 'Freeze readings' }).click();
-  const count = requests;
-  await page.waitForTimeout(1200);
-  expect(requests).toBe(count);
+  // History freezes, but the always-visible strip must keep polling.
+  stale = true;
+  await expect(strip.getByTestId('resource-state')).toHaveText('Audio stale');
+  await expect(strip).not.toContainText('17%');
+  await expect(
+    panel.getByRole('meter', { name: 'Output L peak' }),
+  ).toHaveAttribute('aria-valuenow', '-3');
+  stale = false;
   await expect(panel.getByRole('status')).toHaveText('Frozen readings');
   await panel.getByRole('button', { name: 'Reset view' }).click();
   await expect(panel.getByText('CLIP · 2')).toHaveCount(0);
@@ -91,9 +107,49 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     ).toBe(true);
     const audit = await new AxeBuilder({ page })
       .include('[aria-label="Audio and system monitoring"]')
+      .include('[aria-label="DSP and system resources"]')
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
     expect(audit.violations).toEqual([]);
+  }
+  if (info.project.name === 'boox-air3c') {
+    await page.getByLabel('Display mode').selectOption('epaper');
+    // E-paper must distinguish series without colour, in both plot and legend.
+    for (const label of ['Output peak · dBFS', 'Processing budget · %']) {
+      const chart = page.getByRole('figure', { name: label });
+      await expect(chart.locator('path[stroke-dasharray="6 4"]')).toHaveCount(
+        1,
+      );
+      expect(
+        await chart
+          .locator('figcaption [aria-hidden]')
+          .last()
+          .evaluate((element) => getComputedStyle(element).borderTopStyle),
+      ).toBe('dashed');
+    }
+    const portrait = page.viewportSize()!;
+    for (const viewport of [
+      portrait,
+      { width: portrait.height, height: portrait.width },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(strip).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      expect(
+        await strip.evaluate(
+          (element) => getComputedStyle(element).animationName,
+        ),
+      ).toBe('none');
+      await page.screenshot({
+        path: info.outputPath(`boox-resources-${viewport.width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize(portrait);
   }
   await page.getByLabel('Display mode').selectOption('stage');
   await mkdir('../../.local/previews/monitor', { recursive: true });
@@ -108,4 +164,10 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(
     panel.getByRole('meter', { name: 'Output L peak' }),
   ).not.toHaveAttribute('aria-valuenow');
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  expect((await strip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+  disconnected = true;
+  await expect(strip.getByTestId('resource-state')).toHaveText('Disconnected');
+  await expect(strip).not.toContainText('23%');
+  await expect(strip).not.toContainText('0.5/4.0 GiB');
 });

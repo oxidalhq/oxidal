@@ -195,6 +195,41 @@ fn main() -> Result<(), Box<dyn Error>> {
         restore_error < 1e-5,
         "restored native model differs: {restore_error}"
     );
+    let live_before = engine.capture()?;
+    for (target, value) in [
+        ("osEnabled", 1.0),
+        ("pitchWindow", 0.5),
+        ("unknown", 0.5),
+        ("outputLevel", f32::NAN),
+        ("gateEnabled", 0.5),
+    ] {
+        assert!(engine.set_live_control(target, value).is_err());
+    }
+    assert_eq!(
+        engine.capture()?,
+        live_before,
+        "Rejected live edit changed state"
+    );
+    for control in engine.live_controls()? {
+        let value = if control.toggle {
+            1.0 - control.value
+        } else {
+            0.23
+        };
+        engine.set_live_control(&control.target, value)?;
+        let confirmed = engine
+            .live_controls()?
+            .into_iter()
+            .find(|c| c.target == control.target)
+            .unwrap();
+        assert!(
+            (confirmed.value - value).abs() < 0.001,
+            "Live readback {}",
+            control.target
+        );
+        engine.restore(&live_before)?;
+        engine.wait_ready()?;
+    }
     // Prove that a block gain mutation reaches DSP, not just its JSON readback.
     let block = engine
         .block_controls()?
@@ -210,7 +245,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     for gain in [0.3, 0.7] {
         engine.restore(&model_state)?;
         engine.wait_ready()?;
-        engine.set_block(&block.block_id, "outputGain", gain)?;
+        engine.set_live_control(&block.id, gain)?;
         settle(&mut engine)?;
         let mut sum = 0.0_f64;
         for chunk in 0..12 {

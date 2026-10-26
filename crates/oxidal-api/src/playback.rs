@@ -6,7 +6,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use oxidal_audio::lifecycle::{AudioAction, AudioCommand, AudioPhase, AudioState, StartAudio};
+use oxidal_audio::lifecycle::{
+    AudioAction, AudioCommand, AudioPhase, AudioState, LiveRequest, PlaybackEvent, StartAudio,
+    valid_controls,
+};
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -28,6 +31,7 @@ struct Worker {
     input: Option<ChildStdin>,
     output: Option<BufReader<tokio::process::ChildStdout>>,
     meter_reader: Option<tokio::task::JoinHandle<()>>,
+    control_replies: Option<mpsc::Receiver<PlaybackEvent>>,
     _permit: tokio::sync::SemaphorePermit<'static>,
 }
 impl Drop for Worker {
@@ -103,6 +107,8 @@ impl Owner {
         self.state.revision += 1;
         self.state.phase = phase;
         if phase != AudioPhase::Running {
+            self.state.controls.clear();
+            self.state.modified = false;
             self.meters.send_replace(None);
         }
         self.state.error = error;
@@ -162,6 +168,7 @@ impl Owner {
             input: Some(input),
             output: Some(BufReader::new(output)),
             meter_reader: None,
+            control_replies: None,
             _permit: permit,
         });
         self.state.configured = Some(settings.clone());
@@ -188,20 +195,30 @@ impl Owner {
                 .output
                 .as_mut()
                 .unwrap()
-                .take(1025)
+                .take(65537)
                 .read_until(b'\n', &mut response)
                 .await
                 .map_err(|e| e.to_string())?;
-            if response.len() > 1024
-                || response.last() != Some(&b'\n')
-                || serde_json::from_slice::<serde_json::Value>(&response).ok()
-                    != Some(serde_json::json!({"running":true}))
-            {
+            if response.len() > 65536 || response.last() != Some(&b'\n') {
                 return Err(
                     "Audio worker could not start; check device/settings/preset and service log"
                         .into(),
                 );
             }
+            let event: PlaybackEvent =
+                serde_json::from_slice(&response).map_err(|_| "Invalid native startup reply")?;
+            let PlaybackEvent::Ready {
+                preset_name,
+                controls,
+            } = event
+            else {
+                return Err("Expected native readiness".into());
+            };
+            if preset_name.is_empty() || preset_name.len() > 1024 || !valid_controls(&controls) {
+                return Err("Invalid native controls".into());
+            }
+            self.state.preset_name = Some(preset_name);
+            self.state.controls = controls;
             Ok(())
         })
         .await
@@ -214,24 +231,92 @@ impl Owner {
         self.publish(AudioPhase::Running, None);
         let mut output = self.worker.as_mut().unwrap().output.take().unwrap();
         let meters = self.meters.clone();
+        let (replies, received) = mpsc::channel(1);
+        self.worker.as_mut().unwrap().control_replies = Some(received);
         self.worker.as_mut().unwrap().meter_reader = Some(tokio::spawn(async move {
             loop {
                 let mut bytes = Vec::new();
-                let read = (&mut output).take(8193).read_until(b'\n', &mut bytes).await;
-                if read.is_err() || bytes.len() > 8192 || bytes.last() != Some(&b'\n') {
+                let read = (&mut output)
+                    .take(65537)
+                    .read_until(b'\n', &mut bytes)
+                    .await;
+                if read.is_err() || bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
                     break;
                 }
-                let Ok(snapshot) = serde_json::from_slice::<oxidal_audio::meter::Snapshot>(&bytes)
-                else {
+                let Ok(event) = serde_json::from_slice::<PlaybackEvent>(&bytes) else {
                     break;
                 };
-                if !snapshot.valid() {
-                    break;
+                match event {
+                    PlaybackEvent::Meter { snapshot } if snapshot.valid() => {
+                        meters.send_replace(Some((snapshot, std::time::Instant::now())));
+                    }
+                    reply @ PlaybackEvent::Control { .. } => {
+                        if replies.try_send(reply).is_err() {
+                            break;
+                        }
+                    }
+                    _ => break,
                 }
-                meters.send_replace(Some((snapshot, std::time::Instant::now())));
             }
         }));
         Ok(())
+    }
+    async fn set_control(&mut self, target: String, value: f32) -> Result<(), String> {
+        let serial = self.state.revision + 1;
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut bytes = serde_json::to_vec(&LiveRequest {
+                serial,
+                target,
+                value,
+            })
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let reply = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Audio reply lost")?;
+            let PlaybackEvent::Control {
+                serial: actual,
+                controls,
+                error,
+            } = reply
+            else {
+                return Err("Unexpected audio reply".to_string());
+            };
+            if actual != serial || !valid_controls(&controls) {
+                return Err("Invalid audio control readback".into());
+            }
+            if let Some(error) = error {
+                return Err(error);
+            }
+            Ok(controls)
+        })
+        .await
+        .map_err(|_| "Audio control timed out".to_string())
+        .and_then(|r| r);
+        match result {
+            Ok(controls) => {
+                self.state.controls = controls;
+                self.state.modified = true;
+                self.publish(AudioPhase::Running, None);
+                Ok(())
+            }
+            Err(error) => {
+                self.release().await?;
+                Err(error)
+            }
+        }
     }
     async fn command(&mut self, command: AudioCommand) -> Reply {
         if command.session != self.state.session || command.expected_revision != self.state.revision
@@ -242,6 +327,20 @@ impl Owner {
             return Err("Experimental audio worker unavailable".into());
         }
         let result = match command.action {
+            AudioAction::SetControl { target, value } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Start audio before changing live controls".into());
+                }
+                if !self
+                    .state
+                    .controls
+                    .iter()
+                    .any(|p| p.target == target && p.accepts(value))
+                {
+                    return Err("Unknown, staged or invalid live control".into());
+                }
+                self.set_control(target, value).await
+            }
             AudioAction::Start { settings } => {
                 // Reject invalid requests without disturbing a stream already running.
                 settings.validate()?;
@@ -334,6 +433,9 @@ impl Playback {
                     .as_nanos()
             ),
             revision: 0,
+            controls: vec![],
+            modified: false,
+            preset_name: None,
             phase: if config.audio_worker.is_some() {
                 AudioPhase::Stopped
             } else {

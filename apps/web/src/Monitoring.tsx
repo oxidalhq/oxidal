@@ -22,7 +22,7 @@ type Point = {
 };
 const colour = {
   left: { label: 'Left', color: 'var(--control-accent)' },
-  right: { label: 'Right', color: 'var(--chart-secondary)' },
+  right: { label: 'Right', color: 'var(--chart-secondary)', dashed: true },
 };
 const tooltipStyle = {
   background: 'var(--popover)',
@@ -254,6 +254,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
               type="linear"
               dataKey="right"
               stroke="var(--color-right)"
+              strokeDasharray="6 4"
               dot={false}
               isAnimationActive={false}
             />
@@ -263,7 +264,11 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           label="Processing budget · %"
           config={{
             deadline: { label: 'DSP p95', color: 'var(--control-accent)' },
-            cpu: { label: 'System CPU', color: 'var(--chart-secondary)' },
+            cpu: {
+              label: 'System CPU',
+              color: 'var(--chart-secondary)',
+              dashed: true,
+            },
           }}
         >
           <AreaChart accessibilityLayer data={history}>
@@ -290,6 +295,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
               type="linear"
               dataKey="cpu"
               stroke="var(--color-cpu)"
+              strokeDasharray="6 4"
               dot={false}
               isAnimationActive={false}
             />

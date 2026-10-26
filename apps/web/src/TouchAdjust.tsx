@@ -16,6 +16,7 @@ export function TouchAdjust({
   disabled,
   onChange,
   format,
+  commitHint = 'Release keeps the preview; Commit saves it.',
 }: {
   label: string;
   value: number;
@@ -26,6 +27,7 @@ export function TouchAdjust({
   disabled: boolean;
   onChange: (value: number) => void;
   format: (value: number) => string;
+  commitHint?: string;
 }) {
   const hint = useId();
   const [fine, setFine] = useState(false);
@@ -203,8 +205,8 @@ export function TouchAdjust({
         </Button>
       </div>
       <p className="caption">
-        {fine ? 'Fine: ten times slower.' : 'Normal adjustment speed.'} Release
-        keeps the preview; Commit saves it.
+        {fine ? 'Fine: ten times slower.' : 'Normal adjustment speed.'}{' '}
+        {commitHint}
       </p>
     </div>
   );

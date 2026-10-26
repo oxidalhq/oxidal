@@ -268,6 +268,69 @@ impl Engine {
         // SAFETY: same bounded JSON contract.
         self.json(|p, b, n, w| unsafe { oxidal_t3k_runtime(p, b, n, w) })
     }
+    pub fn live_controls(&mut self) -> Result<Vec<oxidal_audio::lifecycle::LiveControl>> {
+        use oxidal_audio::lifecycle::{LiveControl, valid_controls};
+        let parameters: Vec<crate::protocol::Parameter> =
+            serde_json::from_value(self.catalog()?).map_err(|e| NativeError(e.to_string()))?;
+        let mut controls: Vec<_> = parameters
+            .into_iter()
+            .filter(|p| crate::protocol::live_writable(&p.id))
+            .map(|p| LiveControl {
+                target: p.id.clone(),
+                label: live_label(&p.id).to_owned(),
+                display: live_display(&p),
+                value: p.normalized as f32,
+                toggle: p.toggle,
+            })
+            .collect();
+        controls.extend(
+            self.block_controls()?
+                .into_iter()
+                .filter(|p| !p.staged)
+                .map(|p| LiveControl {
+                    target: p.id,
+                    label: format!("{} · {} · {}", p.name, p.lane, p.parameter),
+                    value: p.value as f32,
+                    toggle: p.step == 1.0,
+                    display: if p.step == 1.0 {
+                        if p.value == 1.0 {
+                            "On".into()
+                        } else {
+                            "Off".into()
+                        }
+                    } else if p.parameter == "inputGain" || p.parameter == "outputGain" {
+                        format!("{:.1} dB", (p.value - 0.5) * 48.0)
+                    } else {
+                        format!("{:.1}%", p.value * 100.0)
+                    },
+                }),
+        );
+        if !valid_controls(&controls) {
+            return Err(NativeError("Invalid live control catalog".into()));
+        }
+        Ok(controls)
+    }
+    /// Experimental control-thread operation between PCM steps, not RT-qualified.
+    pub fn set_live_control(&mut self, target: &str, value: f32) -> Result<()> {
+        let controls = self.live_controls()?;
+        let control = controls
+            .iter()
+            .find(|c| c.target == target)
+            .ok_or_else(|| NativeError("Control requires offline or prepared editing".into()))?;
+        if !control.accepts(value) {
+            return Err(NativeError("Invalid live control value".into()));
+        }
+        if crate::protocol::live_writable(target) {
+            self.set_normalized(target, value)
+        } else {
+            let block = self
+                .block_controls()?
+                .into_iter()
+                .find(|c| c.id == target)
+                .ok_or_else(|| NativeError("Stale native block".into()))?;
+            self.set_block(&block.block_id, &block.parameter, value)
+        }
+    }
     pub fn block_controls(&mut self) -> Result<Vec<crate::protocol::BlockControl>> {
         // SAFETY: json supplies the live owner handle and bounded writable buffer.
         let rows = self.json(|p, b, n, w| unsafe { oxidal_t3k_block_controls(p, b, n, w) })?;
@@ -425,5 +488,40 @@ impl Drop for Engine {
             // Never continue with a half-destroyed native processor.
             std::process::abort();
         }
+    }
+}
+
+// Physical presentation follows the pinned processor and native KnobScale.h;
+// values sent to DSP remain normalized, never double-converted.
+fn live_label(id: &str) -> &str {
+    match id {
+        "inputLevel" => "Input level",
+        "outputLevel" => "Output level",
+        "toneBass" => "Bass",
+        "toneMid" => "Middle",
+        "toneTreble" => "Treble",
+        "toneEqEnabled" => "Tone stack",
+        "gateEnabled" => "Noise gate",
+        "gateThreshold" => "Gate threshold",
+        "gateRelease" => "Gate release",
+        "gateHold" => "Gate hold",
+        "gateRange" => "Gate depth",
+        _ => id,
+    }
+}
+fn live_display(p: &crate::protocol::Parameter) -> String {
+    if p.toggle {
+        return if p.value == 0.0 {
+            "Off".into()
+        } else {
+            "On".into()
+        };
+    }
+    match p.id.as_str() {
+        "inputLevel" | "outputLevel" => format!("{:.1} dB", (p.normalized - 0.5) * 48.0),
+        "gateThreshold" | "gateRange" => format!("{:.1} dB", p.value),
+        "gateRelease" | "gateHold" => format!("{:.1} ms", p.value),
+        "toneBass" | "toneMid" | "toneTreble" => format!("{:.1}", p.value),
+        _ => p.display.clone(),
     }
 }

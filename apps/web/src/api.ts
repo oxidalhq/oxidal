@@ -14,6 +14,7 @@ const ajv = new Ajv2020({
     uint64: true,
     int32: true,
     double: true,
+    float: true,
   },
 });
 const snapshotValidator = ajv.compile<Snapshot>({
