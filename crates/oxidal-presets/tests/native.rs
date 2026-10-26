@@ -163,3 +163,37 @@ fn pinned_external_factory_corpus() {
     assert_eq!(Store::new(storage.clone()).list().unwrap().presets.len(), 8);
     fs::remove_dir_all(storage).unwrap();
 }
+
+#[test]
+fn development_seed_preserves_originals_and_rejects_partial_invalid_inputs() {
+    use std::{fs, process::Command};
+    let root = std::env::temp_dir().join(format!("oxidal-seed-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("source")).unwrap();
+    fs::write(root.join("source/first.t3kpreset"), CURRENT).unwrap();
+    fs::write(root.join("source/broken.t3kpreset"), b"bad").unwrap();
+    let run = || {
+        Command::new(env!("CARGO_BIN_EXE_oxidal-preset-seed"))
+            .arg("--development-only")
+            .arg(root.join("source"))
+            .arg(root.join("output"))
+            .output()
+            .unwrap()
+    };
+    assert!(!run().status.success());
+    assert!(!root.join("output").exists());
+    fs::remove_file(root.join("source/broken.t3kpreset")).unwrap();
+    assert!(run().status.success());
+    let id = inspect(CURRENT).unwrap().sha256;
+    assert_eq!(
+        fs::read(root.join(format!("output/presets/{id}.t3kpreset"))).unwrap(),
+        CURRENT
+    );
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("output/development-presets.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["development_only"], true);
+    assert_eq!(manifest["redistribution_reviewed"], false);
+    assert!(!run().status.success());
+    fs::remove_dir_all(root).unwrap();
+}

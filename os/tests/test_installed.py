@@ -14,7 +14,7 @@ import urllib.request
 class InstalledTests(unittest.TestCase):
     def test_relocated_workers_ui_and_shutdown(self):
         home = Path('/opt/oxidal')
-        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'lib/liboxidal_tone3000.so']:
+        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
             output = subprocess.check_output(['ldd', str(home / binary)], text=True)
             self.assertNotIn('not found', output)
             self.assertNotIn('/tmp/oxidal-', output)

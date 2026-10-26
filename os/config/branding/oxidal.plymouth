@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Oxidal
+Description=Oxidal boot identity
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/oxidal
+ScriptFile=/usr/share/plymouth/themes/oxidal/oxidal.script

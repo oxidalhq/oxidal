@@ -1,0 +1,11 @@
+Window.SetBackgroundTopColor(0.086, 0.086, 0.086);
+Window.SetBackgroundBottomColor(0.086, 0.086, 0.086);
+logo = Image("boot-splash.png");
+width = Window.GetWidth();
+height = Window.GetHeight();
+scale = width / logo.GetWidth();
+if (height / logo.GetHeight() < scale) scale = height / logo.GetHeight();
+logo = logo.Scale(logo.GetWidth() * scale, logo.GetHeight() * scale);
+sprite = Sprite(logo);
+sprite.SetX((width - logo.GetWidth()) / 2);
+sprite.SetY((height - logo.GetHeight()) / 2);

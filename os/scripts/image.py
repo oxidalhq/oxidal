@@ -28,7 +28,7 @@ def regular(path):
     return path
 
 
-def build(base, bundle, access, destination):
+def build(base, bundle, access, destination, boot_splash=False, development_presets=None):
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64', 'arm64'):
         raise ValueError('Build this Pi image on native ARM64 Linux, including an ARM64 Linux container')
     base = regular(base)
@@ -56,6 +56,12 @@ def build(base, bundle, access, destination):
         (root / 'etc/os-release').write_text('ID=debian\nVERSION_CODENAME=trixie\n')
         (root / '.oxidal-disposable-root').touch()
         provision.provision(root, True, bundle, access, True)
+        if development_presets:
+            seed = work / 'development-seed'
+            run(str(Path(bundle).resolve() / 'bin/oxidal-preset-seed'), '--development-only', str(Path(development_presets).resolve()), str(seed))
+            shutil.copytree(seed / 'presets', root / 'var/lib/oxidal/presets')
+            (root / 'usr/share/oxidal').mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(seed / 'development-presets.json', root / 'usr/share/oxidal/development-presets.json')
         (root / '.oxidal-disposable-root').unlink()
         (root / 'etc/os-release').unlink()  # Keep the vendor's full release identity.
         (root / 'etc/cloud').mkdir(parents=True, exist_ok=True)
@@ -68,7 +74,9 @@ def build(base, bundle, access, destination):
             for file in sorted(root.rglob('*')):
                 archive.add(file, arcname=str(file.relative_to(root)), recursive=False)
         profile = provision.manifest()['appliance']
-        packages = profile['runtime_packages']
+        packages = profile['runtime_packages'] + (['plymouth', 'plymouth-themes'] if boot_splash else [])
+        if boot_splash and not (root / 'usr/share/plymouth/themes/oxidal/boot-splash.png').is_file():
+            raise ValueError('Boot splash requires branded web assets in the bundle')
         commands = work / 'customize.txt'
         commands.write_text('\n'.join([
             'hostname oxidal',
@@ -83,6 +91,8 @@ def build(base, bundle, access, destination):
             'run-command systemctl set-default multi-user.target',
             'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service',
             'run-command nginx -t',
+            *(['run-command plymouth-set-default-theme -R oxidal',
+               "run-command sed -i '1s/$/ splash plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt"] if boot_splash else []),
             'run-command dpkg-query -W > /usr/share/oxidal/installed-packages.txt',
             'run-command OXIDAL_TEST_INSTALLED=1 python3 -m unittest discover -s /opt/oxidal/qualification -v > /usr/share/oxidal/installed-tests.log 2>&1',
         ]) + '\n')
@@ -98,7 +108,8 @@ def build(base, bundle, access, destination):
     report = {
         'schema': 1, 'image_sha256': digest.hexdigest(), 'base': provision.manifest()['image'],
         'bundle_manifest': payload, 'installed_qualification': 'passed',
-        'hardware_qualified': False, 'physical_sd_written': False,
+        'hardware_qualified': False, 'physical_sd_written': False, 'boot_splash': boot_splash,
+        'development_presets': bool(development_presets),
         'first_boot': 'Connect to the generated hotspot or wired LAN; trust the supplied CA; open https://oxidal.local.',
         'pending_hardware': ['Pi boot', 'Wi-Fi radio/hotspot', 'physical audio and latency', 'thermal and power-loss testing'],
     }
@@ -113,5 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--bundle', required=True)
     parser.add_argument('--access', required=True)
     parser.add_argument('--output', required=True)
+    parser.add_argument('--boot-splash', action='store_true', help='Enable the Oxidal Plymouth boot splash; console diagnostics remain available')
+    parser.add_argument('--development-presets', help='Opt-in private development seed from a local native-preset directory; never for distribution')
     args = parser.parse_args()
-    print(json.dumps(build(args.base, args.bundle, args.access, args.output), indent=2))
+    print(json.dumps(build(args.base, args.bundle, args.access, args.output, args.boot_splash, args.development_presets), indent=2))

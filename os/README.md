@@ -105,3 +105,15 @@ Back up `/var/lib/oxidal` before replacing an image. Full-service stop is distin
 `provision.py --target-root PATH` still supports read-only planning and `--apply` to an explicitly marked disposable Trixie root. Add `--bundle PATH` for verified application files, and optionally `--access PATH` for HTTPS configuration. `--hotspot` is Pi-only and opt-in. It validates all managed paths and hashes before writes, rejects symlinks/host roots and leaves service activation to the image builder. Without a bundle it only stages the unit and base manifest; that is not a runnable installation.
 
 Regular laptop installation must preserve its network, desktop and boot settings. The bundle format supports Linux x64, but the exact x64 distribution/CPU baseline and install/upgrade/remove lifecycle still require qualification. Do not apply the Pi image or hotspot setup to a laptop.
+
+## Device branding
+
+Appliance provisioning includes the Oxidal ASCII login and post-login banner. Browser branding, SVG masters and derived PNGs travel with the web bundle. To show the supplied artwork during Linux startup, pass `--boot-splash` to `image.py`; this installs Plymouth, selects the Oxidal theme and rebuilds the initramfs. The option requires the branded bundle. It does not replace the Pi EEPROM/firmware display or change its bootloader. The normal console remains available (Escape switches a Plymouth splash to diagnostics); serial-console output remains usable. Graphical startup is not yet qualified on physical HDMI hardware. Ordinary Linux package installation does not change the host's theme or login banner.
+
+## Private development presets
+
+The normal bundle/image contains no factory-preset payloads. For an owner-only test image, pass `--development-presets /path/to/local/presets` to `image.py`. The bundled `oxidal-preset-seed` validates every native preset before importing unchanged originals into the initial library; the image stores a development-only manifest with names, SHA-256 and sizes. This opt-in does not establish redistribution rights for embedded models or other assets. Keep the resulting personalized test image private.
+
+For local testing, run `cargo run -p oxidal-presets --bin oxidal-preset-seed -- --development-only SOURCE NEW_OUTPUT`, then start the daemon with `OXIDAL_PRESET_DIR=NEW_OUTPUT/presets`. Existing output is never overwritten. The normal parser/store admission limits apply, and invalid source files prevent initial output creation. The source directory is explicit; builds never assume a private reference checkout or download an account's presets.
+
+The appliance also packages the [device service](../docs/device-service.md) for browser network setup. Keep its OS group, socket permissions and unprivileged daemon boundary intact.
