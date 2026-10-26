@@ -7,6 +7,8 @@ publish.workspace = true
 
 [features]
 alsa = ["dep:alsa"]
+# Explicit software fixture access for native integration tests, excluded from normal builds.
+qualification = ["alsa"]
 
 [dependencies]
 serde.workspace = true

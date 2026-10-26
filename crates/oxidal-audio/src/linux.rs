@@ -74,11 +74,16 @@ pub fn devices() -> Result<AudioDevices, String> {
 }
 
 pub fn probe(request: &AudioProbe) -> Result<AudioProbeResult, String> {
-    configure(request).map_err(|e| {
+    let _pcm = configured(request).map_err(|e| {
         format!("Audio probe failed (device busy, disconnected or unsupported settings): {e}")
+    })?;
+    Ok(AudioProbeResult {
+        configuration: request.clone(),
+        buffer_frames: request.period_frames * request.periods,
+        streaming_available: false,
     })
 }
-fn configure(request: &AudioProbe) -> Result<AudioProbeResult, Box<dyn std::error::Error>> {
+pub(crate) fn configured(request: &AudioProbe) -> Result<PCM, Box<dyn std::error::Error>> {
     let pcm = PCM::new(&request.endpoint, direction(request.direction), true)?;
     let hw = HwParams::any(&pcm)?;
     hw.set_rate_resample(false)?;
@@ -102,12 +107,9 @@ fn configure(request: &AudioProbe) -> Result<AudioProbeResult, Box<dyn std::erro
     {
         return Err("ALSA changed the requested configuration; no settings were retained".into());
     }
-    // Handles and hw params drop here. No start, read, write or drain operation is issued.
-    Ok(AudioProbeResult {
-        configuration: request.clone(),
-        buffer_frames: expected_buffer,
-        streaming_available: false,
-    })
+    drop(actual);
+    drop(hw);
+    Ok(pcm)
 }
 
 #[cfg(test)]

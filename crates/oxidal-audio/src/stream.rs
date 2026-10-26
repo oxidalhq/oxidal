@@ -1,0 +1,282 @@
+//! Experimental ALSA duplex transport. Processor runs on the caller's thread.
+use crate::{StreamConfig, samples};
+use alsa::PCM;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Waiting,
+    Processed,
+}
+
+#[derive(Debug)]
+pub struct Duplex {
+    capture: PCM,
+    playback: PCM,
+    config: StreamConfig,
+    input: Vec<u8>,
+    output: Vec<u8>,
+    left: Vec<f32>,
+    right: Vec<f32>,
+    captured: usize,
+    written: usize,
+    pending: bool,
+    faulted: bool,
+}
+
+impl Duplex {
+    /// Opens only freshly enumerated hardware endpoints. No default/fallback output.
+    pub fn open(config: StreamConfig) -> Result<Self, String> {
+        config.validate()?;
+        let inventory = crate::devices()?;
+        crate::require_endpoint(&config.input, &inventory)?;
+        crate::require_endpoint(&config.output, &inventory)?;
+        Self::open_pcm(config)
+    }
+    /// ALSA null is a software fixture, not hardware qualification. Unavailable in ordinary builds.
+    #[cfg(feature = "qualification")]
+    pub fn qualification_null(mut config: StreamConfig) -> Result<Self, String> {
+        config.input.endpoint = "null".into();
+        config.output.endpoint = "null".into();
+        config.validate()?;
+        Self::open_pcm(config)
+    }
+    fn open_pcm(config: StreamConfig) -> Result<Self, String> {
+        let capture = crate::linux::configured(&config.input).map_err(|e| e.to_string())?;
+        let playback = crate::linux::configured(&config.output).map_err(|e| e.to_string())?;
+        // Start playback only after a small queue is primed; do not start from one thin block.
+        let sw = playback.sw_params_current().map_err(|e| e.to_string())?;
+        sw.set_avail_min(config.output.period_frames.into())
+            .map_err(|e| e.to_string())?;
+        sw.set_start_threshold(i64::from(
+            config.output.period_frames * (config.output.periods - 1),
+        ))
+        .map_err(|e| e.to_string())?;
+        playback.sw_params(&sw).map_err(|e| e.to_string())?;
+        drop(sw);
+        let frames = config.input.period_frames as usize;
+        Ok(Self {
+            input: vec![
+                0;
+                frames
+                    * config.input.channels as usize
+                    * samples::width(config.input.format)
+            ],
+            output: vec![
+                0;
+                frames
+                    * config.output.channels as usize
+                    * samples::width(config.output.format)
+            ],
+            left: vec![0.0; frames],
+            right: vec![0.0; frames],
+            capture,
+            playback,
+            config,
+            captured: 0,
+            written: 0,
+            pending: false,
+            faulted: false,
+        })
+    }
+    /// At most one prepared block per call. EAGAIN waits at most 5ms; xruns/device failures fail closed.
+    /// No allocations on successful transport steps; the processor has its own RT qualification boundary.
+    pub fn step(
+        &mut self,
+        process: impl FnOnce(&mut [f32], &mut [f32]) -> Result<(), String>,
+    ) -> Result<Step, String> {
+        if self.faulted {
+            return Err("Stream failed; close and reopen it before processing".into());
+        }
+        let result = self.step_inner(process);
+        if result.is_err() {
+            self.faulted = true;
+            let _ = self.capture.drop();
+            let _ = self.playback.drop();
+        }
+        result
+    }
+    fn step_inner(
+        &mut self,
+        process: impl FnOnce(&mut [f32], &mut [f32]) -> Result<(), String>,
+    ) -> Result<Step, String> {
+        if self.pending {
+            return self.write_pending();
+        }
+        let in_stride =
+            self.config.input.channels as usize * samples::width(self.config.input.format);
+        let frames = self.left.len();
+        let received = match self
+            .capture
+            .io_bytes()
+            .readi(&mut self.input[self.captured * in_stride..])
+        {
+            Ok(n) => n,
+            Err(e) if e.errno() == 11 => {
+                self.capture.wait(Some(5)).map_err(|e| e.to_string())?;
+                return Ok(Step::Waiting);
+            }
+            Err(e) => return Err(format!("Capture stopped (xrun/device error): {e}")),
+        };
+        if received == 0 {
+            return Err("Capture returned zero frames".into());
+        }
+        self.captured += received;
+        if self.captured < frames {
+            return Ok(Step::Waiting);
+        }
+        if self.captured != frames {
+            return Err("Capture exceeded prepared buffer".into());
+        }
+        for i in 0..frames {
+            for (channel, target) in [
+                (self.config.input_map[0], &mut self.left[i]),
+                (self.config.input_map[1], &mut self.right[i]),
+            ] {
+                let width = samples::width(self.config.input.format);
+                let start = i * in_stride + channel as usize * width;
+                *target =
+                    samples::decode(&self.input[start..start + width], self.config.input.format)?;
+            }
+        }
+        process(&mut self.left, &mut self.right)?;
+        self.output.fill(0);
+        let width = samples::width(self.config.output.format);
+        let out_stride = self.config.output.channels as usize * width;
+        for i in 0..frames {
+            if self.config.output_map[0] == self.config.output_map[1] {
+                let start = i * out_stride + self.config.output_map[0] as usize * width;
+                samples::encode(
+                    self.left[i] * 0.5 + self.right[i] * 0.5,
+                    self.config.output.format,
+                    &mut self.output[start..start + width],
+                )?;
+            } else {
+                for (channel, value) in [
+                    (self.config.output_map[0], self.left[i]),
+                    (self.config.output_map[1], self.right[i]),
+                ] {
+                    let start = i * out_stride + channel as usize * width;
+                    samples::encode(
+                        value,
+                        self.config.output.format,
+                        &mut self.output[start..start + width],
+                    )?;
+                }
+            }
+        }
+        self.captured = 0;
+        self.written = 0;
+        self.pending = true;
+        self.write_pending()
+    }
+    fn write_pending(&mut self) -> Result<Step, String> {
+        let stride =
+            self.config.output.channels as usize * samples::width(self.config.output.format);
+        let written = match self
+            .playback
+            .io_bytes()
+            .writei(&self.output[self.written * stride..])
+        {
+            Ok(n) => n,
+            Err(e) if e.errno() == 11 => {
+                self.playback.wait(Some(5)).map_err(|e| e.to_string())?;
+                return Ok(Step::Waiting);
+            }
+            Err(e) => return Err(format!("Playback stopped (xrun/device error): {e}")),
+        };
+        if written == 0 {
+            return Err("Playback returned zero frames".into());
+        }
+        self.written += written;
+        if self.written > self.left.len() {
+            return Err("Playback exceeded prepared buffer".into());
+        }
+        if self.written == self.left.len() {
+            self.pending = false;
+            Ok(Step::Processed)
+        } else {
+            Ok(Step::Waiting)
+        }
+    }
+}
+impl Drop for Duplex {
+    fn drop(&mut self) {
+        let _ = self.capture.drop();
+        let _ = self.playback.drop();
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AudioProbe, Direction, SampleFormat};
+    fn config(format: SampleFormat) -> StreamConfig {
+        let input = AudioProbe {
+            endpoint: "null".into(),
+            direction: Direction::Capture,
+            sample_rate: 48000,
+            channels: 2,
+            format,
+            period_frames: 128,
+            periods: 3,
+        };
+        let mut output = input.clone();
+        output.direction = Direction::Playback;
+        StreamConfig {
+            input,
+            output,
+            input_map: [0, 1],
+            output_map: [0, 1],
+        }
+    }
+    #[test]
+    fn real_null_duplex_processes_and_reopens_without_retained_handles() {
+        for format in [
+            SampleFormat::S16,
+            SampleFormat::S24,
+            SampleFormat::S24Packed,
+            SampleFormat::S32,
+            SampleFormat::Float,
+        ] {
+            for _ in 0..2 {
+                let cfg = config(format);
+                cfg.validate().unwrap();
+                let mut stream = Duplex::open_pcm(cfg).unwrap();
+                let mut calls = 0;
+                for _ in 0..20 {
+                    let outcome = stream
+                        .step(|l, r| {
+                            assert_eq!(l.len(), 128);
+                            l.fill(0.25);
+                            r.fill(-0.25);
+                            calls += 1;
+                            Ok(())
+                        })
+                        .unwrap();
+                    assert_eq!(outcome, Step::Processed);
+                }
+                assert_eq!(calls, 20);
+            }
+        }
+    }
+    #[test]
+    fn rejects_independent_clocks_and_invalid_mapping() {
+        let mut cfg = config(SampleFormat::S16);
+        cfg.output.endpoint = "other".into();
+        assert!(cfg.validate().is_err());
+        cfg.output.endpoint = "null".into();
+        cfg.input_map = [0, 2];
+        assert!(cfg.validate().is_err());
+    }
+    #[test]
+    fn processor_failure_does_not_submit_output() {
+        let mut stream = Duplex::open_pcm(config(SampleFormat::S16)).unwrap();
+        assert!(stream.step(|_, _| Err("processor failed".into())).is_err());
+        assert!(!stream.pending);
+        assert!(stream.faulted);
+        assert!(
+            stream
+                .step(|_, _| panic!("failed stream must never process again"))
+                .is_err()
+        );
+    }
+}

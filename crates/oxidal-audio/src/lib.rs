@@ -1,10 +1,15 @@
-//! Audio-device discovery and exact configuration probes; no streaming engine yet.
+//! Audio-device discovery, exact probes and experimental Linux duplex transport.
 //! @see docs/audio.md
+pub mod lifecycle;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 mod linux;
+#[cfg(any(test, all(target_os = "linux", feature = "alsa")))]
+mod samples;
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+pub mod stream;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -64,6 +69,39 @@ impl AudioProbe {
             || !(2..=8).contains(&self.periods)
         {
             return Err("Invalid audio probe bounds".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StreamConfig {
+    pub input: AudioProbe,
+    pub output: AudioProbe,
+    /// Zero-based channels; duplicate input indexes copy mono to both processor channels.
+    pub input_map: [u32; 2],
+    /// Duplicate output indexes mix the stereo processor output equally into mono.
+    pub output_map: [u32; 2],
+}
+impl StreamConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        self.input.validate()?;
+        self.output.validate()?;
+        if self.input.direction != Direction::Capture
+            || self.output.direction != Direction::Playback
+            || self.input.sample_rate != self.output.sample_rate
+            || self.input.period_frames != self.output.period_frames
+            || self.input.period_frames > 2048
+            || self.input_map.iter().any(|&c| c >= self.input.channels)
+            || self.output_map.iter().any(|&c| c >= self.output.channels)
+        {
+            return Err(
+                "Incompatible stream directions, rate, block size or channel mapping".into(),
+            );
+        }
+        if self.input.endpoint != self.output.endpoint {
+            return Err("Independent input/output devices require clock-drift handling; this experimental stream requires one duplex endpoint".into());
         }
         Ok(())
     }
