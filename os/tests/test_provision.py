@@ -9,6 +9,16 @@ spec.loader.exec_module(provision)
 
 
 class ProvisionTests(unittest.TestCase):
+    def test_firmware_uuid_preserves_root_and_rejects_ambiguous_mounts(self):
+        original = 'proc /proc proc defaults 0 0\nPARTUUID=12345678-01 /boot/firmware vfat defaults 0 2\nPARTUUID=12345678-02 / ext4 defaults,noatime 0 1\n'
+        updated = provision.firmware_fstab(original, 'ABCD-0123')
+        self.assertIn('UUID=ABCD-0123 /boot/firmware vfat defaults 0 2', updated)
+        self.assertIn('PARTUUID=12345678-02 / ext4 defaults,noatime 0 1', updated)
+        self.assertEqual(provision.firmware_fstab(updated, 'ABCD-0123'), updated)
+        for text, uuid in [(original, '../invalid'), ('', 'ABCD-0123'), (original + original, 'ABCD-0123')]:
+            with self.assertRaises(ValueError):
+                provision.firmware_fstab(text, uuid)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='os-')
         self.addCleanup(self.directory.cleanup)

@@ -88,6 +88,17 @@ def bundle_files(path):
     return result, data
 
 
+def firmware_fstab(text, uuid):
+    """Use the firmware filesystem UUID so guestfs and the Pi mount the same FAT partition."""
+    if not re.fullmatch(r'[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}', uuid):
+        raise ValueError('Invalid firmware FAT UUID')
+    result, count = re.subn(r'^\S+(\s+/boot/firmware\s+vfat\s+[^\n]*)$',
+                            lambda match: 'UUID=' + uuid + match.group(1), text, flags=re.M)
+    if count != 1:
+        raise ValueError('Expected exactly one firmware mount in the pinned base')
+    return result
+
+
 def create_access(path):
     """Generate per-device credentials locally; never print passwords or install them in web assets."""
     directory = Path(path).absolute()
