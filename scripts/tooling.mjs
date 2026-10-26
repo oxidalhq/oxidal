@@ -60,7 +60,7 @@ if (mode === 'bootstrap') {
       '-p',
       'oxidal-lv2',
       '--features',
-      'native',
+      'qualification',
       '--all-targets',
       '--',
       '-D',
@@ -70,8 +70,46 @@ if (mode === 'bootstrap') {
   );
   run(
     'cargo',
-    ['test', '--locked', '-p', 'oxidal-lv2', '--features', 'native'],
+    ['test', '--locked', '-p', 'oxidal-lv2', '--features', 'qualification'],
     { env },
+  );
+  run(
+    'cargo',
+    [
+      'build',
+      '--locked',
+      '-p',
+      'oxidal-lv2',
+      '--features',
+      'qualification',
+      '--bin',
+      'oxidal-graph-worker',
+    ],
+    { env },
+  );
+  run(
+    'cargo',
+    [
+      'test',
+      '--locked',
+      '-p',
+      'oxidal-api',
+      '--features',
+      'alsa',
+      '--test',
+      'graph_playback',
+      '--',
+      '--ignored',
+      '--test-threads=1',
+    ],
+    {
+      env: {
+        ...env,
+        OXIDAL_GRAPH_QUALIFY_NULL: '1',
+        OXIDAL_TEST_GRAPH_WORKER: join(targetDir, 'debug/oxidal-graph-worker'),
+        LV2_PATH: env.OXIDAL_LV2_EXTERNAL_DIR,
+      },
+    },
   );
 } else if (mode === 'native-check') {
   run('python3', ['native/tone3000/build.py']);

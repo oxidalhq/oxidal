@@ -1,4 +1,5 @@
 mod audio;
+mod graph_playback;
 mod native_editor;
 mod playback;
 mod presets;
@@ -49,6 +50,8 @@ pub struct Contract {
     pub validation: Validation,
     pub capabilities: Capabilities,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
+    pub graph_audio_state: oxidal_lv2::protocol::GraphAudioState,
+    pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
     pub audio_command: oxidal_audio::lifecycle::AudioCommand,
     pub audio_devices: oxidal_audio::AudioDevices,
     pub audio_probe: oxidal_audio::AudioProbe,
@@ -67,6 +70,7 @@ pub struct Config {
     pub simulator: bool,
     pub native_worker: Option<PathBuf>,
     pub audio_worker: Option<PathBuf>,
+    pub graph_worker: Option<PathBuf>,
     pub mapping_path: PathBuf,
     pub preset_dir: PathBuf,
     pub ui_dir: PathBuf,
@@ -76,6 +80,7 @@ pub struct Config {
 #[derive(Debug)]
 struct Shared {
     playback: playback::Playback,
+    graph_playback: graph_playback::GraphPlayback,
     control: Mutex<Control>,
     native: Mutex<Option<native_editor::Worker>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
@@ -86,6 +91,26 @@ struct Shared {
 /// Builds the same router used by the native binary and network integration tests.
 /// @see docs/architecture.md
 pub fn router(config: Config) -> Result<Router, String> {
+    router_with_shutdown(config).map(|(router, _)| router)
+}
+
+/// Completion handles outlive HTTP serving so daemon shutdown reaps audio workers first.
+#[derive(Debug)]
+pub struct WorkersStopped {
+    audio: watch::Receiver<bool>,
+    graph: watch::Receiver<bool>,
+}
+impl WorkersStopped {
+    pub async fn wait(mut self) -> Result<(), String> {
+        for done in [&mut self.audio, &mut self.graph] {
+            done.wait_for(|v| *v)
+                .await
+                .map_err(|_| "Playback owner exited without cleanup acknowledgement")?;
+        }
+        Ok(())
+    }
+}
+pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), String> {
     let mut control = Control::default();
     match std::fs::read(&config.mapping_path) {
         Ok(bytes) => {
@@ -113,6 +138,7 @@ pub fn router(config: Config) -> Result<Router, String> {
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let shared = Arc::new(Shared {
         playback: playback::Playback::new(&config)?,
+        graph_playback: graph_playback::GraphPlayback::new(&config)?,
         control: Mutex::new(control),
         native: Mutex::new(native_editor::Worker::start(&config)?),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
@@ -121,6 +147,10 @@ pub fn router(config: Config) -> Result<Router, String> {
         events,
         config,
     });
+    let stopped = WorkersStopped {
+        audio: shared.playback.finished.clone(),
+        graph: shared.graph_playback.finished.clone(),
+    };
     let weak = Arc::downgrade(&shared);
     tokio::spawn(async move {
         let mut timer = tokio::time::interval(std::time::Duration::from_millis(250));
@@ -138,6 +168,10 @@ pub fn router(config: Config) -> Result<Router, String> {
     let api = Router::new()
         .route("/health", get(health))
         .route("/audio", get(playback::state).post(playback::command))
+        .route(
+            "/graph-audio",
+            get(graph_playback::state).post(graph_playback::command),
+        )
         .route("/audio/devices", get(audio::devices))
         .route("/audio/probe", post(audio::probe))
         .route(
@@ -156,12 +190,15 @@ pub fn router(config: Config) -> Result<Router, String> {
         .route("/rig/validate", post(validate))
         .route("/events", get(state_events))
         .fallback(|| async { failure(StatusCode::NOT_FOUND, "not_found") });
-    Ok(Router::new()
-        .nest("/api/v1", api)
-        .fallback_service(ui)
-        .layer(DefaultBodyLimit::max(65536))
-        .layer(middleware::from_fn(local_origin))
-        .with_state(shared))
+    Ok((
+        Router::new()
+            .nest("/api/v1", api)
+            .fallback_service(ui)
+            .layer(DefaultBodyLimit::max(65536))
+            .layer(middleware::from_fn(local_origin))
+            .with_state(shared),
+        stopped,
+    ))
 }
 
 async fn local_origin(request: Request, next: Next) -> Response {

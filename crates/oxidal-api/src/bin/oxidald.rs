@@ -1,4 +1,4 @@
-use oxidal_api::{Config, router, validate_address};
+use oxidal_api::{Config, router_with_shutdown, validate_address};
 use std::{net::SocketAddr, path::PathBuf};
 
 /// Native local control daemon entry point.
@@ -11,6 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (stop, shutdown) = tokio::sync::watch::channel(false);
     let config = Config {
         shutdown: Some(shutdown),
+        graph_worker: std::env::var_os("OXIDAL_GRAPH_WORKER").map(PathBuf::from),
         audio_worker: std::env::var_os("OXIDAL_AUDIO_WORKER").map(PathBuf::from),
         native_worker: std::env::var_os("OXIDAL_NATIVE_WORKER").map(PathBuf::from),
         simulator: std::env::var("OXIDAL_SIMULATOR").is_ok_and(|v| v == "1"),
@@ -30,7 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env!("CARGO_PKG_VERSION"),
         listener.local_addr()?
     );
-    axum::serve(listener, router(config)?)
+    let (app, stopped) = router_with_shutdown(config)?;
+    axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             #[cfg(unix)]
             {
@@ -46,5 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             stop.send_replace(true);
         })
         .await?;
+    stopped.wait().await?;
     Ok(())
 }

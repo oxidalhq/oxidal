@@ -580,6 +580,7 @@ dependencies = [
  "oxidal-audio",
  "oxidal-control",
  "oxidal-graph",
+ "oxidal-lv2",
  "oxidal-presets",
  "oxidal-tone3000",
  "reqwest",
@@ -620,9 +621,12 @@ dependencies = [
 name = "oxidal-lv2"
 version = "0.1.0"
 dependencies = [
+ "oxidal-audio",
  "oxidal-control",
  "oxidal-graph",
+ "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

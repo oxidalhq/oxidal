@@ -1,16 +1,10 @@
 //! Prepared, single-owner DSP graph. Preparation and commands are non-real-time operations.
-use crate::{Plugin, Port, World};
+use crate::{Binding, Plugin, Port, World};
 use oxidal_control::{Command, Control, Parameter, Snapshot};
 use oxidal_graph::{BlockKind, Rig};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-/// Explicit installed plugin URI for one LV2 node. No implicit effect substitutions.
-#[derive(Debug, Clone)]
-pub struct Binding {
-    pub node: String,
-    pub uri: String,
-}
 #[derive(Debug)]
 struct Processor {
     plugin: Option<Plugin>,

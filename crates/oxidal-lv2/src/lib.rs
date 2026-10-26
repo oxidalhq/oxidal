@@ -6,6 +6,8 @@
 mod host;
 #[cfg(feature = "native")]
 pub use host::{Plugin, World};
+pub mod protocol;
+pub use protocol::Binding;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +83,7 @@ pub struct PluginInfo {
 #[cfg(feature = "native")]
 mod graph;
 #[cfg(feature = "native")]
-pub use graph::{Binding, PreparedGraph};
+pub use graph::PreparedGraph;
 
 #[cfg(test)]
 mod tests {

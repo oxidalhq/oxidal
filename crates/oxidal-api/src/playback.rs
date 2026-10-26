@@ -17,6 +17,7 @@ use tokio::{
 type Reply = Result<AudioState, String>;
 #[derive(Debug)]
 pub(super) struct Playback {
+    pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(AudioCommand, oneshot::Sender<Reply>)>,
     state: watch::Receiver<AudioState>,
 }
@@ -245,6 +246,7 @@ impl Playback {
             updates,
         };
         let mut shutdown = config.shutdown.clone();
+        let (done, finished) = watch::channel(false);
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             loop {
@@ -264,8 +266,13 @@ impl Playback {
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }
+            done.send_replace(true);
         });
-        Ok(Self { commands, state })
+        Ok(Self {
+            commands,
+            state,
+            finished,
+        })
     }
     pub fn snapshot(&self) -> AudioState {
         self.state.borrow().clone()

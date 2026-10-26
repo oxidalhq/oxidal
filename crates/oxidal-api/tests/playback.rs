@@ -17,6 +17,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let app = router(Config {
+        graph_worker: None,
         audio_worker: Some(audio_worker.into()),
         native_worker: Some(native_worker.into()),
         shutdown: Some(signal),

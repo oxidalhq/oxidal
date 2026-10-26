@@ -28,6 +28,12 @@
     "error": {
       "$ref": "#/$defs/ApiError"
     },
+    "graph_audio_command": {
+      "$ref": "#/$defs/GraphAudioCommand"
+    },
+    "graph_audio_state": {
+      "$ref": "#/$defs/GraphAudioState"
+    },
     "library": {
       "$ref": "#/$defs/Library"
     },
@@ -57,6 +63,8 @@
     "validation",
     "capabilities",
     "audio_state",
+    "graph_audio_state",
+    "graph_audio_command",
     "audio_command",
     "audio_devices",
     "audio_probe",
@@ -465,6 +473,22 @@
         "phase",
         "device_owned",
         "experimental"
+      ]
+    },
+    "Binding": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "uri"
       ]
     },
     "BlockControl": {
@@ -1018,6 +1042,161 @@
         "current"
       ]
     },
+    "GraphAudioAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "start"
+            },
+            "settings": {
+              "$ref": "#/$defs/StartGraph"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "settings"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "restart"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/Command"
+            },
+            "kind": {
+              "type": "string",
+              "const": "control"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        }
+      ]
+    },
+    "GraphAudioCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/GraphAudioAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "action"
+      ]
+    },
+    "GraphAudioState": {
+      "type": "object",
+      "properties": {
+        "configured": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartGraph"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Snapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_owned": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "experimental": {
+          "type": "boolean"
+        },
+        "native_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NativeValue"
+          }
+        },
+        "phase": {
+          "$ref": "#/$defs/AudioPhase"
+        },
+        "processed_frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "phase",
+        "native_values",
+        "processed_frames",
+        "device_owned",
+        "experimental"
+      ]
+    },
     "Inspection": {
       "description": "Structural inspection only. Original bytes, not this summary, remain authoritative.",
       "type": "object",
@@ -1254,6 +1433,23 @@
       "enum": [
         "absolute",
         "relative_twos_complement"
+      ]
+    },
+    "NativeValue": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "value"
       ]
     },
     "Node": {
@@ -1553,6 +1749,29 @@
         "stream",
         "preset_id",
         "owned"
+      ]
+    },
+    "StartGraph": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Binding"
+          }
+        },
+        "rig": {
+          "$ref": "#/$defs/Rig"
+        },
+        "stream": {
+          "$ref": "#/$defs/StreamConfig"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stream",
+        "rig",
+        "bindings"
       ]
     },
     "StreamConfig": {

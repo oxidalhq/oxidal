@@ -6,14 +6,24 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-native = ["dep:oxidal-control", "dep:oxidal-graph"]
+native = []
+worker = ["native", "oxidal-audio/alsa"]
+qualification = ["worker", "oxidal-audio/qualification"]
 
 [dependencies]
 serde.workspace = true
-oxidal-control = { workspace = true, optional = true }
-oxidal-graph = { workspace = true, optional = true }
+serde_json.workspace = true
+schemars.workspace = true
+oxidal-audio = { path = "../oxidal-audio", version = "0.1.0" }
+oxidal-control.workspace = true
+oxidal-graph.workspace = true
 
 [lints.rust]
 missing_debug_implementations = "warn"
 [lints.clippy]
 all = "warn"
+
+[[bin]]
+name = "oxidal-graph-worker"
+path = "src/bin/oxidal-graph-worker.rs"
+required-features = ["worker"]

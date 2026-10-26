@@ -78,6 +78,21 @@ export type Edit =
       phase: "cancel";
       token: string;
     };
+export type GraphAudioAction =
+  | {
+      kind: "start";
+      settings: StartGraph;
+    }
+  | {
+      kind: "stop";
+    }
+  | {
+      kind: "restart";
+    }
+  | {
+      command: Command;
+      kind: "control";
+    };
 export type Framing = "legacy" | "current";
 export type EditorAction =
   | {
@@ -128,6 +143,8 @@ export interface Contract {
   capabilities: Capabilities;
   command: Command;
   error: ApiError;
+  graph_audio_command: GraphAudioCommand;
+  graph_audio_state: GraphAudioState;
   library: Library;
   native_command: EditorCommand;
   native_editor: EditorSnapshot;
@@ -282,6 +299,93 @@ export interface MidiInput {
 export interface ApiError {
   error: string;
 }
+export interface GraphAudioCommand {
+  action: GraphAudioAction;
+  expected_revision: number;
+  session: string;
+}
+export interface StartGraph {
+  bindings: Binding[];
+  rig: Rig;
+  stream: StreamConfig;
+}
+export interface Binding {
+  node: string;
+  uri: string;
+}
+export interface GraphAudioState {
+  configured?: StartGraph | null;
+  control?: Snapshot | null;
+  device_owned: boolean;
+  error?: string | null;
+  experimental: boolean;
+  native_values: NativeValue[];
+  phase: AudioPhase;
+  processed_frames: number;
+  revision: number;
+  session: string;
+}
+/**
+ * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.
+ * @see docs/architecture.md
+ */
+export interface Snapshot {
+  actions: ActionDescriptor[];
+  audio_available: boolean;
+  bypassed: boolean;
+  edit?: EditStatus | null;
+  feedback: MidiFeedback[];
+  last_midi?: MidiInput | null;
+  mappings: MappingFile;
+  midi_mapped: boolean;
+  origin: string;
+  parameters: Parameter[];
+  preset: string;
+  protocol: number;
+  request_id: string;
+  revision: number;
+  rig: Rig;
+  session: string;
+}
+/**
+ * Enumerated commands are discoverable alongside numeric parameters.
+ * @see docs/architecture.md
+ */
+export interface ActionDescriptor {
+  id: string;
+  label: string;
+  options: string[];
+}
+export interface EditStatus {
+  owner: string;
+  target: string;
+}
+export interface MidiFeedback {
+  cc: number;
+  channel: number;
+  device: string;
+  mapping: string;
+  value: number;
+}
+/**
+ * Discoverable controls share stable IDs across MIDI and web adapters.
+ * @see docs/architecture.md
+ */
+export interface Parameter {
+  default: number;
+  id: string;
+  label: string;
+  max: number;
+  min: number;
+  step: number;
+  unit: string;
+  value: number;
+  writable: boolean;
+}
+export interface NativeValue {
+  target: string;
+  value: number;
+}
 export interface Library {
   presets: Inspection[];
 }
@@ -351,63 +455,6 @@ export interface Parameter2 {
   normalized: number;
   tone: boolean;
   value: number;
-}
-/**
- * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.
- * @see docs/architecture.md
- */
-export interface Snapshot {
-  actions: ActionDescriptor[];
-  audio_available: boolean;
-  bypassed: boolean;
-  edit?: EditStatus | null;
-  feedback: MidiFeedback[];
-  last_midi?: MidiInput | null;
-  mappings: MappingFile;
-  midi_mapped: boolean;
-  origin: string;
-  parameters: Parameter[];
-  preset: string;
-  protocol: number;
-  request_id: string;
-  revision: number;
-  rig: Rig;
-  session: string;
-}
-/**
- * Enumerated commands are discoverable alongside numeric parameters.
- * @see docs/architecture.md
- */
-export interface ActionDescriptor {
-  id: string;
-  label: string;
-  options: string[];
-}
-export interface EditStatus {
-  owner: string;
-  target: string;
-}
-export interface MidiFeedback {
-  cc: number;
-  channel: number;
-  device: string;
-  mapping: string;
-  value: number;
-}
-/**
- * Discoverable controls share stable IDs across MIDI and web adapters.
- * @see docs/architecture.md
- */
-export interface Parameter {
-  default: number;
-  id: string;
-  label: string;
-  max: number;
-  min: number;
-  step: number;
-  unit: string;
-  value: number;
-  writable: boolean;
 }
 export interface Validation {
   errors: string[];
