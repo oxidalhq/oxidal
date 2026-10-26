@@ -90,6 +90,7 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             'run-command systemctl enable ' + ' '.join(profile['enabled_services']),
             'run-command systemctl mask systemd-networkd.service systemd-networkd-wait-online.service',
             'run-command systemctl set-default multi-user.target',
+            "run-command sed -i 's/^LOGIN_TIMEOUT[[:space:]].*/LOGIN_TIMEOUT 180/' /etc/login.defs",
             'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service /etc/systemd/system/oxidal-debug.service',
             'run-command nginx -t',
             *(['run-command plymouth-set-default-theme -R oxidal',

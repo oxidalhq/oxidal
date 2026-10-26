@@ -41,11 +41,29 @@ try:
     with open('/etc/shadow') as shadow:
         recovery = next(line.split(':')[1] for line in shadow if line.startswith('oxidal-admin:'))
     assert recovery.startswith('$6$') and len(recovery) > 50
+    import re
+    with open('/etc/login.defs') as file:
+        assert re.search(r'^LOGIN_TIMEOUT\s+180\s*$', file.read(), re.M)
     ssh_config = subprocess.check_output(['/usr/sbin/sshd', '-T'], text=True)
     assert 'passwordauthentication yes' in ssh_config
     subprocess.run(['systemctl', 'is-active', '--quiet', 'ssh'], check=True)
     assert get('/api/v1/audio')['phase'] == 'stopped'
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
+    # The installed daemon must serve optional development originals unchanged.
+    from pathlib import Path
+    seed = Path('/usr/share/oxidal/development-presets.json')
+    if seed.exists():
+        import hashlib
+        manifest = json.loads(seed.read_text())
+        library = get('/api/v1/presets')
+        assert len(library['presets']) == len(manifest['files']) > 0
+        for original in manifest['files']:
+            with urllib.request.urlopen('http://127.0.0.1:3210/api/v1/presets/' + original['sha256'] + '/original', timeout=5) as reply:
+                data = reply.read()
+            assert len(data) == original['bytes']
+            assert hashlib.sha256(data).hexdigest() == original['sha256']
+    monitor = get('/api/v1/monitor')
+    assert monitor['audio'] is None, 'Stopped audio must not invent meter readings'
     # Exercise the installed unprivileged debug executor through the real daemon.
     def post(command):
         request = urllib.request.Request('http://127.0.0.1:3210/api/v1/debug', data=json.dumps(command).encode(), headers={'Content-Type':'application/json'}, method='POST')
@@ -115,7 +133,7 @@ try:
 except Exception:
     import traceback
     traceback.print_exc()
-    subprocess.run(['journalctl', '-b', '-u', 'oxidald', '-u', 'nginx', '--no-pager', '-n', '60'])
+    subprocess.run(['journalctl', '-b', '-u', 'oxidald', '-u', 'nginx', '-u', 'oxidal-debug', '-u', 'oxidal-device', '--no-pager', '-n', '60'])
     print('OXIDAL_BOOT_FAILED', flush=True)
 finally:
     subprocess.run(['systemctl', 'poweroff'])
