@@ -15,10 +15,19 @@ import { spawnSync } from 'node:child_process';
 import { root, run, rustEnv } from './process.mjs';
 import { checkVersions } from './release.mjs';
 
+const git = (...args) => {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(result.stderr);
+  return result.stdout.trim();
+};
 // @see docs/architecture.md
 const versions = checkVersions();
 const buildEnv = rustEnv();
 const appliance = process.argv.includes('--appliance');
+if (appliance && git('status', '--porcelain'))
+  throw new Error(
+    'Commit and clean the source tree before building an appliance bundle.',
+  );
 if (appliance && process.platform !== 'linux')
   throw new Error('Appliance bundles require a native Linux build host.');
 if (appliance) {
@@ -125,11 +134,6 @@ cpSync(join(root, 'os/config'), join(staging, 'os/config'), {
 cpSync(join(root, 'os/manifests'), join(staging, 'os/manifests'), {
   recursive: true,
 });
-const git = (...args) => {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(result.stderr);
-  return result.stdout.trim();
-};
 cpSync(join(root, 'os/scripts/provision.py'), join(staging, 'os/provision.py'));
 const files = {};
 function inventory(folder, prefix = '') {
