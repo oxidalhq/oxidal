@@ -82,6 +82,24 @@ export type Edit =
       phase: "cancel";
       token: string;
     };
+export type Command2 =
+  | {
+      type: "status";
+    }
+  | {
+      type: "enable";
+    }
+  | {
+      type: "disable";
+    }
+  | {
+      command: string;
+      type: "run";
+    }
+  | {
+      id: string;
+      type: "cancel";
+    };
 export type GraphAudioAction =
   | {
       kind: "start";
@@ -133,7 +151,7 @@ export type EditorAction =
       kind: "save";
       name: string;
     };
-export type Command2 =
+export type Command3 =
   | {
       action: PowerAction;
       type: "power";
@@ -187,6 +205,8 @@ export interface Contract {
   audio_state: AudioState;
   capabilities: Capabilities;
   command: Command;
+  debug_command: Command2;
+  debug_state: State;
   error: ApiError;
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
@@ -194,7 +214,7 @@ export interface Contract {
   monitoring: Monitoring;
   native_command: EditorCommand;
   native_editor: EditorSnapshot;
-  network_command: Command2;
+  network_command: Command3;
   network_state: NetworkState;
   preset: Inspection;
   rig: Rig;
@@ -347,6 +367,22 @@ export interface MidiInput {
   channel: number;
   device: string;
   value: number;
+}
+export interface State {
+  available: boolean;
+  directory: string;
+  enabled: boolean;
+  identity: string;
+  job?: Job | null;
+  message: string;
+  remaining_seconds: number;
+}
+export interface Job {
+  elapsed_ms: number;
+  exit_code?: number | null;
+  id: string;
+  output: string;
+  phase: string;
 }
 export interface ApiError {
   error: string;

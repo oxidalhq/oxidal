@@ -49,6 +49,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     std::fs::create_dir_all(&root).unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
         device_socket: None,
         graph_worker: Some(executable.clone()),
         audio_worker: Some(executable.clone()),

@@ -29,7 +29,7 @@ try:
     else:
         raise AssertionError('Daemon/native editor not ready after real systemd boot')
     assert health['native_editor'] and 'session' in native
-    for service in ('oxidald', 'nginx', 'NetworkManager', 'avahi-daemon'):
+    for service in ('oxidald', 'nginx', 'NetworkManager', 'avahi-daemon', 'oxidal-device', 'oxidal-debug'):
         subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
     pid = subprocess.check_output(['systemctl', 'show', '-p', 'MainPID', '--value', 'oxidald'], text=True).strip()
     with open('/proc/' + pid + '/status') as file:
@@ -46,6 +46,53 @@ try:
     subprocess.run(['systemctl', 'is-active', '--quiet', 'ssh'], check=True)
     assert get('/api/v1/audio')['phase'] == 'stopped'
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
+    # Exercise the installed unprivileged debug executor through the real daemon.
+    def post(command):
+        request = urllib.request.Request('http://127.0.0.1:3210/api/v1/debug', data=json.dumps(command).encode(), headers={'Content-Type':'application/json'}, method='POST')
+        with urllib.request.urlopen(request, timeout=5) as reply:
+            return json.loads(reply.read())
+    debug = get('/api/v1/debug')
+    assert debug['available'] and not debug['enabled']
+    assert 'oxidal-debug' in debug['identity']
+    post({'type':'enable'})
+    before = subprocess.check_output(['systemctl','show','-p','MainPID','--value','oxidal-debug'],text=True).strip()
+    job = post({'type':'run','command':'id -u; printf debug-ok'})['job']
+    for attempt in range(80):
+        result = get('/api/v1/debug')['job']
+        if result and result['id'] == job['id'] and result['phase'] != 'running':
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('Debug command did not finish')
+    assert result['exit_code'] == 0 and 'debug-ok' in result['output']
+    assert int(result['output'].splitlines()[0]) == pwd.getpwnam('oxidal-debug').pw_uid != 0
+    for attempt in range(80):
+        after = subprocess.check_output(['systemctl','show','-p','MainPID','--value','oxidal-debug'],text=True).strip()
+        if after != before and after != '0':
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('Debug service did not recycle its cgroup')
+    time.sleep(.3)
+    # A descendant that escapes the shell process group must still die with its service cgroup.
+    job = post({'type':'run','command':"setsid sh -c 'echo $$; exec sleep 60' & wait"})['job']
+    escaped = None
+    for attempt in range(80):
+        result = get('/api/v1/debug')['job']
+        if result and result['id'] == job['id'] and result['output'].strip():
+            escaped = int(result['output'].strip()); break
+        time.sleep(.1)
+    assert escaped, 'Missing escaped-child test PID'
+    post({'type':'cancel','id':job['id']})
+    for attempt in range(80):
+        import os
+        if not os.path.exists('/proc/' + str(escaped)):
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('Cancelled debug descendant survived cgroup cleanup')
+    post({'type':'disable'})
+    assert not get('/api/v1/debug')['enabled']
     # A real TLS listener must reject unauthenticated access after systemd starts nginx.
     import ssl, http.client, socket
     context = ssl.create_default_context(cafile='/opt/oxidal/boot-test-ca.crt')

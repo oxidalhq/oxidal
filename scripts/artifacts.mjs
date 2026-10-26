@@ -88,6 +88,7 @@ const binaries = appliance
   ? [
       'oxidald',
       'oxidal-device-service',
+      'oxidal-debug-service',
       'oxidal-preset-seed',
       'oxidal-native-worker',
       'oxidal-audio-worker',

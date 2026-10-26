@@ -12,6 +12,7 @@ workspace = true
 alsa = ["oxidal-audio/alsa"]
 
 [dependencies]
+oxidal-debug = { path = "../oxidal-debug", version = "0.1.0" }
 oxidal-device = { path = "../oxidal-device", version = "0.1.0" }
 oxidal-lv2 = { path = "../oxidal-lv2", version = "0.1.0" }
 oxidal-audio = { path = "../oxidal-audio", version = "0.1.0" }

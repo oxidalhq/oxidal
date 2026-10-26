@@ -19,6 +19,7 @@ import { Library } from './Library';
 const Monitoring = lazy(() =>
   import('./Monitoring').then((m) => ({ default: m.Monitoring })),
 );
+import { DebugConsole } from './DebugConsole';
 import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
@@ -572,6 +573,7 @@ export default function App() {
               </section>
               <NetworkSettings connected={connected} />
               <AudioSettings connected={connected} />
+              <DebugConsole />
               <section className="panel">
                 <h2>MIDI mapping</h2>
                 <p className="muted">

@@ -1,4 +1,5 @@
 mod audio;
+mod debug;
 mod device;
 mod graph_playback;
 mod monitor;
@@ -51,6 +52,8 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub debug_state: oxidal_debug::State,
+    pub debug_command: oxidal_debug::Command,
     pub monitoring: monitor::Monitoring,
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
@@ -72,6 +75,7 @@ pub struct Contract {
 /// @see docs/architecture.md
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub debug_socket: Option<PathBuf>,
     pub device_socket: Option<PathBuf>,
     pub simulator: bool,
     pub native_worker: Option<PathBuf>,
@@ -85,6 +89,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
@@ -145,6 +150,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
     let shared = Arc::new(Shared {
+        debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
         playback: playback::Playback::new(&config)?,
         graph_playback: graph_playback::GraphPlayback::new(&config)?,
@@ -178,6 +184,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let api = Router::new()
         .route("/health", get(health))
         .route("/monitor", get(monitor::state))
+        .route("/debug", get(debug::state).post(debug::command))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
         .route(

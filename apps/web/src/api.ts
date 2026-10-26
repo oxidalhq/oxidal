@@ -8,7 +8,13 @@ export type MappingFile = Snapshot['mappings'];
 const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
-  formats: { uint8: true, uint32: true, uint64: true, double: true },
+  formats: {
+    uint8: true,
+    uint32: true,
+    uint64: true,
+    int32: true,
+    double: true,
+  },
 });
 const snapshotValidator = ajv.compile<Snapshot>({
   $defs: schema.$defs,
@@ -241,5 +247,30 @@ export async function monitoring(signal?: AbortSignal): Promise<Monitoring> {
   const body: unknown = await response.json();
   if (!response.ok || !monitoringValidator(body))
     throw new Error('Monitoring unavailable');
+  return body;
+}
+
+export type DebugState = Contract['debug_state'];
+export type DebugCommand = Contract['debug_command'];
+const debugValidator = ajv.compile<DebugState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/State',
+});
+export async function debugCommand(
+  command?: DebugCommand,
+): Promise<DebugState> {
+  const response = await fetch(
+    '/api/v1/debug',
+    command
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(command),
+          signal: AbortSignal.timeout(5000),
+        }
+      : { cache: 'no-store', signal: AbortSignal.timeout(5000) },
+  );
+  const body = await presetResponse(response);
+  if (!debugValidator(body)) throw new Error('Incompatible debug service');
   return body;
 }

@@ -1,0 +1,35 @@
+[Unit]
+Description=Oxidal isolated debug command service
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+User=oxidal-debug
+Group=oxidal-control
+RuntimeDirectory=oxidal-debug
+RuntimeDirectoryMode=0750
+WorkingDirectory=/run/oxidal-debug
+ExecStart=/opt/oxidal/bin/oxidal-debug-service
+Restart=always
+RestartSec=0.2
+KillMode=control-group
+TimeoutStopSec=2
+SendSIGKILL=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+TasksMax=32
+MemoryMax=128M
+CPUQuota=20%
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

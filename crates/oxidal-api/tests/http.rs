@@ -14,6 +14,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let app = router(Config {
+        debug_socket: None,
         device_socket: None,
         graph_worker: None,
         audio_worker: None,
@@ -147,6 +148,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     );
     assert!(path.is_file());
     let app = router(Config {
+        debug_socket: None,
         device_socket: None,
         graph_worker: None,
         audio_worker: None,
@@ -172,6 +174,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
     std::fs::write(&path, b"bad data").unwrap();
     assert!(
         router(Config {
+            debug_socket: None,
             device_socket: None,
             graph_worker: None,
             audio_worker: None,
@@ -837,5 +840,56 @@ async fn monitor_reports_real_availability_without_inventing_audio() {
         .await
         .unwrap();
     assert_eq!(foreign.status(), 403);
+    task.abort();
+}
+
+#[tokio::test]
+async fn debug_is_disabled_optional_and_rejects_foreign_origins_and_unknown_fields() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/debug"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["available"], false);
+    assert_eq!(state["enabled"], false);
+    for command in [
+        json!({"type":"run","command":"never-echo-this"}),
+        json!({"type":"enable"}),
+    ] {
+        let response = client
+            .post(format!("{url}/debug"))
+            .json(&command)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 409);
+        assert!(!response.text().await.unwrap().contains("never-echo-this"));
+    }
+    assert_eq!(
+        client
+            .post(format!("{url}/debug"))
+            .json(&json!({"type":"enable","root":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/debug"))
+            .header("origin", "https://foreign.invalid")
+            .json(&json!({"type":"enable"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
     task.abort();
 }

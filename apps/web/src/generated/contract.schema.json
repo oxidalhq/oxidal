@@ -25,6 +25,12 @@
     "command": {
       "$ref": "#/$defs/Command"
     },
+    "debug_command": {
+      "$ref": "#/$defs/Command2"
+    },
+    "debug_state": {
+      "$ref": "#/$defs/State"
+    },
     "error": {
       "$ref": "#/$defs/ApiError"
     },
@@ -47,7 +53,7 @@
       "$ref": "#/$defs/EditorSnapshot"
     },
     "network_command": {
-      "$ref": "#/$defs/Command2"
+      "$ref": "#/$defs/Command3"
     },
     "network_state": {
       "$ref": "#/$defs/NetworkState"
@@ -71,6 +77,8 @@
     "rig",
     "validation",
     "capabilities",
+    "debug_state",
+    "debug_command",
     "monitoring",
     "network_state",
     "network_command",
@@ -700,6 +708,83 @@
       ]
     },
     "Command2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "status"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "enable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "disable"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "run"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "cancel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ]
+        }
+      ]
+    },
+    "Command3": {
       "oneOf": [
         {
           "type": "object",
@@ -1579,6 +1664,39 @@
         "connection"
       ]
     },
+    "Job": {
+      "type": "object",
+      "properties": {
+        "elapsed_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "id": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "phase",
+        "output",
+        "elapsed_ms"
+      ]
+    },
     "Library": {
       "type": "object",
       "properties": {
@@ -2376,6 +2494,50 @@
         "stream",
         "rig",
         "bindings"
+      ]
+    },
+    "State": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "identity": {
+          "type": "string"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Job"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "remaining_seconds": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "enabled",
+        "remaining_seconds",
+        "identity",
+        "directory",
+        "message"
       ]
     },
     "StreamConfig": {
