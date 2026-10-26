@@ -575,9 +575,7 @@ input[type='file'] {
 .masthead .online {
   background: var(--enclosure-foreground);
 }
-h1,
 .parameter output,
-.block strong,
 .path-label {
   font-family: var(--font-mono);
 }
@@ -610,18 +608,19 @@ h1,
   letter-spacing: 0.12em;
 }
 .block:not(.endpoint) {
-  border-width: 2px;
-  border-color: var(--lcd-foreground);
+  border-width: 1px;
+  border-color: var(--lcd-border);
+  border-top: 3px solid var(--effect-accent);
+  box-shadow: var(--effect-shadow);
 }
 .block:not(.endpoint) .eyebrow {
   color: var(--lcd-foreground);
-  border-bottom: 1px solid var(--lcd-border);
-  padding-bottom: 6px;
+  letter-spacing: 0.14em;
 }
 .parameter {
   min-width: 0;
   padding: var(--control-gap);
-  background: var(--background);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -655,4 +654,39 @@ input[type='range']:focus-visible {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Modern typography around the LCD readouts; controls retain native semantics. */
+h1 {
+  font-weight: 600;
+  letter-spacing: -0.045em;
+}
+.block strong {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.block > span:last-child {
+  font-size: 11px;
+}
+.endpoint {
+  border-style: dashed;
+}
+.branch {
+  border-left-width: 1px;
+}
+.chain-panel .segmented {
+  padding: 4px;
+  border: 1px solid var(--lcd-border);
+  border-radius: var(--radius);
+  gap: 4px;
+}
+.chain-panel .segmented button {
+  border-color: transparent;
+}
+.control-editor > button {
+  width: 100%;
+}
+.parameter output {
+  font-weight: 500;
 }

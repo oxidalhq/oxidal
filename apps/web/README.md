@@ -13,9 +13,11 @@ Target-phone usability and deployment qualification remain pending. Automated ax
 ## Theme
 
 Edit `src/theme.css` to change the look without editing TSX. The default
-**Multistomp** theme takes visual cues from the original
+**Studio LCD** theme takes visual cues from the original
 [Zoom MS-70CDR](https://zoomcorp.com/en/gb/multi-effects/multistomp-pedals/ms-70cdr/):
-blue enclosure accents, a monochrome LCD-style chain, and clear numeric readouts.
+a monochrome LCD-style chain and clear numeric readouts. Graphite chrome, muted
+teal accents, modern sans-serif headings and softer effect tiles give it an
+independent old-and-new character.
 Oxidal keeps its own layout, labels and behavior. The semantic colour pairs follow
 [shadcn CSS-variable theming](https://ui.shadcn.com/docs/theming).
 
@@ -32,7 +34,7 @@ Oxidal keeps its own layout, labels and behavior. The semantic colour pairs foll
   `--touch-target`. Keep primary touch targets at least 44px.
 - **Typography:** `--font-sans`, `--font-mono`, `--title-size` and
   `--readout-size`. Defaults use local system fonts, with no font download.
-- **Depth:** `--panel-shadow` and `--lcd-shadow`; set both to `none` for a flatter
+- **Depth:** `--panel-shadow`, `--effect-shadow` and `--lcd-shadow`; set these to `none` for a flatter
   presentation. Status and selections also have text/pressed-state cues.
 
 For example, change `--primary` and `--ring` together to retune the control
