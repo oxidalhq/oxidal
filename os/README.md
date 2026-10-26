@@ -1,4 +1,22 @@
-# Oxidal OS recipe foundation
+# Oxidal Linux targets and OS recipes
+
+## Target installation routes
+
+Oxidal targets ordinary Linux computers as well as Raspberry Pi. The same Rust daemon, native audio/plugin adapters, preset formats and browser UI serve both; GPIO or Oxidal Deck must not be prerequisites for playback or control.
+
+| Target                            | Planned delivery                                                                                                          | Qualification boundary                                                                                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Older x86-64 laptops and desktops | Install Oxidal into an existing Linux distribution; start with a Debian/Ubuntu-family package and documented dependencies | Exact distribution release, minimum CPU instruction set, native plugin builds, audio devices and performance must be qualified. Existing desktop, network and boot configuration are preserved. |
+| Raspberry Pi 5, then Pi 4         | ARM64 application plus a separate, board-qualified OxidalOS appliance image                                               | Pi 5 + Hotone Jogg remains the first hardware baseline; Pi 4 needs its own performance measurements.                                                                                            |
+| Orange Pi (candidate)             | Reuse the ARM64 application where compatible; add an image/profile only for a selected board                              | No model is selected. Board revision, SoC, bootloader, kernel, USB audio and cooling need separate qualification. A Raspberry Pi image is not an Orange Pi image.                               |
+
+Initial laptop scope is **64-bit x86 Linux**, not every legacy 32-bit laptop. The first distribution/release baseline and packaging format remain to be qualified; this is a target policy, not a supported-hardware list. On laptops, built-in ALSA audio and USB interfaces are candidates; the selected input/output combination must pass the same latency and xrun checks. Older CPUs need measured model/rig budgets, including switching overlap, rather than an assumption that every rig fits.
+
+Keep platform configuration separate from portable runtime logic. A regular Linux install must not apply Pi boot settings, replace the host network setup, strip desktop packages, or require appliance partitioning. Audio permissions, scheduling and optional service startup must be explicit installation steps. Appliance read-only partitions and future A/B recovery belong to board-image profiles, not mandatory laptop setup.
+
+**Current evidence:** the artifact script packages the build host's native preview and web assets; the configured artifact workflow targets Linux x64. These are control previews, not a completed Linux audio installer or bootable image. ARM64 Linux compile checks do not prove ARM execution, Orange Pi compatibility or audio performance. Native audio hosting, laptop packaging and physical qualification remain pending. Extend the existing OS tests, normal build checks and browser E2E for these routes; keep board/audio qualification results separate.
+
+## Raspberry Pi recipe foundation
 
 This PoC pins Raspberry Pi OS Lite arm64 Trixie (2026-10-06) and its vendor SHA-256 in `manifests/base.json`. Source: [official Raspberry Pi downloads](https://www.raspberrypi.com/software/operating-systems/). No desktop stripping, package removal, block-device flashing, or service activation is performed by these scripts.
 

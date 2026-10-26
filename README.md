@@ -10,6 +10,8 @@ Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control in
 | `scripts/`  | Reproducible development, verification and packaging commands                                |
 | `docs/`     | Product architecture and contributor documentation                                           |
 
+Oxidal targets existing **x86-64 Linux laptops/desktops** and **Raspberry Pi ARM64**, with **Orange Pi as a board-specific candidate**. The portable application and board images have separate installation and qualification paths; see the [Linux target plan](os/README.md#target-installation-routes). Live audio and installation support for these targets are not yet qualified.
+
 ## Run the local PoC
 
 Use Node **22.21.0**, pnpm **10.32.1**, and Rust **1.95.0**. On a fresh machine:
