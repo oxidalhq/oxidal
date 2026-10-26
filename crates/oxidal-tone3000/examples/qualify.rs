@@ -682,6 +682,7 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
         .filter(|e| e.path().extension().is_some_and(|e| e == "t3kpreset"))
         .collect();
     assert_eq!(files.len(), 8, "pinned factory corpus");
+    let mut split_count = 0;
     for file in files {
         let bytes = std::fs::read(file.path())?;
         let source = oxidal_presets::inspect(&bytes)?;
@@ -730,9 +731,177 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
         engine.process(&mut [0.01; 128], &mut [0.01; 128])?;
         assert_eq!(std::fs::read(file.path())?, bytes);
         eprintln!("factory native load/save/reload: {}", source.name);
+        let chain = engine.chain()?;
+        let tones: Vec<_> = chain["chain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["kind"] == "tone")
+            .collect();
+        if source.name == "Mesa Pitch Shift" {
+            assert_eq!(tones.len(), 3);
+            assert_eq!(tones[0]["tone"]["gear"], "amp");
+            assert_eq!(tones[1]["tone"]["gear"], "cab");
+            let original = engine.capture()?;
+            assert!(
+                engine
+                    .split_amp_cab(
+                        tones[0]["blockId"].as_str().unwrap(),
+                        tones[1]["blockId"].as_str().unwrap(),
+                        true,
+                        false
+                    )
+                    .is_err()
+            );
+            assert_eq!(engine.capture()?, original);
+            // Build an explicit owned mono amp/cab test rig; never silently drop extra effects in the split operation.
+            engine.remove_block(tones[2]["blockId"].as_str().unwrap())?;
+            assert!(engine.remove_block("missing").is_err());
+            engine.set_input_mode(oxidal_tone3000::InputMode::Left)?;
+            for id in [
+                "osEnabled",
+                "spreadEnabled",
+                "alignEnabled",
+                "chainSoloLeft",
+                "chainSoloRight",
+                "chainInvertLeft",
+                "chainInvertRight",
+                "pitchEnabled",
+                "gateEnabled",
+            ] {
+                engine.set_normalized(id, 0.0)?;
+            }
+            engine.set_normalized("inputLevel", 0.5)?;
+            engine.set_normalized("outputBalance", 0.5)?;
+            engine.set_normalized("chainPanLeft", 0.0)?;
+            engine.set_normalized("chainPanRight", 1.0)?;
+            let amp = tones[0]["blockId"].as_str().unwrap();
+            // The factory cab uses a WAV encoding outside the strict split contract.
+            // Keep that rejection, then author a plain mono PCM impulse fixture.
+            assert!(
+                engine
+                    .split_amp_cab(amp, tones[1]["blockId"].as_str().unwrap(), true, false)
+                    .is_err()
+            );
+            engine.remove_block(tones[1]["blockId"].as_str().unwrap())?;
+            let ir = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?)
+                .join("split-impulse.wav");
+            let mut wav = Vec::from(&b"RIFF"[..]);
+            wav.extend(38u32.to_le_bytes());
+            wav.extend(b"WAVEfmt ");
+            wav.extend(16u32.to_le_bytes());
+            wav.extend(1u16.to_le_bytes());
+            wav.extend(1u16.to_le_bytes());
+            wav.extend(48000u32.to_le_bytes());
+            wav.extend(96000u32.to_le_bytes());
+            wav.extend(2u16.to_le_bytes());
+            wav.extend(16u16.to_le_bytes());
+            wav.extend(b"data");
+            wav.extend(2u32.to_le_bytes());
+            wav.extend(32767i16.to_le_bytes());
+            std::fs::write(&ir, wav)?;
+            let loaded = engine.load_local_model(&ir)?;
+            assert!(loaded["error"].is_null(), "IR fixture load: {loaded}");
+            engine.wait_ready()?;
+            let fixture_chain = engine.chain()?;
+            let cab = fixture_chain["chain"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|b| b["kind"] == "tone" && b["blockId"] != amp)
+                .unwrap()["blockId"]
+                .as_str()
+                .unwrap();
+            qualify_split(&mut engine, amp, cab)?;
+            split_count += 1;
+        }
     }
+    assert!(
+        split_count > 0,
+        "At least one real factory amp/cab must qualify"
+    );
     println!(
         "native_factory_workflows: 8 passed (state/readiness/finite render; not independent full audio parity)"
+    );
+    Ok(())
+}
+
+fn qualify_split(engine: &mut Engine, amp: &str, cab: &str) -> Result<(), Box<dyn Error>> {
+    let source = engine.capture()?;
+    assert!(engine.split_amp_cab(amp, cab, false, false).is_err());
+    assert!(engine.split_amp_cab(cab, amp, true, false).is_err());
+    assert!(engine.split_amp_cab(amp, amp, true, false).is_err());
+    assert_eq!(engine.capture()?, source, "Rejected split mutated source");
+    let source_parameters = engine.catalog()?;
+    let split = engine.split_amp_cab(amp, cab, true, true)?;
+    assert_eq!(engine.capture()?, source, "Successful split mutated source");
+    assert_eq!(split.pitch["inputMode"], "left");
+    assert_eq!(split.pitch["pitchEnabled"], 0.0);
+    for (state, id) in [(&split.amp, amp), (&split.cab, cab)] {
+        engine.restore(state)?;
+        engine.wait_ready()?;
+        let parameters = engine.catalog()?;
+        for row in parameters.as_array().unwrap() {
+            let name = row["id"].as_str().unwrap();
+            let keep_input = name == "inputLevel"
+                || name.starts_with("gate")
+                || name.starts_with("pitch")
+                || ["calibrateInput", "inputCalibrationLevel", "targetLoudness"].contains(&name);
+            let keep_output = name.starts_with("tone") || name == "outputLevel";
+            let forced_off = [
+                "osEnabled",
+                "osFactor",
+                "spreadEnabled",
+                "alignEnabled",
+                "pitchEnabled",
+            ]
+            .contains(&name)
+                || (id == amp && name == "toneEqEnabled")
+                || (id == cab && ["gateEnabled", "calibrateInput"].contains(&name));
+            let original = source_parameters
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == row["id"])
+                .unwrap();
+            let wanted = if forced_off {
+                0.0
+            } else if (id == amp && keep_input) || (id == cab && keep_output) {
+                original["value"].as_f64().unwrap()
+            } else {
+                row["default"].as_f64().unwrap()
+            };
+            assert!(
+                (row["value"].as_f64().unwrap() - wanted).abs() < 1e-5,
+                "Derived control allocation: {id}/{name}"
+            );
+        }
+        let controls = engine.block_controls()?;
+        assert!(!controls.is_empty());
+        assert!(controls.iter().all(|c| c.block_id == id));
+        settle(engine)?;
+        let mut left = [0.01; 128];
+        let mut right = left;
+        engine.process(&mut left, &mut right)?;
+        assert!(left.iter().chain(&right).all(|s| s.is_finite()));
+    }
+    engine.restore(&source)?;
+    engine.wait_ready()?;
+    assert_eq!(engine.capture()?, source);
+    engine.set_normalized("osEnabled", 1.0)?;
+    let rejected_source = engine.capture()?;
+    assert!(engine.split_amp_cab(amp, cab, true, false).is_err());
+    assert_eq!(engine.capture()?, rejected_source);
+    engine.restore(&source)?;
+    engine.set_normalized("pitchEnabled", 1.0)?;
+    let active_pitch = engine.split_amp_cab(amp, cab, true, true)?;
+    assert_eq!(active_pitch.pitch["pitchEnabled"], 1.0);
+    engine.set_normalized("gateEnabled", 1.0)?;
+    assert!(engine.split_amp_cab(amp, cab, true, true).is_err());
+    assert!(engine.split_amp_cab(amp, cab, true, false).is_ok());
+    engine.restore(&source)?;
+    eprintln!(
+        "native split: source preservation, independent asset restore, 43-parameter allocation, pitch extraction and rejection guards passed"
     );
     Ok(())
 }

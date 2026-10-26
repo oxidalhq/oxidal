@@ -3,7 +3,7 @@
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
-pub use native::{Engine, NativeError, State};
+pub use native::{Engine, InputMode, NativeError, SplitStages, State};
 
 #[cfg(feature = "native")]
 pub mod editor;

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <memory>
 #include <thread>
+#include "split.h"
 
 #define EXPORT extern "C" __attribute__((visibility("default")))
 namespace {
@@ -17,6 +18,7 @@ struct Engine {
   juce::AudioBuffer<float> audio;
   juce::MidiBuffer midi;
   juce::MemoryBlock captured;
+  oxidal::SplitState split;
   std::thread::id owner = std::this_thread::get_id();
   explicit Engine(int frames) : audio(2, frames) {}
   ~Engine() { processor.releaseResources(); }
@@ -252,5 +254,48 @@ EXPORT int oxidal_t3k_save_preset(void* ptr, const char* name, unsigned char* ou
       if (capacity < *written) throw std::runtime_error("preset capacity");
       std::memcpy(out, e.captured.getData(), *written);
     }
+  });
+}
+
+EXPORT int oxidal_t3k_split(void* ptr, const char* amp, const char* cab, bool confirmAmp, bool externalPitch,
+                           char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!amp || !cab) throw std::runtime_error("Missing stage identity");
+    // Prepare both states before publishing either; this never changes the playing/source processor.
+    auto candidate = oxidal::partition(e.processor, amp, cab, confirmAmp, externalPitch);
+    json(candidate.pitch, out, capacity, written);
+    e.split = std::move(candidate);
+  });
+}
+EXPORT int oxidal_t3k_split_state(void* ptr, int stage, unsigned char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!written || (stage != 0 && stage != 1)) throw std::runtime_error("Invalid stage request");
+    const auto& state = stage == 0 ? e.split.amp : e.split.cab;
+    if (state.isEmpty()) throw std::runtime_error("No prepared split");
+    *written = state.getSize();
+    if (out) {
+      if (capacity < *written) throw std::runtime_error("Stage capacity");
+      std::memcpy(out, state.getData(), *written);
+    }
+  });
+}
+
+EXPORT int oxidal_t3k_input_mode(void* ptr, int mode) noexcept {
+  return guard([&] {
+    if (mode < 0 || mode > 3) throw std::runtime_error("Invalid input mode");
+    engine(ptr).processor.setInputMode(static_cast<TONE3000Processor::InputMode>(mode));
+  });
+}
+EXPORT int oxidal_t3k_chain(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] { json(engine(ptr).processor.getChainState(-1), out, capacity, written); });
+}
+
+EXPORT int oxidal_t3k_remove_block(void* ptr, const char* id) noexcept {
+  return guard([&] {
+    auto& p = engine(ptr).processor;
+    if (!id || !*id || std::strlen(id) > 128 || !p.removeChainBlock(id))
+      throw std::runtime_error("Missing, stale or non-removable block");
   });
 }

@@ -62,3 +62,24 @@ The normal `pnpm check` invokes this gate on macOS or Linux when the native depe
 TONE3000 and the contributed stage bridge are MIT-licensed; accompanying notices are retained. JUCE and recursive dependencies retain their upstream licensing in the downloaded trees. JUCE licensing and complete distribution notices must be settled before publishing a native artifact; no binary publication is part of this spike. The non-A2 rejection fixture is project-authored. The A2 qualification model remains in the pinned upstream checkout and is hash-verified; no factory/model weights are copied into this repository.
 
 The native build record `qualification-build.json` in the selected output directory identifies host OS/architecture, source pins, overlay digest and library hash. Do not treat a successful build or finite audio as full TONE3000 compatibility. The full settings/operation inventory, exhaustive native preset/setting parity, real-time/physical Linux qualification and existing state/readiness regressions remain delivery gates.
+
+## Experimental amp/cab partition
+
+The adapter ports PiPedal's guarded amp/cab partition and optional pitch extraction
+into `Engine::split_amp_cab`. It returns two opaque instance states without changing
+the source. Explicit amp-head confirmation, mono unbranched routing, matching
+embedded NAM metadata and a short mono PCM/float WAV are required. Combined
+captures, extra effects, stereo/branch routing, unsupported WAV encodings and
+conflicting metadata are rejected. No assets are silently converted or discarded.
+
+Input gain/gate/calibration remain with the amp; output EQ/level remain with the
+cab. Extracting pitch returns its controls and disables internal pitch; it does
+not instantiate an external pitch effect. The native qualification suite checks
+all 43 control assignments, source preservation, embedded-asset restore and
+rejection paths using an explicitly authored factory-amp/mono-IR rig. Original
+factory files remain unchanged.
+
+This API is control-thread preparation only. There is no browser hybrid conversion
+or simultaneous multi-instance host yet. Additional instance filters and processing
+cost mean a successful split is not an audio-equivalence, latency or gapless claim.
+Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).

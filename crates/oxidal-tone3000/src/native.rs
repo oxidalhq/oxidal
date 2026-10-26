@@ -16,6 +16,32 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_remove_block(engine: *mut c_void, id: *const c_char) -> i32;
+    fn oxidal_t3k_input_mode(engine: *mut c_void, mode: i32) -> i32;
+    fn oxidal_t3k_chain(
+        engine: *mut c_void,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_split(
+        engine: *mut c_void,
+        amp: *const c_char,
+        cab: *const c_char,
+        confirm: bool,
+        pitch: bool,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_split_state(
+        engine: *mut c_void,
+        stage: i32,
+        out: *mut u8,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+
     fn oxidal_t3k_load_preset(engine: *mut c_void, bytes: *const u8, length: usize) -> i32;
     fn oxidal_t3k_save_preset(
         engine: *mut c_void,
@@ -89,13 +115,31 @@ fn string(value: &str) -> Result<CString> {
     CString::new(value).map_err(|_| NativeError("interior NUL".into()))
 }
 
+#[derive(Clone, Copy, Debug)]
+#[repr(i32)]
+pub enum InputMode {
+    Stereo = 0,
+    Left = 1,
+    Right = 2,
+    DualMono = 3,
+}
+
 /// Opaque state captured by this backend, not arbitrary imported bytes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct State(Vec<u8>);
 impl State {
     pub fn byte_len(&self) -> usize {
         self.0.len()
     }
+}
+
+/// Derived native instance states, preserving source assets and allocation of global controls.
+/// Not an audio-equivalence or readiness claim. Restore each on its own stage owner.
+#[derive(Clone, Debug)]
+pub struct SplitStages {
+    pub amp: State,
+    pub cab: State,
+    pub pitch: serde_json::Value,
 }
 
 /// Single-owner offline processor. !Send/!Sync keeps JUCE calls and destruction on its owner thread.
@@ -139,6 +183,82 @@ impl Engine {
             return Err(NativeError("invalid native JSON length".into()));
         }
         serde_json::from_slice(&buffer[..written]).map_err(|e| NativeError(e.to_string()))
+    }
+    /// Port of the existing amp/cab partition; prepares both states without mutating this engine.
+    pub fn split_amp_cab(
+        &mut self,
+        amp: &str,
+        cab: &str,
+        confirm: bool,
+        external_pitch: bool,
+    ) -> Result<SplitStages> {
+        let amp = string(amp)?;
+        let cab = string(cab)?;
+        // SAFETY: owner handle and C strings outlive the bounded native operation.
+        let pitch = self.json(|p, b, n, w| unsafe {
+            oxidal_t3k_split(
+                p,
+                amp.as_ptr(),
+                cab.as_ptr(),
+                confirm,
+                external_pitch,
+                b,
+                n,
+                w,
+            )
+        })?;
+        let read = |stage| -> Result<State> {
+            let mut length = 0;
+            // SAFETY: null output requests the size of an adapter-produced cached state.
+            checked(unsafe {
+                oxidal_t3k_split_state(
+                    self.ptr.as_ptr(),
+                    stage,
+                    std::ptr::null_mut(),
+                    0,
+                    &mut length,
+                )
+            })?;
+            if !(5..=32 * 1024 * 1024).contains(&length) {
+                return Err(NativeError("Invalid stage size".into()));
+            }
+            let mut bytes = vec![0; length];
+            let capacity = length;
+            // SAFETY: output has the requested capacity; owner-exclusive access keeps the state stable.
+            checked(unsafe {
+                oxidal_t3k_split_state(
+                    self.ptr.as_ptr(),
+                    stage,
+                    bytes.as_mut_ptr(),
+                    capacity,
+                    &mut length,
+                )
+            })?;
+            if length != capacity {
+                return Err(NativeError("Stage size changed".into()));
+            }
+            Ok(State(bytes))
+        };
+        Ok(SplitStages {
+            amp: read(0)?,
+            cab: read(1)?,
+            pitch,
+        })
+    }
+    /// Native input routing, persisted in instance state rather than preset files.
+    pub fn set_input_mode(&mut self, mode: InputMode) -> Result<()> {
+        // SAFETY: enum discriminants match the pinned native input-mode ABI.
+        checked(unsafe { oxidal_t3k_input_mode(self.ptr.as_ptr(), mode as i32) })
+    }
+    /// Control-thread structural edit. Call wait_ready before accepting the result.
+    pub fn remove_block(&mut self, id: &str) -> Result<()> {
+        let id = string(id)?;
+        // SAFETY: bounded identity and live exclusive owner; native rejects stale/insert IDs.
+        checked(unsafe { oxidal_t3k_remove_block(self.ptr.as_ptr(), id.as_ptr()) })
+    }
+    pub fn chain(&mut self) -> Result<serde_json::Value> {
+        // SAFETY: live owner handle and bounded JSON output.
+        self.json(|p, b, n, w| unsafe { oxidal_t3k_chain(p, b, n, w) })
     }
     pub fn catalog(&mut self) -> Result<serde_json::Value> {
         // SAFETY: json supplies a live handle and bounded writable buffer/length.
