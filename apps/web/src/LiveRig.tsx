@@ -14,6 +14,7 @@ export function LiveRig({
   const [state, setState] = useState<AudioState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [copyName, setCopyName] = useState('');
   const [target, setTarget] = useState('outputLevel');
   const [draft, setDraft] = useState<{
     target: string;
@@ -99,6 +100,29 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
+  async function saveCopy() {
+    if (!state || sending.current) return;
+    generation.current += 1;
+    sending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const next = await playbackCommand(state, {
+        kind: 'save_copy',
+        name: copyName.trim(),
+      });
+      if (alive.current) {
+        setState(next);
+        setDraft(null);
+      }
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+      // Do not repeat a write after a lost response. Polling retrieves its saved identity.
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
   if (state?.phase !== 'running') return null;
   const control =
     state.controls.find((c) => c.target === target) ?? state.controls[0];
@@ -127,8 +151,9 @@ export function LiveRig({
         </span>
       </div>
       <p className="caption">
-        Changes here affect the running audio. Session adjustments reset on
-        restart; saving the live session is still pending.
+        Changes here affect the running audio. Save a named copy to keep them in
+        Library. Restart still loads the starting preset; select your saved copy
+        in playback settings to use it next time.
       </p>
       <div
         className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
@@ -238,6 +263,34 @@ export function LiveRig({
             </div>
           </>
         ))}
+      <div className="form-grid">
+        <label className="field">
+          Name for sounding copy
+          <input
+            value={copyName}
+            onChange={(e) => setCopyName(e.target.value)}
+            maxLength={100}
+            disabled={busy}
+          />
+        </label>
+        <Button
+          variant="outline"
+          disabled={disabled || !!draft || !copyName.trim()}
+          onClick={() => void saveCopy()}
+        >
+          Save sounding copy
+        </Button>
+      </div>
+      {!!draft && (
+        <p className="caption">
+          Apply or discard the pending adjustment before saving.
+        </p>
+      )}
+      {state.saved_copy && (
+        <p role="status" data-testid="live-saved">
+          Copy saved in Library. Audio is still running.
+        </p>
+      )}
       {stale && (
         <p role="alert">
           The sounding session changed. Discard this adjustment before editing

@@ -20,6 +20,7 @@ The optional `oxidal-device` helper exposes browser Wi-Fi scan/join, hotspot cre
 
 Native playback now has session/revision-checked scalar controls and confirmed
 readback. The rig page shows actual sounding blocks while that worker runs and hides
-the silent example chain. Live changes are not yet saved; full native authoring,
+the silent example chain. A separate export worker saves verified named copies of
+confirmed scalar settings without changing audio/editor state; full native authoring,
 prepared switching and physical timing remain unqualified. The adapter also ports
 guarded amp/cab partitioning as an offline preparation API; see docs/native-tone3000.md.

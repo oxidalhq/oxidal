@@ -396,6 +396,40 @@ impl Engine {
         // SAFETY: structurally validated, bounded bytes remain live for this synchronous call.
         checked(unsafe { oxidal_t3k_load_preset(self.ptr.as_ptr(), bytes.as_ptr(), bytes.len()) })
     }
+    /// Reconstruct only a complete, confirmed scalar catalog on an isolated engine.
+    /// This does not transfer transient delay buffers or general graph state.
+    pub fn apply_live_snapshot(
+        &mut self,
+        controls: &[oxidal_audio::lifecycle::LiveControl],
+    ) -> Result<()> {
+        let actual = self.live_controls()?;
+        if !oxidal_audio::lifecycle::valid_controls(controls)
+            || actual.len() != controls.len()
+            || controls.iter().any(|c| {
+                !actual
+                    .iter()
+                    .any(|a| a.target == c.target && a.toggle == c.toggle && a.accepts(c.value))
+            })
+        {
+            return Err(NativeError(
+                "Live control catalog does not match source preset".into(),
+            ));
+        }
+        for control in controls {
+            self.set_live_control(&control.target, control.value)?;
+        }
+        let restored = self.live_controls()?;
+        if controls.iter().any(|c| {
+            !restored
+                .iter()
+                .any(|a| a.target == c.target && (a.value - c.value).abs() < 1e-5)
+        }) {
+            return Err(NativeError(
+                "Live control reconstruction did not match".into(),
+            ));
+        }
+        Ok(())
+    }
     pub fn save_preset(&mut self, name: &str) -> Result<Vec<u8>> {
         if name.trim().is_empty() || name.len() > 100 || name.chars().any(char::is_control) {
             return Err(NativeError(

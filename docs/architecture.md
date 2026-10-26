@@ -75,3 +75,11 @@ blocks while native playback runs. The generic `/state` simulator and offline ed
 retain separate identities; their commands do not target live audio. See
 [audio controls](audio.md#experimental-sounding-controls) for the supported scalar
 controls, failure policy and remaining authoring/real-time limits.
+
+`AudioAction::SaveCopy` reconstructs the immutable source plus the confirmed scalar
+catalog in a separate export process. It never sends export/file work into the
+sounding processor and never loads over the offline editor's draft. Fresh-engine
+reload validates the native copy before atomic owned-store publication. The playback
+actor serializes the capture against controls; save failure does not mark audio
+failed or change its device ownership. See the audio document for process deadlines,
+resource overhead, lost-response recovery and the explicit restart/boot-selection boundary.

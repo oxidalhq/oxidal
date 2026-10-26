@@ -77,11 +77,24 @@ Lost replies are refreshed in the browser, never replayed. Invalid requests leav
 the stream unchanged; ambiguous worker failures stop/reap the worker before giving
 up its device permit. Meter updates remain independent of command acknowledgements.
 
-These changes affect audio, but are session-only: restart reloads the saved preset.
-The offline editor remains separate, and live saving, full settings authoring,
+These changes affect audio. `AudioAction::SaveCopy` captures the confirmed scalar
+catalog and reconstructs a named native copy in a separate, non-PCM process. It
+verifies the complete catalog against the source, reopens the export on a fresh
+engine, checks every captured scalar, then publishes an immutable owned copy with
+original-source provenance. The sounding engine and offline editor remain unchanged,
+including when export/storage fails. The accepted command survives browser disconnect;
+refresh its `saved_copy` identity or check Library rather than replaying a lost write.
+Export has a 25-second process deadline and a bounded reply. It consumes additional
+CPU/RAM; physical scheduling/overload behavior during export remains unqualified.
+
+Saving does not change playback settings or the boot selection. Restart still loads
+the starting preset; choose the new owned copy in playback settings to use it next.
+Pending unapplied browser adjustments must be applied or discarded before saving.
+This persists the supported scalar state of the complete native preset, not delay
+buffers, arbitrary graph edits or unimplemented settings. Full settings authoring,
 physical MIDI and prepared switching remain pending. Control/catalog work between
 PCM steps can allocate; this is not a real-time or gapless qualification claim.
 
 `pnpm native:check` covers actual DSP gain changes, readback and rejected mutations,
 HTTP/ALSA-null session conflicts and lifecycle, and the sounding panel across the
-target browser profiles. It does not establish physical latency or xrun behavior.
+target browser profiles, including BOOX e-paper. It also covers rendered-audio reconstruction, failed storage preserving playback, immutable originals, owned provenance and exact control reload in a new playback worker. It does not establish physical latency or xrun behavior.

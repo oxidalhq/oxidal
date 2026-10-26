@@ -133,6 +133,51 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         measured,
         "Actual audio worker must deliver measurements to HTTP"
     );
+    // Export failure must leave the sounding revision, controls and editor intact.
+    let controls_before_save = state["controls"].clone();
+    std::fs::write(root.join("presets/owned"), b"not a directory").unwrap();
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"save_copy","name":"Sounding copy"})
+        )
+        .await
+        .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "audio").await, state);
+    std::fs::remove_file(root.join("presets/owned")).unwrap();
+    let saved = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"save_copy","name":"Sounding copy"}),
+    )
+    .await;
+    assert_eq!(
+        saved.status(),
+        200,
+        "{}",
+        saved.text().await.unwrap_or_default()
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["controls"], controls_before_save);
+    let saved_id = state["saved_copy"].as_str().unwrap().to_owned();
+    let saved_info = oxidal_presets::OwnedStore::new(root.join("presets/owned"))
+        .read(&saved_id)
+        .unwrap()
+        .0;
+    assert_eq!(saved_info.source_sha256, preset.sha256);
+    assert_eq!(saved_info.preset.name, "Sounding copy");
+    assert_eq!(
+        oxidal_presets::Store::new(root.join("presets"))
+            .original(&preset.sha256)
+            .unwrap(),
+        bytes
+    );
     assert_eq!(
         get(&client, &url, "native").await["session"],
         editor["session"]
@@ -185,6 +230,28 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
     assert_eq!(state["device_owned"], false);
+    // Reopen the copy in the real PCM worker; every normalized control must match.
+    let mut saved_settings = settings.clone();
+    saved_settings["preset_id"] = json!(saved_id);
+    saved_settings["owned"] = json!(true);
+    let reopened = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"start","settings":saved_settings}),
+    )
+    .await;
+    assert_eq!(reopened.status(), 200);
+    state = reopened.json().await.unwrap();
+    assert_eq!(state["controls"], controls_before_save);
+    assert_eq!(state["preset_name"], "Sounding copy");
+    assert_eq!(
+        send(&client, &url, &state, json!({"kind":"stop"}))
+            .await
+            .status(),
+        200
+    );
+    state = get(&client, &url, "audio").await;
     assert_eq!(get(&client, &url, "state").await, initial);
     assert_eq!(
         get(&client, &url, "presets").await["presets"]
@@ -211,7 +278,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         );
         editor_after = get(&client, &url, "native").await;
     }
-    assert_eq!(editor_after["owned"].as_array().unwrap().len(), 1);
+    assert_eq!(editor_after["owned"].as_array().unwrap().len(), 2);
     assert!(root.join("presets/audio-runtime").is_dir());
     // Another actual open/close proves that the completed stop did not retain the global permit.
     assert!(

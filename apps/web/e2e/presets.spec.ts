@@ -498,6 +498,22 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       sounding.getByRole('button', { name: 'Apply to sound', exact: true }),
     ).toBeDisabled();
+    await sounding
+      .getByLabel('Name for sounding copy')
+      .fill(`Live ${test.info().project.name}`);
+    await sounding
+      .getByRole('button', { name: 'Save sounding copy', exact: true })
+      .click();
+    await expect(sounding.getByTestId('live-saved')).toContainText(
+      'Copy saved in Library',
+    );
+    const savedLive = await (await request.get('/api/v1/audio')).json();
+    expect(savedLive.phase).toBe('running');
+    expect(savedLive.controls).toEqual(live.controls);
+    expect(savedLive.saved_copy).toMatch(/^[0-9a-f]{64}$/);
+    expect((await (await request.get('/api/v1/native')).json()).revision).toBe(
+      nativeBefore.revision,
+    );
     await page.screenshot({
       path: test.info().outputPath('sounding-rig.png'),
       fullPage: true,

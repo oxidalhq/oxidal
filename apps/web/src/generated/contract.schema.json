@@ -359,6 +359,23 @@
             "target",
             "value"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_copy"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
         }
       ]
     },
@@ -564,6 +581,13 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "saved_copy": {
+          "description": "Last copy saved from this exact control revision; restart still uses configured.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "session": {
           "type": "string"

@@ -230,6 +230,50 @@ fn main() -> Result<(), Box<dyn Error>> {
         engine.restore(&live_before)?;
         engine.wait_ready()?;
     }
+    // Reconstruct a captured scalar session and compare actual rendered audio.
+    engine.set_live_control("outputLevel", 0.27)?;
+    let saved_controls = engine.live_controls()?;
+    let changed_state = engine.capture()?;
+    let mut incomplete = saved_controls.clone();
+    incomplete.pop();
+    assert!(engine.apply_live_snapshot(&incomplete).is_err());
+    assert_eq!(engine.capture()?, changed_state);
+    let mut renders = vec![];
+    for rebuild in [false, true] {
+        engine.restore(if rebuild {
+            &live_before
+        } else {
+            &changed_state
+        })?;
+        engine.wait_ready()?;
+        if rebuild {
+            engine.apply_live_snapshot(&saved_controls)?;
+        }
+        settle(&mut engine)?;
+        let mut rendered = vec![];
+        for chunk in 0..12 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| (((chunk * 128 + i) as f32) * 0.01).sin() * 0.02)
+                .collect();
+            let mut right = left.clone();
+            engine.process(&mut left, &mut right)?;
+            rendered.extend(left);
+        }
+        renders.push(rendered);
+    }
+    assert!(renders[0].iter().any(|s| s.abs() > 1e-8));
+    let reconstruction_error = renders[0]
+        .iter()
+        .zip(&renders[1])
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        reconstruction_error < 1e-5,
+        "live reconstruction audio differs: {reconstruction_error}"
+    );
+    println!("live_reconstruction_max_error: {reconstruction_error}");
+    engine.restore(&live_before)?;
+    engine.wait_ready()?;
     // Prove that a block gain mutation reaches DSP, not just its JSON readback.
     let block = engine
         .block_controls()?

@@ -14,6 +14,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         time::{Duration, Instant},
     };
+    if std::env::args().nth(1).as_deref() == Some("--save-copy") {
+        return save_copy();
+    }
     let mut bytes = vec![];
     let mut input = std::io::stdin().lock();
     (&mut input).take(65537).read_until(b'\n', &mut bytes)?;
@@ -149,4 +152,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(not(target_os = "linux"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     Err("Audio worker requires Linux ALSA".into())
+}
+
+/// Export runs in a separate process and never opens PCM or changes the sounding engine.
+#[cfg(target_os = "linux")]
+fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
+    use oxidal_audio::lifecycle::{SavePlayback, valid_controls, valid_preset_name};
+    use std::io::{BufRead, Read, Write};
+    let mut bytes = vec![];
+    std::io::stdin()
+        .lock()
+        .take(65537)
+        .read_until(b'\n', &mut bytes)?;
+    if bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
+        return Err("Invalid save request".into());
+    }
+    let request: SavePlayback = serde_json::from_slice(&bytes)?;
+    request.settings.validate()?;
+    if !valid_preset_name(&request.name) || !valid_controls(&request.controls) {
+        return Err("Invalid save name or controls".into());
+    }
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
+    let owned = oxidal_presets::OwnedStore::new(root.join("owned"));
+    let (source, preset) = if request.settings.owned {
+        let (info, bytes) = owned.read(&request.settings.preset_id)?;
+        (info.source_sha256, bytes)
+    } else {
+        (
+            request.settings.preset_id.clone(),
+            oxidal_presets::Store::new(root).original(&request.settings.preset_id)?,
+        )
+    };
+    let mut engine = oxidal_tone3000::Engine::new(
+        request.settings.stream.input.sample_rate.into(),
+        request.settings.stream.input.period_frames as usize,
+    )?;
+    engine.load_preset(&preset)?;
+    engine.wait_ready()?;
+    engine.apply_live_snapshot(&request.controls)?;
+    let bytes = engine.save_preset(&request.name)?;
+    // A fresh engine prevents retained device/session values hiding a lossy export.
+    drop(engine);
+    let mut engine = oxidal_tone3000::Engine::new(
+        request.settings.stream.input.sample_rate.into(),
+        request.settings.stream.input.period_frames as usize,
+    )?;
+    engine.load_preset(&bytes)?;
+    engine.wait_ready()?;
+    let restored = engine.live_controls()?;
+    if restored.len() != request.controls.len()
+        || request.controls.iter().any(|c| {
+            !restored
+                .iter()
+                .any(|a| a.target == c.target && (a.value - c.value).abs() < 1e-5)
+        })
+    {
+        return Err("Saved control readback differs".into());
+    }
+    let saved = owned.save(&source, &bytes)?;
+    println!("{}", saved.id);
+    std::io::stdout().flush()?;
+    Ok(())
 }

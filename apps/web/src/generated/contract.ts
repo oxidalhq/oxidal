@@ -19,6 +19,10 @@ export type AudioAction =
       kind: "set_control";
       target: string;
       value: number;
+    }
+  | {
+      kind: "save_copy";
+      name: string;
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -312,6 +316,10 @@ export interface AudioState {
   phase: AudioPhase;
   preset_name?: string | null;
   revision: number;
+  /**
+   * Last copy saved from this exact control revision; restart still uses configured.
+   */
+  saved_copy?: string | null;
   session: string;
   /**
    * Explicitly opt in to restoring this saved preset/device configuration after daemon startup.

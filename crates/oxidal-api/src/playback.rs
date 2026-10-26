@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oxidal_audio::lifecycle::{
-    AudioAction, AudioCommand, AudioPhase, AudioState, LiveRequest, PlaybackEvent, StartAudio,
-    valid_controls,
+    AudioAction, AudioCommand, AudioPhase, AudioState, LiveRequest, PlaybackEvent, SavePlayback,
+    StartAudio, valid_controls, valid_preset_name,
 };
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
@@ -109,6 +109,7 @@ impl Owner {
         if phase != AudioPhase::Running {
             self.state.controls.clear();
             self.state.modified = false;
+            self.state.saved_copy = None;
             self.meters.send_replace(None);
         }
         self.state.error = error;
@@ -309,6 +310,7 @@ impl Owner {
             Ok(controls) => {
                 self.state.controls = controls;
                 self.state.modified = true;
+                self.state.saved_copy = None;
                 self.publish(AudioPhase::Running, None);
                 Ok(())
             }
@@ -317,6 +319,90 @@ impl Owner {
                 Err(error)
             }
         }
+    }
+    async fn save_copy(&mut self, name: String) -> Reply {
+        if self.state.phase != AudioPhase::Running || !valid_preset_name(&name) {
+            return Err(
+                "Start audio and enter a name of 1–100 bytes without control characters".into(),
+            );
+        }
+        let request = SavePlayback {
+            settings: self
+                .state
+                .configured
+                .clone()
+                .ok_or("No sounding configuration")?,
+            controls: self.state.controls.clone(),
+            name,
+        };
+        let mut bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        if bytes.len() >= 65536 {
+            return Err("Save catalog too large".into());
+        }
+        bytes.push(b'\n');
+        let root = std::fs::canonicalize(&self.preset_dir).map_err(|e| e.to_string())?;
+        let data = root.join("save-runtime");
+        std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(
+            self.executable
+                .as_ref()
+                .ok_or("Native worker unavailable")?,
+        )
+        .arg("--save-copy")
+        .env("OXIDAL_PRESET_DIR", &root)
+        .env("OXIDAL_QUALIFICATION_DATA", &data)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+        let result = tokio::time::timeout(Duration::from_secs(25), async {
+            let mut input = child.stdin.take().ok_or("Save input unavailable")?;
+            input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            drop(input);
+            let mut output = vec![];
+            child
+                .stdout
+                .take()
+                .ok_or("Save output unavailable")?
+                .take(66)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|e| e.to_string())?;
+            if output.len() != 65 || output.last() != Some(&b'\n') {
+                return Err(
+                    "Could not save a verified native copy; sounding audio was not changed"
+                        .to_owned(),
+                );
+            }
+            if !child.wait().await.map_err(|e| e.to_string())?.success() {
+                return Err("Native copy worker failed; sounding audio was not changed".into());
+            }
+            let id =
+                String::from_utf8(output[..64].to_vec()).map_err(|_| "Invalid saved identity")?;
+            let info = oxidal_presets::OwnedStore::new(root.join("owned"))
+                .read(&id)
+                .map_err(|e| e.to_string())?
+                .0;
+            if info.preset.name != request.name.trim() {
+                return Err("Saved name differs".into());
+            }
+            Ok(id)
+        })
+        .await
+        .map_err(|_| "Save timed out; check Library before retrying".to_owned())
+        .and_then(|r| r);
+        // Reap only this export process, never release the sounding worker/PCM permit.
+        if result.is_err() {
+            let _ = child.start_kill();
+            let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        }
+        let id = result?;
+        self.check_exit();
+        self.state.saved_copy = Some(id);
+        self.publish(self.state.phase, self.state.error.clone());
+        Ok(self.state.clone())
     }
     async fn command(&mut self, command: AudioCommand) -> Reply {
         if command.session != self.state.session || command.expected_revision != self.state.revision
@@ -327,6 +413,8 @@ impl Owner {
             return Err("Experimental audio worker unavailable".into());
         }
         let result = match command.action {
+            // A failed export must not mark the independently running audio failed.
+            AudioAction::SaveCopy { name } => return self.save_copy(name).await,
             AudioAction::SetControl { target, value } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Start audio before changing live controls".into());
@@ -436,6 +524,7 @@ impl Playback {
             controls: vec![],
             modified: false,
             preset_name: None,
+            saved_copy: None,
             phase: if config.audio_worker.is_some() {
                 AudioPhase::Stopped
             } else {

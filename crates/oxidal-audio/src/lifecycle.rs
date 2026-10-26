@@ -48,6 +48,8 @@ pub struct AudioState {
     /// Session edits are not written back to the immutable starting preset.
     pub modified: bool,
     pub preset_name: Option<String>,
+    /// Last copy saved from this exact control revision; restart still uses configured.
+    pub saved_copy: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -57,6 +59,7 @@ pub enum AudioAction {
     Restart,
     SetBoot { enabled: bool },
     SetControl { target: String, value: f32 },
+    SaveCopy { name: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -121,4 +124,16 @@ pub fn valid_controls(controls: &[LiveControl]) -> bool {
             .iter()
             .enumerate()
             .all(|(i, c)| controls[..i].iter().all(|p| p.target != c.target))
+}
+
+/// Immutable reconstruction request for a separate, non-PCM export worker.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SavePlayback {
+    pub settings: StartAudio,
+    pub controls: Vec<LiveControl>,
+    pub name: String,
+}
+pub fn valid_preset_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.len() <= 100 && !name.chars().any(char::is_control)
 }
