@@ -11,6 +11,7 @@ use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, ChildStdout},
+    sync::Mutex,
 };
 
 #[derive(Debug)]
@@ -80,10 +81,25 @@ impl Worker {
     }
 }
 async fn dispatch(shared: Arc<Shared>, request: WorkerRequest) -> Response {
+    exchange(shared.native.clone(), request).await
+}
+async fn exchange(worker: Arc<Mutex<Option<Worker>>>, request: WorkerRequest) -> Response {
+    // Complete each written request/reply pair even when HTTP navigation/disconnect
+    // cancels its caller. Otherwise the next request would consume the abandoned
+    // reply, losing revision and command identity across the IPC stream.
+    tokio::spawn(async move { dispatch_owned(worker, request).await })
+        .await
+        .unwrap_or_else(|_| {
+            failure(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Native exchange interrupted",
+            )
+        })
+}
+async fn dispatch_owned(worker: Arc<Mutex<Option<Worker>>>, request: WorkerRequest) -> Response {
     // Allow an in-flight status read to finish before an edit. Revision/session checks
     // still reject stale mutations; bounded admission avoids an unbounded request queue.
-    let Ok(mut worker) = tokio::time::timeout(Duration::from_secs(2), shared.native.lock()).await
-    else {
+    let Ok(mut worker) = tokio::time::timeout(Duration::from_secs(2), worker.lock()).await else {
         return failure(StatusCode::CONFLICT, "native_busy");
     };
     let Some(active) = worker.as_mut() else {
@@ -114,5 +130,44 @@ pub(super) async fn command(
     match body {
         Ok(Json(command)) => dispatch(shared, WorkerRequest::Command { command }).await,
         Err(e) => failure(e.status(), "invalid_native_command"),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn abandoned_http_call_still_consumes_its_own_native_reply() {
+        let mut child = tokio::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(r#"i=0; while IFS= read -r request; do i=$((i+1)); printf 'received\n' >&2; sleep 0.1; printf '{"kind":"error","error":"reply-%s"}\n' "$i"; done"#)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+            .kill_on_drop(true).spawn().unwrap();
+        let mut received = BufReader::new(child.stderr.take().unwrap());
+        let worker = Arc::new(Mutex::new(Some(Worker {
+            input: child.stdin.take().unwrap(),
+            output: BufReader::new(child.stdout.take().unwrap()),
+            child,
+        })));
+        let first_worker = worker.clone();
+        let first = tokio::spawn(async move { exchange(first_worker, WorkerRequest::State).await });
+        let mut line = String::new();
+        tokio::time::timeout(Duration::from_secs(5), received.read_line(&mut line))
+            .await
+            .unwrap()
+            .unwrap();
+        first.abort();
+        let _ = first.await;
+        let second = exchange(worker.clone(), WorkerRequest::State).await;
+        let bytes = axum::body::to_bytes(second.into_body(), 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["error"], "reply-2");
+        let mut guard = worker.lock().await;
+        let active = guard.as_mut().unwrap();
+        active.child.kill().await.unwrap();
+        active.child.wait().await.unwrap();
     }
 }
