@@ -73,7 +73,7 @@ The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the ve
 
 ### Testing and recovery
 
-`sh os/scripts/check.sh` runs the OS suite; Linux with nginx/openssl additionally runs actual TLS, authentication and origin tests. Image building runs `os/tests/test_installed.py` against the final filesystem: relocated dynamic dependencies, daemon startup, native editor, graph/audio availability, UI, ALSA discovery and orderly shutdown. Audio boot preference/restart/failure recovery is covered by the existing native integration/browser suites using ALSA null. An additional real systemd boot test uses a disposable QEMU overlay, a generic ARM64 kernel/initrd and its matching module directory; it checks the unprivileged daemon, native editor, HTTPS authentication boundary, network services and service restart. The candidate image stays unchanged:
+`sh os/scripts/check.sh` runs the OS suite; Linux with nginx/openssl additionally runs actual TLS, authentication and origin tests. Image building runs `os/tests/test_installed.py` against the final filesystem: relocated dynamic dependencies, daemon startup, native editor, graph/audio availability, UI, ALSA discovery and orderly shutdown. Audio boot preference/restart/failure recovery is covered by the existing native integration/browser suites using ALSA null. An additional real systemd boot test uses a disposable QEMU overlay, a generic ARM64 kernel/initrd and its matching module directory; it checks the unprivileged daemon, native editor, HTTPS authentication boundary, network services, recovery login timeout, unchanged optional development originals, honest stopped-meter state and service restart. It also runs a real unprivileged debug command and verifies systemd removes a cancelled descendant which escaped the shell process group. The candidate image stays unchanged:
 
 ```sh
 OXIDAL_TEST_BOOT_IMAGE=/absolute/path/to/oxidal-prototype.img \
@@ -85,7 +85,7 @@ python3 -m unittest discover -s os/tests -p test_boot.py -v
 
 The host must provide `/lib/modules/MATCHING-ARM64-VERSION`. The generic kernel/modules exist only in the test overlay; the candidate retains its Raspberry Pi kernel. These are software checks, not hardware measurements.
 
-SSH recovery uses `oxidal-admin` and its separate generated password. Useful target commands:
+SSH recovery uses `oxidal-admin` and its separate generated password. Console login allows 180 seconds. Reusing an existing private access directory preserves that device’s credentials; a new directory creates new credentials. Useful target commands:
 
 ```sh
 systemctl status oxidald nginx NetworkManager
@@ -116,4 +116,6 @@ The normal bundle/image contains no factory-preset payloads. For an owner-only t
 
 For local testing, run `cargo run -p oxidal-presets --bin oxidal-preset-seed -- --development-only SOURCE NEW_OUTPUT`, then start the daemon with `OXIDAL_PRESET_DIR=NEW_OUTPUT/presets`. Existing output is never overwritten. The normal parser/store admission limits apply, and invalid source files prevent initial output creation. The source directory is explicit; builds never assume a private reference checkout or download an account's presets.
 
-The appliance also packages the [device service](../docs/device-service.md) for browser network setup. Keep its OS group, socket permissions and unprivileged daemon boundary intact.
+The appliance also packages the [device service](../docs/device-service.md) for browser network setup and system power controls. Hotspot country/channel changes use the radio’s current regulatory capabilities and the same confirmed rollback as credentials. Five automatic policies preserve a recovery AP when managed client activation fails; physical RF transitions require testing. Keep its OS group, socket permissions and unprivileged daemon boundary intact.
+
+The separate [debug executor](../docs/debug-console.md) runs as locked, non-login `oxidal-debug`, with no capabilities or privilege escalation. Systemd limits its resources and removes its complete control group after each job. The web daemon remains unprivileged; enabling debug is temporary and never grants package-install or network-administration privileges. [Monitoring](../docs/monitoring.md) displays real worker/host counters; unavailable readings remain unavailable.

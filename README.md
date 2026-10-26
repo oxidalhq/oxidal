@@ -64,6 +64,8 @@ The [draft Oxidal preset specification](docs/presets/format.md) describes native
 
 ### Optional native preset editing
 
-After `pnpm native:check` builds and verifies the pinned native backend on macOS or Linux, run `OXIDAL_NATIVE_EDITOR=1 pnpm preview`. Library provides real preset load, preview/cancel/commit, owned-copy save and reload. Five controls are qualified in this slice; imported originals stay immutable. Audio output, live Linux hosting and full settings parity are still pending. See [native editor](docs/native-tone3000.md).
+After `pnpm native:check` builds and verifies the pinned native backend on macOS or Linux, run `OXIDAL_NATIVE_EDITOR=1 pnpm preview`. Library provides real preset load, preview/cancel/commit, owned-copy save and reload. Five controls are qualified in this slice; imported originals stay immutable. Experimental Linux playback uses a separate worker; physical audio and full settings parity remain pending. See [native editor](docs/native-tone3000.md).
 
-Linux builds expose **Settings → Audio devices** for real ALSA hardware discovery and exact non-streaming configuration checks. Playback remains unavailable. See [audio devices and lifecycle](docs/audio.md).
+Linux builds expose **Settings → Audio devices** for real ALSA discovery and exact configuration probes. The appliance also includes experimental saved-preset playback with audio-only Start/Stop/Restart; physical audio remains unqualified. See [audio devices and lifecycle](docs/audio.md).
+
+The appliance’s [device service](docs/device-service.md) supplies web Wi-Fi/hotspot setup with rollback and separate system power controls. [Monitoring](docs/monitoring.md) shows real worker levels, processing history and available Linux host readings. The optional [web debug console](docs/debug-console.md) runs bounded commands as a separate unprivileged account after explicit enablement.
