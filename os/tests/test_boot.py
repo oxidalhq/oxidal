@@ -99,7 +99,34 @@ try:
         time.sleep(.1)
     else:
         raise AssertionError('Debug service did not recycle its cgroup')
-    time.sleep(.3)
+    # MainPID becomes visible before the new process has bound its socket. Wait
+    # for an actual empty-job response; do not replay a command after a conflict.
+    import socket, struct
+    for attempt in range(80):
+        try:
+            with socket.socket(socket.AF_UNIX) as connection:
+                connection.settimeout(1)
+                connection.connect('/run/oxidal-debug/control.sock')
+                request = b'{"type":"status"}'
+                connection.sendall(struct.pack('!I', len(request)) + request)
+                def read_exact(length):
+                    data = b''
+                    while len(data) < length:
+                        part = connection.recv(length - len(data))
+                        if not part:
+                            raise OSError('Executor is restarting')
+                        data += part
+                    return data
+                length = struct.unpack('!I', read_exact(4))[0]
+                assert 0 < length <= 65536
+                reply = json.loads(read_exact(length))
+                if reply['state'] and reply['state']['job'] is None:
+                    break
+        except OSError:
+            pass
+        time.sleep(.1)
+    else:
+        raise AssertionError('Restarted debug executor did not become ready')
     # A descendant that escapes the shell process group must still die with its service cgroup.
     job = post({'type':'run','command':"setsid sh -c 'echo $$; exec sleep 60' & wait"})['job']
     escaped = None
