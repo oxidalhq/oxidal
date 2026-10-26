@@ -1,3 +1,4 @@
+import { setDisplayMode } from './display';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdir } from 'node:fs/promises';
@@ -99,7 +100,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(panel.getByText('CLIP · 2')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Resume readings' }).click();
   for (const mode of ['stage', 'sunlight', 'epaper']) {
-    await page.getByLabel('Display mode').selectOption(mode);
+    await setDisplayMode(page, mode);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -113,7 +114,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     expect(audit.violations).toEqual([]);
   }
   if (info.project.name === 'boox-air3c') {
-    await page.getByLabel('Display mode').selectOption('epaper');
+    await setDisplayMode(page, 'epaper');
     // E-paper must distinguish series without colour, in both plot and legend.
     for (const label of ['Output peak · dBFS', 'Processing budget · %']) {
       const chart = page.getByRole('figure', { name: label });
@@ -151,7 +152,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     }
     await page.setViewportSize(portrait);
   }
-  await page.getByLabel('Display mode').selectOption('stage');
+  await setDisplayMode(page, 'stage');
   await mkdir('../../.local/previews/monitor', { recursive: true });
   await page.screenshot({
     path: `../../.local/previews/monitor/${info.project.name}-fixture.png`,

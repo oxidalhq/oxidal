@@ -10,8 +10,16 @@ import {
 } from './api';
 import { EditQueue } from './editQueue';
 import { TouchAdjust } from './TouchAdjust';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 
+const controlLabels: Record<string, string> = {
+  toneBass: 'Bass',
+  outputLevel: 'Output level',
+  inputCalibrationLevel: 'Input calibration',
+  osEnabled: 'Oversampling',
+  osFactor: 'Oversampling factor',
+};
 const blockLabels: Record<string, string> = {
   enabled: 'Enabled',
   normalize: 'Normalise',
@@ -242,7 +250,7 @@ export function NativeEditor({
         Silent authoring with the TONE3000 engine. Edits do not change the saved
         preset currently playing; save a copy and start playback to hear it.
       </p>
-      {error && (
+      {error && !ours && (
         <p role="alert" className="error">
           {error}
         </p>
@@ -307,89 +315,146 @@ export function NativeEditor({
               setValue(String(controlValue(state, e.target.value)));
             }}
           >
-            <option value="toneBass">Bass · tone</option>
-            <option value="outputLevel">Output level · tone</option>
-            <option value="inputCalibrationLevel">
-              Input calibration · device
-            </option>
-            <option value="osEnabled">
-              Oversampling enabled · device, staged
-            </option>
-            <option value="osFactor">
-              Oversampling factor · device, staged
-            </option>
+            <optgroup label="Tone">
+              <option value="toneBass">Bass</option>
+              <option value="outputLevel">Output level</option>
+            </optgroup>
+            <optgroup label="Device processing">
+              <option value="inputCalibrationLevel">
+                Input calibration · device
+              </option>
+              <option value="osEnabled">
+                Oversampling enabled · device, staged
+              </option>
+              <option value="osFactor">
+                Oversampling factor · device, staged
+              </option>
+            </optgroup>
             <optgroup label="Tone blocks">
               {state?.block_controls.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} · {p.lane} · {p.block_id.slice(0, 8)} ·{' '}
-                  {blockLabels[p.parameter]}
+                  {p.name} · {p.lane} · {blockLabels[p.parameter]}
                 </option>
               ))}
             </optgroup>
           </select>
         </label>
-        <p data-testid="native-readback">
-          Confirmed value: {blockControl?.value ?? parameter?.value ?? '—'} ·
-          normalized {blockControl?.value ?? parameter?.normalized ?? '—'}
-        </p>
-        <Button
+        <button
+          type="button"
+          className="native-value-trigger"
+          aria-label="Adjust native value"
+          aria-haspopup="dialog"
           disabled={blocked || !state?.loaded || !!state.edit}
           onClick={() => void begin()}
         >
-          Begin native edit
-        </Button>
+          <span>
+            {blockControl
+              ? `${blockControl.name} · ${blockLabels[blockControl.parameter]}`
+              : (controlLabels[target] ?? target)}
+          </span>
+          <strong>
+            {blockControl
+              ? blockControl.step === 1
+                ? blockControl.value
+                  ? 'On'
+                  : 'Off'
+                : `${Math.round(blockControl.value * 100)}%`
+              : `${parameter?.display ?? '—'} ${parameter?.label ?? ''}`}
+          </strong>
+          <span className="sr-only" data-testid="native-readback">
+            Confirmed value: {blockControl?.value ?? parameter?.value ?? '—'} ·
+            normalized {blockControl?.value ?? parameter?.normalized ?? '—'}
+          </span>
+        </button>
         {ours && (
-          <div className="native-touch">
-            <TouchAdjust
-              key={`${state.session}:${target}`}
-              label="native value"
-              value={valid ? Number(value) : NaN}
-              baseline={baseline}
-              min={0}
-              max={1}
-              step={step}
-              disabled={blocked}
-              format={(v) =>
-                blockControl?.step === 1
-                  ? v === 1
-                    ? 'On'
-                    : 'Off'
-                  : `${Number((v * 100).toFixed(2))}% of range`
-              }
-              onChange={(v) => {
-                setValue(String(v));
-                if (!staged) queue.current?.preview(v);
-              }}
-            />
-          </div>
+          <AdjustmentDialog
+            title={
+              blockControl
+                ? `${blockControl.name} · ${blockLabels[blockControl.parameter]}`
+                : (controlLabels[target] ?? target)
+            }
+            onCancel={() => {
+              if (!blocked) void finish(true);
+            }}
+          >
+            <p className="caption">
+              {staged
+                ? 'Applied on Done · no preview during adjustment.'
+                : 'Previewing this draft · Done keeps the change.'}
+            </p>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+            <div className="native-touch">
+              <TouchAdjust
+                key={`${state.session}:${target}`}
+                label="native value"
+                value={valid ? Number(value) : NaN}
+                baseline={baseline}
+                min={0}
+                max={1}
+                step={step}
+                disabled={blocked}
+                format={(v) =>
+                  blockControl?.step === 1
+                    ? v === 1
+                      ? 'On'
+                      : 'Off'
+                    : `${Number((v * 100).toFixed(2))}% of range`
+                }
+                onChange={(v) => {
+                  setValue(String(v));
+                  if (!staged) queue.current?.preview(v);
+                }}
+              />
+            </div>
+            <details className="exact-entry">
+              <summary>Enter value</summary>
+              <label className="field">
+                Normalized value (0–1)
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step={step}
+                  value={value}
+                  disabled={blocked || !ours}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setValue(next);
+                    if (
+                      !staged &&
+                      next.trim() !== '' &&
+                      Number.isFinite(Number(next)) &&
+                      Number(next) >= 0 &&
+                      Number(next) <= 1 &&
+                      (blockControl?.step !== 1 ||
+                        Number(next) === 0 ||
+                        Number(next) === 1)
+                    )
+                      queue.current?.preview(Number(next));
+                  }}
+                />
+              </label>
+            </details>
+            <div className="editor-actions">
+              <Button
+                disabled={blocked || !ours || !valid}
+                onClick={() => void finish(false)}
+              >
+                Done
+              </Button>
+              <Button
+                disabled={blocked || !ours}
+                onClick={() => void finish(true)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </AdjustmentDialog>
         )}
-        <label className="field">
-          Normalized value (0–1)
-          <input
-            type="number"
-            min="0"
-            max="1"
-            step={step}
-            value={value}
-            disabled={blocked || !ours}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        </label>
-        <Button
-          disabled={blocked || !ours || staged || !valid}
-          onClick={() => queue.current?.preview(Number(value))}
-        >
-          Preview native change
-        </Button>
-        <Button
-          disabled={blocked || !ours || !valid}
-          onClick={() => void finish(false)}
-        >
-          Commit native change
-        </Button>
-        <Button disabled={blocked || !ours} onClick={() => void finish(true)}>
-          Cancel native edit
-        </Button>
       </div>
       {state?.edit && (
         <p>
@@ -399,8 +464,8 @@ export function NativeEditor({
       )}
       <p className="caption">
         Processing settings apply on commit. Calibration and oversampling stay
-        with this session and are excluded from tone copies. Only the five
-        controls shown here are currently qualified for editing.
+        with this session and are excluded from tone copies. The available
+        controls reflect the currently qualified adapter.
       </p>
       <div className="form-grid">
         <label className="field">

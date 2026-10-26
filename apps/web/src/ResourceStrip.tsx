@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { monitoring, type Monitoring } from './api';
+import { ChartLine } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 
 const percent = (n: number | null | undefined) =>
@@ -8,9 +9,11 @@ const percent = (n: number | null | undefined) =>
 /** Persistent measured resources; diagnostics can freeze without freezing this strip. */
 export function ResourceStrip({
   displayMode,
+  connected,
   onDetails,
 }: {
   displayMode: string;
+  connected: boolean;
   onDetails: () => void;
 }) {
   const [state, setState] = useState<Monitoring | null>(null);
@@ -101,13 +104,28 @@ export function ResourceStrip({
   return (
     <aside className="resource-strip" aria-label="DSP and system resources">
       <div className="resource-strip-state">
-        <span data-testid="resource-state">{status}</span>
+        <span className="device-indicator" role="status">
+          <span
+            className={connected ? 'dot online' : 'dot'}
+            aria-hidden="true"
+          />
+          {connected ? 'Device connected' : 'Reconnecting…'}
+        </span>
+        <span
+          className="audio-indicator"
+          data-state={
+            failed || disconnected ? 'fault' : running ? 'running' : 'stopped'
+          }
+          data-testid="resource-state"
+        >
+          {status}
+        </span>
         <Button
-          variant="outline"
+          variant="ghost"
           onClick={onDetails}
           aria-label="Open resource details"
         >
-          Details
+          <ChartLine size={20} aria-hidden="true" />
         </Button>
       </div>
       <dl>

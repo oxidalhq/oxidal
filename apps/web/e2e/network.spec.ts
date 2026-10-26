@@ -48,6 +48,10 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await page.goto('/');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
   await panel.getByRole('button', { name: /Studio: Wi-Fi/ }).click();
   await panel
@@ -64,6 +68,10 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await expect(panel.getByText(/Network change pending/)).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await panel.getByRole('button', { name: 'Keep this connection' }).click();
   await expect(panel.getByRole('status')).toHaveText('Network settings saved');
   await expect(panel.getByLabel('Wi-Fi password', { exact: true })).toHaveValue(

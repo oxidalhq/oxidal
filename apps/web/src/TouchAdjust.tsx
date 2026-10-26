@@ -16,7 +16,7 @@ export function TouchAdjust({
   disabled,
   onChange,
   format,
-  commitHint = 'Release keeps the preview; Commit saves it.',
+  commitHint = '',
 }: {
   label: string;
   value: number;
@@ -155,7 +155,7 @@ export function TouchAdjust({
           />
         </span>
       </div>
-      <p id={hint} className="caption">
+      <p id={hint} className="sr-only">
         Drag left or right to adjust. Touching alone keeps the value.
       </p>
       <div className="editor-actions">
@@ -194,20 +194,18 @@ export function TouchAdjust({
           Fine
         </Button>
         <Button
-          variant="outline"
+          aria-label="Restore starting value"
+          variant="ghost"
           disabled={disabled}
           onClick={() => {
             release();
             onChange(baseline);
           }}
         >
-          Restore starting value
+          Reset
         </Button>
       </div>
-      <p className="caption">
-        {fine ? 'Fine: ten times slower.' : 'Normal adjustment speed.'}{' '}
-        {commitHint}
-      </p>
+      {commitHint && <p className="caption">{commitHint}</p>}
     </div>
   );
 }

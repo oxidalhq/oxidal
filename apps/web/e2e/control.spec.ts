@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { setDisplayMode } from './display';
+import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdirSync } from 'node:fs';
 
@@ -57,12 +58,20 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
     page.getByText('Rig preview is silent.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Serial rig' })).toBeVisible();
-  await expect(page.getByRole('complementary')).toHaveCount(0);
+  await expect(page.getByRole('complementary')).toHaveCount(1);
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Custom routing' }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Maintenance', exact: true })
+    .click();
   await page.getByText('Rig validation inspector').click();
   await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
   await expect(page.getByText('Rig is valid', { exact: true })).toBeVisible();
@@ -77,11 +86,19 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   await second.goto('/');
   await expect(second.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'MIDI', exact: true })
+    .click();
   await page.getByLabel('MIDI value', { exact: true }).fill('127');
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('100%');
   await expect(second.getByTestId('last-origin')).toHaveText('midi');
-  await second.getByRole('slider', { name: 'NAM A level' }).fill('0.25');
+  await second
+    .getByRole('button', { name: 'Adjust NAM A level value' })
+    .click();
+  await enterValue(second, 'Draft NAM A level (%)', '25');
+  await second.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByTestId('feedback-value')).toHaveText('32');
   await second.reload();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('25%');
@@ -147,11 +164,13 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
   await context.setOffline(true);
   await expect(page.getByText('Reconnecting…', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('slider', { name: 'NAM A level' }),
+    page.getByRole('button', { name: 'Adjust NAM A level value' }),
   ).toBeDisabled();
   await context.setOffline(false);
   await expect(page.getByText('Device connected')).toBeVisible();
-  await expect(page.getByRole('slider', { name: 'NAM A level' })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Adjust NAM A level value' }),
+  ).toBeEnabled();
 });
 
 test('quiet interface has no detected WCAG AA violations', async ({
@@ -201,6 +220,10 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   await page.goto('/');
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'MIDI', exact: true })
+    .click();
   await page.getByLabel('Target', { exact: true }).selectOption('rig.bypass');
   await page.getByRole('button', { name: 'Learn next MIDI message' }).click();
   await page.getByLabel('CC number', { exact: true }).fill('99');
@@ -214,7 +237,7 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     page.getByText(/Current mapping: CC 99 → rig.bypass/),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
-  await page.getByRole('button', { name: 'Back to rig' }).click();
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Bypass on', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -238,6 +261,10 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   await page.reload();
   await expect(page.getByText('Device connected')).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'MIDI', exact: true })
+    .click();
   await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
   await expect(page.getByLabel('Target', { exact: true })).toHaveValue(
     'rig.bypass',
@@ -253,7 +280,7 @@ test('owned previews cancel, commit exactly, and preserve independent client cha
   const second = await context.newPage();
   await second.goto('/');
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
   await expect(
     page.getByRole('group', { name: 'Preview NAM A level' }),
@@ -270,37 +297,61 @@ test('owned previews cancel, commit exactly, and preserve independent client cha
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('81');
+  await enterValue(page, 'Draft NAM A level (%)', '81');
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('81%');
   await expect(
-    second.getByRole('slider', { name: 'NAM A level' }),
+    second.getByRole('button', { name: 'Adjust NAM A level value' }),
   ).toBeDisabled();
   await expect(
-    second.getByRole('button', { name: 'Edit Delay mix' }),
+    second.getByRole('button', { name: 'Adjust Delay mix value' }),
   ).toBeDisabled();
-  await second
-    .getByRole('slider', { name: 'Delay mix', exact: true })
-    .fill('0.62');
+  const independent = await (await request.get('/api/v1/state')).json();
+  const change = await request.post('/api/v1/commands', {
+    data: {
+      protocol: 1,
+      session: independent.session,
+      request_id: crypto.randomUUID(),
+      expected_revision: null,
+      action: { type: 'set', target: 'delay.mix', value: 0.62 },
+    },
+  });
+  expect(change.ok()).toBe(true);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('50%');
   await expect(second.getByTestId('value-delay.mix')).toHaveText('62%');
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
-  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('73');
-  await page.getByRole('button', { name: 'Commit', exact: true }).click();
+  await enterValue(page, 'Draft NAM A level (%)', '73');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(
     page.getByRole('group', { name: 'Preview NAM A level' }),
   ).toHaveCount(0);
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('73%');
   await page.reload();
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('73%');
-  // Navigation cancels after any in-flight preview, rather than leaving its value behind.
+  // Dismissal cancels after any in-flight preview, rather than leaving its value behind.
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
-  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('90');
+  let losePreviewReply = true;
+  await page.route('**/api/v1/commands', async (route) => {
+    const action = route.request().postDataJSON()?.action;
+    if (
+      losePreviewReply &&
+      action?.type === 'edit' &&
+      action.edit.phase === 'preview'
+    ) {
+      losePreviewReply = false;
+      await route.fetch();
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await enterValue(page, 'Draft NAM A level (%)', '90');
+  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('90%');
+  await page.keyboard.press('Escape');
+  await page.unroute('**/api/v1/commands');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(second.getByTestId('value-nam-a.level')).toHaveText('73%');
   const state = (await (await request.get('/api/v1/state')).json()) as {
@@ -317,14 +368,14 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
   test.setTimeout(50000);
   await page.goto('/');
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
-  await page.getByLabel('Draft NAM A level (%)', { exact: true }).fill('91');
+  await enterValue(page, 'Draft NAM A level (%)', '91');
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('91%');
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(
-    page.getByRole('button', { name: 'Commit', exact: true }),
+    page.getByRole('button', { name: 'Done', exact: true }),
   ).toBeDisabled();
   await expect
     .poll(
@@ -346,11 +397,11 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
     page.getByLabel('Draft NAM A level (%)', { exact: true }),
   ).toHaveValue('91');
   await expect(
-    page.getByRole('button', { name: 'Commit', exact: true }),
+    page.getByRole('button', { name: 'Done', exact: true }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Close editor', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Edit NAM A level', exact: true }),
+    page.getByRole('button', { name: 'Adjust NAM A level value', exact: true }),
   ).toBeEnabled();
 });
 
@@ -373,7 +424,7 @@ test('audio inspection keeps the authoring service connected', async ({
   const health = await (await request.get('/api/v1/health')).json();
   expect(health.audio_available).toBe(false);
   await expect(page.getByText('Device connected')).toBeVisible();
-  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(
     page.getByText('Rig preview is silent.', { exact: true }),
   ).toBeVisible();
@@ -400,10 +451,10 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   expect(after.revision).toBe(before.revision);
   expect(after.parameters).toEqual(before.parameters);
   await page
-    .getByRole('button', { name: 'Edit Delay mix', exact: true })
+    .getByRole('button', { name: 'Adjust Delay mix value', exact: true })
     .click();
-  await page.getByLabel('Draft Delay mix (%)').fill('38');
-  await page.getByRole('button', { name: 'Focus Reverb controls' }).click();
+  await enterValue(page, 'Draft Delay mix (%)', '38');
+  await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByLabel('Draft Delay mix (%)')).toHaveValue('38');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByTestId('value-delay.mix')).toHaveText('25%');
@@ -414,7 +465,7 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   ).toBeVisible();
   mkdirSync('../../.local/previews/instrument', { recursive: true });
   for (const mode of ['orchid', 'stage']) {
-    await page.getByLabel('Display mode').selectOption(mode);
+    await setDisplayMode(page, mode);
     await page.screenshot({
       path: `../../.local/previews/instrument/${testInfo.project.name}-${mode}.png`,
       fullPage: true,
@@ -423,6 +474,16 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   }
   await page.getByRole('button', { name: 'Audio setup', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Controls & MIDI' }),
+    page.getByRole('heading', { name: 'Audio setup', exact: true }),
   ).toBeVisible();
 });
+
+async function enterValue(page: Page, label: string, value: string) {
+  const input = page.getByLabel(label, { exact: true });
+  if (!(await input.isVisible()))
+    await page
+      .getByRole('dialog')
+      .getByText('Enter value', { exact: true })
+      .click();
+  await input.fill(value);
+}

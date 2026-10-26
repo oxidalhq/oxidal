@@ -1,0 +1,16 @@
+# Interface theme and navigation
+
+Oxidal uses a shared shadcn-style Button primitive, Radix composition and Tailwind v4 semantic tokens. The custom Orchid theme is defined in `apps/web/src/theme.css`; it is not an imported Mira preset. Colours, surface pairs, radius, spacing, type scale and touch-target size can be changed there without editing component markup. Tailwind classes are sorted by the pinned Prettier plugin.
+
+- Rig is the playing/control surface. Actual native playback shows confirmed sounding blocks; the separate silent preview remains labelled as such.
+- Library separates Browse (import, originals and artwork) from Author (offline native editing and saved copies).
+- Monitor owns detailed signal/system graphs; the compact resource strip stays visible everywhere.
+- Settings separates Audio, Connections, MIDI, Display and Maintenance. Only the selected section is mounted. Maintenance holds interactive terminals and the restricted diagnostic runner; it does not crowd performance controls.
+- Display mode lives in Settings → Display, never in the playing header. Form inputs remain at least 16 px to avoid Safari input zoom. Short landscape keeps telemetry on one row; safe-area insets protect controls from the notch. The floating editor follows visual viewport changes and does not automatically open the keyboard.
+- Main navigation remains stable on every page. Selected destinations have a persistent underline and `aria-current`; selection does not rely on colour alone.
+- Parameter readouts are the adjustment triggers; there is no repeated Edit action. A compact floating panel keeps the chain visible and provides relative drag, fine mode, increment/decrement, reset and optional numeric entry. Tapping the track alone does not change the value. Done keeps the adjustment; Cancel/Escape restores owned preview state. Sounding controls explicitly apply their pending value on Done. This follows the existing PiPedal touch interaction while keeping Oxidal transport ownership and stale-session guards.
+- Connection and audio state have a dedicated telemetry rail. Effect power remains on its effect; unsaved/saved state remains with the sound being authored.
+- Buttons share primary, secondary, outline and ghost states. Primary colour identifies the main action; navigation and secondary actions use quieter surfaces. Button feedback is immediate, without colour transitions that obscure contrast during stage use.
+- Touch targets remain at least 44 px, or 48 px in sunlight, dark-stage and e-paper modes. Dense layout does not shrink the touch area. E-paper disables animation and uses monochrome distinctions.
+
+The existing Playwright device suite checks both orientations, each Settings section, keyboard/accessibility rules, no horizontal clipping, aligned navigation, repeated portrait/landscape and keyboard-sized resizing during an edit, and edit retention across Fold 4 transitions. It covers representative iPhone XR WebKit, Fold 4 cover/open and BOOX Air3 C browser viewports. Screenshots and browser checks do not replace physical sunlight, e-paper refresh/ghosting or on-stage acceptance.

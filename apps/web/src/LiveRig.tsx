@@ -1,6 +1,7 @@
 import { ArtworkDeck } from './AssetArtwork';
 import { useEffect, useRef, useState } from 'react';
 import { playbackCommand, playbackState, type AudioState } from './api';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
 
@@ -16,6 +17,7 @@ export function LiveRig({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copyName, setCopyName] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
   const [target, setTarget] = useState('outputLevel');
   const [draft, setDraft] = useState<{
     target: string;
@@ -76,6 +78,7 @@ export function LiveRig({
       if (alive.current) {
         setState(next);
         setDraft(null);
+        setAdjusting(false);
       }
     } catch (cause) {
       if (alive.current) {
@@ -137,7 +140,7 @@ export function LiveRig({
     (c) => c.target.startsWith('block:') && c.target.endsWith(':enabled'),
   );
   return (
-    <section className="panel live-rig space-y-4" aria-label="Sounding rig">
+    <section className="panel live-rig space-y-3" aria-label="Sounding rig">
       <div className="section-heading">
         <div>
           <span className="eyebrow">Sounding session</span>
@@ -151,11 +154,6 @@ export function LiveRig({
               : 'Saved preset playing'}
         </span>
       </div>
-      <p className="caption">
-        Changes here affect the running audio. Save a named copy to keep them in
-        Library. Restart still loads the starting preset; select your saved copy
-        in playback settings to use it next time.
-      </p>
       <div
         className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
         aria-label="Sounding tone blocks"
@@ -163,13 +161,18 @@ export function LiveRig({
         {groups.map((c) => (
           <div
             key={c.target}
-            className="min-w-0 rounded-md border border-current/20 p-2"
+            className="live-effect min-w-0 rounded-md border border-border p-2"
           >
             <Button
-              variant="outline"
-              className="h-auto w-full justify-start text-left whitespace-normal"
+              variant="ghost"
+              className="h-auto w-full justify-start px-1 text-left whitespace-normal"
               onClick={() => {
-                setTarget(c.target);
+                const prefix = c.target.slice(0, -7);
+                setTarget(
+                  state.controls.find(
+                    (item) => item.target.startsWith(prefix) && !item.toggle,
+                  )?.target ?? c.target,
+                );
                 setDraft(null);
               }}
             >
@@ -185,8 +188,8 @@ export function LiveRig({
               />
             )}
             <Button
-              className="mt-2 w-full"
-              variant={c.value === 1 ? 'default' : 'outline'}
+              className="effect-power mt-1"
+              variant={c.value === 1 ? 'secondary' : 'ghost'}
               aria-pressed={c.value === 1}
               disabled={disabled}
               onClick={() => void apply(c.target, c.value === 1 ? 0 : 1)}
@@ -196,101 +199,141 @@ export function LiveRig({
           </div>
         ))}
       </div>
-      <div className="form-grid">
-        <label className="field">
-          Sounding control
-          <select
-            value={control?.target ?? ''}
-            disabled={busy}
-            onChange={(e) => {
-              setTarget(e.target.value);
-              setDraft(null);
-            }}
-          >
-            {state.controls.map((c) => (
-              <option key={c.target} value={c.target}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <output data-testid="live-readback">
-          Confirmed: {control?.display ?? '—'}
-        </output>
-      </div>
-      {control &&
-        (control.toggle ? (
-          <Button
-            disabled={disabled}
-            aria-pressed={control.value === 1}
-            onClick={() =>
-              void apply(control.target, control.value === 1 ? 0 : 1)
-            }
-          >
-            {control.label}: {control.value === 1 ? 'On' : 'Off'}
-          </Button>
-        ) : (
-          <>
-            <TouchAdjust
-              label="sounding value"
-              commitHint="Adjust here, then Apply to sound. This does not save a preset."
-              value={activeDraft?.value ?? control.value}
-              baseline={control.value}
-              min={0}
-              max={1}
-              step={0.01}
-              disabled={disabled || stale}
-              format={(v) =>
-                v === control.value
-                  ? control.display
-                  : `${Math.round(v * 100)}% · pending`
-              }
-              onChange={(value) =>
-                setDraft({
-                  target: control.target,
-                  value,
-                  session: state.session,
-                  revision: state.revision,
-                })
-              }
-            />
-            <div className="editor-actions">
-              <Button
-                disabled={disabled || !activeDraft || stale}
-                onClick={() =>
-                  activeDraft && void apply(control.target, activeDraft.value)
-                }
-              >
-                Apply to sound
-              </Button>
-              <Button
-                variant="outline"
-                disabled={!activeDraft || busy}
-                onClick={() => setDraft(null)}
-              >
-                Discard adjustment
-              </Button>
-            </div>
-          </>
-        ))}
-      <div className="form-grid">
-        <label className="field">
-          Name for sounding copy
-          <input
-            value={copyName}
-            onChange={(e) => setCopyName(e.target.value)}
-            maxLength={100}
-            disabled={busy}
-          />
-        </label>
+      <div className="section-heading">
+        <h3>Controls</h3>
         <Button
-          variant="outline"
-          disabled={disabled || !!draft || !copyName.trim()}
-          onClick={() => void saveCopy()}
+          variant="ghost"
+          onClick={() => {
+            setTarget('outputLevel');
+            setDraft(null);
+          }}
         >
-          Save sounding copy
+          Global
         </Button>
       </div>
+      <div className="live-parameter-grid" aria-label="Sounding controls">
+        {state.controls
+          .filter(
+            (item) =>
+              !item.target.endsWith(':enabled') &&
+              (target.startsWith('block:')
+                ? item.target.startsWith(
+                    target.slice(0, target.lastIndexOf(':') + 1),
+                  )
+                : !item.target.startsWith('block:')),
+          )
+          .map((item) => (
+            <button
+              type="button"
+              className="live-value-trigger"
+              key={item.target}
+              disabled={disabled}
+              aria-haspopup={item.toggle ? undefined : 'dialog'}
+              aria-pressed={item.toggle ? item.value === 1 : undefined}
+              aria-label={`Adjust sounding ${item.label}`}
+              onClick={() => {
+                setTarget(item.target);
+                setDraft(null);
+                if (item.toggle)
+                  void apply(item.target, item.value === 1 ? 0 : 1);
+                else setAdjusting(true);
+              }}
+            >
+              <span>{item.label}</span>
+              <strong>{item.display}</strong>
+            </button>
+          ))}
+      </div>
+      <output className="sr-only" data-testid="live-readback">
+        Confirmed: {control?.display ?? '—'}
+      </output>
+      {adjusting && control && (
+        <AdjustmentDialog
+          title={control.label}
+          onCancel={() => {
+            if (!busy) {
+              setDraft(null);
+              setAdjusting(false);
+            }
+          }}
+        >
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <TouchAdjust
+            label="sounding value"
+            commitHint="Done applies to sound. Reset returns to the opening value."
+            value={activeDraft?.value ?? control.value}
+            baseline={control.value}
+            min={0}
+            max={1}
+            step={0.01}
+            disabled={disabled || stale}
+            format={(v) =>
+              v === control.value
+                ? control.display
+                : `${Math.round(v * 100)}% · pending`
+            }
+            onChange={(value) =>
+              setDraft({
+                target: control.target,
+                value,
+                session: state.session,
+                revision: state.revision,
+              })
+            }
+          />
+          <div className="editor-actions">
+            <Button
+              disabled={disabled || stale}
+              onClick={() => {
+                if (activeDraft) void apply(control.target, activeDraft.value);
+                else setAdjusting(false);
+              }}
+            >
+              Done
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setDraft(null);
+                setAdjusting(false);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+          {stale && (
+            <p role="alert">
+              Sounding session changed. Cancel and reopen this control.
+            </p>
+          )}
+        </AdjustmentDialog>
+      )}
+      <details className="save-copy">
+        <summary>Save copy</summary>
+        <div className="form-grid">
+          <label className="field">
+            Name for sounding copy
+            <input
+              value={copyName}
+              onChange={(e) => setCopyName(e.target.value)}
+              maxLength={100}
+              disabled={busy}
+            />
+          </label>
+          <Button
+            variant="outline"
+            disabled={disabled || !!draft || !copyName.trim()}
+            onClick={() => void saveCopy()}
+          >
+            Save sounding copy
+          </Button>
+        </div>
+      </details>
       {!!draft && (
         <p className="caption">
           Apply or discard the pending adjustment before saving.
@@ -301,13 +344,13 @@ export function LiveRig({
           Copy saved in Library. Audio is still running.
         </p>
       )}
-      {stale && (
+      {stale && !adjusting && (
         <p role="alert">
           The sounding session changed. Discard this adjustment before editing
           again.
         </p>
       )}
-      {error && (
+      {error && !adjusting && (
         <div role="alert">
           <p>{error}</p>
           <Button variant="outline" onClick={() => setError('')}>

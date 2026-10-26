@@ -1,3 +1,4 @@
+import { setDisplayMode } from './display';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { mkdirSync } from 'node:fs';
@@ -32,6 +33,21 @@ async function fits(page: Page) {
         element.scrollWidth > element.clientWidth + 1
       )
         problems.push(`${name}: effect content overflows`);
+    }
+    for (const dialog of document.querySelectorAll<HTMLDialogElement>(
+      'dialog[open]',
+    )) {
+      const rect = dialog.getBoundingClientRect();
+      const bottom =
+        (visualViewport?.offsetTop ?? 0) +
+        (visualViewport?.height ?? innerHeight);
+      if (
+        rect.bottom > bottom + 1 ||
+        rect.height > (visualViewport?.height ?? innerHeight) + 1
+      )
+        problems.push(
+          `Adjustment panel extends beyond visible viewport: ${JSON.stringify({ top: rect.top, bottom: rect.bottom, height: rect.height, viewportBottom: bottom, viewportHeight: visualViewport?.height, innerHeight })}`,
+        );
     }
     return problems;
   });
@@ -91,27 +107,52 @@ test.beforeEach(async ({ page, request }, testInfo) => {
 test('device portrait and landscape keep controls accessible and preserve a rotating edit', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   const portrait = page.viewportSize()!;
   const landscape = { width: portrait.height, height: portrait.width };
   const epaper = testInfo.project.name === 'boox-air3c';
   if (epaper) {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('Display mode').selectOption('epaper');
-    await page
-      .getByRole('button', { name: 'Back to rig', exact: true })
-      .click();
+    await setDisplayMode(page, 'epaper');
+    await page.getByRole('button', { name: 'Rig', exact: true }).click();
   }
+  await expect(page.locator('.masthead select')).toHaveCount(0);
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   const before = await page.getByTestId('value-nam-a.level').textContent();
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
-  await page.getByLabel('Draft NAM A level (%)').fill('45');
+  await enterValue(page, 'Draft NAM A level (%)', '45');
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('45%');
-  await page.setViewportSize(landscape);
-  await expect(page.getByLabel('Draft NAM A level (%)')).toHaveValue('45');
-  await fits(page);
+  // Repeat rotation and a keyboard-sized viewport without remounting the edit.
+  // A single orientation snapshot misses stale fixed widths and text enlargement.
+  for (const viewport of [
+    landscape,
+    portrait,
+    { width: landscape.width, height: Math.min(280, landscape.height) },
+    landscape,
+    portrait,
+    landscape,
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect(page.getByLabel('Draft NAM A level (%)')).toHaveValue('45');
+    await fits(page);
+    const navigation = page.getByRole('navigation', {
+      name: 'Instrument navigation',
+    });
+    const positions = await navigation
+      .getByRole('button')
+      .evaluateAll((buttons) =>
+        buttons.map((button) => ({
+          top: button.getBoundingClientRect().top,
+          height: button.getBoundingClientRect().height,
+        })),
+      );
+    for (const position of positions) {
+      expect(Math.abs(position.top - positions[0]!.top)).toBeLessThan(1);
+      expect(Math.abs(position.height - positions[0]!.height)).toBeLessThan(1);
+    }
+  }
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByTestId('value-nam-a.level')).toHaveText(before!);
   mkdirSync('../../.local/previews/devices', { recursive: true });
@@ -138,14 +179,36 @@ test('device portrait and landscape keep controls accessible and preserve a rota
         fullPage: true,
       });
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await fits(page);
-      await accessible(page);
+      for (const section of [
+        'Audio',
+        'Connections',
+        'MIDI',
+        'Display',
+        'Maintenance',
+      ]) {
+        await page
+          .getByRole('navigation', { name: 'Settings sections' })
+          .getByRole('button', { name: section, exact: true })
+          .click();
+        await fits(page);
+        await accessible(page);
+        if (section === 'Maintenance') {
+          await expect(
+            page.getByRole('heading', { name: 'MIDI mapping', exact: true }),
+          ).toHaveCount(0);
+          await expect(
+            page.getByRole('region', { name: 'Wi-Fi and hotspot' }),
+          ).toHaveCount(0);
+          await page.screenshot({
+            path: `../../.local/previews/devices/${testInfo.project.name}-${orientation}-maintenance.png`,
+            fullPage: true,
+          });
+        }
+      }
       await page.getByRole('button', { name: 'Library', exact: true }).click();
       await fits(page);
       await accessible(page);
-      await page
-        .getByRole('button', { name: 'Back to rig', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Rig', exact: true }).click();
     });
   }
   if (epaper) {
@@ -161,8 +224,12 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await page.setViewportSize({ width: 768, height: 1024 });
     await fits(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: 'Display', exact: true })
+      .click();
     await expect(page.getByLabel('Display mode')).toHaveValue('epaper');
-    await page.getByLabel('Display mode').selectOption('orchid');
+    await setDisplayMode(page, 'orchid');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
       'data-display',
@@ -180,9 +247,9 @@ test('folding and unfolding preserves the active draft without reloading', async
     'Fold transition is covered once on the cover profile',
   );
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
-  await page.getByLabel('Draft NAM A level (%)').fill('37');
+  await enterValue(page, 'Draft NAM A level (%)', '37');
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('37%');
   for (const viewport of [
     { width: 690, height: 829 },
@@ -194,7 +261,7 @@ test('folding and unfolding preserves the active draft without reloading', async
     await expect(page.getByLabel('Draft NAM A level (%)')).toHaveValue('37');
     await fits(page);
   }
-  await page.getByRole('button', { name: 'Commit', exact: true }).click();
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('37%');
 });
 
@@ -205,7 +272,7 @@ test('stage display modes persist and stay accessible in both orientations', asy
   const portrait = page.viewportSize()!;
   mkdirSync('../../.local/previews/stage', { recursive: true });
   for (const mode of ['sunlight', 'stage']) {
-    await page.getByLabel('Display mode').selectOption(mode);
+    await setDisplayMode(page, mode);
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-display', mode);
     for (const [orientation, viewport] of [
@@ -225,14 +292,36 @@ test('stage display modes persist and stay accessible in both orientations', asy
         fullPage: true,
       });
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await fits(page);
-      await accessible(page);
+      for (const section of [
+        'Audio',
+        'Connections',
+        'MIDI',
+        'Display',
+        'Maintenance',
+      ]) {
+        await page
+          .getByRole('navigation', { name: 'Settings sections' })
+          .getByRole('button', { name: section, exact: true })
+          .click();
+        await fits(page);
+        await accessible(page);
+        if (section === 'Maintenance') {
+          await expect(
+            page.getByRole('heading', { name: 'MIDI mapping', exact: true }),
+          ).toHaveCount(0);
+          await expect(
+            page.getByRole('region', { name: 'Wi-Fi and hotspot' }),
+          ).toHaveCount(0);
+          await page.screenshot({
+            path: `../../.local/previews/devices/${testInfo.project.name}-${orientation}-maintenance.png`,
+            fullPage: true,
+          });
+        }
+      }
       await page.getByRole('button', { name: 'Library', exact: true }).click();
       await fits(page);
       await accessible(page);
-      await page
-        .getByRole('button', { name: 'Back to rig', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Rig', exact: true }).click();
     }
   }
 });
@@ -241,9 +330,9 @@ test('touch adjustment keeps taps steady, slows fine drags and rolls back interr
   page,
   request,
 }, testInfo) => {
-  await page.getByLabel('Display mode').selectOption('stage');
+  await setDisplayMode(page, 'stage');
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
   const track = page.getByRole('slider', {
     name: 'Adjust NAM A level',
@@ -251,6 +340,10 @@ test('touch adjustment keeps taps steady, slows fine drags and rolls back interr
   });
   const draft = page.getByLabel('Draft NAM A level (%)');
   await expect(draft).toHaveValue('50');
+  await expect(
+    page.getByRole('button', { name: 'Edit', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toBeVisible();
   await track.scrollIntoViewIfNeeded();
   await track.click({ position: { x: 20, y: 20 } });
   await expect(draft).toHaveValue('50');
@@ -303,10 +396,10 @@ test('touch adjustment keeps taps steady, slows fine drags and rolls back interr
   mkdirSync('../../.local/previews/touch', { recursive: true });
   await page.screenshot({
     path: `../../.local/previews/touch/${testInfo.project.name}.png`,
-    fullPage: true,
+    fullPage: false,
   });
-  await draft.fill('42.37');
-  await page.getByRole('button', { name: 'Commit', exact: true }).click();
+  await enterValue(page, 'Draft NAM A level (%)', '42.37');
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
   await expect
     .poll(async () => {
       const state = await (await request.get('/api/v1/state')).json();
@@ -316,10 +409,20 @@ test('touch adjustment keeps taps steady, slows fine drags and rolls back interr
     })
     .toBeCloseTo(0.4237, 5);
   await page
-    .getByRole('button', { name: 'Edit NAM A level', exact: true })
+    .getByRole('button', { name: 'Adjust NAM A level value', exact: true })
     .click();
   await page.getByRole('button', { name: 'Increase NAM A level' }).click();
   await page.getByRole('button', { name: 'Restore starting value' }).click();
   await expect(draft).toHaveValue('42.37');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 });
+
+async function enterValue(page: Page, label: string, value: string) {
+  const input = page.getByLabel(label, { exact: true });
+  if (!(await input.isVisible()))
+    await page
+      .getByRole('dialog')
+      .getByText('Enter value', { exact: true })
+      .click();
+  await input.fill(value);
+}

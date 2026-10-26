@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { setDisplayMode } from './display';
+import { test, expect, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -70,6 +71,10 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(page.getByRole('alert')).toContainText('Not a TONE3000 preset');
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
+  await page
+    .getByRole('navigation', { name: 'Library sections' })
+    .getByRole('button', { name: 'Author', exact: true })
+    .click();
   await expect(
     page.getByText(/Playback and editing are not available/),
   ).toBeVisible();
@@ -107,9 +112,13 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await page.goto('/');
   if (test.info().project.name === 'boox-air3c') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('Display mode').selectOption('epaper');
+    await setDisplayMode(page, 'epaper');
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Library sections' })
+    .getByRole('button', { name: 'Author', exact: true })
+    .click();
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
   await editor
@@ -118,7 +127,9 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await editor.getByRole('button', { name: 'Load into native editor' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   const before = await editor.getByTestId('native-readback').textContent();
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   const touch = editor.getByRole('slider', { name: 'Adjust native value' });
   const starting = await editor
     .getByLabel('Normalized value (0–1)')
@@ -138,8 +149,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   );
   await editor.getByRole('button', { name: 'Restore starting value' }).click();
   await expect(editor.getByTestId('native-readback')).toHaveText(before!);
-  await editor.getByLabel('Normalized value (0–1)').fill('0.8');
-  await editor.getByRole('button', { name: 'Preview native change' }).click();
+  await nativeValue(editor, '0.8');
   await expect(editor.getByTestId('native-readback')).not.toHaveText(before!);
   // The server applies this preview, but its reply is lost. Cancel must refresh
   // the revision and restore the baseline rather than replaying the preview.
@@ -155,21 +165,24 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
       await route.abort('failed');
     } else await route.continue();
   });
-  await editor.getByLabel('Normalized value (0–1)').fill('0.9');
-  await editor.getByRole('button', { name: 'Preview native change' }).click();
+  await nativeValue(editor, '0.9');
   await expect(editor.getByRole('alert')).toBeVisible();
-  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.unroute('**/api/v1/native');
   await expect(editor.getByTestId('native-readback')).toHaveText(before!);
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
-  await editor.getByLabel('Normalized value (0–1)').fill('0.75');
-  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
+  await nativeValue(editor, '0.75');
+  await editor.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(editor.getByRole('status')).toContainText(
     'Unsaved tone changes',
   );
   const edited = await editor.getByTestId('native-readback').textContent();
   await editor.getByLabel('Native control').selectOption('osEnabled');
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   const stagedBefore = await editor
     .getByTestId('native-readback')
     .textContent();
@@ -177,10 +190,8 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByLabel('Normalized value (0–1)')).toHaveValue('1');
   await expect(editor.getByTestId('native-readback')).toHaveText(stagedBefore!);
 
-  await expect(
-    editor.getByRole('button', { name: 'Preview native change' }),
-  ).toBeDisabled();
-  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await expect(editor.getByRole('dialog')).toContainText('Applied on Done');
+  await editor.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 1',
   );
@@ -195,24 +206,30 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   );
   expect(blockMix).toBeTruthy();
   await editor.getByLabel('Native control').selectOption(blockEnabled.id);
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
-  await editor.getByLabel('Normalized value (0–1)').fill('0.5');
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
+  await nativeValue(editor, '0.5');
   await expect(
-    editor.getByRole('button', { name: 'Commit native change' }),
+    editor.getByRole('button', { name: 'Done', exact: true }),
   ).toBeDisabled();
-  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await editor.getByLabel('Native control').selectOption(blockMix.id);
   const mixBefore = await editor.getByTestId('native-readback').textContent();
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   await touch.press('Home');
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0',
   );
-  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toHaveText(mixBefore!);
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
-  await editor.getByLabel('Normalized value (0–1)').fill('0.375');
-  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
+  await nativeValue(editor, '0.375');
+  await editor.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0.375',
   );
@@ -222,17 +239,19 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   expect(blockSize.staged).toBe(true);
   await editor.getByLabel('Native control').selectOption(blockSize.id);
   const sizeBefore = await editor.getByTestId('native-readback').textContent();
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   await touch.press('End');
   await expect(editor.getByTestId('native-readback')).toHaveText(sizeBefore!);
-  await expect(
-    editor.getByRole('button', { name: 'Preview native change' }),
-  ).toBeDisabled();
-  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await expect(editor.getByRole('dialog')).toContainText('Applied on Done');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toHaveText(sizeBefore!);
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
-  await editor.getByLabel('Normalized value (0–1)').fill('0.75');
-  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
+  await nativeValue(editor, '0.75');
+  await editor.getByRole('button', { name: 'Done', exact: true }).click();
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0.75',
   );
@@ -254,6 +273,10 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByTestId('native-readback')).toHaveText(before!);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Library sections' })
+    .getByRole('button', { name: 'Author', exact: true })
+    .click();
   await editor.getByLabel('Preset to load').selectOption(`owned:${owned.id}`);
   await editor.getByRole('button', { name: 'Load into native editor' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
@@ -272,16 +295,23 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     'normalized 0.375',
   );
   await editor.getByLabel('Native control').selectOption('toneBass');
-  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
   await touch.press('Home');
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0',
   );
-  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/v1/native')).json()).edit)
     .toBeNull();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Library sections' })
+    .getByRole('button', { name: 'Author', exact: true })
+    .click();
   await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
   const original = await request.get(
     `/api/v1/presets/${preset.sha256}/original`,
@@ -468,7 +498,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const nativeBefore = await (await request.get('/api/v1/native')).json();
     await page.goto('/');
     if (test.info().project.name === 'boox-air3c')
-      await page.getByLabel('Display mode').selectOption('epaper');
+      await setDisplayMode(page, 'epaper');
     const sounding = page.getByRole('region', { name: 'Sounding rig' });
     await expect(sounding).toBeVisible();
     const art = sounding.locator(
@@ -485,13 +515,74 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       page.getByRole('region', { name: 'Signal chain', exact: true }),
     ).toHaveCount(0);
-    await sounding.getByLabel('Sounding control').selectOption('outputLevel');
+    const liveControls = await (await request.get('/api/v1/audio')).json();
+    // Real effect bypass/readback and button geometry, not just the silent preview.
+    const firstBlock = liveControls.controls.find(
+      (c: { target: string }) =>
+        c.target.startsWith('block:') && c.target.endsWith(':enabled'),
+    );
+    const power = sounding.locator('.effect-power').first();
+    await power.click();
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.controls.find(
+          (c: { target: string }) => c.target === firstBlock.target,
+        ).value;
+      })
+      .toBe(firstBlock.value === 1 ? 0 : 1);
+    await expect(power).toHaveAttribute(
+      'aria-pressed',
+      firstBlock.value === 1 ? 'false' : 'true',
+    );
+    await power.click();
+    await expect(power).toHaveAttribute(
+      'aria-pressed',
+      String(firstBlock.value === 1),
+    );
+    const portrait = page.viewportSize()!;
+    for (const viewport of [
+      portrait,
+      { width: portrait.height, height: portrait.width },
+      portrait,
+    ]) {
+      await page.setViewportSize(viewport);
+      const cards = await sounding
+        .locator('.live-effect')
+        .evaluateAll((items) =>
+          items.map((item) => ({
+            top: item.getBoundingClientRect().top,
+            buttonBottom: item
+              .querySelector('.effect-power')!
+              .getBoundingClientRect().bottom,
+          })),
+        );
+      for (const card of cards)
+        for (const other of cards) {
+          if (Math.abs(card.top - other.top) < 1)
+            expect(
+              Math.abs(card.buttonBottom - other.buttonBottom),
+            ).toBeLessThan(1);
+        }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+    }
+    const outputControl = liveControls.controls.find(
+      (c: { target: string }) => c.target === 'outputLevel',
+    );
+    await sounding
+      .getByRole('button', {
+        name: `Adjust sounding ${outputControl.label}`,
+        exact: true,
+      })
+      .click();
     await sounding
       .getByRole('slider', { name: 'Adjust sounding value' })
       .press('ArrowLeft');
-    await sounding
-      .getByRole('button', { name: 'Apply to sound', exact: true })
-      .click();
+    await sounding.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(sounding.getByTestId('live-status')).toHaveText(
       'Session modified',
     );
@@ -507,8 +598,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
       nativeBefore.revision,
     );
     await expect(
-      sounding.getByRole('button', { name: 'Apply to sound', exact: true }),
-    ).toBeDisabled();
+      sounding.getByRole('button', { name: 'Done', exact: true }),
+    ).toHaveCount(0);
+    await sounding.getByText('Save copy', { exact: true }).click();
     await sounding
       .getByLabel('Name for sounding copy')
       .fill(`Live ${test.info().project.name}`);
@@ -555,6 +647,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
     await expect(page.getByText('Device connected')).toBeVisible();
     await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await page
+      .getByRole('navigation', { name: 'Library sections' })
+      .getByRole('button', { name: 'Author', exact: true })
+      .click();
     const editor = page.getByRole('region', { name: 'Native preset editor' });
     await editor
       .getByLabel('Preset to load')
@@ -573,9 +669,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     expect(saved.owned.some((p: { id: string }) => p.id === saved.loaded)).toBe(
       true,
     );
-    await page
-      .getByRole('button', { name: 'Back to rig', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'Rig', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await audio.getByRole('button', { name: 'Resume saved session' }).click();
     await expect(audio.getByRole('status')).toContainText('Audio: running');
@@ -698,7 +792,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   await page.goto('/');
   if (testInfo.project.name === 'boox-air3c') {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await page.getByLabel('Display mode').selectOption('epaper');
+    await setDisplayMode(page, 'epaper');
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   const image = page.getByRole('img', {
@@ -748,3 +842,13 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   await expect(image).toBeVisible();
   expect(external).toEqual([]);
 });
+
+async function nativeValue(editor: Locator, value: string) {
+  const input = editor.getByLabel('Normalized value (0–1)');
+  if (!(await input.isVisible()))
+    await editor
+      .getByRole('dialog')
+      .getByText('Enter value', { exact: true })
+      .click();
+  await input.fill(value);
+}

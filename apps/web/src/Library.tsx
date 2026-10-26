@@ -8,6 +8,7 @@ import { Button } from './components/ui/button';
  * @see docs/presets/format.md
  */
 export function Library({ connected }: { connected: boolean }) {
+  const [page, setPage] = useState<'browse' | 'author'>('browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);
@@ -59,61 +60,86 @@ export function Library({ connected }: { connected: boolean }) {
   }
   return (
     <section className="panel" aria-label="Preset library">
-      <h2>Native preset library</h2>
-      <p>
-        Keep your TONE3000 originals here. Importing does not change the current
-        rig. Originals are kept unchanged.
-      </p>
-      <div className="form-grid">
-        <label className="field">
-          TONE3000 preset file
-          <input
-            type="file"
-            accept=".t3kpreset"
-            disabled={busy || !connected}
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
-        </label>
+      <nav className="settings-nav" aria-label="Library sections">
         <Button
-          disabled={!file || busy || !connected}
-          onClick={() => void upload()}
+          variant={page === 'browse' ? 'secondary' : 'ghost'}
+          aria-current={page === 'browse' ? 'page' : undefined}
+          onClick={() => setPage('browse')}
         >
-          Import original
+          Browse
         </Button>
-      </div>
-      <p className="caption">
-        Up to 32 MiB per file. Original bytes are preserved; importing the same
-        file twice keeps one copy.
-      </p>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      <p role="status">{message}</p>
-      {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
-      <ul className="preset-library">
-        {presets.map((preset) => (
-          <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
-            <h3>{preset.name}</h3>
-            <ArtworkDeck id={preset.sha256} />
-            <p>
-              {preset.framing === 'legacy' ? 'Legacy format' : 'Current format'}{' '}
-              · {preset.parameter_count} parameters · {preset.block_count} chain
-              entries
-            </p>
-            <p className="caption">Original stored · Playback is separate</p>
-            <a
-              href={`/api/v1/presets/${preset.sha256}/original`}
-              download
-              aria-label={`Download original ${preset.name}`}
+        <Button
+          variant={page === 'author' ? 'secondary' : 'ghost'}
+          aria-current={page === 'author' ? 'page' : undefined}
+          onClick={() => setPage('author')}
+        >
+          Author
+        </Button>
+      </nav>
+      {page === 'browse' ? (
+        <>
+          <h2 className="sr-only">Native preset library</h2>
+          <p>
+            Keep your TONE3000 originals here. Importing does not change the
+            current rig. Originals are kept unchanged.
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              TONE3000 preset file
+              <input
+                type="file"
+                accept=".t3kpreset"
+                disabled={busy || !connected}
+                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <Button
+              disabled={!file || busy || !connected}
+              onClick={() => void upload()}
             >
-              Download original
-            </a>
-          </li>
-        ))}
-      </ul>
-      <NativeEditor presets={presets} connected={connected} />
+              Import original
+            </Button>
+          </div>
+          <p className="caption">
+            Up to 32 MiB per file. Original bytes are preserved; importing the
+            same file twice keeps one copy.
+          </p>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <p role="status">{message}</p>
+          {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
+          <ul className="preset-library">
+            {presets.map((preset) => (
+              <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
+                <h3>{preset.name}</h3>
+                <ArtworkDeck id={preset.sha256} />
+                <details>
+                  <summary>File details</summary>
+                  <p>
+                    {preset.framing === 'legacy'
+                      ? 'Legacy format'
+                      : 'Current format'}{' '}
+                    · {preset.parameter_count} parameters · {preset.block_count}{' '}
+                    chain entries
+                  </p>
+                </details>
+                <a
+                  href={`/api/v1/presets/${preset.sha256}/original`}
+                  download
+                  aria-label={`Download original ${preset.name}`}
+                >
+                  Download original
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <NativeEditor presets={presets} connected={connected} />
+      )}
     </section>
   );
 }

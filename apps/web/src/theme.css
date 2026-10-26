@@ -117,6 +117,7 @@
   --warning: #ffffff;
   --warning-foreground: #111111;
   --destructive: #111111;
+  --success: #111111;
   --lcd-shadow: none;
   --panel-shadow: none;
   --effect-shadow: none;
@@ -155,6 +156,7 @@
   --warning: #30271b;
   --warning-foreground: #f5d5a2;
   --destructive: #ffb4aa;
+  --success: #66d9ab;
   --destructive-foreground: #291312;
   --lcd-shadow: none;
   --panel-shadow: none;

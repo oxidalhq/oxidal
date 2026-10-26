@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { sendCommand, type Snapshot } from './api';
 import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 
 type Parameter = Snapshot['parameters'][number];
@@ -104,91 +105,122 @@ export function ControlEditor({
   const unavailable = !connected || busy || !owned;
   return (
     <div className="control-editor">
-      {!opened ? (
-        <Button
-          variant="outline"
-          disabled={!connected || busy || !!state.edit}
-          onClick={() => void begin()}
-          aria-label={`Edit ${parameter.label}`}
-        >
-          Edit
-        </Button>
-      ) : (
-        <fieldset aria-label={`Preview ${parameter.label}`}>
-          <legend>Preview {parameter.label}</legend>
-          <TouchAdjust
-            label={parameter.label}
-            value={draft}
-            baseline={baseline}
-            min={parameter.min}
-            max={parameter.max}
-            step={parameter.step}
-            disabled={unavailable}
-            onChange={preview}
-            format={(value) => `${Number((value * 100).toFixed(2))}%`}
+      <button
+        type="button"
+        className="parameter-touch"
+        disabled={!connected || busy || !!state.edit}
+        onClick={() => void begin()}
+        aria-label={`Adjust ${parameter.label} value`}
+        aria-haspopup="dialog"
+      >
+        <svg className="parameter-dial" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="32" cy="32" r="26" className="dial-track" />
+          <circle
+            cx="32"
+            cy="32"
+            r="26"
+            className="dial-value"
+            pathLength="100"
+            strokeDasharray={`${Math.max(0, Math.min(100, ((parameter.value - parameter.min) / (parameter.max - parameter.min)) * 100))} 100`}
           />
-          <label className="field">
-            Draft {parameter.label} (%)
-            <input
-              type="number"
-              min={parameter.min * 100}
-              max={parameter.max * 100}
-              step={parameter.step * 100}
-              value={
-                Number.isFinite(draft) ? Math.round(draft * 10000) / 100 : ''
-              }
-              disabled={unavailable}
-              onChange={(event) =>
-                preview(
-                  event.target.value === ''
-                    ? NaN
-                    : Number(event.target.value) / 100,
-                )
-              }
-            />
-          </label>
-          <div className="editor-actions">
-            <Button
-              disabled={
-                unavailable ||
-                !Number.isFinite(draft) ||
-                draft < parameter.min ||
-                draft > parameter.max
-              }
-              onClick={() => void finish(false)}
-            >
-              Commit
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!connected || busy}
-              onClick={() => void finish(true)}
-            >
-              Cancel
-            </Button>
-          </div>
-          <p className="caption">
-            {owned
-              ? 'Preview only until committed. Cancel restores the starting value. Idle previews expire after 30 seconds.'
-              : 'This edit ended or was superseded. Your draft is retained; close and reopen to edit again.'}
-          </p>
-          {!owned && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                setOpened(false);
-                queue.current = null;
-              }}
-            >
-              Close editor
-            </Button>
+        </svg>
+        <output data-testid={`value-${parameter.id}`}>
+          {Math.round(parameter.value * 100)}%
+        </output>
+      </button>
+      {opened && (
+        <AdjustmentDialog
+          title={parameter.label}
+          onCancel={() => {
+            if (!busy) void finish(true);
+          }}
+        >
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
           )}
-        </fieldset>
+          <fieldset aria-label={`Preview ${parameter.label}`}>
+            <legend className="sr-only">Preview {parameter.label}</legend>
+            <TouchAdjust
+              label={parameter.label}
+              value={draft}
+              baseline={baseline}
+              min={parameter.min}
+              max={parameter.max}
+              step={parameter.step}
+              disabled={unavailable}
+              onChange={preview}
+              format={(value) => `${Number((value * 100).toFixed(2))}%`}
+            />
+            <details className="exact-entry">
+              <summary>Enter value</summary>
+              <label className="field">
+                Draft {parameter.label} (%)
+                <input
+                  type="number"
+                  min={parameter.min * 100}
+                  max={parameter.max * 100}
+                  step={parameter.step * 100}
+                  value={
+                    Number.isFinite(draft)
+                      ? Math.round(draft * 10000) / 100
+                      : ''
+                  }
+                  disabled={unavailable}
+                  onChange={(event) =>
+                    preview(
+                      event.target.value === ''
+                        ? NaN
+                        : Number(event.target.value) / 100,
+                    )
+                  }
+                />
+              </label>
+            </details>
+            <div className="editor-actions">
+              <Button
+                disabled={
+                  unavailable ||
+                  !Number.isFinite(draft) ||
+                  draft < parameter.min ||
+                  draft > parameter.max
+                }
+                onClick={() => void finish(false)}
+              >
+                Done
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!connected || busy}
+                onClick={() => void finish(true)}
+              >
+                Cancel
+              </Button>
+            </div>
+            <p className="caption">
+              {owned
+                ? 'Done keeps this adjustment. Cancel restores the opening value.'
+                : 'This edit ended or was superseded. Your draft is retained; close and reopen to edit again.'}
+            </p>
+            {!owned && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setOpened(false);
+                  queue.current = null;
+                }}
+              >
+                Close editor
+              </Button>
+            )}
+          </fieldset>
+        </AdjustmentDialog>
       )}
       {state.edit?.target === parameter.id && !owned && (
         <p className="caption">Preview controlled by another editor.</p>
       )}
-      {error && (
+      {error && !opened && (
         <p role="alert" className="error">
           {error}
         </p>

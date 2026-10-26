@@ -36,8 +36,8 @@ Open **http://127.0.0.1:5173**. Rust runs on port 3210; Vite proxies the version
 Try this:
 
 1. Select **Parallel** and inspect paths A/B merging into the shared wet section.
-2. Open **Settings**, send MIDI value **127**, then return to the rig: NAM A becomes 100%. A second browser tab updates too.
-3. Change NAM A on the web; Settings shows the confirmed MIDI feedback value.
+2. Open **Settings → MIDI**, send MIDI value **127**, then return to the rig: NAM A becomes 100%. A second browser tab updates too.
+3. Change NAM A on the web; Settings → MIDI shows the confirmed MIDI feedback value.
 4. Try MIDI learn, pickup, range/scaling, or map a CC to bypass/preset selection. These are control-state operations; they process no audio.
 5. Use **Edit** beside a numeric control to preview an exact percentage, then **Commit** or **Cancel**. Another browser sees the preview and cannot overwrite its target.
 6. Open the rig validation inspector, remove the nodes, and validate: the Rust service rejects it.
@@ -66,6 +66,8 @@ The [draft Oxidal preset specification](docs/presets/format.md) describes native
 
 After `pnpm native:check` builds and verifies the pinned native backend on macOS or Linux, run `OXIDAL_NATIVE_EDITOR=1 pnpm preview`. Library provides real preset load, preview/cancel/commit, owned-copy save and reload. Five controls are qualified in this slice; imported originals stay immutable. Experimental Linux playback uses a separate worker; physical audio and full settings parity remain pending. See [native editor](docs/native-tone3000.md).
 
-Linux builds expose **Settings → Audio devices** for real ALSA discovery and exact configuration probes. The appliance also includes experimental saved-preset playback with audio-only Start/Stop/Restart; physical audio remains unqualified. See [audio devices and lifecycle](docs/audio.md).
+Linux builds expose **Settings → Audio → Audio devices** for real ALSA discovery and exact configuration probes. The appliance also includes experimental saved-preset playback with audio-only Start/Stop/Restart; physical audio remains unqualified. See [audio devices and lifecycle](docs/audio.md).
 
 The appliance’s [device service](docs/device-service.md) supplies web Wi-Fi/hotspot setup with rollback and separate system power controls. [Monitoring](docs/monitoring.md) shows real worker levels, processing history and available Linux host readings. The optional [web debug console](docs/debug-console.md) runs bounded commands as a separate unprivileged account after explicit enablement.
+
+The interface keeps Rig, Library, Monitor and Settings as stable destinations. Settings separates Audio, Connections, MIDI, Display and Maintenance. See [interface theme and navigation](docs/interface.md).

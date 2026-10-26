@@ -311,3 +311,26 @@ export async function saveArtwork(
     throw new Error(body.error ?? 'Artwork download failed');
   }
 }
+
+export type TerminalState = Contract['terminal_state'];
+export type TerminalCommand = Contract['terminal_command'];
+const terminalValidator = ajv.compile<TerminalState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/TerminalState',
+});
+export async function terminalCommand(
+  command: TerminalCommand,
+  mode: 'unprivileged' | 'admin' = 'unprivileged',
+): Promise<TerminalState> {
+  const response = await fetch(`/api/v1/terminal/${mode}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(command),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(5000),
+  });
+  const body = await presetResponse(response);
+  if (!terminalValidator(body))
+    throw new Error('Incompatible terminal service');
+  return body;
+}

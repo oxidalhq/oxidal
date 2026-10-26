@@ -1,0 +1,28 @@
+import type { Page } from '@playwright/test';
+
+export async function setDisplayMode(page: Page, mode: string) {
+  const navigation = page.getByRole('navigation', {
+    name: 'Instrument navigation',
+  });
+  const previous = await navigation
+    .locator('[aria-current="page"]')
+    .innerText();
+  const section = page.getByRole('navigation', { name: 'Settings sections' });
+  const previousSection =
+    previous === 'Settings'
+      ? await section.locator('[aria-current="page"]').innerText()
+      : null;
+  await navigation
+    .getByRole('button', { name: 'Settings', exact: true })
+    .click();
+  await section.getByRole('button', { name: 'Display', exact: true }).click();
+  await page.getByLabel('Display mode').selectOption(mode);
+  if (previousSection)
+    await section
+      .getByRole('button', { name: previousSection, exact: true })
+      .click();
+  else
+    await navigation
+      .getByRole('button', { name: previous, exact: true })
+      .click();
+}
