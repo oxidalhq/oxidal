@@ -23,7 +23,7 @@ MIDI is currently a typed simulator transport, enabled explicitly with `OXIDAL_S
 
 MIDI mappings persist with atomic file replacement. Rig/parameter/bypass state resets on restart in this PoC. Power-loss durability, migration, catalog storage, and backups remain appliance work. Storage/HTTP/JSON happen in the control plane, not an audio callback; the experimental playback process owns its synchronous PCM loop, without a real-time scheduling guarantee.
 
-The service accepts loopback listeners and loopback browser origins only. It does not expose LAN writes, provider login, arbitrary privileged commands, or a physical MIDI port. Pairing/authorization and target-device permissions must be designed before LAN/hardware operation. The staged systemd unit is not enabled by the OS recipe.
+The daemon accepts loopback listeners and loopback browser origins only. The experimental appliance puts nginx in front of it with per-device HTTPS and password authentication on every UI/API/event request, plus an explicit external Host/Origin allowlist before forwarding. The personal CA key remains outside the image. The image builder enables an unprivileged systemd daemon with audio-group access; staging alone does not activate services. See [OS build and access](../os/README.md). Provider login, arbitrary privileged commands and physical MIDI are not exposed. This prototype uses generated device credentials rather than a browser pairing/revocation flow.
 
 Public package licensing and namespace checks are pending owner/release decisions. Cargo packages are unpublished; third-party Rust licenses/advisories are checked without assigning a new license to the owner's code.
 

@@ -43,3 +43,60 @@ class ProvisionTests(unittest.TestCase):
         image.write_bytes(b'not-an-image')
         with self.assertRaises(ValueError): provision.verify_image(image)
         self.assertEqual(provision.manifest()['architecture'], 'arm64')
+
+class ApplianceTests(ProvisionTests):
+    def setUp(self):
+        super().setUp()
+        import hashlib
+        import json
+        self.bundle = self.root / 'bundle'
+        self.bundle.mkdir()
+        files = {}
+        elf = bytearray(32)
+        elf[:6] = b'\x7fELF\x02\x01'
+        elf[18:20] = (183).to_bytes(2, 'little')
+        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
+            file = self.bundle / name
+            file.parent.mkdir(exist_ok=True)
+            file.write_bytes(bytes(elf) if name != 'ui/index.html' else b'<html>fixture</html>')
+            files[name] = hashlib.sha256(file.read_bytes()).hexdigest()
+        (self.bundle / 'manifest.json').write_text(json.dumps({'format': 2, 'engine_available': True, 'target': 'linux-arm64', 'files': files}))
+
+    def test_native_bundle_integrity_install_and_idempotence(self):
+        result = provision.provision(self.root, bundle=self.bundle)
+        self.assertIn('opt/oxidal/bin/oxidald', result['changes'])
+        self.assertFalse((self.root / 'opt').exists())
+        provision.provision(self.root, True, self.bundle)
+        self.assertEqual((self.root / 'opt/oxidal/bin/oxidald').stat().st_mode & 0o777, 0o755)
+        self.assertEqual(provision.provision(self.root, True, self.bundle)['changes'], [])
+        (self.bundle / 'bin/oxidald').write_bytes(b'corrupted')
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            provision.provision(self.root, True, self.bundle)
+
+    def test_bundle_symlinks_architecture_and_traversal_rejected(self):
+        import json
+        manifest = self.bundle / 'manifest.json'
+        data = json.loads(manifest.read_text())
+        data['target'] = 'linux-x64'
+        manifest.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'architecture'):
+            provision.provision(self.root, True, self.bundle)
+        data['target'] = 'linux-arm64'
+        data['files']['../escape'] = '0' * 64
+        manifest.write_text(json.dumps(data))
+        with self.assertRaises(ValueError):
+            provision.provision(self.root, True, self.bundle)
+        del data['files']['../escape']
+        manifest.write_text(json.dumps(data))
+        (self.bundle / 'bin/oxidald').unlink()
+        (self.bundle / 'bin/oxidald').symlink_to('/bin/sh')
+        with self.assertRaisesRegex(ValueError, 'Symlink'):
+            provision.provision(self.root, True, self.bundle)
+        self.assertFalse((self.root / 'opt').exists())
+
+    def test_temporary_symlink_is_rejected_before_any_write(self):
+        (self.root / 'usr/share/oxidal').mkdir(parents=True)
+        (self.root / 'usr/share/oxidal/base-manifest.json.oxidal-tmp').symlink_to('/tmp')
+        with self.assertRaisesRegex(ValueError, 'Symlink'):
+            provision.provision(self.root, True, self.bundle)
+        self.assertFalse((self.root / 'etc/systemd').exists())

@@ -1,21 +1,28 @@
 [Unit]
-Description=Oxidal native rig control
-After=local-fs.target
-ConditionPathIsExecutable=/opt/oxidal/bin/oxidald
+Description=Oxidal rig control and isolated audio workers
+After=local-fs.target sound.target
+ConditionFileIsExecutable=/opt/oxidal/bin/oxidald
 
 [Service]
 Type=simple
 DynamicUser=yes
+SupplementaryGroups=audio
 StateDirectory=oxidal
 WorkingDirectory=/var/lib/oxidal
 ExecStart=/opt/oxidal/bin/oxidald
 Environment=OXIDAL_ADDR=127.0.0.1:3210
 Environment=OXIDAL_SIMULATOR=0
 Environment=OXIDAL_MAPPING_PATH=/var/lib/oxidal/mappings.json
+Environment=OXIDAL_PRESET_DIR=/var/lib/oxidal/presets
 Environment=OXIDAL_UI_DIR=/opt/oxidal/ui
+Environment=OXIDAL_NATIVE_WORKER=/opt/oxidal/bin/oxidal-native-worker
+Environment=OXIDAL_AUDIO_WORKER=/opt/oxidal/bin/oxidal-audio-worker
+Environment=OXIDAL_GRAPH_WORKER=/opt/oxidal/bin/oxidal-graph-worker
+Environment=LV2_PATH=/usr/lib/lv2:/usr/local/lib/lv2
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=15
+KillMode=control-group
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

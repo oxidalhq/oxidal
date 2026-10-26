@@ -14,13 +14,13 @@ Initial laptop scope is **64-bit x86 Linux**, not every legacy 32-bit laptop. Th
 
 Keep platform configuration separate from portable runtime logic. A regular Linux install must not apply Pi boot settings, replace the host network setup, strip desktop packages, or require appliance partitioning. Audio permissions, scheduling and optional service startup must be explicit installation steps. Appliance read-only partitions and future A/B recovery belong to board-image profiles, not mandatory laptop setup.
 
-**Current evidence:** the artifact script packages the build host's native preview and web assets; the configured artifact workflow targets Linux x64. These are control previews, not a completed Linux audio installer or bootable image. ARM64 Linux compile checks do not prove ARM execution, Orange Pi compatibility or audio performance. Native audio hosting, laptop packaging and physical qualification remain pending. Extend the existing OS tests, normal build checks and browser E2E for these routes; keep board/audio qualification results separate.
+**Current delivery:** `node scripts/artifacts.mjs --appliance` builds a relocatable native Linux bundle containing the daemon, web UI, isolated native editor, saved-preset player and general LV2 graph worker. `scripts/image.py` assembles that ARM64 bundle into a fresh disposable Pi OS image, installs its dependencies, enables boot services, captures the package closure and runs the installed-service qualification before producing checksums. This is an experimental first-boot image, not hardware or live-performance qualification. The ordinary artifact workflow remains a preview build; Linux laptop package lifecycle and Orange Pi images remain separate work.
 
 ## General audio-device support target
 
 Jogg is one test fixture, not a device restriction. Discover and configure compatible Linux ALSA devices, including USB interfaces, built-in audio and board audio. Probe capture/playback, channel layouts, sample rates, sample formats, buffer/period constraints and busy status. Allow input/output channel selection and separate input/output devices; independently clocked combinations require drift handling and sustained duplex qualification. Do not hard-code a vendor or card index.
 
-Persist resolvable device identities with duplicate-device handling. Show negotiated settings and actionable busy/missing/unsupported errors. Stage configuration changes with rollback where possible, handle reconnect predictably, and never silently switch live output to a different device. Keep device configuration and calibration separate from tone presets. A Linux driver does not prove that every audio configuration meets Oxidal's latency requirements. Hardware enumeration and exact single-endpoint configuration probes are implemented; experimental same-endpoint duplex transport and isolated saved-preset playback are implemented and tested against ALSA null. Physical streaming, persistence, recovery and real-time qualification remain pending. Extend existing native/service suites and hardware qualification rather than creating ad hoc scripts.
+Persist resolvable device identities with duplicate-device handling. Show negotiated settings and actionable busy/missing/unsupported errors. Stage configuration changes with rollback where possible, handle reconnect predictably, and never silently switch live output to a different device. Keep device configuration and calibration separate from tone presets. A Linux driver does not prove that every audio configuration meets Oxidal's latency requirements. Hardware enumeration and exact single-endpoint configuration probes are implemented; experimental same-endpoint duplex transport and isolated saved-preset playback are implemented and tested against ALSA null. Explicit saved-session boot configuration is implemented. Physical streaming, device reconnect recovery and real-time qualification remain pending. Extend existing native/service suites and hardware qualification rather than creating ad hoc scripts.
 
 ## Planned headless and desktop workflows
 
@@ -32,40 +32,76 @@ Transfer compatible sounds through explicit validated `.t3kpreset` import/export
 
 The normal **Use TONE3000** action must stop only the audio engine and release its interface, preserving `oxidald`, HTTP/SSE and silent authoring. Preflight the desktop/app, resolve edits and wait for actual audio release before launch. **Return to Oxidal** releases the managed standalone audio owner before validating and starting the Oxidal rig. Keep offline edits and preset import explicit; no automatic replacement of a playing rig.
 
-Plan Stop/Start audio, Restart audio, Use TONE3000, Return to Oxidal, and saved audio-device settings. Whole-service shutdown/restart is an advanced maintenance action that disconnects the UI and requires recovery outside the service. See [audio lifecycle](../docs/audio.md) for ownership, failure handling and qualification requirements. Current discovery and exact probe endpoints work on ALSA-feature Linux builds; experimental Start/Stop/Restart now keep authoring available, while managed desktop handoff, boot streaming and hardware qualification remain pending.
+Plan Stop/Start audio, Restart audio, Use TONE3000, Return to Oxidal, and saved audio-device settings. Whole-service shutdown/restart is an advanced maintenance action that disconnects the UI and requires recovery outside the service. See [audio lifecycle](../docs/audio.md) for ownership, failure handling and qualification requirements. Current discovery and exact probe endpoints work on ALSA-feature Linux builds; experimental Start/Stop/Restart now keep authoring available, including opt-in saved-session restoration on daemon startup; managed desktop handoff and hardware qualification remain pending.
 
-**Planned, not delivered:** desktop packaging, mode-switch commands, native Linux audio, service handoff/recovery and Pi ARM64 standalone qualification. Verify the upstream app's exact architecture, release availability and runtime dependencies; an Oxidal-patched build is not an official release. Keep the live path independent of a running display server while retaining any libraries required by the selected native plugin build. Extend existing packaging/service/E2E tests for boot, handoff, failure recovery and preset transfer; qualify audio performance on each target.
+**Planned, not delivered:** desktop packaging, managed mode-switch commands, physical audio qualification and Pi ARM64 standalone qualification. Verify the upstream app's exact architecture, release availability and runtime dependencies; an Oxidal-patched build is not an official release. Keep the live path independent of a running display server while retaining any libraries required by the selected native plugin build. Extend existing packaging/service/E2E tests for boot, handoff, failure recovery and preset transfer; qualify audio performance on each target.
 
-## Raspberry Pi recipe foundation
+## Build the first Pi prototype image
 
-This PoC pins Raspberry Pi OS Lite arm64 Trixie (2026-10-06) and its vendor SHA-256 in `manifests/base.json`. Source: [official Raspberry Pi downloads](https://www.raspberrypi.com/software/operating-systems/). No desktop stripping, package removal, block-device flashing, or service activation is performed by these scripts.
+The base is Raspberry Pi OS Lite ARM64 Trixie (2026-10-06), pinned by official URL and SHA-256 in `manifests/base.json`. The builder accepts regular files only and contains no flashing or block-device commands. Existing Pi installations are untouched.
 
-Run checks from the repository root:
-
-```sh
-sh os/scripts/check.sh
-python3 os/scripts/provision.py --check-manifest
-```
-
-The check needs Python 3.9+, ShellCheck, and shfmt. A fixture dry run needs an explicitly marked disposable root. On macOS, use the resolved `/private/tmp` path (the tool deliberately rejects symlinked roots):
+On a native ARM64 Linux build host/container, install the native build prerequisites in [native adapter setup](../docs/native-tone3000.md), plus `libguestfs-tools`, QEMU, `xz-utils`, `openssl`, `liblilv-dev`, `lv2-dev`, `libasound2-dev` and `pkg-config`. Run normal checks before building:
 
 ```sh
-mkdir -p /private/tmp/oxidal-image-fixture/etc
-touch /private/tmp/oxidal-image-fixture/.oxidal-disposable-root
-printf 'ID=debian\nVERSION_CODENAME=trixie\n' > /private/tmp/oxidal-image-fixture/etc/os-release
-python3 os/scripts/provision.py --target-root /private/tmp/oxidal-image-fixture
-python3 os/scripts/provision.py --target-root /private/tmp/oxidal-image-fixture --apply
-python3 os/scripts/provision.py --target-root /private/tmp/oxidal-image-fixture --apply
+pnpm check
+pnpm native:check
+pnpm lv2:check
+node scripts/artifacts.mjs --appliance
+python3 os/scripts/provision.py --create-access .local/device-access
+# Download the exact URL in os/manifests/base.json to .local/images/base.img.xz.
+python3 os/scripts/provision.py --verify-image .local/images/base.img.xz
+python3 os/scripts/image.py \
+  --base .local/images/base.img.xz \
+  --bundle .local/artifacts/oxidal-linux-arm64-appliance \
+  --access .local/device-access \
+  --output .local/images/oxidal-prototype.img
 ```
 
-The final invocation must report no changes. Only the unit file and versioned base manifest are staged. The recipe refuses host/device roots, unmarked/wrong-base roots, and managed paths containing symlinks. The service expects a separately supplied executable and built web assets under `/opt/oxidal`; it remains disabled. Loopback-only service access is deliberate until LAN pairing/security exists. Audio-device permissions and scheduling will be qualified with the native host.
+The native artifact build uses pinned source/patch hashes. The image build records installed Debian package versions; package repositories are not snapshot-pinned, so image rebuilds are auditable rather than bit-for-bit reproducible. The output includes the image, SHA-256, manifest and installed test/package evidence. No successful readiness report is produced when installation or validation fails. A failed output is a diagnostic artifact, not a candidate to flash; use a new output filename after correcting the failure.
 
-To verify a separately downloaded image without writing a device:
+The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the vendor boot partitions/kernel and uses a headless multi-user boot. No desktop removal or performance tuning is performed. It installs ALSA/Lilv/native dependencies and SWH LV2 plugins, enables the unprivileged daemon with audio-group access, and keeps persistent user data under `/var/lib/oxidal`. It also configures authenticated HTTPS, mDNS, SSH recovery and a WPA-protected 2.4 GHz NetworkManager hotspot on `wlan0` (New Zealand regulatory profile). Ethernet remains available. The appliance disables cloud-init and masks systemd-networkd so it cannot compete with NetworkManager or hold network-online waiting for an unmanaged link. Use the generated credentials; do not add Raspberry Pi Imager OS customizations to this already configured image. Wi-Fi radio behavior, Pi boot and actual sound still require physical verification.
+
+### Phone access and first sound
+
+- Keep `.local/device-access/` private. `access.txt` contains independently generated web, Wi-Fi and recovery credentials. Credentials are not printed into build logs or web assets. Do not reuse one image/credential set across multiple devices.
+- Copy `ca.crt` to your own phone/tablet and install/trust that personal CA. The CA private key stays outside the image. The device certificate covers `oxidal.local` and `10.42.0.1`; do not bypass certificate validation.
+- Join the generated hotspot and open `https://10.42.0.1`, or use `https://oxidal.local` on a network with mDNS. Sign in as `oxidal` with the generated web password. All UI, API and event-stream requests require authentication.
+- The API itself stays on `127.0.0.1:3210`. Nginx checks external Host and Origin before forwarding requests. HTTP is not an alternative authenticated control endpoint. Provider accounts and internet access are not required for local playback.
+- Initially audio is stopped. Import a preset in Library, select/probe the interface in Settings, then start the saved session. Both directions initially require the same hardware clock/endpoint. Keep output levels low for the first physical test.
+- After verifying a session, select **Use this session on boot** for headless restoration. Stop audio leaves the UI and silent native editor running. A failed boot audio attempt reports its error without switching interfaces or retrying unexpectedly.
+- The general LV2 graph worker is installed and available through its API. The main browser rig/MIDI view still uses the simulator model; it is not a controller for native saved-preset playback. Physical MIDI, mixed native/LV2 rigs, full native setting coverage and gapless switching/trails are separate unfinished features.
+
+### Testing and recovery
+
+`sh os/scripts/check.sh` runs the OS suite; Linux with nginx/openssl additionally runs actual TLS, authentication and origin tests. Image building runs `os/tests/test_installed.py` against the final filesystem: relocated dynamic dependencies, daemon startup, native editor, graph/audio availability, UI, ALSA discovery and orderly shutdown. Audio boot preference/restart/failure recovery is covered by the existing native integration/browser suites using ALSA null. An additional real systemd boot test uses a disposable QEMU overlay, a generic ARM64 kernel/initrd and its matching module directory; it checks the unprivileged daemon, native editor, HTTPS authentication boundary, network services and service restart. The candidate image stays unchanged:
 
 ```sh
-python3 os/scripts/provision.py --verify-image /path/to/2026-10-06-raspios-trixie-arm64-lite.img.xz
+OXIDAL_TEST_BOOT_IMAGE=/absolute/path/to/oxidal-prototype.img \
+OXIDAL_TEST_BOOT_KERNEL=/boot/vmlinuz-MATCHING-ARM64-VERSION \
+OXIDAL_TEST_BOOT_INITRD=/boot/initrd.img-MATCHING-ARM64-VERSION \
+OXIDAL_TEST_BOOT_CA=/absolute/path/to/device-access/ca.crt \
+python3 -m unittest discover -s os/tests -p test_boot.py -v
 ```
 
-Physical installation is a later step: identify the **new, separate SD card** by capacity/serial/device identity, verify the base-image hash, write only that card using an explicitly reviewed target, then qualify boot/services/audio. Preserve the existing working card and installation. This recipe intentionally has no flashing command to guess a device for you.
+The host must provide `/lib/modules/MATCHING-ARM64-VERSION`. The generic kernel/modules exist only in the test overlay; the candidate retains its Raspberry Pi kernel. These are software checks, not hardware measurements.
 
-Recovery for this stage is to power down and use the untouched original card; a failed disposable root can be recreated from the pinned image. A flashable Oxidal image, exact installed-package closure, power-loss durability, and A/B updates/rollback are still unqualified. Host fixture tests do not prove image boot or hardware recovery.
+SSH recovery uses `oxidal-admin` and its separate generated password. Useful target commands:
+
+```sh
+systemctl status oxidald nginx NetworkManager
+journalctl -u oxidald -b
+sudo systemctl restart oxidald
+# Stop the whole service only for maintenance (this disconnects the UI).
+sudo systemctl stop oxidald
+# Disable an unwanted/corrupt boot-audio preference while stopped.
+sudo rm -f /var/lib/oxidal/presets/boot-audio.json
+sudo systemctl start oxidald
+```
+
+Back up `/var/lib/oxidal` before replacing an image. Full-service stop is distinct from the UI’s audio-only stop. No A/B updates, power-loss guarantees or automatic rollback are claimed. Recovery from an unbootable prototype is to power down and use the untouched original card, or rebuild and rewrite only the separate prototype card after identifying it explicitly.
+
+### Fixture staging and regular Linux boundary
+
+`provision.py --target-root PATH` still supports read-only planning and `--apply` to an explicitly marked disposable Trixie root. Add `--bundle PATH` for verified application files, and optionally `--access PATH` for HTTPS configuration. `--hotspot` is Pi-only and opt-in. It validates all managed paths and hashes before writes, rejects symlinks/host roots and leaves service activation to the image builder. Without a bundle it only stages the unit and base manifest; that is not a runnable installation.
+
+Regular laptop installation must preserve its network, desktop and boot settings. The bundle format supports Linux x64, but the exact x64 distribution/CPU baseline and install/upgrade/remove lifecycle still require qualification. Do not apply the Pi image or hotspot setup to a laptop.

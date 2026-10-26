@@ -13,7 +13,7 @@
   "packages": {
     "install": [],
     "remove": [],
-    "policy": "Use pinned Lite image contents; capture installed package versions on target before qualification. No apt changes in this PoC."
+    "policy": "The staging-only recipe makes no package changes. Appliance image assembly installs the explicit runtime list below and captures exact installed versions; no package removal."
   },
   "services": {
     "stage": [
@@ -23,5 +23,33 @@
     "disable": []
   },
   "hardware_qualified": false,
-  "requires_fresh_sd_card": true
+  "requires_fresh_sd_card": true,
+  "appliance": {
+    "runtime_packages": [
+      "libasound2t64",
+      "liblilv-0-0",
+      "libfontconfig1",
+      "libfreetype6",
+      "nginx",
+      "openssl",
+      "avahi-daemon",
+      "network-manager",
+      "dnsmasq-base",
+      "iw",
+      "rfkill",
+      "swh-lv2",
+      "python3"
+    ],
+    "enabled_services": [
+      "oxidald.service",
+      "nginx.service",
+      "NetworkManager.service",
+      "avahi-daemon.service",
+      "oxidal-regdomain.service",
+      "ssh.service"
+    ],
+    "default_target": "multi-user.target",
+    "wifi_country": "NZ",
+    "image_bytes": 8589934592
+  }
 }

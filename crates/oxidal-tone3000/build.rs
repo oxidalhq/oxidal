@@ -1,5 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-env-changed=OXIDAL_TONE3000_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=OXIDAL_TONE3000_RELOCATABLE");
     if std::env::var_os("CARGO_FEATURE_NATIVE").is_some() {
         let dir = std::env::var("OXIDAL_TONE3000_LIB_DIR")
             .expect("Build the verified offline adapter with pnpm native:check first");
@@ -16,6 +17,11 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.join(file).display());
         println!("cargo:rustc-link-search=native={dir}");
         println!("cargo:rustc-link-lib=dylib=oxidal_tone3000");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
+        if std::env::var_os("OXIDAL_TONE3000_RELOCATABLE").is_some() {
+            assert_eq!(std::env::var("CARGO_CFG_TARGET_OS").as_deref(), Ok("linux"));
+            println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib");
+        } else {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
+        }
     }
 }

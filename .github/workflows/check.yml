@@ -36,7 +36,7 @@ jobs:
           cargo +1.95.0 install --locked --root .tools cargo-machete --version 0.9.2
       - name: Install shell tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes shellcheck shfmt libasound2-dev pkg-config liblilv-dev lv2-dev swh-lv2
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck shfmt libasound2-dev pkg-config liblilv-dev lv2-dev swh-lv2 nginx openssl
       - name: Install shell tools (macOS)
         if: runner.os == 'macOS'
         env:
