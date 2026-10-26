@@ -17,6 +17,7 @@ const blockLabels: Record<string, string> = {
   inputGain: 'Input gain',
   outputGain: 'Output gain',
   mix: 'Mix',
+  slimSize: 'Requested NAM size · staged',
 };
 function controlValue(state: NativeSnapshot | null, target: string) {
   return (
@@ -224,7 +225,8 @@ export function NativeEditor({
     blockControl?.step ??
     (target === 'osEnabled' ? 1 : target === 'osFactor' ? 0.5 : 0.01);
   const ours = state?.edit?.owner === owner && state.edit.target === target;
-  const staged = target === 'osEnabled' || target === 'osFactor';
+  const staged =
+    blockControl?.staged || target === 'osEnabled' || target === 'osFactor';
   const blocked = busy || !connected || !state;
   const valid =
     value.trim() !== '' &&

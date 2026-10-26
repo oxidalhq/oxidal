@@ -205,6 +205,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         assert!(engine.set_block(&block.block_id, parameter, value).is_err());
     }
     assert!(engine.set_block("missing", "mix", 0.5).is_err());
+    assert!(engine.set_block("missing", "slimSize", 0.5).is_err());
     let mut energy = Vec::new();
     for gain in [0.3, 0.7] {
         engine.restore(&model_state)?;
@@ -386,8 +387,8 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
     assert_eq!(globals.state_captures, loaded.state_captures + 5);
     assert_eq!(
         globals.block_controls.len(),
-        5,
-        "one A2 block with five controls"
+        6,
+        "one A2 block with five controls and requested model size"
     );
     assert!(
         send(
@@ -401,6 +402,9 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
         .is_err()
     );
     for (index, control) in globals.block_controls.iter().enumerate() {
+        if control.staged {
+            continue;
+        }
         let token = format!("block-cancel-{index}");
         let baseline = editor.snapshot()?;
         send(
@@ -495,8 +499,66 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
             );
         }
     }
-    let committed = editor.snapshot()?;
-    assert_eq!(committed.state_captures, loaded.state_captures + 10);
+    let size = globals
+        .block_controls
+        .iter()
+        .find(|p| p.parameter == "slimSize")
+        .unwrap();
+    assert!(size.staged);
+    let before_size = editor.snapshot()?;
+    send(
+        &mut editor,
+        A::Begin {
+            owner: "owner".into(),
+            token: "size-cancel".into(),
+            target: size.id.clone(),
+        },
+    )?;
+    assert!(
+        send(
+            &mut editor,
+            A::Preview {
+                owner: "owner".into(),
+                token: "size-cancel".into(),
+                sequence: 1,
+                value: 0.75
+            }
+        )
+        .is_err()
+    );
+    let after_rejection = editor.snapshot()?;
+    assert_eq!(
+        after_rejection.block_controls.last().unwrap().value,
+        size.value
+    );
+    assert_eq!(after_rejection.state_captures, before_size.state_captures);
+    send(
+        &mut editor,
+        A::Cancel {
+            owner: "owner".into(),
+            token: "size-cancel".into(),
+        },
+    )?;
+    send(
+        &mut editor,
+        A::Begin {
+            owner: "owner".into(),
+            token: "size-commit".into(),
+            target: size.id.clone(),
+        },
+    )?;
+    let committed = send(
+        &mut editor,
+        A::Commit {
+            owner: "owner".into(),
+            token: "size-commit".into(),
+            sequence: 1,
+            value: 0.75,
+        },
+    )?;
+    assert_eq!(committed.block_controls.last().unwrap().value, 0.75);
+    assert!(committed.dirty);
+    assert_eq!(committed.state_captures, loaded.state_captures + 11);
     // A real filesystem failure must not report success or change native working state.
     std::fs::write(store_root.join("owned"), b"not a directory")?;
     assert!(
@@ -604,7 +666,7 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
     assert!(error < 1e-5, "owned preset recreated audio error {error}");
     println!("owned_preset_recreated_audio_max_error: {error}");
     println!(
-        "native_editor: live preview/cancel, five global and five block commits, exact toggles, staged rejection, device scope, owned save/reload/restart and immutable source pass"
+        "native_editor: live preview/cancel, five global and five block commits, staged A2 size commit, exact toggles, staged rejection, device scope, owned save/reload/restart and immutable source pass"
     );
     Ok(())
 }
@@ -628,6 +690,16 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
         engine.wait_ready()?;
         let before = engine.catalog()?;
         let blocks = engine.block_controls()?;
+        // Unsupported blocks must not gain size controls merely because their
+        // metadata/title looks like a NAM. Only the loaded engine supplies support.
+        for block in blocks.iter().filter(|p| p.parameter == "mix") {
+            if !blocks
+                .iter()
+                .any(|p| p.block_id == block.block_id && p.parameter == "slimSize")
+            {
+                assert!(engine.set_block(&block.block_id, "slimSize", 0.75).is_err());
+            }
+        }
         let saved = engine.save_preset("Owned factory qualification")?;
         assert_ne!(oxidal_presets::inspect(&saved)?.source_id, source.source_id);
         engine.load_preset(&saved)?;

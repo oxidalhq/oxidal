@@ -275,15 +275,16 @@ impl Editor {
             return Err("invalid_edit_sequence_or_value".into());
         }
         let target = g.target.clone();
-        if staged(&target) && !commit {
-            return Err("Processing changes apply only on commit".into());
-        }
         let block = self
             .engine
             .block_controls()
             .map_err(|e| e.to_string())?
             .into_iter()
             .find(|p| p.id == target);
+        let requires_commit = staged(&target) || block.as_ref().is_some_and(|p| p.staged);
+        if requires_commit && !commit {
+            return Err("Processing changes apply only on commit".into());
+        }
         if block.as_ref().is_some_and(|p| p.step == 1.0) && value != 0.0 && value != 1.0 {
             return Err("Block toggles require 0 or 1".into());
         }
@@ -293,7 +294,7 @@ impl Editor {
             self.engine.set_normalized(&target, value)
         };
         let result = changed.and_then(|_| {
-            if staged(&target) {
+            if requires_commit {
                 self.engine.wait_ready()
             } else {
                 Ok(())

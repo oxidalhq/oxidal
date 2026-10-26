@@ -216,6 +216,26 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0.375',
   );
+  const blockSize = blockState.block_controls.find(
+    (p: { parameter: string }) => p.parameter === 'slimSize',
+  );
+  expect(blockSize.staged).toBe(true);
+  await editor.getByLabel('Native control').selectOption(blockSize.id);
+  const sizeBefore = await editor.getByTestId('native-readback').textContent();
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await touch.press('End');
+  await expect(editor.getByTestId('native-readback')).toHaveText(sizeBefore!);
+  await expect(
+    editor.getByRole('button', { name: 'Preview native change' }),
+  ).toBeDisabled();
+  await editor.getByRole('button', { name: 'Cancel native edit' }).click();
+  await expect(editor.getByTestId('native-readback')).toHaveText(sizeBefore!);
+  await editor.getByRole('button', { name: 'Begin native edit' }).click();
+  await editor.getByLabel('Normalized value (0–1)').fill('0.75');
+  await editor.getByRole('button', { name: 'Commit native change' }).click();
+  await expect(editor.getByTestId('native-readback')).toContainText(
+    'normalized 0.75',
+  );
   await editor
     .getByLabel('Owned preset name')
     .fill(`Browser owned ${test.info().project.name}`);
@@ -239,6 +259,11 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
   const restored = await (await request.get('/api/v1/native')).json();
+  expect(
+    restored.block_controls.find(
+      (p: { parameter: string }) => p.parameter === 'slimSize',
+    ).value,
+  ).toBe(0.75);
   const restoredMix = restored.block_controls.find(
     (p: { parameter: string }) => p.parameter === 'mix',
   );

@@ -486,6 +486,9 @@
         "parameter": {
           "type": "string"
         },
+        "staged": {
+          "type": "boolean"
+        },
         "step": {
           "type": "number",
           "format": "double"
@@ -503,7 +506,8 @@
         "name",
         "parameter",
         "value",
-        "step"
+        "step",
+        "staged"
       ]
     },
     "BlockKind": {

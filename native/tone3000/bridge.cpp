@@ -37,6 +37,17 @@ void json(const juce::var& value, char* out, size_t capacity, size_t* written) {
   if (!out || !written || text.size() > capacity) throw std::runtime_error("JSON capacity");
   std::memcpy(out, text.data(), text.size()); *written = text.size();
 }
+bool supportsSlim(const juce::var& runtime, const juce::String& id) {
+  const auto blocks = runtime.getProperty("blocks", {});
+  if (const auto* rows = blocks.getArray()) for (const auto& row : *rows)
+    if (row.getProperty("blockId", {}).toString() == id)
+      return static_cast<bool>(row.getProperty("loaded", false)) &&
+        !static_cast<bool>(row.getProperty("modelLoading", false)) &&
+        !static_cast<bool>(row.getProperty("loadFailed", false)) &&
+        static_cast<bool>(row.getProperty("a2Known", false)) &&
+        static_cast<bool>(row.getProperty("a2Supported", false));
+  return false;
+}
 }
 EXPORT const char* oxidal_t3k_error() noexcept { return error.c_str(); }
 EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
@@ -93,11 +104,13 @@ EXPORT int oxidal_t3k_set(void* ptr, const char* id, float normalized) noexcept 
     p->setValueNotifyingHost(p->convertTo0to1(p->convertFrom0to1(normalized)));
   });
 }
-// Only named non-structural block controls cross this boundary. Never forward arbitrary
+// Only qualified block controls cross this boundary. Never forward arbitrary
 // browser method names or raw chain payloads into the native processor.
 EXPORT int oxidal_t3k_block_controls(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
-    const auto state = engine(ptr).processor.getChainState(-1);
+    auto& processor = engine(ptr).processor;
+    const auto state = processor.getChainState(-1);
+    const auto runtime = processor.getStageRuntime();
     juce::Array<juce::var> controls;
     int count = 0;
     for (const auto& lane : {"chain", "chainRight"}) {
@@ -109,7 +122,9 @@ EXPORT int oxidal_t3k_block_controls(void* ptr, char* out, size_t capacity, size
           throw std::runtime_error("block catalog bounds");
         const auto params = block.getProperty("params", {});
         const auto title = block.getProperty("tone", {}).getProperty("title", "Tone").toString().substring(0, 128);
-        for (const auto& name : {"enabled", "normalize", "inputGain", "outputGain", "mix"}) {
+        for (const auto& name : {"enabled", "normalize", "inputGain", "outputGain", "mix", "slimSize"}) {
+          const bool staged = std::strcmp(name, "slimSize") == 0;
+          if (staged && !supportsSlim(runtime, id)) continue;
           const bool toggle = std::strcmp(name, "enabled") == 0 || std::strcmp(name, "normalize") == 0;
           const auto raw = params.getProperty(name, {});
           if (!(raw.isBool() || raw.isDouble() || raw.isInt())) throw std::runtime_error("invalid block readback");
@@ -123,6 +138,7 @@ EXPORT int oxidal_t3k_block_controls(void* ptr, char* out, size_t capacity, size
           row->setProperty("parameter", name);
           row->setProperty("value", value);
           row->setProperty("step", toggle ? 1.0 : 0.01);
+          row->setProperty("staged", staged);
           controls.add(juce::var(row));
         }
       }
@@ -136,6 +152,11 @@ EXPORT int oxidal_t3k_set_block(void* ptr, const char* id, const char* parameter
     if (!id || !parameter || std::strlen(id) == 0 || std::strlen(id) > 128 || !std::isfinite(value) || value < 0 || value > 1)
       throw std::runtime_error("invalid block control");
     const juce::String name(parameter);
+    if (name == "slimSize") {
+      if (!supportsSlim(e.processor.getStageRuntime(), juce::String(id)) || !e.processor.setBlockSlimSize(id, value))
+        throw std::runtime_error("loaded block does not support model size");
+      return;
+    }
     const bool toggle = name == "enabled" || name == "normalize";
     if (!(toggle || name == "inputGain" || name == "outputGain" || name == "mix") || (toggle && value != 0 && value != 1))
       throw std::runtime_error("unsupported block control or value");

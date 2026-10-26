@@ -27,6 +27,7 @@ pub struct BlockControl {
     pub parameter: String,
     pub value: f64,
     pub step: f64,
+    pub staged: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

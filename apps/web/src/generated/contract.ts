@@ -327,6 +327,7 @@ export interface BlockControl {
   lane: string;
   name: string;
   parameter: string;
+  staged: boolean;
   step: number;
   value: number;
 }
