@@ -16,6 +16,16 @@ Keep platform configuration separate from portable runtime logic. A regular Linu
 
 **Current evidence:** the artifact script packages the build host's native preview and web assets; the configured artifact workflow targets Linux x64. These are control previews, not a completed Linux audio installer or bootable image. ARM64 Linux compile checks do not prove ARM execution, Orange Pi compatibility or audio performance. Native audio hosting, laptop packaging and physical qualification remain pending. Extend the existing OS tests, normal build checks and browser E2E for these routes; keep board/audio qualification results separate.
 
+## Planned headless and desktop workflows
+
+Appliance images should boot to a headless/CLI environment and start audio, local network access and the web server without a graphical login. Playback and browser editing must work without a desktop. An optional, manually started desktop session on the same installation will allow authoring with the official upstream TONE3000 standalone application. Existing laptop desktops and boot defaults are preserved.
+
+Initially, use explicit audio ownership handoff: resolve unsaved edits and release Oxidal audio before launching standalone; close/release standalone audio before reacquiring the interface and restoring a validated Oxidal rig. This switch interrupts audio. The two applications do not share a live processor instance. Control/web services can remain available if their lifecycle is independent of the audio engine.
+
+Transfer compatible sounds through explicit validated `.t3kpreset` import/export. Calibration, oversampling, MIDI mapping and audio-device settings are separate from preset tone data. Do not automatically load desktop file changes into a playing rig. Mixed external-LV2/Oxidal rigs stay in Oxidal's editor; standalone authoring is not embedded plugin GUI hosting.
+
+**Planned, not delivered:** desktop packaging, mode-switch commands, native Linux audio, service handoff/recovery and Pi ARM64 standalone qualification. Verify the upstream app's exact architecture, release availability and runtime dependencies; an Oxidal-patched build is not an official release. Keep the live path independent of a running display server while retaining any libraries required by the selected native plugin build. Extend existing packaging/service/E2E tests for boot, handoff, failure recovery and preset transfer; qualify audio performance on each target.
+
 ## Raspberry Pi recipe foundation
 
 This PoC pins Raspberry Pi OS Lite arm64 Trixie (2026-10-06) and its vendor SHA-256 in `manifests/base.json`. Source: [official Raspberry Pi downloads](https://www.raspberrypi.com/software/operating-systems/). No desktop stripping, package removal, block-device flashing, or service activation is performed by these scripts.
