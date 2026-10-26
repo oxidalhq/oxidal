@@ -116,6 +116,11 @@ for (const binary of binaries) {
     );
 }
 if (appliance) {
+  mkdirSync(join(staging, 'licenses'), { recursive: true });
+  copyFileSync(
+    join(root, 'native/tone3000/NOTICE-split.md'),
+    join(staging, 'licenses/PiPedal-split.md'),
+  );
   mkdirSync(join(staging, 'lib'), { recursive: true });
   copyFileSync(
     join(buildEnv.OXIDAL_TONE3000_LIB_DIR, 'liboxidal_tone3000.so'),
