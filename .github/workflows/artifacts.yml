@@ -28,6 +28,7 @@ jobs:
           node-version-file: .node-version
       - run: npm install --global pnpm@10.32.1
       - run: rustup toolchain install 1.95.0 --profile minimal --component clippy,rustfmt
+      - run: sudo apt-get update && sudo apt-get install --yes libasound2-dev pkg-config
       - run: pnpm install --frozen-lockfile
       - name: Verify and package native Linux x64 preview (not a Pi image)
         run: |

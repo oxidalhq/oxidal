@@ -1,3 +1,4 @@
+mod audio;
 mod native_editor;
 mod presets;
 use axum::{
@@ -46,6 +47,9 @@ pub struct Contract {
     pub rig: Rig,
     pub validation: Validation,
     pub capabilities: Capabilities,
+    pub audio_devices: oxidal_audio::AudioDevices,
+    pub audio_probe: oxidal_audio::AudioProbe,
+    pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
     pub library: oxidal_presets::Library,
     pub preset: oxidal_presets::Inspection,
@@ -127,6 +131,8 @@ pub fn router(config: Config) -> Result<Router, String> {
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route("/audio/devices", get(audio::devices))
+        .route("/audio/probe", post(audio::probe))
         .route(
             "/native",
             get(native_editor::state).post(native_editor::command),

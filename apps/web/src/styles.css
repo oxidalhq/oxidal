@@ -908,3 +908,14 @@ main {
 .native-touch {
   grid-column: 1 / -1;
 }
+
+.audio-probe-fields {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin-block: 1rem;
+}
+.audio-probe-fields select {
+  max-width: 100%;
+  min-width: 0;
+}

@@ -583,3 +583,77 @@ async fn owned_edit_commands_reject_competitors_and_retain_terminal_receipts() {
     assert_eq!(late_cancel, committed);
     task.abort();
 }
+
+#[tokio::test]
+async fn audio_inspection_preserves_authoring_and_rejects_arbitrary_pcm() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let before: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let inventory = client
+        .get(format!("{url}/audio/devices"))
+        .send()
+        .await
+        .unwrap();
+    assert!(inventory.status().is_success());
+    let inventory: Value = inventory.json().await.unwrap();
+    assert_eq!(inventory["streaming_available"], false);
+    assert!(inventory["endpoints"].is_array());
+    let request = json!({"endpoint":"file:/tmp/oxidal-must-not-create", "direction":"capture", "sample_rate":48000,
+        "channels":2, "format":"s16", "period_frames":128, "periods":3});
+    let rejected = client
+        .post(format!("{url}/audio/probe"))
+        .json(&request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(rejected.status(), 422);
+    let mut invalid = request.clone();
+    invalid["channels"] = json!(0);
+    assert_eq!(
+        client
+            .post(format!("{url}/audio/probe"))
+            .json(&invalid)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/audio/probe"))
+            .header("Origin", "https://elsewhere.example")
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        403
+    );
+    let after: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(before, after);
+    assert!(
+        client
+            .get(format!("{url}/presets"))
+            .send()
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    task.abort();
+}

@@ -4,6 +4,15 @@
   "description": "Schema generation root. Rust wire types are the contract source of truth.\n@see docs/architecture.md",
   "type": "object",
   "properties": {
+    "audio_devices": {
+      "$ref": "#/$defs/AudioDevices"
+    },
+    "audio_probe": {
+      "$ref": "#/$defs/AudioProbe"
+    },
+    "audio_probe_result": {
+      "$ref": "#/$defs/AudioProbeResult"
+    },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
@@ -41,6 +50,9 @@
     "rig",
     "validation",
     "capabilities",
+    "audio_devices",
+    "audio_probe",
+    "audio_probe_result",
     "error",
     "library",
     "preset",
@@ -201,6 +213,125 @@
         "error"
       ]
     },
+    "AudioDevices": {
+      "type": "object",
+      "properties": {
+        "backend_available": {
+          "type": "boolean"
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AudioEndpoint"
+          }
+        },
+        "streaming_available": {
+          "description": "Discovery support must never be mistaken for an implemented playback engine.",
+          "type": "boolean"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "backend_available",
+        "streaming_available",
+        "endpoints",
+        "warnings"
+      ]
+    },
+    "AudioEndpoint": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "id": {
+          "description": "ALSA card ID plus PCM device; re-enumerate before using it. Not a USB serial number.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "direction"
+      ]
+    },
+    "AudioProbe": {
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/SampleFormat"
+        },
+        "period_frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "periods": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sample_rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoint",
+        "direction",
+        "sample_rate",
+        "channels",
+        "format",
+        "period_frames",
+        "periods"
+      ]
+    },
+    "AudioProbeResult": {
+      "type": "object",
+      "properties": {
+        "buffer_frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "configuration": {
+          "$ref": "#/$defs/AudioProbe"
+        },
+        "streaming_available": {
+          "description": "Only a point-in-time open/configure/readback/close check, never live readiness.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "configuration",
+        "buffer_frames",
+        "streaming_available"
+      ]
+    },
     "BlockKind": {
       "type": "string",
       "enum": [
@@ -277,6 +408,13 @@
         "protocol",
         "request_id",
         "action"
+      ]
+    },
+    "Direction": {
+      "type": "string",
+      "enum": [
+        "capture",
+        "playback"
       ]
     },
     "Edge": {
@@ -1099,6 +1237,16 @@
       "required": [
         "nodes",
         "edges"
+      ]
+    },
+    "SampleFormat": {
+      "type": "string",
+      "enum": [
+        "s16",
+        "s24",
+        "s24_packed",
+        "s32",
+        "float"
       ]
     },
     "Snapshot": {

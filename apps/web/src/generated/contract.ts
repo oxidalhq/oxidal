@@ -1,5 +1,7 @@
 /* Generated from Rust. Run pnpm contract:generate; do not edit. */
 
+export type Direction = "capture" | "playback";
+export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
 /**
  * One command entry point; relative edits are applied to current authoritative state.
  * @see docs/architecture.md
@@ -106,6 +108,9 @@ export type EditorAction =
  * @see docs/architecture.md
  */
 export interface Contract {
+  audio_devices: AudioDevices;
+  audio_probe: AudioProbe;
+  audio_probe_result: AudioProbeResult;
   capabilities: Capabilities;
   command: Command;
   error: ApiError;
@@ -116,6 +121,40 @@ export interface Contract {
   rig: Rig;
   snapshot: Snapshot;
   validation: Validation;
+}
+export interface AudioDevices {
+  backend_available: boolean;
+  endpoints: AudioEndpoint[];
+  /**
+   * Discovery support must never be mistaken for an implemented playback engine.
+   */
+  streaming_available: boolean;
+  warnings: string[];
+}
+export interface AudioEndpoint {
+  direction: Direction;
+  /**
+   * ALSA card ID plus PCM device; re-enumerate before using it. Not a USB serial number.
+   */
+  id: string;
+  name: string;
+}
+export interface AudioProbe {
+  channels: number;
+  direction: Direction;
+  endpoint: string;
+  format: SampleFormat;
+  period_frames: number;
+  periods: number;
+  sample_rate: number;
+}
+export interface AudioProbeResult {
+  buffer_frames: number;
+  configuration: AudioProbe;
+  /**
+   * Only a point-in-time open/configure/readback/close check, never live readiness.
+   */
+  streaming_available: boolean;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.

@@ -353,3 +353,26 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
     page.getByRole('button', { name: 'Edit NAM A level', exact: true }),
   ).toBeEnabled();
 });
+
+test('audio inspection keeps the authoring service connected', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/');
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Audio devices' });
+  await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
+  await expect(
+    panel.getByRole('button', { name: 'Refresh audio devices' }),
+  ).toBeEnabled();
+  await expect(panel.getByRole('status')).not.toBeEmpty();
+  await expect(panel.getByRole('status')).not.toHaveText('Inspecting audio…');
+  const health = await (await request.get('/api/v1/health')).json();
+  expect(health.audio_available).toBe(false);
+  await expect(page.getByText('Device connected')).toBeVisible();
+  await page.getByRole('button', { name: 'Back to rig', exact: true }).click();
+  await expect(
+    page.getByText('Audio unavailable.', { exact: true }),
+  ).toBeVisible();
+});

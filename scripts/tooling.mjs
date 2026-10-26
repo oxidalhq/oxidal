@@ -7,6 +7,9 @@ import { root, run, rustEnv } from './process.mjs';
 const cargo = (...args) =>
   run('rustup', ['run', '1.95.0', 'cargo', ...args], { env: rustEnv() });
 const workspace = ['--manifest-path', 'Cargo.toml'];
+// Portable builds keep ALSA optional; native Linux checks and previews exercise the real backend.
+const audioFeatures =
+  process.platform === 'linux' ? ['--features', 'oxidal-api/alsa'] : [];
 const mode = process.argv[2];
 if (mode === 'bootstrap') {
   cargo('fetch', '--locked', ...workspace);
@@ -93,12 +96,13 @@ if (mode === 'bootstrap') {
     '--locked',
     ...workspace,
     '--workspace',
+    ...audioFeatures,
     '--all-targets',
     '--',
     '-D',
     'warnings',
   );
-  cargo('test', '--locked', ...workspace, '--workspace');
+  cargo('test', '--locked', ...workspace, '--workspace', ...audioFeatures);
   if (mode === 'check') {
     run('python3', [
       '-m',
@@ -136,7 +140,14 @@ if (mode === 'bootstrap') {
     }
   }
 } else if (mode === 'dev' || mode === 'preview' || mode === 'e2e-server') {
-  cargo('build', '--locked', ...workspace, '--bin', 'oxidald');
+  cargo(
+    'build',
+    '--locked',
+    ...workspace,
+    '--bin',
+    'oxidald',
+    ...audioFeatures,
+  );
   if (process.env.OXIDAL_NATIVE_EDITOR === '1') {
     run(
       'cargo',

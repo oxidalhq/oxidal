@@ -27,7 +27,7 @@ pnpm hooks:install
 pnpm dev
 ```
 
-On Linux, install ShellCheck and shfmt with the distribution package manager. `pnpm bootstrap` performs locked dependency installation, installs workspace-local Rust dependency tools and Chromium, and fetches native dependencies. Browser system dependencies may also be needed on Linux (`pnpm --dir apps/web exec playwright install --with-deps chromium`).
+On Linux, install ShellCheck, shfmt, `libasound2-dev` and `pkg-config` with the distribution package manager (Debian/Ubuntu names). `pnpm bootstrap` performs locked dependency installation, installs workspace-local Rust dependency tools and Chromium, and fetches native dependencies. Browser system dependencies may also be needed on Linux (`pnpm --dir apps/web exec playwright install --with-deps chromium`).
 
 Open **http://127.0.0.1:5173**. Rust runs on port 3210; Vite proxies the versioned API. The service listens on loopback only. No Pi is needed. See [core](docs/core.md), [web](apps/web/README.md), [OS recipes](os/README.md), and [our NAM crate](crates/oxidal-nam/README.md).
 
@@ -63,3 +63,5 @@ The [draft Oxidal preset specification](docs/presets/format.md) describes native
 ### Optional native preset editing
 
 After `pnpm native:check` builds and verifies the pinned native backend on macOS, run `OXIDAL_NATIVE_EDITOR=1 pnpm preview`. Library provides real preset load, preview/cancel/commit, owned-copy save and reload. Five controls are qualified in this slice; imported originals stay immutable. Audio output, native Linux hosting and full settings parity are still pending. See [native editor](docs/native-tone3000.md).
+
+Linux builds expose **Settings → Audio devices** for real ALSA hardware discovery and exact non-streaming configuration checks. Playback remains unavailable. See [audio devices and lifecycle](docs/audio.md).

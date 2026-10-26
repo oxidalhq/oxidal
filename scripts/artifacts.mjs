@@ -37,6 +37,7 @@ run(
     'Cargo.toml',
     '--bin',
     'oxidald',
+    ...(process.platform === 'linux' ? ['--features', 'oxidal-api/alsa'] : []),
   ],
   { env: buildEnv },
 );

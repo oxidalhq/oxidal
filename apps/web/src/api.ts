@@ -138,3 +138,32 @@ export async function nativeCommand(
     throw new Error('Incompatible native editor state');
   return body;
 }
+
+export type AudioDevices = Contract['audio_devices'];
+export type AudioProbe = Contract['audio_probe'];
+const audioDevicesValidator = ajv.compile<AudioDevices>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AudioDevices',
+});
+const audioProbeValidator = ajv.compile<Contract['audio_probe_result']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AudioProbeResult',
+});
+export async function audioDevices(): Promise<AudioDevices> {
+  const body = await presetResponse(await fetch('/api/v1/audio/devices'));
+  if (!audioDevicesValidator(body))
+    throw new Error('Incompatible audio devices response');
+  return body;
+}
+export async function probeAudio(request: AudioProbe) {
+  const body = await presetResponse(
+    await fetch('/api/v1/audio/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+  if (!audioProbeValidator(body))
+    throw new Error('Incompatible audio probe response');
+  return body;
+}

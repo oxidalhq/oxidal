@@ -9,6 +9,7 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { Library } from './Library';
+import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
 import {
   capabilities,
@@ -549,6 +550,7 @@ export default function App() {
                   </div>
                 </dl>
               </section>
+              <AudioSettings connected={connected} />
               <section className="panel">
                 <h2>MIDI mapping</h2>
                 <p className="muted">
