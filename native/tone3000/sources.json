@@ -13,10 +13,11 @@
       "path": "plugin/include/Processor.h",
       "patch": "tone3000-Processor.h.patch",
       "before": "f394ff0050f2c9423d89363871f47cb811cd63df546dbd059063600811edd43e",
-      "after": "c2ceb28760f0a6264bab11d2947e6481e63588a6db54194b59cd04e4da6ad9a0",
-      "patch_sha256": "ff8e84ef70230c29bf7749573e099fdc1825ad67fe5a2a9d3a760712504a2f4d",
+      "after": "e07dbe0bb11e1f7eaa8ec0c2cb33996c816930e227a034f86e63eeecb3c0d32c",
+      "patch_sha256": "a791e5df2558da23ae37a3cf42d8b5ff168af9b4587edf57a49be2a408408d16",
       "previous_after": [
-        "4e066c42d6112c096836768c78f9adac881a34f1a1a1aecf882067d3c61a4939"
+        "4e066c42d6112c096836768c78f9adac881a34f1a1a1aecf882067d3c61a4939",
+        "c2ceb28760f0a6264bab11d2947e6481e63588a6db54194b59cd04e4da6ad9a0"
       ]
     },
     {
@@ -24,8 +25,11 @@
       "path": "plugin/src/Processor.cpp",
       "patch": "tone3000-Processor.cpp.patch",
       "before": "83e4d870ab68c4a766f470823318d80df05be86b52501a24145c4758f02d94fe",
-      "after": "08bf920fa94a75514b0a5325df5a0ba4751b951a5c241f240dcb62c25a6f152e",
-      "patch_sha256": "2dd380dcdf0fbb4b9b62befa6918ea172b90f47ec0b620ab66aef8af278f5c02"
+      "after": "4700dd7433ccda72d7f3458a05f6e21fdce2561775726c61301057fe746e76e8",
+      "patch_sha256": "b95ac3b19a7beb4ac09470585a2c15991e482096b4d92ae2e55bca7fab6f9ae3",
+      "previous_after": [
+        "08bf920fa94a75514b0a5325df5a0ba4751b951a5c241f240dcb62c25a6f152e"
+      ]
     },
     {
       "namespace": "tone3000",

@@ -72,6 +72,7 @@ unsafe extern "C" {
     ) -> i32;
     fn oxidal_t3k_error() -> *const c_char;
     fn oxidal_t3k_create(rate: f64, frames: i32, result: *mut *mut c_void) -> i32;
+    fn oxidal_t3k_create_stage(rate: f64, frames: i32, role: i32, result: *mut *mut c_void) -> i32;
     fn oxidal_t3k_destroy(engine: *mut c_void) -> i32;
     fn oxidal_t3k_catalog(
         engine: *mut c_void,
@@ -154,12 +155,31 @@ impl State {
 }
 
 /// Derived native instance states, preserving source assets and allocation of global controls.
-/// Not an audio-equivalence or readiness claim. Restore each on its own stage owner.
+/// Use `prepare` to allocate the matching DSP roles; restoring each as a whole
+/// preset would apply the output DC blocker twice. Full parity remains scope-limited.
 #[derive(Clone, Debug)]
 pub struct SplitStages {
     pub amp: State,
     pub cab: State,
     pub pitch: serde_json::Value,
+}
+
+impl SplitStages {
+    /// Prepare the paired processing roles on the current owner. This loads assets
+    /// and waits for readiness; call outside a streaming callback. The amp omits
+    /// the final DC blocker, which the cab applies once before the output controls.
+    /// The pair currently requires a 48 kHz host to avoid duplicated boundary
+    /// resampling. Whole-preset engines keep their existing sample-rate support.
+    /// Extracted external pitch still requires a separate upstream processor.
+    pub fn prepare(&self, rate: f64, frames: usize) -> Result<(Engine, Engine)> {
+        let mut amp = Engine::with_stage_role(rate, frames, Some(1))?;
+        amp.restore(&self.amp)?;
+        amp.wait_ready()?;
+        let mut cab = Engine::with_stage_role(rate, frames, Some(2))?;
+        cab.restore(&self.cab)?;
+        cab.wait_ready()?;
+        Ok((amp, cab))
+    }
 }
 
 /// Single-owner offline processor. !Send/!Sync keeps JUCE calls and destruction on its owner thread.
@@ -173,6 +193,9 @@ pub struct Engine {
 }
 impl Engine {
     pub fn new(rate: f64, frames: usize) -> Result<Self> {
+        Self::with_stage_role(rate, frames, None)
+    }
+    fn with_stage_role(rate: f64, frames: usize, role: Option<i32>) -> Result<Self> {
         if !rate.is_finite()
             || !(8000.0..=192000.0).contains(&rate)
             || !(1..=2048).contains(&frames)
@@ -181,7 +204,12 @@ impl Engine {
         }
         let mut ptr = std::ptr::null_mut();
         // SAFETY: out pointer is live; native validates configuration and constructs one owned handle.
-        checked(unsafe { oxidal_t3k_create(rate, frames as i32, &mut ptr) })?;
+        checked(unsafe {
+            match role {
+                Some(role) => oxidal_t3k_create_stage(rate, frames as i32, role, &mut ptr),
+                None => oxidal_t3k_create(rate, frames as i32, &mut ptr),
+            }
+        })?;
         Ok(Self {
             ptr: NonNull::new(ptr).ok_or_else(|| NativeError("null native result".into()))?,
             frames,

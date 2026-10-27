@@ -877,7 +877,18 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
             engine.remove_block(tones[1]["blockId"].as_str().unwrap())?;
             let ir = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?)
                 .join("split-impulse.wav");
-            std::fs::write(&ir, impulse_wav())?;
+            // A short multi-tap IR exercises convolution history as well as the
+            // filter placement; this is not just a unity passthrough cabinet.
+            let mut wav = impulse_wav();
+            wav.truncate(44);
+            let samples: [i16; 8] = [24000, -3000, 0, 1200, 0, 0, -700, 500];
+            let size = (samples.len() * 2) as u32;
+            wav[4..8].copy_from_slice(&(36 + size).to_le_bytes());
+            wav[40..44].copy_from_slice(&size.to_le_bytes());
+            for sample in samples {
+                wav.extend(sample.to_le_bytes());
+            }
+            std::fs::write(&ir, wav)?;
             let loaded = engine.load_local_model(&ir)?;
             assert!(loaded["error"].is_null(), "IR fixture load: {loaded}");
             engine.wait_ready()?;
@@ -891,6 +902,7 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
                 .as_str()
                 .unwrap();
             qualify_split(&mut engine, amp, cab)?;
+            qualify_split_rendered(&mut engine, amp, cab)?;
             split_count += 1;
         }
     }
@@ -1724,5 +1736,106 @@ fn qualify_engine_isolation(preset: &[u8]) -> Result<(), Box<dyn Error>> {
     drop(third);
     assert_eq!(staging_count()?, before_staging);
     eprintln!("qualify: coexisting engine isolation, rendered parity and peer destruction passed");
+    Ok(())
+}
+
+// Compare the complete native chain with the paired host roles. A deliberately
+// naive pair is a negative control: the test must detect its extra DC blocker.
+fn qualify_split_rendered(
+    source: &mut Engine,
+    amp_id: &str,
+    cab_id: &str,
+) -> Result<(), Box<dyn Error>> {
+    let original = source.capture()?;
+    for (rate, frames, alternate) in [(48000.0, 128, false), (48000.0, 64, true)] {
+        source.restore(&original)?;
+        source.wait_ready()?;
+        if alternate {
+            source.set_input_mode(oxidal_tone3000::InputMode::Right)?;
+            source.set_normalized("inputLevel", 0.57)?;
+            source.set_normalized("outputLevel", 0.43)?;
+            source.set_normalized("toneEqEnabled", 1.0)?;
+            source.set_normalized("toneBass", 0.65)?;
+            source.set_normalized("toneMid", 0.35)?;
+            source.set_normalized("toneTreble", 0.6)?;
+        }
+        let state = source.capture()?;
+        let split = source.split_amp_cab(amp_id, cab_id, true, false)?;
+        for unsupported in [44100.0, 96000.0] {
+            assert!(
+                split.prepare(unsupported, frames).is_err(),
+                "reject duplicated resampling"
+            );
+        }
+        let mut whole = Engine::new(rate, frames)?;
+        whole.restore(&state)?;
+        whole.wait_ready()?;
+        let (mut amp, mut cab) = split.prepare(rate, frames)?;
+        let mut naive_amp = Engine::new(rate, frames)?;
+        naive_amp.restore(&split.amp)?;
+        naive_amp.wait_ready()?;
+        let mut naive_cab = Engine::new(rate, frames)?;
+        naive_cab.restore(&split.cab)?;
+        naive_cab.wait_ready()?;
+        let mut max_error = 0.0_f32;
+        let mut naive_error = 0.0_f32;
+        let mut peak = 0.0_f32;
+        for block in 0..700 {
+            for e in [
+                &mut whole,
+                &mut amp,
+                &mut cab,
+                &mut naive_amp,
+                &mut naive_cab,
+            ] {
+                e.pump()?;
+            }
+            let mut left: Vec<f32> = (0..frames)
+                .map(|i| {
+                    if block < 400 {
+                        0.0
+                    } else {
+                        let t = ((block - 400) * frames + i) as f32 / rate as f32;
+                        0.02 + 0.04 * (t * std::f32::consts::TAU * 73.0).sin()
+                    }
+                })
+                .collect();
+            let mut right: Vec<f32> = left.iter().map(|s| s * -0.7).collect();
+            let (mut a, mut b) = (left.clone(), right.clone());
+            let (mut n, mut m) = (left.clone(), right.clone());
+            whole.process(&mut left, &mut right)?;
+            amp.process(&mut a, &mut b)?;
+            cab.process(&mut a, &mut b)?;
+            naive_amp.process(&mut n, &mut m)?;
+            naive_cab.process(&mut n, &mut m)?;
+            if block >= 400 {
+                for ((expected, actual), naive) in left
+                    .iter()
+                    .chain(&right)
+                    .zip(a.iter().chain(&b))
+                    .zip(n.iter().chain(&m))
+                {
+                    assert!(expected.is_finite() && actual.is_finite() && naive.is_finite());
+                    max_error = max_error.max((expected - actual).abs());
+                    naive_error = naive_error.max((expected - naive).abs());
+                    peak = peak.max(expected.abs());
+                }
+            }
+        }
+        assert!(peak > 1e-4, "split parity must render audible test signal");
+        assert!(
+            max_error < 1e-5,
+            "split rendered mismatch {rate}/{frames}: {max_error}"
+        );
+        assert!(
+            naive_error > 1e-4,
+            "negative control failed to detect duplicated DC filter: {naive_error}"
+        );
+        eprintln!(
+            "native split rendered: rate={rate} frames={frames} max_error={max_error} naive_error={naive_error}"
+        );
+    }
+    source.restore(&original)?;
+    source.wait_ready()?;
     Ok(())
 }

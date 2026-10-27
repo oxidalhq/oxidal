@@ -81,9 +81,28 @@ all 43 control assignments, source preservation, embedded-asset restore and
 rejection paths using an explicitly authored factory-amp/mono-IR rig. Original
 factory files remain unchanged.
 
+`SplitStages::prepare` creates the paired amp/cab processors on the same owner and
+waits for assets. The amp omits the final DC blocker; the cab applies it once before
+output EQ/level, matching the whole-preset ordering. Stage roles are host-owned and
+are not encoded in exported native presets. Restoring both opaque stage states with
+ordinary `Engine::new` would apply the filter twice and is not the composition API.
+
+The maintained rendered comparison checks the whole chain against this paired path
+at 48 kHz with 128- and 64-frame blocks, including different input selection,
+gain and tone-stack settings. A deliberately naive whole-processor pair must fail equivalence,
+so the test detects the duplicated filter rather than merely checking finite output.
+The fixture is a real factory amp with an authored mono multi-tap IR; it does not
+prove all cabinets, active pitch extraction, spatial routing or structural transitions.
+
+Split preparation currently rejects rates other than 48 kHz. At other rates the
+native processor wraps each chain in its own resampling boundary; two instances
+would therefore resample twice. A rendered 44.1 kHz comparison exposed this mismatch.
+A shared graph boundary is required before admitting other split-stage rates.
+Whole-preset playback retains its existing rate support.
+
 This API is control-thread preparation only. There is no browser hybrid conversion
-or simultaneous multi-instance host yet. Additional instance filters and processing
-cost mean a successful split is not an audio-equivalence, latency or gapless claim.
+or combined native/LV2 host yet. Preparing processors waits for model loads; it is not
+a streaming callback operation or a latency, real-time or gapless claim.
 Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).
 
 ## Prepared model audition boundary

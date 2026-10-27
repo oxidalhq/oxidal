@@ -90,6 +90,21 @@ EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
     *result = e.release();
   });
 }
+// Separate entry point preserves whole-preset ABI and prevents stale libraries
+// from silently treating the new constructor arguments as the old signature.
+EXPORT int oxidal_t3k_create_stage(double rate, int frames, int role, void** result) noexcept {
+  if (role != 1 && role != 2)
+    return guard([] { throw std::runtime_error("invalid native stage role"); });
+  // Whole presets own one host-to-chain resampling boundary. Until the mixed
+  // host owns that boundary, reject pairs that would resample between stages.
+  if (rate != kChainBaseSampleRate)
+    return guard([] { throw std::runtime_error("split stages require the 48000 Hz chain domain"); });
+  const auto status = oxidal_t3k_create(rate, frames, result);
+  if (status == 0)
+    static_cast<Engine*>(*result)->processor.setOxidalProcessingRole(role == 1
+        ? TONE3000Processor::OxidalProcessingRole::Amp : TONE3000Processor::OxidalProcessingRole::Cab);
+  return status;
+}
 EXPORT int oxidal_t3k_destroy(void* ptr) noexcept {
   return guard([&] { auto& e = engine(ptr); delete &e; });
 }

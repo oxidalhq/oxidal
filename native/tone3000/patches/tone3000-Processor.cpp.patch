@@ -23,7 +23,18 @@
    parameters.removeParameterListener("osEnabled", this);
    parameters.removeParameterListener("osFactor", this);
    for (const auto& paramId : presetParameterIds())
-@@ -2064,6 +2068,7 @@
+@@ -1982,7 +1986,9 @@
+   // ##########
+   // DC blocker
+   // ##########
+-  {
++  // A split amp feeds a separate cab stage. Filter only after the cab, exactly
++  // where the whole-preset path filters; otherwise serial stages high-pass twice.
++  if (oxidalProcessingRole != OxidalProcessingRole::Amp) {
+     // ProcessorDuplicator runs an independent filter instance per channel, so a
+     // single duplicator covers the whole (mono or stereo) buffer. Running a
+     // second one here would high-pass every channel twice.
+@@ -2064,6 +2070,7 @@
      outputMeterLevelL.store(peakToDb(peakL));
      outputMeterLevelR.store(peakToDb(peakR));
    }
