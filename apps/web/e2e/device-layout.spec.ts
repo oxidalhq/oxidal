@@ -34,6 +34,47 @@ async function fits(page: Page) {
       )
         problems.push(`${name}: effect content overflows`);
     }
+    // Visible separation is essential even when controls technically fit the viewport.
+    for (const group of document.querySelectorAll('.action-row, .form-grid')) {
+      const controls = Array.from(group.children)
+        .map((child) => ({
+          name: child.textContent?.trim().slice(0, 45),
+          rect: child.getBoundingClientRect(),
+        }))
+        .filter(({ rect }) => rect.width && rect.height);
+      for (let i = 0; i < controls.length; i++) {
+        for (const other of controls.slice(i + 1)) {
+          const first = controls[i]!;
+          const xGap = Math.max(
+            other.rect.left - first.rect.right,
+            first.rect.left - other.rect.right,
+          );
+          const yGap = Math.max(
+            other.rect.top - first.rect.bottom,
+            first.rect.top - other.rect.bottom,
+          );
+          if ((xGap < 7.5 && yGap < 0) || (yGap < 7.5 && xGap < 0))
+            problems.push(
+              `${first.name} / ${other.name}: controls touch or have insufficient separation`,
+            );
+        }
+      }
+    }
+    const display = document.querySelector(
+      '[aria-label="Display preferences"]',
+    );
+    if (display) {
+      const selector = display
+        .querySelector('.display-mode')
+        ?.getBoundingClientRect();
+      const actions = display
+        .querySelector('.action-row')
+        ?.getBoundingClientRect();
+      if (selector && actions && selector.bottom > actions.top)
+        problems.push(
+          'Display preference was visually reordered after screen actions',
+        );
+    }
     for (const dialog of document.querySelectorAll<HTMLDialogElement>(
       'dialog[open]',
     )) {
@@ -192,6 +233,12 @@ test('device portrait and landscape keep controls accessible and preserve a rota
           .click();
         await fits(page);
         await accessible(page);
+        await page.screenshot({
+          path: testInfo.outputPath(
+            `${orientation}-${section.toLowerCase()}.png`,
+          ),
+          fullPage: true,
+        });
         if (section === 'Maintenance') {
           await expect(
             page.getByRole('heading', { name: 'MIDI mapping', exact: true }),

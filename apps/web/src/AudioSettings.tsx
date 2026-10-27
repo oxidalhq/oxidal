@@ -89,7 +89,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     setRequest((previous) => ({ ...previous, [key]: value }));
   }
   return (
-    <section className="panel" aria-label="Audio devices">
+    <section className="panel control-stack" aria-label="Audio devices">
       <h2>Audio devices</h2>
       <p>
         Inspect Linux audio interfaces while keeping the editor available.

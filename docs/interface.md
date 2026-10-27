@@ -24,3 +24,9 @@ Keep-awake is a browser-local preference, off by default. It survives view chang
 [Screen Wake Lock](https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API) requires a supported browser and a secure context; use the device's trusted HTTPS address. Browser/power policies can revoke it, and leaving or locking the phone releases it. Fullscreen alone does not prevent timeout. There is no claim of background browser operation or an override of OS power settings.
 
 The maintained unit suite covers visibility return, release/denial, explicit retry, late acquisition and fullscreen events. Device-layout tests cover control placement, navigation/reload, rotation and browser fullscreen availability on XR/Fold/BOOX; wake-lock behavior uses a browser API fixture. Actual idle-timeout prevention and power-saving behavior require physical-device acceptance.
+
+## Spacing and visual review
+
+Independent button actions use `.action-row`: wrapping, aligned controls and the theme's `--action-gap` (8px by default). Joined navigation and compact adjustment controls have their own patterns. Settings and offline-authoring forms use `.control-stack` with `--control-gap` (12px); mobile `.form-grid` retains that separation when it becomes one column. Do not add unstyled toolbar classes or remove gaps just to fit a phone.
+
+The maintained device suite checks visible gaps as well as target size, overflow and alignment, and captures every Settings section in both orientations. Review the screenshots: a passing geometry check is not a UX sign-off or proof of physical stage usability.

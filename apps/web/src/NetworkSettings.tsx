@@ -103,7 +103,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
               workers and closes the web interface. Save your preset edits
               first.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="action-row mt-3">
               <Button
                 variant="outline"
                 disabled={busy || !connected || !!state.pending}
@@ -133,7 +133,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   {power === 'shutdown' &&
                     'Leave power connected until shutdown has finished.'}
                 </p>
-                <div className="flex gap-2">
+                <div className="action-row">
                   <Button
                     disabled={busy || !connected}
                     onClick={() => {
@@ -169,7 +169,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                 here. Without confirmation the previous network returns
                 automatically.
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="action-row">
                 <Button
                   disabled={
                     busy ||
@@ -202,7 +202,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           ) : (
             <>
               <div
-                className="mt-4 flex flex-wrap gap-2"
+                className="action-row mt-4"
                 role="group"
                 aria-label="Network setup mode"
               >

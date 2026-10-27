@@ -110,7 +110,7 @@ export function PlaybackSettings({
   const transitioning =
     state?.phase === 'starting' || state?.phase === 'stopping';
   return (
-    <section aria-label="Playback controls">
+    <section className="control-stack" aria-label="Playback controls">
       <h3>Audio playback</h3>
       <p>
         Stop audio releases the interface while keeping the library and silent
@@ -132,7 +132,7 @@ export function PlaybackSettings({
             Experimental playback — physical audio and live performance are not
             qualified yet. Boot playback is opt-in; there is no device fallback.
           </p>
-          <div className="toolbar">
+          <div className="action-row">
             <Button
               disabled={
                 !connected || busy || transitioning || !state?.device_owned
@@ -206,6 +206,7 @@ export function PlaybackSettings({
             </section>
           )}
           <fieldset
+            className="control-stack"
             disabled={
               !connected || busy || transitioning || state?.device_owned
             }

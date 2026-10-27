@@ -246,7 +246,7 @@ export function LiveRig({
           a saved preset. Live controls appear here when its audio session is
           running.
         </p>
-        <div className="toolbar">
+        <div className="action-row">
           <Button onClick={onLibrary}>Browse presets</Button>
           <Button variant="outline" onClick={onAudioSetup}>
             Audio setup

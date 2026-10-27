@@ -63,7 +63,7 @@ export function DebugConsole() {
         )}
         {state?.available && (
           <>
-            <div className="flex flex-wrap gap-2">
+            <div className="action-row">
               <Button
                 variant="outline"
                 disabled={busy}
@@ -88,7 +88,7 @@ export function DebugConsole() {
               )}
             </div>
             <div
-              className="my-3 flex flex-wrap gap-2"
+              className="action-row my-3"
               role="group"
               aria-label="Diagnostic command suggestions"
             >

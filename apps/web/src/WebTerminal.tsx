@@ -206,7 +206,7 @@ function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {
           {error}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="action-row">
         <Button
           disabled={!connected || !!state?.session}
           onClick={() => actions.current.start()}

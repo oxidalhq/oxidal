@@ -55,6 +55,7 @@
   --page-space: clamp(0.75rem, 2vw, 1.5rem);
   --panel-space: clamp(0.75rem, 1.5vw, 1.125rem);
   --control-gap: 0.75rem;
+  --action-gap: 0.5rem;
   --touch-target: 2.75rem;
   --title-size: clamp(1.5rem, 2.5vw, 2rem);
   --readout-size: 2rem;

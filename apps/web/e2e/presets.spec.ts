@@ -505,6 +505,10 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
       ),
     ).toBe(true);
   }
+  await page.screenshot({
+    path: test.info().outputPath('native-authoring.png'),
+    fullPage: true,
+  });
 });
 
 test('native editor rejects stale ownership and replay then expires abandoned edits', async ({

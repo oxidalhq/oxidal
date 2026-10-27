@@ -247,7 +247,7 @@ export function NativeEditor({
       Number(value) === 0 ||
       Number(value) === 1);
   return (
-    <section aria-label="Native preset editor">
+    <section className="control-stack" aria-label="Native preset editor">
       <h3>Native preset editor</h3>
       <p>
         Silent authoring with the TONE3000 engine. Edits do not change the saved

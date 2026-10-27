@@ -561,7 +561,10 @@ export default function App() {
               </nav>
               {settingsSection === 'display' && (
                 <>
-                  <section className="panel" aria-label="Display preferences">
+                  <section
+                    className="panel control-stack"
+                    aria-label="Display preferences"
+                  >
                     <h2>Display</h2>
                     <label className="field display-mode">
                       <span>Display mode</span>
@@ -576,7 +579,7 @@ export default function App() {
                       </select>
                     </label>
                     <p>Your choice is saved on this browser.</p>
-                    <div className="flex flex-wrap gap-2 py-3">
+                    <div className="action-row">
                       <Button
                         variant="outline"
                         disabled={!screen.fullscreenSupported}

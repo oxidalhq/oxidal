@@ -415,7 +415,7 @@ summary:focus-visible {
   }
   .form-grid {
     grid-template-columns: 1fr;
-    gap: 0;
+    gap: var(--control-gap);
   }
   .device-info > div {
     flex-direction: column;
@@ -848,21 +848,8 @@ main {
   }
 }
 
-.display-mode {
-  margin: 0;
-  flex: 0 1 10rem;
-}
 .masthead {
   flex-wrap: wrap;
-}
-@media (max-width: 760px) {
-  .display-mode {
-    order: 2;
-    flex: 1 1 100%;
-  }
-  .display-mode select {
-    width: 100%;
-  }
 }
 :root[data-display='sunlight'] .caption,
 :root[data-display='stage'] .caption {
@@ -1181,10 +1168,6 @@ button.block:focus-visible {
     width: auto;
     flex: 1;
   }
-  .display-mode {
-    order: initial;
-    flex: 1 1 8rem;
-  }
   .connection {
     margin-left: auto;
   }
@@ -1294,13 +1277,6 @@ button.block:focus-visible {
     min-width: 0;
     padding-inline: 8px;
     font-size: 13px;
-  }
-  .display-mode {
-    flex: 1 0 100%;
-    order: 2;
-  }
-  .masthead .display-mode select {
-    min-height: 44px;
   }
 }
 .live-rig .caption {
@@ -1594,17 +1570,9 @@ button.block:focus-visible {
   }
 }
 @media (max-width: 760px) {
-  .masthead .display-mode {
-    order: 0;
-    flex: 0 1 9rem;
-    margin-left: auto;
-  }
   .masthead nav {
     order: 1;
     flex: 1 0 100%;
-  }
-  .masthead .display-mode select {
-    font-size: 0.8rem;
   }
 }
 .live-parameter-grid {
@@ -1707,6 +1675,8 @@ textarea {
   font-size: 0.8125rem;
 }
 .display-mode {
+  margin: 0;
+  width: 100%;
   max-width: 24rem;
 }
 .resource-strip {
@@ -1775,4 +1745,34 @@ textarea {
 .live-parameter-grid > button {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* Separate actions stay separated when wrapped; joined navigation is a different pattern. */
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--action-gap);
+  min-width: 0;
+}
+.action-row > button {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.control-stack {
+  display: grid;
+  align-items: start;
+  gap: var(--control-gap);
+  min-width: 0;
+}
+.control-stack > button {
+  justify-self: start;
+  max-width: 100%;
+}
+.control-stack > h2,
+.control-stack > h3,
+.control-stack > .form-grid {
+  margin-block: 0;
 }
