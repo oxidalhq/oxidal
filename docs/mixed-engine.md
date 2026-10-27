@@ -34,7 +34,8 @@ The current integration boundary remains explicit:
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
   payloads and roles, routing, LV2 declarations and opaque resources. The mixed
-  worker/HTTP/browser lifecycle and actual DSP restoration are not connected yet.
+  worker/HTTP/browser lifecycle is not connected yet; the portable loader below
+  now restores the qualified whole-native/scalar-LV2 subset.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
   audible discontinuity and is not a gapless switch.
@@ -54,8 +55,8 @@ The current integration boundary remains explicit:
 that same revision by a trusted caller. It checks channel counts against discovered
 LV2 ports, applies complete native-value LV2 controls, validates backend roles and
 rate/frame configuration, and compiles scalar routing before processing. It does
-not instantiate plugins or qualify a native compatibility profile from a manifest
-string; a worker loader must perform those checks before supplying its bindings.
+not itself instantiate plugins or qualify a native compatibility profile. The
+`from_bundle` entry point performs preparation from verified stored resources.
 
 Split nodes explicitly copy a scalar port. Merge nodes apply their declared gains,
 without implicit normalization. Host bypass retains the processor and declaration.
@@ -87,3 +88,29 @@ saved routing matches exactly in that scoped settled fixture. Asset readiness is
 not deterministic initial DSP state or proof of a gapless transition. A live
 prepared-switch implementation must qualify startup/prewarm and continuous output
 rather than reuse this offline comparison as its acceptance test.
+
+## Verified bundle loading
+
+`PreparedPorts::from_bundle` preflights every native profile, installed LV2 URI,
+audio-port declaration, complete control set and host buffer budget before creating
+processors. Unknown required extensions, opaque LV2 state/assets, unsupported
+features and Preserve tails are rejected. It loads exact verified native payloads
+and instantiates installed LV2 libraries; clients cannot supply library paths.
+
+The native codec baseline is derived from the pinned adapter source revision by
+`native_profile_id`. This identifier is not a binary signature or evidence of full
+upstream field/settings fidelity; installed-library identity remains a build/image
+qualification responsibility. Extracted amp/cab roles are rejected by this loader
+until paired state restoration is implemented. The lower-level prepared-binding
+API continues to exercise the separately qualified paired-stage adapter.
+
+Native blocks receive explicit Stereo input mode. Hardware channel selection stays
+in `StreamConfig.input_map`; a single capture channel can be mapped to both inputs.
+Native mono chains perform their own fold, while native stereo chains retain their
+two lanes. The loader does not silently inherit the native Left input default.
+
+The maintained mixed qualification now uses this loader to reopen the persisted
+fixture. It rejects mismatched profiles, extracted roles and unsupported installed
+plugin declarations before playback. Loading, readiness waits and plugin discovery
+remain owner-thread preparation operations, never concurrent with the same plugin
+library's running callback. This is not live replacement or gapless switching.

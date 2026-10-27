@@ -46,7 +46,7 @@ fn declaration(bytes: &[u8]) -> Result<Value, Box<dyn Error>> {
     }
     Ok(json!({
         "format":"oxidal.preset","formatVersion":1,"id":"68448a6d-0168-4fc8-b337-c12959165271","name":"Authored mixed qualification",
-        "tone3000":{"instances":[{"id":"native","preset":"current","profile":"tone3000-plugin:ab5e5ae4388753184687d67816815aa481f2cea9"}]},
+        "tone3000":{"instances":[{"id":"native","preset":"current","profile":oxidal_engine::native_profile_id()?}]},
         "oxidal":{"graph":{"nodes":nodes,"edges":edges},"lv2":lv2,"recall":{"tails":"cut"}},
         "resources":[{"id":"current","path":"native/current.t3kpreset","kind":"tone3000-preset","bytes":bytes.len(),"sha256":inspection.sha256}],
         "extensions":{},"requiredExtensions":[]
@@ -109,15 +109,27 @@ pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dy
         )
         .is_err()
     );
-    let mut graph = PreparedPorts::new(
-        &bundle,
-        processors(world, &bundle)?,
-        48000.0,
-        128,
-        1024 * 1024,
-    )?;
+    for role in [false, true] {
+        let mut invalid = bundle.manifest().clone();
+        if role {
+            invalid.tone3000.instances[0].processing_role =
+                Some(oxidal_presets::manifest::ProcessingRole::Amp);
+        } else {
+            invalid.tone3000.instances[0].profile = "tone3000-plugin:unsupported".into();
+        }
+        let invalid = Bundle::from_parts(
+            invalid.encode()?,
+            BTreeMap::from([(
+                "current".into(),
+                bundle.resource("current").unwrap().to_vec(),
+            )]),
+        )?;
+        assert!(PreparedPorts::from_bundle(&invalid, world, 48000.0, 128, 1024 * 1024).is_err());
+    }
+    let mut graph = PreparedPorts::from_bundle(&bundle, world, 48000.0, 128, 1024 * 1024)?;
     assert_eq!(graph.channels(), (2, 2));
     let mut reference = super::native(bundle.resource("current").unwrap(), 128)?;
+    reference.set_input_mode(oxidal_tone3000::InputMode::Stereo)?;
     let mut amp = Plugin::new_ports(world, AMP, 48000.0, 128)?;
     amp.set(0, -6.0206)?;
     let mut peak = 0.0_f32;
@@ -273,6 +285,7 @@ fn qualify_lv2_admission(world: &World) -> Result<(), Box<dyn Error>> {
         let mut invalid = value.clone();
         invalid["oxidal"]["lv2"][0][key] = replacement;
         let invalid = Bundle::from_parts(serde_json::to_vec(&invalid)?, BTreeMap::new())?;
+        assert!(PreparedPorts::from_bundle(&invalid, world, 48000.0, 128, 1024 * 1024).is_err());
         assert!(
             PreparedPorts::new(&invalid, bindings()?, 48000.0, 128, 1024 * 1024).is_err(),
             "admitted invalid {key}"

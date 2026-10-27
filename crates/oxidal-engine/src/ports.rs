@@ -145,39 +145,8 @@ impl PreparedPorts {
                     {
                         return Err("LV2 URI or discovered audio ports differ".into());
                     }
-                    // A complete base rig cannot silently inherit unspecified
-                    // input controls from an already edited processor instance.
-                    let controls: Vec<_> = info
-                        .ports
-                        .iter()
-                        .filter(|p| p.input && p.control)
-                        .map(|p| {
-                            (
-                                p.symbol.clone(),
-                                p.index,
-                                p.integer,
-                                p.toggled,
-                                p.minimum,
-                                p.maximum,
-                            )
-                        })
-                        .collect();
-                    if controls.len() != instance.controls.len() {
-                        return Err("Portable LV2 controls must be complete".into());
-                    }
-                    for (symbol, port, integer, toggled, minimum, maximum) in controls {
-                        let declared = *instance
-                            .controls
-                            .get(&symbol)
-                            .ok_or("Missing LV2 control symbol")?;
-                        if (integer && declared.fract() != 0.0)
-                            || (toggled
-                                && Some(declared) != minimum.map(f64::from)
-                                && Some(declared) != maximum.map(f64::from))
-                        {
-                            return Err("Invalid discrete portable LV2 value".into());
-                        }
-                        p.set(port, declared as f32)?;
+                    for (port, value) in crate::loading::control_values(instance, info)? {
+                        p.set(port, value)?;
                     }
                 }
                 NodeKind::Input => input = index,

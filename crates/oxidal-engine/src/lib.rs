@@ -9,3 +9,8 @@ pub use prepared::{PreparedRig, Processor};
 mod ports;
 #[cfg(feature = "native")]
 pub use ports::PreparedPorts;
+
+#[cfg(feature = "native")]
+mod loading;
+#[cfg(feature = "native")]
+pub use loading::native_profile_id;
