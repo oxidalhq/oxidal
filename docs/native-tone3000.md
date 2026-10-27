@@ -193,3 +193,31 @@ are prerequisites for native stages in a mixed graph. Construction/loading still
 on the owner and may block; no concurrent DSP, background engine transfer, crossfade,
 continuous-stream swap, latency alignment, overload admission or gapless behavior is
 provided by this change. The current daemon still uses its existing separate workers.
+
+## Reported processing delay
+
+`Engine::latency_samples` exposes the native processor's host-rate algorithmic
+latency after readiness and message pumping. The native qualifier checks the
+48 kHz direct path, 44.1/96 kHz rate boundary, all four pitch windows, disable and
+captured-state restoration. This is not hardware or round-trip latency. The pitch
+processor reports a nominal mean delay; its moving tap and transient resynchronization
+cannot be phase-corrected by a fixed host delay.
+
+Portable mixed routing uses this report to prepare its path alignment and preserve
+the declared delay while bypassed. Changing a processor's reported latency after
+preparation requires a new graph; current live scalar controls exclude those
+settings. This readback does not implement prepared switching or qualify timing.
+
+`Engine::prepare_stream` is a separate, destructive-to-history preparation operation:
+it waits for loaded assets and released native edit holds, then re-runs the native
+processing preparation at the same rate/block size. Mixed graph construction uses
+it before PCM to establish a defined resampling clock origin. It preserves controls
+and loaded models but resets DSP histories; never use it on a sounding instance.
+Asset-only `wait_ready` remains available for workflows that must retain state.
+
+The pinned processor overlay adds an owner-only rate-boundary reset for this path.
+The dependency's same-rate `Reset` clears sample buffers while retaining Lanczos
+phase counters; simply re-running native preparation left repeated 44.1 kHz
+comparisons timing-dependent. Recreating that boundary before preparation gives
+both graphs a common phase origin. Original reference sources remain unchanged;
+the builder accepts only recorded original/current/previous-overlay hashes.

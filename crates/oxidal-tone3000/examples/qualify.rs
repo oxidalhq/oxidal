@@ -53,7 +53,45 @@ impl DcBlocker {
         }
     }
 }
+// Native reports algorithmic delay to its host; rate conversion and the
+// pitch window must not disappear at the Rust boundary. No device-latency claim.
+fn qualify_latency() -> Result<(), Box<dyn Error>> {
+    for rate in [48000.0, 44100.0, 96000.0] {
+        let mut engine = Engine::new(rate, 128)?;
+        engine.set_normalized("pitchEnabled", 0.0)?;
+        engine.pump()?;
+        let baseline = engine.latency_samples()?;
+        if rate == 48000.0 {
+            assert_eq!(baseline, 0);
+        } else {
+            assert!(baseline > 0, "rate boundary must report its delay");
+        }
+        engine.set_normalized("pitchEnabled", 1.0)?;
+        for (index, milliseconds) in [20u32, 30, 40, 60].into_iter().enumerate() {
+            engine.set_normalized("pitchWindow", index as f32 / 3.0)?;
+            engine.pump()?;
+            let floor = (rate * 0.002).round() as u32;
+            let window = (rate * f64::from(milliseconds) / 1000.0).round() as u32;
+            assert_eq!(engine.latency_samples()?, baseline + (floor + window) / 2);
+        }
+        let retained = engine.capture()?;
+        engine.set_normalized("pitchEnabled", 0.0)?;
+        engine.pump()?;
+        assert_eq!(engine.latency_samples()?, baseline);
+        engine.restore(&retained)?;
+        engine.pump()?;
+        assert!(engine.latency_samples()? > baseline);
+        let restored_delay = engine.latency_samples()?;
+        engine.prepare_stream()?;
+        assert_eq!(engine.latency_samples()?, restored_delay);
+    }
+    println!(
+        "native latency: rate boundary, four pitch windows, disable and restored state passed"
+    );
+    Ok(())
+}
 fn main() -> Result<(), Box<dyn Error>> {
+    qualify_latency()?;
     let expected: Value =
         serde_json::from_str(include_str!("../../../native/tone3000/parameters.json"))?;
     let mut engine = Engine::new(48000.0, 128)?;

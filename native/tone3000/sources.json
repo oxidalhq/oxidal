@@ -13,11 +13,12 @@
       "path": "plugin/include/Processor.h",
       "patch": "tone3000-Processor.h.patch",
       "before": "f394ff0050f2c9423d89363871f47cb811cd63df546dbd059063600811edd43e",
-      "after": "e07dbe0bb11e1f7eaa8ec0c2cb33996c816930e227a034f86e63eeecb3c0d32c",
-      "patch_sha256": "a791e5df2558da23ae37a3cf42d8b5ff168af9b4587edf57a49be2a408408d16",
+      "after": "cf6612d20772b8aea5acdaf642414732643f19cf29e544f0581446a53e811969",
+      "patch_sha256": "1f54f08c7fc1bf0c8904382944b632a3301c4a321b84f7c39de69da804753b85",
       "previous_after": [
         "4e066c42d6112c096836768c78f9adac881a34f1a1a1aecf882067d3c61a4939",
-        "c2ceb28760f0a6264bab11d2947e6481e63588a6db54194b59cd04e4da6ad9a0"
+        "c2ceb28760f0a6264bab11d2947e6481e63588a6db54194b59cd04e4da6ad9a0",
+        "e07dbe0bb11e1f7eaa8ec0c2cb33996c816930e227a034f86e63eeecb3c0d32c"
       ]
     },
     {

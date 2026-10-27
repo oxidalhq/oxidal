@@ -1016,6 +1016,10 @@ export interface Snapshot3 {
   buffer_bytes: number;
   controls: Control[];
   /**
+   * Reported algorithmic and alignment delay; excludes audio devices/transport.
+   */
+  latency_frames: number;
+  /**
    * Actual scalar values differ from the immutable source bundle.
    */
   modified: boolean;

@@ -9,7 +9,7 @@
  #include "ChainDomain.h"
  #include "ChainHistory.h"
  #include "AutoOffset.h"
-@@ -32,12 +34,18 @@
+@@ -32,12 +34,21 @@
  
  class TONE3000Processor;
  
@@ -26,10 +26,13 @@
 +  // Host role is not serialized in native presets. Set before processing only.
 +  enum class OxidalProcessingRole { WholePreset, Amp, Cab };
 +  void setOxidalProcessingRole(OxidalProcessingRole role) noexcept { oxidalProcessingRole = role; }
++  // Preparation owner only: same-rate ResamplingContainer::Reset clears its
++  // sample buffers but retains phase. A fresh boundary establishes stream zero.
++  void resetOxidalRateBoundary() { chainBoundary.reset(); }
  
    void prepareToPlay(double sampleRate, int samplesPerBlock) override;
    void releaseResources() override;
-@@ -521,6 +529,8 @@
+@@ -521,6 +532,8 @@
    static juce::PropertiesFile::Options uiPreferencesOptions();
  
  private:
@@ -38,7 +41,7 @@
    // One chain of blocks. Two of these make up `lanes` (declared below).
    using Lane = std::vector<std::unique_ptr<ChainBlock>>;
  
-@@ -951,6 +961,8 @@
+@@ -951,6 +964,8 @@
    // post-chain image matrix, pre-pan), smoothed so knob moves glide instead
    // of stepping once per block. Audio thread only.
    juce::SmoothedValue<float> outputGainSmoother;

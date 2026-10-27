@@ -75,6 +75,7 @@ fn processors(
 pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dyn Error>> {
     qualify_routing()?;
     qualify_lv2_admission(world)?;
+    qualify_latency(world, original)?;
     let mut author = super::native(original, 128)?;
     let current = author.save_preset("Portable authored fixture")?;
     drop(author);
@@ -298,6 +299,203 @@ fn qualify_lv2_admission(world: &World) -> Result<(), Box<dyn Error>> {
     assert!(output.iter().all(|v| (*v - 0.25).abs() < 1e-5));
     println!(
         "portable LV2 admission: exact mono ports, full symbol controls, ranges, features and configuration checks pass"
+    );
+    Ok(())
+}
+
+// Different-length native/LV2 paths must converge at the same reported sample
+// time. The oracle uses its own raw-input history, not the host delay primitive.
+fn qualify_latency(world: &World, original: &[u8]) -> Result<(), Box<dyn Error>> {
+    qualify_latency_at(world, original, 44100.0)?;
+    let mut pitched = oxidal_tone3000::Engine::new(48000.0, 128)?;
+    pitched.load_preset(original)?;
+    pitched.wait_ready()?;
+    pitched.set_normalized("pitchEnabled", 1.0)?;
+    pitched.set_normalized("pitchWindow", 1.0)?;
+    pitched.pump()?;
+    let bytes = pitched.save_preset("Long reported delay")?;
+    drop(pitched);
+    qualify_latency_at(world, &bytes, 48000.0)
+}
+fn qualify_latency_at(world: &World, original: &[u8], rate: f64) -> Result<(), Box<dyn Error>> {
+    use oxidal_engine::{
+        Session,
+        protocol::{ControlCommand, Target},
+    };
+    use std::collections::VecDeque;
+    let mut value = declaration(original)?;
+    let mut nodes = vec![node("in", "input", 0, 2), node("out", "output", 2, 0)];
+    let mut native_node = node("tone", "tone3000", 2, 2);
+    native_node["instance"] = json!("native");
+    native_node["bypassed"] = json!(false);
+    nodes.push(native_node);
+    let mut edges = vec![];
+    for (port, side) in [(0, "l"), (1, "r")] {
+        let (split, fx, merge) = (
+            format!("split_{side}"),
+            format!("fx_{side}"),
+            format!("merge_{side}"),
+        );
+        nodes.push(node(&split, "split", 1, 2));
+        let mut effect = node(&fx, "lv2", 1, 1);
+        effect["instance"] = json!(fx);
+        effect["bypassed"] = json!(false);
+        nodes.push(effect);
+        let mut sum = node(&merge, "merge", 2, 1);
+        sum["inputGains"] = json!([0.25, 0.75]);
+        nodes.push(sum);
+        edges.extend([
+            edge("in", port, &split, 0),
+            edge(&split, 0, "tone", port),
+            edge(&split, 1, &fx, 0),
+            edge("tone", port, &merge, 0),
+            edge(&fx, 0, &merge, 1),
+            edge(&merge, 0, "out", port),
+        ]);
+    }
+    value["oxidal"]["graph"] = json!({"nodes":nodes,"edges":edges});
+    let bundle = Bundle::from_parts(
+        serde_json::to_vec(&value)?,
+        BTreeMap::from([("current".into(), original.to_vec())]),
+    )?;
+    let mut session = Session::new(bundle.clone(), world, rate, 128, 1024 * 1024)?;
+    let mut reference = oxidal_tone3000::Engine::new(rate, 128)?;
+    reference.load_preset(original)?;
+    reference.set_input_mode(oxidal_tone3000::InputMode::Stereo)?;
+    reference.prepare_stream()?;
+    let latency = reference.latency_samples()? as usize;
+    assert!(latency > 0);
+    if rate == 48000.0 {
+        assert!(latency > 128, "exercise delay across multiple blocks");
+    }
+    assert_eq!(session.snapshot().latency_frames as usize, latency);
+    let bare_bytes = nodes
+        .iter()
+        .map(|n| {
+            n["audioInputs"]
+                .as_u64()
+                .unwrap()
+                .max(n["audioOutputs"].as_u64().unwrap()) as usize
+                * 128
+                * 4
+        })
+        .sum::<usize>();
+    assert!(session.snapshot().buffer_bytes > bare_bytes);
+    assert!(PreparedPorts::from_bundle(&bundle, world, rate, 128, bare_bytes).is_err());
+    let mut amps = [
+        Plugin::new_ports(world, AMP, rate, 128)?,
+        Plugin::new_ports(world, AMP, rate, 128)?,
+    ];
+    amps[0].set(0, -6.0206)?;
+    amps[1].set(0, 6.0206)?;
+    let mut dry = [
+        VecDeque::from(vec![0.0f32; latency]),
+        VecDeque::from(vec![0.0f32; latency]),
+    ];
+    let mut processed = dry.clone();
+    let mut worst = 0.0f32;
+    let mut worst_at = (0, 0, 0, 0.0f32, 0.0f32);
+    let mut phases = [0.0f32; 3];
+    let mut peak = 0.0f32;
+    for block in 0..600 {
+        if block == 460 || block == 510 {
+            let state = session.snapshot();
+            session.apply(ControlCommand {
+                session: state.session,
+                expected_revision: state.revision,
+                target: Target::Bypass {
+                    node: "tone".into(),
+                },
+                value: if block == 460 { 1.0 } else { 0.0 },
+            })?;
+            assert_eq!(session.snapshot().latency_frames as usize, latency);
+        }
+        session.pump()?;
+        reference.pump()?;
+        let mut input = [[0.0f32; 128]; 2];
+        let [input_l, input_r] = &mut input;
+        for (i, (left, right)) in input_l.iter_mut().zip(input_r).enumerate() {
+            if block >= 400 {
+                let t = (block * 128 + i) as f32;
+                *left = (t * 0.017).sin() * 0.02 + if i == 0 { 0.04 } else { 0.0 };
+                *right = (t * 0.023).sin() * -0.013;
+            }
+        }
+        let mut raw_delay = [[0.0f32; 128]; 2];
+        let mut amp_delay = raw_delay;
+        for channel in 0..2 {
+            let mut samples = input[channel];
+            amps[channel].process_mono(&mut samples)?;
+            for i in 0..128 {
+                raw_delay[channel][i] = dry[channel].pop_front().unwrap();
+                dry[channel].push_back(input[channel][i]);
+                amp_delay[channel][i] = processed[channel].pop_front().unwrap();
+                processed[channel].push_back(samples[i]);
+            }
+        }
+        let mut native = input;
+        if (460..510).contains(&block) {
+            native = raw_delay;
+        } else {
+            let (l, r) = native.split_at_mut(1);
+            reference.process(&mut l[0], &mut r[0])?;
+        }
+        let mut actual = [[0.0f32; 128]; 2];
+        let (l, r) = actual.split_at_mut(1);
+        session.process(&[&input[0], &input[1]], &mut [&mut l[0], &mut r[0]])?;
+        // Include the first prepared sample; do not hide startup phase errors.
+        for channel in 0..2 {
+            for i in 0..128 {
+                let expected = 0.25 * native[channel][i] + 0.75 * amp_delay[channel][i];
+                let error = (actual[channel][i] - expected).abs();
+                let phase = if block < 460 {
+                    0
+                } else if block < 510 {
+                    1
+                } else {
+                    2
+                };
+                phases[phase] = phases[phase].max(error);
+                if error > worst {
+                    worst = error;
+                    worst_at = (block, channel, i, actual[channel][i], expected);
+                }
+                peak = peak.max(actual[channel][i].abs());
+            }
+        }
+    }
+    println!("alignment phase errors: {phases:?}; worst={worst_at:?}; rate={rate}");
+    assert!(peak > 1e-4);
+    assert!(
+        worst < 1e-5,
+        "aligned mixed render differs: {worst}, at {worst_at:?}, rate {rate}"
+    );
+    let mut graph = PreparedPorts::from_bundle(&bundle, world, rate, 128, 1024 * 1024)?;
+    let Some(Processor::Native(p)) = graph.processor_mut("tone") else {
+        panic!("native")
+    };
+    let pitch = p
+        .catalog()?
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "pitchEnabled")
+        .unwrap()["normalized"]
+        .as_f64()
+        .unwrap();
+    p.set_normalized("pitchEnabled", if pitch > 0.5 { 0.0 } else { 1.0 })?;
+    p.pump()?;
+    let mut l = [1.0; 128];
+    let mut r = l;
+    assert!(
+        graph
+            .process(&[&[0.0; 128], &[0.0; 128]], &mut [&mut l, &mut r])
+            .is_err()
+    );
+    assert_eq!(l, [0.0; 128]);
+    assert_eq!(r, [0.0; 128]);
+    println!(
+        "mixed latency: unequal native/LV2 path alignment, live bypass delay, budget rejection and changed-latency fail-closed passed; latency={latency}; max_error={worst}"
     );
     Ok(())
 }

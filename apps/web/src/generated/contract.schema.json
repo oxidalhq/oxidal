@@ -4462,6 +4462,12 @@
             "$ref": "#/$defs/Control"
           }
         },
+        "latency_frames": {
+          "description": "Reported algorithmic and alignment delay; excludes audio devices/transport.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "modified": {
           "description": "Actual scalar values differ from the immutable source bundle.",
           "type": "boolean"
@@ -4485,7 +4491,8 @@
         "revision",
         "source_revision",
         "controls",
-        "buffer_bytes"
+        "buffer_bytes",
+        "latency_frames"
       ]
     },
     "StageModel": {

@@ -127,6 +127,7 @@ impl Session {
             source_revision: bundle.revision().into(),
             controls: controls.clone(),
             buffer_bytes: graph.buffer_bytes(),
+            latency_frames: graph.latency_frames(),
         };
         if serde_json::to_vec(&state).map_err(|e| e.to_string())?.len() + 65536 > REPLY_LIMIT {
             return Err("Rig controls exceed IPC byte budget".into());

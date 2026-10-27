@@ -108,6 +108,42 @@ EXPORT int oxidal_t3k_create_stage(double rate, int frames, int role, void** res
 EXPORT int oxidal_t3k_destroy(void* ptr) noexcept {
   return guard([&] { auto& e = engine(ptr); delete &e; });
 }
+// Preparation only: settle asynchronous edit holds, then restart the DSP
+// clock/history at a known boundary. Asset-ready alone is not stream-ready.
+EXPORT int oxidal_t3k_prepare_stream(void* ptr, unsigned int* ready) noexcept {
+  return guard([&] {
+    if (!ready) throw std::runtime_error("null preparation output");
+    *ready = 0;
+    auto& e = engine(ptr);
+    if (e.preparation) throw std::runtime_error("model audition owns preparation");
+    const auto runtime = e.processor.getStageRuntime();
+    const auto blocks = runtime.getProperty("blocks", {});
+    if (static_cast<bool>(runtime.getProperty("truncated", false)) || !blocks.isArray())
+      throw std::runtime_error("invalid preparation catalog");
+    for (const auto& block : *blocks.getArray()) {
+      if (static_cast<bool>(block.getProperty("loadFailed", false)))
+        throw std::runtime_error("model failed during preparation");
+      if (!static_cast<bool>(block.getProperty("loaded", false)) ||
+          static_cast<bool>(block.getProperty("modelLoading", false))) return;
+    }
+    if (e.processor.isChainEditFadeHeld()) return;
+    const auto rate = e.processor.getSampleRate();
+    e.processor.releaseResources();
+    e.processor.resetOxidalRateBoundary();
+    e.processor.prepareToPlay(rate, e.audio.getNumSamples());
+    *ready = 1;
+  });
+}
+// Read on the native owner after preparation/message pumping. This is the
+// processor's reported algorithmic delay, not device or round-trip latency.
+EXPORT int oxidal_t3k_latency_samples(void* ptr, unsigned int* samples) noexcept {
+  return guard([&] {
+    if (!samples) throw std::runtime_error("null latency output");
+    const auto latency = engine(ptr).processor.getLatencySamples();
+    if (latency < 0) throw std::runtime_error("invalid processor latency");
+    *samples = static_cast<unsigned int>(latency);
+  });
+}
 EXPORT int oxidal_t3k_catalog(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
     auto& e = engine(ptr); juce::Array<juce::var> rows;

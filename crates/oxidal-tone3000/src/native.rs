@@ -74,6 +74,8 @@ unsafe extern "C" {
     fn oxidal_t3k_create(rate: f64, frames: i32, result: *mut *mut c_void) -> i32;
     fn oxidal_t3k_create_stage(rate: f64, frames: i32, role: i32, result: *mut *mut c_void) -> i32;
     fn oxidal_t3k_destroy(engine: *mut c_void) -> i32;
+    fn oxidal_t3k_latency_samples(engine: *mut c_void, samples: *mut u32) -> i32;
+    fn oxidal_t3k_prepare_stream(engine: *mut c_void, ready: *mut u32) -> i32;
     fn oxidal_t3k_catalog(
         engine: *mut c_void,
         out: *mut c_char,
@@ -327,6 +329,38 @@ impl Engine {
     pub fn chain(&mut self) -> Result<serde_json::Value> {
         // SAFETY: live owner handle and bounded JSON output.
         self.json(|p, b, n, w| unsafe { oxidal_t3k_chain(p, b, n, w) })
+    }
+    /// Preparation only: wait for assets/edit holds and reset DSP histories and
+    /// resampling clocks before admission. Never call on a sounding instance.
+    pub fn prepare_stream(&mut self) -> Result<()> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        let mut left = vec![0.0; self.frames];
+        let mut right = left.clone();
+        loop {
+            self.pump()?;
+            let mut ready = 0;
+            // SAFETY: exclusive owner handle and writable result. Native checks
+            // pending assets/edit holds before restarting prepared DSP state.
+            checked(unsafe { oxidal_t3k_prepare_stream(self.ptr.as_ptr(), &mut ready) })?;
+            if ready == 1 {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(NativeError("native stream preparation timed out".into()));
+            }
+            left.fill(0.0);
+            right.fill(0.0);
+            self.process(&mut left, &mut right)?;
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+    /// Reported processor delay at the configured host rate. Query after
+    /// preparation/pumping; this excludes audio-device and transport latency.
+    pub fn latency_samples(&self) -> Result<u32> {
+        let mut samples = 0;
+        // SAFETY: live owner handle and writable, correctly sized output.
+        checked(unsafe { oxidal_t3k_latency_samples(self.ptr.as_ptr(), &mut samples) })?;
+        Ok(samples)
     }
     pub fn catalog(&mut self) -> Result<serde_json::Value> {
         // SAFETY: json supplies a live handle and bounded writable buffer/length.

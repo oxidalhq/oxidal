@@ -14,13 +14,54 @@ struct PortNode {
     kind: NodeKind,
     channels: usize,
     offset: usize,
-    sources: Vec<(usize, usize)>,
+    sources: Vec<Source>,
+    latency: u32,
+    dry: Vec<Delay>,
     processor: Option<Processor>,
     bypassed: bool,
     gains: Vec<f32>,
 }
+#[derive(Debug, Default)]
+struct Delay {
+    samples: Vec<f32>,
+    cursor: usize,
+}
+impl Delay {
+    fn new(frames: usize, used: &mut usize, budget: usize) -> Result<Self, String> {
+        *used = frames
+            .checked_mul(size_of::<f32>())
+            .and_then(|bytes| used.checked_add(bytes))
+            .filter(|bytes| *bytes <= budget)
+            .ok_or("Delay compensation exceeds host buffer budget")?;
+        let mut samples = Vec::new();
+        samples
+            .try_reserve_exact(frames)
+            .map_err(|_| "Delay buffers unavailable")?;
+        samples.resize(frames, 0.0);
+        Ok(Self { samples, cursor: 0 })
+    }
+    fn next(&mut self, input: f32) -> f32 {
+        if self.samples.is_empty() {
+            return input;
+        }
+        let output = self.samples[self.cursor];
+        self.samples[self.cursor] = input;
+        self.cursor += 1;
+        if self.cursor == self.samples.len() {
+            self.cursor = 0;
+        }
+        output
+    }
+}
+#[derive(Debug)]
+struct Source {
+    port: usize,
+    sample: usize,
+    node: usize,
+    delay: Delay,
+}
 /// One owner, fixed blocks, explicit split/merge gains. This executes prepared
-/// instances; it does not import plugins, implement latency compensation, restore
+/// instances with reported-delay compensation; it does not import plugins, restore
 /// opaque LV2 state, or promise callback-safe transitions.
 #[derive(Debug)]
 pub struct PreparedPorts {
@@ -31,6 +72,8 @@ pub struct PreparedPorts {
     input: usize,
     output: usize,
     failed: bool,
+    buffer_bytes: usize,
+    latency_frames: u32,
 }
 impl PreparedPorts {
     /// The caller supplies processors prepared from this same verified document.
@@ -159,12 +202,17 @@ impl PreparedPorts {
                 }
                 p.ready()?;
             }
+            let latency = processor
+                .as_ref()
+                .map_or(Ok(0), Processor::latency_frames)?;
             nodes.push(PortNode {
                 id: declaration.id.clone(),
                 kind: declaration.kind,
                 channels,
                 offset,
                 sources: vec![],
+                latency,
+                dry: vec![],
                 processor,
                 bypassed: declaration.bypassed.unwrap_or(false),
                 gains: declaration
@@ -182,9 +230,12 @@ impl PreparedPorts {
             let from = indices[edge.from.node.as_str()];
             let to = indices[edge.to.node.as_str()];
             let source = nodes[from].offset + usize::from(edge.from.port) * frames;
-            nodes[to]
-                .sources
-                .push((usize::from(edge.to.port) * frames, source));
+            nodes[to].sources.push(Source {
+                port: usize::from(edge.to.port) * frames,
+                sample: source,
+                node: from,
+                delay: Delay::default(),
+            });
             outgoing[from].push(to);
             degree[to] += 1;
         }
@@ -206,6 +257,33 @@ impl PreparedPorts {
         if order.len() != nodes.len() {
             return Err("Feedback cycle".into());
         }
+        let mut buffer_bytes = sample_count
+            .checked_mul(size_of::<f32>())
+            .ok_or("Port buffer size overflow")?;
+        let mut latency = vec![0u32; nodes.len()];
+        for &index in &order {
+            let n = &mut nodes[index];
+            let arrival = n.sources.iter().map(|s| latency[s.node]).max().unwrap_or(0);
+            latency[index] = arrival
+                .checked_add(n.latency)
+                .ok_or("Path latency overflow")?;
+            for source in &mut n.sources {
+                source.delay = Delay::new(
+                    (arrival - latency[source.node]) as usize,
+                    &mut buffer_bytes,
+                    buffer_budget,
+                )?;
+            }
+            if n.processor.is_some() {
+                for _ in 0..n.channels {
+                    n.dry.push(Delay::new(
+                        n.latency as usize,
+                        &mut buffer_bytes,
+                        buffer_budget,
+                    )?);
+                }
+            }
+        }
         let mut samples = Vec::new();
         samples
             .try_reserve_exact(sample_count)
@@ -219,6 +297,8 @@ impl PreparedPorts {
             input,
             output,
             failed: false,
+            buffer_bytes,
+            latency_frames: latency[output],
         })
     }
     pub fn channels(&self) -> (usize, usize) {
@@ -228,7 +308,11 @@ impl PreparedPorts {
         )
     }
     pub fn buffer_bytes(&self) -> usize {
-        self.samples.len() * size_of::<f32>()
+        self.buffer_bytes
+    }
+    /// Reported processing delay plus host alignment, excluding device/transport.
+    pub fn latency_frames(&self) -> u32 {
+        self.latency_frames
     }
     /// Control/qualification access, outside concurrent processing. A future Save
     /// must serialize confirmed backend state rather than reuse the initial view.
@@ -315,11 +399,41 @@ impl PreparedPorts {
     fn run(&mut self) -> Result<(), String> {
         for &index in &self.order {
             let node = &mut self.nodes[index];
-            for &(port, source) in &node.sources {
-                self.samples
-                    .copy_within(source..source + self.frames, node.offset + port);
+            if node
+                .processor
+                .as_ref()
+                .map_or(Ok(0), Processor::latency_frames)?
+                != node.latency
+            {
+                return Err("Processor latency changed; prepare a new graph".into());
+            }
+            for source in &mut node.sources {
+                if source.delay.samples.is_empty() {
+                    self.samples.copy_within(
+                        source.sample..source.sample + self.frames,
+                        node.offset + source.port,
+                    );
+                    continue;
+                }
+                for frame in 0..self.frames {
+                    let sample = self.samples[source.sample + frame];
+                    self.samples[node.offset + source.port + frame] = source.delay.next(sample);
+                }
             }
             let data = &mut self.samples[node.offset..node.offset + node.channels * self.frames];
+            // Keep dry history current even while wet. Bypass preserves the same
+            // declared path delay and never changes a downstream alignment plan.
+            for (port, delay) in node.dry.iter_mut().enumerate() {
+                if delay.samples.is_empty() {
+                    continue;
+                }
+                for sample in &mut data[port * self.frames..(port + 1) * self.frames] {
+                    let dry = delay.next(*sample);
+                    if node.bypassed {
+                        *sample = dry;
+                    }
+                }
+            }
             match node.kind {
                 NodeKind::Split => {
                     for port in 1..node.channels {

@@ -53,6 +53,8 @@ pub struct Snapshot {
     pub source_revision: String,
     pub controls: Vec<Control>,
     pub buffer_bytes: usize,
+    /// Reported algorithmic and alignment delay; excludes audio devices/transport.
+    pub latency_frames: u32,
 }
 impl Snapshot {
     pub fn recall(&self) -> Recall {

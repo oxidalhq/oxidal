@@ -18,6 +18,13 @@ impl Processor {
             Self::Lv2(p) => p.configuration(),
         }
     }
+    pub(crate) fn latency_frames(&self) -> Result<u32, String> {
+        match self {
+            Self::Native(p) => p.latency_samples().map_err(|e| e.to_string()),
+            // This admission profile rejects latency-reporting LV2 ports.
+            Self::Lv2(_) => Ok(0),
+        }
+    }
     fn matches(&self, kind: &BlockKind) -> bool {
         match self {
             Self::Lv2(p) => *kind == BlockKind::Lv2 && p.channels() == 2,
@@ -33,7 +40,7 @@ impl Processor {
     }
     pub(crate) fn ready(&mut self) -> Result<(), String> {
         match self {
-            Self::Native(p) => p.wait_ready().map_err(|e| e.to_string()),
+            Self::Native(p) => p.prepare_stream().map_err(|e| e.to_string()),
             Self::Lv2(_) => Ok(()),
         }
     }

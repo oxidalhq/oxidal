@@ -29,7 +29,8 @@ checks actual sound and retained state rather than only graph serialization. The
 existing LV2 gate also exercises the shared routing scheduler. Linux native checks
 therefore require `liblilv-dev`, `lv2-dev` and `swh-lv2` alongside native prerequisites.
 
-The current integration boundary remains explicit:
+The older stereo `PreparedRig` integration boundary remains explicit (the portable
+executor below has separate admission and delay alignment):
 
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
@@ -61,7 +62,7 @@ without implicit normalization. Host bypass retains the processor and declaratio
 The buffer allocation is precomputed and admitted against a caller-supplied byte
 budget, with no fixed graph-node count in this executor. This accounts for host
 buffers only; native/plugin memory and compute still require resource monitoring.
-The existing worker/stereo graph bounds remain until integration.
+The older stereo graph retains its fixed bounds; the mixed worker uses this portable executor.
 
 `Plugin::new_ports` uses exactly one instance for a discovered mono LV2 plugin and
 `process_mono` handles its one signal. Stereo plugins use the stereo method.
@@ -76,16 +77,43 @@ It also exercises bypass, invalid-input recovery, resource-budget rejection,
 unsupported Preserve policy and 162-node explicit routing with overload latching.
 The current qualified DSP scope is whole native plus scalar-only LV2; portable
 opaque LV2 state/assets, required-feature admission, mono native stage restoration,
-latency compensation and live prepared replacement still need integration.
+general latency-reporting LV2 support and live prepared replacement still need integration.
 
-Startup samples are explicitly outside the settled-render comparison. Native
-`wait_ready` pumps and processes a variable number of silent blocks while assets
-load. The regression records an initial difference and then compares after the
-same 400-block prewarm window used by existing native graph qualification; the
-saved routing matches exactly in that scoped settled fixture. Asset readiness is
-not deterministic initial DSP state or proof of a gapless transition. A live
-prepared-switch implementation must qualify startup/prewarm and continuous output
-rather than reuse this offline comparison as its acceptance test.
+The older saved-render comparison retains its 400-block prewarm window because
+its reference uses asset-only `wait_ready`, which advances silent DSP by a variable
+number of blocks. Prepared processors now use `prepare_stream`: wait for assets and
+the asynchronous edit hold, then reset processing/resampling histories before
+admission. Its rate boundary is recreated explicitly because the dependency's
+same-rate reset retains fractional phase. This fixes a timing-sensitive 44.1 kHz
+comparison failure. The separate
+alignment fixture below prepares both sides at the same clock origin and compares
+from the first sample. Neither fixture establishes continuous switching or physical
+real-time timing; the old prewarmed comparison alone cannot qualify those claims.
+
+## Reported-delay alignment
+
+The portable executor reads each prepared native processor's reported delay and
+computes cumulative latency in topological order. Preallocated per-edge delay lines
+align inputs before merges, stereo processing and final output. Per-channel dry
+histories keep host bypass at the same declared latency without reallocating or
+changing downstream alignment. Bypassed processors retain their state but do not
+advance their wet histories; bypass/resume still has no crossfade or tails guarantee.
+
+Routing and delay histories share the host-buffer budget. Overflow and insufficient
+memory reject preparation before streaming. Snapshot `latency_frames` reports the
+resulting graph delay, excluding audio-device and transport buffering. The currently
+qualified scalar LV2 profile rejects latency-reporting ports; it does not silently
+claim support for those plugins. If any prepared processor reports a different
+latency during processing, output is cleared and failure latched instead of using
+an invalid alignment plan. Complete prepared replacement/recovery remains required.
+
+The maintained mixed example compares a 44.1 kHz native branch and shorter mono
+LV2 paths against separate native/plugin rendering and independent input histories.
+It also exercises a native pitch-enabled fixture whose reported delay spans multiple
+blocks, live bypass/resume, budget rejection and changed latency failure. The alignment comparison includes the first prepared sample as well as a zero-input
+prewarm and signal/bypass blocks. Native
+pitch reports nominal mean delay; fixed alignment does not remove its moving-tap
+phase variation. The older stereo executor remains uncompensated.
 
 ## Verified bundle loading
 

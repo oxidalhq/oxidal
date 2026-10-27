@@ -252,6 +252,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     )
     .await;
     assert_eq!(s["configured"]["stream"], updated_stream);
+    assert!(s["control"]["latency_frames"].as_u64().unwrap() > 0);
     assert_eq!(control(&s, &gain), -9.0);
     assert!((control(&s, &native) - 0.6).abs() < 1e-5);
     assert_eq!(pids(&executable).len(), 1);
@@ -275,6 +276,10 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     unavailable["output"]["endpoint"] = json!("hw:CARD=MissingDevice,DEV=0");
     let restored = apply(&c, &url, json!({"kind":"reconfigure","stream":unavailable})).await;
     assert_eq!(restored["configured"]["stream"], updated_stream);
+    assert_eq!(
+        restored["control"]["latency_frames"],
+        s["control"]["latency_frames"]
+    );
     assert_eq!(control(&restored, &gain), -9.0);
     assert!((control(&restored, &native) - 0.6).abs() < 1e-5);
     assert!(
