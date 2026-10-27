@@ -6,6 +6,7 @@ mod graph_playback;
 mod monitor;
 mod native_editor;
 mod playback;
+mod playback_recovery;
 mod presets;
 mod terminal;
 use axum::{

@@ -241,6 +241,25 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
     assert_eq!(state["device_owned"], false);
+    let previous_settings = state["configured"].clone();
+    let mut missing = previous_settings.clone();
+    missing["preset_id"] = json!("0".repeat(64));
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"start","settings":missing})
+        )
+        .await
+        .status(),
+        409
+    );
+    state = get(&client, &url, "audio").await;
+    assert_eq!(
+        state["configured"], previous_settings,
+        "failed replacement retains the previous session"
+    );
     let resumed = send(&client, &url, &state, json!({"kind":"resume"})).await;
     assert_eq!(resumed.status(), 200);
     state = resumed.json().await.unwrap();
@@ -377,6 +396,79 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert!(!root.join("presets/boot-audio.json").exists());
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "running"); // Preference changes do not interrupt the live worker.
+    let changed = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"outputLevel","value":0.41}),
+    )
+    .await;
+    assert_eq!(changed.status(), 200);
+    state = changed.json().await.unwrap();
+    let recovery_controls = state["controls"].clone();
+    // A disk failure is a recovery warning, never a reason to stop the audio worker.
+    let recovery_path = root.join("presets/last-audio-session.json");
+    if recovery_path.is_file() {
+        std::fs::remove_file(&recovery_path).unwrap();
+    }
+    std::fs::create_dir(&recovery_path).unwrap();
+    for _ in 0..60 {
+        state = get(&client, &url, "audio").await;
+        if state["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("recovery could not be saved"))
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["controls"], recovery_controls);
+    assert!(
+        state["error"]
+            .as_str()
+            .unwrap()
+            .contains("recovery could not be saved")
+    );
+    std::fs::remove_dir(&recovery_path).unwrap();
+    for _ in 0..70 {
+        state = get(&client, &url, "audio").await;
+        if state["error"].is_null() && recovery_path.is_file() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert!(state["error"].is_null());
+    assert!(recovery_path.is_file());
+    shutdown.send_replace(true);
+    task.abort();
+    stopped.wait().await.unwrap();
+    // With boot playback disabled, startup restores metadata only. Resume is explicit.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "stopped");
+    assert_eq!(state["device_owned"], false);
+    assert_eq!(state["start_on_boot"], false);
+    assert_eq!(state["configured"], settings);
+    assert!(state["controls"].as_array().unwrap().is_empty());
+    let resumed = send(&client, &url, &state, json!({"kind":"resume"})).await;
+    assert_eq!(resumed.status(), 200);
+    state = resumed.json().await.unwrap();
+    assert_eq!(
+        state["controls"], recovery_controls,
+        "daemon restart retains confirmed scalar changes"
+    );
+    assert_eq!(state["modified"], true);
     shutdown.send_replace(true);
     task.abort();
     stopped.wait().await.unwrap();

@@ -1,4 +1,5 @@
 //! One actor owns playback and the ALSA permit, independently of HTTP request lifetimes.
+use crate::playback_recovery::Recovery;
 use crate::{Config, Shared, failure};
 use axum::{
     Json,
@@ -47,6 +48,8 @@ struct Owner {
     preset_dir: PathBuf,
     state: AudioState,
     resume_controls: Option<Vec<LiveControl>>,
+    recovery_due: Option<std::time::Instant>,
+    recovery_error: Option<String>,
     updates: watch::Sender<AudioState>,
     meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
@@ -113,9 +116,44 @@ impl Owner {
             self.state.saved_copy = None;
             self.meters.send_replace(None);
         }
-        self.state.error = error;
+        self.state.error = error.or_else(|| self.recovery_error.clone());
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
+    }
+    fn schedule_recovery(&mut self) {
+        // Coalesce touch updates; continuous adjustment still checkpoints every two seconds.
+        self.recovery_due
+            .get_or_insert_with(|| std::time::Instant::now() + Duration::from_secs(2));
+    }
+    fn checkpoint(&mut self) {
+        if self.recovery_due.is_none() {
+            return;
+        }
+        let Some(settings) = self.state.configured.clone() else {
+            return;
+        };
+        let result = Recovery::new(settings, self.resume_controls.clone())
+            .write(&self.preset_dir.join("last-audio-session.json"));
+        match result {
+            Ok(()) => {
+                self.recovery_due = None;
+                if let Some(previous) = self.recovery_error.take()
+                    && self.state.error.as_ref() == Some(&previous)
+                {
+                    self.publish(self.state.phase, None);
+                }
+            }
+            Err(error) => {
+                self.recovery_due = Some(std::time::Instant::now() + Duration::from_secs(5));
+                let message = format!(
+                    "Session recovery could not be saved: {error}. Current session remains in memory."
+                );
+                if self.recovery_error.as_ref() != Some(&message) {
+                    self.recovery_error = Some(message.clone());
+                    self.publish(self.state.phase, Some(message));
+                }
+            }
+        }
     }
     async fn release(&mut self) -> Result<(), String> {
         let Some(worker) = self.worker.as_mut() else {
@@ -177,8 +215,8 @@ impl Owner {
             control_replies: None,
             _permit: permit,
         });
-        self.state.configured = Some(settings.clone());
-        self.resume_controls = controls.clone();
+        let previous_settings = self.state.configured.replace(settings.clone());
+        let previous_controls = std::mem::replace(&mut self.resume_controls, controls.clone());
         self.publish(AudioPhase::Starting, None);
         let startup = tokio::time::timeout(Duration::from_secs(25), async {
             let mut bytes = serde_json::to_vec(&PlaybackStart { settings, controls })
@@ -234,9 +272,12 @@ impl Owner {
         .map_err(|_| "Audio startup timed out".to_owned())
         .and_then(|r| r);
         if let Err(error) = startup {
+            self.state.configured = previous_settings;
+            self.resume_controls = previous_controls;
             self.release().await?;
             return Err(error);
         }
+        self.schedule_recovery();
         self.publish(AudioPhase::Running, None);
         let mut output = self.worker.as_mut().unwrap().output.take().unwrap();
         let meters = self.meters.clone();
@@ -317,6 +358,7 @@ impl Owner {
         match result {
             Ok(controls) => {
                 self.resume_controls = Some(controls.clone());
+                self.schedule_recovery();
                 self.state.controls = controls;
                 self.state.modified = true;
                 self.state.saved_copy = None;
@@ -460,6 +502,7 @@ impl Owner {
                 self.start(settings, self.resume_controls.clone()).await
             }
             AudioAction::Stop => {
+                self.checkpoint();
                 self.publish(AudioPhase::Stopping, None);
                 match self.release().await {
                     Ok(()) => {
@@ -531,6 +574,9 @@ impl Playback {
             return Err("Audio worker must be a configured absolute executable".into());
         }
         let boot = read_boot(&config.preset_dir.join("boot-audio.json"));
+        let recovery = Recovery::read(&config.preset_dir.join("last-audio-session.json"));
+        let recovery_error = recovery.as_ref().err().cloned();
+        let recovery = recovery.ok().flatten();
         let initial = AudioState {
             session: format!(
                 "audio-{}-{}",
@@ -550,8 +596,8 @@ impl Playback {
             } else {
                 AudioPhase::Unavailable
             },
-            configured: None,
-            error: None,
+            configured: recovery.as_ref().map(|r| r.settings.clone()),
+            error: recovery_error.clone(),
             device_owned: false,
             experimental: true,
             start_on_boot: matches!(boot, Ok(Some(_))),
@@ -564,7 +610,9 @@ impl Playback {
             executable: config.audio_worker.clone(),
             preset_dir: config.preset_dir.clone(),
             state: initial,
-            resume_controls: None,
+            resume_controls: recovery.and_then(|r| r.controls),
+            recovery_due: None,
+            recovery_error,
             updates,
             meters,
         };
@@ -589,9 +637,15 @@ impl Playback {
                         Some((command, response)) => { let _ = response.send(owner.command(command).await); },
                         None => break,
                     },
-                    _ = interval.tick() => owner.check_exit(),
+                    _ = interval.tick() => {
+                        owner.check_exit();
+                        if owner.recovery_due.is_some_and(|due| due <= std::time::Instant::now()) {
+                            owner.checkpoint();
+                        }
+                    },
                 }
             }
+            owner.checkpoint();
             // Retain the permit if the OS has not reaped a failed/stuck worker yet.
             while owner.worker.is_some() {
                 if owner.release().await.is_err() {
