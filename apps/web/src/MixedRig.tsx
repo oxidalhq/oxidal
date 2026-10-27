@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { rigNodeLabel } from './rigDraft';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
@@ -299,11 +300,12 @@ export function MixedRig({
             (p) => p.id === n.instance,
           );
           const label =
-            n.kind === 'tone3000'
+            rigNodeLabel(matching, n.id) ??
+            (n.kind === 'tone3000'
               ? 'TONE3000'
               : n.kind === 'lv2'
                 ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
-                : 'Mix';
+                : 'Mix');
           return (
             <div key={n.id} data-node={n.id} className="flex min-w-0 gap-2">
               <Button

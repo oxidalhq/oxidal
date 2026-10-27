@@ -1,3 +1,6 @@
+import { RigComposer } from './RigComposer';
+import { lv2Effect, type DraftEffect } from './rigDraft';
+import { rigAudioState } from './api';
 import { lv2Control } from './lv2Control';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
@@ -57,6 +60,7 @@ export function GraphAuthor({
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
   const [namPicker, setNamPicker] = useState<'nam' | 'ir' | null>(null);
+  const [mixedDraft, setMixedDraft] = useState<DraftEffect[] | null>(null);
   const newNative = useRef<AudioState | null>(null);
   const [query, setQuery] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -284,6 +288,78 @@ export function GraphAuthor({
       ?.ports.find((p) => p.symbol === target.slice(dot + 1));
     return port ? lv2Control(port) : undefined;
   }
+  async function compose() {
+    setBusy(true);
+    setError('');
+    try {
+      const mixed = await rigAudioState();
+      if (mixed.phase === 'unavailable')
+        throw new Error('Mixed playback is not enabled on this device.');
+      if (draft.sampleRate !== undefined && draft.sampleRate !== sampleRate)
+        throw new Error(
+          'Match this draft’s sample rate in Audio setup before composing.',
+        );
+      if (draft.recall?.bypassed || draft.recall?.mappings.mappings.length)
+        throw new Error(
+          'Turn off global bypass and remove MIDI mappings before converting this draft.',
+        );
+      const plugins = await installedLv2(sampleRate);
+      // Only a serial draft can be represented by this editor. Never flatten a DAG.
+      const chain = draft.rig.nodes;
+      if (
+        chain[0]?.kind !== 'input' ||
+        chain.at(-1)?.kind !== 'output' ||
+        chain.slice(1, -1).some((n) => n.kind !== 'lv2' || n.level !== 1) ||
+        draft.rig.edges.length !== chain.length - 1 ||
+        chain
+          .slice(1)
+          .some(
+            (n, i) =>
+              !draft.rig.edges.some(
+                (e) => e.from === chain[i]!.id && e.to === n.id,
+              ),
+          )
+      )
+        throw new Error(
+          'This routing needs the full graph editor; start an empty draft for serial composition.',
+        );
+      const effects = chain.slice(1, -1).map((node) => {
+        const uri = draft.bindings.find((b) => b.node === node.id)?.uri;
+        const plugin = plugins.find((p) => p.uri === uri);
+        if (!plugin)
+          throw new Error('A required effect is no longer installed.');
+        const effect = lv2Effect(plugin);
+        if (effect.kind === 'lv2')
+          for (const port of plugin.ports.filter((p) => p.input && p.control)) {
+            const value = draft.recall?.values.find(
+              (v) => v.target === `${node.id}.${port.symbol}`,
+            )?.normalized;
+            if (value !== undefined) {
+              const scale = lv2Control(port);
+              if (!scale)
+                throw new Error('An effect has unsupported control scaling.');
+              effect.controls[port.symbol] = scale.native(value);
+            }
+          }
+        return effect;
+      });
+      if (alive.current) setMixedDraft(effects);
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+  if (!liveOnly && mixedDraft)
+    return (
+      <RigComposer
+        connected={connected}
+        initial={mixedDraft}
+        initialName={name}
+        onOpenRig={() => onOpenRig?.()}
+        onBack={() => setMixedDraft(null)}
+      />
+    );
   if (liveOnly && !running) return null;
   const disabled =
     !connected || busy || !state || state.phase === 'unavailable';
@@ -315,6 +391,13 @@ export function GraphAuthor({
           </label>
           <div className="action-row">
             <Button
+              variant="outline"
+              disabled={!connected || busy}
+              onClick={() => void compose()}
+            >
+              Add saved tone
+            </Button>
+            <Button
               disabled={!connected || busy || (!state && !audio)}
               onClick={() => {
                 setPicker(true);
@@ -335,8 +418,8 @@ export function GraphAuthor({
             </Button>
           </div>
           <p className="caption">
-            Add NAM, IR or installed effects. Mixing native processing with LV2
-            is still being connected.
+            Add NAM, IR or installed effects. Use a saved tone to compose a
+            native/LV2 chain.
           </p>
         </>
       )}
@@ -562,7 +645,8 @@ export function GraphAuthor({
             ))}
             {!!draft.bindings.length && (
               <p className="caption">
-                Mixed NAM/LV2 routing is not available yet.
+                Use Add saved tone to combine this chain with a saved NAM or
+                TONE3000 tone.
               </p>
             )}
             {!stream && (

@@ -33,6 +33,7 @@ live native/LV2/bypass/merge controls, and exports immutable revisions in a sepa
 process. `pnpm native:check` includes actual mixed worker and HTTP/ALSA-null tests.
 See docs/mixed-engine.md for byte/resource admission, startup limits and qualification.
 The browser exposes confirmed mixed controls and isolated Save/recall with actual-worker
-XR, Fold and BOOX regression checks. Structural composition, complete native controls,
+XR, Fold and BOOX regression checks. The serial composer combines saved native tones and scalar LV2 effects with explicit mono routing.
+Live structural replacement, complete native controls,
 extracted-stage persistence, opaque LV2 state, prepared replacement and gapless/physical
 acceptance remain open.

@@ -103,6 +103,12 @@
     "rig_library": {
       "$ref": "#/$defs/RigPage"
     },
+    "rig_native_sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RigNativeSource"
+      }
+    },
     "rig_publish": {
       "$ref": "#/$defs/RigPublish"
     },
@@ -135,6 +141,7 @@
     "rig_document",
     "rig_library",
     "rig_publish",
+    "rig_native_sources",
     "lv2_catalog",
     "graph_presets",
     "stage_model",
@@ -4078,6 +4085,22 @@
         "name",
         "native_instances",
         "lv2_instances"
+      ]
+    },
+    "RigNativeSource": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "$ref": "#/$defs/Inspection"
+        },
+        "source": {
+          "$ref": "#/$defs/ResourceSource"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "source"
       ]
     },
     "RigPage": {

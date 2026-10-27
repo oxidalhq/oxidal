@@ -1123,6 +1123,12 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
         .await
         .unwrap();
     let id = imported["sha256"].as_str().unwrap();
+    // Source browsing is available without starting a native editor or audio worker.
+    let sources = get(&c, &url, "presets/rig-sources").await;
+    assert_eq!(
+        sources,
+        json!([{"preset": imported, "source":{"kind":"original","preset":id}}])
+    );
     m["tone3000"]["instances"] =
         json!([{"id":"native","preset":"payload","profile":page["native_profile"]}]);
     m["resources"] = json!([{"id":"payload","path":"native/current.t3kpreset","kind":"tone3000-preset","sha256":id,"bytes":bytes.len()}]);
@@ -1170,6 +1176,31 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     m["resources"][0]["sha256"] = json!("a".repeat(64));
     assert_eq!(publish(&c, &url, &m, from_native).await.status(), 422);
     assert_eq!(get(&c, &url, "rig-audio").await, before);
+    // Working auditions stay addressable but never appear as user-saved presets.
+    let mut working = first["manifest"].clone();
+    working["extensions"]["urn:oxidal:authoring"] = json!({"draft":true,"labels":{}});
+    let draft: Value = publish(&c, &url, &working, json!({}))
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        get(
+            &c,
+            &url,
+            &format!("presets/rigs/{}", draft["revision"].as_str().unwrap())
+        )
+        .await,
+        draft
+    );
+    let listed = get(&c, &url, "presets/rigs").await;
+    assert!(
+        listed["presets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["revision"] != draft["revision"])
+    );
     // Metadata pagination is bounded, independent of immutable payload size.
     let mut empty = first["manifest"].clone();
     for n in 0..20 {

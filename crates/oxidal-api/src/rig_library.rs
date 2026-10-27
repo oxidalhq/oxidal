@@ -52,6 +52,35 @@ pub enum ResourceSource {
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct RigNativeSource {
+    pub preset: oxidal_presets::Inspection,
+    pub source: ResourceSource,
+}
+pub async fn native_sources(State(shared): State<Arc<Shared>>) -> Response {
+    job(shared, true, move |root| {
+        let originals = Store::new(root.clone())
+            .list()?
+            .presets
+            .into_iter()
+            .map(|preset| RigNativeSource {
+                source: ResourceSource::Original {
+                    preset: preset.sha256.clone(),
+                },
+                preset,
+            });
+        let owned = OwnedStore::new(root.join("owned"))
+            .list()?
+            .into_iter()
+            .map(|p| RigNativeSource {
+                preset: p.preset,
+                source: ResourceSource::Owned { preset: p.id },
+            });
+        Ok(originals.chain(owned).collect::<Vec<_>>())
+    })
+    .await
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RigPublish {
     /// Exact manifest JSON: strict parsing also rejects duplicate keys in metadata.
     pub manifest_json: String,
@@ -68,12 +97,25 @@ fn valid_revision(s: &str) -> bool {
         && s.bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
-async fn job<F, T>(shared: Arc<Shared>, operation: F) -> Response
+async fn job<F, T>(shared: Arc<Shared>, read_only: bool, operation: F) -> Response
 where
     F: FnOnce(PathBuf) -> Result<T, Error> + Send + 'static,
     T: Serialize + Send + 'static,
 {
-    let Ok(permit) = shared.bundle_work.clone().try_acquire_owned() else {
+    // Reads may overlap during navigation/React remounts. Queue their lightweight
+    // declarations briefly; publication still refuses a competing large request.
+    let permit = if read_only {
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            shared.bundle_work.clone().acquire_owned(),
+        )
+        .await
+        .ok()
+        .and_then(Result::ok)
+    } else {
+        shared.bundle_work.clone().try_acquire_owned().ok()
+    };
+    let Some(permit) = permit else {
         return failure(
             StatusCode::CONFLICT,
             "Preset library operation already in progress",
@@ -113,27 +155,40 @@ pub async fn list(
     if query.after.as_ref().is_some_and(|v| !valid_revision(v)) {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, "Invalid rig page cursor");
     }
-    job(shared, move |root| {
+    job(shared, true, move |root| {
         let store = BundleStore::new(root.join("bundles"));
-        let revisions: Vec<_> = store
-            .list()?
-            .into_iter()
-            .filter(|r| query.after.as_ref().is_none_or(|after| r > after))
-            .take(21)
-            .collect();
         let mut presets = Vec::new();
-        for revision in revisions.iter().take(20) {
-            let m = store.manifest(revision)?;
+        for revision in store.list()? {
+            if query.after.as_ref().is_some_and(|after| &revision <= after) {
+                continue;
+            }
+            let m = store.manifest(&revision)?;
+            if m.extensions
+                .get("urn:oxidal:authoring")
+                .and_then(|a| a.get("draft"))
+                == Some(&serde_json::Value::Bool(true))
+            {
+                continue;
+            }
             presets.push(RigEntry {
-                revision: revision.clone(),
+                revision,
                 id: m.id,
                 name: m.name,
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
             });
+            if presets.len() == 21 {
+                break;
+            }
         }
+        let next = if presets.len() > 20 {
+            presets.pop();
+            presets.last().map(|p| p.revision.clone())
+        } else {
+            None
+        };
         Ok(RigPage {
-            next: (revisions.len() > 20).then(|| revisions[19].clone()),
+            next,
             presets,
             native_profile: oxidal_engine::native_profile_id()
                 .map_err(|_| Error::Invalid("Missing native profile"))?,
@@ -142,7 +197,7 @@ pub async fn list(
     .await
 }
 pub async fn read(State(shared): State<Arc<Shared>>, Path(revision): Path<String>) -> Response {
-    job(shared, move |root| {
+    job(shared, true, move |root| {
         let b = BundleStore::new(root.join("bundles")).read(&revision)?;
         Ok(RigDocument {
             revision,
@@ -159,7 +214,7 @@ pub async fn publish(
         Ok(Json(r)) => r,
         Err(e) => return failure(e.status(), "Invalid rig publication request"),
     };
-    job(shared, move |root| {
+    job(shared, false, move |root| {
         let manifest = Manifest::parse(request.manifest_json.as_bytes())?;
         manifest.check_required_extensions()?;
         if manifest.resources.len() != request.resources.len() {

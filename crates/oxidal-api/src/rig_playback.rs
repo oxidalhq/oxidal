@@ -335,7 +335,8 @@ impl Owner {
             save.running = self.export.is_some();
             save.error = Some(error);
         }
-        self.changed();
+        // Export progress does not change audio command authority.
+        self.publish();
     }
     async fn poll_export(&mut self) {
         let Some(export) = self.export.as_mut() else {
@@ -400,7 +401,8 @@ impl Owner {
                 Err(e) => save.error = Some(e),
             }
         }
-        self.changed();
+        // Export progress does not change audio command authority.
+        self.publish();
     }
     async fn command(&mut self, command: RigAudioCommand) -> Reply {
         if command.session != self.state.session || command.expected_revision != self.state.revision

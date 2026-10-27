@@ -558,3 +558,30 @@ export async function rigLibrary(after?: string): Promise<RigPage> {
   if (!rigPageValidator(body)) throw new Error('Incompatible rig library');
   return body;
 }
+
+export async function publishRig(
+  request: Contract['rig_publish'],
+): Promise<RigDocument> {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/rigs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+  if (!rigDocumentValidator(body)) throw new Error('Incompatible saved rig');
+  return body;
+}
+
+const rigSourcesValidator = ajv.compile<Contract['rig_native_sources']>({
+  $defs: schema.$defs,
+  type: 'array',
+  items: { $ref: '#/$defs/RigNativeSource' },
+});
+export async function rigNativeSources(signal?: AbortSignal) {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/rig-sources', { signal }),
+  );
+  if (!rigSourcesValidator(body)) throw new Error('Incompatible tone library');
+  return body;
+}

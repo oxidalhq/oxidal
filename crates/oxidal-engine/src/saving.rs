@@ -29,6 +29,9 @@ pub fn save_revision(
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
+    if let Some(authoring) = manifest.extensions.get_mut("urn:oxidal:authoring") {
+        authoring.remove("draft");
+    }
     let mut resources: BTreeMap<String, Vec<u8>> = manifest
         .resources
         .iter()

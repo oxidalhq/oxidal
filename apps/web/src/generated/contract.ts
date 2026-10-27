@@ -376,6 +376,7 @@ export interface Contract {
   rig_audio_state: RigAudioState;
   rig_document: RigDocument;
   rig_library: RigPage;
+  rig_native_sources: RigNativeSource[];
   rig_publish: RigPublish;
   snapshot: Snapshot;
   stage_model: StageModel;
@@ -1126,6 +1127,10 @@ export interface RigEntry {
   name: string;
   native_instances: number;
   revision: string;
+}
+export interface RigNativeSource {
+  preset: Inspection;
+  source: ResourceSource;
 }
 export interface RigPublish {
   /**

@@ -57,6 +57,7 @@ pub struct Contract {
     pub rig_document: rig_library::RigDocument,
     pub rig_library: rig_library::RigPage,
     pub rig_publish: rig_library::RigPublish,
+    pub rig_native_sources: Vec<rig_library::RigNativeSource>,
     pub lv2_catalog: oxidal_lv2::PluginCatalog,
     pub graph_presets: Vec<oxidal_presets::SavedGraph>,
     pub stage_model: provider::download::StageModel,
@@ -250,6 +251,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 )),
         )
         .route("/plugins/lv2", get(plugins::catalog))
+        .route("/presets/rig-sources", get(rig_library::native_sources))
         .route("/presets/graphs", get(presets::graphs))
         .route(
             "/presets/rigs",

@@ -2,7 +2,7 @@
 
 `oxidal-engine/native` prepares a single-owner stereo DAG from already prepared
 native and LV2 processors. It also has an isolated worker and daemon lifecycle, described below; the mixed
-browser authoring workflow remains separate integration work. Native handles and LV2 instances remain non-Send
+browser supports confirmed controls, offline recall and scoped serial composition. Native handles and LV2 instances remain non-Send
 and non-Sync; discovery, loading, readiness waits, controls and teardown stay on
 that owner. Construction must happen before streaming. The owner must service native
 message-pump/control work between processing calls; the graph does not dispatch
@@ -33,9 +33,7 @@ The current integration boundary remains explicit:
 
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
-  payloads and roles, routing, LV2 declarations and opaque resources. The mixed
-  browser authoring workflow is not connected yet; the portable loader below
-  now restores the qualified whole-native/scalar-LV2 subset.
+  payloads and roles, routing, LV2 declarations and opaque resources. The portable loader and browser restore the qualified whole-native/scalar-LV2 subset.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
   audible discontinuity and is not a gapless switch.
@@ -78,7 +76,7 @@ It also exercises bypass, invalid-input recovery, resource-budget rejection,
 unsupported Preserve policy and 162-node explicit routing with overload latching.
 The current qualified DSP scope is whole native plus scalar-only LV2; portable
 opaque LV2 state/assets, required-feature admission, mono native stage restoration,
-latency compensation and live worker/browser Save still need integration.
+latency compensation and live prepared replacement still need integration.
 
 Startup samples are explicitly outside the settled-render comparison. Native
 `wait_ready` pumps and processes a variable number of silent blocks while assets
@@ -179,7 +177,9 @@ maintained slow-worker test covers cancellation and shutdown before readiness.
 Save acknowledges a captured control revision and runs independently of subsequent
 control commands. `save.source_session` and `source_control_revision` identify what
 was saved; completion must not mark later edits clean. Status exposes progress,
-the published revision or an error. A failed export never stops the separate PCM
+the published revision or an error. Export completion does not advance the audio
+command revision, so an otherwise valid Stop/control is not rejected while a save
+finishes. A failed export never stops the separate PCM
 child. Daemon shutdown reaps both children. Publication may complete before a lost
 reply/timeout, so inspect stored revisions before retrying an uncertain export.
 
@@ -219,7 +219,8 @@ Original imports, previous revisions and the current audible session are unchang
 There are no arbitrary file paths or embedded executables in these requests.
 
 One blocking library operation is admitted at a time, including after a client
-disconnect; work is outside audio/async threads. The manifest remains capped at
+disconnect; work is outside audio/async threads. Read requests can wait up to five seconds
+for that permit; competing publication requests are rejected without automatic retry. The manifest remains capped at
 1 MiB (the request permits JSON-string escaping). Resource byte budgets apply before
 retaining payload copies. The typed response contains the immutable revision and
 manifest, not an assertion that it plays. Start uses `/rig-audio` and performs actual
@@ -251,7 +252,39 @@ revision. The maintained mixed browser case in `presets.spec.ts` runs through
 `native:check` on Linux for desktop, XR/WebKit, Fold cover/open and BOOX. It publishes
 a verified mixed fixture via HTTP, then tests actual touch/readback, cancel, Save
 while PCM continues, library recall, reload and both orientations. BOOX uses e-paper
-mode and non-colour state cues. This does not implement browser structural editing,
+mode and non-colour state cues. This does not implement live structural replacement,
 model insertion into the mixed worker, a full visual routing editor, complete native
 parameter fidelity, server-side gesture leases or gapless replacement. The image
 recipe still needs the mixed-worker packaging and boot qualification step.
+
+## Serial composition from saved tones
+
+Library → New preset → Add saved tone opens a serial composer. It retains compatible
+LV2 draft controls, permits multiple original/owned native tones and installed scalar
+LV2 effects, and supports reordering/removal before Play. Existing model-first native
+creation remains available; direct NAM/IR insertion inside a mixed rig is still open.
+Legacy drafts with non-serial routing, global bypass, MIDI bindings or a different
+sample rate are rejected instead of losing that intent during conversion.
+
+`GET /api/v1/presets/rig-sources` lists original and owned native payload identities
+without requiring the native editor service. Publication verifies each selected
+payload through the existing binding contract. Repeated native instances can share
+unchanged bytes but keep independent processor identities and later controls.
+
+Every mono LV2 effect has an explicit Left, Right or averaged L+R input choice. The
+manifest contains a two-input weighted merge, one mono processor and a split to
+identical L/R outputs. Stereo effects keep both ports. The composer never duplicates
+a mono processor behind the user's back or implies that its output retains stereo.
+It does not yet author parallel routing; imported port graphs retain their topology.
+
+The optional `urn:oxidal:authoring` metadata holds node labels and a boolean `draft`.
+Audition revisions are immutable and addressable but hidden from saved-library pages
+when `draft` is exactly true. The isolated Save worker removes that marker while
+retaining labels and unrelated metadata. Play does not represent an audition as a
+named Save. Old audition revisions remain stored; automatic garbage collection is
+not implemented. Playing a draft currently requires current audio to be stopped.
+
+The maintained browser scenario composes and reorders actual native/LV2 processors,
+checks explicit mono routing and hidden draft status, saves while running, and recalls
+the named revision. It covers both orientations on XR, Fold and BOOX. Portable schema
+checks exercise empty routing, repeated native instances and all mono-input policies.

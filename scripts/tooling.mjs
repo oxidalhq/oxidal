@@ -294,6 +294,8 @@ if (mode === 'bootstrap') {
       env: {
         ...env,
         OXIDAL_EXPERIMENTAL_RIG: '1',
+        OXIDAL_EXPERIMENTAL_GRAPH: '1',
+        OXIDAL_GRAPH_QUALIFY_NULL: '1',
         OXIDAL_RIG_QUALIFY_NULL: '1',
         OXIDAL_MIXED_TEST_ROOT: env.OXIDAL_QUALIFICATION_DATA,
       },

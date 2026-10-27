@@ -228,6 +228,8 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let saved = saved.expect("save did not finish");
+    // Asynchronous export completion must not invalidate the last audio readback.
+    assert_eq!(get(&c, &url, "rig-audio").await["revision"], s["revision"]);
     assert_ne!(saved, revision);
     assert_eq!(control(&get(&c, &url, "rig-audio").await, &gain), -9.0);
     let before_frames = s["processed_frames"].as_u64().unwrap();
