@@ -1,6 +1,6 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). The portable manifest reader now implements strict JSON/shape and graph/resource-reference semantics. ZIP interchange, runtime mixed authoring, export/stripping and sync are not yet implemented. Normative MUST/MUST NOT requirements describe the intended implementation.
+**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). The portable manifest reader implements strict JSON/shape and graph/resource-reference semantics; `BundleStore` persists verified expanded documents in private local storage. ZIP interchange, runtime mixed authoring, export/stripping and sync are not yet implemented. Normative MUST/MUST NOT requirements describe the intended implementation.
 
 ## Purpose and choice
 
@@ -174,6 +174,30 @@ reads resource files nor loads plugins. Native profile, role/state fidelity,
 installed plugin ports/features, scalar ranges and requested tail policy still
 require backend qualification before preparation. A valid document is not a
 playable rig or authorization to export it.
+
+`Bundle::from_parts` binds exact manifest bytes to complete size/hash-checked
+resources and structurally inspects native payloads. It preserves source/current
+bytes independently; LV2 state is stored opaquely, not restored or declared playable.
+The existing native inspector has a lower 32 MiB payload bound and reports oversized
+native resources rather than truncating them. Unknown required extensions can be
+retained for recovery but still fail capability admission.
+
+`BundleStore` stores immutable expanded revisions under the exact manifest SHA-256,
+which also binds every resource digest. It writes and syncs a private sibling
+staging directory before atomic publication, then syncs the parent. An interrupted
+staging directory is never listed as a revision. Failed saves leave earlier
+revisions intact; an I/O failure after rename may have published the new revision,
+so callers must re-read that revision before retrying. Logical UUID ownership remains
+in the manifest: changing metadata, routing, roles or resource hashes changes the
+revision even when the UUID is retained. Native payloads are never rewritten by
+this storage layer.
+
+Reads reject missing/unlisted entries, symlinks, special files and altered
+manifest/resource bytes. The root and its parent are trusted application-owned
+storage, not a sandbox for a concurrently hostile filesystem writer. ZIP import,
+plugin state restoration, backend capability qualification, the live worker and
+browser Save remain separate integration work. No image or UI is changed merely
+by adding this store.
 
 Before format 1 is frozen or runtime compatibility is claimed, implement and pass:
 

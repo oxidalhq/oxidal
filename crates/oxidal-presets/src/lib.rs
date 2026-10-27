@@ -1,8 +1,10 @@
-//! Bounded native preset inspection and immutable original storage.
+//! Bounded native inspection, portable declarations and immutable preset storage.
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
+mod bundle;
 mod graph;
 pub mod manifest;
+pub use bundle::{Bundle, BundleStore};
 pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod model;
 mod native;

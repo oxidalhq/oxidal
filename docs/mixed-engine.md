@@ -31,7 +31,10 @@ therefore require `liblilv-dev`, `lv2-dev` and `swh-lv2` alongside native prereq
 
 The current integration boundary remains explicit:
 
-- No mixed worker/HTTP/browser lifecycle or durable hybrid manifest yet.
+- Portable manifest validation and immutable expanded-bundle storage now live in
+  `oxidal-presets`; see [preset format](presets/format.md). They preserve native
+  payloads and roles, routing, LV2 declarations and opaque resources. The mixed
+  worker/HTTP/browser lifecycle and actual DSP restoration are not connected yet.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
   audible discontinuity and is not a gapless switch.
