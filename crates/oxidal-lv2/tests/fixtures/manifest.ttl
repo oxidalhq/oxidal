@@ -3,3 +3,8 @@
 <urn:oxidal:test:contract> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:unsupported> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:quantized> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:latency> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:latency-legacy> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:latency-input> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:latency-duplicate> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:latency-stereo> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .

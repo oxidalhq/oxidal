@@ -28,6 +28,7 @@ unsafe extern "C" {
     fn ox_lv2_free(h: *mut c_void);
     fn ox_lv2_set(h: *mut c_void, port: u32, value: f32);
     fn ox_lv2_get(h: *mut c_void, port: u32) -> f32;
+    fn ox_lv2_refresh_outputs(h: *mut c_void);
     fn ox_lv2_run(h: *mut c_void, l: *mut f32, r: *mut f32, frames: u32) -> i32;
 }
 fn text(p: *const c_char) -> Result<String, String> {
@@ -47,6 +48,33 @@ fn error() -> String {
     // SAFETY: static thread-local terminated buffer, copied before any subsequent FFI call.
     text(unsafe { ox_lv2_error() }).unwrap_or_else(|_| "LV2 operation failed".into())
 }
+/// Only a verified scalar rollback can leave a prepared session usable.
+#[derive(Debug)]
+pub enum ControlError {
+    LatencyRestored,
+    Failed(String),
+}
+impl From<String> for ControlError {
+    fn from(reason: String) -> Self {
+        Self::Failed(reason)
+    }
+}
+impl From<&str> for ControlError {
+    fn from(reason: &str) -> Self {
+        Self::Failed(reason.into())
+    }
+}
+impl std::fmt::Display for ControlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LatencyRestored => {
+                f.write_str("This control changes latency; prepare a new graph")
+            }
+            Self::Failed(reason) => f.write_str(reason),
+        }
+    }
+}
+impl std::error::Error for ControlError {}
 #[derive(Debug)]
 struct Inner(NonNull<c_void>);
 impl Drop for Inner {
@@ -159,8 +187,8 @@ impl World {
                 maximum: hi.is_finite().then_some(hi),
                 default: d.is_finite().then_some(d),
             };
-            if port.audio == port.control || port.input == port.output || port.latency {
-                unsupported = Some("Unsupported port class, direction or latency".into());
+            if port.audio == port.control || port.input == port.output {
+                unsupported = Some("Unsupported port class or direction".into());
             }
             if port.control
                 && port.input
@@ -170,6 +198,11 @@ impl World {
                 unsupported = Some("Unsupported bounded control metadata".into());
             }
             ports.push(port);
+        }
+        if ports.iter().filter(|p| p.latency).count() > 1
+            || ports.iter().any(|p| p.latency && (!p.control || !p.output))
+        {
+            unsupported = Some("Latency needs one output control port".into());
         }
         let ins = ports.iter().filter(|p| p.audio && p.input).count();
         let outs = ports.iter().filter(|p| p.audio && p.output).count();
@@ -215,6 +248,8 @@ pub struct Plugin {
     rate: f64,
     failed: bool,
     channels: usize,
+    latency_port: Option<u32>,
+    prepared_latency: Option<u32>,
 }
 impl Plugin {
     pub fn configuration(&self) -> (f64, usize) {
@@ -254,6 +289,10 @@ impl Plugin {
                 return Err(reason.clone());
             }
             let mono = info.ports.iter().filter(|p| p.audio && p.input).count() == 1;
+            let latency_port = info.ports.iter().find(|p| p.latency).map(|p| p.index);
+            if stereo && latency_port.is_some() {
+                return Err("Latency-reporting effects require the mixed-chain host".into());
+            }
             return Ok(Self {
                 left: Instance::new(world, p, rate, frames as u32)?,
                 right: if mono && stereo {
@@ -266,11 +305,58 @@ impl Plugin {
                 rate,
                 failed: false,
                 channels: if mono && !stereo { 1 } else { 2 },
+                latency_port,
+                prepared_latency: None,
             });
         }
         Err("LV2 URI not discovered".into())
     }
+    /// Resolve the reported frame delay after applying saved controls, without
+    /// consuming audio or resetting plugin histories. Dynamic changes need a new plan.
+    pub fn prepare_latency(&mut self) -> Result<u32, String> {
+        if self.failed {
+            return Err("Failed plugin must be recreated".into());
+        }
+        if self.latency_port.is_some() {
+            self.refresh_outputs();
+        }
+        let frames = self.latency_frames()?;
+        if self.prepared_latency.is_some_and(|old| old != frames) {
+            return Err("Plugin latency changed; prepare a new graph".into());
+        }
+        self.prepared_latency = Some(frames);
+        Ok(frames)
+    }
+    pub fn latency_frames(&self) -> Result<u32, String> {
+        let Some(port) = self.latency_port else {
+            return Ok(0);
+        };
+        let frames = self.value(port)?;
+        if frames < 0.0 || frames.fract() != 0.0 || f64::from(frames) > f64::from(u32::MAX) {
+            return Err("Invalid reported LV2 latency".into());
+        }
+        Ok(frames as u32)
+    }
+    fn refresh_outputs(&mut self) {
+        // SAFETY: live activated instance, all buffers connected, serialized owner.
+        // Latent plugins must tolerate the core run(0) special case.
+        unsafe {
+            ox_lv2_refresh_outputs(self.left.ptr.as_ptr());
+        }
+    }
+    fn check_latency(&self) -> Result<(), String> {
+        if self.latency_port.is_none() {
+            return Ok(());
+        }
+        if self.prepared_latency != Some(self.latency_frames()?) {
+            return Err("Plugin latency changed or was not prepared".into());
+        }
+        Ok(())
+    }
     pub fn set(&mut self, index: u32, value: f32) -> Result<f32, String> {
+        self.set_control(index, value).map_err(|e| e.to_string())
+    }
+    pub fn set_control(&mut self, index: u32, value: f32) -> Result<f32, ControlError> {
         if self.failed {
             return Err("Failed plugin must be recreated".into());
         }
@@ -281,6 +367,7 @@ impl Plugin {
         {
             return Err("Expected discrete native value".into());
         }
+        let previous = self.value(index)?;
         // SAFETY: index identifies a connected input control; finite range checked. Exclusive mutable owner.
         unsafe {
             ox_lv2_set(self.left.ptr.as_ptr(), index, value);
@@ -288,7 +375,28 @@ impl Plugin {
                 ox_lv2_set(r.ptr.as_ptr(), index, value);
             }
         }
-        self.value(index)
+        if self.latency_port.is_some() && self.prepared_latency.is_some() {
+            self.refresh_outputs();
+            if self.check_latency().is_err() {
+                // Reject this scalar transaction before publishing its readback.
+                // No audio was consumed; restore the previous control immediately.
+                // SAFETY: the same connected input port and exclusive instance as above.
+                unsafe {
+                    ox_lv2_set(self.left.ptr.as_ptr(), index, previous);
+                }
+                self.refresh_outputs();
+                if self.check_latency().is_err() {
+                    self.failed = true;
+                    return Err("LV2 latency rollback failed; recreate the graph".into());
+                }
+                if self.value(index)? != previous {
+                    self.failed = true;
+                    return Err("LV2 control rollback failed; recreate the graph".into());
+                }
+                return Err(ControlError::LatencyRestored);
+            }
+        }
+        self.value(index).map_err(ControlError::from)
     }
     pub fn value(&self, index: u32) -> Result<f32, String> {
         if !self
@@ -319,6 +427,10 @@ impl Plugin {
             samples.fill(0.0);
             return Err("Invalid fixed mono buffer or plugin layout".into());
         }
+        if let Err(reason) = self.check_latency() {
+            samples.fill(0.0);
+            return Err(reason);
+        }
         // SAFETY: new_ports admitted exactly one input/output port and no right
         // instance. The C bridge never dereferences right for this mono layout;
         // samples is exclusive, finite, and has the instantiated frame count.
@@ -330,10 +442,15 @@ impl Plugin {
                 self.frames as u32,
             )
         };
-        if status != 0 {
+        let result = if status != 0 {
+            Err(error())
+        } else {
+            self.check_latency()
+        };
+        if let Err(reason) = result {
             self.failed = true;
             samples.fill(0.0);
-            return Err(error());
+            return Err(reason);
         }
         Ok(())
     }
@@ -347,6 +464,11 @@ impl Plugin {
             || left.iter().chain(right.iter()).any(|x| !x.is_finite())
         {
             return Err("Invalid fixed stereo buffer".into());
+        }
+        if let Err(reason) = self.check_latency() {
+            left.fill(0.0);
+            right.fill(0.0);
+            return Err(reason);
         }
         // SAFETY: both slices are exclusive, live, and exact declared size. C owns stable port buffers.
         let first = unsafe {
@@ -374,11 +496,16 @@ impl Plugin {
         } else {
             first
         };
-        if second != 0 {
+        let result = if second != 0 {
+            Err(error())
+        } else {
+            self.check_latency()
+        };
+        if let Err(reason) = result {
             self.failed = true;
             left.fill(0.0);
             right.fill(0.0);
-            Err(error())
+            Err(reason)
         } else {
             Ok(())
         }

@@ -157,15 +157,19 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     h->features[4]=(LV2_Feature){LV2_BUF_SIZE__fixedBlockLength,NULL};
     h->features[5]=(LV2_Feature){LV2_BUF_SIZE__powerOf2BlockLength,NULL};
     for (int i=0;i<6;i++) h->feature_ptrs[i]=&h->features[i];
+    uint32_t latency_ports=0;
     for (uint32_t i=0;i<ports;i++) {
         float d,lo,hi;int flags=ox_lv2_port(world,p,i,&d,&lo,&hi);
         if ((flags&3)!=1 && (flags&3)!=2) {fail("Unsupported port class (only audio/control)");goto failed;}
         if ((flags&12)!=4 && (flags&12)!=8) {fail("Ambiguous port direction");goto failed;}
-        if (flags&256) {fail("Latency-reporting plugins require graph compensation");goto failed;}
+        if ((flags&256) && ((flags&15)!=10 || ++latency_ports>1)) {fail("Latency needs one output control port");goto failed;}
         if (flags&1) {
             h->audio[i]=calloc(frames,sizeof(float));if (!h->audio[i]) {fail("Audio buffer allocation failed");goto failed;}
             if (flags&4) {if (h->ins>=2) {fail("Too many input channels");goto failed;}h->input[h->ins++]=i;}
             else {if (h->outs>=2) {fail("Too many output channels");goto failed;}h->output[h->outs++]=i;}
+        } else if (flags&256) {
+            // Never mistake an unwritten output for zero latency.
+            h->control[i]=NAN;
         } else if (flags&4) {
             if (flags&64) {d*=rate;lo*=rate;hi*=rate;}
             if (!isfinite(d)||!isfinite(lo)||!isfinite(hi)||lo>=hi||d<lo||d>hi) {fail("Input control needs finite bounded range/default");goto failed;}
@@ -179,6 +183,9 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     lilv_instance_activate(h->instance);h->active=1;return h;
 failed: ox_lv2_free(h);return NULL;
 }
+// Core LV2 run(0) updates instant control outputs without consuming audio.
+// Called only during latency preparation or a control transaction, never discovery.
+void ox_lv2_refresh_outputs(void* raw) {Host* h=raw;lilv_instance_run(h->instance,0);}
 // Rust validates port kind/range; every call is serialized on the instance owner.
 void ox_lv2_set(void* raw,uint32_t port,float value) {Host* h=raw;h->control[port]=value;}
 float ox_lv2_get(void* raw,uint32_t port) {Host* h=raw;return h->control[port];}

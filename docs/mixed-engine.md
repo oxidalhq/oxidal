@@ -77,7 +77,7 @@ It also exercises bypass, invalid-input recovery, resource-budget rejection,
 unsupported Preserve policy and 162-node explicit routing with overload latching.
 The current qualified DSP scope is whole native or guarded paired amp/cab plus scalar-only LV2; portable
 opaque LV2 state/assets, required-feature admission, one-port native stage layouts,
-general latency-reporting LV2 support and live prepared replacement still need integration.
+complete LV2 feature support and live prepared replacement still need integration.
 
 The older saved-render comparison retains its 400-block prewarm window because
 its reference uses asset-only `wait_ready`, which advances silent DSP by a variable
@@ -92,7 +92,7 @@ real-time timing; the old prewarmed comparison alone cannot qualify those claims
 
 ## Reported-delay alignment
 
-The portable executor reads each prepared native processor's reported delay and
+The portable executor reads each prepared native or LV2 processor's reported delay and
 computes cumulative latency in topological order. Preallocated per-edge delay lines
 align inputs before merges, stereo processing and final output. Per-channel dry
 histories keep host bypass at the same declared latency without reallocating or
@@ -101,9 +101,10 @@ advance their wet histories; bypass/resume still has no crossfade or tails guara
 
 Routing and delay histories share the host-buffer budget. Overflow and insufficient
 memory reject preparation before streaming. Snapshot `latency_frames` reports the
-resulting graph delay, excluding audio-device and transport buffering. The currently
-qualified scalar LV2 profile rejects latency-reporting ports; it does not silently
-claim support for those plugins. If any prepared processor reports a different
+resulting graph delay, excluding audio-device and transport buffering. The scalar LV2 profile accepts one valid latency output and queries it without
+consuming audio after restoring saved controls. Latency-changing scalar edits require
+a new graph; a verified rollback preserves the preceding control revision and audio.
+Failed rollback invalidates the session. If any prepared processor reports a different
 latency during processing, output is cleared and failure latched instead of using
 an invalid alignment plan. Complete prepared replacement/recovery remains required.
 

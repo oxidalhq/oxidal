@@ -5,7 +5,7 @@
 #[allow(unsafe_code)]
 mod host;
 #[cfg(feature = "native")]
-pub use host::{Plugin, World};
+pub use host::{ControlError, Plugin, World};
 pub mod protocol;
 pub use protocol::Binding;
 use schemars::JsonSchema;
@@ -171,4 +171,10 @@ impl PluginCatalog {
         }
         Ok(())
     }
+}
+
+/// Shared authored ABI fixture for maintained engine qualification, never a user effect.
+#[cfg(feature = "qualification")]
+pub fn qualification_bundle() -> &'static std::path::Path {
+    std::path::Path::new(env!("OXIDAL_LV2_FIXTURE"))
 }

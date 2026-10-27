@@ -1,6 +1,6 @@
 //! One DSP owner with confirmed scalar controls. No structural live replacement.
 use crate::{PreparedPorts, Processor, protocol::*};
-use oxidal_lv2::World;
+use oxidal_lv2::{ControlError, World};
 use oxidal_presets::{Bundle, manifest::NodeKind};
 use std::collections::BTreeSet;
 
@@ -209,14 +209,16 @@ impl Session {
         let result = self.set(index, command.value);
         // Native errors after admission may have changed DSP; never retain a
         // supposedly confirmed state or continue playback after an ambiguous result.
-        if result.is_err() {
-            self.failed = true;
-            return result;
+        if let Err(reason) = result {
+            if !matches!(reason, ControlError::LatencyRestored) {
+                self.failed = true;
+            }
+            return Err(reason.to_string());
         }
         self.state.revision = revision;
         Ok(())
     }
-    fn set(&mut self, index: usize, value: f64) -> Result<(), String> {
+    fn set(&mut self, index: usize, value: f64) -> Result<(), ControlError> {
         let target = self.state.controls[index].target.clone();
         if let Target::Native { node, parameter } = &target {
             let Some(Processor::Native(p)) = self.graph.processor_mut(node) else {
@@ -264,7 +266,7 @@ impl Session {
                     .find(|p| &p.symbol == symbol)
                     .ok_or("Missing LV2 port")?
                     .index;
-                c.value = f64::from(p.set(port, value as f32)?);
+                c.value = f64::from(p.set_control(port, value as f32)?);
                 c.display = format!("{:.3}", c.value);
             }
             Target::Bypass { .. } | Target::Merge { .. } => {

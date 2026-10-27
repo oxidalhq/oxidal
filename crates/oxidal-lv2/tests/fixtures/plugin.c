@@ -5,6 +5,7 @@
 #include <lv2/buf-size/buf-size.h>
 #include <lv2/atom/atom.h>
 #include <stdlib.h>
+#include <math.h>
 #include <string.h>
 typedef struct {float* p[6];float history[2][2048];uint32_t frames;} Test;
 static LV2_Handle create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
@@ -34,4 +35,28 @@ static void run(LV2_Handle h,uint32_t n){Test* t=h;if(n!=t->frames)abort();for(u
 static void cleanup(LV2_Handle h){free(h);}
 static const LV2_Descriptor descriptor={"urn:oxidal:test:contract",create,connect,NULL,run,NULL,cleanup,NULL};
 static const LV2_Descriptor quantized={"urn:oxidal:test:quantized",create,connect,NULL,run,NULL,cleanup,NULL};
-LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:NULL;}
+// Deliberately reports only from run(), including the core run(0) query.
+// Mode selects malformed or spontaneously changing latency for host rejection tests.
+typedef struct {float* p[7];float history[2][1024];uint32_t position;int stuck, stereo;} Latent;
+static LV2_Handle latent_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
+    (void)rate;(void)path;(void)features;Latent* t=calloc(1,sizeof(Latent));if(t)t->stereo=!strcmp(d->URI,"urn:oxidal:test:latency-stereo");return t;
+}
+static void latent_connect(LV2_Handle h,uint32_t p,void* data){if(p<7)((Latent*)h)->p[p]=data;}
+static void latent_run(LV2_Handle h,uint32_t n) {
+    Latent* t=h;uint32_t channels=t->stereo?2:1, offset=t->stereo?2:0;float delay=*t->p[3+offset];int mode=(int)*t->p[4+offset];
+    if(mode==6)t->stuck=1;
+    *t->p[2+offset]=t->stuck?NAN:mode==1?-1.0f:mode==2?NAN:mode==3?delay+0.5f:mode==4?4294967296.0f:delay;
+    if(n && mode==5) *t->p[2+offset]=delay+1.0f;
+    uint32_t frames=(uint32_t)delay;
+    for(uint32_t i=0;i<n;i++) {
+        for(uint32_t c=0;c<channels;c++) {
+            t->history[c][t->position]=t->p[c][i];
+            t->p[c+channels][i]=t->history[c][(t->position+1024-frames)%1024];
+        }
+        t->position=(t->position+1)%1024;
+    }
+}
+static const LV2_Descriptor latency={"urn:oxidal:test:latency",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
+static const LV2_Descriptor latency_legacy={"urn:oxidal:test:latency-legacy",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
+static const LV2_Descriptor latency_stereo={"urn:oxidal:test:latency-stereo",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
+LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:NULL;}

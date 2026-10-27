@@ -182,6 +182,18 @@ if (mode === 'bootstrap') {
       { env },
     );
     env.OXIDAL_TEST_RIG_WORKER = join(targetDir, 'debug/oxidal-rig-worker');
+    run(
+      'cargo',
+      [
+        'test',
+        '--locked',
+        '-p',
+        'oxidal-engine',
+        '--features',
+        'qualification',
+      ],
+      { env },
+    );
     // Reuse the authored embedded fixture and isolated data root from the native
     // qualifier; no downloaded test scripts or extra provider credentials.
     run(

@@ -8,18 +8,24 @@ The optional `oxidal-lv2/native` feature uses Lilv to discover and instantiate i
 - Mono input/output plugins use two independent instances to preserve stereo histories. Stereo input/output plugins use one instance.
 - Bounded scalar input controls retain native ranges, integer/toggle properties and logarithmic scaling. Finite scalar outputs can be read back.
 - Stable URID map/unmap, sample-rate and block-size options are delivered during instantiation. Required unknown features/options fail before instantiation.
-- Unsupported ports, asymmetric channel layouts, reported latency, missing control ranges, Atom/CV, worker scheduling and opaque plugin state fail closed. This is a deliberately limited general plugin host, not full LV2 compatibility.
+- Unsupported ports, asymmetric channel layouts, missing control ranges, Atom/CV, worker scheduling and opaque plugin state fail closed. This is a deliberately limited general plugin host, not full LV2 compatibility.
+- The portable mixed-chain host admits one output control port designated `lv2:latency` (or deprecated `reportsLatency`). It queries latency with `run(0)` after restoring controls, validates whole nonnegative frames and uses the mixed executor's budgeted delay alignment. The legacy stereo graph rejects these plugins because it has no latency compensation.
+- Live latency-changing scalar edits are rejected with verified control/latency rollback; failed rollback or spontaneous processing-time latency changes invalidate the session. Automatic replanning is not implemented. A zero-frame query does not prove an arbitrary plugin's reconfiguration is real-time safe.
 - Instances and their discovery world have one thread owner. Port metadata is immutable after preparation. Buffers are prepared before processing; the successful host processing path does not allocate. Plugin allocation and real-time safety still require individual qualification.
 - Nonfinite plugin audio silences the block and poisons the instance until recreation. Native plugin crashes are not contained by this library: installed plugins are trusted code. A separate process boundary is required before exposing arbitrary plugins to playback.
 - Plugin ports that require reactivation or other lifecycle actions are not qualified by scalar readback alone.
 
 Feature behavior follows the LV2 [buffer-size](https://lv2plug.in/ns/ext/buf-size), [options](https://lv2plug.in/ns/ext/options) and [URID](https://lv2plug.in/ns/ext/urid) specifications.
 
+Latency semantics follow the official [latency designation](https://lv2plug.in/ns/lv2core#latency) and [core run contract](https://lv2plug.in/c/html/group__lv2core.html). Intentional musical delay is not processing latency.
+
 ## Repeatable qualification
 
 On Debian/Ubuntu install `liblilv-dev lv2-dev swh-lv2`, then run `pnpm lv2:check`. Linux CI runs the same command. `OXIDAL_LV2_EXTERNAL_DIR` can override the default `/usr/lib/lv2` external bundle directory. Missing external fixtures fail the test rather than silently skipping it.
 
 The suite checks feature delivery with a project-authored contract plugin and renders the independently installed SWH amplifier and delay. It verifies native gain, exact impulse delay and separate left/right histories, invalid ports/values, feature rejection, world lifetime and nonfinite-output containment. The contract plugin is infrastructure evidence, not musical-effect fidelity evidence.
+
+The existing `pnpm native:check` also runs portable-engine latency tests: modern/legacy metadata, parallel impulse alignment over multiple blocks, live bypass, offline bundle recall, buffer-budget rejection, scalar rollback and invalid/dynamic latency containment. These use an authored ABI fixture, not qualification of every third-party latency-reporting plugin.
 
 These tests do not qualify physical audio, real-time deadlines, reverb, TONE3000 LV2 preset parity, whole-graph replacement/trails, or physical MIDI devices. The existing native TONE3000 playback worker remains separate. The graph worker below connects this library to its own PCM loop and daemon API; the browser installed-effects flow controls the real graph worker; the development simulator remains separate.
 

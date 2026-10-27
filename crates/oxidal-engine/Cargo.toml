@@ -8,7 +8,7 @@ publish.workspace = true
 [features]
 native = ["oxidal-tone3000/native", "oxidal-lv2/native"]
 worker = ["native", "oxidal-audio/alsa"]
-qualification = ["worker", "oxidal-audio/qualification"]
+qualification = ["worker", "oxidal-audio/qualification", "oxidal-lv2/qualification"]
 
 [dependencies]
 serde.workspace = true

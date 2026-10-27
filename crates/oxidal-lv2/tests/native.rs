@@ -6,7 +6,7 @@ const URI: &str = "urn:oxidal:test:contract";
 fn contract_features_lifetime_bounds_readback_and_poison() {
     let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
     let catalog = world.plugins(48000.0).unwrap();
-    assert_eq!(catalog.len(), 3);
+    assert_eq!(catalog.len(), 8);
     let info = catalog.iter().find(|p| p.uri == URI).unwrap();
     assert!(!info.name.is_empty());
     assert!(info.unsupported.is_none());
@@ -118,4 +118,107 @@ fn declared_mono_ports_process_one_signal_and_reject_stereo_calls() {
     stereo.process(&mut left, &mut right).unwrap();
     assert_eq!(left, [0.2; 64]);
     assert_eq!(right, [-0.1; 64]);
+}
+
+#[test]
+fn reported_latency_prepares_without_audio_and_rejects_invalid_or_changing_values() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    for uri in ["urn:oxidal:test:latency", "urn:oxidal:test:latency-legacy"] {
+        let info = world
+            .plugins(48000.0)
+            .unwrap()
+            .into_iter()
+            .find(|p| p.uri == uri)
+            .unwrap();
+        assert!(info.unsupported.is_none());
+        assert_eq!(info.ports.iter().filter(|p| p.latency).count(), 1);
+        assert!(
+            Plugin::new(&world, uri, 48000.0, 64)
+                .unwrap_err()
+                .contains("mixed-chain")
+        );
+        let mut p = Plugin::new_ports(&world, uri, 48000.0, 64).unwrap();
+        assert!(p.latency_frames().is_err()); // Unwritten NaN is not zero.
+        p.set(3, 137.0).unwrap();
+        assert_eq!(p.prepare_latency().unwrap(), 137);
+        assert!(p.set(2, 1.0).is_err()); // latency is read-only
+        assert!(p.set(3, 12.0).unwrap_err().contains("prepare a new graph"));
+        assert_eq!(p.value(3).unwrap(), 137.0);
+        assert_eq!(p.latency_frames().unwrap(), 137);
+        let mut rendered = Vec::new();
+        for b in 0..4 {
+            if b == 1 {
+                // Rejected edits must not erase the impulse still in flight.
+                assert!(p.set(3, 12.0).is_err());
+            }
+            let mut samples = [0.0; 64];
+            if b == 0 {
+                samples[0] = 0.75;
+            }
+            p.process_mono(&mut samples).unwrap();
+            rendered.extend(samples);
+        }
+        assert_eq!(rendered.iter().filter(|v| **v != 0.0).count(), 1);
+        assert_eq!(rendered[137], 0.75);
+        // Zero-frame queries restore an invalid proposed scalar without consuming PCM.
+        for mode in 1..=4 {
+            assert!(p.set(4, mode as f32).is_err());
+            assert_eq!(p.value(4).unwrap(), 0.0);
+            assert_eq!(p.latency_frames().unwrap(), 137);
+        }
+        p.set(4, 5.0).unwrap();
+        let mut samples = [1.0; 64];
+        assert!(p.process_mono(&mut samples).is_err()); // spontaneous run-time latency
+        assert_eq!(samples, [0.0; 64]);
+        assert!(p.set(4, 0.0).is_err()); // poisoned instance cannot resume silently
+    }
+    for uri in [
+        "urn:oxidal:test:latency-input",
+        "urn:oxidal:test:latency-duplicate",
+    ] {
+        assert!(
+            world
+                .plugins(48000.0)
+                .unwrap()
+                .iter()
+                .find(|p| p.uri == uri)
+                .unwrap()
+                .unsupported
+                .is_some()
+        );
+        assert!(Plugin::new_ports(&world, uri, 48000.0, 64).is_err());
+    }
+    for mode in 1..=4 {
+        let mut p = Plugin::new_ports(&world, "urn:oxidal:test:latency", 48000.0, 64).unwrap();
+        p.set(4, mode as f32).unwrap();
+        assert!(p.prepare_latency().is_err());
+    }
+}
+
+#[test]
+fn stereo_latency_keeps_channels_separate_and_contains_runtime_change() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:latency-stereo", 48000.0, 64).unwrap();
+    p.set(5, 137.0).unwrap();
+    assert_eq!(p.prepare_latency().unwrap(), 137);
+    let mut rendered = [Vec::new(), Vec::new()];
+    for block in 0..4 {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        if block == 0 {
+            l[0] = 0.75;
+            r[0] = -0.25;
+        }
+        p.process(&mut l, &mut r).unwrap();
+        rendered[0].extend(l);
+        rendered[1].extend(r);
+    }
+    for (channel, amplitude) in rendered.iter().zip([0.75, -0.25]) {
+        assert_eq!(channel.iter().filter(|v| **v != 0.0).count(), 1);
+        assert_eq!(channel[137], amplitude);
+    }
+    p.set(6, 5.0).unwrap();
+    let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
+    assert!(p.process(&mut l, &mut r).is_err());
+    assert_eq!(l, [0.0; 64]);
+    assert_eq!(r, [0.0; 64]);
 }
