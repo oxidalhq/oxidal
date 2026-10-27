@@ -163,7 +163,8 @@ pub struct SplitStages {
 }
 
 /// Single-owner offline processor. !Send/!Sync keeps JUCE calls and destruction on its owner thread.
-/// This is not a real-time-safe or live ALSA interface.
+/// Multiple handles may coexist on that process owner. Construction and transfer on
+/// another thread are rejected. This is not a real-time-safe or live ALSA interface.
 #[derive(Debug)]
 pub struct Engine {
     ptr: NonNull<c_void>,

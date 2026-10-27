@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include "split.h"
 #include "audition.h"
@@ -12,9 +13,27 @@
 #define EXPORT extern "C" __attribute__((visibility("default")))
 namespace {
 thread_local std::string error;
-std::atomic<bool> occupied{false};
+// JUCE lifecycle and every processor stay on one process owner. Multiple
+// independent handles may coexist there; this is not permission to construct
+// or transfer an engine onto a background/audio thread.
+std::mutex ownerMutex;
+std::thread::id processOwner;
+void claimProcessOwner() {
+  std::lock_guard<std::mutex> lock(ownerMutex);
+  const auto caller = std::this_thread::get_id();
+  if (processOwner != std::thread::id{} && processOwner != caller)
+    throw std::runtime_error("native engines require the process owner thread");
+  processOwner = caller;
+}
+struct PresetStaging {
+  const juce::File root = juce::File(juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {}))
+      .getChildFile("adapter-presets").getChildFile(juce::Uuid().toString());
+  ~PresetStaging() { if (root.exists()) root.deleteRecursively(); }
+};
 struct Engine {
   juce::ScopedJuceInitialiser_GUI juce;
+  // Destroy after the processor has joined pending loads, before JUCE shutdown.
+  PresetStaging staging;
   TONE3000Processor processor;
   juce::AudioBuffer<float> audio;
   juce::MidiBuffer midi;
@@ -62,19 +81,17 @@ EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
     const auto root = juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {});
     if (root.isEmpty() || !juce::File::isAbsolutePath(root) || !juce::File(root).isDirectory())
       throw std::runtime_error("explicit existing isolated data root required");
-    if (occupied.exchange(true)) throw std::runtime_error("offline bridge permits one engine at a time");
-    try {
-      auto e = std::make_unique<Engine>(frames);
-      e->processor.setMultiCoreEnabled(false, false);
-      // JUCE host contract: publish rate/block metadata before preparation and callbacks.
-      e->processor.setRateAndBufferSizeDetails(rate, frames);
-      e->processor.prepareToPlay(rate, frames);
-      *result = e.release();
-    } catch (...) { occupied.store(false); throw; }
+    claimProcessOwner();
+    auto e = std::make_unique<Engine>(frames);
+    e->processor.setMultiCoreEnabled(false, false);
+    // JUCE host contract: publish rate/block metadata before preparation and callbacks.
+    e->processor.setRateAndBufferSizeDetails(rate, frames);
+    e->processor.prepareToPlay(rate, frames);
+    *result = e.release();
   });
 }
 EXPORT int oxidal_t3k_destroy(void* ptr) noexcept {
-  return guard([&] { auto& e = engine(ptr); delete &e; occupied.store(false); });
+  return guard([&] { auto& e = engine(ptr); delete &e; });
 }
 EXPORT int oxidal_t3k_catalog(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
@@ -231,7 +248,7 @@ EXPORT int oxidal_t3k_load_preset(void* ptr, const unsigned char* bytes, size_t 
   return guard([&] {
     auto& e = engine(ptr);
     if (!bytes || length < 5 || length > 32 * 1024 * 1024) throw std::runtime_error("preset size");
-    const auto root = juce::File(juce::SystemStats::getEnvironmentVariable("OXIDAL_QUALIFICATION_DATA", {})).getChildFile("adapter-presets");
+    const auto& root = e.staging.root;
     if (!root.createDirectory()) throw std::runtime_error("preset staging directory");
     const auto file = root.getChildFile("input.t3kpreset");
     if (!file.replaceWithData(bytes, length)) throw std::runtime_error("preset staging write");

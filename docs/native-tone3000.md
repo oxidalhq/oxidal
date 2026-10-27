@@ -49,7 +49,7 @@ The normal `pnpm check` invokes this gate on macOS or Linux when the native depe
 
 ## State, threads and bounds
 
-- The Rust wrapper owns one native handle, is neither `Send` nor `Sync`, and uses exclusive mutable borrows. The native bridge additionally checks the owning thread and rejects a second concurrent instance. This is a temporary qualification limit, not the intended multi-instance host architecture.
+- Each Rust wrapper owns one native handle, is neither `Send` nor `Sync`, and uses exclusive mutable borrows. Multiple independent handles may coexist on the same process owner. The first native construction fixes that owner for the process lifetime; construction from a different thread is rejected, and calls/destruction still check the handle owner. This permits prepared stages to coexist, not background engine construction or a real-time handoff.
 - All native exports catch C++ exceptions. Input sample-rate, block-size, parameter-value, string and buffer bounds are validated. Audio is stereo, at most 2048 frames, with finite input/output checks. Control JSON is bounded to 256 KiB and captured state to 32 MiB.
 - `State` can only be constructed from a native capture. Arbitrary imported bytes are not accepted through that safe Rust type. Complete native session state is different from a tone preset: this gate does not replace the bounded `.t3kpreset` importer or establish its audio fidelity.
 - Native settings, logs, model stash and preset discovery use a newly created `OXIDAL_QUALIFICATION_DATA` directory. Required isolation patches redirect macOS/Linux JUCE special folders and factory discovery. Linux uses `user/.config` inside the isolated root; macOS uses `user/Library`. This remains an experimental isolated adapter, not a production plugin. The private first-boot appliance bundle uses the same isolation: the daemon creates separate native-editor and playback roots under its state directory. It does not modify the official standalone application’s user data. No environment changes are made to `HOME` or the installed TONE3000 data.
@@ -155,3 +155,21 @@ an IR after multiple NAM blocks and recalls the saved rig with both temporary st
 hidden. The browser scenario selects the IR via the real transaction and saves the
 combined working rig. This does not qualify every WAV encoding, stereo convolution,
 physical audio, gapless transitions or mixed LV2 hosting.
+
+## Coexisting native processors
+
+The bridge permits independently owned processor handles on its single JUCE owner.
+Upstream TONE3000 already keeps DSP state per processor; shared logger/settings
+initialization is not treated as permission to share mutable audio state. Each handle
+retains its own processor, prepared models, buffers, capture storage and unique preset
+staging directory. That directory is removed only after its processor has been destroyed. The existing
+Rust `!Send`/`!Sync` boundary and native thread checks remain in force.
+
+The maintained qualifier compares isolated A2 rendering with interleaved rendering
+from two live handles running at different rates, changes one handle's gain, checks
+staging isolation/cleanup, and destroys/recreates peers while
+the other remains usable. A foreign-thread construction probe must fail. These checks
+are prerequisites for native stages in a mixed graph. Construction/loading still runs
+on the owner and may block; no concurrent DSP, background engine transfer, crossfade,
+continuous-stream swap, latency alignment, overload admission or gapless behavior is
+provided by this change. The current daemon still uses its existing separate workers.

@@ -57,9 +57,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let expected: Value =
         serde_json::from_str(include_str!("../../../native/tone3000/parameters.json"))?;
     let mut engine = Engine::new(48000.0, 128)?;
+    // Coexisting processors share the process owner, never their mutable DSP state.
+    drop(Engine::new(48000.0, 128)?);
     assert!(
-        Engine::new(48000.0, 128).is_err(),
-        "must reject second live owner"
+        std::thread::spawn(|| Engine::new(48000.0, 128).is_err())
+            .join()
+            .expect("foreign-owner probe"),
+        "must reject a foreign owner thread"
     );
     let catalog = engine.catalog()?;
     let actual = catalog.as_array().ok_or("catalog must be array")?;
@@ -350,6 +354,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_empty_creation(&root, &preset)?;
     qualify_model_preparation(&root, &preset)?;
     qualify_ir_preparation(&root)?;
+    qualify_engine_isolation(&preset)?;
     println!(
         "{}",
         serde_json::json!({"parameters":43,"tone_parameters":36,"machine_defaults":4,"dry_max_error":dry_error,"restored_a2_max_error":restore_error,"state_bytes":model_state.byte_len(),"non_a2_local_load_rejected":true,"live_audio_qualified":false})
@@ -1626,5 +1631,98 @@ fn qualify_ir_preparation(root: &std::path::Path) -> Result<(), Box<dyn Error>> 
         "IR embedded rendered restore differs: {error}"
     );
     eprintln!("qualify: IR preparation/insertion/rendered embedded recall passed");
+    Ok(())
+}
+
+fn qualify_engine_isolation(preset: &[u8]) -> Result<(), Box<dyn Error>> {
+    fn prepared(preset: &[u8], rate: f64) -> Result<Engine, Box<dyn Error>> {
+        let mut engine = Engine::new(rate, 128)?;
+        engine.load_preset(preset)?;
+        engine.wait_ready()?;
+        engine.set_normalized("gateEnabled", 0.0)?;
+        engine.set_normalized("inputLevel", 0.5)?;
+        engine.set_normalized("outputLevel", 0.5)?;
+        settle(&mut engine)?;
+        Ok(engine)
+    }
+    fn block(engine: &mut Engine, index: usize) -> Result<Vec<f32>, Box<dyn Error>> {
+        let mut left: Vec<f32> = (0..128)
+            .map(|i| ((index * 128 + i) as f32 * 0.031).sin() * 0.03)
+            .collect();
+        let mut right = left.clone();
+        engine.process(&mut left, &mut right)?;
+        left.extend(right);
+        Ok(left)
+    }
+    let staging_root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?)
+        .join("adapter-presets");
+    let staging_count = || -> Result<usize, Box<dyn Error>> {
+        Ok(std::fs::read_dir(&staging_root)?
+            .collect::<Result<Vec<_>, _>>()?
+            .iter()
+            .filter(|entry| entry.path().is_dir())
+            .count())
+    };
+    let before_staging = staging_count()?;
+    let mut reference = prepared(preset, 48000.0)?;
+    let mut expected = Vec::new();
+    for i in 0..16 {
+        expected.extend(block(&mut reference, i)?);
+    }
+    drop(reference);
+    assert_eq!(staging_count()?, before_staging);
+    let mut first = prepared(preset, 48000.0)?;
+    let baseline = serde_json::to_value(first.live_controls()?)?;
+    let mut second = prepared(preset, 44100.0)?;
+    assert_eq!(
+        staging_count()?,
+        before_staging + 2,
+        "each engine needs its own preset staging root"
+    );
+    second.set_normalized("outputLevel", 0.2)?;
+    settle(&mut second)?;
+    assert_eq!(
+        serde_json::to_value(first.live_controls()?)?,
+        baseline,
+        "second settings changed first controls"
+    );
+    let mut actual = Vec::new();
+    let mut different = Vec::new();
+    for i in 0..16 {
+        actual.extend(block(&mut first, i)?);
+        different.extend(block(&mut second, i)?);
+    }
+    let error = expected
+        .iter()
+        .zip(&actual)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        error < 1e-5,
+        "coexisting instance changed rendered output: {error}"
+    );
+    assert!(
+        actual
+            .iter()
+            .zip(&different)
+            .any(|(a, b)| (a - b).abs() > 1e-4),
+        "different instance output controls had no effect"
+    );
+    // Destroying either instance must leave its peer and a later instance usable.
+    drop(first);
+    assert_eq!(staging_count()?, before_staging + 1);
+    let second_before = serde_json::to_value(second.live_controls()?)?;
+    let mut third = prepared(preset, 48000.0)?;
+    assert_eq!(
+        serde_json::to_value(second.live_controls()?)?,
+        second_before
+    );
+    drop(second);
+    assert_eq!(staging_count()?, before_staging + 1);
+    assert!(block(&mut third, 0)?.iter().all(|s| s.is_finite()));
+    assert!(!third.runtime()?["blocks"].as_array().unwrap().is_empty());
+    drop(third);
+    assert_eq!(staging_count()?, before_staging);
+    eprintln!("qualify: coexisting engine isolation, rendered parity and peer destruction passed");
     Ok(())
 }
