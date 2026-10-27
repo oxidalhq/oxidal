@@ -78,3 +78,44 @@ fn independent_external_mono_amp_and_delay_preserve_stereo() {
         .is_err()
     );
 }
+
+#[test]
+fn declared_mono_ports_process_one_signal_and_reject_stereo_calls() {
+    let root = std::env::var("OXIDAL_LV2_EXTERNAL_DIR").expect("Use pnpm lv2:check");
+    let world = World::bundle(&Path::new(&root).join("amp-swh.lv2")).unwrap();
+    let mut amp =
+        Plugin::new_ports(&world, "http://plugin.org.uk/swh-plugins/amp", 48000.0, 64).unwrap();
+    assert_eq!(amp.channels(), 1);
+    assert_eq!(
+        amp.info()
+            .ports
+            .iter()
+            .filter(|p| p.audio && p.input)
+            .count(),
+        1
+    );
+    amp.set(0, -6.0206).unwrap();
+    let mut signal = [0.5; 64];
+    amp.process_mono(&mut signal).unwrap();
+    assert!(signal.iter().all(|v| (*v - 0.25).abs() < 1e-5));
+    assert!(amp.process(&mut [1.0; 64], &mut [1.0; 64]).is_err());
+    let mut invalid = [f32::NAN; 64];
+    assert!(amp.process_mono(&mut invalid).is_err());
+    assert_eq!(invalid, [0.0; 64]);
+    amp.process_mono(&mut signal).unwrap(); // invalid input did not poison DSP
+    amp.set(0, 24.0).unwrap();
+    let mut overflow = [f32::MAX; 64];
+    assert!(amp.process_mono(&mut overflow).is_err());
+    assert_eq!(overflow, [0.0; 64]);
+    assert!(amp.process_mono(&mut signal).is_err());
+    assert!(amp.set(0, 0.0).is_err());
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut stereo = Plugin::new_ports(&world, URI, 48000.0, 64).unwrap();
+    assert_eq!(stereo.channels(), 2);
+    assert!(stereo.process_mono(&mut [1.0; 64]).is_err());
+    let (mut left, mut right) = ([0.4; 64], [-0.2; 64]);
+    stereo.set(4, 0.5).unwrap();
+    stereo.process(&mut left, &mut right).unwrap();
+    assert_eq!(left, [0.2; 64]);
+    assert_eq!(right, [-0.1; 64]);
+}

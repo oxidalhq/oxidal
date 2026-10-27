@@ -1,4 +1,6 @@
 //! Actual native A2 + installed LV2 composition, part of the Linux native gate.
+#[path = "qualify_mixed/portable.rs"]
+mod portable;
 use oxidal_engine::{PreparedRig, Processor};
 use oxidal_graph::{BlockKind, Edge, Node, Rig};
 use oxidal_lv2::{Plugin, World};
@@ -60,6 +62,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
     qualify_admission_and_failure(&world)?;
+    portable::qualify(&world, &bytes, Path::new(&root))?;
     let frames = 128;
     let mut fx = Plugin::new(
         &world,
@@ -206,6 +209,16 @@ fn qualify_admission_and_failure(world: &World) -> Result<(), Box<dyn Error>> {
         PreparedRig::new(
             wrong,
             BTreeMap::from([("fx".into(), Processor::Lv2(plugin()?))]),
+            48000.0,
+            128
+        )
+        .is_err()
+    );
+    let mono = Plugin::new_ports(world, "http://plugin.org.uk/swh-plugins/amp", 48000.0, 128)?;
+    assert!(
+        PreparedRig::new(
+            simple.clone(),
+            BTreeMap::from([("fx".into(), Processor::Lv2(mono))]),
             48000.0,
             128
         )

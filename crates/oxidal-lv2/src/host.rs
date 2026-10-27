@@ -214,6 +214,7 @@ pub struct Plugin {
     frames: usize,
     rate: f64,
     failed: bool,
+    channels: usize,
 }
 impl Plugin {
     pub fn configuration(&self) -> (f64, usize) {
@@ -222,7 +223,25 @@ impl Plugin {
     pub fn info(&self) -> &PluginInfo {
         &self.info
     }
+    /// Compatibility stereo host: mono plugins use two independent instances.
     pub fn new(world: &World, uri: &str, rate: f64, frames: usize) -> Result<Self, String> {
+        Self::instantiate(world, uri, rate, frames, true)
+    }
+    /// Match the discovered audio ports exactly. A mono plugin owns one instance
+    /// and must be called through process_mono; no hidden stereo duplication.
+    pub fn new_ports(world: &World, uri: &str, rate: f64, frames: usize) -> Result<Self, String> {
+        Self::instantiate(world, uri, rate, frames, false)
+    }
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+    fn instantiate(
+        world: &World,
+        uri: &str,
+        rate: f64,
+        frames: usize,
+        stereo: bool,
+    ) -> Result<Self, String> {
         if frames == 0 || frames > 2048 || !frames.is_power_of_two() {
             return Err("Require fixed power-of-two frames 1–2048".into());
         }
@@ -237,7 +256,7 @@ impl Plugin {
             let mono = info.ports.iter().filter(|p| p.audio && p.input).count() == 1;
             return Ok(Self {
                 left: Instance::new(world, p, rate, frames as u32)?,
-                right: if mono {
+                right: if mono && stereo {
                     Some(Instance::new(world, p, rate, frames as u32)?)
                 } else {
                     None
@@ -246,6 +265,7 @@ impl Plugin {
                 frames,
                 rate,
                 failed: false,
+                channels: if mono && !stereo { 1 } else { 2 },
             });
         }
         Err("LV2 URI not discovered".into())
@@ -287,11 +307,42 @@ impl Plugin {
             Err("Nonfinite control output".into())
         }
     }
+    pub fn process_mono(&mut self, samples: &mut [f32]) -> Result<(), String> {
+        if self.failed {
+            samples.fill(0.0);
+            return Err("Failed plugin must be recreated".into());
+        }
+        if self.channels != 1
+            || samples.len() != self.frames
+            || samples.iter().any(|v| !v.is_finite())
+        {
+            samples.fill(0.0);
+            return Err("Invalid fixed mono buffer or plugin layout".into());
+        }
+        // SAFETY: new_ports admitted exactly one input/output port and no right
+        // instance. The C bridge never dereferences right for this mono layout;
+        // samples is exclusive, finite, and has the instantiated frame count.
+        let status = unsafe {
+            ox_lv2_run(
+                self.left.ptr.as_ptr(),
+                samples.as_mut_ptr(),
+                std::ptr::null_mut(),
+                self.frames as u32,
+            )
+        };
+        if status != 0 {
+            self.failed = true;
+            samples.fill(0.0);
+            return Err(error());
+        }
+        Ok(())
+    }
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) -> Result<(), String> {
         if self.failed {
             return Err("Failed plugin must be recreated".into());
         }
-        if left.len() != self.frames
+        if self.channels != 2
+            || left.len() != self.frames
             || right.len() != self.frames
             || left.iter().chain(right.iter()).any(|x| !x.is_finite())
         {

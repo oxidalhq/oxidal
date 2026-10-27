@@ -129,3 +129,10 @@ actual touch-button/keyboard dispatch. The maintained Linux browser scenario ent
 native amplifier value, observes actual worker readback, cancels, commits, saves and
 recalls it on all six profiles. This is control mapping evidence, not physical audio
 or real-time timing qualification.
+
+The portable graph integration additionally exposes `Plugin::new_ports` and
+`process_mono` for a mono plugin's exact discovered layout, without creating an
+implicit second instance. Existing `Plugin::new` callers retain the dual-mono
+stereo wrapper. The maintained native tests cover both modes, wrong-layout/input
+rejection, stereo separation and overload failure latching. This does not add
+opaque State/Atom/worker support or qualify live structural replacement.

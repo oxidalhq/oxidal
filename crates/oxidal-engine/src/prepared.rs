@@ -12,7 +12,7 @@ pub enum Processor {
     Lv2(Plugin),
 }
 impl Processor {
-    fn configuration(&self) -> (f64, usize) {
+    pub(crate) fn configuration(&self) -> (f64, usize) {
         match self {
             Self::Native(p) => p.configuration(),
             Self::Lv2(p) => p.configuration(),
@@ -20,7 +20,7 @@ impl Processor {
     }
     fn matches(&self, kind: &BlockKind) -> bool {
         match self {
-            Self::Lv2(_) => *kind == BlockKind::Lv2,
+            Self::Lv2(p) => *kind == BlockKind::Lv2 && p.channels() == 2,
             Self::Native(p) => {
                 *kind
                     == match p.processing_role() {
@@ -31,7 +31,7 @@ impl Processor {
             }
         }
     }
-    fn ready(&mut self) -> Result<(), String> {
+    pub(crate) fn ready(&mut self) -> Result<(), String> {
         match self {
             Self::Native(p) => p.wait_ready().map_err(|e| e.to_string()),
             Self::Lv2(_) => Ok(()),
