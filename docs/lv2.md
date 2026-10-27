@@ -113,3 +113,19 @@ from acquiring the audio device at once. No switch between these workers is gapl
 journey against the actual worker and SWH plugin on desktop, mobile, XR WebKit, Fold cover,
 Fold open and BOOX profiles. It captures portrait/landscape picker and live-control views,
 checks tap targets/overflow, and waits for real metadata and monitoring before captures.
+
+## Native-value touch editing
+
+The installed-effects editor accepts exact native port values rather than requiring a
+percentage conversion. Its drag axis remains logarithmic for logarithmic ports. Plus,
+minus and arrow keys move one native integer for integer ports and between endpoints
+for toggles; continuous controls use a 0.001 normalized increment. Reset/Cancel retain
+the existing owned-edit behavior and confirmed native readback remains authoritative.
+Missing or unusable port metadata falls back to explicitly labelled percentage entry.
+Enumeration labels/scale points and native unit metadata are not exposed yet.
+
+Unit/component coverage checks every integer in a 1–200 range with both tapers and
+actual touch-button/keyboard dispatch. The maintained Linux browser scenario enters a
+native amplifier value, observes actual worker readback, cancels, commits, saves and
+recalls it on all six profiles. This is control mapping evidence, not physical audio
+or real-time timing qualification.

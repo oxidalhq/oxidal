@@ -1,3 +1,4 @@
+import { lv2Control } from './lv2Control';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -273,7 +274,7 @@ export function GraphAuthor({
       });
     return () => controller.abort();
   }, [running, sampleRate]);
-  function formatControl(target: string, value: number) {
+  function controlScale(target: string) {
     const dot = target.indexOf('.');
     const binding = configured?.bindings.find(
       (b) => b.node === target.slice(0, dot),
@@ -281,15 +282,7 @@ export function GraphAuthor({
     const port = catalog
       .find((p) => p.uri === binding?.uri)
       ?.ports.find((p) => p.symbol === target.slice(dot + 1));
-    if (!port || port.minimum == null || port.maximum == null)
-      return `${Number((value * 100).toFixed(2))}%`;
-    const native = port.logarithmic
-      ? port.minimum * (port.maximum / port.minimum) ** value
-      : port.minimum + (port.maximum - port.minimum) * value;
-    if (port.toggled) return value >= 0.5 ? 'On' : 'Off';
-    return String(
-      port.integer ? Math.round(native) : Number(native.toPrecision(5)),
-    );
+    return port ? lv2Control(port) : undefined;
   }
   if (liveOnly && !running) return null;
   const disabled =
@@ -426,9 +419,8 @@ export function GraphAuthor({
                           state={state.control!}
                           connected={connected && !busy}
                           send={send}
-                          formatValue={(value) =>
-                            formatControl(parameter.id, value)
-                          }
+                          scale={controlScale(parameter.id)}
+                          formatValue={controlScale(parameter.id)?.format}
                           accept={() => {}}
                         />
                       </div>

@@ -1,3 +1,4 @@
+import type { ControlScale } from './lv2Control';
 import { useEffect, useRef, useState } from 'react';
 import { sendCommand, type Snapshot } from './api';
 import { TouchAdjust } from './TouchAdjust';
@@ -12,6 +13,7 @@ export function ControlEditor({
   connected,
   accept,
   send = sendCommand,
+  scale,
   formatValue = (value: number) => `${Number((value * 100).toFixed(2))}%`,
 }: {
   parameter: Parameter;
@@ -20,6 +22,7 @@ export function ControlEditor({
   accept: (next: Snapshot, session: string) => void;
   send?: typeof sendCommand;
   formatValue?: (value: number) => string;
+  scale?: ControlScale;
 }) {
   const [owner] = useState(() => crypto.randomUUID());
   const [opened, setOpened] = useState(false);
@@ -152,7 +155,9 @@ export function ControlEditor({
               baseline={baseline}
               min={parameter.min}
               max={parameter.max}
-              step={parameter.step}
+              step={scale ? 0.001 : parameter.step}
+              snap={scale?.snap}
+              nudge={scale?.nudge}
               disabled={unavailable}
               onChange={preview}
               format={formatValue}
@@ -160,15 +165,18 @@ export function ControlEditor({
             <details className="exact-entry">
               <summary>Enter value</summary>
               <label className="field">
-                Draft {parameter.label} (%)
+                Draft {parameter.label}
+                {scale ? '' : ' (%)'}
                 <input
                   type="number"
-                  min={parameter.min * 100}
-                  max={parameter.max * 100}
-                  step={parameter.step * 100}
+                  min={scale?.min ?? parameter.min * 100}
+                  max={scale?.max ?? parameter.max * 100}
+                  step={scale?.step ?? parameter.step * 100}
                   value={
                     Number.isFinite(draft)
-                      ? Math.round(draft * 10000) / 100
+                      ? scale
+                        ? Number(scale.native(draft).toPrecision(8))
+                        : Math.round(draft * 10000) / 100
                       : ''
                   }
                   disabled={unavailable}
@@ -176,7 +184,9 @@ export function ControlEditor({
                     preview(
                       event.target.value === ''
                         ? NaN
-                        : Number(event.target.value) / 100,
+                        : scale
+                          ? scale.normalized(Number(event.target.value))
+                          : Number(event.target.value) / 100,
                     )
                   }
                 />

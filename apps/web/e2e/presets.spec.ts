@@ -1608,7 +1608,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await adjust.click();
   const dialog = page.getByRole('dialog', { name: 'gain', exact: true });
   await dialog.getByText('Enter value', { exact: true }).click();
-  await dialog.getByLabel('Draft gain (%)', { exact: true }).fill('25');
+  await dialog.getByLabel('Draft gain', { exact: true }).fill('-35');
   await expect
     .poll(async () => (await read()).native_values[0].value)
     .toBe(-35);
@@ -1616,7 +1616,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect.poll(async () => (await read()).native_values[0].value).toBe(0);
   await adjust.click();
   await dialog.getByText('Enter value', { exact: true }).click();
-  await dialog.getByLabel('Draft gain (%)', { exact: true }).fill('25');
+  await dialog.getByLabel('Draft gain', { exact: true }).fill('-35');
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   await expect
     .poll(async () => (await read()).native_values[0].value)

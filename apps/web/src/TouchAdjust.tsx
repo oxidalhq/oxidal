@@ -17,6 +17,8 @@ export function TouchAdjust({
   onChange,
   format,
   commitHint = '',
+  snap,
+  nudge,
 }: {
   label: string;
   value: number;
@@ -28,6 +30,8 @@ export function TouchAdjust({
   onChange: (value: number) => void;
   format: (value: number) => string;
   commitHint?: string;
+  snap?: (value: number) => number;
+  nudge?: (value: number, direction: -1 | 1) => number;
 }) {
   const hint = useId();
   const [fine, setFine] = useState(false);
@@ -56,6 +60,7 @@ export function TouchAdjust({
     };
   }, [valid]);
   function quantize(next: number) {
+    if (snap) return snap(Math.min(max, Math.max(min, next)));
     return Math.min(
       max,
       Math.max(
@@ -130,9 +135,9 @@ export function TouchAdjust({
           if (!valid || gesture.current) return;
           const next =
             event.key === 'ArrowLeft' || event.key === 'ArrowDown'
-              ? value - step
+              ? (nudge?.(value, -1) ?? value - step)
               : event.key === 'ArrowRight' || event.key === 'ArrowUp'
-                ? value + step
+                ? (nudge?.(value, 1) ?? value + step)
                 : event.key === 'Home'
                   ? min
                   : event.key === 'End'
@@ -165,7 +170,10 @@ export function TouchAdjust({
           disabled={!valid}
           onClick={() => {
             release();
-            onChange(Math.max(min, Number((value - step).toFixed(12))));
+            onChange(
+              nudge?.(value, -1) ??
+                Math.max(min, Number((value - step).toFixed(12))),
+            );
           }}
         >
           −
@@ -176,7 +184,10 @@ export function TouchAdjust({
           disabled={!valid}
           onClick={() => {
             release();
-            onChange(Math.min(max, Number((value + step).toFixed(12))));
+            onChange(
+              nudge?.(value, 1) ??
+                Math.min(max, Number((value + step).toFixed(12))),
+            );
           }}
         >
           +
