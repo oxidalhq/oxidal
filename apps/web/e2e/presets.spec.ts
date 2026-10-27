@@ -1,7 +1,8 @@
 import { setDisplayMode } from './display';
 import { test, expect, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
@@ -877,6 +878,133 @@ test('playback lifecycle keeps native authoring available after stop and restart
         exact: true,
       }),
     ).toBeEnabled();
+    // Only provider transport is a fixture. Selection, verified local asset, native
+    // worker preparation, live readback and Save use the real daemon/processes.
+    const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
+    const asset = readdirSync(modelRoot).find((id) =>
+      /^[0-9a-f]{64}$/.test(id),
+    )!;
+    const metadata = JSON.parse(
+      readFileSync(join(modelRoot, asset, 'metadata.json'), 'utf8'),
+    );
+    await page.route('**/api/v1/tone3000/tones?*', (route) =>
+      route.fulfill({
+        json: {
+          data: [
+            {
+              id: metadata.tone_id,
+              title: 'Audition fixture',
+              format: 'nam',
+              gear: 'amp',
+              license: 'Test fixture',
+              models_count: 1,
+              a2_models_count: 1,
+              url: 'https://www.tone3000.com',
+              user: { username: 'fixture' },
+            },
+          ],
+          page: 1,
+          total_pages: 1,
+        },
+      }),
+    );
+    await page.route('**/api/v1/tone3000/models?*', (route) => {
+      expect(
+        new URL(route.request().url()).searchParams.get('architecture'),
+      ).toBe('2');
+      return route.fulfill({
+        json: {
+          data: [
+            {
+              id: metadata.model_id,
+              tone_id: metadata.tone_id,
+              name: 'Prepared A2',
+              size: null,
+              architecture_version: '2',
+            },
+          ],
+          page: 1,
+          total_pages: 1,
+        },
+      });
+    });
+    let holdDownload = true;
+    await page.route('**/api/v1/tone3000/stage', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        tone_id: metadata.tone_id,
+        model_id: metadata.model_id,
+      });
+      if (holdDownload)
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({
+        json: {
+          id: asset,
+          tone_id: metadata.tone_id,
+          model_id: metadata.model_id,
+          title: metadata.title,
+          name: metadata.name,
+          sha256: metadata.sha256,
+        },
+      });
+    });
+    const beforeModel = await (await request.get('/api/v1/audio')).json();
+    await sounding
+      .getByRole('button', { name: 'Choose NAM', exact: true })
+      .first()
+      .click();
+    const picker = page.getByRole('dialog', { name: 'Choose NAM' });
+    await picker.getByRole('button', { name: /Audition fixture/ }).click();
+    for (const [name, viewport] of [
+      ['portrait', portrait],
+      ['landscape', { width: portrait.height, height: portrait.width }],
+    ] as const) {
+      await page.setViewportSize(viewport);
+      await expect(
+        picker.getByRole('button', { name: /Prepared A2/ }),
+      ).toBeVisible();
+      expect(
+        await picker.evaluate((node) => node.scrollWidth <= node.clientWidth),
+      ).toBe(true);
+      const back = await picker
+        .getByRole('button', { name: 'Back to tones', exact: true })
+        .boundingBox();
+      const model = await picker
+        .getByRole('button', { name: /Prepared A2/ })
+        .boundingBox();
+      expect(back && model && model.y - (back.y + back.height) >= 8).toBe(true);
+      expect(model && model.height >= 44).toBe(true);
+      await page.screenshot({
+        path: test.info().outputPath(`model-picker-${name}.png`),
+      });
+    }
+    await page.setViewportSize(portrait);
+    await picker.getByRole('button', { name: /Prepared A2/ }).click();
+    await picker
+      .getByRole('button', { name: 'Cancel download', exact: true })
+      .click();
+    await expect(picker).toHaveCount(0);
+    await page.waitForTimeout(1600);
+    expect((await (await request.get('/api/v1/audio')).json()).models).toEqual(
+      beforeModel.models,
+    );
+    holdDownload = false;
+    await sounding
+      .getByRole('button', { name: 'Choose NAM', exact: true })
+      .first()
+      .click();
+    await picker.getByRole('button', { name: /Audition fixture/ }).click();
+    await picker.getByRole('button', { name: /Prepared A2/ }).click();
+    await expect(picker).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).model_change
+            ?.phase,
+      )
+      .toBe('applied');
+    await expect(sounding.locator('.live-effect').first()).toContainText(
+      'Audition fixture',
+    );
     const confirmedAfterOther = await (
       await request.get('/api/v1/audio')
     ).json();

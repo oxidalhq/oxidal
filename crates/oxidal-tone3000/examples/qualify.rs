@@ -1292,6 +1292,12 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
 }
 
 fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<(), Box<dyn Error>> {
+    fn content(mut state: Value) -> Value {
+        // Starting preparation settles a previously pending scalar revision. Only
+        // that notification epoch may advance; every chain/settings field must match.
+        state.as_object_mut().unwrap().remove("revision");
+        state
+    }
     let mut engine = Engine::new(48000.0, 128)?;
     engine.load_preset(preset)?;
     engine.wait_ready()?;
@@ -1303,39 +1309,61 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     std::fs::copy(std::env::var("OXIDAL_TONE3000_TEST_MODEL")?, &path)?;
     let tone = serde_json::json!({"id":7,"title":"Audition fixture","format":"nam","gear":"amp",
         "models":[{"id":9,"name":"Prepared A2","model_url":"oxidal-model://fixture/model.nam"}]});
-    let before = engine.chain()?;
+    // Reuse this verified fixture in the real browser/worker scenario; no test-only HTTP endpoint.
+    let pins: Value = serde_json::from_str(include_str!("../../../native/tone3000/sources.json"))?;
+    oxidal_presets::ModelStore::new(root.join("audition-models")).stage(
+        &oxidal_presets::ModelAsset {
+            schema: 1,
+            tone_id: 7,
+            model_id: 9,
+            title: "Audition fixture".into(),
+            name: "Prepared A2".into(),
+            format: "nam".into(),
+            sha256: pins["qualification_model"]["sha256"]
+                .as_str()
+                .unwrap()
+                .into(),
+            tone: tone.clone(),
+        },
+        &std::fs::read(&path)?,
+    )?;
+    let before = content(engine.chain()?);
     assert!(
         engine
             .prepare_model("missing-target", &path, &tone)
             .is_err()
     );
-    assert_eq!(engine.chain()?, before);
+    assert_eq!(content(engine.chain()?), before);
     // Failed candidate parsing must not change metadata, loaded state or the selected block.
     let corrupt = root.join("corrupt-a2.nam");
     std::fs::write(&corrupt, b"not a NAM")?;
     engine.prepare_model(&target, &corrupt, &tone)?;
     assert_eq!(wait_preparation(&mut engine)?["phase"], "failed");
-    assert_eq!(engine.chain()?, before);
+    assert_eq!(content(engine.chain()?), before);
     assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
     engine.prepare_model(&target, &path, &tone)?;
     assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
     assert_eq!(
-        engine.chain()?,
+        content(engine.chain()?),
         before,
         "prepared is not yet audible/committed"
     );
     engine.model_preparation(2)?;
-    assert_eq!(engine.chain()?, before, "cancel retains exact chain");
+    assert_eq!(
+        content(engine.chain()?),
+        before,
+        "cancel retains exact chain"
+    );
     engine.prepare_model(&target, &path, &tone)?;
     assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
     engine.set_block(&target, "mix", 0.7)?;
-    let changed = engine.chain()?;
+    let changed = content(engine.chain()?);
     assert_eq!(
         engine.model_preparation(0)?["phase"],
         "failed",
         "intervening control edit invalidates prepared snapshot"
     );
-    assert_eq!(engine.chain()?, changed);
+    assert_eq!(content(engine.chain()?), changed);
     engine.prepare_model(&target, &path, &tone)?;
     assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
     engine.model_preparation(1)?;
@@ -1347,13 +1375,13 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     assert!(controls.iter().any(|c| c.target.contains(&target)
         && c.target.ends_with("mix")
         && (c.value - 0.7).abs() < 1e-5));
-    let committed_chain = engine.chain()?;
+    let committed_chain = content(engine.chain()?);
     engine.prepare_model(&target, &path, &tone)?;
     assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
     engine.model_preparation(1)?;
     assert_eq!(engine.model_preparation(2)?["phase"], "cancelled");
     assert_eq!(
-        engine.chain()?,
+        content(engine.chain()?),
         committed_chain,
         "cancel during transition retains metadata"
     );
@@ -1383,7 +1411,7 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     engine.wait_ready()?;
     assert_eq!(engine.runtime()?["blocks"][0]["blockId"], target);
     assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
-    assert!(serde_json::to_string(&engine.chain()?)?.contains("Audition fixture"));
+    assert!(serde_json::to_string(&content(engine.chain()?))?.contains("Audition fixture"));
     eprintln!(
         "qualify: model prepare/failure/cancel/stale target/commit/offline embedded recall passed"
     );

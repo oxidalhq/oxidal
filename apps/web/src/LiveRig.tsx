@@ -1,4 +1,5 @@
 import { ArtworkDeck } from './AssetArtwork';
+import { ModelPicker } from './ModelPicker';
 import { useEffect, useRef, useState } from 'react';
 import { playbackCommand, playbackState, type AudioState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -25,6 +26,11 @@ export function LiveRig({
   const [busy, setBusy] = useState(false);
   const [copyName, setCopyName] = useState('');
   const [adjusting, setAdjusting] = useState(false);
+  const [picker, setPicker] = useState<{
+    target: string;
+    name: string;
+    opening: AudioState;
+  } | null>(null);
   const [target, setTarget] = useState('outputLevel');
   const [draft, setDraft] = useState<{
     target: string;
@@ -263,7 +269,12 @@ export function LiveRig({
     !!activeDraft &&
     (activeDraft.session !== state.session ||
       activeDraft.revision !== state.revision);
-  const disabled = !connected || busy || !!error;
+  const modelPending =
+    !!state.model_change &&
+    ['verifying', 'preparing', 'ready', 'applying'].includes(
+      state.model_change.phase,
+    );
+  const disabled = !connected || busy || !!error || modelPending;
   const groups = state.controls.filter(
     (c) => c.target.startsWith('block:') && c.target.endsWith(':enabled'),
   );
@@ -306,15 +317,32 @@ export function LiveRig({
             >
               {c.label.replace(/ · enabled$/, '')}
             </Button>
-            {state.configured && (
-              <ArtworkDeck
-                compact
-                key={state.configured.preset_id}
-                id={state.configured.preset_id}
-                owned={state.configured.owned}
-                blockId={c.target.slice(6, -8)}
-              />
-            )}
+            {state.configured &&
+              !state.models?.some(
+                (m) => m.target === c.target.slice(6, -8),
+              ) && (
+                <ArtworkDeck
+                  compact
+                  key={state.configured.preset_id}
+                  id={state.configured.preset_id}
+                  owned={state.configured.owned}
+                  blockId={c.target.slice(6, -8)}
+                />
+              )}
+            <Button
+              variant="outline"
+              className="mt-2 w-full"
+              disabled={disabled || !!draft}
+              onClick={() =>
+                setPicker({
+                  target: c.target.slice(6, -8),
+                  name: c.label.replace(/ · enabled$/, ''),
+                  opening: state,
+                })
+              }
+            >
+              Choose NAM
+            </Button>
             <Button
               className="effect-power mt-1"
               variant={c.value === 1 ? 'secondary' : 'ghost'}
@@ -327,6 +355,73 @@ export function LiveRig({
           </div>
         ))}
       </div>
+      {picker && (
+        <ModelPicker
+          name={picker.name}
+          onClose={() => setPicker(null)}
+          onAudition={async (asset) => {
+            generation.current += 1;
+            sending.current = true;
+            setBusy(true);
+            try {
+              const next = await playbackCommand(picker.opening, {
+                kind: 'replace_model',
+                assignment: { target: picker.target, asset },
+              });
+              if (alive.current) {
+                setState(next);
+                setError('');
+              }
+            } finally {
+              sending.current = false;
+              if (alive.current) setBusy(false);
+            }
+          }}
+        />
+      )}
+      {modelPending && (
+        <div className="flex flex-wrap items-center gap-2" role="status">
+          <span>
+            {state.model_change?.phase === 'applying'
+              ? 'Applying model…'
+              : 'Preparing model…'}
+          </span>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              generation.current += 1;
+              sending.current = true;
+              setBusy(true);
+              try {
+                const current = await playbackState();
+                if (
+                  current.session !== state.session ||
+                  current.model_change?.request !== state.model_change?.request
+                )
+                  throw new Error(
+                    'Model selection changed. Review it before cancelling.',
+                  );
+                const next = await playbackCommand(current, {
+                  kind: 'cancel_model',
+                  request: state.model_change!.request,
+                });
+                if (alive.current) setState(next);
+              } catch (cause) {
+                if (alive.current) setError(String(cause));
+              } finally {
+                sending.current = false;
+                if (alive.current) setBusy(false);
+              }
+            }}
+          >
+            Cancel model
+          </Button>
+        </div>
+      )}
+      {state.model_change?.error && (
+        <p role="alert">{state.model_change.error}</p>
+      )}
       <div className="section-heading">
         <h3>Controls</h3>
         <Button

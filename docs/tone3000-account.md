@@ -64,3 +64,13 @@ reads support restart/offline reuse and reject tampering. Expiring download URLs
 and tokens are not persisted in asset metadata. Artwork URLs are retained but
 this slice does not yet download artwork. Native preparation must still validate
 model contents before applying them; cache integrity is not DSP readiness.
+
+While saved-preset audio is running, **Choose NAM** on a sounding block opens the
+catalog and downloads the selected A2 variant for audition. It submits only the
+verified asset identity and target block to playback, never a provider URL or
+filesystem path. The browser's opening audio revision guards against concurrent
+session edits. Close cancels a pending download; once preparation is accepted,
+**Cancel model** targets that exact preparation. Save sounding copy embeds confirmed
+models for offline recall. See [audio lifecycle](audio.md#live-nam-audition-and-offline-copies)
+for the transition, persistence and qualification boundaries. This does not yet
+provide New preset, general LV2/hybrid authoring or provider preset export.

@@ -117,6 +117,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
             state["revision"]
         );
     }
+    state = qualify_models(&client, &url, state, &root).await;
     // Apply keeps the immutable tone identity and unsaved controls. Invalid
     // candidates are rejected before releasing the currently running stream.
     let before_apply = state.clone();
@@ -353,6 +354,12 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         200
     );
     state = get(&client, &url, "audio").await;
+    // Remove the audition cache: the saved rig must contain the selected model itself.
+    std::fs::rename(
+        root.join("presets/audition-models"),
+        root.join("offline-cache"),
+    )
+    .unwrap();
     // Reopen the copy in the real PCM worker; every normalized control must match.
     let mut saved_settings = settings.clone();
     saved_settings["preset_id"] = json!(saved_id);
@@ -368,6 +375,16 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = reopened.json().await.unwrap();
     assert_eq!(state["controls"], controls_before_save);
     assert_eq!(state["preset_name"], "Sounding copy");
+    assert!(
+        state["controls"]
+            .to_string()
+            .contains("Live audition fixture")
+    );
+    std::fs::rename(
+        root.join("offline-cache"),
+        root.join("presets/audition-models"),
+    )
+    .unwrap();
     assert_eq!(
         state["modified"], false,
         "explicit new session starts from its saved source"
@@ -483,6 +500,8 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     .await;
     assert_eq!(changed.status(), 200);
     state = changed.json().await.unwrap();
+    state = qualify_models(&client, &url, state, &root).await;
+    let recovery_models = state["models"].clone();
     let recovery_controls = state["controls"].clone();
     // A disk failure is a recovery warning, never a reason to stop the audio worker.
     let recovery_path = root.join("presets/last-audio-session.json");
@@ -547,6 +566,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         "daemon restart retains confirmed scalar changes"
     );
     assert_eq!(state["modified"], true);
+    assert_eq!(state["models"], recovery_models);
     shutdown.send_replace(true);
     task.abort();
     stopped.wait().await.unwrap();
@@ -614,4 +634,132 @@ async fn wait_phase(client: &reqwest::Client, url: &str, phase: &str) -> Value {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     panic!("audio never reached {phase}");
+}
+
+async fn qualify_models(
+    client: &reqwest::Client,
+    url: &str,
+    mut state: Value,
+    root: &std::path::Path,
+) -> Value {
+    use sha2::{Digest, Sha256};
+    let target = state["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|c| {
+            c["target"]
+                .as_str()?
+                .strip_prefix("block:")?
+                .strip_suffix(":enabled")
+        })
+        .unwrap()
+        .to_owned();
+    let bytes =
+        std::fs::read(std::env::var_os("OXIDAL_TONE3000_TEST_MODEL").expect("qualified model"))
+            .unwrap();
+    let store = oxidal_presets::ModelStore::new(root.join("presets/audition-models"));
+    let mut asset = oxidal_presets::ModelAsset {
+        schema: 1,
+        tone_id: 701,
+        model_id: 901,
+        title: "Live audition fixture".into(),
+        name: "A2 fixture".into(),
+        format: "nam".into(),
+        sha256: format!("{:x}", Sha256::digest(&bytes)),
+        tone: json!({"id":701,"title":"Live audition fixture","format":"nam","gear":"amp", "models":[{"id":901,"name":"A2 fixture","model_url":"oxidal-model://fixture/model.nam"}]}),
+    };
+    let good = store.stage(&asset, &bytes).unwrap();
+    asset.sha256 = format!("{:x}", Sha256::digest(b"invalid model"));
+    let bad = store.stage(&asset, b"invalid model").unwrap();
+    let original_controls = state["controls"].clone();
+    let original_models = state["models"].clone();
+    for id in ["0".repeat(64), bad] {
+        let result = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"replace_model","assignment":{"target":target,"asset":id}}),
+        )
+        .await;
+        assert_eq!(result.status(), 200, "{}", result.text().await.unwrap());
+        state = wait_model(client, url, "failed").await;
+        assert_eq!(state["phase"], "running", "bad candidate must retain PCM");
+        assert_eq!(state["controls"], original_controls);
+        assert_eq!(state["models"], original_models);
+    }
+    // Cancellation is tied to this selection, not just the currently running tone.
+    let prepared = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"replace_model","assignment":{"target":target,"asset":good}}),
+    )
+    .await;
+    assert_eq!(prepared.status(), 200);
+    state = prepared.json().await.unwrap();
+    let request_id = state["model_change"]["request"].clone();
+    let wrong = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"cancel_model","request":0}),
+    )
+    .await;
+    assert_eq!(wrong.status(), 409);
+    for _ in 0..10 {
+        state = get(client, url, "audio").await;
+        assert_eq!(state["model_change"]["request"], request_id);
+        let cancelled = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"cancel_model","request":request_id}),
+        )
+        .await;
+        if cancelled.status() == 200 {
+            state = cancelled.json().await.unwrap();
+            break;
+        }
+    }
+    assert_eq!(state["model_change"]["phase"], "cancelled");
+    assert_eq!(state["models"], original_models);
+    assert_eq!(state["controls"], original_controls);
+    // A cancelled parser may finish in the background; it must never apply late.
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    state = get(client, url, "audio").await;
+    assert_eq!(state["models"], original_models);
+    let result = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"replace_model","assignment":{"target":target,"asset":good}}),
+    )
+    .await;
+    assert_eq!(result.status(), 200, "{}", result.text().await.unwrap());
+    state = wait_model(client, url, "applied").await;
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["models"], json!([{"target":target,"asset":good}]));
+    assert!(
+        state["controls"]
+            .to_string()
+            .contains("Live audition fixture")
+    );
+    assert_eq!(state["saved_copy"], Value::Null, "audition precedes save");
+    assert_eq!(state["modified"], true);
+    state
+}
+async fn wait_model(client: &reqwest::Client, url: &str, phase: &str) -> Value {
+    for _ in 0..250 {
+        let state = get(client, url, "audio").await;
+        assert_eq!(state["phase"], "running", "{state}");
+        if state["model_change"]["phase"] == phase {
+            return state;
+        }
+        if phase == "applied" {
+            assert_ne!(state["model_change"]["phase"], "failed", "{state}");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+    }
+    panic!("model did not reach {phase}");
 }

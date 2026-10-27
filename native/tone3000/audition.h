@@ -35,6 +35,9 @@ public:
       candidate->activeModelId = static_cast<int>(modelId);
       candidate->applyDefaultMixOnLoad = inserting;
       if (inserting) p.prepareBlockForChainRate(*candidate);
+      // Finish any previous scalar gesture before taking the transaction epoch.
+      // Otherwise a delayed UI readback bump can invalidate an unchanged target.
+      if (p.pendingParamBumpAt.exchange(0) != 0) p.bumpChainRevision();
       baseline = p.serializeBlockSettings(*current);
       revision = p.chainRevision.load();
       factor = p.chainOversampleFactor.load(); voices = p.wantedNamVoices();

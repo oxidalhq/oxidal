@@ -1,5 +1,7 @@
 //! Last confirmed scalar session; separate from the explicit saved-preset boot policy.
-use oxidal_audio::lifecycle::{LiveControl, StartAudio, valid_controls};
+use oxidal_audio::lifecycle::{
+    LiveControl, ModelAssignment, StartAudio, valid_controls, valid_models,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
@@ -14,17 +16,27 @@ pub(super) struct Recovery {
     schema: u32,
     pub settings: StartAudio,
     pub controls: Option<Vec<LiveControl>>,
+    #[serde(default)]
+    pub models: Vec<ModelAssignment>,
 }
 impl Recovery {
-    pub fn new(settings: StartAudio, controls: Option<Vec<LiveControl>>) -> Self {
+    pub fn new(
+        settings: StartAudio,
+        controls: Option<Vec<LiveControl>>,
+        models: Vec<ModelAssignment>,
+    ) -> Self {
         Self {
             schema: 1,
             settings,
             controls,
+            models,
         }
     }
     fn validate(&self) -> Result<(), String> {
-        if self.schema != 1 || self.controls.as_ref().is_some_and(|c| !valid_controls(c)) {
+        if self.schema != 1
+            || !valid_models(&self.models)
+            || self.controls.as_ref().is_some_and(|c| !valid_controls(c))
+        {
             return Err("Invalid audio recovery state".into());
         }
         self.settings.validate()
@@ -95,8 +107,16 @@ mod tests {
             display: "2.5".into(),
             toggle: false,
         };
-        let mut state = Recovery::new(settings, Some(vec![control.clone()]));
+        let mut state = Recovery::new(settings, Some(vec![control.clone()]), vec![]);
+        state.models = vec![ModelAssignment {
+            target: "block-one".into(),
+            asset: "a".repeat(64),
+        }];
         state.write(&path).unwrap();
+        assert_eq!(Recovery::read(&path).unwrap().unwrap().models, state.models);
+        state.models.push(state.models[0].clone());
+        assert!(state.write(&path).is_err());
+        state.models.pop();
         let original = std::fs::read(&path).unwrap();
         // An interrupted temporary write cannot replace the last published state.
         std::fs::write(path.with_extension("tmp"), b"partial").unwrap();

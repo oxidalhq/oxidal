@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { root, run, rustEnv } from './process.mjs';
@@ -163,6 +163,10 @@ if (mode === 'bootstrap') {
       OXIDAL_AUDIO_QUALIFY_NULL: '1',
       OXIDAL_TEST_AUDIO_WORKER: join(targetDir, 'debug/oxidal-audio-worker'),
       OXIDAL_TEST_NATIVE_WORKER: join(targetDir, 'debug/oxidal-native-worker'),
+      OXIDAL_NATIVE_TEST_MODELS: join(
+        env.OXIDAL_QUALIFICATION_DATA,
+        'audition-models',
+      ),
       OXIDAL_NATIVE_TEST_PRESET: join(
         env.OXIDAL_QUALIFICATION_DATA,
         'a2-preset.t3kpreset',
@@ -205,6 +209,10 @@ if (mode === 'bootstrap') {
       ...(process.platform === 'linux'
         ? { OXIDAL_EXPERIMENTAL_AUDIO: '1', OXIDAL_AUDIO_QUALIFY_NULL: '1' }
         : {}),
+      OXIDAL_NATIVE_TEST_MODELS: join(
+        env.OXIDAL_QUALIFICATION_DATA,
+        'audition-models',
+      ),
       OXIDAL_NATIVE_TEST_PRESET: join(
         env.OXIDAL_QUALIFICATION_DATA,
         'a2-preset.t3kpreset',
@@ -319,6 +327,17 @@ if (mode === 'bootstrap') {
     mode === 'e2e-server'
       ? join(mkdtempSync(join(tmpdir(), 'oxidal-e2e-')), 'mappings.json')
       : join(root, '.local/mappings.json');
+  if (
+    mode === 'e2e-server' &&
+    process.env.OXIDAL_AUDIO_QUALIFY_NULL === '1' &&
+    process.env.OXIDAL_NATIVE_TEST_MODELS
+  ) {
+    cpSync(
+      process.env.OXIDAL_NATIVE_TEST_MODELS,
+      join(dirname(mappingPath), 'presets/audition-models'),
+      { recursive: true },
+    );
+  }
   const env = {
     ...process.env,
     OXIDAL_SIMULATOR: '1',

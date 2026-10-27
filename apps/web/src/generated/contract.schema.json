@@ -615,6 +615,42 @@
         {
           "type": "object",
           "properties": {
+            "assignment": {
+              "$ref": "#/$defs/ModelAssignment"
+            },
+            "kind": {
+              "type": "string",
+              "const": "replace_model"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "assignment"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cancel_model"
+            },
+            "request": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "request"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "save_copy"
@@ -815,6 +851,24 @@
         },
         "experimental": {
           "type": "boolean"
+        },
+        "model_change": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "models": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ModelAssignment"
+          }
         },
         "modified": {
           "description": "Session edits are not written back to the immutable starting preset.",
@@ -2365,6 +2419,64 @@
         "id",
         "tone_id",
         "name"
+      ]
+    },
+    "ModelAssignment": {
+      "description": "Immutable verified asset assigned to an existing native block.",
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "asset"
+      ]
+    },
+    "ModelPhase": {
+      "type": "string",
+      "enum": [
+        "verifying",
+        "preparing",
+        "ready",
+        "applying",
+        "applied",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "ModelProgress": {
+      "type": "object",
+      "properties": {
+        "assignment": {
+          "$ref": "#/$defs/ModelAssignment"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/ModelPhase"
+        },
+        "request": {
+          "description": "Start-command serial within the audio session; rejects cancellation of a newer selection.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "assignment",
+        "phase"
       ]
     },
     "ModelQuery": {

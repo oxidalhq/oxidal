@@ -153,3 +153,35 @@ are checkpointed by session recovery; the separate opt-in boot preference is not
 rewritten. This is an interrupting reconfiguration, not prepared/gapless switching.
 No capability range negotiation, clock compensation or automatic fallback device
 is implied. Physical device support and dropout/latency behavior remain unqualified.
+
+## Live NAM audition and offline copies
+
+With native playback running, each tone block offers **Choose NAM**. The provider
+picker lists entitled TONE3000 libraries and A2 model variants. Downloading stages
+an integrity-checked asset; it does not change the sound. Closing during download
+prevents that selection from being applied. The selection retains its opening
+audio revision, so another client's changes cannot be overwritten silently.
+
+The audio owner verifies cached bytes on a separate thread, then prepares the
+native engine off-thread. Its supervisor polls readiness and commits to the exact
+existing block. Failed preparation preserves the previous model and PCM stream.
+Cancellation identifies the exact selection within its audio session. Progress
+and errors appear beside the sounding controls. This path replaces an existing
+block; empty-rig insertion and arbitrary structural authoring are separate work.
+The current transition uses native wet muting, **not gapless switching**.
+
+Confirmed model assignments and scalar controls survive Stop/Resume/Restart,
+current-session device Apply and daemon recovery. Save is unavailable while a
+model change is pending. The isolated save worker reconstructs those assignments
+before applying controls, embeds their assets, and reloads the result to verify
+model identities and control values. The saved copy opens without the audition
+cache or provider login. Saving a copy does not rewrite the imported original or
+change the running session's configured source.
+
+The maintained Linux native gate exercises failed/missing candidates, exact
+selection cancellation, live readback, configuration/restart recovery and saved
+recall after removing the audition cache. The browser scenario uses provider
+transport fixtures with an actual verified asset and actual native worker; it
+captures the picker across target device orientations. Real provider downloading
+is checked separately. Physical audio deadlines, gapless transitions, unrestricted
+model counts and artwork for newly assigned models remain separate gates.

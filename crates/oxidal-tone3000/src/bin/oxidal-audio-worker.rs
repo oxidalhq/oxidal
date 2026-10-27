@@ -1,8 +1,11 @@
 //! Experimental playback process. EOF stops PCM; the editor lives in a different process.
 #[cfg(target_os = "linux")]
+#[path = "../playback_models.rs"]
+mod models;
+#[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::{
-        lifecycle::{LiveRequest, PlaybackEvent, PlaybackStart},
+        lifecycle::{PlaybackEvent, PlaybackStart, WorkerRequest},
         stream::{Duplex, Step},
     };
     use oxidal_tone3000::Engine;
@@ -29,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(input);
     let stop = Arc::new(AtomicBool::new(false));
     let reader_stop = stop.clone();
-    let (command_send, commands) = std::sync::mpsc::sync_channel::<LiveRequest>(1);
+    let (command_send, commands) = std::sync::mpsc::sync_channel::<WorkerRequest>(1);
     std::thread::spawn(move || {
         let mut input = std::io::stdin().lock();
         loop {
@@ -53,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .read(&settings.preset_id)?
             .1
     } else {
-        oxidal_presets::Store::new(root).original(&settings.preset_id)?
+        oxidal_presets::Store::new(root.clone()).original(&settings.preset_id)?
     };
     let preset_name = oxidal_presets::inspect(&preset)?.name;
     let mut engine = Engine::new(
@@ -62,6 +65,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     engine.load_preset(&preset)?;
     engine.wait_ready()?;
+    models::restore(
+        &mut engine,
+        &root,
+        &startup.models,
+        settings.stream.input.period_frames as usize,
+    )?;
+    let mut models = models::Models::default();
     if let Some(controls) = startup.controls {
         engine.apply_live_snapshot(&controls)?;
         engine.wait_ready()?;
@@ -140,15 +150,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
-            let error = engine
-                .set_live_control(&request.target, request.value)
-                .err()
-                .map(|e| e.to_string());
-            meter_send.try_send(PlaybackEvent::Control {
-                serial: request.serial,
-                controls: engine.live_controls()?,
-                error,
-            })?;
+            let event = match request {
+                WorkerRequest::Control(request) => {
+                    let error = if models.pending() {
+                        Some(
+                            "Model preparation is pending; cancel before adjusting controls".into(),
+                        )
+                    } else {
+                        engine
+                            .set_live_control(&request.target, request.value)
+                            .err()
+                            .map(|e| e.to_string())
+                    };
+                    PlaybackEvent::Control {
+                        serial: request.serial,
+                        controls: engine.live_controls()?,
+                        error,
+                    }
+                }
+                WorkerRequest::Model(request) => {
+                    let result =
+                        models.operation(&mut engine, &root, request.model, request.serial);
+                    let (progress, error) = match result {
+                        Ok(p) => (p, None),
+                        Err(e) => (None, Some(e)),
+                    };
+                    PlaybackEvent::Model {
+                        serial: request.serial,
+                        progress,
+                        controls: engine.live_controls()?,
+                        error,
+                    }
+                }
+            };
+            meter_send.try_send(event)?;
         }
     }
     drop(stream); // PCM is released before native state destruction and process exit.
@@ -185,7 +220,7 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         (
             request.settings.preset_id.clone(),
-            oxidal_presets::Store::new(root).original(&request.settings.preset_id)?,
+            oxidal_presets::Store::new(root.clone()).original(&request.settings.preset_id)?,
         )
     };
     let mut engine = oxidal_tone3000::Engine::new(
@@ -194,7 +229,14 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     engine.load_preset(&preset)?;
     engine.wait_ready()?;
+    models::restore(
+        &mut engine,
+        &root,
+        &request.models,
+        request.settings.stream.input.period_frames as usize,
+    )?;
     engine.apply_live_snapshot(&request.controls)?;
+    let model_identities = models::identities(&mut engine)?;
     let bytes = engine.save_preset(&request.name)?;
     // A fresh engine prevents retained device/session values hiding a lossy export.
     drop(engine);
@@ -204,6 +246,9 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     engine.load_preset(&bytes)?;
     engine.wait_ready()?;
+    if models::identities(&mut engine)? != model_identities {
+        return Err("Saved model identity differs".into());
+    }
     let restored = engine.live_controls()?;
     if restored.len() != request.controls.len()
         || request.controls.iter().any(|c| {

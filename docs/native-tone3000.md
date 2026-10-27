@@ -104,9 +104,10 @@ an already-running parser, but prevents its result from being committed.
 
 The maintained native qualification example covers invalid targets, failed
 parsing, cancellation, stale edits, replacement, exact-slot insertion and
-embedded offline recall after deleting the input asset. This is a native adapter
-boundary only: the sounding worker, browser selection, recovery and Save path
-must be connected before live provider audition is a delivered workflow.
+embedded offline recall after deleting the input asset. The sounding worker now uses this boundary for existing-block replacement,
+with browser selection, confirmed assignment recovery and isolated offline Save.
+See [the live audition path](audio.md#live-nam-audition-and-offline-copies).
+Insertion remains an adapter capability rather than a browser authoring workflow.
 
 The build can migrate explicitly hash-pinned previous overlays in its owned
 source cache. Unknown local changes still fail; reference checkouts are never

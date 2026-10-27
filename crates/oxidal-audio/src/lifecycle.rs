@@ -50,6 +50,10 @@ pub struct AudioState {
     pub preset_name: Option<String>,
     /// Last copy saved from this exact control revision; restart still uses configured.
     pub saved_copy: Option<String>,
+    #[serde(default)]
+    pub models: Vec<ModelAssignment>,
+    #[serde(default)]
+    pub model_change: Option<ModelProgress>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -70,6 +74,12 @@ pub enum AudioAction {
     SetControl {
         target: String,
         value: f32,
+    },
+    ReplaceModel {
+        assignment: ModelAssignment,
+    },
+    CancelModel {
+        request: u64,
     },
     SaveCopy {
         name: String,
@@ -126,6 +136,12 @@ pub enum PlaybackEvent {
         controls: Vec<LiveControl>,
         error: Option<String>,
     },
+    Model {
+        serial: u64,
+        progress: Option<ModelProgress>,
+        controls: Vec<LiveControl>,
+        error: Option<String>,
+    },
     Meter {
         snapshot: crate::meter::Snapshot,
     },
@@ -146,6 +162,8 @@ pub fn valid_controls(controls: &[LiveControl]) -> bool {
 #[serde(deny_unknown_fields)]
 pub struct PlaybackStart {
     pub settings: StartAudio,
+    #[serde(default)]
+    pub models: Vec<ModelAssignment>,
     pub controls: Option<Vec<LiveControl>>,
 }
 
@@ -154,9 +172,86 @@ pub struct PlaybackStart {
 #[serde(deny_unknown_fields)]
 pub struct SavePlayback {
     pub settings: StartAudio,
+    #[serde(default)]
+    pub models: Vec<ModelAssignment>,
     pub controls: Vec<LiveControl>,
     pub name: String,
 }
 pub fn valid_preset_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= 100 && !name.chars().any(char::is_control)
+}
+
+/// Immutable verified asset assigned to an existing native block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModelAssignment {
+    pub target: String,
+    pub asset: String,
+}
+impl ModelAssignment {
+    pub fn valid(&self) -> bool {
+        !self.target.is_empty()
+            && self.target.len() <= 128
+            && !self.target.chars().any(char::is_control)
+            && self.asset.len() == 64
+            && self
+                .asset
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    }
+}
+pub fn valid_models(models: &[ModelAssignment]) -> bool {
+    models.len() <= 32
+        && models
+            .iter()
+            .enumerate()
+            .all(|(i, m)| m.valid() && models[..i].iter().all(|p| p.target != m.target))
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelPhase {
+    Verifying,
+    Preparing,
+    Ready,
+    Applying,
+    Applied,
+    Failed,
+    Cancelled,
+}
+impl ModelPhase {
+    pub fn pending(self) -> bool {
+        matches!(
+            self,
+            Self::Verifying | Self::Preparing | Self::Ready | Self::Applying
+        )
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModelProgress {
+    /// Start-command serial within the audio session; rejects cancellation of a newer selection.
+    pub request: u64,
+    pub assignment: ModelAssignment,
+    pub phase: ModelPhase,
+    pub error: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ModelOperation {
+    Prepare { assignment: ModelAssignment },
+    Poll,
+    Commit,
+    Cancel,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelRequest {
+    pub serial: u64,
+    pub model: ModelOperation,
+}
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum WorkerRequest {
+    Control(LiveRequest),
+    Model(ModelRequest),
 }

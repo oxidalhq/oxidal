@@ -364,3 +364,77 @@ export async function tone3000Account(command?: {
   if (!accountValidator(body)) throw new Error('Incompatible account response');
   return body;
 }
+
+export type TonePage = Contract['tone_page'];
+export type ModelPage = Contract['model_page'];
+export type ToneQuery = Contract['tone_query'];
+const tonesValidator = ajv.compile<TonePage>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Page',
+});
+const modelsValidator = ajv.compile<ModelPage>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Page2',
+});
+const stagedValidator = ajv.compile<Contract['staged_model']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/StagedModel',
+});
+export async function tone3000Tones(
+  query: ToneQuery,
+  signal: AbortSignal,
+): Promise<TonePage> {
+  const params = new URLSearchParams({
+    collection: query.collection ?? 'latest',
+    page: String(query.page ?? 1),
+    query: query.query ?? '',
+  });
+  const body = await presetResponse(
+    await fetch(`/api/v1/tone3000/tones?${params}`, {
+      signal,
+      cache: 'no-store',
+    }),
+  );
+  if (!tonesValidator(body)) throw new Error('Incompatible tone catalog');
+  return body;
+}
+export async function tone3000Models(
+  tone: number,
+  page: number,
+  signal: AbortSignal,
+): Promise<ModelPage> {
+  const params = new URLSearchParams({
+    tone_id: String(tone),
+    page: String(page),
+    architecture: '2',
+  });
+  const body = await presetResponse(
+    await fetch(`/api/v1/tone3000/models?${params}`, {
+      signal,
+      cache: 'no-store',
+    }),
+  );
+  if (!modelsValidator(body)) throw new Error('Incompatible model catalog');
+  return body;
+}
+export async function stageTone3000(
+  tone: number,
+  model: number,
+  signal: AbortSignal,
+) {
+  const body = await presetResponse(
+    await fetch('/api/v1/tone3000/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tone_id: tone, model_id: model }),
+      signal,
+    }),
+  );
+  if (
+    !stagedValidator(body) ||
+    body.tone_id !== tone ||
+    body.model_id !== model
+  )
+    throw new Error('Downloaded model identity differs');
+  return body;
+}

@@ -8,8 +8,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oxidal_audio::lifecycle::{
-    AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, PlaybackEvent,
-    PlaybackStart, SavePlayback, StartAudio, valid_controls, valid_preset_name,
+    AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, ModelAssignment,
+    ModelOperation, ModelPhase, ModelRequest, PlaybackEvent, PlaybackStart, SavePlayback,
+    StartAudio, valid_controls, valid_models, valid_preset_name,
 };
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
@@ -114,6 +115,7 @@ impl Owner {
             self.state.controls.clear();
             self.state.modified = false;
             self.state.saved_copy = None;
+            self.state.model_change = None;
             self.meters.send_replace(None);
         }
         self.state.error = error.or_else(|| self.recovery_error.clone());
@@ -132,8 +134,12 @@ impl Owner {
         let Some(settings) = self.state.configured.clone() else {
             return;
         };
-        let result = Recovery::new(settings, self.resume_controls.clone())
-            .write(&self.preset_dir.join("last-audio-session.json"));
+        let result = Recovery::new(
+            settings,
+            self.resume_controls.clone(),
+            self.state.models.clone(),
+        )
+        .write(&self.preset_dir.join("last-audio-session.json"));
         match result {
             Ok(()) => {
                 self.recovery_due = None;
@@ -180,7 +186,11 @@ impl Owner {
         &mut self,
         settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
+        models: Vec<ModelAssignment>,
     ) -> Result<(), String> {
+        if !valid_models(&models) {
+            return Err("Invalid model assignments".into());
+        }
         settings.validate()?;
         let executable = self
             .executable
@@ -217,10 +227,15 @@ impl Owner {
         });
         let previous_settings = self.state.configured.replace(settings.clone());
         let previous_controls = std::mem::replace(&mut self.resume_controls, controls.clone());
+        let previous_models = std::mem::replace(&mut self.state.models, models.clone());
         self.publish(AudioPhase::Starting, None);
         let startup = tokio::time::timeout(Duration::from_secs(25), async {
-            let mut bytes = serde_json::to_vec(&PlaybackStart { settings, controls })
-                .map_err(|e| e.to_string())?;
+            let mut bytes = serde_json::to_vec(&PlaybackStart {
+                settings,
+                controls,
+                models,
+            })
+            .map_err(|e| e.to_string())?;
             if bytes.len() > 65535 {
                 return Err("Audio settings too large".into());
             }
@@ -265,7 +280,7 @@ impl Owner {
             }
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
-            self.state.modified = self.resume_controls.is_some();
+            self.state.modified = self.resume_controls.is_some() || !self.state.models.is_empty();
             Ok(())
         })
         .await
@@ -274,6 +289,7 @@ impl Owner {
         if let Err(error) = startup {
             self.state.configured = previous_settings;
             self.resume_controls = previous_controls;
+            self.state.models = previous_models;
             self.release().await?;
             return Err(error);
         }
@@ -300,7 +316,7 @@ impl Owner {
                     PlaybackEvent::Meter { snapshot } if snapshot.valid() => {
                         meters.send_replace(Some((snapshot, std::time::Instant::now())));
                     }
-                    reply @ PlaybackEvent::Control { .. } => {
+                    reply @ (PlaybackEvent::Control { .. } | PlaybackEvent::Model { .. }) => {
                         if replies.try_send(reply).is_err() {
                             break;
                         }
@@ -371,7 +387,148 @@ impl Owner {
             }
         }
     }
+    fn model_pending(&self) -> bool {
+        self.state
+            .model_change
+            .as_ref()
+            .is_some_and(|p| p.phase.pending())
+    }
+    async fn model_exchange(&mut self, operation: ModelOperation) -> Result<PlaybackEvent, String> {
+        let serial = self.state.revision + 1;
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        tokio::time::timeout(Duration::from_secs(2), async {
+            let mut bytes = serde_json::to_vec(&ModelRequest {
+                serial,
+                model: operation,
+            })
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let event = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Audio reply lost")?;
+            match &event {
+                PlaybackEvent::Model {
+                    serial: actual,
+                    controls,
+                    progress,
+                    ..
+                } if *actual == serial
+                    && valid_controls(controls)
+                    && progress.as_ref().is_none_or(|p| {
+                        p.assignment.valid() && p.error.as_ref().is_none_or(|s| s.len() <= 1024)
+                    }) =>
+                {
+                    Ok(event)
+                }
+                _ => Err("Invalid model worker reply".into()),
+            }
+        })
+        .await
+        .map_err(|_| "Model worker reply timed out".to_owned())?
+    }
+    async fn model_command(&mut self, operation: ModelOperation) -> Reply {
+        let expected_request = match &operation {
+            ModelOperation::Prepare { .. } => Some(self.state.revision + 1),
+            _ => self.state.model_change.as_ref().map(|p| p.request),
+        };
+        let expected = match &operation {
+            ModelOperation::Prepare { assignment } => Some(assignment.clone()),
+            _ => self
+                .state
+                .model_change
+                .as_ref()
+                .map(|p| p.assignment.clone()),
+        };
+        let event = match self.model_exchange(operation).await {
+            Ok(event) => event,
+            Err(error) => {
+                self.release().await?;
+                self.publish(AudioPhase::Failed, Some(error.clone()));
+                return Err(error);
+            }
+        };
+        let PlaybackEvent::Model {
+            progress,
+            controls,
+            error,
+            ..
+        } = event
+        else {
+            unreachable!()
+        };
+        // A rejected candidate is a model error, never a reason to stop healthy PCM.
+        if let Some(error) = error {
+            return Err(error);
+        }
+        if progress.as_ref().map(|p| &p.assignment) != expected.as_ref()
+            || progress.as_ref().map(|p| p.request) != expected_request
+        {
+            self.release().await?;
+            self.publish(
+                AudioPhase::Failed,
+                Some("Model assignment reply differs".into()),
+            );
+            return Err("Model assignment reply differs".into());
+        }
+        if self.state.model_change != progress {
+            if let Some(p) = &progress
+                && p.phase == ModelPhase::Applied
+            {
+                self.state
+                    .models
+                    .retain(|m| m.target != p.assignment.target);
+                self.state.models.push(p.assignment.clone());
+                self.state.controls = controls.clone();
+                self.resume_controls = Some(controls);
+                self.state.modified = true;
+                self.state.saved_copy = None;
+                self.schedule_recovery();
+            }
+            let error = progress.as_ref().and_then(|p| p.error.clone());
+            self.state.model_change = progress;
+            self.publish(AudioPhase::Running, error);
+        }
+        Ok(self.state.clone())
+    }
+    async fn advance_model(&mut self) {
+        if self.state.phase != AudioPhase::Running || !self.model_pending() {
+            return;
+        }
+        let operation = if self
+            .state
+            .model_change
+            .as_ref()
+            .is_some_and(|p| p.phase == ModelPhase::Ready)
+        {
+            ModelOperation::Commit
+        } else {
+            ModelOperation::Poll
+        };
+        if let Err(error) = self.model_command(operation).await
+            && self.state.phase == AudioPhase::Running
+        {
+            if let Some(p) = &mut self.state.model_change {
+                p.phase = ModelPhase::Failed;
+                p.error = Some(error.clone());
+            }
+            self.publish(AudioPhase::Running, Some(error));
+        }
+    }
     async fn save_copy(&mut self, name: String) -> Reply {
+        if self.model_pending() {
+            return Err("Wait for model audition or cancel before saving".into());
+        }
         if self.state.phase != AudioPhase::Running || !valid_preset_name(&name) {
             return Err(
                 "Start audio and enter a name of 1–100 bytes without control characters".into(),
@@ -384,6 +541,7 @@ impl Owner {
                 .clone()
                 .ok_or("No sounding configuration")?,
             controls: self.state.controls.clone(),
+            models: self.state.models.clone(),
             name,
         };
         let mut bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
@@ -473,13 +631,19 @@ impl Owner {
             self.publish(AudioPhase::Failed, Some(error.clone()));
             return Err(error);
         }
-        match self.start(proposed, controls.clone()).await {
+        match self
+            .start(proposed, controls.clone(), self.state.models.clone())
+            .await
+        {
             Ok(()) => Ok(self.state.clone()),
             Err(error) => {
                 // start restores the last confirmed configuration on failure. Roll back
                 // only a previously running stream; a stopped session stays stopped.
                 let message = if was_running {
-                    match self.start(previous, controls).await {
+                    match self
+                        .start(previous, controls, self.state.models.clone())
+                        .await
+                    {
                         Ok(()) => {
                             let message = format!(
                                 "Audio settings were not applied: {error}. Previous session restored."
@@ -511,6 +675,32 @@ impl Owner {
         }
         let result = match command.action {
             // A failed export must not mark the independently running audio failed.
+            AudioAction::ReplaceModel { assignment } => {
+                if self.state.phase != AudioPhase::Running
+                    || !assignment.valid()
+                    || self.model_pending()
+                {
+                    return Err("Start audio and finish or cancel the pending model first".into());
+                }
+                let target = format!("block:{}:enabled", assignment.target);
+                if !self.state.controls.iter().any(|c| c.target == target) {
+                    return Err("Select an existing sounding tone block".into());
+                }
+                return self
+                    .model_command(ModelOperation::Prepare { assignment })
+                    .await;
+            }
+            AudioAction::CancelModel { request } => {
+                if self
+                    .state
+                    .model_change
+                    .as_ref()
+                    .is_none_or(|p| p.request != request)
+                {
+                    return Err("Model selection changed; refresh before cancelling".into());
+                }
+                return self.model_command(ModelOperation::Cancel).await;
+            }
             AudioAction::SaveCopy { name } => return self.save_copy(name).await,
             AudioAction::Reconfigure { stream } => return self.reconfigure(stream).await,
             AudioAction::SetControl { target, value } => {
@@ -525,6 +715,9 @@ impl Owner {
                 {
                     return Err("Unknown, staged or invalid live control".into());
                 }
+                if self.model_pending() {
+                    self.model_command(ModelOperation::Cancel).await?;
+                }
                 self.set_control(target, value).await
             }
             AudioAction::Start { settings } => {
@@ -535,7 +728,7 @@ impl Owner {
                         "Audio already owns the device; stop before applying changes".into(),
                     );
                 }
-                self.start(settings, None).await
+                self.start(settings, None, vec![]).await
             }
             AudioAction::Resume => {
                 let settings = self
@@ -546,7 +739,12 @@ impl Owner {
                 if self.worker.is_some() {
                     return Err("Audio is already running".into());
                 }
-                self.start(settings, self.resume_controls.clone()).await
+                self.start(
+                    settings,
+                    self.resume_controls.clone(),
+                    self.state.models.clone(),
+                )
+                .await
             }
             AudioAction::Stop => {
                 self.checkpoint();
@@ -581,7 +779,14 @@ impl Owner {
                     .ok_or("No previous audio configuration")?;
                 self.publish(AudioPhase::Stopping, None);
                 match self.release().await {
-                    Ok(()) => self.start(settings, self.resume_controls.clone()).await,
+                    Ok(()) => {
+                        self.start(
+                            settings,
+                            self.resume_controls.clone(),
+                            self.state.models.clone(),
+                        )
+                        .await
+                    }
                     Err(e) => Err(e),
                 }
             }
@@ -638,6 +843,11 @@ impl Playback {
             modified: false,
             preset_name: None,
             saved_copy: None,
+            models: recovery
+                .as_ref()
+                .map(|r| r.models.clone())
+                .unwrap_or_default(),
+            model_change: None,
             phase: if config.audio_worker.is_some() {
                 AudioPhase::Stopped
             } else {
@@ -668,7 +878,7 @@ impl Playback {
         tokio::spawn(async move {
             match boot {
                 Ok(Some(settings)) if owner.executable.is_some() => {
-                    if let Err(error) = owner.start(settings, None).await {
+                    if let Err(error) = owner.start(settings, None, vec![]).await {
                         owner.publish(AudioPhase::Failed, Some(error));
                     }
                 }
@@ -686,6 +896,7 @@ impl Playback {
                     },
                     _ = interval.tick() => {
                         owner.check_exit();
+                        owner.advance_model().await;
                         if owner.recovery_due.is_some_and(|due| due <= std::time::Instant::now()) {
                             owner.checkpoint();
                         }

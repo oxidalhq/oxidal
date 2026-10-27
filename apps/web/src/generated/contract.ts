@@ -40,11 +40,20 @@ export type AudioAction =
       value: number;
     }
   | {
+      assignment: ModelAssignment;
+      kind: "replace_model";
+    }
+  | {
+      kind: "cancel_model";
+      request: number;
+    }
+  | {
       kind: "save_copy";
       name: string;
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
+export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
  * One command entry point; relative edits are applied to current authoritative state.
@@ -368,6 +377,13 @@ export interface AudioProbe {
   periods: number;
   sample_rate: number;
 }
+/**
+ * Immutable verified asset assigned to an existing native block.
+ */
+export interface ModelAssignment {
+  asset: string;
+  target: string;
+}
 export interface AudioDevices {
   backend_available: boolean;
   endpoints: AudioEndpoint[];
@@ -405,6 +421,8 @@ export interface AudioState {
   device_owned: boolean;
   error?: string | null;
   experimental: boolean;
+  model_change?: ModelProgress | null;
+  models?: ModelAssignment[];
   /**
    * Session edits are not written back to the immutable starting preset.
    */
@@ -431,6 +449,15 @@ export interface LiveControl {
   target: string;
   toggle: boolean;
   value: number;
+}
+export interface ModelProgress {
+  assignment: ModelAssignment;
+  error?: string | null;
+  phase: ModelPhase;
+  /**
+   * Start-command serial within the audio session; rejects cancellation of a newer selection.
+   */
+  request: number;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.
