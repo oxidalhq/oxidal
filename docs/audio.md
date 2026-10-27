@@ -98,3 +98,21 @@ PCM steps can allocate; this is not a real-time or gapless qualification claim.
 `pnpm native:check` covers actual DSP gain changes, readback and rejected mutations,
 HTTP/ALSA-null session conflicts and lifecycle, and the sounding panel across the
 target browser profiles, including BOOX e-paper. It also covers rendered-audio reconstruction, failed storage preserving playback, immutable originals, owned provenance and exact control reload in a new playback worker. It does not establish physical latency or xrun behavior.
+
+## Live adjustment and audio setup
+
+Sounding scalar controls audition each adjustment immediately through serialized,
+revision-checked worker commands. The browser coalesces drag updates to one active
+request and one latest pending value. Done closes the adjustment; Save copy is
+separate persistence. Cancel restores the opening value only if this client still
+owns the confirmed revision. Another client's edit, stopped/recalled audio, or an
+uncertain reply must never be refreshed and replayed as an overwrite. Navigating
+away retains the latest audible adjustment. These controls remain limited to the
+qualified scalar catalog; offline structural authoring does not yet audition in
+the sounding session, and prepared model/chain transitions remain unfinished.
+
+Settings labels expose buffer size in samples per period and buffer period count.
+The checked and last playback configurations include sample rate, channel count,
+format and total buffer capacity. Changing a candidate configuration, a failed
+check, or device refresh invalidates the relevant prior check before a new session
+can start. Those checks do not measure round-trip latency or qualify hotplug.

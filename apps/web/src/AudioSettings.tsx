@@ -34,6 +34,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     setBusy(true);
     setMessage('');
     setSelected('');
+    setInput(null);
+    setOutput(null);
     setInventory(null);
     try {
       const devices = await audioDevices();
@@ -55,6 +57,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     if (!endpoint) return;
     setBusy(true);
     setMessage('');
+    invalidate(endpoint.direction);
     try {
       const result = await probeAudio({
         ...request,
@@ -73,11 +76,16 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       setBusy(false);
     }
   }
+  function invalidate(direction?: AudioProbe['direction']) {
+    if (direction === 'capture') setInput(null);
+    if (direction === 'playback') setOutput(null);
+  }
   function update<K extends keyof typeof request>(
     key: K,
     value: (typeof request)[K],
   ) {
     setMessage('');
+    invalidate(endpoint?.direction);
     setRequest((previous) => ({ ...previous, [key]: value }));
   }
   return (
@@ -113,6 +121,13 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                   value={selected}
                   onChange={(e) => {
                     setSelected(e.target.value);
+                    invalidate(
+                      inventory.endpoints.find(
+                        (candidate) =>
+                          `${candidate.id}/${candidate.direction}` ===
+                          e.target.value,
+                      )?.direction,
+                    );
                     setMessage('');
                   }}
                 >
@@ -165,7 +180,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 </select>
               </label>
               <label className="field">
-                Period frames
+                Buffer size (samples per period)
                 <input
                   type="number"
                   min={16}
@@ -177,7 +192,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 />
               </label>
               <label className="field">
-                Period count
+                Buffer periods
                 <input
                   type="number"
                   min={2}
@@ -187,6 +202,11 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 />
               </label>
             </div>
+            <p className="caption">
+              Buffer size is the number of samples processed per block. Buffer
+              periods sets the total queued capacity. These settings affect
+              latency and stability; they are not a measured round-trip latency.
+            </p>
             <Button
               variant="outline"
               disabled={!endpoint}

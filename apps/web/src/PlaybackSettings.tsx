@@ -11,6 +11,10 @@ import {
 } from './api';
 import { Button } from './components/ui/button';
 
+function configurationLabel(configuration: AudioProbe) {
+  return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${configuration.channels} channels · ${configuration.format} · ${configuration.period_frames} samples × ${configuration.periods} periods (${configuration.period_frames * configuration.periods} samples total)`;
+}
+
 /** Audio ownership is independent of silent authoring. @see docs/audio.md */
 export function PlaybackSettings({
   connected,
@@ -183,6 +187,15 @@ export function PlaybackSettings({
             for “stopped”. Launch the application separately; close its audio
             session before resuming here.
           </p>
+          {state?.configured && (
+            <section aria-label="Playback session configuration">
+              <h4>Playback session configuration</h4>
+              <p>Input: {configurationLabel(state.configured.stream.input)}</p>
+              <p>
+                Output: {configurationLabel(state.configured.stream.output)}
+              </p>
+            </section>
+          )}
           <fieldset
             disabled={
               !connected || busy || transitioning || state?.device_owned
@@ -194,15 +207,9 @@ export function PlaybackSettings({
               directions must use the same hardware endpoint, rate and period
               size.
             </p>
-            <p>
-              Input:{' '}
-              {input
-                ? `${input.endpoint}, ${input.channels} channels`
-                : 'Not checked'}{' '}
-              · Output:{' '}
-              {output
-                ? `${output.endpoint}, ${output.channels} channels`
-                : 'Not checked'}
+            <p aria-label="Checked audio configuration">
+              Input: {input ? configurationLabel(input) : 'Not checked'} ·
+              Output: {output ? configurationLabel(output) : 'Not checked'}
             </p>
             <Button variant="outline" onClick={() => void loadPresets()}>
               Refresh saved presets

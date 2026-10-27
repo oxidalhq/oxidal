@@ -487,3 +487,93 @@ async function enterValue(page: Page, label: string, value: string) {
       .click();
   await input.fill(value);
 }
+
+test('audio configuration exposes buffers and discards changed or failed checks', async ({
+  page,
+}) => {
+  const probe = {
+    endpoint: 'hw:USB,0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  await page.route('**/api/v1/audio/devices', (route) =>
+    route.fulfill({
+      json: {
+        backend_available: true,
+        streaming_available: false,
+        warnings: [],
+        endpoints: ['capture', 'playback'].map((direction) => ({
+          id: probe.endpoint,
+          name: 'Test interface',
+          direction,
+        })),
+      },
+    }),
+  );
+  let fail = false;
+  await page.route('**/api/v1/audio/probe', (route) =>
+    fail
+      ? route.fulfill({
+          status: 409,
+          json: { error: 'Unsupported configuration' },
+        })
+      : route.fulfill({
+          json: {
+            configuration: route.request().postDataJSON(),
+            buffer_frames: 384,
+            streaming_available: false,
+          },
+        }),
+  );
+  await page.route('**/api/v1/audio', (route) =>
+    route.fulfill({
+      json: {
+        session: 'fixture',
+        revision: 1,
+        phase: 'stopped',
+        configured: null,
+        error: null,
+        device_owned: false,
+        experimental: true,
+        start_on_boot: false,
+        controls: [],
+        modified: false,
+        preset_name: null,
+        saved_copy: null,
+      },
+    }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Audio devices' });
+  await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
+  await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/capture');
+  await expect(panel.getByLabel('Sample rate (Hz)')).toHaveValue('48000');
+  await expect(
+    panel.getByLabel('Buffer size (samples per period)'),
+  ).toHaveValue('128');
+  await expect(panel.getByLabel('Buffer periods')).toHaveValue('3');
+  await panel.getByRole('button', { name: 'Check audio settings' }).click();
+  const checked = panel.getByLabel('Checked audio configuration');
+  await expect(checked).toContainText(
+    '128 samples × 3 periods (384 samples total)',
+  );
+  await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/playback');
+  await panel.getByRole('button', { name: 'Check audio settings' }).click();
+  await expect(checked).not.toContainText('Not checked');
+  await panel.getByLabel('Buffer size (samples per period)').fill('256');
+  await expect(checked).toContainText('Output: Not checked');
+  await expect(checked).toContainText('Input: hw:USB,0');
+  fail = true;
+  await panel.getByRole('button', { name: 'Check audio settings' }).click();
+  await expect(panel.getByRole('status').last()).toContainText(
+    'Unsupported configuration',
+  );
+  await expect(checked).toContainText('Output: Not checked');
+  await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
+  await expect(checked).toContainText('Input: Not checked');
+});
