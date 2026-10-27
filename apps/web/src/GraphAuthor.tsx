@@ -55,9 +55,11 @@ export function GraphAuthor({
   const [typedName, setName] = useState<string | null>(null);
   const name =
     typedName ??
-    state?.configured?.name ??
-    library.find((item) => item.id === state?.saved_copy)?.preset.name ??
-    'New rig';
+    (liveOnly || state?.phase === 'running'
+      ? (state?.configured?.name ??
+        library.find((item) => item.id === state?.saved_copy)?.preset.name ??
+        'New rig')
+      : 'New rig');
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
   const [namPicker, setNamPicker] = useState<'nam' | 'ir' | null>(null);
@@ -681,13 +683,21 @@ export function GraphAuthor({
                     <Button
                       variant="outline"
                       className="h-auto min-h-11 w-full justify-start text-left whitespace-normal"
-                      disabled={!!plugin.unsupported || scanning}
+                      disabled={
+                        !!plugin.unsupported ||
+                        plugin.ports.some((p) => p.latency) ||
+                        scanning
+                      }
                       onClick={() => add(plugin)}
                     >
                       {plugin.name}
                     </Button>
-                    {plugin.unsupported && (
-                      <p className="caption">{plugin.unsupported}</p>
+                    {(plugin.unsupported ||
+                      plugin.ports.some((p) => p.latency)) && (
+                      <p className="caption">
+                        {plugin.unsupported ??
+                          'Use “Add saved tone” to open the mixed-chain composer for this effect.'}
+                      </p>
                     )}
                   </div>
                 ))}

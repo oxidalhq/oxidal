@@ -16,7 +16,7 @@ const variants = cva(
         secondary:
           'border-border bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground',
         ghost:
-          'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground aria-[current=page]:text-foreground',
+          'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:text-foreground',
         destructive:
           'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90',
       },

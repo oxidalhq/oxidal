@@ -1647,6 +1647,11 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     },
   });
   expect(configured.device_owned).toBe(false);
+  await send({
+    kind: 'start',
+    settings: { ...configured.configured, name: 'Previous session' },
+  });
+  await send({ kind: 'stop' });
   await page.goto('/');
   if (testInfo.project.name === 'boox-air3c')
     await setDisplayMode(page, 'epaper');
@@ -1654,6 +1659,13 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await page.getByRole('button', { name: 'New preset', exact: true }).click();
   const editor = page.getByRole('region', { name: 'Effects authoring' });
   const name = `Practice ${testInfo.project.name}`;
+  // Wait for the stopped session to arrive; it must not rename a new draft.
+  await expect(
+    editor.getByRole('button', { name: 'Add effect', exact: true }),
+  ).toBeEnabled();
+  await expect(editor.getByLabel('Preset name', { exact: true })).toHaveValue(
+    'New rig',
+  );
   await editor.getByLabel('Preset name', { exact: true }).fill(name);
   await editor.getByRole('button', { name: 'Add effect', exact: true }).click();
   const picker = page.getByRole('dialog', { name: 'Add effect' });

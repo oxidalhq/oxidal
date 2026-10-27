@@ -565,8 +565,8 @@ input[type='file'] {
   --foreground: var(--enclosure-foreground);
   --muted-foreground: var(--enclosure-foreground);
   --input: var(--enclosure-border);
-  --accent: var(--enclosure-border);
-  --accent-foreground: var(--enclosure-foreground);
+  --accent: var(--secondary);
+  --accent-foreground: var(--secondary-foreground);
   --ring: var(--enclosure-foreground);
 }
 .masthead nav {

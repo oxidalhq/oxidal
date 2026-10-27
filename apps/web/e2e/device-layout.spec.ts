@@ -582,3 +582,50 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
   await fits(page);
   await accessible(page);
 });
+
+test('stage display navigation retains contrast after touch and hover', async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.setTimeout(90000);
+  // Touch emulation can suppress :hover. Also exercise a mouse-capable context.
+  const mouseContext = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    hasTouch: false,
+    isMobile: false,
+    baseURL: new URL(page.url()).origin,
+  });
+  const mouse = await mouseContext.newPage();
+  try {
+    await mouse.goto('/?development=simulator');
+    for (const target of [page, mouse]) {
+      const pointer = target === page ? 'touch' : 'mouse';
+      const navigation = target.getByRole('navigation', {
+        name: 'Instrument navigation',
+      });
+      for (const mode of ['orchid', 'stage', 'sunlight', 'epaper'] as const) {
+        await setDisplayMode(target, mode);
+        await navigation
+          .getByRole('button', { name: 'Rig', exact: true })
+          .click();
+        for (const label of ['Rig', 'Library']) {
+          await navigation
+            .getByRole('button', { name: label, exact: true })
+            .hover();
+          const result = await new AxeBuilder({ page: target })
+            .include('.masthead')
+            .withRules(['color-contrast'])
+            .analyze();
+          await navigation.screenshot({
+            path: testInfo.outputPath(
+              `navigation-${pointer}-${mode}-${label}.png`,
+            ),
+          });
+          expect(result.violations, `${pointer} ${mode}: ${label}`).toEqual([]);
+        }
+      }
+    }
+  } finally {
+    await mouseContext.close();
+  }
+});
