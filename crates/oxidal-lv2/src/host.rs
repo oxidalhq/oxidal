@@ -29,6 +29,25 @@ unsafe extern "C" {
     fn ox_lv2_set(h: *mut c_void, port: u32, value: f32);
     fn ox_lv2_get(h: *mut c_void, port: u32) -> f32;
     fn ox_lv2_refresh_outputs(h: *mut c_void) -> i32;
+    fn ox_lv2_map(h: *mut c_void, uri: *const c_char) -> u32;
+    fn ox_lv2_unmap(h: *mut c_void, id: u32) -> *const c_char;
+    fn ox_lv2_atom_push(
+        h: *mut c_void,
+        port: u32,
+        frame: u32,
+        type_id: u32,
+        size: u32,
+        body: *const c_void,
+    ) -> i32;
+    fn ox_lv2_atom_event(
+        h: *mut c_void,
+        port: u32,
+        index: u32,
+        frame: *mut u32,
+        type_id: *mut u32,
+        size: *mut u32,
+        body: *mut *const c_void,
+    ) -> i32;
     fn ox_lv2_run(h: *mut c_void, l: *mut f32, r: *mut f32, frames: u32) -> i32;
 }
 fn text(p: *const c_char) -> Result<String, String> {
@@ -177,6 +196,7 @@ impl World {
                 symbol,
                 audio: f & 1 != 0,
                 control: f & 2 != 0,
+                atom: f & 512 != 0,
                 input: f & 4 != 0,
                 output: f & 8 != 0,
                 integer: f & 16 != 0,
@@ -187,7 +207,10 @@ impl World {
                 maximum: hi.is_finite().then_some(hi),
                 default: d.is_finite().then_some(d),
             };
-            if port.audio == port.control || port.input == port.output {
+            if u8::from(port.audio) + u8::from(port.control) + u8::from(port.atom) != 1
+                || port.input == port.output
+                || f & 1024 != 0
+            {
                 unsupported = Some("Unsupported port class or direction".into());
             }
             if port.control
@@ -238,6 +261,15 @@ impl Drop for Instance {
         unsafe { ox_lv2_free(self.ptr.as_ptr()) };
     }
 }
+/// Copied message from one processing cycle. URIDs inside structured bodies
+/// remain instance-local; this is not a portable state serialization format.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AtomEvent {
+    pub frame: u32,
+    pub type_uri: String,
+    pub body: Vec<u8>,
+}
+
 /// Prepared stereo processor. Mono effects use two independent instances, preserving stereo history.
 #[derive(Debug)]
 pub struct Plugin {
@@ -252,6 +284,99 @@ pub struct Plugin {
     prepared_latency: Option<u32>,
 }
 impl Plugin {
+    /// Map an Atom URI between processing calls. IDs belong to this instance.
+    pub fn map_atom_uri(&mut self, uri: &str) -> Result<u32, String> {
+        if self.failed || self.right.is_some() || uri.is_empty() || uri.len() >= 256 {
+            return Err("Invalid Atom mapping request".into());
+        }
+        let uri = CString::new(uri).map_err(|_| "Invalid Atom URI")?;
+        // SAFETY: live exclusive owner, NUL-terminated URI copied into host storage.
+        let id = unsafe { ox_lv2_map(self.left.ptr.as_ptr(), uri.as_ptr()) };
+        if id == 0 {
+            return Err("LV2 URID map capacity exceeded".into());
+        }
+        Ok(id)
+    }
+    /// Queue a copied event for the next nonzero processing cycle. Call on the
+    /// instance owner between blocks; no network or filesystem work happens here.
+    pub fn queue_atom(
+        &mut self,
+        port: u32,
+        frame: u32,
+        type_uri: &str,
+        body: &[u8],
+    ) -> Result<(), String> {
+        if self.failed
+            || body.len() > 16384
+            || !self
+                .info
+                .ports
+                .get(port as usize)
+                .is_some_and(|p| p.atom && p.input)
+        {
+            return Err("Invalid Atom input request".into());
+        }
+        let type_id = self.map_atom_uri(type_uri)?;
+        // SAFETY: owner serializes calls; body is readable for its exact length.
+        // C checks port, timestamp and capacity before copying any bytes.
+        if unsafe {
+            ox_lv2_atom_push(
+                self.left.ptr.as_ptr(),
+                port,
+                frame,
+                type_id,
+                body.len() as u32,
+                body.as_ptr().cast(),
+            )
+        } != 0
+        {
+            return Err(error());
+        }
+        Ok(())
+    }
+    /// Copy output messages before the next process call. This allocates and is
+    /// intended for the non-real-time owner/control path, not an audio callback.
+    pub fn atom_events(&self, port: u32) -> Result<Vec<AtomEvent>, String> {
+        if self.failed || self.right.is_some() {
+            return Err("Unavailable Atom output".into());
+        }
+        let mut events = Vec::new();
+        loop {
+            let (mut frame, mut type_id, mut size, mut body) = (0, 0, 0, std::ptr::null());
+            // SAFETY: live owner; out pointers are valid, C validates the complete
+            // sequence and returns a borrowed payload within its allocated buffer.
+            let status = unsafe {
+                ox_lv2_atom_event(
+                    self.left.ptr.as_ptr(),
+                    port,
+                    events.len() as u32,
+                    &mut frame,
+                    &mut type_id,
+                    &mut size,
+                    &mut body,
+                )
+            };
+            if status < 0 {
+                return Err(error());
+            }
+            if status == 0 {
+                return Ok(events);
+            }
+            // SAFETY: host-owned URID string and validated payload remain live;
+            // immutable owner prevents another process call while copying them.
+            let (type_uri, body) = unsafe {
+                (
+                    text(ox_lv2_unmap(self.left.ptr.as_ptr(), type_id))?,
+                    std::slice::from_raw_parts(body.cast::<u8>(), size as usize).to_vec(),
+                )
+            };
+            events.push(AtomEvent {
+                frame,
+                type_uri,
+                body,
+            });
+        }
+    }
     pub fn configuration(&self) -> (f64, usize) {
         (self.rate, self.frames)
     }
@@ -290,6 +415,11 @@ impl Plugin {
             }
             let mono = info.ports.iter().filter(|p| p.audio && p.input).count() == 1;
             let latency_port = info.ports.iter().find(|p| p.latency).map(|p| p.index);
+            if stereo && info.ports.iter().any(|p| p.atom) {
+                return Err(
+                    "Atom effects require declared-port hosting and message/state authoring".into(),
+                );
+            }
             if stereo && latency_port.is_some() {
                 return Err("Latency-reporting effects require the mixed-chain host".into());
             }

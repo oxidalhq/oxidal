@@ -835,6 +835,7 @@ export interface PluginInfo {
   uri: string;
 }
 export interface Port {
+  atom?: boolean;
   audio: boolean;
   control: boolean;
   default?: number | null;

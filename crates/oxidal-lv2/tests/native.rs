@@ -6,7 +6,7 @@ const URI: &str = "urn:oxidal:test:contract";
 fn contract_features_lifetime_bounds_readback_and_poison() {
     let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
     let catalog = world.plugins(48000.0).unwrap();
-    assert_eq!(catalog.len(), 10);
+    assert_eq!(catalog.len(), 13);
     let info = catalog.iter().find(|p| p.uri == URI).unwrap();
     assert!(!info.name.is_empty());
     assert!(info.unsupported.is_none());
@@ -283,4 +283,97 @@ fn worker_response_backpressure_and_missing_interface_are_explicit() {
     // Fixture holds its run until the response burst completes; the host must
     // preserve exactly the accepted messages and report overflow to the plugin.
     assert_eq!(p.value(5).unwrap(), 16.0);
+}
+
+#[test]
+fn atom_sequences_copy_ordered_events_and_preserve_timing_across_latency_queries() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    assert!(p.info().ports[2].atom);
+    let float = "http://lv2plug.in/ns/ext/atom#Float";
+    let midi = "http://lv2plug.in/ns/ext/midi#MidiEvent";
+    p.queue_atom(2, 16, float, &0.5_f32.to_ne_bytes()).unwrap();
+    assert!(p.queue_atom(2, 4, float, &0.1_f32.to_ne_bytes()).is_err());
+    assert!(p.queue_atom(3, 16, float, &[]).is_err());
+    assert!(p.queue_atom(2, 64, float, &[]).is_err());
+    p.queue_atom(2, 32, midi, &[0xB0, 7, 0]).unwrap();
+    p.prepare_latency().unwrap(); // run(0) must not consume timed events
+    assert!(p.atom_events(3).unwrap().is_empty());
+    let mut signal = [1.0; 64];
+    p.process_mono(&mut signal).unwrap();
+    assert_eq!(&signal[..16], &[1.0; 16]);
+    assert_eq!(&signal[16..32], &[0.5; 16]);
+    assert_eq!(&signal[32..], &[0.0; 32]);
+    let messages = p.atom_events(3).unwrap();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(
+        (
+            messages[0].frame,
+            messages[0].type_uri.as_str(),
+            messages[0].body.as_slice()
+        ),
+        (16, float, 0.5_f32.to_ne_bytes().as_slice())
+    );
+    assert_eq!(
+        (
+            messages[1].frame,
+            messages[1].type_uri.as_str(),
+            messages[1].body.as_slice()
+        ),
+        (32, midi, [0xB0, 7, 0].as_slice())
+    );
+    p.process_mono(&mut [1.0; 64]).unwrap();
+    assert!(p.atom_events(3).unwrap().is_empty()); // consumed exactly once
+    assert_eq!(messages[0].body, 0.5_f32.to_ne_bytes()); // returned copy survives next run
+    assert!(p.queue_atom(2, 0, float, &[0; 16384]).is_err());
+    let payload = vec![42; 8000];
+    p.queue_atom(2, 0, "urn:oxidal:test:blob", &payload)
+        .unwrap();
+    p.queue_atom(2, 1, "urn:oxidal:test:blob", &payload)
+        .unwrap();
+    assert!(
+        p.queue_atom(2, 2, "urn:oxidal:test:blob", &payload)
+            .is_err()
+    );
+    p.process_mono(&mut [1.0; 64]).unwrap();
+    assert_eq!(
+        p.atom_events(3)
+            .unwrap()
+            .iter()
+            .map(|e| e.body.len())
+            .collect::<Vec<_>>(),
+        vec![8000, 8000]
+    );
+}
+
+#[test]
+fn malformed_atom_outputs_and_unsupported_buffers_fail_closed() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    for uri in [
+        "urn:oxidal:test:atoms-large",
+        "urn:oxidal:test:atoms-unsupported",
+    ] {
+        assert!(Plugin::new_ports(&world, uri, 48000.0, 64).is_err());
+        assert!(
+            world
+                .plugins(48000.0)
+                .unwrap()
+                .iter()
+                .find(|p| p.uri == uri)
+                .unwrap()
+                .unsupported
+                .is_some()
+        );
+    }
+    assert!(Plugin::new(&world, "urn:oxidal:test:atoms", 48000.0, 64).is_err());
+    for mode in 1..=6 {
+        let mut p = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+        p.prepare_latency().unwrap();
+        p.set(4, mode as f32).unwrap();
+        let mut audio = [1.0; 64];
+        assert!(p.process_mono(&mut audio).is_err());
+        assert_eq!(audio, [0.0; 64]);
+        assert!(p.atom_events(3).is_err());
+        assert!(p.queue_atom(2, 0, "urn:test", &[]).is_err());
+    }
 }

@@ -685,7 +685,7 @@ export function GraphAuthor({
                       className="h-auto min-h-11 w-full justify-start text-left whitespace-normal"
                       disabled={
                         !!plugin.unsupported ||
-                        plugin.ports.some((p) => p.latency) ||
+                        plugin.ports.some((p) => p.latency || p.atom) ||
                         scanning
                       }
                       onClick={() => add(plugin)}
@@ -693,10 +693,12 @@ export function GraphAuthor({
                       {plugin.name}
                     </Button>
                     {(plugin.unsupported ||
-                      plugin.ports.some((p) => p.latency)) && (
+                      plugin.ports.some((p) => p.latency || p.atom)) && (
                       <p className="caption">
                         {plugin.unsupported ??
-                          'Use “Add saved tone” to open the mixed-chain composer for this effect.'}
+                          (plugin.ports.some((p) => p.atom)
+                            ? 'Message and file controls are not available yet.'
+                            : 'Use “Add saved tone” to open the mixed-chain composer for this effect.')}
                       </p>
                     )}
                   </div>

@@ -5,7 +5,7 @@
 #[allow(unsafe_code)]
 mod host;
 #[cfg(feature = "native")]
-pub use host::{ControlError, Plugin, World};
+pub use host::{AtomEvent, ControlError, Plugin, World};
 pub mod protocol;
 pub use protocol::Binding;
 use schemars::JsonSchema;
@@ -17,6 +17,8 @@ pub struct Port {
     pub symbol: String,
     pub audio: bool,
     pub control: bool,
+    #[serde(default)]
+    pub atom: bool,
     pub input: bool,
     pub output: bool,
     pub integer: bool,
@@ -97,6 +99,7 @@ mod tests {
             symbol: "control".into(),
             audio: false,
             control: true,
+            atom: false,
             input: true,
             output: false,
             integer: false,

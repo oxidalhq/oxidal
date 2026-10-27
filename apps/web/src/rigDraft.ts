@@ -25,6 +25,9 @@ export type DraftEffect =
     };
 
 export function lv2Effect(plugin: Lv2Plugin): DraftEffect {
+  if (plugin.ports.some((port) => port.atom)) {
+    throw new Error('Message and file controls are not available yet.');
+  }
   if (plugin.unsupported) throw new Error(plugin.unsupported);
   const inputs = plugin.ports.filter((p) => p.audio && p.input).length;
   const outputs = plugin.ports.filter((p) => p.audio && p.output).length;

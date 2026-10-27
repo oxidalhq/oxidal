@@ -3318,6 +3318,10 @@
     "Port": {
       "type": "object",
       "properties": {
+        "atom": {
+          "type": "boolean",
+          "default": false
+        },
         "audio": {
           "type": "boolean"
         },

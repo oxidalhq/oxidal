@@ -426,7 +426,11 @@ export function RigComposer({
                         <Button
                           variant="outline"
                           className="min-h-11 w-full justify-start text-left whitespace-normal"
-                          disabled={loading || !!plugin.unsupported}
+                          disabled={
+                            loading ||
+                            !!plugin.unsupported ||
+                            plugin.ports.some((p) => p.atom)
+                          }
                           onClick={() => {
                             try {
                               const item = lv2Effect(plugin);
@@ -439,8 +443,12 @@ export function RigComposer({
                         >
                           {plugin.name}
                         </Button>
-                        {plugin.unsupported && (
-                          <p className="caption">{plugin.unsupported}</p>
+                        {(plugin.unsupported ||
+                          plugin.ports.some((p) => p.atom)) && (
+                          <p className="caption">
+                            {plugin.unsupported ??
+                              'Message and file controls are not available yet.'}
+                          </p>
                         )}
                       </div>
                     ))}

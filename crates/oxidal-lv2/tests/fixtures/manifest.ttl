@@ -11,3 +11,6 @@
 
 <urn:oxidal:test:worker> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
 <urn:oxidal:test:missing-worker> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:atoms> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:atoms-large> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .
+<urn:oxidal:test:atoms-unsupported> a lv2:Plugin ; lv2:binary <plugin.so> ; rdfs:seeAlso <plugin.ttl> .

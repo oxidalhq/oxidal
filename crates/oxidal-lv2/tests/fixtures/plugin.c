@@ -5,6 +5,8 @@
 #include <lv2/options/options.h>
 #include <lv2/buf-size/buf-size.h>
 #include <lv2/atom/atom.h>
+#include <lv2/atom/util.h>
+#include <lv2/midi/midi.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <lv2/worker/worker.h>
@@ -139,4 +141,43 @@ static void async_cleanup(LV2_Handle h) {
 }
 static const LV2_Descriptor async_descriptor={"urn:oxidal:test:worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,async_extension};
 static const LV2_Descriptor missing_worker={"urn:oxidal:test:missing-worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,NULL};
-LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:NULL;}
+typedef struct {float* in;float* out;float* mode;float* latency;LV2_Atom_Sequence* input;LV2_Atom_Sequence* output;LV2_URID sequence,floating,midi;float gain;} Atoms;
+static LV2_Handle atoms_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
+    (void)d;(void)rate;(void)path;LV2_URID_Map* map=NULL;
+    for(int i=0;features && features[i];i++)if(!strcmp(features[i]->URI,LV2_URID__map))map=features[i]->data;
+    if(!map)return NULL;
+    Atoms* a=calloc(1,sizeof(Atoms));if(!a)return NULL;
+    a->gain=1;a->sequence=map->map(map->handle,LV2_ATOM__Sequence);a->floating=map->map(map->handle,LV2_ATOM__Float);a->midi=map->map(map->handle,LV2_MIDI__MidiEvent);return a;
+}
+static void atoms_connect(LV2_Handle h,uint32_t port,void* data) {
+    Atoms* a=h;switch(port){case 0:a->in=data;break;case 1:a->out=data;break;case 2:a->input=data;break;case 3:a->output=data;break;case 4:a->mode=data;break;case 5:a->latency=data;break;}
+}
+static void atoms_run(LV2_Handle h,uint32_t n) {
+    Atoms* a=h;*a->latency=0;assert(a->input->atom.type==a->sequence);assert(a->input->body.unit==0 && a->input->body.pad==0);
+    assert(a->output->atom.size+sizeof(LV2_Atom)>=a->input->atom.size+sizeof(LV2_Atom));
+    memcpy(a->output,a->input,a->input->atom.size+sizeof(LV2_Atom));
+    LV2_Atom_Event* event=lv2_atom_sequence_begin(&a->input->body);
+    for(uint32_t frame=0;frame<n;frame++) {
+        while(!lv2_atom_sequence_is_end(&a->input->body,a->input->atom.size,event) && event->time.frames==frame) {
+            if(event->body.type==a->floating && event->body.size==sizeof(float))memcpy(&a->gain,event+1,sizeof(float));
+            if(event->body.type==a->midi && event->body.size==3) {const unsigned char* midi=(const unsigned char*)(event+1);if(midi[0]==0xB0 && midi[1]==7)a->gain=midi[2]/127.0f;}
+            event=lv2_atom_sequence_next(event);
+        }
+        a->out[frame]=a->in[frame]*a->gain;
+    }
+    if(n && *a->mode>0) {
+        LV2_Atom_Event* e=(LV2_Atom_Event*)((unsigned char*)a->output+sizeof(LV2_Atom_Sequence));
+        a->output->atom.size=sizeof(LV2_Atom_Sequence_Body)+sizeof(LV2_Atom_Event);
+        *e=(LV2_Atom_Event){.time.frames=0,.body={0,a->floating}};
+        switch((int)*a->mode) {
+            case 1:a->output->atom.size=UINT32_MAX;break;
+            case 2:e->body.size=UINT32_MAX;break;
+            case 3:e->time.frames=n;break;
+            case 4:a->output->body.unit=UINT32_MAX;break;
+            case 5:e->body.type=0;break;
+            case 6:a->output->atom.size--;break;
+        }
+    }
+}
+static const LV2_Descriptor atoms_descriptor={"urn:oxidal:test:atoms",atoms_create,atoms_connect,NULL,atoms_run,NULL,cleanup,NULL};
+LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:index==7?&atoms_descriptor:NULL;}

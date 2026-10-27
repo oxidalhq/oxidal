@@ -181,3 +181,23 @@ it('keeps stage pairs complete and ordered without preventing effects between th
   expect(() => splitNative(amp, 'amp', 'cab', 'left')).toThrow('whole tone');
   expect(() => splitNative(native, 'same', 'same', 'left')).toThrow('separate');
 });
+
+it('message-based effects cannot silently become scalar-only drafts', () => {
+  const source = mono.ports[0];
+  if (!source) throw new Error('Missing fixture port');
+  expect(() =>
+    lv2Effect({
+      ...mono,
+      ports: [
+        ...mono.ports,
+        {
+          ...source,
+          atom: true,
+          audio: false,
+          control: false,
+          symbol: 'events',
+        },
+      ],
+    }),
+  ).toThrow('Message and file controls');
+});

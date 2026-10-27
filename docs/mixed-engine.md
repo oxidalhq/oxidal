@@ -427,3 +427,5 @@ This is not browser conversion or live structural replacement. The source is a
 saved preset, not arbitrary unsaved native machine state. Pitch remains internal
 to the amp. General cab formats, opaque LV2 state, non-48-kHz split stages,
 prepared switching, trails and physical timing remain unqualified.
+
+Atom Sequence transport exists in the LV2 library, but portable scalar-only recall rejects Atom effects until typed message/state persistence is implemented. It must not silently save a resource-loading plugin without its model/file state.

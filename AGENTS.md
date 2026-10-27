@@ -47,4 +47,4 @@ whole-rig conversion and non-48-kHz stage processing remain open.
 
 The portable mixed executor aligns valid LV2 reported latency after a zero-frame query. Live latency-changing edits require fresh preparation; verified scalar rollback preserves the session, while invalid runtime changes fail closed. The legacy stereo graph still rejects latency-reporting plugins. See docs/lv2.md.
 
-The LV2 host now supports bounded background Worker scheduling with owner-thread responses and drained teardown. Atom/state and full resource-loading plugin compatibility remain pending; see docs/lv2.md.
+The LV2 host now supports bounded background Worker scheduling with owner-thread responses and drained teardown. Declared-port Atom Sequence transport is qualified separately; portable Atom/state authoring and full resource-loading plugin compatibility remain pending. Scalar-only authoring rejects Atom effects to avoid incomplete saves; see docs/lv2.md.

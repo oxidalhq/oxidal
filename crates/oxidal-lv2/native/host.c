@@ -2,6 +2,8 @@
 // Bounded Lilv/LV2 ownership boundary. Plugins are trusted native code, not sandboxed.
 #include <lilv/lilv.h>
 #include <lv2/atom/atom.h>
+#include <lv2/atom/util.h>
+#include <lv2/resize-port/resize-port.h>
 #include <lv2/buf-size/buf-size.h>
 #include <lv2/options/options.h>
 #include <lv2/parameters/parameters.h>
@@ -18,6 +20,7 @@
 #include <string.h>
 #define MAX_PORTS 128
 #define MAX_URIS 256
+#define ATOM_BYTES 16384
 static _Thread_local char error[512];
 static int fail(const char* message) { snprintf(error, sizeof(error), "%s", message); return -1; }
 const char* ox_lv2_error(void) { return error; }
@@ -65,7 +68,7 @@ static int property(LilvWorld* w, const LilvPlugin* p, const LilvPort* port, con
     LilvNode* node = lilv_new_uri(w, uri);
     int result = lilv_port_has_property(p, port, node); lilv_node_free(node); return result;
 }
-// flags: audio, control, input, output, integer, toggled, sampleRate, logarithmic, latency.
+// flags: audio, control, input, output, integer, toggled, sampleRate, logarithmic, latency, Atom, invalid Atom metadata.
 int ox_lv2_port(void* world, const LilvPlugin* p, uint32_t index, float* def, float* min, float* max) {
     LilvWorld* w = world; const LilvPort* port = lilv_plugin_get_port_by_index(p, index);
     if (!port) return fail("Missing port");
@@ -80,6 +83,18 @@ int ox_lv2_port(void* world, const LilvPlugin* p, uint32_t index, float* def, fl
     LilvNode* latency=lilv_new_uri(w,LV2_CORE__latency);
     if (value && lilv_node_equals(value,latency)) flags|=256;
     lilv_node_free(designation);lilv_node_free(value);lilv_node_free(latency);
+    if (is_class(w,p,port,LV2_ATOM__AtomPort)) {
+        flags|=512;
+        LilvNode* key=lilv_new_uri(w,LV2_ATOM__bufferType);
+        LilvNodes* types=lilv_port_get_value(p,port,key);lilv_node_free(key);
+        LilvNode* sequence=lilv_new_uri(w,LV2_ATOM__Sequence);
+        if (!lilv_nodes_contains(types,sequence)) flags|=1024;
+        lilv_nodes_free(types);lilv_node_free(sequence);
+        key=lilv_new_uri(w,LV2_RESIZE_PORT__minimumSize);
+        LilvNode* minimum=lilv_port_get(p,port,key);lilv_node_free(key);
+        if (minimum && (!lilv_node_is_int(minimum) || lilv_node_as_int(minimum)<0 || lilv_node_as_int(minimum)>ATOM_BYTES)) flags|=1024;
+        lilv_node_free(minimum);
+    }
     LilvNode *d=NULL,*lo=NULL,*hi=NULL; lilv_port_get_range(p,port,&d,&lo,&hi);
     *def=d?lilv_node_as_float(d):NAN; *min=lo?lilv_node_as_float(lo):NAN; *max=hi?lilv_node_as_float(hi):NAN;
     lilv_node_free(d);lilv_node_free(lo);lilv_node_free(hi);
@@ -206,6 +221,11 @@ typedef struct {
     uint32_t input[2], output[2];
     float control[MAX_PORTS];
     float* audio[MAX_PORTS];
+    LV2_Atom_Sequence* atoms[MAX_PORTS];
+    LV2_Atom_Sequence* pending[MAX_PORTS];
+    int atom_input[MAX_PORTS];
+    LV2_URID sequence_type, chunk_type, frame_time;
+    uint32_t atom_count;
     pthread_mutex_t urid_lock;
     char uris[MAX_URIS][256];
     LV2_URID_Map map;
@@ -234,7 +254,7 @@ void ox_lv2_free(void* raw) {
     Host* h=raw;if (!h) return;
     worker_stop(h->worker);
     if (h->instance) {if (h->active) lilv_instance_deactivate(h->instance);lilv_instance_free(h->instance);}
-    for (uint32_t i=0;i<h->ports;i++) free(h->audio[i]);
+    for (uint32_t i=0;i<h->ports;i++) {free(h->audio[i]);free(h->atoms[i]);free(h->pending[i]);}
     pthread_mutex_destroy(&h->urid_lock);free(h->worker);free(h);
 }
 void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
@@ -263,13 +283,21 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     uint32_t latency_ports=0;
     for (uint32_t i=0;i<ports;i++) {
         float d,lo,hi;int flags=ox_lv2_port(world,p,i,&d,&lo,&hi);
-        if ((flags&3)!=1 && (flags&3)!=2) {fail("Unsupported port class (only audio/control)");goto failed;}
+        int classes=!!(flags&1)+!!(flags&2)+!!(flags&512);
+        if (classes!=1 || (flags&1024)) {fail("Unsupported port class or Atom buffer requirements");goto failed;}
         if ((flags&12)!=4 && (flags&12)!=8) {fail("Ambiguous port direction");goto failed;}
         if ((flags&256) && ((flags&15)!=10 || ++latency_ports>1)) {fail("Latency needs one output control port");goto failed;}
         if (flags&1) {
             h->audio[i]=calloc(frames,sizeof(float));if (!h->audio[i]) {fail("Audio buffer allocation failed");goto failed;}
             if (flags&4) {if (h->ins>=2) {fail("Too many input channels");goto failed;}h->input[h->ins++]=i;}
             else {if (h->outs>=2) {fail("Too many output channels");goto failed;}h->output[h->outs++]=i;}
+        } else if (flags&512) {
+            h->atoms[i]=calloc(1,ATOM_BYTES);if (!h->atoms[i]) {fail("Atom buffer allocation failed");goto failed;}
+            h->atom_count++;h->atom_input[i]=!!(flags&4);
+            if (h->atom_input[i]) {
+                h->pending[i]=calloc(1,ATOM_BYTES);if (!h->pending[i]) {fail("Atom queue allocation failed");goto failed;}
+                h->pending[i]->atom.size=sizeof(LV2_Atom_Sequence_Body);
+            }
         } else if (flags&256) {
             // Never mistake an unwritten output for zero latency.
             h->control[i]=NAN;
@@ -280,9 +308,10 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
         }
     }
     if (h->ins!=h->outs || (h->ins!=1 && h->ins!=2)) {fail("Require mono/mono or stereo/stereo audio ports");goto failed;}
+    h->sequence_type=map_uri(h,LV2_ATOM__Sequence);h->chunk_type=map_uri(h,LV2_ATOM__Chunk);h->frame_time=map_uri(h,LV2_ATOM__frameTime);
     h->instance=lilv_plugin_instantiate(p,rate,h->feature_ptrs);
     if (!h->instance) {fail("Plugin instantiate rejected supplied features");goto failed;}
-    for (uint32_t i=0;i<ports;i++) lilv_instance_connect_port(h->instance,i,h->audio[i]?h->audio[i]:&h->control[i]);
+    for (uint32_t i=0;i<ports;i++) lilv_instance_connect_port(h->instance,i,h->audio[i]?(void*)h->audio[i]:h->atoms[i]?(void*)h->atoms[i]:&h->control[i]);
     if (h->worker) {
         Worker* w=h->worker;w->instance=h->instance;
         w->interface=lilv_instance_get_extension_data(h->instance,LV2_WORKER__interface);
@@ -295,17 +324,50 @@ failed: ox_lv2_free(h);return NULL;
 }
 // Core LV2 run(0) updates instant control outputs without consuming audio.
 // Called only during latency preparation or a control transaction, never discovery.
-static void run_cycle(Host* h,uint32_t frames) {
+static int valid_sequence(Host* h,const LV2_Atom_Sequence* seq,uint32_t frames) {
+    if (seq->atom.type==0 && seq->atom.size==0) return 1;
+    // An untouched Chunk is empty, not plugin-generated event data.
+    if (seq->atom.type==h->chunk_type && seq->atom.size==ATOM_BYTES-sizeof(LV2_Atom)) return 1;
+    if (seq->atom.type!=h->sequence_type || seq->atom.size<sizeof(seq->body) || seq->atom.size>ATOM_BYTES-sizeof(LV2_Atom)
+        || (seq->body.unit && seq->body.unit!=h->frame_time)) return 0;
+    uint32_t offset=sizeof(seq->body);int64_t previous=0;
+    while (offset<seq->atom.size) {
+        uint32_t remaining=seq->atom.size-offset;
+        if (remaining<sizeof(LV2_Atom_Event)) return 0;
+        const LV2_Atom_Event* e=(const LV2_Atom_Event*)((const unsigned char*)&seq->body+offset);
+        if (!e->body.type || e->body.size>remaining-sizeof(*e) || e->time.frames<previous || e->time.frames<0
+            || (frames?e->time.frames>=frames:e->time.frames!=0)) return 0;
+        uint32_t size=lv2_atom_pad_size(sizeof(*e)+e->body.size);
+        if (size>remaining) return 0;
+        previous=e->time.frames;offset+=size;
+    }
+    return offset==seq->atom.size;
+}
+static int run_cycle(Host* h,uint32_t frames) {
+    if (h->atom_count) for (uint32_t i=0;i<h->ports;i++) if (h->atoms[i]) {
+        LV2_Atom_Sequence* seq=h->atoms[i];
+        if (h->atom_input[i]) {
+            seq->atom=(LV2_Atom){sizeof(seq->body),h->sequence_type};seq->body=(LV2_Atom_Sequence_Body){0,0};
+            // Latency/control run(0) must not consume queued timed events.
+            if (frames) {
+                memcpy(&seq->body,&h->pending[i]->body,h->pending[i]->atom.size);
+                seq->atom.size=h->pending[i]->atom.size;seq->body.pad=0;
+                h->pending[i]->atom.size=sizeof(seq->body);h->pending[i]->body.pad=0;
+            }
+        } else seq->atom=(LV2_Atom){ATOM_BYTES-sizeof(LV2_Atom),h->chunk_type};
+    }
     lilv_instance_run(h->instance,frames);
     if (h->worker) {
         worker_responses(h->worker);
         if (h->worker->interface->end_run && h->worker->interface->end_run(lilv_instance_get_handle(h->instance))!=LV2_WORKER_SUCCESS)
             atomic_store_explicit(&h->worker->failed,1,memory_order_release);
     }
+    if (h->atom_count) for (uint32_t i=0;i<h->ports;i++)
+        if (h->atoms[i] && !h->atom_input[i] && !valid_sequence(h,h->atoms[i],frames)) return fail("Malformed LV2 Atom output");
+    return h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)?fail("LV2 worker callback failed"):0;
 }
 int ox_lv2_refresh_outputs(void* raw) {
-    Host* h=raw;run_cycle(h,0);
-    return h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)?fail("LV2 worker callback failed"):0;
+    Host* h=raw;return run_cycle(h,0);
 }
 // Rust validates port kind/range; every call is serialized on the instance owner.
 void ox_lv2_set(void* raw,uint32_t port,float value) {Host* h=raw;h->control[port]=value;}
@@ -314,12 +376,44 @@ int ox_lv2_run(void* raw,float* left,float* right,uint32_t frames) {
     Host* h=raw;if (frames!=h->frames) return fail("Block length differs from instantiate options");
     memcpy(h->audio[h->input[0]],left,frames*sizeof(float));
     if (h->ins==2) memcpy(h->audio[h->input[1]],right,frames*sizeof(float));
-    run_cycle(h,frames);
-    if (h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)) return fail("LV2 worker callback failed");
+    if (run_cycle(h,frames)) return -1;
     for (uint32_t n=0;n<frames;n++) {
         left[n]=h->audio[h->output[0]][n];
         if (h->outs==2) right[n]=h->audio[h->output[1]][n];
         if (!isfinite(left[n]) || (h->outs==2 && !isfinite(right[n]))) return fail("Nonfinite plugin output");
+    }
+    return 0;
+}
+
+// Owner-thread APIs used between process calls. URIDs are instance-local and
+// must never be persisted or reused with a different instance.
+uint32_t ox_lv2_map(void* raw,const char* uri) {return map_uri(raw,uri);}
+const char* ox_lv2_unmap(void* raw,uint32_t id) {return unmap_uri(raw,id);}
+int ox_lv2_atom_push(void* raw,uint32_t port,uint32_t frame,uint32_t type,uint32_t size,const void* body) {
+    Host* h=raw;
+    if (port>=h->ports || !h->pending[port] || frame>=h->frames || !type || size>ATOM_BYTES || (size && !body)) return fail("Invalid Atom input");
+    LV2_Atom_Sequence* seq=h->pending[port];
+    uint32_t total=lv2_atom_pad_size(sizeof(LV2_Atom_Event)+size);
+    if (total>ATOM_BYTES-sizeof(LV2_Atom)-seq->atom.size) return fail("Atom input buffer full");
+    if (seq->atom.size>sizeof(seq->body) && frame<seq->body.pad) return fail("Atom events must be ordered by frame");
+    LV2_Atom_Event* e=(LV2_Atom_Event*)((unsigned char*)&seq->body+seq->atom.size);
+    memset(e,0,total);e->time.frames=frame;e->body=(LV2_Atom){size,type};
+    if (size) memcpy(e+1,body,size);
+    seq->atom.size+=total;
+    // Pending-only ordering cursor; zeroed before copying to the plugin.
+    seq->body.pad=frame;return 0;
+}
+int ox_lv2_atom_event(void* raw,uint32_t port,uint32_t index,uint32_t* frame,uint32_t* type,uint32_t* size,const void** body) {
+    Host* h=raw;
+    if (port>=h->ports || !h->atoms[port] || h->atom_input[port]) return fail("Not an Atom output");
+    const LV2_Atom_Sequence* seq=h->atoms[port];
+    if (!valid_sequence(h,seq,h->frames)) return fail("Malformed LV2 Atom output");
+    if (seq->atom.type!=h->sequence_type) return 0;
+    uint32_t offset=sizeof(seq->body),n=0;
+    while (offset<seq->atom.size) {
+        const LV2_Atom_Event* e=(const LV2_Atom_Event*)((const unsigned char*)&seq->body+offset);
+        if (n++==index) {*frame=(uint32_t)e->time.frames;*type=e->body.type;*size=e->body.size;*body=e+1;return 1;}
+        offset+=lv2_atom_pad_size(sizeof(*e)+e->body.size);
     }
     return 0;
 }

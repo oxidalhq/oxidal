@@ -8,7 +8,7 @@ The optional `oxidal-lv2/native` feature uses Lilv to discover and instantiate i
 - Mono input/output plugins use two independent instances to preserve stereo histories. Stereo input/output plugins use one instance.
 - Bounded scalar input controls retain native ranges, integer/toggle properties and logarithmic scaling. Finite scalar outputs can be read back.
 - Stable URID map/unmap, sample-rate and block-size options are delivered during instantiation. Required unknown features/options fail before instantiation.
-- Unsupported ports, asymmetric channel layouts, missing control ranges, Atom/CV and opaque plugin state fail closed. This is a deliberately limited general plugin host, not full LV2 compatibility.
+- Unsupported ports, asymmetric channel layouts, missing control ranges, CV and opaque plugin state fail closed. Atom Sequence transport is available on the declared-port library API; browser/portable scalar-only authoring rejects Atom effects until message/state persistence is integrated. This is a deliberately limited general plugin host, not full LV2 compatibility.
 - The portable mixed-chain host admits one output control port designated `lv2:latency` (or deprecated `reportsLatency`). It queries latency with `run(0)` after restoring controls, validates whole nonnegative frames and uses the mixed executor's budgeted delay alignment. The legacy stereo graph rejects these plugins because it has no latency compensation.
 - Live latency-changing scalar edits are rejected with verified control/latency rollback; failed rollback or spontaneous processing-time latency changes invalidate the session. Automatic replanning is not implemented. A zero-frame query does not prove an arbitrary plugin's reconfiguration is real-time safe.
 - Instances and their discovery world have one thread owner. Port metadata is immutable after preparation. Buffers are prepared before processing; the successful host processing path does not allocate. Plugin allocation and real-time safety still require individual qualification.
@@ -18,6 +18,28 @@ The optional `oxidal-lv2/native` feature uses Lilv to discover and instantiate i
 Feature behavior follows the LV2 [buffer-size](https://lv2plug.in/ns/ext/buf-size), [options](https://lv2plug.in/ns/ext/options) and [URID](https://lv2plug.in/ns/ext/urid) specifications.
 
 Latency semantics follow the official [latency designation](https://lv2plug.in/ns/lv2core#latency) and [core run contract](https://lv2plug.in/c/html/group__lv2core.html). Intentional musical delay is not processing latency.
+
+## Atom Sequence transport
+
+The declared-port host connects frame-timed Atom Sequence ports with fixed 16 KiB
+buffers. Advertised minimum sizes above that budget and non-Sequence buffer types
+are rejected. Output capacity is supplied as an Atom Chunk before each cycle.
+Input events are copied and consumed once, in timestamp order; zero-frame latency
+queries preserve queued events for the next audio block. Output sequence sizes,
+event sizes, padding, time units and timestamps are validated before messages or
+audio are accepted. Malformed output invalidates processing.
+
+`Plugin::queue_atom` and `map_atom_uri` run between blocks on the instance owner.
+`atom_events` copies output for the control path and allocates; it is not an audio
+callback API. Structured bodies can contain instance-local URIDs and must not be
+persisted as raw bytes. This API supports copied MIDI/POD messages; it does not yet
+provide a physical MIDI device, browser file picker, patch-property discovery or
+portable opaque-state recall. Scalar-only graph authoring rejects Atom effects
+instead of saving a rig that would silently lose those settings. No generic message
+API is exposed directly to the network.
+
+The layout and capacity contract follows [LV2 Atom](https://lv2plug.in/ns/ext/atom)
+and [Resize Port metadata](https://lv2plug.in/ns/ext/resize-port).
 
 ## Background plugin work
 
@@ -39,8 +61,8 @@ threads, joins the worker, then deactivates and frees the plugin. Destruction ca
 for plugin code and must never run in the audio callback. A hung native plugin still
 requires the enclosing process supervisor; this library does not detach threads that
 could access freed plugin memory. Rendering uses asynchronous worker execution; no
-freewheeling/sample-exact resource-loading mode is claimed. Atom messages, opaque state
-and representative resource-loading plugins need separate qualification.
+freewheeling/sample-exact resource-loading mode is claimed. Portable Atom/state authoring and representative resource-loading plugins need
+separate qualification.
 
 The contract follows the official [LV2 Worker specification](https://lv2plug.in/ns/ext/worker).
 
@@ -51,6 +73,8 @@ On Debian/Ubuntu install `liblilv-dev lv2-dev swh-lv2`, then run `pnpm lv2:check
 The suite checks feature delivery with a project-authored contract plugin and renders the independently installed SWH amplifier and delay. It verifies native gain, exact impulse delay and separate left/right histories, invalid ports/values, feature rejection, world lifetime and nonfinite-output containment. The contract plugin is infrastructure evidence, not musical-effect fidelity evidence.
 
 The existing `pnpm native:check` also runs portable-engine latency tests: modern/legacy metadata, parallel impulse alignment over multiple blocks, live bypass, offline bundle recall, buffer-budget rejection, scalar rollback and invalid/dynamic latency containment. These use an authored ABI fixture, not qualification of every third-party latency-reporting plugin.
+
+Atom regressions verify exact in-block gain/MIDI timing, copied payloads, input saturation, zero-frame preservation and malformed output containment.
 
 Worker regressions check copied stack messages, ordered replies, thread ownership, request saturation, oversized-message rejection, zero-frame end-of-cycle handling, callback failure and teardown with queued work.
 

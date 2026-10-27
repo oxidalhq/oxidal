@@ -416,3 +416,27 @@ fn recalled_controls_and_bypass_reach_audio_and_reject_changed_ports() {
     );
     assert!(oxidal_lv2::protocol::GraphRecall::from_snapshot(&original.snapshot()).is_err());
 }
+
+#[test]
+fn atom_processing_does_not_allocate_rust_memory() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut plugin =
+        oxidal_lv2::Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    plugin.prepare_latency().unwrap();
+    plugin
+        .queue_atom(
+            2,
+            16,
+            "http://lv2plug.in/ns/ext/atom#Float",
+            &0.5_f32.to_ne_bytes(),
+        )
+        .unwrap();
+    let mut samples = [1.0; 64];
+    ALLOCATIONS.with(|n| n.set(0));
+    COUNTING.with(|c| c.set(true));
+    for _ in 0..100 {
+        plugin.process_mono(&mut samples).unwrap();
+    }
+    COUNTING.with(|c| c.set(false));
+    assert_eq!(ALLOCATIONS.with(|n| n.get()), 0);
+}
