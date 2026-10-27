@@ -46,13 +46,17 @@ pub enum Architecture {
     A2,
     #[serde(rename = "custom")]
     Custom,
+    /// IR models have no NAM architecture; omit the provider filter.
+    #[serde(rename = "any")]
+    Any,
 }
 impl Architecture {
-    fn value(self) -> &'static str {
+    fn value(self) -> Option<&'static str> {
         match self {
-            Self::A1 => "1",
-            Self::A2 => "2",
-            Self::Custom => "custom",
+            Self::A1 => Some("1"),
+            Self::A2 => Some("2"),
+            Self::Custom => Some("custom"),
+            Self::Any => None,
         }
     }
 }
@@ -206,17 +210,15 @@ impl Account {
         if query.tone_id == 0 || query.page == 0 || query.page > 10000 {
             return Err("Invalid tone or model page");
         }
-        let page: Page<Model> = self
-            .catalog(
-                "models",
-                &[
-                    ("tone_id", query.tone_id.to_string()),
-                    ("page", query.page.to_string()),
-                    ("page_size", "20".into()),
-                    ("architecture", query.architecture.value().into()),
-                ],
-            )
-            .await?;
+        let mut params = vec![
+            ("tone_id", query.tone_id.to_string()),
+            ("page", query.page.to_string()),
+            ("page_size", "20".into()),
+        ];
+        if let Some(architecture) = query.architecture.value() {
+            params.push(("architecture", architecture.into()));
+        }
+        let page: Page<Model> = self.catalog("models", &params).await?;
         if page.data.len() > 20
             || page.page != query.page
             || !page

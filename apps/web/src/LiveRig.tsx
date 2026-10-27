@@ -31,6 +31,7 @@ export function LiveRig({
     name: string;
     opening: AudioState;
     insert?: boolean;
+    format?: 'nam' | 'ir';
   } | null>(null);
   const [target, setTarget] = useState('outputLevel');
   const [draft, setDraft] = useState<{
@@ -343,7 +344,7 @@ export function LiveRig({
                 })
               }
             >
-              Choose NAM
+              Change model
             </Button>
             <Button
               className="effect-power mt-1"
@@ -358,25 +359,32 @@ export function LiveRig({
         ))}
       </div>
       {state.slots?.some((s) => s.position.lane === 0) && (
-        <Button
-          variant="outline"
-          disabled={disabled || !!draft}
-          onClick={() => {
-            const slot = state.slots!.find((s) => s.position.lane === 0)!;
-            setPicker({
-              target: slot.target,
-              name: `slot ${slot.position.index + 1}`,
-              opening: state,
-              insert: true,
-            });
-          }}
-        >
-          Add NAM
-        </Button>
+        <div className="action-row">
+          {(['nam', 'ir'] as const).map((format) => (
+            <Button
+              key={format}
+              variant="outline"
+              disabled={disabled || !!draft}
+              onClick={() => {
+                const slot = state.slots!.find((s) => s.position.lane === 0)!;
+                setPicker({
+                  target: slot.target,
+                  name: `slot ${slot.position.index + 1}`,
+                  opening: state,
+                  insert: true,
+                  format,
+                });
+              }}
+            >
+              {format === 'nam' ? 'Add NAM' : 'Add IR'}
+            </Button>
+          ))}
+        </div>
       )}
       {picker && (
         <ModelPicker
           name={picker.name}
+          initialFormat={picker.format}
           intent={picker.insert ? 'add' : 'replace'}
           onClose={() => setPicker(null)}
           onAudition={async (asset) => {

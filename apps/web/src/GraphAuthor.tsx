@@ -55,7 +55,7 @@ export function GraphAuthor({
     'New rig';
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
-  const [namPicker, setNamPicker] = useState(false);
+  const [namPicker, setNamPicker] = useState<'nam' | 'ir' | null>(null);
   const newNative = useRef<AudioState | null>(null);
   const [query, setQuery] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -231,7 +231,7 @@ export function GraphAuthor({
       });
       if (alive.current) {
         setAudio(updated);
-        setNamPicker(false);
+        setNamPicker(null);
         onOpenRig?.();
       }
     } finally {
@@ -342,8 +342,8 @@ export function GraphAuthor({
             </Button>
           </div>
           <p className="caption">
-            Add a NAM model or installed effects. Mixing native NAM with LV2 is
-            still being connected.
+            Add NAM, IR or installed effects. Mixing native processing with LV2
+            is still being connected.
           </p>
         </>
       )}
@@ -533,7 +533,8 @@ export function GraphAuthor({
         <ModelPicker
           name={name}
           intent="add"
-          onClose={() => setNamPicker(false)}
+          initialFormat={namPicker}
+          onClose={() => setNamPicker(null)}
           onAudition={addNam}
         />
       )}
@@ -546,24 +547,27 @@ export function GraphAuthor({
           }}
         >
           <div className="space-y-3">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              disabled={
-                !stream ||
-                audio?.phase === 'unavailable' ||
-                audio?.device_owned ||
-                !!draft.bindings.length ||
-                !name.trim()
-              }
-              onClick={() => {
-                setPicker(false);
-                scan.current?.abort();
-                setNamPicker(true);
-              }}
-            >
-              NAM model
-            </Button>
+            {(['nam', 'ir'] as const).map((format) => (
+              <Button
+                key={format}
+                variant="outline"
+                className="w-full justify-start"
+                disabled={
+                  !stream ||
+                  audio?.phase === 'unavailable' ||
+                  audio?.device_owned ||
+                  !!draft.bindings.length ||
+                  !name.trim()
+                }
+                onClick={() => {
+                  setPicker(false);
+                  scan.current?.abort();
+                  setNamPicker(format);
+                }}
+              >
+                {format === 'nam' ? 'NAM model' : 'Cab / IR'}
+              </Button>
+            ))}
             {!!draft.bindings.length && (
               <p className="caption">
                 Mixed NAM/LV2 routing is not available yet.

@@ -349,6 +349,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_factories()?;
     qualify_empty_creation(&root, &preset)?;
     qualify_model_preparation(&root, &preset)?;
+    qualify_ir_preparation(&root)?;
     println!(
         "{}",
         serde_json::json!({"parameters":43,"tone_parameters":36,"machine_defaults":4,"dry_max_error":dry_error,"restored_a2_max_error":restore_error,"state_bytes":model_state.byte_len(),"non_a2_local_load_rejected":true,"live_audio_qualified":false})
@@ -871,20 +872,7 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
             engine.remove_block(tones[1]["blockId"].as_str().unwrap())?;
             let ir = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?)
                 .join("split-impulse.wav");
-            let mut wav = Vec::from(&b"RIFF"[..]);
-            wav.extend(38u32.to_le_bytes());
-            wav.extend(b"WAVEfmt ");
-            wav.extend(16u32.to_le_bytes());
-            wav.extend(1u16.to_le_bytes());
-            wav.extend(1u16.to_le_bytes());
-            wav.extend(48000u32.to_le_bytes());
-            wav.extend(96000u32.to_le_bytes());
-            wav.extend(2u16.to_le_bytes());
-            wav.extend(16u16.to_le_bytes());
-            wav.extend(b"data");
-            wav.extend(2u32.to_le_bytes());
-            wav.extend(32767i16.to_le_bytes());
-            std::fs::write(&ir, wav)?;
+            std::fs::write(&ir, impulse_wav())?;
             let loaded = engine.load_local_model(&ir)?;
             assert!(loaded["error"].is_null(), "IR fixture load: {loaded}");
             engine.wait_ready()?;
@@ -1554,5 +1542,89 @@ fn qualify_empty_creation(root: &std::path::Path, preset: &[u8]) -> Result<(), B
     eprintln!(
         "qualify: empty native creation, defaults/device scope, previous-state recovery, insert identity recall and created-copy provenance passed"
     );
+    Ok(())
+}
+
+fn impulse_wav() -> Vec<u8> {
+    let mut wav = Vec::from(&b"RIFF"[..]);
+    wav.extend(38u32.to_le_bytes());
+    wav.extend(b"WAVEfmt ");
+    wav.extend(16u32.to_le_bytes());
+    wav.extend(1u16.to_le_bytes());
+    wav.extend(1u16.to_le_bytes());
+    wav.extend(48000u32.to_le_bytes());
+    wav.extend(96000u32.to_le_bytes());
+    wav.extend(2u16.to_le_bytes());
+    wav.extend(16u16.to_le_bytes());
+    wav.extend(b"data");
+    wav.extend(2u32.to_le_bytes());
+    wav.extend(32767i16.to_le_bytes());
+    wav
+}
+
+fn qualify_ir_preparation(root: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    use sha2::{Digest, Sha256};
+    let bytes = impulse_wav();
+    let path = root.join("prepared-ir.wav");
+    std::fs::write(&path, &bytes)?;
+    let tone = serde_json::json!({"id":17,"title":"IR audition fixture","format":"ir","gear":"cab",
+        "models":[{"id":19,"name":"Prepared IR","model_url":"oxidal-model://fixture/model.wav"}]});
+    oxidal_presets::ModelStore::new(root.join("audition-models")).stage(
+        &oxidal_presets::ModelAsset {
+            schema: 1,
+            tone_id: 17,
+            model_id: 19,
+            title: "IR audition fixture".into(),
+            name: "Prepared IR".into(),
+            format: "ir".into(),
+            sha256: format!("{:x}", Sha256::digest(&bytes)),
+            tone: tone.clone(),
+        },
+        &bytes,
+    )?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.reset_empty()?;
+    let target = engine.slots()?[0].target.clone();
+    engine.prepare_model(&target, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    assert_eq!(engine.runtime()?["blocks"].as_array().unwrap().len(), 0);
+    engine.model_preparation(1)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "applied");
+    assert_eq!(engine.runtime()?["blocks"][0]["blockId"], target);
+    assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    engine.set_normalized("gateEnabled", 0.0)?;
+    let saved = engine.save_preset("IR embedded recall")?;
+    fn render(engine: &mut Engine) -> Result<Vec<f32>, Box<dyn Error>> {
+        settle(engine)?;
+        let mut result = vec![];
+        for block in 0..12 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| (((block * 128 + i) as f32) * 0.07).sin() * 0.05)
+                .collect();
+            let mut right = left.clone();
+            engine.process(&mut left, &mut right)?;
+            result.extend(left);
+        }
+        Ok(result)
+    }
+    let before = render(&mut engine)?;
+    assert!(before.iter().any(|s| s.abs() > 0.001));
+    drop(engine);
+    std::fs::remove_file(path)?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(&saved)?;
+    engine.wait_ready()?;
+    assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    let after = render(&mut engine)?;
+    let error = before
+        .iter()
+        .zip(after)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        error < 1e-5,
+        "IR embedded rendered restore differs: {error}"
+    );
+    eprintln!("qualify: IR preparation/insertion/rendered embedded recall passed");
     Ok(())
 }

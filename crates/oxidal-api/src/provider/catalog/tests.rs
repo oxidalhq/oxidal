@@ -183,3 +183,25 @@ async fn catalog_rejects_redirects_overlarge_replies_wrong_targets_and_rate_limi
     drop(account);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn ir_catalog_omits_nam_architecture_filter() {
+    let app = Router::new().route("/api/v1/models", get(|Query(query): Query<std::collections::HashMap<String, String>>| async move {
+        assert_eq!(query["tone_id"], "17");
+        assert!(!query.contains_key("architecture"));
+        Json(json!({"data":[{"id":19,"tone_id":17,"name":"Cab impulse","size":null,"architecture_version":null}],"page":1,"total_pages":1}))
+    }));
+    let (account, server, root) = account(app).await;
+    let models = account
+        .models(ModelQuery {
+            tone_id: 17,
+            page: 1,
+            architecture: Architecture::Any,
+        })
+        .await
+        .unwrap();
+    assert_eq!(models.data[0].architecture_version, None);
+    server.abort();
+    drop(account);
+    std::fs::remove_dir_all(root).unwrap();
+}

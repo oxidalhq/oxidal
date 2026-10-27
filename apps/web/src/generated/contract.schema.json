@@ -470,11 +470,20 @@
       ]
     },
     "Architecture": {
-      "type": "string",
-      "enum": [
-        "1",
-        "2",
-        "custom"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "1",
+            "2",
+            "custom"
+          ]
+        },
+        {
+          "description": "IR models have no NAM architecture; omit the provider filter.",
+          "type": "string",
+          "const": "any"
+        }
       ]
     },
     "AssetArtwork": {

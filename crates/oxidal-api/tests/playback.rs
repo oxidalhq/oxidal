@@ -879,6 +879,40 @@ async fn qualify_created_rig(
     state = wait_model(client, url, "applied").await;
     assert_eq!(state["models"][0]["target"], targets[0]);
     assert_eq!(state["models"][1]["target"], targets[1]);
+    // Add an independently typed IR to the same working chain. Its bytes must also
+    // survive the cache-independent Save/reload exercised below.
+    let fixtures = oxidal_presets::ModelStore::new(std::path::PathBuf::from(
+        std::env::var_os("OXIDAL_NATIVE_TEST_MODELS").unwrap(),
+    ));
+    let ir = std::fs::read_dir(std::env::var_os("OXIDAL_NATIVE_TEST_MODELS").unwrap())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter_map(|e| fixtures.read(&e.file_name().to_string_lossy()).ok())
+        .find(|(m, _)| m.format == "ir")
+        .expect("qualified IR fixture");
+    let ir_asset = oxidal_presets::ModelStore::new(root.join("presets/audition-models"))
+        .stage(&ir.0, &std::fs::read(ir.1).unwrap())
+        .unwrap();
+    let slot = state["slots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["position"]["lane"] == 0)
+        .unwrap()["target"]
+        .clone();
+    let response = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"replace_model","assignment":{"target":slot,"asset":ir_asset}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = wait_model(client, url, "applied").await;
+    assert_eq!(
+        state["models"].as_array().unwrap().last().unwrap()["asset"],
+        ir_asset
+    );
     let edited = send(
         client,
         url,

@@ -402,11 +402,12 @@ export async function tone3000Models(
   tone: number,
   page: number,
   signal: AbortSignal,
+  format: 'nam' | 'ir' = 'nam',
 ): Promise<ModelPage> {
   const params = new URLSearchParams({
     tone_id: String(tone),
     page: String(page),
-    architecture: '2',
+    architecture: format === 'nam' ? '2' : 'any',
   });
   const body = await presetResponse(
     await fetch(`/api/v1/tone3000/models?${params}`, {

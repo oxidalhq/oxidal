@@ -881,46 +881,50 @@ test('playback lifecycle keeps native authoring available after stop and restart
     // Only provider transport is a fixture. Selection, verified local asset, native
     // worker preparation, live readback and Save use the real daemon/processes.
     const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
-    const asset = readdirSync(modelRoot).find((id) =>
-      /^[0-9a-f]{64}$/.test(id),
-    )!;
-    const metadata = JSON.parse(
-      readFileSync(join(modelRoot, asset, 'metadata.json'), 'utf8'),
-    );
+    const fixtures = readdirSync(modelRoot)
+      .filter((id) => /^[0-9a-f]{64}$/.test(id))
+      .map((id) => ({
+        id,
+        metadata: JSON.parse(
+          readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'),
+        ),
+      }));
+    const irFixture = fixtures.find((f) => f.metadata.format === 'ir')!;
+    expect(irFixture).toBeTruthy();
     await page.route('**/api/v1/tone3000/tones?*', (route) =>
       route.fulfill({
         json: {
-          data: [
-            {
-              id: metadata.tone_id,
-              title: 'Audition fixture',
-              format: 'nam',
-              gear: 'amp',
-              license: 'Test fixture',
-              models_count: 1,
-              a2_models_count: 1,
-              url: 'https://www.tone3000.com',
-              user: { username: 'fixture' },
-            },
-          ],
+          data: fixtures.map(({ metadata: m }) => ({
+            id: m.tone_id,
+            title: m.title,
+            format: m.format,
+            gear: m.format === 'nam' ? 'amp' : 'cab',
+            license: 'Test fixture',
+            models_count: 1,
+            a2_models_count: m.format === 'nam' ? 1 : 0,
+            url: 'https://www.tone3000.com',
+            user: { username: 'fixture' },
+          })),
           page: 1,
           total_pages: 1,
         },
       }),
     );
     await page.route('**/api/v1/tone3000/models?*', (route) => {
-      expect(
-        new URL(route.request().url()).searchParams.get('architecture'),
-      ).toBe('2');
+      const params = new URL(route.request().url()).searchParams;
+      const m = fixtures.find(
+        (f) => String(f.metadata.tone_id) === params.get('tone_id'),
+      )!.metadata;
+      expect(params.get('architecture')).toBe(m.format === 'nam' ? '2' : 'any');
       return route.fulfill({
         json: {
           data: [
             {
-              id: metadata.model_id,
-              tone_id: metadata.tone_id,
-              name: 'Prepared A2',
+              id: m.model_id,
+              tone_id: m.tone_id,
+              name: m.name,
               size: null,
-              architecture_version: '2',
+              architecture_version: m.format === 'nam' ? '2' : null,
             },
           ],
           page: 1,
@@ -930,29 +934,33 @@ test('playback lifecycle keeps native authoring available after stop and restart
     });
     let holdDownload = true;
     await page.route('**/api/v1/tone3000/stage', async (route) => {
-      expect(route.request().postDataJSON()).toEqual({
-        tone_id: metadata.tone_id,
-        model_id: metadata.model_id,
-      });
+      const selected = route.request().postDataJSON();
+      const fixture = fixtures.find(
+        (f) =>
+          f.metadata.tone_id === selected.tone_id &&
+          f.metadata.model_id === selected.model_id,
+      )!;
+      expect(fixture).toBeTruthy();
+      const m = fixture.metadata;
       if (holdDownload)
         await new Promise((resolve) => setTimeout(resolve, 1500));
       await route.fulfill({
         json: {
-          id: asset,
-          tone_id: metadata.tone_id,
-          model_id: metadata.model_id,
-          title: metadata.title,
-          name: metadata.name,
-          sha256: metadata.sha256,
+          id: fixture.id,
+          tone_id: m.tone_id,
+          model_id: m.model_id,
+          title: m.title,
+          name: m.name,
+          sha256: m.sha256,
         },
       });
     });
     const beforeModel = await (await request.get('/api/v1/audio')).json();
     await sounding
-      .getByRole('button', { name: 'Choose NAM', exact: true })
+      .getByRole('button', { name: 'Change model', exact: true })
       .first()
       .click();
-    const picker = page.getByRole('dialog', { name: 'Choose NAM' });
+    const picker = page.getByRole('dialog', { name: 'Choose model' });
     await picker.getByRole('button', { name: /Audition fixture/ }).click();
     for (const [name, viewport] of [
       ['portrait', portrait],
@@ -989,7 +997,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     );
     holdDownload = false;
     await sounding
-      .getByRole('button', { name: 'Choose NAM', exact: true })
+      .getByRole('button', { name: 'Change model', exact: true })
       .first()
       .click();
     await picker.getByRole('button', { name: /Audition fixture/ }).click();
@@ -1233,6 +1241,23 @@ test('playback lifecycle keeps native authoring available after stop and restart
       )
       .toBe(2);
     await expect(sounding.locator('.live-effect')).toHaveCount(2);
+    await sounding.getByRole('button', { name: 'Add IR', exact: true }).click();
+    await expect(
+      picker.getByRole('button', { name: 'Cab / IR', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      picker.getByRole('button', { name: /^Audition fixture/ }),
+    ).toHaveCount(0);
+    await picker.getByRole('button', { name: /IR audition fixture/ }).click();
+    await picker.getByRole('button', { name: /Prepared IR/ }).click();
+    await expect(picker).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).models.length,
+      )
+      .toBe(3);
+    await expect(sounding.locator('.live-effect')).toHaveCount(3);
     const created = await (await request.get('/api/v1/audio')).json();
     expect(created.configured.draft).toBe(true);
     expect(created.saved_copy).toBeNull();

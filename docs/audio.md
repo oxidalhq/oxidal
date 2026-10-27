@@ -156,8 +156,9 @@ is implied. Physical device support and dropout/latency behavior remain unqualif
 
 ## Live NAM audition and offline copies
 
-With native playback running, each tone block offers **Choose NAM**. The provider
-picker lists entitled TONE3000 libraries and A2 model variants. Downloading stages
+With native playback running, each tone block offers **Change model**. The provider
+picker lists entitled TONE3000 libraries with separate NAM and Cab / IR choices. NAM
+model queries use architecture 2; IR queries omit that provider filter. Downloading stages
 an integrity-checked asset; it does not change the sound. Closing during download
 prevents that selection from being applied. The selection retains its opening
 audio revision, so another client's changes cannot be overwritten silently.
@@ -166,8 +167,10 @@ The audio owner verifies cached bytes on a separate thread, then prepares the
 native engine off-thread. Its supervisor polls readiness and commits to the exact
 existing block. Failed preparation preserves the previous model and PCM stream.
 Cancellation identifies the exact selection within its audio session. Progress
-and errors appear beside the sounding controls. Add NAM uses the same preparation
-path for a current insertion slot, including rigs created from Library → New preset.
+and errors appear beside the sounding controls. Add NAM and Add IR use the same preparation
+path for a current insertion slot, including rigs created from Library → New preset. Both selected NAM and IR bytes are
+embedded by Save; neither an active provider account nor the audition cache is needed
+for the saved copy.
 The supervisor supplies the exact slot position; replay preserves insertion chronology
 even after replacing an earlier model. Arbitrary routing and mixed native/LV2 structural
 authoring remain separate work.

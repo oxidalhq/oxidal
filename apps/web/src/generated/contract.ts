@@ -773,7 +773,7 @@ export interface Model {
   tone_id: number;
 }
 export interface ModelQuery {
-  architecture?: "1" | "2" | "custom";
+  architecture?: ("1" | "2" | "custom") | "any";
   page?: number;
   tone_id: number;
 }

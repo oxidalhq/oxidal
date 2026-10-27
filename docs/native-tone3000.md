@@ -139,3 +139,19 @@ replaces an early insertion, restarts, then recalls a saved copy with both worki
 audition stores hidden. Browser coverage creates, inserts, auditions and saves on all
 six device profiles. Native/LV2 mixing, general routing, full authoring and gapless
 switching remain separate work.
+
+## IR selection and embedded recall
+
+The same preparation transaction accepts an IR descriptor and verified WAV bytes. The
+browser provides Cab / IR in the provider picker and Add IR on the sounding rig; a New
+preset may start with either NAM or IR. IR model listing omits the NAM architecture
+filter, matching the pinned native client's format distinction. Download identity and
+native decoding remain separately checked; a filename is not proof a WAV is supported.
+
+The maintained native qualification stages a project-authored mono PCM impulse, inserts
+it into an empty rig, renders nonzero output, embeds it in a saved tone, deletes the
+original input and compares rendered output after reload within 1e-5. The HTTP test adds
+an IR after multiple NAM blocks and recalls the saved rig with both temporary stores
+hidden. The browser scenario selects the IR via the real transaction and saves the
+combined working rig. This does not qualify every WAV encoding, stereo convolution,
+physical audio, gapless transitions or mixed LV2 hosting.

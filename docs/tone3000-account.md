@@ -65,14 +65,15 @@ and tokens are not persisted in asset metadata. Artwork URLs are retained but
 this slice does not yet download artwork. Native preparation must still validate
 model contents before applying them; cache integrity is not DSP readiness.
 
-While saved-preset audio is running, **Choose NAM** on a sounding block opens the
-catalog and downloads the selected A2 variant for audition. It submits only the
+While saved-preset audio is running, **Change model** on a sounding block opens the
+catalog and downloads the selected A2 NAM variant or IR for audition. It submits only the
 verified asset identity and target block to playback, never a provider URL or
 filesystem path. The browser's opening audio revision guards against concurrent
 session edits. Close cancels a pending download; once preparation is accepted,
 **Cancel model** targets that exact preparation. Save sounding copy embeds confirmed
 models for offline recall. See [audio lifecycle](audio.md#live-nam-audition-and-offline-copies)
 for the transition, persistence and qualification boundaries. Library → New preset also
-supports starting an empty native rig with a selected NAM model; Add NAM fills its next
-left-lane slot. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
+supports starting an empty native rig with a selected NAM model or IR; Add NAM and Add IR
+fill its next left-lane slot. IR listings omit the upstream NAM architecture filter; the
+typed local API uses `architecture=any` to request that behavior. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
 provider preset export remain unfinished.

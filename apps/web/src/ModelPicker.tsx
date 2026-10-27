@@ -14,11 +14,13 @@ import {
 export function ModelPicker({
   name,
   intent = 'replace',
+  initialFormat = 'nam',
   onClose,
   onAudition,
 }: {
   name: string;
   intent?: 'add' | 'replace';
+  initialFormat?: 'nam' | 'ir';
   onClose: () => void;
   onAudition: (asset: string) => Promise<void>;
 }) {
@@ -26,6 +28,7 @@ export function ModelPicker({
     collection: 'latest',
     page: 1,
   });
+  const [format, setFormat] = useState(initialFormat);
   const [search, setSearch] = useState('');
   const [tones, setTones] = useState<TonePage | null>(null);
   const [tone, setTone] = useState<TonePage['data'][number] | null>(null);
@@ -54,6 +57,7 @@ export function ModelPicker({
             tone.id,
             modelPage,
             controller.signal,
+            format,
           );
           if (!controller.signal.aborted) setModels(page);
         } else {
@@ -68,7 +72,7 @@ export function ModelPicker({
     }
     void load();
     return () => controller.abort();
-  }, [query, tone, modelPage]);
+  }, [query, tone, modelPage, format]);
   function close() {
     if (busy === 'assign') return;
     download.current?.abort();
@@ -101,13 +105,26 @@ export function ModelPicker({
     else setQuery({ ...query, page: next });
   }
   return (
-    <AdjustmentDialog title="Choose NAM" onCancel={close}>
+    <AdjustmentDialog title="Choose model" onCancel={close}>
       <div className="space-y-3">
         <p className="truncate text-sm text-muted-foreground">
           {intent === 'add' ? 'Add to' : 'Replace'} {name}
         </p>
         {!tone ? (
           <>
+            <div className="action-row" aria-label="Model type">
+              {(['nam', 'ir'] as const).map((kind) => (
+                <Button
+                  key={kind}
+                  variant={format === kind ? 'secondary' : 'ghost'}
+                  aria-pressed={format === kind}
+                  disabled={!!busy}
+                  onClick={() => setFormat(kind)}
+                >
+                  {kind === 'nam' ? 'NAM' : 'Cab / IR'}
+                </Button>
+              ))}
+            </div>
             <label className="field">
               TONE3000 library
               <select
@@ -170,7 +187,7 @@ export function ModelPicker({
         )}
         <div
           className="space-y-2"
-          aria-label={tone ? 'NAM models' : 'TONE3000 tones'}
+          aria-label={tone ? 'Available models' : 'TONE3000 tones'}
           aria-busy={loading || !!busy}
         >
           {loading ? (
@@ -178,7 +195,10 @@ export function ModelPicker({
           ) : tone ? (
             <>
               {!models?.data.length && (
-                <p>No A2 models available for this tone.</p>
+                <p>
+                  {format === 'nam' ? 'No A2 models' : 'No IR files'} available
+                  for this tone.
+                </p>
               )}
               {models?.data.map((m) => (
                 <Button
@@ -198,11 +218,14 @@ export function ModelPicker({
             </>
           ) : (
             <>
-              {!tones?.data.some((t) => t.format === 'nam') && (
-                <p>No NAM tones here. Try another library.</p>
+              {!tones?.data.some((t) => t.format === format) && (
+                <p>
+                  No {format === 'nam' ? 'NAM tones' : 'IRs'} here. Try another
+                  library.
+                </p>
               )}
               {tones?.data
-                .filter((t) => t.format === 'nam')
+                .filter((t) => t.format === format)
                 .map((t) => (
                   <Button
                     key={t.id}
