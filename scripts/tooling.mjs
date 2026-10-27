@@ -73,6 +73,36 @@ if (mode === 'bootstrap') {
     ['test', '--locked', '-p', 'oxidal-lv2', '--features', 'qualification'],
     { env },
   );
+  const resourceKeys = [
+    'OXIDAL_LV2_STATE_BUNDLE',
+    'OXIDAL_LV2_STATE_URI',
+    'OXIDAL_LV2_STATE_MODEL',
+    'OXIDAL_LV2_STATE_KEY',
+  ];
+  if (resourceKeys.some((key) => process.env[key])) {
+    if (!resourceKeys.every((key) => process.env[key]))
+      throw new Error(
+        'Resource-plugin qualification needs bundle, URI, model and state key.',
+      );
+    run(
+      'cargo',
+      [
+        'test',
+        '--locked',
+        '-p',
+        'oxidal-lv2',
+        '--features',
+        'qualification',
+        '--test',
+        'native',
+        'external_resource_plugin_state_restores_after_asset_relocation',
+        '--',
+        '--ignored',
+        '--nocapture',
+      ],
+      { env },
+    );
+  }
   run(
     'cargo',
     [

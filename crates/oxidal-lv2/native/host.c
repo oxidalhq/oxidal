@@ -9,6 +9,8 @@
 #include <lv2/parameters/parameters.h>
 #include <lv2/urid/urid.h>
 #include <lv2/worker/worker.h>
+#include <lv2/state/state.h>
+#include <lv2/units/units.h>
 #include <stdatomic.h>
 #include <stddef.h>
 #include <time.h>
@@ -205,7 +207,7 @@ static void worker_stop(Worker* w) {
             worker_responses(w);
             const struct timespec pause={0,1000000};nanosleep(&pause,NULL);
         }
-        pthread_join(w->thread,NULL);worker_responses(w);
+        pthread_join(w->thread,NULL);worker_responses(w);w->started=0;
     }
 }
 static int wants_worker(LilvWorld* world,const LilvPlugin* p) {
@@ -308,7 +310,7 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
         }
     }
     if (h->ins!=h->outs || (h->ins!=1 && h->ins!=2)) {fail("Require mono/mono or stereo/stereo audio ports");goto failed;}
-    h->sequence_type=map_uri(h,LV2_ATOM__Sequence);h->chunk_type=map_uri(h,LV2_ATOM__Chunk);h->frame_time=map_uri(h,LV2_ATOM__frameTime);
+    h->sequence_type=map_uri(h,LV2_ATOM__Sequence);h->chunk_type=map_uri(h,LV2_ATOM__Chunk);h->frame_time=map_uri(h,LV2_UNITS__frame);
     h->instance=lilv_plugin_instantiate(p,rate,h->feature_ptrs);
     if (!h->instance) {fail("Plugin instantiate rejected supplied features");goto failed;}
     for (uint32_t i=0;i<ports;i++) lilv_instance_connect_port(h->instance,i,h->audio[i]?(void*)h->audio[i]:h->atoms[i]?(void*)h->atoms[i]:&h->control[i]);
@@ -329,16 +331,20 @@ static int valid_sequence(Host* h,const LV2_Atom_Sequence* seq,uint32_t frames) 
     // An untouched Chunk is empty, not plugin-generated event data.
     if (seq->atom.type==h->chunk_type && seq->atom.size==ATOM_BYTES-sizeof(LV2_Atom)) return 1;
     if (seq->atom.type!=h->sequence_type || seq->atom.size<sizeof(seq->body) || seq->atom.size>ATOM_BYTES-sizeof(LV2_Atom)
-        || (seq->body.unit && seq->body.unit!=h->frame_time)) return 0;
+        || (seq->body.unit && seq->body.unit!=h->frame_time)) {
+        snprintf(error,sizeof(error),"Invalid Atom sequence header: type=%u expected=%u size=%u unit=%u (%s)",seq->atom.type,h->sequence_type,seq->atom.size,seq->body.unit,unmap_uri(h,seq->body.unit)?unmap_uri(h,seq->body.unit):"unknown");return 0;
+    }
     uint32_t offset=sizeof(seq->body);int64_t previous=0;
     while (offset<seq->atom.size) {
         uint32_t remaining=seq->atom.size-offset;
-        if (remaining<sizeof(LV2_Atom_Event)) return 0;
+        if (remaining<sizeof(LV2_Atom_Event)) {fail("Truncated Atom event header");return 0;}
         const LV2_Atom_Event* e=(const LV2_Atom_Event*)((const unsigned char*)&seq->body+offset);
         if (!e->body.type || e->body.size>remaining-sizeof(*e) || e->time.frames<previous || e->time.frames<0
-            || (frames?e->time.frames>=frames:e->time.frames!=0)) return 0;
+            || (frames?e->time.frames>=frames:e->time.frames!=0)) {
+            snprintf(error,sizeof(error),"Invalid Atom event: type=%u size=%u available=%u frame=%lld previous=%lld frames=%u",e->body.type,e->body.size,remaining,(long long)e->time.frames,(long long)previous,frames);return 0;
+        }
         uint32_t size=lv2_atom_pad_size(sizeof(*e)+e->body.size);
-        if (size>remaining) return 0;
+        if (size>remaining) {fail("Truncated Atom event padding");return 0;}
         previous=e->time.frames;offset+=size;
     }
     return offset==seq->atom.size;
@@ -363,7 +369,7 @@ static int run_cycle(Host* h,uint32_t frames) {
             atomic_store_explicit(&h->worker->failed,1,memory_order_release);
     }
     if (h->atom_count) for (uint32_t i=0;i<h->ports;i++)
-        if (h->atoms[i] && !h->atom_input[i] && !valid_sequence(h,h->atoms[i],frames)) return fail("Malformed LV2 Atom output");
+        if (h->atoms[i] && !h->atom_input[i] && !valid_sequence(h,h->atoms[i],frames)) return -1;
     return h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)?fail("LV2 worker callback failed"):0;
 }
 int ox_lv2_refresh_outputs(void* raw) {
@@ -407,13 +413,82 @@ int ox_lv2_atom_event(void* raw,uint32_t port,uint32_t index,uint32_t* frame,uin
     Host* h=raw;
     if (port>=h->ports || !h->atoms[port] || h->atom_input[port]) return fail("Not an Atom output");
     const LV2_Atom_Sequence* seq=h->atoms[port];
-    if (!valid_sequence(h,seq,h->frames)) return fail("Malformed LV2 Atom output");
+    if (!valid_sequence(h,seq,h->frames)) return -1;
     if (seq->atom.type!=h->sequence_type) return 0;
     uint32_t offset=sizeof(seq->body),n=0;
     while (offset<seq->atom.size) {
         const LV2_Atom_Event* e=(const LV2_Atom_Event*)((const unsigned char*)&seq->body+offset);
         if (n++==index) {*frame=(uint32_t)e->time.frames;*type=e->body.type;*size=e->body.size;*body=e+1;return 1;}
         offset+=lv2_atom_pad_size(sizeof(*e)+e->body.size);
+    }
+    return 0;
+}
+
+// State callbacks run on the owner outside audio processing. Paths are explicit
+// caller-approved mappings; no ambient filesystem path is serialized or resolved.
+typedef struct {const char* absolute;const char* abstract;} StatePath;
+typedef struct {Host* host;const StatePath* paths;uint32_t count;int failed;} StateContext;
+static char* state_abstract(void* raw,const char* path) {
+    StateContext* c=raw;
+    if(path && !*path)return strdup("");
+    for(uint32_t i=0;path && i<c->count;i++)if(!strcmp(path,c->paths[i].absolute))return strdup(c->paths[i].abstract);
+    c->failed=1;return NULL;
+}
+static char* state_absolute(void* raw,const char* path) {
+    StateContext* c=raw;
+    if(path && !*path)return strdup("");
+    for(uint32_t i=0;path && i<c->count;i++)if(!strcmp(path,c->paths[i].abstract))return strdup(c->paths[i].absolute);
+    c->failed=1;return NULL;
+}
+static void state_free_path(void* handle,char* path) {(void)handle;free(path);}
+static LV2_Worker_Status state_respond(void* raw,uint32_t size,const void* data) {
+    StateContext* c=raw;Worker* w=c->host->worker;
+    LV2_Worker_Status status=w->interface->work_response(lilv_instance_get_handle(c->host->instance),size,data);
+    if(status!=LV2_WORKER_SUCCESS)c->failed=1;
+    return status;
+}
+static LV2_Worker_Status state_schedule(void* raw,uint32_t size,const void* data) {
+    StateContext* c=raw;Worker* w=c->host->worker;
+    LV2_Worker_Status status=w->interface->work(lilv_instance_get_handle(c->host->instance),state_respond,c,size,data);
+    if(status!=LV2_WORKER_SUCCESS)c->failed=1;
+    return status;
+}
+int ox_lv2_has_state(void* raw) {
+    Host* h=raw;const LV2_State_Interface* state=lilv_instance_get_extension_data(h->instance,LV2_STATE__interface);
+    return state && state->save && state->restore;
+}
+int ox_lv2_state(void* raw,int restore,LV2_State_Store_Function store,LV2_State_Retrieve_Function retrieve,void* data,const StatePath* paths,uint32_t count) {
+    Host* h=raw;
+    const LV2_State_Interface* state=lilv_instance_get_extension_data(h->instance,LV2_STATE__interface);
+    if(!state || !state->save || !state->restore)return fail("Plugin has no complete state interface");
+    worker_stop(h->worker);
+    if(h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire))return fail("Cannot capture or restore failed worker state");
+    StateContext context={h,paths,count,0};
+    LV2_State_Map_Path map={&context,state_abstract,state_absolute};
+    LV2_State_Free_Path free_path={&context,state_free_path};
+    LV2_Worker_Schedule synchronous={&context,state_schedule};
+    LV2_Feature map_feature={LV2_STATE__mapPath,&map},free_feature={LV2_STATE__freePath,&free_path},worker_feature={LV2_WORKER__schedule,&synchronous};
+    const LV2_Feature* features[10]={0};
+    for(unsigned i=0;i<6;i++)features[i]=h->feature_ptrs[i];
+    features[6]=&map_feature;features[7]=&free_feature;if(h->worker)features[8]=&worker_feature;
+    // Restore is instantiation-class: no processing or background work overlaps it.
+    if(restore && h->active) {lilv_instance_deactivate(h->instance);h->active=0;}
+    LV2_State_Status status=restore
+        ?state->restore(lilv_instance_get_handle(h->instance),retrieve,data,LV2_STATE_IS_POD|LV2_STATE_IS_PORTABLE,features)
+        :state->save(lilv_instance_get_handle(h->instance),store,data,LV2_STATE_IS_POD|LV2_STATE_IS_PORTABLE,features);
+    if(status!=LV2_STATE_SUCCESS || context.failed)return fail("LV2 state callback or path mapping failed");
+    if(restore) {
+        for(uint32_t i=0;i<h->ports;i++) {
+            if(h->pending[i]) {h->pending[i]->atom.size=sizeof(LV2_Atom_Sequence_Body);h->pending[i]->body.pad=0;}
+            if(h->atoms[i])h->atoms[i]->atom=(LV2_Atom){0,0};
+        }
+        lilv_instance_activate(h->instance);h->active=1;
+    }
+    if(h->worker) {
+        Worker* w=h->worker;
+        atomic_store_explicit(&w->stopping,0,memory_order_release);atomic_store_explicit(&w->finished,0,memory_order_release);
+        if(pthread_create(&w->thread,NULL,worker_main,w))return fail("Worker restart after state operation failed");
+        w->started=1;
     }
     return 0;
 }

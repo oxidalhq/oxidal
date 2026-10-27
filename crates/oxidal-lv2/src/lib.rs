@@ -5,7 +5,7 @@
 #[allow(unsafe_code)]
 mod host;
 #[cfg(feature = "native")]
-pub use host::{AtomEvent, ControlError, Plugin, World};
+pub use host::{AtomEvent, ControlError, Plugin, PluginState, StatePath, StateProperty, World};
 pub mod protocol;
 pub use protocol::Binding;
 use schemars::JsonSchema;

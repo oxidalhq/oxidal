@@ -1,4 +1,6 @@
+mod state;
 use crate::{PluginInfo, Port};
+pub use state::{PluginState, StatePath, StateProperty};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     path::Path,
@@ -588,6 +590,8 @@ impl Plugin {
     }
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) -> Result<(), String> {
         if self.failed {
+            left.fill(0.0);
+            right.fill(0.0);
             return Err("Failed plugin must be recreated".into());
         }
         if self.channels != 2

@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <lv2/worker/worker.h>
+#include <lv2/state/state.h>
+#include <lv2/units/units.h>
+#include <stdio.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -72,7 +75,7 @@ static const LV2_Descriptor latency_stereo={"urn:oxidal:test:latency-stereo",lat
 typedef struct {
     float* p[8];const LV2_Worker_Schedule* schedule;pthread_t owner;
     atomic_uint release, worked, responded, completed;
-    uint32_t accepted, received, ends;int dispatched;float gain;
+    uint32_t accepted, received, ends;int dispatched,restoring;float gain;
 } Async;
 static LV2_Handle async_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
     (void)d;(void)rate;(void)path;
@@ -90,7 +93,7 @@ static void async_run(LV2_Handle h,uint32_t n) {
     if(*a->p[2]>0 && !a->dispatched) {
         a->dispatched=1;uint32_t count=*a->p[2]==1?64:1;
         for(uint32_t i=1;i<=count;i++) {
-            uint32_t message[2]={i,(uint32_t)*a->p[2]};
+            uint32_t message[2]={a->accepted+1,(uint32_t)*a->p[2]};
             LV2_Worker_Status status=a->schedule->schedule_work(a->schedule->handle,sizeof(message),message);
             if(status==LV2_WORKER_SUCCESS)a->accepted++;else {assert(status==LV2_WORKER_ERR_NO_SPACE);(*a->p[4])++;}
             message[0]=999; // Host must have copied stack bytes before returning.
@@ -109,7 +112,7 @@ static void async_run(LV2_Handle h,uint32_t n) {
     for(uint32_t i=0;i<n;i++)a->p[1][i]=a->p[0][i]*a->gain;
 }
 static LV2_Worker_Status async_work(LV2_Handle h,LV2_Worker_Respond_Function respond,LV2_Worker_Respond_Handle handle,uint32_t size,const void* data) {
-    Async* a=h;assert(!pthread_equal(a->owner,pthread_self()));assert(size==2*sizeof(uint32_t));
+    Async* a=h;assert(!!pthread_equal(a->owner,pthread_self())==a->restoring);assert(size==2*sizeof(uint32_t));
     const uint32_t* message=data;assert(message[0]==atomic_load(&a->worked)+1);
     const struct timespec pause={0,1000000};while(!atomic_load(&a->release))nanosleep(&pause,NULL);
     if(message[1]==3 || message[1]==5) {const struct timespec delay={0,20000000};nanosleep(&delay,NULL);}
@@ -134,20 +137,45 @@ static LV2_Worker_Status async_end(LV2_Handle h) {
     Async* a=h;assert(pthread_equal(a->owner,pthread_self()));*a->p[6]=(float)++a->ends;return LV2_WORKER_SUCCESS;
 }
 static const LV2_Worker_Interface async_interface={async_work,async_response,async_end};
-static const void* async_extension(const char* uri){return !strcmp(uri,LV2_WORKER__interface)?&async_interface:NULL;}
+static LV2_State_Status async_save(LV2_Handle h,LV2_State_Store_Function store,LV2_State_Handle context,uint32_t flags,const LV2_Feature*const* features) {
+    (void)flags;Async* a=h;LV2_URID_Map* map=NULL;
+    for(unsigned i=0;features && features[i];i++)if(!strcmp(features[i]->URI,LV2_URID__map))map=features[i]->data;
+    assert(map);return store(context,map->map(map->handle,"urn:oxidal:test:async-gain"),&a->gain,sizeof(float),map->map(map->handle,LV2_ATOM__Float),3);
+}
+static LV2_State_Status async_restore(LV2_Handle h,LV2_State_Retrieve_Function retrieve,LV2_State_Handle context,uint32_t flags,const LV2_Feature*const* features) {
+    (void)flags;Async* a=h;LV2_URID_Map* map=NULL;LV2_Worker_Schedule* schedule=NULL;
+    for(unsigned i=0;features && features[i];i++) {
+        if(!strcmp(features[i]->URI,LV2_URID__map))map=features[i]->data;
+        if(!strcmp(features[i]->URI,LV2_WORKER__schedule))schedule=features[i]->data;
+    }
+    assert(map && schedule && schedule!=a->schedule);
+    size_t size=0;uint32_t type=0,stored_flags=0;
+    const void* value=retrieve(context,map->map(map->handle,"urn:oxidal:test:async-gain"),&size,&type,&stored_flags);
+    if(!value || size!=sizeof(float) || type!=map->map(map->handle,LV2_ATOM__Float))return LV2_STATE_ERR_BAD_TYPE;
+    float gain;memcpy(&gain,value,sizeof(float));
+    a->restoring=1;atomic_store(&a->release,1);uint32_t message[2]={++a->accepted,2};
+    assert(schedule->schedule_work(schedule->handle,sizeof(message),message)==LV2_WORKER_SUCCESS);
+    assert(a->received==a->accepted);a->restoring=0;a->gain=gain;return LV2_STATE_SUCCESS;
+}
+static const LV2_State_Interface async_state={async_save,async_restore};
+static const void* async_extension(const char* uri){return !strcmp(uri,LV2_WORKER__interface)?(const void*)&async_interface:!strcmp(uri,LV2_STATE__interface)?(const void*)&async_state:NULL;}
+
 static void async_cleanup(LV2_Handle h) {
     Async* a=h;assert(pthread_equal(a->owner,pthread_self()));
     assert(a->accepted==atomic_load(&a->worked));assert(a->received==atomic_load(&a->responded));free(a);
 }
 static const LV2_Descriptor async_descriptor={"urn:oxidal:test:worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,async_extension};
 static const LV2_Descriptor missing_worker={"urn:oxidal:test:missing-worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,NULL};
-typedef struct {float* in;float* out;float* mode;float* latency;LV2_Atom_Sequence* input;LV2_Atom_Sequence* output;LV2_URID sequence,floating,midi;float gain;} Atoms;
+typedef struct {float* in;float* out;float* mode;float* latency;LV2_Atom_Sequence* input;LV2_Atom_Sequence* output;LV2_URID frame_unit,sequence,floating,midi,path_type,urid,string_type,gain_key,path_key,token_key,name_key,token;LV2_URID_Map* map;float gain;char path[4096];} Atoms;
 static LV2_Handle atoms_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
     (void)d;(void)rate;(void)path;LV2_URID_Map* map=NULL;
     for(int i=0;features && features[i];i++)if(!strcmp(features[i]->URI,LV2_URID__map))map=features[i]->data;
     if(!map)return NULL;
     Atoms* a=calloc(1,sizeof(Atoms));if(!a)return NULL;
-    a->gain=1;a->sequence=map->map(map->handle,LV2_ATOM__Sequence);a->floating=map->map(map->handle,LV2_ATOM__Float);a->midi=map->map(map->handle,LV2_MIDI__MidiEvent);return a;
+    a->gain=1;a->sequence=map->map(map->handle,LV2_ATOM__Sequence);a->floating=map->map(map->handle,LV2_ATOM__Float);a->midi=map->map(map->handle,LV2_MIDI__MidiEvent);
+    a->frame_unit=map->map(map->handle,LV2_UNITS__frame);a->map=map;a->path_type=map->map(map->handle,LV2_ATOM__Path);a->urid=map->map(map->handle,LV2_ATOM__URID);a->string_type=map->map(map->handle,LV2_ATOM__String);
+    a->gain_key=map->map(map->handle,"urn:oxidal:test:gain");a->path_key=map->map(map->handle,"urn:oxidal:test:file");a->token_key=map->map(map->handle,"urn:oxidal:test:token");a->name_key=map->map(map->handle,"urn:oxidal:test:name");
+    a->token=map->map(map->handle,"urn:oxidal:test:profile");return a;
 }
 static void atoms_connect(LV2_Handle h,uint32_t port,void* data) {
     Atoms* a=h;switch(port){case 0:a->in=data;break;case 1:a->out=data;break;case 2:a->input=data;break;case 3:a->output=data;break;case 4:a->mode=data;break;case 5:a->latency=data;break;}
@@ -155,17 +183,21 @@ static void atoms_connect(LV2_Handle h,uint32_t port,void* data) {
 static void atoms_run(LV2_Handle h,uint32_t n) {
     Atoms* a=h;*a->latency=0;assert(a->input->atom.type==a->sequence);assert(a->input->body.unit==0 && a->input->body.pad==0);
     assert(a->output->atom.size+sizeof(LV2_Atom)>=a->input->atom.size+sizeof(LV2_Atom));
-    memcpy(a->output,a->input,a->input->atom.size+sizeof(LV2_Atom));
+    memcpy(a->output,a->input,a->input->atom.size+sizeof(LV2_Atom));a->output->body.unit=a->frame_unit;
     LV2_Atom_Event* event=lv2_atom_sequence_begin(&a->input->body);
     for(uint32_t frame=0;frame<n;frame++) {
         while(!lv2_atom_sequence_is_end(&a->input->body,a->input->atom.size,event) && event->time.frames==frame) {
             if(event->body.type==a->floating && event->body.size==sizeof(float))memcpy(&a->gain,event+1,sizeof(float));
             if(event->body.type==a->midi && event->body.size==3) {const unsigned char* midi=(const unsigned char*)(event+1);if(midi[0]==0xB0 && midi[1]==7)a->gain=midi[2]/127.0f;}
+            if(event->body.type==a->urid && event->body.size==sizeof(a->token))memcpy(&a->token,event+1,sizeof(a->token));
+            if(event->body.type==a->path_type && event->body.size>0 && event->body.size<sizeof(a->path)) {
+                const char* path=(const char*)(event+1);assert(path[event->body.size-1]==0);memcpy(a->path,path,event->body.size);
+            }
             event=lv2_atom_sequence_next(event);
         }
         a->out[frame]=a->in[frame]*a->gain;
     }
-    if(n && *a->mode>0) {
+    if(n && *a->mode>0 && *a->mode<7) {
         LV2_Atom_Event* e=(LV2_Atom_Event*)((unsigned char*)a->output+sizeof(LV2_Atom_Sequence));
         a->output->atom.size=sizeof(LV2_Atom_Sequence_Body)+sizeof(LV2_Atom_Event);
         *e=(LV2_Atom_Event){.time.frames=0,.body={0,a->floating}};
@@ -179,5 +211,52 @@ static void atoms_run(LV2_Handle h,uint32_t n) {
         }
     }
 }
-static const LV2_Descriptor atoms_descriptor={"urn:oxidal:test:atoms",atoms_create,atoms_connect,NULL,atoms_run,NULL,cleanup,NULL};
+static LV2_State_Status atoms_save(LV2_Handle h,LV2_State_Store_Function store,LV2_State_Handle context,uint32_t flags,const LV2_Feature*const* features) {
+    (void)flags;Atoms* a=h;LV2_State_Map_Path* map=NULL;LV2_State_Free_Path* release=NULL;
+    for(unsigned i=0;features && features[i];i++) {
+        if(!strcmp(features[i]->URI,LV2_STATE__mapPath))map=features[i]->data;
+        if(!strcmp(features[i]->URI,LV2_STATE__freePath))release=features[i]->data;
+    }
+    uint32_t property_flags=*a->mode==8?LV2_STATE_IS_POD:LV2_STATE_IS_POD|LV2_STATE_IS_PORTABLE;
+    // Deliberately ignores store failure; the host must still reject the snapshot.
+    store(context,a->gain_key,&a->gain,sizeof(float),a->floating,property_flags);
+    store(context,a->token_key,&a->token,sizeof(a->token),a->urid,3);
+    store(context,a->name_key,"Fixture",8,a->string_type,3);
+    if(a->path[0]) {
+        if(!map || !release)return LV2_STATE_ERR_NO_FEATURE;
+        char* path=map->abstract_path(map->handle,a->path);if(!path)return LV2_STATE_ERR_UNKNOWN;
+        store(context,a->path_key,path,strlen(path)+1,a->path_type,3);release->free_path(release->handle,path);
+    }
+    return LV2_STATE_SUCCESS;
+}
+static LV2_State_Status atoms_restore(LV2_Handle h,LV2_State_Retrieve_Function retrieve,LV2_State_Handle context,uint32_t flags,const LV2_Feature*const* features) {
+    (void)flags;Atoms* a=h;
+    if(*a->mode==7) {a->gain=999;return LV2_STATE_ERR_UNKNOWN;}
+    size_t size=0;uint32_t type=0,property_flags=0;
+    const void* value=retrieve(context,a->gain_key,&size,&type,&property_flags);
+    if(!value || size!=sizeof(float) || type!=a->floating)return LV2_STATE_ERR_BAD_TYPE;
+    memcpy(&a->gain,value,sizeof(float));
+    value=retrieve(context,a->token_key,&size,&type,&property_flags);
+    if(!value || size!=sizeof(a->token) || type!=a->urid)return LV2_STATE_ERR_BAD_TYPE;
+    memcpy(&a->token,value,sizeof(a->token));
+    const char* name=retrieve(context,a->name_key,NULL,NULL,NULL);if(name)assert(!strcmp(name,"Fixture"));
+    value=retrieve(context,a->path_key,&size,&type,&property_flags);
+    if(value) {
+        LV2_State_Map_Path* map=NULL;LV2_State_Free_Path* release=NULL;
+        for(unsigned i=0;features && features[i];i++) {
+            if(!strcmp(features[i]->URI,LV2_STATE__mapPath))map=features[i]->data;
+            if(!strcmp(features[i]->URI,LV2_STATE__freePath))release=features[i]->data;
+        }
+        if(!map || !release || type!=a->path_type)return LV2_STATE_ERR_NO_FEATURE;
+        char* absolute=map->absolute_path(map->handle,value);if(!absolute)return LV2_STATE_ERR_UNKNOWN;
+        if(strlen(absolute)>=sizeof(a->path)){release->free_path(release->handle,absolute);return LV2_STATE_ERR_NO_SPACE;}
+        strcpy(a->path,absolute);release->free_path(release->handle,absolute);
+        FILE* file=fopen(a->path,"rb");if(!file)return LV2_STATE_ERR_UNKNOWN;
+        size_t read=fread(&a->gain,sizeof(float),1,file);fclose(file);if(read!=1)return LV2_STATE_ERR_UNKNOWN;
+    } else a->path[0]=0;
+    return LV2_STATE_SUCCESS;
+}
+static const LV2_State_Interface atoms_state={atoms_save,atoms_restore};
+static const void* atoms_extension(const char* uri){return !strcmp(uri,LV2_STATE__interface)?&atoms_state:NULL;}
+static const LV2_Descriptor atoms_descriptor={"urn:oxidal:test:atoms",atoms_create,atoms_connect,NULL,atoms_run,NULL,cleanup,atoms_extension};
 LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:index==7?&atoms_descriptor:NULL;}

@@ -28,7 +28,10 @@ fn contract_features_lifetime_bounds_readback_and_poison() {
     assert!(plugin.process(&mut [0.0; 32], &mut [0.0; 32]).is_err());
     plugin.set(4, 2.0).unwrap();
     assert!(plugin.process(&mut [f32::MAX; 64], &mut [0.0; 64]).is_err());
-    assert!(plugin.process(&mut [0.0; 64], &mut [0.0; 64]).is_err());
+    let (mut failed_left, mut failed_right) = ([1.0; 64], [1.0; 64]);
+    assert!(plugin.process(&mut failed_left, &mut failed_right).is_err());
+    assert_eq!(failed_left, [0.0; 64]);
+    assert_eq!(failed_right, [0.0; 64]);
     assert!(plugin.set(4, 1.0).is_err());
 }
 #[test]
@@ -376,4 +379,237 @@ fn malformed_atom_outputs_and_unsupported_buffers_fail_closed() {
         assert!(p.atom_events(3).is_err());
         assert!(p.queue_atom(2, 0, "urn:test", &[]).is_err());
     }
+}
+
+#[test]
+fn state_roundtrip_remaps_urids_and_owned_paths_after_original_is_removed() {
+    use oxidal_lv2::{PluginState, StatePath};
+    let root = std::env::temp_dir().join(format!("oxidal-lv2-state-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let original = root.join("original.bin");
+    let replacement = root.join("offline.bin");
+    std::fs::write(&original, 0.25_f32.to_ne_bytes()).unwrap();
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    assert!(p.has_state());
+    p.prepare_latency().unwrap();
+    p.queue_atom(
+        2,
+        0,
+        "http://lv2plug.in/ns/ext/atom#Float",
+        &0.25_f32.to_ne_bytes(),
+    )
+    .unwrap();
+    p.map_atom_uri("urn:oxidal:test:original-map-entry-a")
+        .unwrap();
+    p.map_atom_uri("urn:oxidal:test:original-map-entry-b")
+        .unwrap();
+    let original_token = p.map_atom_uri("urn:oxidal:test:custom-profile").unwrap();
+    p.queue_atom(
+        2,
+        0,
+        "http://lv2plug.in/ns/ext/atom#URID",
+        &original_token.to_ne_bytes(),
+    )
+    .unwrap();
+    let path = std::ffi::CString::new(original.to_str().unwrap()).unwrap();
+    p.queue_atom(
+        2,
+        0,
+        "http://lv2plug.in/ns/ext/atom#Path",
+        path.as_bytes_with_nul(),
+    )
+    .unwrap();
+    p.process_mono(&mut [1.0; 64]).unwrap();
+    let state = p
+        .save_state(&[StatePath {
+            absolute: original.clone(),
+            alias: "assets/model.bin".into(),
+        }])
+        .unwrap();
+    let bytes = serde_json::to_vec(&state).unwrap();
+    assert!(
+        !String::from_utf8(bytes.clone())
+            .unwrap()
+            .contains(original.to_str().unwrap())
+    );
+    assert!(
+        state
+            .properties
+            .iter()
+            .any(|p| p.type_uri.ends_with("#URID") && p.data == b"urn:oxidal:test:custom-profile\0")
+    );
+    assert!(
+        state
+            .properties
+            .iter()
+            .any(|p| p.type_uri.ends_with("#Path") && p.data == b"assets/model.bin\0")
+    );
+    std::fs::rename(&original, &replacement).unwrap();
+    drop(p);
+    let state: PluginState = serde_json::from_slice(&bytes).unwrap();
+    let paths = [StatePath {
+        absolute: replacement.clone(),
+        alias: "assets/model.bin".into(),
+    }];
+    let mut restored = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    // Force different mapped IDs before restore; persisted local integers would be wrong.
+    restored.map_atom_uri("urn:oxidal:test:extra").unwrap();
+    restored.restore_state(&state, &paths).unwrap();
+    assert_ne!(
+        restored
+            .map_atom_uri("urn:oxidal:test:custom-profile")
+            .unwrap(),
+        original_token
+    );
+    let mut audio = [1.0; 64];
+    restored.process_mono(&mut audio).unwrap();
+    assert_eq!(audio, [0.25; 64]);
+    assert_eq!(restored.save_state(&paths).unwrap(), state);
+    let mut invalid = state.clone();
+    invalid.plugin_uri = "urn:wrong".into();
+    assert!(restored.restore_state(&invalid, &paths).is_err());
+    assert!(restored.restore_state(&state, &[]).is_err());
+    let mut invalid = state.clone();
+    invalid.properties.push(invalid.properties[0].clone());
+    assert!(restored.restore_state(&invalid, &paths).is_err());
+    restored.process_mono(&mut [1.0; 64]).unwrap(); // rejected metadata did not mutate the candidate
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn state_callback_failure_or_nonportable_property_invalidates_candidate() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    p.prepare_latency().unwrap();
+    let state = p.save_state(&[]).unwrap();
+    p.set(4, 7.0).unwrap();
+    assert!(p.restore_state(&state, &[]).is_err());
+    let mut audio = [1.0; 64];
+    assert!(p.process_mono(&mut audio).is_err());
+    assert_eq!(audio, [0.0; 64]);
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    p.prepare_latency().unwrap();
+    p.set(4, 8.0).unwrap();
+    assert!(p.save_state(&[]).unwrap_err().contains("portable POD"));
+    assert!(p.process_mono(&mut [1.0; 64]).is_err());
+}
+
+#[test]
+fn state_drains_background_work_and_restore_uses_synchronous_schedule() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+    p.prepare_latency().unwrap();
+    p.set(2, 3.0).unwrap(); // delayed outstanding work
+    let state = p.save_state(&[]).unwrap();
+    assert_eq!(p.value(5).unwrap(), 1.0); // drained before snapshot
+    let mut restored = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+    restored.restore_state(&state, &[]).unwrap();
+    assert_eq!(restored.value(5).unwrap(), 1.0); // restore work completed synchronously
+    assert_eq!(restored.save_state(&[]).unwrap(), state);
+    restored.set(2, 3.0).unwrap(); // background worker resumes after state operations
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while restored.value(5).unwrap() < 2.0 {
+        assert!(std::time::Instant::now() < deadline);
+        restored.process_mono(&mut [1.0; 64]).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+#[test]
+#[ignore = "explicit resource-plugin qualification requires a pinned bundle and owned model"]
+fn external_resource_plugin_state_restores_after_asset_relocation() {
+    use oxidal_lv2::{PluginState, StatePath, StateProperty};
+    let bundle = std::env::var("OXIDAL_LV2_STATE_BUNDLE").unwrap();
+    let uri = std::env::var("OXIDAL_LV2_STATE_URI").unwrap();
+    let model = std::env::var("OXIDAL_LV2_STATE_MODEL").unwrap();
+    let key = std::env::var("OXIDAL_LV2_STATE_KEY").unwrap();
+    let root =
+        std::env::temp_dir().join(format!("oxidal-lv2-external-state-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let original = root.join("source.nam");
+    let offline = root.join("offline.nam");
+    std::fs::copy(model, &original).unwrap();
+    let world = World::bundle(Path::new(&bundle)).unwrap();
+    let state = PluginState {
+        version: 1,
+        plugin_uri: uri.clone(),
+        properties: vec![StateProperty {
+            key,
+            type_uri: "http://lv2plug.in/ns/ext/atom#Path".into(),
+            data: b"assets/model.nam\0".to_vec(),
+        }],
+    };
+    let mut p = Plugin::new_ports(&world, &uri, 48000.0, 64).unwrap();
+    assert_eq!(p.channels(), 1);
+    p.restore_state(
+        &state,
+        &[StatePath {
+            absolute: original.clone(),
+            alias: "assets/model.nam".into(),
+        }],
+    )
+    .unwrap();
+    let saved = p
+        .save_state(&[StatePath {
+            absolute: original.clone(),
+            alias: "assets/model.nam".into(),
+        }])
+        .unwrap();
+    assert!(
+        saved
+            .properties
+            .iter()
+            .any(|p| p.type_uri.ends_with("#Path") && p.data == b"assets/model.nam\0")
+    );
+    fn render(p: &mut Plugin) -> Vec<f32> {
+        let mut rendered = Vec::new();
+        for block in 0..256 {
+            let mut audio = [0.0; 64];
+            for (i, v) in audio.iter_mut().enumerate() {
+                *v = ((block * 64 + i) as f32 * 0.031).sin() * 0.1;
+            }
+            p.process_mono(&mut audio).unwrap();
+            if block >= 128 {
+                rendered.extend(audio);
+            }
+        }
+        rendered
+    }
+    let expected = render(&mut p);
+    if uri == "http://two-play.com/plugins/toob-nam" {
+        let model_type = p
+            .info()
+            .ports
+            .iter()
+            .find(|port| port.symbol == "modelType")
+            .expect("TooB model readiness port")
+            .index;
+        assert_eq!(p.value(model_type).unwrap(), 2.0, "A2 model was not loaded");
+    }
+    drop(p);
+    std::fs::rename(&original, &offline).unwrap();
+    let mut restored = Plugin::new_ports(&world, &uri, 48000.0, 64).unwrap();
+    restored
+        .restore_state(
+            &saved,
+            &[StatePath {
+                absolute: offline,
+                alias: "assets/model.nam".into(),
+            }],
+        )
+        .unwrap();
+    let actual = render(&mut restored);
+    let error = expected
+        .iter()
+        .zip(&actual)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0_f32, f32::max);
+    assert!(
+        expected.iter().any(|v| v.abs() > 0.0001),
+        "silent resource plugin"
+    );
+    assert!(error < 1e-5, "state recall render error {error}");
+    drop(restored);
+    std::fs::remove_dir_all(root).unwrap();
 }

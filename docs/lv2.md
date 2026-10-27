@@ -8,7 +8,7 @@ The optional `oxidal-lv2/native` feature uses Lilv to discover and instantiate i
 - Mono input/output plugins use two independent instances to preserve stereo histories. Stereo input/output plugins use one instance.
 - Bounded scalar input controls retain native ranges, integer/toggle properties and logarithmic scaling. Finite scalar outputs can be read back.
 - Stable URID map/unmap, sample-rate and block-size options are delivered during instantiation. Required unknown features/options fail before instantiation.
-- Unsupported ports, asymmetric channel layouts, missing control ranges, CV and opaque plugin state fail closed. Atom Sequence transport is available on the declared-port library API; browser/portable scalar-only authoring rejects Atom effects until message/state persistence is integrated. This is a deliberately limited general plugin host, not full LV2 compatibility.
+- Unsupported ports, asymmetric channel layouts, missing control ranges, CV and unsupported state capabilities fail closed. Atom Sequence transport is available on the declared-port library API; browser/portable scalar-only authoring rejects Atom effects until message/state persistence is integrated. This is a deliberately limited general plugin host, not full LV2 compatibility.
 - The portable mixed-chain host admits one output control port designated `lv2:latency` (or deprecated `reportsLatency`). It queries latency with `run(0)` after restoring controls, validates whole nonnegative frames and uses the mixed executor's budgeted delay alignment. The legacy stereo graph rejects these plugins because it has no latency compensation.
 - Live latency-changing scalar edits are rejected with verified control/latency rollback; failed rollback or spontaneous processing-time latency changes invalidate the session. Automatic replanning is not implemented. A zero-frame query does not prove an arbitrary plugin's reconfiguration is real-time safe.
 - Instances and their discovery world have one thread owner. Port metadata is immutable after preparation. Buffers are prepared before processing; the successful host processing path does not allocate. Plugin allocation and real-time safety still require individual qualification.
@@ -41,6 +41,38 @@ API is exposed directly to the network.
 The layout and capacity contract follows [LV2 Atom](https://lv2plug.in/ns/ext/atom)
 and [Resize Port metadata](https://lv2plug.in/ns/ext/resize-port).
 
+## State capture and restore
+
+The declared-port library supports owner-only `save_state`/`restore_state` on a
+prepared candidate or isolated export instance. These are blocking operations,
+never audio callback calls. Background work is drained first; restore gets a
+synchronous Worker schedule so accepted resource-loading work completes before it
+returns. A failed state callback invalidates the candidate. The audio/session
+layer must retain the preceding working graph until a complete replacement passes.
+
+`PluginState` version 1 stores URI keys/types, portable POD values and explicit
+file aliases. Numeric Atom payloads use canonical little-endian bytes and URID
+values are serialized as URIs, then remapped per instance. String, URI, Path,
+Bool/Int/Long/Float/Double and Chunk values are supported; nested Atom containers
+are rejected until their embedded URIDs have a recursive codec. Plugin-specific
+POD data must explicitly advertise portability. Property count and payload budgets
+are 256 and 1 MiB. Unknown/malformed values, duplicate keys and callback errors are
+never silently discarded.
+
+Callers provide canonical existing files and unique relative aliases through
+`StatePath`; only those mappings are resolved. Absolute source paths are not saved.
+Missing or unapproved files reject restore. Empty Path means no selected asset.
+The caller retains asset ownership and verifies content hashes; the library neither
+copies nor downloads files. `state:makePath`, creation of plugin-owned files,
+structured-Atom state and arbitrary restore-time features remain unsupported.
+Scalar controls are separate from opaque state and must also be restored by the
+caller. These APIs follow [LV2 State](https://lv2plug.in/ns/ext/state).
+
+This library capability is not yet connected to portable bundle Save/recovery or
+the browser file picker. Those workflows continue rejecting Atom effects rather
+than claiming a complete state save. Successful resource restoration is not a
+prepared-switching, gapless or real-time performance guarantee.
+
 ## Background plugin work
 
 Plugins declaring the LV2 Worker schedule feature or interface receive a per-instance
@@ -61,7 +93,7 @@ threads, joins the worker, then deactivates and frees the plugin. Destruction ca
 for plugin code and must never run in the audio callback. A hung native plugin still
 requires the enclosing process supervisor; this library does not detach threads that
 could access freed plugin memory. Rendering uses asynchronous worker execution; no
-freewheeling/sample-exact resource-loading mode is claimed. Portable Atom/state authoring and representative resource-loading plugins need
+freewheeling/sample-exact resource-loading mode is claimed. Portable Atom/state authoring and each additional resource-loading plugin need
 separate qualification.
 
 The contract follows the official [LV2 Worker specification](https://lv2plug.in/ns/ext/worker).
@@ -77,6 +109,24 @@ The existing `pnpm native:check` also runs portable-engine latency tests: modern
 Atom regressions verify exact in-block gain/MIDI timing, copied payloads, input saturation, zero-frame preservation and malformed output containment.
 
 Worker regressions check copied stack messages, ordered replies, thread ownership, request saturation, oversized-message rejection, zero-frame end-of-cycle handling, callback failure and teardown with queued work.
+
+State tests exercise changed URID maps, relocated files after source removal,
+nonportable/error rejection, optional retrieve outputs and synchronous/background
+Worker lifecycle. For an explicitly supplied resource plugin, the same runner also
+runs an offline restore/render comparison:
+
+```sh
+OXIDAL_LV2_STATE_BUNDLE=/absolute/plugin.lv2/ \
+OXIDAL_LV2_STATE_URI=http://two-play.com/plugins/toob-nam \
+OXIDAL_LV2_STATE_KEY=http://two-play.com/plugins/toob-nam#modelFile \
+OXIDAL_LV2_STATE_MODEL=/absolute/owned-a2-model.nam pnpm lv2:check
+```
+
+All four variables are required when any is set. The pinned plugin/model are
+external qualification inputs, not downloaded or redistributed by the runner.
+The maintained TooB NAM case checks its A2 model-type readback as well as rendered
+recall. The generic CI run clearly marks that external case ignored when inputs
+are absent; it does not claim third-party resource-plugin qualification.
 
 These tests do not qualify physical audio, real-time deadlines, reverb, TONE3000 LV2 preset parity, whole-graph replacement/trails, or physical MIDI devices. The existing native TONE3000 playback worker remains separate. The graph worker below connects this library to its own PCM loop and daemon API; the browser installed-effects flow controls the real graph worker; the development simulator remains separate.
 
