@@ -215,6 +215,17 @@ EXPORT int oxidal_t3k_runtime(void* ptr, char* out, size_t capacity, size_t* wri
   return guard([&] { json(engine(ptr).processor.getStageRuntime(), out, capacity, written); });
 }
 
+// Offline/isolated preparation only: never invoke a whole-chain reset on PCM.
+EXPORT int oxidal_t3k_reset_empty(void* ptr) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (e.preparation) throw std::runtime_error("create empty rig on a fresh preparation owner");
+    e.processor.resetToDefault();
+    const auto state = e.processor.getStageRuntime();
+    const auto blocks = state.getProperty("blocks", {});
+    if (!blocks.isArray() || blocks.size() != 0) throw std::runtime_error("native empty reset failed");
+  });
+}
 // Input was structurally bounded by oxidal-presets before entering this ABI.
 EXPORT int oxidal_t3k_load_preset(void* ptr, const unsigned char* bytes, size_t length) noexcept {
   return guard([&] {

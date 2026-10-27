@@ -55,6 +55,7 @@ unsafe extern "C" {
         written: *mut usize,
     ) -> i32;
 
+    fn oxidal_t3k_reset_empty(engine: *mut c_void) -> i32;
     fn oxidal_t3k_load_preset(engine: *mut c_void, bytes: *const u8, length: usize) -> i32;
     fn oxidal_t3k_save_preset(
         engine: *mut c_void,
@@ -403,6 +404,14 @@ impl Engine {
     pub fn restore(&mut self, state: &State) -> Result<()> {
         // SAFETY: State is only constructible from this backend's bounded capture, and lives through call.
         checked(unsafe { oxidal_t3k_restore(self.ptr.as_ptr(), state.0.as_ptr(), state.0.len()) })
+    }
+    /// Create an empty native working chain on an isolated preparation owner.
+    /// Preset-scoped parameters reset; machine/device settings retain their scope.
+    /// This whole-chain operation must not run on an active PCM owner.
+    pub fn reset_empty(&mut self) -> Result<()> {
+        // SAFETY: this Engine has unique thread ownership; the ABI checks preparation state.
+        checked(unsafe { oxidal_t3k_reset_empty(self.ptr.as_ptr()) })?;
+        self.wait_ready()
     }
     pub fn load_preset(&mut self, bytes: &[u8]) -> Result<()> {
         oxidal_presets::inspect(bytes).map_err(|e| NativeError(e.to_string()))?;

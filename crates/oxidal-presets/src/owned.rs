@@ -8,7 +8,8 @@ use std::{fs, io::Write, path::PathBuf};
 #[serde(deny_unknown_fields)]
 pub struct OwnedPreset {
     pub id: String,
-    pub source_sha256: String,
+    /// Original import lineage; None means authored from an empty native rig.
+    pub source_sha256: Option<String>,
     pub preset: Inspection,
 }
 #[derive(Debug)]
@@ -73,11 +74,22 @@ impl OwnedStore {
         {
             return Err(Error::Invalid("Owned snapshot integrity failed"));
         }
-        self.path(&info.source_sha256)?;
+        if let Some(source) = &info.source_sha256 {
+            self.path(source)?;
+        }
         Ok((info, bytes))
     }
     pub fn save(&self, source_sha256: &str, bytes: &[u8]) -> Result<OwnedPreset> {
-        self.path(source_sha256)?;
+        self.save_with_source(Some(source_sha256), bytes)
+    }
+    /// Persist an authored native copy without inventing an imported original.
+    pub fn save_created(&self, bytes: &[u8]) -> Result<OwnedPreset> {
+        self.save_with_source(None, bytes)
+    }
+    fn save_with_source(&self, source: Option<&str>, bytes: &[u8]) -> Result<OwnedPreset> {
+        if let Some(source) = source {
+            self.path(source)?;
+        }
         let preset = inspect(bytes)?;
         if !preset
             .source_id
@@ -99,7 +111,7 @@ impl OwnedStore {
         }
         let info = OwnedPreset {
             id: preset.sha256.clone(),
-            source_sha256: source_sha256.into(),
+            source_sha256: source.map(str::to_owned),
             preset,
         };
         let path = self.path(&info.id)?;

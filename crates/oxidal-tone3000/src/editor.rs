@@ -244,7 +244,7 @@ impl Editor {
                     (info.source_sha256, bytes)
                 } else {
                     (
-                        id.clone(),
+                        Some(id.clone()),
                         self.originals.original(&id).map_err(|e| e.to_string())?,
                     )
                 };
@@ -262,7 +262,7 @@ impl Editor {
                     self.rollback()?;
                     return Err(error);
                 }
-                self.state.source_sha256 = Some(source);
+                self.state.source_sha256 = source;
                 self.state.loaded = Some(id);
                 self.state.dirty = false;
                 self.clear_history();
@@ -271,19 +271,20 @@ impl Editor {
                 if self.gesture.is_some() {
                     return Err("edit_busy".into());
                 }
-                let source = self
-                    .state
-                    .source_sha256
-                    .clone()
-                    .ok_or("Load a preset first")?;
+                if self.state.loaded.is_none() {
+                    return Err("Load a preset first".into());
+                }
+                let source = self.state.source_sha256.clone();
                 let bytes = self.engine.save_preset(&name).map_err(|e| e.to_string());
                 // Upstream save changes native active-preset identity. Restore the exact working
                 // session before storage, so a storage failure never changes our committed state.
                 self.rollback()?;
-                let info = self
-                    .owned
-                    .save(&source, &bytes?)
-                    .map_err(|e| e.to_string())?;
+                let bytes = bytes?;
+                let info = match source {
+                    Some(source) => self.owned.save(&source, &bytes),
+                    None => self.owned.save_created(&bytes),
+                }
+                .map_err(|e| e.to_string())?;
                 self.state.loaded = Some(info.id);
                 self.state.dirty = false;
                 self.clear_history();

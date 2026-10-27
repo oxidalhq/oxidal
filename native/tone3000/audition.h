@@ -29,7 +29,9 @@ public:
       if (!current || current->modelLoading || current->loadFailed)
         throw std::runtime_error("target missing or not ready");
       inserting = current->type == ChainBlockType::INSERT;
-      candidate = std::make_unique<ChainBlock>(inserting ? juce::Uuid().toString().toStdString() : target, type);
+      // The slot is the logical identity of this edit. Retain it when filling an
+      // insert so replay from an immutable empty base addresses the same block.
+      candidate = std::make_unique<ChainBlock>(target, type);
       candidate->namSlimSize = inserting ? p.namSlimSizeDefault.load() : current->namSlimSize;
       p.setToneOnBlock(*candidate, static_cast<int>(toneId), juce::JSON::toString(tone), tone.clone());
       candidate->activeModelId = static_cast<int>(modelId);

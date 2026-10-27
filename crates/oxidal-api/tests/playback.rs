@@ -40,7 +40,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0", "direction":"capture", "sample_rate":48000, "channels":2, "format":"s16", "period_frames":128, "periods":3});
     let mut output = input.clone();
     output["direction"] = json!("playback");
-    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false});
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false,"draft":false});
     let mut state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
     // Missing immutable asset fails before PCM ownership and leaves the HTTP/native sessions intact.
@@ -249,7 +249,10 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .read(&saved_id)
         .unwrap()
         .0;
-    assert_eq!(saved_info.source_sha256, preset.sha256);
+    assert_eq!(
+        saved_info.source_sha256.as_deref(),
+        Some(preset.sha256.as_str())
+    );
     assert_eq!(saved_info.preset.name, "Sounding copy");
     assert_eq!(
         oxidal_presets::Store::new(root.join("presets"))
@@ -606,6 +609,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .status()
         .is_success()
     );
+    qualify_created_rig(&client, &url, &settings["stream"], &root).await;
     shutdown.send_replace(true);
     task.abort();
     stopped.wait().await.unwrap();
@@ -762,4 +766,107 @@ async fn wait_model(client: &reqwest::Client, url: &str, phase: &str) -> Value {
         tokio::time::sleep(std::time::Duration::from_millis(40)).await;
     }
     panic!("model did not reach {phase}");
+}
+
+async fn qualify_created_rig(
+    client: &reqwest::Client,
+    url: &str,
+    stream: &Value,
+    root: &std::path::Path,
+) {
+    let originals = get(client, url, "presets").await;
+    let owned = oxidal_presets::OwnedStore::new(root.join("presets/owned"));
+    let count = owned.list().unwrap().len();
+    let mut state = get(client, url, "audio").await;
+    let response = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"create","stream":stream,"name":"New native rig"}),
+    )
+    .await;
+    let status = response.status();
+    let body = response.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    state = serde_json::from_str(&body).unwrap();
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["configured"]["draft"], true);
+    assert_eq!(state["modified"], true);
+    assert_eq!(state["preset_name"], "New native rig");
+    assert!(
+        !state["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["target"].as_str().unwrap().starts_with("block:"))
+    );
+    assert_eq!(get(client, url, "presets").await, originals);
+    assert_eq!(
+        owned.list().unwrap().len(),
+        count,
+        "New is not an implicit named Save"
+    );
+    for action in [
+        json!({"kind":"create","stream":stream,"name":"Do not replace"}),
+        json!({"kind":"set_boot","enabled":true}),
+    ] {
+        assert_eq!(send(client, url, &state, action).await.status(), 409);
+        assert_eq!(
+            get(client, url, "audio").await["revision"],
+            state["revision"]
+        );
+    }
+    let edited = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"set_control","target":"outputLevel","value":0.31}),
+    )
+    .await;
+    assert_eq!(edited.status(), 200);
+    state = edited.json().await.unwrap();
+    let controls = state["controls"].clone();
+    for action in [json!({"kind":"stop"}), json!({"kind":"resume"})] {
+        let response = send(client, url, &state, action).await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+    }
+    assert_eq!(state["controls"], controls);
+    let saved = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"save_copy","name":"Created native copy"}),
+    )
+    .await;
+    assert_eq!(saved.status(), 200);
+    state = saved.json().await.unwrap();
+    let id = state["saved_copy"].as_str().unwrap().to_owned();
+    assert!(owned.read(&id).unwrap().0.source_sha256.is_none());
+    assert_eq!(owned.list().unwrap().len(), count + 1);
+    let stopped = send(client, url, &state, json!({"kind":"stop"})).await;
+    state = stopped.json().await.unwrap();
+    std::fs::rename(
+        root.join("presets/working-native"),
+        root.join("drafts-hidden-for-offline-test"),
+    )
+    .unwrap();
+    let reopened = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"start","settings":{"stream":stream,"preset_id":id,"owned":true}}),
+    )
+    .await;
+    assert_eq!(reopened.status(), 200);
+    state = reopened.json().await.unwrap();
+    assert_eq!(state["controls"], controls);
+    assert_eq!(state["configured"]["draft"], false);
+    assert_eq!(get(client, url, "presets").await, originals);
+    assert_eq!(
+        send(client, url, &state, json!({"kind":"stop"}))
+            .await
+            .status(),
+        200
+    );
 }

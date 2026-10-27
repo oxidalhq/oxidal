@@ -17,6 +17,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         time::{Duration, Instant},
     };
+    if std::env::args().nth(1).as_deref() == Some("--create-draft") {
+        return create_draft();
+    }
     if std::env::args().nth(1).as_deref() == Some("--save-copy") {
         return save_copy();
     }
@@ -51,10 +54,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         reader_stop.store(true, Ordering::Release);
     });
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
-    let preset = if settings.owned {
-        oxidal_presets::OwnedStore::new(root.join("owned"))
-            .read(&settings.preset_id)?
-            .1
+    let preset = if settings.owned || settings.draft {
+        oxidal_presets::OwnedStore::new(root.join(if settings.draft {
+            "working-native"
+        } else {
+            "owned"
+        }))
+        .read(&settings.preset_id)?
+        .1
     } else {
         oxidal_presets::Store::new(root.clone()).original(&settings.preset_id)?
     };
@@ -214,12 +221,17 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     }
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
     let owned = oxidal_presets::OwnedStore::new(root.join("owned"));
-    let (source, preset) = if request.settings.owned {
-        let (info, bytes) = owned.read(&request.settings.preset_id)?;
+    let (source, preset) = if request.settings.owned || request.settings.draft {
+        let store = oxidal_presets::OwnedStore::new(root.join(if request.settings.draft {
+            "working-native"
+        } else {
+            "owned"
+        }));
+        let (info, bytes) = store.read(&request.settings.preset_id)?;
         (info.source_sha256, bytes)
     } else {
         (
-            request.settings.preset_id.clone(),
+            Some(request.settings.preset_id.clone()),
             oxidal_presets::Store::new(root.clone()).original(&request.settings.preset_id)?,
         )
     };
@@ -259,8 +271,54 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("Saved control readback differs".into());
     }
-    let saved = owned.save(&source, &bytes)?;
+    let saved = match source {
+        Some(source) => owned.save(&source, &bytes)?,
+        None => owned.save_created(&bytes)?,
+    };
     println!("{}", saved.id);
+    std::io::stdout().flush()?;
+    Ok(())
+}
+
+/// Isolated, non-PCM factory. The working base is not a named library Save.
+#[cfg(target_os = "linux")]
+fn create_draft() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::{BufRead, Read, Write};
+    let mut bytes = vec![];
+    std::io::stdin()
+        .lock()
+        .take(1025)
+        .read_until(b'\n', &mut bytes)?;
+    if bytes.len() > 1024 || bytes.last() != Some(&b'\n') {
+        return Err("Invalid new rig request".into());
+    }
+    let name: String = serde_json::from_slice(&bytes)?;
+    if !oxidal_audio::lifecycle::valid_preset_name(&name) {
+        return Err("Invalid new rig name".into());
+    }
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
+    let mut engine = oxidal_tone3000::Engine::new(48000.0, 128)?;
+    engine.reset_empty()?;
+    let bytes = engine.save_preset(name.trim())?;
+    let slots = engine.chain()?;
+    drop(engine);
+    let mut verify = oxidal_tone3000::Engine::new(48000.0, 128)?;
+    verify.load_preset(&bytes)?;
+    verify.wait_ready()?;
+    if !verify.runtime()?["blocks"]
+        .as_array()
+        .is_some_and(Vec::is_empty)
+    {
+        return Err("New rig contains unexpected models".into());
+    }
+    let recalled = verify.chain()?;
+    for lane in ["chain", "chainRight"] {
+        if slots[lane] != recalled[lane] {
+            return Err("New rig slot identities changed".into());
+        }
+    }
+    let info = oxidal_presets::OwnedStore::new(root.join("working-native")).save_created(&bytes)?;
+    println!("{}", info.id);
     std::io::stdout().flush()?;
     Ok(())
 }

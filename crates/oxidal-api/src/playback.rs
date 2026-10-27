@@ -280,7 +280,9 @@ impl Owner {
             }
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
-            self.state.modified = self.resume_controls.is_some() || !self.state.models.is_empty();
+            self.state.modified = self.state.configured.as_ref().is_some_and(|s| s.draft)
+                || self.resume_controls.is_some()
+                || !self.state.models.is_empty();
             Ok(())
         })
         .await
@@ -525,6 +527,88 @@ impl Owner {
             self.publish(AudioPhase::Running, Some(error));
         }
     }
+    async fn create(&mut self, stream: oxidal_audio::StreamConfig, name: String) -> Reply {
+        stream.validate()?;
+        if !valid_preset_name(&name) || self.worker.is_some() {
+            return Err("Stop audio and enter a valid name before creating a new rig".into());
+        }
+        let name = name.trim().to_owned();
+        let mut bytes = serde_json::to_vec(&name).map_err(|e| e.to_string())?;
+        bytes.push(b'\n');
+        std::fs::create_dir_all(&self.preset_dir).map_err(|e| e.to_string())?;
+        let root = std::fs::canonicalize(&self.preset_dir).map_err(|e| e.to_string())?;
+        let data = root.join("create-runtime");
+        std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(
+            self.executable
+                .as_ref()
+                .ok_or("Native worker unavailable")?,
+        )
+        .arg("--create-draft")
+        .env("OXIDAL_PRESET_DIR", &root)
+        .env("OXIDAL_QUALIFICATION_DATA", &data)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+        let result = tokio::time::timeout(Duration::from_secs(25), async {
+            let mut input = child.stdin.take().ok_or("Creation input unavailable")?;
+            input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            drop(input);
+            let mut output = vec![];
+            child
+                .stdout
+                .take()
+                .ok_or("Creation output unavailable")?
+                .take(66)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|e| e.to_string())?;
+            if output.len() != 65 || output.last() != Some(&b'\n') {
+                return Err("Could not prepare an empty native rig".to_owned());
+            }
+            if !child.wait().await.map_err(|e| e.to_string())?.success() {
+                return Err("Native creation worker failed".into());
+            }
+            let id =
+                String::from_utf8(output[..64].to_vec()).map_err(|_| "Invalid draft identity")?;
+            let info = oxidal_presets::OwnedStore::new(root.join("working-native"))
+                .read(&id)
+                .map_err(|e| e.to_string())?
+                .0;
+            if info.preset.name != name || info.source_sha256.is_some() {
+                return Err("Created draft metadata differs".into());
+            }
+            Ok(id)
+        })
+        .await
+        .map_err(|_| "New rig preparation timed out".to_owned())
+        .and_then(|r| r);
+        if result.is_err() {
+            let _ = child.start_kill();
+            let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        }
+        let id = result?;
+        let started = self
+            .start(
+                StartAudio {
+                    stream,
+                    preset_id: id,
+                    owned: false,
+                    draft: true,
+                },
+                None,
+                vec![],
+            )
+            .await;
+        if let Err(error) = started {
+            self.publish(AudioPhase::Failed, Some(error.clone()));
+            return Err(error);
+        }
+        Ok(self.state.clone())
+    }
     async fn save_copy(&mut self, name: String) -> Reply {
         if self.model_pending() {
             return Err("Wait for model audition or cancel before saving".into());
@@ -674,6 +758,7 @@ impl Owner {
             return Err("Experimental audio worker unavailable".into());
         }
         let result = match command.action {
+            AudioAction::Create { stream, name } => return self.create(stream, name).await,
             // A failed export must not mark the independently running audio failed.
             AudioAction::ReplaceModel { assignment } => {
                 if self.state.phase != AudioPhase::Running
@@ -761,6 +846,11 @@ impl Owner {
                 let settings = if enabled {
                     if self.state.phase != AudioPhase::Running {
                         return Err("Start and verify audio before enabling boot playback".into());
+                    }
+                    if self.state.configured.as_ref().is_some_and(|s| s.draft) {
+                        return Err(
+                            "Save and recall the new rig before enabling boot playback".into()
+                        );
                     }
                     self.state.configured.clone()
                 } else {

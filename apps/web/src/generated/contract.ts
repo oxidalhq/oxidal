@@ -14,6 +14,11 @@ export type AccountAction =
 export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
 export type AudioAction =
   | {
+      kind: "create";
+      name: string;
+      stream: StreamConfig;
+    }
+  | {
       kind: "start";
       settings: StartAudio;
     }
@@ -352,14 +357,6 @@ export interface AudioCommand {
   expected_revision: number;
   session: string;
 }
-export interface StartAudio {
-  owned: boolean;
-  /**
-   * Immutable imported/owned preset identity, never a browser-supplied file path.
-   */
-  preset_id: string;
-  stream: StreamConfig;
-}
 export interface StreamConfig {
   input: AudioProbe;
   /**
@@ -386,6 +383,18 @@ export interface AudioProbe {
   period_frames: number;
   periods: number;
   sample_rate: number;
+}
+export interface StartAudio {
+  /**
+   * An immutable working base created locally, separate from imported/saved libraries.
+   */
+  draft?: boolean;
+  owned: boolean;
+  /**
+   * Immutable imported/owned preset identity, never a browser-supplied file path.
+   */
+  preset_id: string;
+  stream: StreamConfig;
 }
 /**
  * Immutable verified asset assigned to an existing native block.
@@ -820,7 +829,10 @@ export interface Editing {
 export interface OwnedPreset {
   id: string;
   preset: Inspection;
-  source_sha256: string;
+  /**
+   * Original import lineage; None means authored from an empty native rig.
+   */
+  source_sha256?: string | null;
 }
 export interface Parameter2 {
   automatable: boolean;

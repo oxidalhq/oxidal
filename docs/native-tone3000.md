@@ -112,3 +112,22 @@ Insertion remains an adapter capability rather than a browser authoring workflow
 The build can migrate explicitly hash-pinned previous overlays in its owned
 source cache. Unknown local changes still fail; reference checkouts are never
 rewritten by that migration.
+
+### Empty native creation foundation
+
+The isolated native preparation API can reset to an empty chain using the pinned
+processor's preset defaults while retaining machine/device calibration scope. The
+maintained qualification verifies restoring the previous captured session, serializing
+an empty working base and reloading its exact insert-slot identities. Filling an insert
+slot retains that block identity; native saved recall verifies the inserted model.
+This whole-chain reset is intended for preparation owners and must not run on active PCM.
+
+Owned copies now distinguish imported lineage (a source SHA-256) from a rig authored
+from scratch (`source_sha256: null`). Existing string metadata remains readable, and
+load/save of a created copy preserves its source-free origin. These are preparation and
+persistence foundations. The playback `create` action accepts an audio stream and name,
+prepares a verified empty base in the private `working-native` store, then opens audio.
+It does not add an imported original or a named library copy. Stop/Resume retain the
+working base; Save produces a source-free owned copy that recalls without the draft.
+Boot playback requires explicitly saving and recalling that copy. The browser New
+preset/model-insertion flow and live insertion/replay still need integration. They do not establish full authoring or gapless behavior.

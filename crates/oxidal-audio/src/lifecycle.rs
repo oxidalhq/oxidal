@@ -10,10 +10,16 @@ pub struct StartAudio {
     /// Immutable imported/owned preset identity, never a browser-supplied file path.
     pub preset_id: String,
     pub owned: bool,
+    /// An immutable working base created locally, separate from imported/saved libraries.
+    #[serde(default)]
+    pub draft: bool,
 }
 impl StartAudio {
     pub fn validate(&self) -> Result<(), String> {
         self.stream.validate()?;
+        if self.draft && self.owned {
+            return Err("Ambiguous preset source".into());
+        }
         if self.preset_id.len() != 64 || !self.preset_id.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("Select a saved preset before starting audio".into());
         }
@@ -58,6 +64,10 @@ pub struct AudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AudioAction {
+    Create {
+        stream: StreamConfig,
+        name: String,
+    },
     Start {
         settings: StartAudio,
     },

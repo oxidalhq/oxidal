@@ -515,6 +515,27 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "create"
+            },
+            "name": {
+              "type": "string"
+            },
+            "stream": {
+              "$ref": "#/$defs/StreamConfig"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stream",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "start"
             },
             "settings": {
@@ -2830,13 +2851,16 @@
           "$ref": "#/$defs/Inspection"
         },
         "source_sha256": {
-          "type": "string"
+          "description": "Original import lineage; None means authored from an empty native rig.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "id",
-        "source_sha256",
         "preset"
       ]
     },
@@ -3497,6 +3521,11 @@
     "StartAudio": {
       "type": "object",
       "properties": {
+        "draft": {
+          "description": "An immutable working base created locally, separate from imported/saved libraries.",
+          "type": "boolean",
+          "default": false
+        },
         "owned": {
           "type": "boolean"
         },

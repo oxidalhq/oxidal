@@ -347,6 +347,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_editor(&root, &preset)?;
     qualify_editor_scalars(&root, &preset)?;
     qualify_factories()?;
+    qualify_empty_creation(&root, &preset)?;
     qualify_model_preparation(&root, &preset)?;
     println!(
         "{}",
@@ -663,7 +664,10 @@ fn qualify_editor(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Er
         },
     )?;
     let owned = saved.owned.last().unwrap();
-    assert_eq!(owned.source_sha256, original.sha256);
+    assert_eq!(
+        owned.source_sha256.as_deref(),
+        Some(original.sha256.as_str())
+    );
     assert_ne!(owned.preset.source_id, original.source_id);
     let id = owned.id.clone();
     assert_eq!(originals.original(&original.sha256)?, bytes);
@@ -1398,7 +1402,12 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
     assert_eq!(engine.runtime()?["blocks"].as_array().unwrap().len(), count);
     engine.model_preparation(1)?;
-    assert_eq!(wait_preparation(&mut engine)?["phase"], "applied");
+    let inserted = wait_preparation(&mut engine)?;
+    assert_eq!(inserted["phase"], "applied");
+    assert_eq!(
+        inserted["block_id"], insert,
+        "filling a slot retains logical identity"
+    );
     assert_eq!(
         engine.runtime()?["blocks"].as_array().unwrap().len(),
         count + 1
@@ -1411,6 +1420,13 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     engine.wait_ready()?;
     assert_eq!(engine.runtime()?["blocks"][0]["blockId"], target);
     assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    assert!(
+        engine.runtime()?["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|b| b["blockId"] == insert && b["loaded"] == true)
+    );
     assert!(serde_json::to_string(&content(engine.chain()?))?.contains("Audition fixture"));
     eprintln!(
         "qualify: model prepare/failure/cancel/stale target/commit/offline embedded recall passed"
@@ -1430,4 +1446,113 @@ fn wait_preparation(engine: &mut Engine) -> Result<Value, Box<dyn Error>> {
         }
         std::thread::sleep(Duration::from_millis(2));
     }
+}
+
+fn qualify_empty_creation(root: &std::path::Path, preset: &[u8]) -> Result<(), Box<dyn Error>> {
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(preset)?;
+    engine.wait_ready()?;
+    engine.set_normalized("inputLevel", 0.75)?;
+    engine.set_normalized("inputCalibrationLevel", 0.6)?;
+    let before = engine.capture()?;
+    engine.reset_empty()?;
+    assert!(engine.runtime()?["blocks"].as_array().unwrap().is_empty());
+    let catalog = engine.catalog()?;
+    for row in catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["tone"] == true)
+    {
+        assert!(
+            (row["value"].as_f64().unwrap() - row["default"].as_f64().unwrap()).abs() < 1e-4,
+            "preset default: {row}"
+        );
+    }
+    let calibration = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "inputCalibrationLevel")
+        .unwrap();
+    assert!(
+        (calibration["normalized"].as_f64().unwrap() - 0.6).abs() < 1e-5,
+        "device calibration remains outside preset reset"
+    );
+    let chain = engine.chain()?;
+    let slots: Vec<_> = chain["chain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["kind"] == "insert")
+        .map(|b| b["blockId"].clone())
+        .collect();
+    assert!(!slots.is_empty());
+    let empty = engine.save_preset("New empty working rig")?;
+    let owned = oxidal_presets::OwnedStore::new(root.join("created-library/owned"));
+    let created = owned.save_created(&empty)?;
+    assert!(
+        created.source_sha256.is_none(),
+        "new rigs have no imported original"
+    );
+    let (metadata, bytes) = owned.read(&created.id)?;
+    assert!(metadata.source_sha256.is_none());
+    assert_eq!(bytes, empty);
+    engine.restore(&before)?;
+    engine.wait_ready()?;
+    assert!(
+        !engine.runtime()?["blocks"].as_array().unwrap().is_empty(),
+        "caller can restore its previous session"
+    );
+    drop(engine);
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(&empty)?;
+    engine.wait_ready()?;
+    assert!(engine.runtime()?["blocks"].as_array().unwrap().is_empty());
+    let recalled = engine.chain()?;
+    let recalled_slots: Vec<_> = recalled["chain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|b| b["kind"] == "insert")
+        .map(|b| b["blockId"].clone())
+        .collect();
+    assert_eq!(
+        slots, recalled_slots,
+        "empty working base retains exact insertion targets across native save/reload"
+    );
+    drop(engine);
+    let mut editor = oxidal_tone3000::editor::Editor::new(root.join("created-library"))?;
+    for (index, action) in [
+        oxidal_tone3000::protocol::EditorAction::Load {
+            id: created.id,
+            owned: true,
+        },
+        oxidal_tone3000::protocol::EditorAction::Save {
+            name: "Created copy again".into(),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let state = editor.snapshot()?;
+        let next = editor.command(oxidal_tone3000::protocol::EditorCommand {
+            session: state.session,
+            expected_revision: state.revision,
+            request_id: format!("created-{index}"),
+            action,
+        })?;
+        assert!(next.source_sha256.is_none());
+    }
+    assert_eq!(owned.list()?.len(), 2);
+    assert!(
+        owned
+            .list()?
+            .iter()
+            .all(|copy| copy.source_sha256.is_none())
+    );
+    eprintln!(
+        "qualify: empty native creation, defaults/device scope, previous-state recovery, insert identity recall and created-copy provenance passed"
+    );
+    Ok(())
 }
