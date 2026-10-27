@@ -136,3 +136,18 @@ implicit second instance. Existing `Plugin::new` callers retain the dual-mono
 stereo wrapper. The maintained native tests cover both modes, wrong-layout/input
 rejection, stereo separation and overload failure latching. This does not add
 opaque State/Atom/worker support or qualify live structural replacement.
+
+## Effects session boot and device settings
+
+Audio Settings displays and controls the effects owner while its chain plays.
+The working rig name stays with the session across navigation, Apply and boot.
+Stop releases the interface; Resume and Restart retain confirmed scalar controls,
+routing, bypass and MIDI mappings. Apply changes rate/buffer/channels while retaining
+the same confirmed session, restoring the previous configuration after rejected
+preparation. Device reservation is held across this transition; PCM itself restarts.
+
+The shared explicit boot choice captures that confirmed session. Later edits do not
+rewrite it; disable and enable again to capture a replacement. The existing Linux
+HTTP and browser suites cover these paths, including missing-worker disable and
+failed boot-record publication. See [shared boot selection](audio.md#shared-boot-selection).
+This does not add opaque plugin state, persistent DSP tails or seamless switching.

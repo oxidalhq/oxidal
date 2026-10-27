@@ -48,7 +48,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     let root = std::env::temp_dir().join(format!("oxidal-graph-http-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let (shutdown, signal) = tokio::sync::watch::channel(false);
-    let (app, stopped) = router_with_shutdown(Config {
+    let config = Config {
         debug_socket: None,
         device_socket: None,
         graph_worker: Some(executable.clone()),
@@ -60,8 +60,8 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         preset_dir: root.join("presets"),
         ui_dir: root.join("ui"),
         shutdown: Some(signal),
-    })
-    .unwrap();
+    };
+    let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
@@ -108,6 +108,12 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     let original = get(&c, &url, "state").await;
     let mut s = get(&c, &url, "graph-audio").await;
     assert_eq!(s["phase"], "stopped");
+    assert_eq!(
+        send(&c, &url, &s, json!({"kind":"set_boot","enabled":true}))
+            .await
+            .status(),
+        409
+    );
     let mut missing = settings();
     missing["bindings"][0]["uri"] = json!("urn:oxidal:missing");
     assert_eq!(
@@ -203,6 +209,12 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     );
     apply(&c, &url, &mut s, action).await;
     assert_eq!(s["native_values"][0]["value"], 0.0);
+    assert_eq!(
+        send(&c, &url, &s, json!({"kind":"set_boot","enabled":true}))
+            .await
+            .status(),
+        409
+    );
     let action = control(
         &s,
         json!({"type":"edit","edit":{"phase":"cancel","owner":"web","token":"preview"}}),
@@ -275,7 +287,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     // Reopen the durable document through a fresh Start, not retained worker state.
     apply(&c, &url, &mut s, json!({"kind":"stop"})).await;
     let mut recalled = settings();
-    for key in ["rig", "bindings", "recall"] {
+    for key in ["name", "rig", "bindings", "recall"] {
         recalled[key] = saved[0]["preset"][key].clone();
     }
     apply(
@@ -300,6 +312,81 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     assert_eq!(s["device_owned"], false);
     assert_eq!(get(&c, &url, "state").await, original);
     apply(&c, &url, &mut s, json!({"kind":"restart"})).await;
+    // Device Apply retains the actual confirmed controls, routes and mappings.
+    let before = s["configured"].clone();
+    let mut stream = before["stream"].clone();
+    stream["input"]["sample_rate"] = json!(44100);
+    stream["output"]["sample_rate"] = json!(44100);
+    stream["input"]["period_frames"] = json!(256);
+    stream["output"]["period_frames"] = json!(256);
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"reconfigure","stream":stream}),
+    )
+    .await;
+    assert_eq!(s["phase"], "running");
+    assert_eq!(s["configured"]["stream"], stream);
+    assert_eq!(s["configured"]["recall"], before["recall"]);
+    assert_eq!(s["control"]["rig"], routed);
+    assert_eq!(s["native_values"][0]["value"], 70.0);
+    let mut invalid = stream.clone();
+    invalid["input"]["endpoint"] = json!("hw:CARD=Missing,DEV=0");
+    invalid["output"]["endpoint"] = json!("hw:CARD=Missing,DEV=0");
+    assert_eq!(
+        send(&c, &url, &s, json!({"kind":"reconfigure","stream":invalid}))
+            .await
+            .status(),
+        409
+    );
+    s = wait(&c, &url, "running").await;
+    assert!(
+        s["error"]
+            .as_str()
+            .unwrap()
+            .contains("previous session restored")
+    );
+    assert_eq!(s["configured"]["stream"], stream);
+    assert_eq!(s["configured"]["recall"], before["recall"]);
+    assert_eq!(s["native_values"][0]["value"], 70.0);
+    // Apply on a stopped session means Apply and resume, matching the UI.
+    apply(&c, &url, &mut s, json!({"kind":"stop"})).await;
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"reconfigure","stream":stream}),
+    )
+    .await;
+    assert_eq!(s["phase"], "running");
+    assert_eq!(s["configured"]["recall"], before["recall"]);
+    let action = control(&s, json!({"type":"set","target":"rig.bypass","value":1.0}));
+    apply(&c, &url, &mut s, action).await;
+    assert_eq!(s["control"]["bypassed"], true);
+    // Failed persistence leaves the live sound and prior preference intact.
+    let boot_path = root.join("presets/boot-audio.json");
+    std::fs::create_dir(boot_path.with_extension("tmp")).unwrap();
+    assert_eq!(
+        send(&c, &url, &s, json!({"kind":"set_boot","enabled":true}))
+            .await
+            .status(),
+        409
+    );
+    assert!(!boot_path.exists());
+    assert_eq!(get(&c, &url, "graph-audio").await["phase"], "running");
+    std::fs::remove_dir(boot_path.with_extension("tmp")).unwrap();
+    apply(&c, &url, &mut s, json!({"kind":"set_boot","enabled":true})).await;
+    let captured = s["configured"].clone();
+    assert_eq!(captured["name"], "Authored LV2 rig");
+    assert_eq!(s["start_on_boot"], true);
+    let audio = get(&c, &url, "audio").await;
+    assert_eq!(audio["start_on_boot"], false);
+    assert!(c.post(format!("{url}/audio")).json(&json!({"session":audio["session"],"expected_revision":audio["revision"],"action":{"kind":"set_boot","enabled":false}})).send().await.unwrap().status().is_success());
+    assert_eq!(get(&c, &url, "graph-audio").await["start_on_boot"], true);
+    let action = control(&s, json!({"type":"set","target":"amp.gain","value":0.25}));
+    apply(&c, &url, &mut s, action).await;
+    assert_eq!(s["native_values"][0]["value"], -35.0);
     let pid = worker_pid(&executable);
     shutdown.send_replace(true);
     tokio::time::timeout(Duration::from_secs(5), stopped.wait())
@@ -326,6 +413,61 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
             .status(),
         409
     );
+    server.abort();
+    // A new daemon automatically restores the captured session, not later edits.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let mut config = config;
+    config.shutdown = Some(signal);
+    let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let mut s = wait(&c, &url, "running").await;
+    assert_eq!(s["start_on_boot"], true);
+    assert_eq!(s["configured"], captured);
+    assert_eq!(s["control"]["bypassed"], true);
+    assert_eq!(s["native_values"][0]["value"], 70.0);
+    assert_eq!(s["device_owned"], true);
+    let audio = get(&c, &url, "audio").await;
+    assert_eq!(audio["phase"], "stopped");
+    assert_eq!(audio["device_owned"], false);
+    assert_eq!(get(&c, &url, "rig-audio").await["device_owned"], false);
+    let control = s["control"].clone();
+    apply(&c, &url, &mut s, json!({"kind":"set_boot","enabled":false})).await;
+    assert!(!boot_path.exists());
+    assert_eq!(s["control"], control);
+    assert_eq!(s["phase"], "running");
+    apply(&c, &url, &mut s, json!({"kind":"set_boot","enabled":true})).await;
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    // A missing worker must not make the selected preference impossible to disable.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    config.shutdown = Some(signal);
+    config.graph_worker = None;
+    let (app, stopped) = router_with_shutdown(config).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let mut s = wait(&c, &url, "unavailable").await;
+    assert_eq!(s["start_on_boot"], true);
+    apply(&c, &url, &mut s, json!({"kind":"set_boot","enabled":false})).await;
+    assert_eq!(s["phase"], "unavailable");
+    assert_eq!(s["start_on_boot"], false);
+    assert!(!boot_path.exists());
+    assert_eq!(get(&c, &url, "presets/graphs").await[0]["id"], saved_id);
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }

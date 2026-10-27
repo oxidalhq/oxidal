@@ -1699,6 +1699,89 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect
     .poll(async () => (await read()).native_values[0].value)
     .toBe(-35);
+  // Audio settings must operate on the sounding effects owner, not native playback.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  const playback = page.getByRole('region', { name: 'Playback controls' });
+  await expect(
+    playback.getByRole('heading', { name: 'Effects audio' }),
+  ).toBeVisible();
+  await playback
+    .getByRole('button', { name: 'Use this session on boot', exact: true })
+    .click();
+  await expect.poll(async () => (await read()).start_on_boot).toBe(true);
+  expect(
+    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+  ).toBe(false);
+  await playback
+    .getByRole('button', { name: 'Stop audio', exact: true })
+    .click();
+  await expect.poll(async () => (await read()).device_owned).toBe(false);
+  await expect(
+    playback.getByRole('heading', { name: 'Effects audio' }),
+  ).toBeVisible();
+  await playback
+    .getByRole('button', { name: 'Resume session', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await read()).native_values[0]?.value)
+    .toBe(-35);
+  await playback.getByText('Current device & buffers', { exact: true }).click();
+  await playback
+    .getByLabel('Session sample rate (Hz)', { exact: true })
+    .fill('44100');
+  await playback
+    .getByLabel('Session buffer (samples)', { exact: true })
+    .fill('256');
+  const apply = playback.getByRole('button', {
+    name: 'Apply & restart audio',
+    exact: true,
+  });
+  await apply.click();
+  await expect
+    .poll(async () => (await read()).configured.stream.input.sample_rate)
+    .toBe(44100);
+  await expect.poll(async () => (await read()).phase).toBe('running');
+  await expect
+    .poll(async () => (await read()).native_values[0]?.value)
+    .toBe(-35);
+  for (const size of [
+    viewport,
+    { width: viewport.height, height: viewport.width },
+  ]) {
+    await page.setViewportSize(size);
+    await playback.scrollIntoViewIfNeeded();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    const buttons = await playback.getByRole('button').all();
+    for (const button of buttons) {
+      if (await button.isVisible())
+        expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    // Capture from a stable top-of-page position: full-page screenshots otherwise
+    // place the sticky meter strip over content from the prior scrolled viewport.
+    await expect(page.getByTestId('resource-state')).toHaveText(
+      'Audio running',
+      { timeout: 12000 },
+    );
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await page.screenshot({
+      path: testInfo.outputPath(`effects-settings-${size.width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize(viewport);
+  await playback
+    .getByRole('button', { name: 'Disable boot playback', exact: true })
+    .click();
+  await expect.poll(async () => (await read()).start_on_boot).toBe(false);
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel('Save as', { exact: true })).toHaveValue(name);
   await editor
     .getByRole('button', { name: 'Save preset', exact: true })
     .click();

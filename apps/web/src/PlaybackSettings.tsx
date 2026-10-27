@@ -1,3 +1,4 @@
+import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { BootPlayback } from './BootPlayback';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useEffect, useState } from 'react';
@@ -5,6 +6,7 @@ import {
   playbackState,
   rigAudioState,
   type RigAudioState,
+  type GraphAudioState,
   graphAudioState,
   graphAudioCommand,
   playbackCommand,
@@ -35,8 +37,20 @@ export function PlaybackSettings({
 }) {
   const [state, setState] = useState<AudioState | null>(null);
   const [mixed, setMixed] = useState<RigAudioState | null>(null);
-  const [graphOwnsDevice, setGraphOwnsDevice] = useState(false);
+  const [effects, setEffects] = useState<GraphAudioState | null>(null);
+  const [lastOwner, setLastOwner] = useState<
+    'native' | 'mixed' | 'effects' | null
+  >(null);
+  function acceptEffects(next: GraphAudioState) {
+    if (next.device_owned) setLastOwner('effects');
+    setEffects((current) =>
+      current?.session === next.session && current.revision > next.revision
+        ? current
+        : next,
+    );
+  }
   function acceptMixed(next: RigAudioState) {
+    if (next.device_owned) setLastOwner('mixed');
     setMixed((current) =>
       current?.session === next.session && current.revision > next.revision
         ? current
@@ -53,6 +67,7 @@ export function PlaybackSettings({
   const [inputMap, setInputMap] = useState<[number, number]>([0, 1]);
   const [outputMap, setOutputMap] = useState<[number, number]>([0, 1]);
   function accept(next: AudioState) {
+    if (next.device_owned) setLastOwner('native');
     setState((current) =>
       current?.session === next.session && current.revision > next.revision
         ? current
@@ -72,7 +87,7 @@ export function PlaybackSettings({
         if (active) {
           accept(next);
           acceptMixed(rig);
-          setGraphOwnsDevice(graph.device_owned);
+          acceptEffects(graph);
         }
       } catch (cause) {
         if (active) setError(String(cause));
@@ -139,22 +154,45 @@ export function PlaybackSettings({
     <BootPlayback
       native={state}
       mixed={mixed}
+      effects={effects}
       disabled={
         !connected ||
         busy ||
         transitioning ||
         mixed?.phase === 'starting' ||
-        mixed?.phase === 'stopping'
+        mixed?.phase === 'stopping' ||
+        effects?.phase === 'starting' ||
+        effects?.phase === 'stopping'
       }
       onNative={accept}
       onMixed={acceptMixed}
+      onEffects={acceptEffects}
     />
   );
+  if (
+    effects?.configured &&
+    effects.phase !== 'unavailable' &&
+    !state?.device_owned &&
+    !mixed?.device_owned &&
+    (effects.device_owned ||
+      lastOwner === 'effects' ||
+      (!lastOwner && effects.configured.recall && !mixed?.configured))
+  )
+    return (
+      <EffectsPlaybackSettings
+        state={effects}
+        connected={connected}
+        input={input}
+        output={output}
+        onState={acceptEffects}
+        boot={boot}
+      />
+    );
   if (
     mixed?.configured &&
     mixed.phase !== 'unavailable' &&
     !state?.device_owned &&
-    !graphOwnsDevice
+    !effects?.device_owned
   )
     return (
       <MixedPlaybackSettings
@@ -181,15 +219,17 @@ export function PlaybackSettings({
               setGraphMessage('');
               try {
                 const graph = await graphAudioState();
-                await graphAudioCommand(graph, {
-                  kind: 'configure',
-                  stream: {
-                    input,
-                    output,
-                    input_map: inputMap,
-                    output_map: outputMap,
-                  },
-                });
+                acceptEffects(
+                  await graphAudioCommand(graph, {
+                    kind: 'configure',
+                    stream: {
+                      input,
+                      output,
+                      input_map: inputMap,
+                      output_map: outputMap,
+                    },
+                  }),
+                );
                 setGraphMessage('Audio setup ready for New preset.');
               } catch (cause) {
                 setError(String(cause));

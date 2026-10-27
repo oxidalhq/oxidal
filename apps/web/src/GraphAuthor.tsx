@@ -55,6 +55,7 @@ export function GraphAuthor({
   const [typedName, setName] = useState<string | null>(null);
   const name =
     typedName ??
+    state?.configured?.name ??
     library.find((item) => item.id === state?.saved_copy)?.preset.name ??
     'New rig';
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
@@ -547,6 +548,7 @@ export function GraphAuthor({
                 void command({
                   kind: 'start',
                   settings: {
+                    name: name.trim(),
                     stream,
                     rig: draft.rig,
                     bindings: draft.bindings,

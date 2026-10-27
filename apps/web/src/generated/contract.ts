@@ -144,6 +144,14 @@ export type Command2 =
     };
 export type GraphAudioAction =
   | {
+      enabled: boolean;
+      kind: "set_boot";
+    }
+  | {
+      kind: "reconfigure";
+      stream: StreamConfig;
+    }
+  | {
       kind: "configure";
       stream: StreamConfig;
     }
@@ -656,6 +664,10 @@ export interface GraphAudioCommand {
 }
 export interface StartGraph {
   bindings: Binding[];
+  /**
+   * Working name belongs to the audible session, not an individual browser view.
+   */
+  name?: string | null;
   recall?: GraphRecall | null;
   rig: Rig;
   stream: StreamConfig;
@@ -688,6 +700,7 @@ export interface GraphAudioState {
   revision: number;
   saved_copy?: string | null;
   session: string;
+  start_on_boot: boolean;
   telemetry?: Snapshot2 | null;
 }
 /**

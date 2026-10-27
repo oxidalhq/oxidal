@@ -1,4 +1,5 @@
 //! Actor-owned graph worker. HTTP lifetimes never own PCM or in-flight commands.
+use crate::audio_boot::{Choice, Policy, Role};
 use crate::{Config, Shared, failure};
 use axum::{
     Json,
@@ -17,6 +18,7 @@ use tokio::{
 type Reply = Result<GraphAudioState, String>;
 #[derive(Debug)]
 pub(super) struct GraphPlayback {
+    boot: Arc<Policy>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(GraphAudioCommand, oneshot::Sender<Reply>)>,
     state: watch::Receiver<GraphAudioState>,
@@ -25,7 +27,7 @@ struct Worker {
     child: Child,
     input: Option<ChildStdin>,
     output: BufReader<ChildStdout>,
-    _permit: tokio::sync::SemaphorePermit<'static>,
+    _permit: Option<tokio::sync::SemaphorePermit<'static>>,
 }
 impl Worker {
     async fn read(&mut self) -> Result<WorkerReply, String> {
@@ -55,6 +57,7 @@ impl Worker {
     }
 }
 struct Owner {
+    boot: Arc<Policy>,
     midi_enabled: bool,
     executable: Option<PathBuf>,
     preset_root: PathBuf,
@@ -95,8 +98,13 @@ impl Owner {
         self.publish();
     }
     async fn release(&mut self) -> Result<(), String> {
+        self.release_reserved().await.map(|_| ())
+    }
+    async fn release_reserved(
+        &mut self,
+    ) -> Result<Option<tokio::sync::SemaphorePermit<'static>>, String> {
         let Some(worker) = self.worker.as_mut() else {
-            return Ok(());
+            return Ok(None);
         };
         worker.input.take();
         match tokio::time::timeout(Duration::from_secs(2), worker.child.wait()).await {
@@ -109,8 +117,9 @@ impl Owner {
                     .map_err(|e| e.to_string())?;
             }
         }
+        let reserved = worker._permit.take();
         self.worker = None;
-        Ok(())
+        Ok(reserved)
     }
     async fn fault(&mut self, error: String) -> String {
         let error = match self.release().await {
@@ -130,14 +139,25 @@ impl Owner {
         .map_err(|_| "Graph worker response timed out".to_owned())?
     }
     async fn start(&mut self, settings: StartGraph) -> Result<(), String> {
+        self.start_reserved(settings, &mut None).await
+    }
+    async fn start_reserved(
+        &mut self,
+        settings: StartGraph,
+        reserved: &mut Option<tokio::sync::SemaphorePermit<'static>>,
+    ) -> Result<(), String> {
         settings.validate()?;
         if self.worker.is_some() {
             return Err("Stop graph audio before changing its configuration".into());
         }
         let executable = self.executable.as_ref().ok_or("Graph worker unavailable")?;
-        let permit = crate::audio::PROBE
-            .try_acquire()
-            .map_err(|_| "Audio device operation already in progress")?;
+        if reserved.is_none() {
+            *reserved = Some(
+                crate::audio::PROBE
+                    .try_acquire()
+                    .map_err(|_| "Audio device operation already in progress")?,
+            );
+        }
         let mut child = tokio::process::Command::new(executable)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -151,7 +171,7 @@ impl Owner {
             child,
             input: Some(input),
             output,
-            _permit: permit,
+            _permit: None,
         });
         self.state.configured = Some(settings.clone());
         self.state.control = None;
@@ -167,25 +187,116 @@ impl Owner {
         .await
         .map_err(|_| "Graph startup timed out".to_owned())
         .and_then(|r| r);
-        match result {
+        let result = match result {
             Ok(reply) if reply.error.is_none() && reply.processed_frames > 0 => {
+                self.worker.as_mut().unwrap()._permit = reserved.take();
                 self.readback(reply);
                 self.phase(AudioPhase::Running, None);
                 Ok(())
             }
             Ok(_) => Err(self.fault("Graph worker rejected startup".into()).await),
             Err(e) => Err(self.fault(e).await),
+        };
+        // A child that could not be reaped still owns the interface. Never let
+        // the caller drop its reservation while that child may be alive.
+        if result.is_err()
+            && let Some(worker) = &mut self.worker
+        {
+            worker._permit = reserved.take();
         }
+        result
     }
     async fn command(&mut self, command: GraphAudioCommand) -> Reply {
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
             return Err("graph_audio_state_conflict; refresh status".into());
         }
-        if self.executable.is_none() {
+        if self.executable.is_none()
+            && !matches!(command.action, GraphAudioAction::SetBoot { enabled: false })
+        {
             return Err("Graph worker unavailable".into());
         }
         match command.action {
+            GraphAudioAction::SetBoot { enabled } => {
+                if enabled {
+                    if self.state.phase != AudioPhase::Running {
+                        return Err(
+                            "Start and verify effects audio before enabling boot playback".into(),
+                        );
+                    }
+                    let control = self
+                        .state
+                        .control
+                        .as_ref()
+                        .ok_or("No confirmed effects controls")?;
+                    let mut settings = self
+                        .state
+                        .configured
+                        .clone()
+                        .ok_or("No effects configuration")?;
+                    settings.rig = control.rig.clone();
+                    settings.recall = Some(GraphRecall::from_snapshot(control)?);
+                    self.boot.set(Choice::Effects { settings })?;
+                } else {
+                    self.boot.clear(Role::Effects)?;
+                }
+                self.state.start_on_boot = self.boot.enabled(Role::Effects);
+                self.state.revision += 1;
+                self.publish();
+            }
+            GraphAudioAction::Reconfigure { stream } => {
+                let previous = self
+                    .state
+                    .configured
+                    .clone()
+                    .ok_or("No effects configuration")?;
+                let mut candidate = previous.clone();
+                candidate.stream = stream;
+                candidate.validate()?;
+                if self.worker.is_some() {
+                    if self.state.phase != AudioPhase::Running {
+                        return Err(
+                            "Wait for effects audio to settle before applying settings".into()
+                        );
+                    }
+                    if self
+                        .state
+                        .control
+                        .as_ref()
+                        .is_some_and(|s| s.edit.is_some())
+                    {
+                        return Err("Finish the current adjustment first".into());
+                    }
+                    self.phase(AudioPhase::Stopping, None);
+                    let mut reserved = match self.release_reserved().await {
+                        Ok(permit) => permit,
+                        Err(error) => return Err(self.fault(error).await),
+                    };
+                    if let Err(error) = self.start_reserved(candidate, &mut reserved).await {
+                        let restored = self.start_reserved(previous.clone(), &mut reserved).await;
+                        if restored.is_err() {
+                            self.state.configured = Some(previous);
+                            self.state.phase = AudioPhase::Failed;
+                        }
+                        let message = match restored {
+                            Ok(()) => format!(
+                                "Audio settings rejected; previous session restored: {error}"
+                            ),
+                            Err(recovery) => format!(
+                                "Audio settings rejected: {error}; previous session could not restart: {recovery}"
+                            ),
+                        };
+                        self.state.error = Some(message.clone());
+                        self.state.revision += 1;
+                        self.publish();
+                        return Err(message);
+                    }
+                } else if let Err(error) = self.start(candidate).await {
+                    self.state.configured = Some(previous);
+                    self.phase(AudioPhase::Failed, Some(error.clone()));
+                    return Err(error);
+                }
+            }
             GraphAudioAction::Configure { stream } => {
                 if self.worker.is_some() {
                     return Err(
@@ -197,6 +308,7 @@ impl Owner {
                     previous
                 } else {
                     StartGraph {
+                        name: None,
                         stream,
                         recall: None,
                         bindings: vec![],
@@ -243,11 +355,14 @@ impl Owner {
                     .clone()
                     .ok_or("No previous graph configuration")?;
                 self.phase(AudioPhase::Stopping, None);
-                if let Err(e) = self.release().await {
-                    self.phase(AudioPhase::Failed, Some(e.clone()));
-                    return Err(e);
-                }
-                if let Err(e) = self.start(settings).await {
+                let mut reserved = match self.release_reserved().await {
+                    Ok(permit) => permit,
+                    Err(e) => {
+                        self.phase(AudioPhase::Failed, Some(e.clone()));
+                        return Err(e);
+                    }
+                };
+                if let Err(e) = self.start_reserved(settings, &mut reserved).await {
                     if self.state.phase != AudioPhase::Failed {
                         self.phase(AudioPhase::Failed, Some(e.clone()));
                     }
@@ -284,6 +399,9 @@ impl Owner {
                 .await
                 .map_err(|_| "Graph save task failed")?
                 .map_err(|e| e.to_string())?;
+                if let Some(settings) = &mut self.state.configured {
+                    settings.name = Some(saved.preset.name);
+                }
                 self.state.saved_copy = Some(saved.id);
                 self.state.revision += 1;
                 self.publish();
@@ -332,13 +450,15 @@ impl Owner {
     }
 }
 impl GraphPlayback {
-    pub fn new(config: &Config) -> Result<Self, String> {
+    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
         if let Some(p) = &config.graph_worker
             && (!p.is_absolute() || !p.is_file())
         {
             return Err("Graph worker must be a configured absolute executable".into());
         }
+        let boot = policy.snapshot();
         let initial = GraphAudioState {
+            start_on_boot: policy.enabled(Role::Effects),
             telemetry: None,
             session: format!(
                 "graph-{}-{}",
@@ -367,6 +487,7 @@ impl GraphPlayback {
         let (commands, mut receiver) =
             mpsc::channel::<(GraphAudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            boot: policy.clone(),
             midi_enabled: config.simulator,
             executable: config.graph_worker.clone(),
             preset_root: config.preset_dir.join("graphs"),
@@ -377,6 +498,12 @@ impl GraphPlayback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         tokio::spawn(async move {
+            if let Ok(Some(Choice::Effects { settings })) = boot
+                && owner.executable.is_some()
+                && let Err(error) = owner.start(settings).await
+            {
+                owner.phase(AudioPhase::Failed, Some(error));
+            }
             let mut interval = tokio::time::interval(Duration::from_millis(200));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
@@ -395,22 +522,27 @@ impl GraphPlayback {
             done.send_replace(true);
         });
         Ok(Self {
+            boot: policy,
             commands,
             state,
             finished,
         })
     }
     pub fn snapshot(&self) -> GraphAudioState {
-        self.state.borrow().clone()
+        let mut state = self.state.borrow().clone();
+        state.start_on_boot = self.boot.enabled(Role::Effects);
+        state
     }
     async fn dispatch(&self, command: GraphAudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
         self.commands
             .try_send((command, response))
             .map_err(|_| "graph_audio_busy")?;
-        received
+        let mut state = received
             .await
-            .map_err(|_| "Graph owner stopped".to_owned())?
+            .map_err(|_| "Graph owner stopped".to_owned())??;
+        state.start_on_boot = self.boot.enabled(Role::Effects);
+        Ok(state)
     }
 }
 pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Json<GraphAudioState> {

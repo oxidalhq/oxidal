@@ -17,6 +17,9 @@ pub struct Binding {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartGraph {
+    /// Working name belongs to the audible session, not an individual browser view.
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(default)]
     pub recall: Option<GraphRecall>,
     pub stream: StreamConfig,
@@ -25,6 +28,14 @@ pub struct StartGraph {
 }
 impl StartGraph {
     pub fn validate(&self) -> Result<(), String> {
+        if self.name.as_ref().is_some_and(|name| {
+            name.is_empty()
+                || name.trim() != name
+                || name.len() > 80
+                || name.contains(char::is_control)
+        }) {
+            return Err("Invalid effects session name".into());
+        }
         self.stream.validate()?;
         if let Some(recall) = &self.recall {
             recall.validate()?;
@@ -150,6 +161,7 @@ pub struct WorkerReply {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GraphAudioState {
+    pub start_on_boot: bool,
     pub telemetry: Option<oxidal_audio::meter::Snapshot>,
     pub session: String,
     pub revision: u64,
@@ -166,6 +178,8 @@ pub struct GraphAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GraphAudioAction {
+    SetBoot { enabled: bool },
+    Reconfigure { stream: StreamConfig },
     Configure { stream: StreamConfig },
     Start { settings: Box<StartGraph> },
     Stop,

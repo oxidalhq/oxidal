@@ -2,6 +2,7 @@
 use crate::{playback_recovery, rig_recovery};
 use oxidal_audio::lifecycle::{LiveControl, ModelAssignment, StartAudio};
 use oxidal_engine::protocol::{REQUEST_LIMIT, StartRig};
+use oxidal_lv2::protocol::StartGraph;
 use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
@@ -13,6 +14,7 @@ use std::{
 pub(super) enum Role {
     Native,
     Mixed,
+    Effects,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -25,12 +27,16 @@ pub(super) enum Choice {
     Mixed {
         settings: StartRig,
     },
+    Effects {
+        settings: StartGraph,
+    },
 }
 impl Choice {
     fn role(&self) -> Role {
         match self {
             Self::Native { .. } => Role::Native,
             Self::Mixed { .. } => Role::Mixed,
+            Self::Effects { .. } => Role::Effects,
         }
     }
     fn validate(&self) -> Result<(), String> {
@@ -47,6 +53,14 @@ impl Choice {
                     .validate()
             }
             Self::Mixed { settings } => rig_recovery::Recovery::new(settings.clone()).validate(),
+            Self::Effects { settings } => {
+                settings.validate()?;
+                settings
+                    .recall
+                    .as_ref()
+                    .ok_or("No confirmed effects session")?
+                    .validate()
+            }
         }
     }
 }
@@ -241,6 +255,44 @@ mod tests {
         );
         p.clear(Role::Native).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), original);
+        let effects: StartGraph = serde_json::from_value(json!({
+            "stream":stream,
+            "rig":{"nodes":[{"id":"in","kind":"input","level":1.0},{"id":"out","kind":"output","level":1.0}],"edges":[{"from":"in","to":"out"}]},
+            "bindings":[],
+            "recall":{"bypassed":false,"values":[],"mappings":{"version":1,"mappings":[]}}
+        })).unwrap();
+        p.set(Choice::Effects {
+            settings: effects.clone(),
+        })
+        .unwrap();
+        assert!(p.enabled(Role::Effects));
+        assert!(!p.enabled(Role::Mixed));
+        p.clear(Role::Native).unwrap();
+        p.clear(Role::Mixed).unwrap();
+        assert!(p.enabled(Role::Effects));
+        let mut invalid_name = effects.clone();
+        invalid_name.name = Some("bad\nname".into());
+        assert!(
+            p.set(Choice::Effects {
+                settings: invalid_name
+            })
+            .is_err()
+        );
+        assert!(p.enabled(Role::Effects));
+        let mut incomplete = effects;
+        incomplete.recall = None;
+        assert!(
+            p.set(Choice::Effects {
+                settings: incomplete
+            })
+            .is_err()
+        );
+        assert!(p.enabled(Role::Effects));
+        p.set(Choice::Mixed {
+            settings: mixed.clone(),
+        })
+        .unwrap();
+        let original = std::fs::read(&path).unwrap();
         let native = Choice::Native {
             settings: settings.clone(),
             controls: None,

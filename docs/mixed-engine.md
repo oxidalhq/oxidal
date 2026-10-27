@@ -354,15 +354,14 @@ The maintained API test exercises actual mixed DSP/ALSA-null playback during a
 checkpoint failure, retry, unsaved edits flushed at shutdown, a new daemon's
 explicit Resume and failed-bundle preservation. Unit tests cover interrupted,
 oversized, malformed and invalid records. This is scalar recovery for the supported
-profile, not opaque plugin state, DSP tail history or automatic boot playback.
-Native-only boot policy still exists separately; unified opt-in boot ownership
-remains required before mixed boot support is claimed.
+profile, not opaque plugin state or DSP tail history. The checkpoint does not
+itself enable automatic playback; explicit boot selection is described below.
 
 ### Explicit boot playback
 
 Audio settings can capture the confirmed mixed revision, controls and device setup
 for automatic playback on the next daemon start. The shared boot record selects
-either native or mixed playback, never both. Later edits keep updating recovery but
+one native, mixed or scalar-LV2 session, never competing owners. Later edits keep updating recovery but
 do not change the boot snapshot. Disable and enable boot playback again to replace
 it. Stop retains the preference. Corrupt boot records remain recoverable in the web
 interface. See [audio lifecycle](audio.md#shared-boot-selection).

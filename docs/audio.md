@@ -31,7 +31,7 @@ Controls and remaining handoff scope:
 
 Start, Stop, Restart and Resume saved session now work through `/api/v1/audio` and Settings when the experimental worker is enabled. States distinguish unavailable, stopped, starting, running, stopping and failed. Session/revision checks reject stale commands. The supervisor owns accepted commands even if an HTTP client disconnects. Stop closes worker stdin, waits up to two seconds, then requests termination and waits again; it acknowledges release only after reaping the child. A failed stop retains ownership and blocks new probes/starts. A startup error, xrun, disconnect, nonfinite sample or two seconds without block progress fails closed without automatic fallback/restart.
 
-The native editor and playback use separate processes, owner threads and native data roots. Playback loads one saved original/owned preset; changes to the draft or generic rig/MIDI controls do not affect it. Stop does not destroy the editor session. Resume uses the last confirmed device settings and scalar adjustments. Recovery is checkpointed separately from boot playback; when boot playback is disabled, daemon startup restores the configuration without opening the interface and Resume is explicit. **Use this session on boot** captures the successfully running native or mixed session, its confirmed scalar/model edits and exact device configuration; the daemon makes one startup attempt on later launches. One shared boot choice prevents competing owners. Disable boot playback to remove that preference. Subsequent session changes do not overwrite the saved boot session; disable and enable again to replace it. Missing devices or presets leave the web/editor reachable with an audio error; corrupt boot settings are reported separately and start no audio. Stop releases audio but retains the boot preference. Use TONE3000/Return to Oxidal app launching and tracking remain planned. For now, stop and wait for `stopped`, then launch the external app manually; release its interface before resuming.
+The native editor and playback use separate processes, owner threads and native data roots. Playback loads one saved original/owned preset; changes to the draft or generic rig/MIDI controls do not affect it. Stop does not destroy the editor session. Resume uses the last confirmed device settings and scalar adjustments. Recovery is checkpointed separately from boot playback; when boot playback is disabled, daemon startup restores the configuration without opening the interface and Resume is explicit. **Use this session on boot** captures the successfully running native, mixed or scalar-LV2 session, its confirmed scalar/model edits and exact device configuration; the daemon makes one startup attempt on later launches. One shared boot choice prevents competing owners. Disable boot playback to remove that preference. Subsequent session changes do not overwrite the saved boot session; disable and enable again to replace it. Missing devices or presets leave the web/editor reachable with an audio error; corrupt boot settings are reported separately and start no audio. Stop releases audio but retains the boot preference. Use TONE3000/Return to Oxidal app launching and tracking remain planned. For now, stop and wait for `stopped`, then launch the external app manually; release its interface before resuming.
 
 Use narrowly authorized lifecycle operations and configured executables. Avoid automatic restart races and preserve an explicit user choice after app exit/failure. The browser must not acquire arbitrary service-manager or shell permissions.
 
@@ -193,21 +193,31 @@ model counts and artwork for newly assigned models remain separate gates.
 
 ## Shared boot selection
 
-Native and mixed Audio settings expose the same boot control. Enabling captures a
+Native, mixed and scalar-LV2 Audio settings expose the same boot control. Enabling captures a
 confirmed running session; a native working draft must first be saved and recalled.
 Only one owner is selected. Stop does not disable it, later edits do not overwrite
 it, and disabling it does not interrupt current audio. The control remains reachable
 when another session is selected or the audio worker is unavailable. Invalid stored
 settings can be cleared from the browser without opening an audio device.
 
-`boot-audio.json` schema 2 contains one native or mixed choice. Schema 1 native
+`boot-audio.json` schema 2 contains one native, mixed or effects choice. Schema 1 native
 records remain readable and are upgraded only on an explicit new selection. Writes
 are validated, byte-bounded, atomically replaced and synced. Rejected writes preserve
 the preceding published choice; policy failures are independent of playing PCM.
-Daemon startup never launches both selected owners. A failed startup leaves the UI
+Daemon startup launches only the selected owner. A failed startup leaves the UI
 available and does not silently select a different worker. This is session restoration,
 not gapless switching, hardware hotplug negotiation or opaque LV2 state recovery.
 
-The older scalar-only LV2 graph owner does not yet participate in boot selection.
-A portable mixed rig containing only LV2 processors uses the mixed policy above;
-legacy graph boot integration remains a separate tracked requirement.
+The scalar-only LV2 owner captures settled controls, edge routing, bypass and MIDI
+mappings. An active preview must finish before boot selection or device Apply.
+Settings follows the sounding owner and retains it after Stop. Rate/buffer/channel
+Apply reconstructs the confirmed effects session; failed preparation attempts to
+restore the previous setup while retaining exclusive device ownership. If that
+also fails, the previous configuration remains available for recovery and the
+error is explicit. Apply on a stopped session resumes it. These operations restart
+PCM and do not implement prepared or gapless replacement.
+
+The maintained Linux LV2 gate covers real worker Apply/rollback, boot capture,
+later-edit isolation, daemon restart, wrong-owner disable and unavailable-worker
+recovery. Its browser scenario exercises the actual settings controls on XR,
+Fold and BOOX in both orientations. Physical boot/device timing remains open.
