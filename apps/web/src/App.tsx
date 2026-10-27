@@ -9,6 +9,9 @@ import {
 import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { LiveRig } from './LiveRig';
+const MixedRig = lazy(() =>
+  import('./MixedRig').then((m) => ({ default: m.MixedRig })),
+);
 const GraphAuthor = lazy(() =>
   import('./GraphAuthor').then((m) => ({ default: m.GraphAuthor })),
 );
@@ -45,7 +48,10 @@ export default function App() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
   const [graphName, setGraphName] = useState<string | null>(null);
-  const audioRunning = playingName !== null || graphName !== null;
+  const [mixedPresent, setMixedPresent] = useState(false);
+  const [mixedName, setMixedName] = useState<string | null>(null);
+  const audioRunning =
+    playingName !== null || graphName !== null || mixedName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
@@ -339,6 +345,7 @@ export default function App() {
                 {view === 'rig'
                   ? (playingName ??
                     graphName ??
+                    mixedName ??
                     (!developmentSimulator
                       ? 'Your rig'
                       : !state
@@ -436,9 +443,17 @@ export default function App() {
                 onPlaying={setPlayingName}
                 onLibrary={() => setView('library')}
                 onAudioSetup={showSettings}
-                hideInactive={developmentSimulator || graphName !== null}
+                hideInactive={
+                  developmentSimulator || graphName !== null || mixedPresent
+                }
               />
               <Suspense fallback={null}>
+                <MixedRig
+                  connected={connected}
+                  onPlaying={setMixedName}
+                  onPresent={setMixedPresent}
+                  otherPlaying={playingName !== null || graphName !== null}
+                />
                 <GraphAuthor
                   connected={connected}
                   liveOnly

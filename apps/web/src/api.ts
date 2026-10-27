@@ -9,6 +9,7 @@ const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
   formats: {
+    uint: true,
     uint8: true,
     uint32: true,
     uint64: true,
@@ -497,4 +498,63 @@ export async function installedLv2(
   if (!lv2CatalogValidator(body) || body.sample_rate !== sampleRate)
     throw new Error('Incompatible effects catalog');
   return body.plugins;
+}
+
+export type RigAudioState = Contract['rig_audio_state'];
+export type RigAudioAction = Contract['rig_audio_command']['action'];
+export type RigControl = NonNullable<
+  RigAudioState['control']
+>['controls'][number];
+export type RigDocument = Contract['rig_document'];
+export type RigPage = Contract['rig_library'];
+const rigStateValidator = ajv.compile<RigAudioState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RigAudioState',
+});
+const rigDocumentValidator = ajv.compile<RigDocument>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RigDocument',
+});
+const rigPageValidator = ajv.compile<RigPage>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RigPage',
+});
+export async function rigAudioState(): Promise<RigAudioState> {
+  const body = await presetResponse(await fetch('/api/v1/rig-audio'));
+  if (!rigStateValidator(body)) throw new Error('Incompatible rig state');
+  return body;
+}
+export async function rigAudioCommand(
+  state: RigAudioState,
+  action: RigAudioAction,
+): Promise<RigAudioState> {
+  const body = await presetResponse(
+    await fetch('/api/v1/rig-audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: state.session,
+        expected_revision: state.revision,
+        action,
+      }),
+    }),
+  );
+  if (!rigStateValidator(body)) throw new Error('Incompatible rig state');
+  return body;
+}
+export async function rigDocument(revision: string): Promise<RigDocument> {
+  const body = await presetResponse(
+    await fetch(`/api/v1/presets/rigs/${encodeURIComponent(revision)}`),
+  );
+  if (!rigDocumentValidator(body)) throw new Error('Incompatible rig document');
+  return body;
+}
+export async function rigLibrary(after?: string): Promise<RigPage> {
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/presets/rigs${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+    ),
+  );
+  if (!rigPageValidator(body)) throw new Error('Incompatible rig library');
+  return body;
 }

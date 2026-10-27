@@ -289,6 +289,16 @@ if (mode === 'bootstrap') {
       ),
     },
   });
+  if (process.platform === 'linux') {
+    run('pnpm', ['test:e2e', '--grep', 'mixed rig authoring'], {
+      env: {
+        ...env,
+        OXIDAL_EXPERIMENTAL_RIG: '1',
+        OXIDAL_RIG_QUALIFY_NULL: '1',
+        OXIDAL_MIXED_TEST_ROOT: env.OXIDAL_QUALIFICATION_DATA,
+      },
+    });
+  }
 } else if (mode === 'check' || mode === 'core-check') {
   run('python3', ['scripts/check_repository.py']);
   cargo('fmt', ...workspace, '--all', '--check');
@@ -414,6 +424,27 @@ if (mode === 'bootstrap') {
       { env: rustEnv() },
     );
   }
+  if (process.env.OXIDAL_EXPERIMENTAL_RIG === '1') {
+    if (process.platform !== 'linux')
+      throw new Error('Mixed playback requires Linux ALSA.');
+    const qualify = process.env.OXIDAL_RIG_QUALIFY_NULL === '1';
+    if (qualify && mode !== 'e2e-server')
+      throw new Error('Null fixture is only enabled by the E2E server.');
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-engine',
+        '--features',
+        qualify ? 'qualification' : 'worker',
+        '--bin',
+        'oxidal-rig-worker',
+      ],
+      { env: { ...rustEnv(), OXIDAL_TONE3000_LIB_DIR: nativeLibrary } },
+    );
+  }
   const mappingPath =
     mode === 'e2e-server'
       ? join(mkdtempSync(join(tmpdir(), 'oxidal-e2e-')), 'mappings.json')
@@ -432,6 +463,9 @@ if (mode === 'bootstrap') {
   const env = {
     ...process.env,
     OXIDAL_SIMULATOR: '1',
+    ...(process.env.OXIDAL_EXPERIMENTAL_RIG === '1'
+      ? { OXIDAL_RIG_WORKER: join(targetDir, 'debug/oxidal-rig-worker') }
+      : {}),
     ...(process.env.OXIDAL_EXPERIMENTAL_GRAPH === '1'
       ? { OXIDAL_GRAPH_WORKER: join(targetDir, 'debug/oxidal-graph-worker') }
       : {}),

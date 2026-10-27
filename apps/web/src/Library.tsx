@@ -3,6 +3,7 @@ import { importPreset, presetLibrary, type Preset } from './api';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
+import { SavedRigs } from './SavedRigs';
 import { Button } from './components/ui/button';
 
 /** Immutable native originals; playback has its own explicitly started session.
@@ -94,6 +95,7 @@ export function Library({
         <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
       ) : page === 'browse' ? (
         <>
+          <SavedRigs connected={connected} onOpenRig={onOpenRig} />
           <h2 className="sr-only">Native preset library</h2>
           <p>
             Keep your TONE3000 originals here. Importing does not change the

@@ -46,6 +46,8 @@ impl Control {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
+    /// Actual scalar values differ from the immutable source bundle.
+    pub modified: bool,
     pub session: String,
     pub revision: u64,
     pub source_revision: String,

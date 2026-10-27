@@ -4422,6 +4422,10 @@
             "$ref": "#/$defs/Control"
           }
         },
+        "modified": {
+          "description": "Actual scalar values differ from the immutable source bundle.",
+          "type": "boolean"
+        },
         "revision": {
           "type": "integer",
           "format": "uint64",
@@ -4436,6 +4440,7 @@
       },
       "additionalProperties": false,
       "required": [
+        "modified",
         "session",
         "revision",
         "source_revision",

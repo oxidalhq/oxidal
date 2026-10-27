@@ -154,8 +154,7 @@ or certify all native field fidelity.
 existing mixed example with audible scalar changes, invalid/stale rejection, actual
 worker control/readback, concurrent isolated export, independent shared native
 resources, exact unchanged payloads, offline child recall and EOF teardown.
-Ordinary builds cannot open the null qualification route. The daemon lifecycle below connects device ownership and HTTP control. A single
-mixed authoring UI remains required before this becomes a user-facing mixed mode.
+Ordinary builds cannot open the null qualification route. The daemon lifecycle below connects device ownership and HTTP control. Browser readback/recall is described below; interactive structural composition remains open.
 
 ## Daemon ownership and HTTP lifecycle
 
@@ -228,3 +227,31 @@ backend admission. Publishing alone does not apply structural edits live, save D
 histories or provide gapless switching. The maintained HTTP suite covers persistence
 and integrity; `native:check` now publishes its mixed fixture through this boundary
 before actual worker/control/export/offline-recall qualification.
+
+## Browser readback and offline recall
+
+When the configured mixed worker is active, Rig shows its verified processor
+nodes and current controls. Selecting a processor exposes its actual qualified
+controls; no delay/reverb or example parameters are inserted. Native, LV2, host
+bypass and merge values use confirmed session/revision-checked readback. The shared
+relative touch dialog coalesces previews, supports fine adjustment and cancel, and
+does not replay an uncertain command against refreshed state. This is optimistic
+revision ownership, not yet a server-side touch lease or physical MIDI path.
+
+The worker's `modified` flag compares actual scalar values with the source bundle;
+returning a gesture to its baseline does not remain dirty solely because revisions
+advanced. Save runs independently, identifies its captured control revision and
+leaves newer edits unsaved. Library lists portable revisions and can recall them
+using the configured audio endpoints. Until prepared replacement is implemented,
+playing a different saved rig requires stopping current audio; the UI reports
+this constraint rather than interrupting an unrelated session automatically.
+
+Selection survives visits to Settings and orientation changes within the same
+revision. The maintained mixed browser case in `presets.spec.ts` runs through
+`native:check` on Linux for desktop, XR/WebKit, Fold cover/open and BOOX. It publishes
+a verified mixed fixture via HTTP, then tests actual touch/readback, cancel, Save
+while PCM continues, library recall, reload and both orientations. BOOX uses e-paper
+mode and non-colour state cues. This does not implement browser structural editing,
+model insertion into the mixed worker, a full visual routing editor, complete native
+parameter fidelity, server-side gesture leases or gapless replacement. The image
+recipe still needs the mixed-worker packaging and boot qualification step.

@@ -114,6 +114,7 @@ impl Session {
             }
         }
         let state = Snapshot {
+            modified: false,
             session: format!(
                 "rig-{}-{}",
                 std::process::id(),
@@ -139,7 +140,13 @@ impl Session {
         })
     }
     pub fn snapshot(&self) -> Snapshot {
-        self.state.clone()
+        let mut state = self.state.clone();
+        state.modified = state
+            .controls
+            .iter()
+            .zip(&self.initial)
+            .any(|(current, initial)| current.value != initial.value);
+        state
     }
     pub fn healthy(&self) -> bool {
         !self.failed

@@ -1010,6 +1010,10 @@ export interface RigAudioState {
 export interface Snapshot3 {
   buffer_bytes: number;
   controls: Control[];
+  /**
+   * Actual scalar values differ from the immutable source bundle.
+   */
+  modified: boolean;
   revision: number;
   session: string;
   source_revision: string;

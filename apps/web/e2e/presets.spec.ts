@@ -1662,3 +1662,175 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await editor.getByRole('button', { name: 'Stop audio', exact: true }).click();
   await expect.poll(async () => (await read()).device_owned).toBe(false);
 });
+
+test('mixed rig authoring presents confirmed controls and recalls isolated offline saves', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(
+    process.env.OXIDAL_RIG_QUALIFY_NULL !== '1' ||
+      !process.env.OXIDAL_MIXED_TEST_ROOT,
+    'Maintained Linux native gate supplies the mixed worker and fixture',
+  );
+  test.setTimeout(120000);
+  const root = process.env.OXIDAL_MIXED_TEST_ROOT!;
+  const revision = readFileSync(
+    join(root, 'mixed-preset-revision'),
+    'utf8',
+  ).trim();
+  const folder = join(root, 'worker-rigs', revision);
+  const manifest = JSON.parse(
+    readFileSync(join(folder, 'manifest.json'), 'utf8'),
+  );
+  manifest.name = `Browser rig ${info.project.name}`;
+  const sources: Record<string, unknown> = {};
+  for (const resource of manifest.resources) {
+    const imported = await request.post('/api/v1/presets', {
+      data: readFileSync(join(folder, resource.path)),
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+    expect(imported.ok()).toBe(true);
+    sources[resource.id] = {
+      kind: 'original',
+      preset: (await imported.json()).sha256,
+    };
+  }
+  const published = await request.post('/api/v1/presets/rigs', {
+    data: { manifest_json: JSON.stringify(manifest), resources: sources },
+  });
+  expect(published.ok()).toBe(true);
+  const document = await published.json();
+  const get = async () => (await request.get('/api/v1/rig-audio')).json();
+  const command = async (action: unknown) => {
+    const s = await get();
+    const r = await request.post('/api/v1/rig-audio', {
+      data: { session: s.session, expected_revision: s.revision, action },
+    });
+    expect(r.ok(), await r.text()).toBe(true);
+    return r.json();
+  };
+  await command({ kind: 'stop' });
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  await command({
+    kind: 'start',
+    settings: {
+      revision: document.revision,
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
+      recall: null,
+    },
+  });
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await page.goto('/');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await expect(rig).toBeVisible();
+  await expect(page.getByTestId('active-preset')).toHaveText(manifest.name);
+  await expect(page.getByRole('region', { name: 'Rig playback' })).toHaveCount(
+    0,
+  );
+  await rig.locator('[data-node="fx_l"]').getByRole('button').first().click();
+  const target = { kind: 'lv2', node: 'fx_l', symbol: 'gain' };
+  const value = async () =>
+    (
+      (await get()).control.controls as { target: unknown; value: number }[]
+    ).find((c) => JSON.stringify(c.target) === JSON.stringify(target))!.value;
+  const initial = await value();
+  const control = (await get()).control.controls.find(
+    (c: { target: unknown }) =>
+      JSON.stringify(c.target) === JSON.stringify(target),
+  );
+  const adjust = rig.getByRole('button', {
+    name: `Adjust ${control.label}`,
+    exact: true,
+  });
+  await adjust.click();
+  let dialog = page.getByRole('dialog');
+  await dialog.getByRole('slider').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(value).toBeGreaterThan(initial);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(value).toBe(initial);
+  await expect.poll(async () => (await get()).control.modified).toBe(false);
+  await adjust.click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('slider').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(value).toBeGreaterThan(initial);
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  const changed = await value();
+  await expect(rig.getByRole('status').first()).toHaveText('Session modified');
+  const name = `Offline mixed ${info.project.name}`;
+  await rig.getByLabel('Preset name', { exact: true }).fill(name);
+  await rig.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(
+    rig.getByText('Saved for offline use', { exact: true }),
+  ).toBeVisible();
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Saved rigs', exact: true })
+    .getByRole('button', { name: `Play ${name}`, exact: true })
+    .click();
+  await expect(rig).toBeVisible();
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await expect.poll(value).toBe(changed);
+  await expect.poll(async () => (await get()).control.modified).toBe(false);
+  await page.reload();
+  await expect(page.getByTestId('active-preset')).toHaveText(name);
+  await rig.locator('[data-node="fx_l"]').getByRole('button').first().click();
+  for (const mode of info.project.name === 'boox-air3c'
+    ? ['epaper']
+    : ['stage']) {
+    await setDisplayMode(page, mode);
+    const portrait = page.viewportSize()!;
+    for (const viewport of [
+      portrait,
+      { width: portrait.height, height: portrait.width },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(adjust).toBeVisible();
+      const cramped = await rig.locator('[data-node]').evaluateAll((rows) =>
+        rows.some((row) => {
+          const buttons = Array.from(row.querySelectorAll('button'));
+          return (
+            buttons.some((b) => b.getBoundingClientRect().height < 43.5) ||
+            (buttons.length === 2 &&
+              buttons[1]!.getBoundingClientRect().left -
+                buttons[0]!.getBoundingClientRect().right <
+                7.5)
+          );
+        }),
+      );
+      expect(cramped).toBe(false);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      const audit = await new AxeBuilder({ page })
+        .include('[aria-label="Sounding mixed rig"]')
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze();
+      expect(audit.violations).toEqual([]);
+      await page.screenshot({
+        path: info.outputPath(`mixed-${viewport.width}.png`),
+        fullPage: true,
+      });
+    }
+  }
+  await command({ kind: 'stop' });
+});

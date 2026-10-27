@@ -13,7 +13,10 @@ export type ControlScale = {
 };
 
 export function lv2Control(
-  port: Lv2Plugin['ports'][number],
+  port: Pick<
+    Lv2Plugin['ports'][number],
+    'minimum' | 'maximum' | 'logarithmic' | 'integer' | 'toggled'
+  >,
 ): ControlScale | undefined {
   const lo = port.minimum;
   const hi = port.maximum;

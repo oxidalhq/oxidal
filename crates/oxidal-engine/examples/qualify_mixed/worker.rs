@@ -125,6 +125,11 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         port: 0,
     };
     let mut session = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    assert!(!session.snapshot().modified);
+    change(&mut session, bypass.clone(), 1.0)?;
+    assert!(session.snapshot().modified);
+    change(&mut session, bypass.clone(), 0.0)?;
+    assert!(!session.snapshot().modified); // Cancel restores values, not merely revision zero.
     change(&mut session, bypass.clone(), 1.0)?;
     let (mut l, mut r) = ([0.0; 128], [0.0; 128]);
     session.process(&[&[0.5; 128], &[0.25; 128]], &mut [&mut l, &mut r])?;
