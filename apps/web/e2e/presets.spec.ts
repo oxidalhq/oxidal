@@ -1308,6 +1308,28 @@ test('playback lifecycle keeps native authoring available after stop and restart
           }),
         ),
       ).toEqual([]);
+      // Compact blocks retain separate, full-size touch targets after rotation.
+      const blockGeometry = await sounding
+        .locator('.live-effect')
+        .evaluateAll((cards) =>
+          cards.map((card) => ({
+            height: card.getBoundingClientRect().height,
+            buttons: Array.from(card.querySelectorAll('button')).map(
+              (button) => {
+                const box = button.getBoundingClientRect();
+                return { width: box.width, height: box.height };
+              },
+            ),
+          })),
+        );
+      for (const card of blockGeometry) {
+        // BOOX uses heavier borders and larger theme touch targets.
+        expect(card.height).toBeLessThanOrEqual(128);
+        for (const button of card.buttons) {
+          expect(button.width).toBeGreaterThanOrEqual(44);
+          expect(button.height).toBeGreaterThanOrEqual(44);
+        }
+      }
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: test.info().outputPath(`created-native-${orientation}.png`),

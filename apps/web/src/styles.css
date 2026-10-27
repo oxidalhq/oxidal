@@ -1757,9 +1757,17 @@ textarea {
   flex-direction: column;
   gap: 0.5rem;
 }
-.live-effect > .effect-power {
+.live-effect-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin-top: auto;
-  width: 100%;
+}
+.live-effect-actions > .effect-power[aria-pressed='true']::before {
+  content: none;
+}
+.live-effect-actions > .effect-power[aria-pressed='false'] {
+  border: 1px dashed currentColor;
 }
 .live-parameter-grid > button {
   min-width: 0;

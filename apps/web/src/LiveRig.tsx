@@ -1,3 +1,4 @@
+import { Power } from '@phosphor-icons/react';
 import { ArtworkDeck } from './AssetArtwork';
 import { ModelPicker } from './ModelPicker';
 import { useEffect, useRef, useState } from 'react';
@@ -283,10 +284,7 @@ export function LiveRig({
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
       <div className="section-heading">
-        <div>
-          <span className="eyebrow">Sounding session</span>
-          <h2>Live controls</h2>
-        </div>
+        <h2>Chain</h2>
         <span role="status" data-testid="live-status">
           {busy
             ? 'Applying…'
@@ -306,7 +304,7 @@ export function LiveRig({
           >
             <Button
               variant="ghost"
-              className="h-auto w-full justify-start px-1 text-left whitespace-normal"
+              className="h-11 w-full justify-start px-1 text-left whitespace-normal"
               onClick={() => {
                 const prefix = c.target.slice(0, -7);
                 setTarget(
@@ -317,7 +315,9 @@ export function LiveRig({
                 setDraft(null);
               }}
             >
-              {c.label.replace(/ · enabled$/, '')}
+              <span className="line-clamp-2">
+                {c.label.replace(/ · enabled$/, '')}
+              </span>
             </Button>
             {state.configured &&
               !state.configured.draft &&
@@ -332,29 +332,38 @@ export function LiveRig({
                   blockId={c.target.slice(6, -8)}
                 />
               )}
-            <Button
-              variant="outline"
-              className="mt-2 w-full"
-              disabled={disabled || !!draft}
-              onClick={() =>
-                setPicker({
-                  target: c.target.slice(6, -8),
-                  name: c.label.replace(/ · enabled$/, ''),
-                  opening: state,
-                })
-              }
-            >
-              Change model
-            </Button>
-            <Button
-              className="effect-power mt-1"
-              variant={c.value === 1 ? 'secondary' : 'ghost'}
-              aria-pressed={c.value === 1}
-              disabled={disabled}
-              onClick={() => void apply(c.target, c.value === 1 ? 0 : 1)}
-            >
-              {c.value === 1 ? 'On' : 'Bypassed'}
-            </Button>
+            <div className="live-effect-actions">
+              <Button
+                variant="outline"
+                aria-label="Change model"
+                className="min-w-0 flex-1"
+                disabled={disabled || !!draft}
+                onClick={() =>
+                  setPicker({
+                    target: c.target.slice(6, -8),
+                    name: c.label.replace(/ · enabled$/, ''),
+                    opening: state,
+                  })
+                }
+              >
+                Model
+              </Button>
+              <Button
+                className="effect-power h-11 w-11 shrink-0 p-0"
+                aria-label={`Enable ${c.label.replace(/ · enabled$/, '')}`}
+                title={
+                  c.value === 1
+                    ? 'On — tap to bypass'
+                    : 'Bypassed — tap to enable'
+                }
+                variant={c.value === 1 ? 'secondary' : 'ghost'}
+                aria-pressed={c.value === 1}
+                disabled={disabled}
+                onClick={() => void apply(c.target, c.value === 1 ? 0 : 1)}
+              >
+                <Power className="size-5" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
         ))}
       </div>
