@@ -4,6 +4,7 @@ import { playbackCommand, playbackState, type AudioState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
+import { EditQueue } from './editQueue';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
 export function LiveRig({
@@ -28,9 +29,12 @@ export function LiveRig({
   const [draft, setDraft] = useState<{
     target: string;
     value: number;
+    baseline: number;
     session: string;
     revision: number;
   } | null>(null);
+  const adjustment = useRef<EditQueue<AudioState> | null>(null);
+  const latestValue = useRef(0);
   const alive = useRef(false);
   const sending = useRef(false);
   const generation = useRef(0);
@@ -46,7 +50,7 @@ export function LiveRig({
           !sending.current &&
           requested === generation.current
         ) {
-          setError('');
+          if (!adjustment.current) setError('');
           setState((old) =>
             old?.session === next.session && old.revision > next.revision
               ? old
@@ -68,6 +72,8 @@ export function LiveRig({
     return () => {
       alive.current = false;
       clearTimeout(timer);
+      // Navigation keeps the latest audible edit; it does not silently undo it.
+      void adjustment.current?.finish(latestValue.current).catch(() => {});
     };
   }, [onPlaying]);
   async function apply(id: string, value: number) {
@@ -109,6 +115,89 @@ export function LiveRig({
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
+    }
+  }
+  function openAdjustment(control: AudioState['controls'][number]) {
+    if (!state || sending.current || adjustment.current) return;
+    const opening = control.value;
+    let cursor = state;
+    latestValue.current = opening;
+    setDraft({
+      target: control.target,
+      value: opening,
+      baseline: opening,
+      session: state.session,
+      revision: state.revision,
+    });
+    setAdjusting(true);
+    setError('');
+    adjustment.current = new EditQueue<AudioState>(
+      'live',
+      crypto.randomUUID(),
+      Promise.resolve(),
+      async (edit) => {
+        const value = edit.phase === 'cancel' ? opening : edit.value;
+        // Opening/closing without adjustment must not mark the session modified.
+        if (
+          cursor.controls.find((item) => item.target === control.target)
+            ?.value === value
+        )
+          return cursor;
+        generation.current += 1;
+        sending.current = true;
+        try {
+          // Each accepted value advances our cursor. Never refresh and replay a
+          // failed command: another client or a recalled rig may own the sound.
+          cursor = await playbackCommand(cursor, {
+            kind: 'set_control',
+            target: control.target,
+            value,
+          });
+          return cursor;
+        } finally {
+          sending.current = false;
+        }
+      },
+      (next) => {
+        if (!alive.current) return;
+        setState((old) =>
+          old?.session === next.session && old.revision > next.revision
+            ? old
+            : next,
+        );
+        setDraft((old) =>
+          old?.session === next.session && old.target === control.target
+            ? { ...old, revision: next.revision }
+            : old,
+        );
+      },
+      (cause) => {
+        if (!alive.current) return;
+        setError(String(cause));
+        void playbackState()
+          .then((next) => {
+            if (alive.current) setState(next);
+          })
+          .catch(() => {});
+      },
+    );
+  }
+  async function finishAdjustment(cancel: boolean) {
+    const queue = adjustment.current;
+    if (!queue) return;
+    setBusy(true);
+    try {
+      if (cancel) await queue.cancel();
+      else await queue.finish(latestValue.current);
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (adjustment.current === queue) adjustment.current = null;
+      if (alive.current) {
+        setDraft(null);
+        setAdjusting(false);
+        setBusy(false);
+      }
     }
   }
   async function saveCopy() {
@@ -278,7 +367,7 @@ export function LiveRig({
                 setDraft(null);
                 if (item.toggle)
                   void apply(item.target, item.value === 1 ? 0 : 1);
-                else setAdjusting(true);
+                else openAdjustment(item);
               }}
             >
               <span>{item.label}</span>
@@ -293,10 +382,7 @@ export function LiveRig({
         <AdjustmentDialog
           title={control.label}
           onCancel={() => {
-            if (!busy) {
-              setDraft(null);
-              setAdjusting(false);
-            }
+            if (!busy) void finishAdjustment(true);
           }}
         >
           {error && (
@@ -306,9 +392,9 @@ export function LiveRig({
           )}
           <TouchAdjust
             label="sounding value"
-            commitHint="Done applies to sound. Reset returns to the opening value."
+            commitHint="Changes sound immediately. Done keeps edits; Cancel restores the opening value."
             value={activeDraft?.value ?? control.value}
-            baseline={control.value}
+            baseline={activeDraft?.baseline ?? control.value}
             min={0}
             max={1}
             step={0.01}
@@ -316,34 +402,25 @@ export function LiveRig({
             format={(v) =>
               v === control.value
                 ? control.display
-                : `${Math.round(v * 100)}% · pending`
+                : `${Math.round(v * 100)}% · sending`
             }
-            onChange={(value) =>
-              setDraft({
-                target: control.target,
-                value,
-                session: state.session,
-                revision: state.revision,
-              })
-            }
+            onChange={(value) => {
+              latestValue.current = value;
+              setDraft((old) => (old ? { ...old, value } : old));
+              adjustment.current?.preview(value);
+            }}
           />
           <div className="editor-actions">
             <Button
               disabled={disabled || stale}
-              onClick={() => {
-                if (activeDraft) void apply(control.target, activeDraft.value);
-                else setAdjusting(false);
-              }}
+              onClick={() => void finishAdjustment(false)}
             >
               Done
             </Button>
             <Button
               variant="ghost"
               disabled={busy}
-              onClick={() => {
-                setDraft(null);
-                setAdjusting(false);
-              }}
+              onClick={() => void finishAdjustment(true)}
             >
               Cancel
             </Button>
@@ -378,7 +455,7 @@ export function LiveRig({
       </details>
       {!!draft && (
         <p className="caption">
-          Apply or discard the pending adjustment before saving.
+          Finish the audible adjustment before saving a copy.
         </p>
       )}
       {state.saved_copy && (

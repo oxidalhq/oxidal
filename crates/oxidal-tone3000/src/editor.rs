@@ -20,6 +20,14 @@ struct Gesture {
     touched: Instant,
 }
 #[derive(Debug)]
+struct Checkpoint {
+    state: State,
+    dirty: bool,
+}
+// History is control-thread memory, separate from active model capacity.
+const HISTORY_ENTRIES: usize = 8;
+const HISTORY_BYTES: usize = 64 * 1024 * 1024;
+#[derive(Debug)]
 pub struct Editor {
     engine: Engine,
     originals: Store,
@@ -30,6 +38,8 @@ pub struct Editor {
     finished: VecDeque<String>,
     receipts: VecDeque<(String, String)>,
     failed: bool,
+    undo: VecDeque<Checkpoint>,
+    redo: VecDeque<Checkpoint>,
 }
 impl Editor {
     pub fn new(root: PathBuf) -> Result<Self> {
@@ -61,11 +71,15 @@ impl Editor {
                 owned: vec![],
                 state_captures: 0,
                 live_audio: false,
+                can_undo: false,
+                can_redo: false,
             },
             gesture: None,
             finished: VecDeque::new(),
             receipts: VecDeque::new(),
             failed: false,
+            undo: VecDeque::new(),
+            redo: VecDeque::new(),
         })
     }
     fn finish(&mut self) {
@@ -91,6 +105,69 @@ impl Editor {
     fn capture(&mut self) -> Result<()> {
         self.committed = self.engine.capture().map_err(|e| e.to_string())?;
         self.state.state_captures += 1;
+        Ok(())
+    }
+    fn capture_change(&mut self) -> Result<()> {
+        let next = self.engine.capture().map_err(|e| e.to_string())?;
+        self.undo.push_back(Checkpoint {
+            state: std::mem::replace(&mut self.committed, next),
+            dirty: self.state.dirty,
+        });
+        self.redo.clear();
+        while self.undo.len() > HISTORY_ENTRIES
+            || self.undo.iter().map(|p| p.state.byte_len()).sum::<usize>() > HISTORY_BYTES
+        {
+            self.undo.pop_front();
+        }
+        self.state.state_captures += 1;
+        Ok(())
+    }
+    fn clear_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+    }
+    fn restore_history(&mut self, redo: bool) -> Result<()> {
+        if self.gesture.is_some() {
+            return Err("edit_busy".into());
+        }
+        let history = if redo { &self.redo } else { &self.undo };
+        let target = history.back().ok_or("No history available")?;
+        if let Err(error) = self
+            .engine
+            .restore(&target.state)
+            .and_then(|_| self.engine.wait_ready())
+            .and_then(|_| self.engine.block_controls().map(|_| ()))
+        {
+            self.rollback()?;
+            return Err(error.to_string());
+        }
+        let (from, to) = if redo {
+            (&mut self.redo, &mut self.undo)
+        } else {
+            (&mut self.undo, &mut self.redo)
+        };
+        let target = from.pop_back().expect("checked history");
+        to.push_back(Checkpoint {
+            state: std::mem::replace(&mut self.committed, target.state),
+            dirty: self.state.dirty,
+        });
+        self.state.dirty = target.dirty;
+        // A structural edit may change state size; moving history can bring a
+        // larger current state into the retained set. Keep the combined budget.
+        while self
+            .undo
+            .iter()
+            .chain(&self.redo)
+            .map(|p| p.state.byte_len())
+            .sum::<usize>()
+            > HISTORY_BYTES
+        {
+            if redo {
+                self.undo.pop_front();
+            } else {
+                self.redo.pop_front();
+            }
+        }
         Ok(())
     }
     pub fn tick(&mut self) -> Result<()> {
@@ -119,6 +196,8 @@ impl Editor {
             parameter.staged = staged(&parameter.id);
         }
         self.state.block_controls = self.engine.block_controls().map_err(|e| e.to_string())?;
+        self.state.can_undo = !self.undo.is_empty();
+        self.state.can_redo = !self.redo.is_empty();
         self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
         Ok(self.state.clone())
     }
@@ -184,6 +263,7 @@ impl Editor {
                 self.state.source_sha256 = Some(source);
                 self.state.loaded = Some(id);
                 self.state.dirty = false;
+                self.clear_history();
             }
             EditorAction::Save { name } => {
                 if self.gesture.is_some() {
@@ -204,6 +284,40 @@ impl Editor {
                     .map_err(|e| e.to_string())?;
                 self.state.loaded = Some(info.id);
                 self.state.dirty = false;
+                self.clear_history();
+            }
+            EditorAction::Undo => self.restore_history(false)?,
+            EditorAction::Redo => self.restore_history(true)?,
+            EditorAction::RemoveBlock { block_id } => {
+                if self.gesture.is_some() {
+                    return Err("edit_busy".into());
+                }
+                if self.state.loaded.is_none() {
+                    return Err("Load a preset first".into());
+                }
+                if !self
+                    .engine
+                    .block_controls()
+                    .map_err(|e| e.to_string())?
+                    .iter()
+                    .any(|p| p.block_id == block_id)
+                {
+                    return Err("Missing or stale native block".into());
+                }
+                if let Err(error) = self
+                    .engine
+                    .remove_block(&block_id)
+                    .and_then(|_| self.engine.wait_ready())
+                    .and_then(|_| self.engine.block_controls().map(|_| ()))
+                {
+                    self.rollback()?;
+                    return Err(error.to_string());
+                }
+                if let Err(error) = self.capture_change() {
+                    self.rollback()?;
+                    return Err(error);
+                }
+                self.state.dirty = true;
             }
             EditorAction::Begin {
                 owner,
@@ -317,7 +431,7 @@ impl Editor {
             return Err(error.to_string());
         }
         if commit {
-            if let Err(error) = self.capture() {
+            if let Err(error) = self.capture_change() {
                 self.rollback()?;
                 self.finish();
                 return Err(error);

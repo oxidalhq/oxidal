@@ -159,6 +159,16 @@ export type EditorAction =
   | {
       kind: "save";
       name: string;
+    }
+  | {
+      block_id: string;
+      kind: "remove_block";
+    }
+  | {
+      kind: "undo";
+    }
+  | {
+      kind: "redo";
     };
 export type Command3 =
   | {
@@ -623,6 +633,8 @@ export interface EditorCommand {
 }
 export interface EditorSnapshot {
   block_controls: BlockControl[];
+  can_redo: boolean;
+  can_undo: boolean;
   dirty: boolean;
   edit?: Editing | null;
   live_audio: boolean;

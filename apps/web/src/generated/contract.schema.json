@@ -1395,6 +1395,49 @@
             "kind",
             "name"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "remove_block"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "undo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "redo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
         }
       ]
     },
@@ -1432,6 +1475,12 @@
           "items": {
             "$ref": "#/$defs/BlockControl"
           }
+        },
+        "can_redo": {
+          "type": "boolean"
+        },
+        "can_undo": {
+          "type": "boolean"
         },
         "dirty": {
           "type": "boolean"
@@ -1496,7 +1545,9 @@
         "block_controls",
         "owned",
         "state_captures",
-        "live_audio"
+        "live_audio",
+        "can_undo",
+        "can_redo"
       ]
     },
     "Framing": {

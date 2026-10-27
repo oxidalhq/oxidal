@@ -57,6 +57,8 @@ pub struct EditorSnapshot {
     pub owned: Vec<oxidal_presets::OwnedPreset>,
     pub state_captures: u32,
     pub live_audio: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -89,6 +91,11 @@ pub enum EditorAction {
     Save {
         name: String,
     },
+    RemoveBlock {
+        block_id: String,
+    },
+    Undo,
+    Redo,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

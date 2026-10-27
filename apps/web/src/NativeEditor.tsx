@@ -460,6 +460,36 @@ export function NativeEditor({
           </AdjustmentDialog>
         )}
       </div>
+      <div className="editor-actions" aria-label="Draft history">
+        <Button
+          disabled={blocked || !!state?.edit || !state?.can_undo}
+          onClick={() => void send({ kind: 'undo' })}
+        >
+          Undo
+        </Button>
+        <Button
+          disabled={blocked || !!state?.edit || !state?.can_redo}
+          onClick={() => void send({ kind: 'redo' })}
+        >
+          Redo
+        </Button>
+        {blockControl && (
+          <Button
+            disabled={blocked || !!state?.edit}
+            onClick={() =>
+              void send({
+                kind: 'remove_block',
+                block_id: blockControl.block_id,
+              })
+            }
+          >
+            Remove selected block
+          </Button>
+        )}
+      </div>
+      <p className="caption">
+        Undo/redo applies to this draft. Loading or saving starts a new history.
+      </p>
       {state?.edit && (
         <p>
           {ours ? 'Your edit is active.' : 'Another client is editing.'}{' '}

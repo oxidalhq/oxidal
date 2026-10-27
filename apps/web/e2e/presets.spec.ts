@@ -442,6 +442,22 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0.375',
   );
+  await editor
+    .getByRole('button', { name: 'Remove selected block', exact: true })
+    .click();
+  await expect(editor.getByLabel('Native control')).toHaveValue('toneBass');
+  await expect(editor.getByRole('status')).toContainText(
+    'Unsaved tone changes',
+  );
+  await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  await editor.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(editor.getByRole('status')).toContainText(
+    'Unsaved tone changes',
+  );
+  await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+  const afterUndo = await (await request.get('/api/v1/native')).json();
+  expect(afterUndo.block_controls).toEqual(restored.block_controls);
   await editor.getByLabel('Native control').selectOption('toneBass');
   await editor
     .getByRole('button', { name: 'Adjust native value', exact: true })
@@ -730,6 +746,34 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await sounding
       .getByRole('slider', { name: 'Adjust sounding value' })
       .press('ArrowLeft');
+    // Hear the change while the floating control is still open, before Done or Save.
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.controls.find(
+          (p: { target: string }) => p.target === 'outputLevel',
+        ).value;
+      })
+      .not.toBe(outputControl.value);
+    await expect(sounding.getByRole('dialog')).toBeVisible();
+    await sounding.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.controls.find(
+          (p: { target: string }) => p.target === 'outputLevel',
+        ).value;
+      })
+      .toBe(outputControl.value);
+    await sounding
+      .getByRole('button', {
+        name: `Adjust sounding ${outputControl.label}`,
+        exact: true,
+      })
+      .click();
+    await sounding
+      .getByRole('slider', { name: 'Adjust sounding value' })
+      .press('ArrowLeft');
     await sounding.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(sounding.getByTestId('live-status')).toHaveText(
       'Session modified',
@@ -742,6 +786,57 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(sounding.getByTestId('live-readback')).toContainText(
       liveLevel.display,
     );
+    // A second client changing the session invalidates rollback ownership.
+    await sounding
+      .getByRole('button', {
+        name: `Adjust sounding ${outputControl.label}`,
+        exact: true,
+      })
+      .click();
+    await sounding
+      .getByRole('slider', { name: 'Adjust sounding value' })
+      .press('ArrowLeft');
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.controls.find(
+          (p: { target: string }) => p.target === 'outputLevel',
+        ).value;
+      })
+      .not.toBe(liveLevel.value);
+    const beforeOther = await (await request.get('/api/v1/audio')).json();
+    const other = await request.post('/api/v1/audio', {
+      data: {
+        session: beforeOther.session,
+        expected_revision: beforeOther.revision,
+        action: { kind: 'set_control', target: 'outputLevel', value: 0.4 },
+      },
+    });
+    expect(other.ok()).toBe(true);
+    await expect(
+      sounding.getByText(
+        'Sounding session changed. Cancel and reopen this control.',
+      ),
+    ).toBeVisible();
+    await sounding.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.controls.find(
+          (p: { target: string }) => p.target === 'outputLevel',
+        ).value;
+      })
+      .toBeCloseTo(0.4, 5);
+    await expect(
+      sounding.getByRole('button', {
+        name: 'Adjust sounding ' + outputControl.label,
+        exact: true,
+      }),
+    ).toBeEnabled();
+    const confirmedAfterOther = await (
+      await request.get('/api/v1/audio')
+    ).json();
+
     expect((await (await request.get('/api/v1/native')).json()).revision).toBe(
       nativeBefore.revision,
     );
@@ -760,7 +855,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     );
     const savedLive = await (await request.get('/api/v1/audio')).json();
     expect(savedLive.phase).toBe('running');
-    expect(savedLive.controls).toEqual(live.controls);
+    expect(savedLive.controls).toEqual(confirmedAfterOther.controls);
     expect(savedLive.saved_copy).toMatch(/^[0-9a-f]{64}$/);
     expect((await (await request.get('/api/v1/native')).json()).revision).toBe(
       nativeBefore.revision,

@@ -1142,6 +1142,122 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
             before.id
         );
     }
+    assert!(
+        !reopened.can_undo && !reopened.can_redo,
+        "restart starts a new history"
+    );
+    let block = reopened.block_controls[0].block_id.clone();
+    // Structural edits reject stale IDs and active gestures without changing history.
+    assert!(
+        send(
+            &mut editor,
+            A::RemoveBlock {
+                block_id: "missing".into()
+            }
+        )
+        .is_err()
+    );
+    send(
+        &mut editor,
+        A::Begin {
+            owner: "owner".into(),
+            token: "busy-history".into(),
+            target: "toneBass".into(),
+        },
+    )?;
+    assert!(
+        send(
+            &mut editor,
+            A::RemoveBlock {
+                block_id: block.clone()
+            }
+        )
+        .is_err()
+    );
+    assert!(send(&mut editor, A::Undo).is_err());
+    send(
+        &mut editor,
+        A::Cancel {
+            owner: "owner".into(),
+            token: "busy-history".into(),
+        },
+    )?;
+    let removed = send(
+        &mut editor,
+        A::RemoveBlock {
+            block_id: block.clone(),
+        },
+    )?;
+    assert!(removed.block_controls.is_empty());
+    assert!(removed.dirty && removed.can_undo && !removed.can_redo);
+    // An old scalar target cannot mutate the new structure.
+    assert!(
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: "stale-block".into(),
+                target: reopened.block_controls[0].id.clone()
+            }
+        )
+        .is_err()
+    );
+    let undone = send(&mut editor, A::Undo)?;
+    assert_eq!(undone.block_controls[0].block_id, block);
+    assert!(!undone.dirty && !undone.can_undo && undone.can_redo);
+    for (a, b) in reopened.parameters.iter().zip(&undone.parameters) {
+        assert!((a.value - b.value).abs() < 1e-5, "undo preserves {}", a.id);
+    }
+    let redone = send(&mut editor, A::Redo)?;
+    assert!(redone.block_controls.is_empty() && redone.dirty);
+    send(&mut editor, A::Undo)?;
+    // A new edit abandons the redo branch; history has a bounded retention window.
+    for index in 0..10 {
+        let token = format!("history-{index}");
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.clone(),
+                target: "toneMid".into(),
+            },
+        )?;
+        let next = send(
+            &mut editor,
+            A::Commit {
+                owner: "owner".into(),
+                token,
+                sequence: 1,
+                value: index as f32 / 10.0,
+            },
+        )?;
+        assert!(!next.can_redo);
+    }
+    for _ in 0..8 {
+        send(&mut editor, A::Undo)?;
+    }
+    assert!(send(&mut editor, A::Undo).is_err());
+    for _ in 0..8 {
+        send(&mut editor, A::Redo)?;
+    }
+    assert!(send(&mut editor, A::Redo).is_err());
+    let saved = send(
+        &mut editor,
+        A::Save {
+            name: "History restored".into(),
+        },
+    )?;
+    assert!(!saved.can_undo && !saved.can_redo && !saved.dirty);
+    send(&mut editor, A::RemoveBlock { block_id: block })?;
+    let reloaded = send(
+        &mut editor,
+        A::Load {
+            id: saved.loaded.unwrap(),
+            owned: true,
+        },
+    )?;
+    assert!(!reloaded.can_undo && !reloaded.can_redo);
+    assert!(!reloaded.block_controls.is_empty());
     assert_eq!(store.original(&original.sha256)?, bytes);
     eprintln!("qualify: 14 descriptor-driven globals preview/cancel/commit/save/reopen passed");
     Ok(())
