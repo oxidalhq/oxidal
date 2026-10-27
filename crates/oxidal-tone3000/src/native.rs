@@ -172,14 +172,23 @@ impl SplitStages {
     /// resampling. Whole-preset engines keep their existing sample-rate support.
     /// Extracted external pitch still requires a separate upstream processor.
     pub fn prepare(&self, rate: f64, frames: usize) -> Result<(Engine, Engine)> {
-        let mut amp = Engine::with_stage_role(rate, frames, Some(1))?;
+        let mut amp = Engine::with_stage_role(rate, frames, ProcessingRole::Amp)?;
         amp.restore(&self.amp)?;
         amp.wait_ready()?;
-        let mut cab = Engine::with_stage_role(rate, frames, Some(2))?;
+        let mut cab = Engine::with_stage_role(rate, frames, ProcessingRole::Cab)?;
         cab.restore(&self.cab)?;
         cab.wait_ready()?;
         Ok((amp, cab))
     }
+}
+
+/// Host processing role, intentionally independent of exported native state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum ProcessingRole {
+    WholePreset = 0,
+    Amp = 1,
+    Cab = 2,
 }
 
 /// Single-owner offline processor. !Send/!Sync keeps JUCE calls and destruction on its owner thread.
@@ -189,13 +198,21 @@ impl SplitStages {
 pub struct Engine {
     ptr: NonNull<c_void>,
     frames: usize,
+    rate: f64,
+    role: ProcessingRole,
     owner: PhantomData<Rc<()>>,
 }
 impl Engine {
-    pub fn new(rate: f64, frames: usize) -> Result<Self> {
-        Self::with_stage_role(rate, frames, None)
+    pub fn configuration(&self) -> (f64, usize) {
+        (self.rate, self.frames)
     }
-    fn with_stage_role(rate: f64, frames: usize, role: Option<i32>) -> Result<Self> {
+    pub fn processing_role(&self) -> ProcessingRole {
+        self.role
+    }
+    pub fn new(rate: f64, frames: usize) -> Result<Self> {
+        Self::with_stage_role(rate, frames, ProcessingRole::WholePreset)
+    }
+    fn with_stage_role(rate: f64, frames: usize, role: ProcessingRole) -> Result<Self> {
         if !rate.is_finite()
             || !(8000.0..=192000.0).contains(&rate)
             || !(1..=2048).contains(&frames)
@@ -206,13 +223,15 @@ impl Engine {
         // SAFETY: out pointer is live; native validates configuration and constructs one owned handle.
         checked(unsafe {
             match role {
-                Some(role) => oxidal_t3k_create_stage(rate, frames as i32, role, &mut ptr),
-                None => oxidal_t3k_create(rate, frames as i32, &mut ptr),
+                ProcessingRole::WholePreset => oxidal_t3k_create(rate, frames as i32, &mut ptr),
+                role => oxidal_t3k_create_stage(rate, frames as i32, role as i32, &mut ptr),
             }
         })?;
         Ok(Self {
             ptr: NonNull::new(ptr).ok_or_else(|| NativeError("null native result".into()))?,
             frames,
+            rate,
+            role,
             owner: PhantomData,
         })
     }

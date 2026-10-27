@@ -212,9 +212,13 @@ pub struct Plugin {
     right: Option<Instance>,
     info: PluginInfo,
     frames: usize,
+    rate: f64,
     failed: bool,
 }
 impl Plugin {
+    pub fn configuration(&self) -> (f64, usize) {
+        (self.rate, self.frames)
+    }
     pub fn info(&self) -> &PluginInfo {
         &self.info
     }
@@ -240,6 +244,7 @@ impl Plugin {
                 },
                 info,
                 frames,
+                rate,
                 failed: false,
             });
         }

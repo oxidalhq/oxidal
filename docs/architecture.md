@@ -4,6 +4,11 @@ The control/runtime foundation has six crates with concrete jobs: `oxidal-graph`
 
 The `oxidal-tone3000` crate contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its optional worker connects real native preset loading, bounded edits, and immutable owned-copy save/reload to the browser. A separate experimental audio worker runs one saved native preset through ALSA while preserving the offline editor. The optional `oxidal-lv2` crate now has a bounded Linux host, prepared graph and isolated experimental worker with daemon lifecycle/control endpoints; installed-effect browser authoring and offline scalar recall are available; mixed-native graph integration and full LV2 compatibility remain pending. The adapter executes offline on macOS and ARM64 Linux without a display server; physical audio, real-time scheduling and appliance packaging remain unqualified.
 
+The optional `oxidal-engine` integration core owns native and LV2 processors in one
+prepared DAG using the shared routing scheduler. It is not yet connected to either
+worker or browser. See [mixed engine boundaries](mixed-engine.md) for actual DSP
+qualification, preserved histories and remaining persistence/transition work.
+
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
 | Endpoint                                | Behavior                                                                                                               |

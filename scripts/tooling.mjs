@@ -143,7 +143,7 @@ if (mode === 'bootstrap') {
       '--workspace',
       '--features',
       process.platform === 'linux'
-        ? 'oxidal-tone3000/audio-qualification,oxidal-api/alsa'
+        ? 'oxidal-tone3000/audio-qualification,oxidal-api/alsa,oxidal-engine/native'
         : 'oxidal-tone3000/native',
       '--all-targets',
       '--',
@@ -167,6 +167,22 @@ if (mode === 'bootstrap') {
     { env },
   );
   if (process.platform === 'linux') {
+    // Reuse the authored embedded fixture and isolated data root from the native
+    // qualifier; no downloaded test scripts or extra provider credentials.
+    run(
+      'cargo',
+      [
+        'run',
+        '--locked',
+        '-p',
+        'oxidal-engine',
+        '--features',
+        'native',
+        '--example',
+        'qualify_mixed',
+      ],
+      { env },
+    );
     const audioEnv = {
       ...env,
       OXIDAL_AUDIO_QUALIFY_NULL: '1',

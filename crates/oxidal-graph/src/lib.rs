@@ -1,3 +1,6 @@
+mod routing;
+pub use routing::PreparedRouting;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -27,6 +30,8 @@ pub enum BlockKind {
     Input,
     Nam,
     Cabinet,
+    /// An intact native preset, not an extracted NAM or cabinet stage.
+    Native,
     Lv2,
     Delay,
     Reverb,

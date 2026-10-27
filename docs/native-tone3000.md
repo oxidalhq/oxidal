@@ -101,7 +101,8 @@ A shared graph boundary is required before admitting other split-stage rates.
 Whole-preset playback retains its existing rate support.
 
 This API is control-thread preparation only. There is no browser hybrid conversion
-or combined native/LV2 host yet. Preparing processors waits for model loads; it is not
+or connected native/LV2 playback worker yet. The [mixed graph core](mixed-engine.md)
+prepares both backend types but has no streaming handoff or browser lifecycle. Preparing processors waits for model loads; it is not
 a streaming callback operation or a latency, real-time or gapless claim.
 Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).
 

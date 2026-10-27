@@ -1,7 +1,7 @@
 //! Prepared, single-owner DSP graph. Preparation and commands are non-real-time operations.
 use crate::{Binding, Plugin, Port, World};
 use oxidal_control::{Command, Control, Parameter, Snapshot};
-use oxidal_graph::{BlockKind, Rig};
+use oxidal_graph::{BlockKind, PreparedRouting, Rig};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -17,38 +17,6 @@ struct ControlPort {
     node: usize,
     port: Port,
 }
-#[derive(Debug)]
-struct Schedule {
-    order: Vec<usize>,
-    sources: Vec<Vec<usize>>,
-}
-impl Schedule {
-    fn new(rig: &Rig) -> Result<Self, String> {
-        let validation = rig.validate();
-        if !validation.valid {
-            return Err(validation.errors.join("; "));
-        }
-        let ids: BTreeMap<_, _> = rig
-            .nodes
-            .iter()
-            .enumerate()
-            .map(|(i, n)| (n.id.as_str(), i))
-            .collect();
-        let mut sources = vec![Vec::new(); rig.nodes.len()];
-        for e in &rig.edges {
-            sources[ids[e.to.as_str()]].push(ids[e.from.as_str()]);
-        }
-        let mut order = Vec::with_capacity(rig.nodes.len());
-        while order.len() < rig.nodes.len() {
-            let next = (0..rig.nodes.len())
-                .find(|i| !order.contains(i) && sources[*i].iter().all(|s| order.contains(s)))
-                .ok_or("Cyclic graph")?;
-            order.push(next);
-        }
-        Ok(Self { order, sources })
-    }
-}
-
 /// A fixed-size stereo DAG with normalized controls and native port readback.
 /// Call commands/expiry between blocks on the same owner. They allocate; process does not
 /// allocate on the successful host path. This is not yet the daemon's playback worker.
@@ -57,7 +25,7 @@ pub struct PreparedGraph {
     control: Control,
     nodes: Vec<Processor>,
     ports: Vec<ControlPort>,
-    schedule: Schedule,
+    schedule: PreparedRouting,
     input: usize,
     output: usize,
     frames: usize,
@@ -80,7 +48,7 @@ impl PreparedGraph {
         {
             return Err("Invalid processing configuration".into());
         }
-        let schedule = Schedule::new(&rig)?;
+        let schedule = PreparedRouting::new(&rig)?;
         if bindings.len() != rig.nodes.len() - 2 {
             return Err("Every LV2 node requires exactly one binding".into());
         }
@@ -146,16 +114,8 @@ impl PreparedGraph {
         if !by_node.is_empty() {
             return Err("Unknown plugin binding".into());
         }
-        let input = rig
-            .nodes
-            .iter()
-            .position(|n| n.kind == BlockKind::Input)
-            .expect("validated input");
-        let output = rig
-            .nodes
-            .iter()
-            .position(|n| n.kind == BlockKind::Output)
-            .expect("validated output");
+        let input = schedule.input();
+        let output = schedule.output();
         let control = Control::prepared(rig, parameters)?;
         Ok(Self {
             control,
@@ -266,7 +226,7 @@ impl PreparedGraph {
         if state.rig.nodes != current.rig.nodes {
             return Err("Node replacement requires graph preparation".into());
         }
-        let schedule = Schedule::new(&state.rig)?;
+        let schedule = PreparedRouting::new(&state.rig)?;
         let result = self.install_controls(&mut candidate, &state)?;
         self.schedule = schedule;
         self.control = candidate;
@@ -369,13 +329,13 @@ impl PreparedGraph {
         Ok(())
     }
     fn run(&mut self) -> Result<(), String> {
-        for &i in &self.schedule.order {
+        for &i in self.schedule.order() {
             if i == self.input {
                 continue;
             }
             self.nodes[i].left.fill(0.0);
             self.nodes[i].right.fill(0.0);
-            for &s in &self.schedule.sources[i] {
+            for &s in self.schedule.sources(i) {
                 for k in 0..self.frames {
                     self.nodes[i].left[k] += self.nodes[s].left[k];
                     self.nodes[i].right[k] += self.nodes[s].right[k];

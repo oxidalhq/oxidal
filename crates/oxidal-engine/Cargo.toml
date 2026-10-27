@@ -1,0 +1,21 @@
+[package]
+name = "oxidal-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+native = ["oxidal-tone3000/native", "oxidal-lv2/native"]
+
+[dependencies]
+oxidal-graph.workspace = true
+oxidal-tone3000 = { path = "../oxidal-tone3000", version = "0.1.0" }
+oxidal-lv2 = { path = "../oxidal-lv2", version = "0.1.0" }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "qualify_mixed"
+required-features = ["native"]

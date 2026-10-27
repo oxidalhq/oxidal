@@ -1023,15 +1023,24 @@
       ]
     },
     "BlockKind": {
-      "type": "string",
-      "enum": [
-        "input",
-        "nam",
-        "cabinet",
-        "lv2",
-        "delay",
-        "reverb",
-        "output"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "input",
+            "nam",
+            "cabinet",
+            "lv2",
+            "delay",
+            "reverb",
+            "output"
+          ]
+        },
+        {
+          "description": "An intact native preset, not an extracted NAM or cabinet stage.",
+          "type": "string",
+          "const": "native"
+        }
       ]
     },
     "Capabilities": {

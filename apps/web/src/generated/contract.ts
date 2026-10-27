@@ -91,7 +91,7 @@ export type Action =
       edit: Edit;
       type: "edit";
     };
-export type BlockKind = "input" | "nam" | "cabinet" | "lv2" | "delay" | "reverb" | "output";
+export type BlockKind = ("input" | "nam" | "cabinet" | "lv2" | "delay" | "reverb" | "output") | "native";
 /**
  * Scaling policy for a mapped absolute knob.
  * @see docs/architecture.md
