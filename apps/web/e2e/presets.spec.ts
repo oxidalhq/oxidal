@@ -922,6 +922,46 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const audio = page.getByRole('region', { name: 'Playback controls' });
     await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await audio.getByText('Current device & buffers', { exact: true }).click();
+    const currentBuffers = audio.getByRole('group', {
+      name: 'Adjust current session',
+    });
+    await currentBuffers.getByLabel('Session buffer (samples)').fill('256');
+    await currentBuffers.getByLabel('Session input right channel').fill('1');
+    const appliedResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/audio') &&
+        response.request().method() === 'POST' &&
+        response.request().postDataJSON().action.kind === 'reconfigure',
+    );
+    await currentBuffers
+      .getByRole('button', { name: 'Apply & restart audio', exact: true })
+      .click();
+    const applied = await appliedResponse;
+    expect(applied.ok()).toBe(true);
+    const reconfigured = await applied.json();
+    expect(reconfigured.configured.stream.input.period_frames).toBe(256);
+    expect(reconfigured.configured.stream.input_map).toEqual([0, 0]);
+    expect(reconfigured.configured.preset_id).toBe(
+      savedLive.configured.preset_id,
+    );
+    expect(reconfigured.controls).toEqual(savedLive.controls);
+    await expect(audio.getByRole('status')).toContainText('Audio: running');
+    await expect(
+      currentBuffers.getByLabel('Session buffer (samples)'),
+    ).toHaveValue('256');
+    await expect(
+      currentBuffers.getByRole('button', {
+        name: 'Apply & restart audio',
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: test.info().outputPath('audio-apply.png'),
+      fullPage: true,
+    });
+    await audio.getByText('Current device & buffers', { exact: true }).click();
     await audio
       .getByRole('button', { name: 'Use this session on boot' })
       .click();
@@ -949,6 +989,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByRole('button', { name: 'Author', exact: true })
       .click();
     const editor = page.getByRole('region', { name: 'Native preset editor' });
+    await expect(editor).toBeVisible();
     if (!(await editor.getByLabel('Preset to load').isVisible()))
       await editor
         .getByTestId('native-preset-loader')

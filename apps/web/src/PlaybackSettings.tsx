@@ -10,6 +10,7 @@ import {
   type StartAudio,
 } from './api';
 import { Button } from './components/ui/button';
+import { AudioReconfigure } from './AudioReconfigure';
 
 function configurationLabel(configuration: AudioProbe) {
   return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${configuration.channels} channels · ${configuration.format} · ${configuration.period_frames} samples × ${configuration.periods} periods (${configuration.period_frames * configuration.periods} samples total)`;
@@ -127,36 +128,32 @@ export function PlaybackSettings({
             Prototype audio · hardware qualification pending.
           </p>
           <div className="action-row">
-            <Button
-              disabled={
-                !connected || busy || transitioning || !state?.device_owned
-              }
-              onClick={() => void command({ kind: 'stop' })}
-            >
-              Stop audio
-            </Button>
-            <Button
-              variant="outline"
-              disabled={
-                !connected || busy || transitioning || !state?.configured
-              }
-              onClick={() => void command({ kind: 'restart' })}
-            >
-              Restart audio
-            </Button>
-            <Button
-              variant="outline"
-              disabled={
-                !connected ||
-                busy ||
-                transitioning ||
-                state?.device_owned ||
-                !state?.configured
-              }
-              onClick={() => void command({ kind: 'resume' })}
-            >
-              Resume session
-            </Button>
+            {state?.device_owned ? (
+              <>
+                <Button
+                  disabled={!connected || busy || transitioning}
+                  onClick={() => void command({ kind: 'stop' })}
+                >
+                  Stop audio
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={
+                    !connected || busy || transitioning || !state?.configured
+                  }
+                  onClick={() => void command({ kind: 'restart' })}
+                >
+                  Restart audio
+                </Button>
+              </>
+            ) : state?.configured ? (
+              <Button
+                disabled={!connected || busy || transitioning}
+                onClick={() => void command({ kind: 'resume' })}
+              >
+                Resume session
+              </Button>
+            ) : null}
           </div>
           <Button
             variant="outline"
@@ -201,92 +198,106 @@ export function PlaybackSettings({
               <p>
                 Output: {configurationLabel(state.configured.stream.output)}
               </p>
+              <AudioReconfigure
+                key={JSON.stringify(state.configured.stream)}
+                initial={state.configured.stream}
+                checkedInput={input}
+                checkedOutput={output}
+                disabled={!connected || busy || transitioning}
+                running={state.phase === 'running'}
+                onApply={(stream) =>
+                  void command({ kind: 'reconfigure', stream })
+                }
+              />
             </details>
           )}
-          <fieldset
-            className="control-stack"
-            disabled={
-              !connected || busy || transitioning || state?.device_owned
-            }
-          >
-            <legend>New playback session</legend>
-            <p>
-              Check input and output, then choose a preset. Use matching device,
-              rate and buffer settings.
-            </p>
-            <p aria-label="Checked audio configuration">
-              Input: {input ? configurationLabel(input) : 'Not checked'} ·
-              Output: {output ? configurationLabel(output) : 'Not checked'}
-            </p>
-            <Button variant="outline" onClick={() => void loadPresets()}>
-              Refresh saved presets
-            </Button>
-            <div className="form-grid">
-              <label className="field">
-                Playback preset
-                <select
-                  value={selected}
-                  onChange={(e) => setSelected(e.target.value)}
-                >
-                  <option value="">Select saved preset</option>
-                  {presets.map((p) => (
-                    <option
-                      key={`${p.owned}/${p.id}`}
-                      value={`${p.owned}/${p.id}`}
-                    >
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <details className="control-help channel-routing">
-                <summary>Channel routing</summary>
-                <div className="form-grid">
-                  {(
-                    [
-                      'Input left',
-                      'Input right',
-                      'Output left',
-                      'Output right',
-                    ] as const
-                  ).map((label, i) => {
-                    const capture = i < 2;
-                    const index = (i % 2) as 0 | 1;
-                    const values = capture ? inputMap : outputMap;
-                    return (
-                      <label key={label} className="field">
-                        {label} channel (1-based)
-                        <input
-                          type="number"
-                          min={1}
-                          max={(capture ? input : output)?.channels ?? 64}
-                          value={values[index] + 1}
-                          onChange={(e) => {
-                            const next: [number, number] = [...values];
-                            next[index] = Number(e.target.value) - 1;
-                            if (capture) setInputMap(next);
-                            else setOutputMap(next);
-                          }}
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-                <p>
-                  Repeat an input channel for mono. Repeat an output channel to
-                  mix stereo to mono.
-                </p>
-              </details>
-            </div>
-            <Button
-              disabled={!settings}
-              onClick={() =>
-                settings && void command({ kind: 'start', settings })
+          <details className="control-help" open={!state?.configured}>
+            <summary>New playback session</summary>
+            <fieldset
+              className="control-stack"
+              disabled={
+                !connected || busy || transitioning || state?.device_owned
               }
             >
-              Start audio
-            </Button>
-          </fieldset>
+              <legend className="sr-only">New playback session</legend>
+              <p>
+                Check input and output, then choose a preset. Use matching
+                device, rate and buffer settings.
+              </p>
+              <p aria-label="Checked audio configuration">
+                Input: {input ? configurationLabel(input) : 'Not checked'} ·
+                Output: {output ? configurationLabel(output) : 'Not checked'}
+              </p>
+              <Button variant="outline" onClick={() => void loadPresets()}>
+                Refresh saved presets
+              </Button>
+              <div className="form-grid">
+                <label className="field">
+                  Playback preset
+                  <select
+                    value={selected}
+                    onChange={(e) => setSelected(e.target.value)}
+                  >
+                    <option value="">Select saved preset</option>
+                    {presets.map((p) => (
+                      <option
+                        key={`${p.owned}/${p.id}`}
+                        value={`${p.owned}/${p.id}`}
+                      >
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <details className="control-help channel-routing">
+                  <summary>Channel routing</summary>
+                  <div className="form-grid">
+                    {(
+                      [
+                        'Input left',
+                        'Input right',
+                        'Output left',
+                        'Output right',
+                      ] as const
+                    ).map((label, i) => {
+                      const capture = i < 2;
+                      const index = (i % 2) as 0 | 1;
+                      const values = capture ? inputMap : outputMap;
+                      return (
+                        <label key={label} className="field">
+                          {label} channel (1-based)
+                          <input
+                            type="number"
+                            min={1}
+                            max={(capture ? input : output)?.channels ?? 64}
+                            value={values[index] + 1}
+                            onChange={(e) => {
+                              const next: [number, number] = [...values];
+                              next[index] = Number(e.target.value) - 1;
+                              if (capture) setInputMap(next);
+                              else setOutputMap(next);
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p>
+                    Repeat an input channel for mono. Repeat an output channel
+                    to mix stereo to mono.
+                  </p>
+                </details>
+              </div>
+              <Button
+                disabled={!settings}
+                onClick={() =>
+                  settings && void command({ kind: 'start', settings })
+                }
+              >
+                Start audio
+              </Button>
+            </fieldset>{' '}
+          </details>
         </>
       )}
       {(error || state?.error) && <p role="alert">{error || state?.error}</p>}

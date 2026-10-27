@@ -232,7 +232,12 @@ export function NativeEditor({
   }
   if (!available)
     return <p>Playback and editing are not available in this build.</p>;
-  if (!state) return <p role="status">Loading preset editor…</p>;
+  if (!state)
+    return (
+      <p role={error ? 'alert' : 'status'}>
+        {error || 'Loading preset editor…'}
+      </p>
+    );
   const parameter = state?.parameters.find((p) => p.id === target);
   const blockControl = state?.block_controls.find((p) => p.id === target);
   const step =

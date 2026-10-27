@@ -54,13 +54,26 @@ pub struct AudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AudioAction {
-    Start { settings: StartAudio },
+    Start {
+        settings: StartAudio,
+    },
     Stop,
     Restart,
     Resume,
-    SetBoot { enabled: bool },
-    SetControl { target: String, value: f32 },
-    SaveCopy { name: String },
+    /// Restart the same tone with new device settings, retaining confirmed scalar edits.
+    Reconfigure {
+        stream: StreamConfig,
+    },
+    SetBoot {
+        enabled: bool,
+    },
+    SetControl {
+        target: String,
+        value: f32,
+    },
+    SaveCopy {
+        name: String,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

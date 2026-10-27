@@ -455,6 +455,52 @@ impl Owner {
         self.publish(self.state.phase, self.state.error.clone());
         Ok(self.state.clone())
     }
+    async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Reply {
+        // Validate before releasing audio. Device support is established by worker readiness.
+        stream.validate()?;
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("No previous audio configuration")?;
+        let mut proposed = previous.clone();
+        proposed.stream = stream;
+        let controls = self.resume_controls.clone();
+        let was_running = self.state.phase == AudioPhase::Running;
+        self.checkpoint();
+        self.publish(AudioPhase::Stopping, None);
+        if let Err(error) = self.release().await {
+            self.publish(AudioPhase::Failed, Some(error.clone()));
+            return Err(error);
+        }
+        match self.start(proposed, controls.clone()).await {
+            Ok(()) => Ok(self.state.clone()),
+            Err(error) => {
+                // start restores the last confirmed configuration on failure. Roll back
+                // only a previously running stream; a stopped session stays stopped.
+                let message = if was_running {
+                    match self.start(previous, controls).await {
+                        Ok(()) => {
+                            let message = format!(
+                                "Audio settings were not applied: {error}. Previous session restored."
+                            );
+                            self.publish(AudioPhase::Running, Some(message.clone()));
+                            return Err(message);
+                        }
+                        Err(restore) => format!(
+                            "Audio settings were not applied: {error}. Previous session could not resume: {restore}"
+                        ),
+                    }
+                } else {
+                    format!(
+                        "Audio settings were not applied: {error}. Previous configuration retained; retry Resume when the device is available."
+                    )
+                };
+                self.publish(AudioPhase::Failed, Some(message.clone()));
+                Err(message)
+            }
+        }
+    }
     async fn command(&mut self, command: AudioCommand) -> Reply {
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
@@ -466,6 +512,7 @@ impl Owner {
         let result = match command.action {
             // A failed export must not mark the independently running audio failed.
             AudioAction::SaveCopy { name } => return self.save_copy(name).await,
+            AudioAction::Reconfigure { stream } => return self.reconfigure(stream).await,
             AudioAction::SetControl { target, value } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Start audio before changing live controls".into());

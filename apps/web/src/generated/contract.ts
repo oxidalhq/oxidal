@@ -15,6 +15,10 @@ export type AudioAction =
       kind: "resume";
     }
   | {
+      kind: "reconfigure";
+      stream: StreamConfig;
+    }
+  | {
       enabled: boolean;
       kind: "set_boot";
     }

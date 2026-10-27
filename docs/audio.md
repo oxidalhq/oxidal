@@ -26,7 +26,7 @@ Controls and remaining handoff scope:
 - **Restart audio:** recover the audio worker without restarting the web/control service; show failure rather than silently changing devices.
 - **Use TONE3000:** preflight desktop/app availability, resolve pending edits, stop/release Oxidal audio, and launch the configured standalone app. A failed stop must not launch another audio owner. Keep Oxidal authoring open.
 - **Return to Oxidal:** release the managed standalone audio session, explicitly choose whether to import an exported preset, then resume the validated Oxidal rig. Do not automatically terminate unrelated app instances or overwrite edits.
-- **Audio devices:** refresh/inspect now; saved input/output, channels, rate/buffer selection and transactional Apply follow with the live engine.
+- **Audio devices:** inspect and check endpoints; apply input/output, channel maps and rate/buffer settings to the current saved-preset session with an explicit audio restart. Confirmed scalar adjustments are retained. Capability negotiation and reconnect handling remain pending.
 - **Full service shutdown/restart:** separate advanced maintenance, clearly labelled as disconnecting the UI; recovery must exist outside the stopped service.
 
 Start, Stop, Restart and Resume saved session now work through `/api/v1/audio` and Settings when the experimental worker is enabled. States distinguish unavailable, stopped, starting, running, stopping and failed. Session/revision checks reject stale commands. The supervisor owns accepted commands even if an HTTP client disconnects. Stop closes worker stdin, waits up to two seconds, then requests termination and waits again; it acknowledges release only after reaping the child. A failed stop retains ownership and blocks new probes/starts. A startup error, xrun, disconnect, nonfinite sample or two seconds without block progress fails closed without automatic fallback/restart.
@@ -87,8 +87,9 @@ refresh its `saved_copy` identity or check Library rather than replaying a lost 
 Export has a 25-second process deadline and a bounded reply. It consumes additional
 CPU/RAM; physical scheduling/overload behavior during export remains unqualified.
 
-Saving does not change playback settings or the boot selection. Restart still loads
-the starting preset; choose the new owned copy in playback settings to use it next.
+Saving does not change playback settings or the boot selection. Restart reconstructs
+the starting preset with the confirmed live scalar adjustments. Choose a saved copy
+explicitly to make it the immutable starting preset.
 Pending unapplied browser adjustments must be applied or discarded before saving.
 This persists the supported scalar state of the complete native preset, not delay
 buffers, arbitrary graph edits or unimplemented settings. Full settings authoring,
@@ -133,3 +134,22 @@ The supervisor writes `last-audio-session.json` atomically after successful star
 With boot playback disabled, startup reads and validates recovery metadata but does not open a device. Resume reconstructs the last confirmed scalar session before PCM opens. Explicit boot playback retains its existing saved-preset policy and may establish a new last session. Failed replacements retain the previous recovery settings. Corrupt recovery is surfaced while authoring remains available; checkpoint failures keep current sound and state in memory and retry after five seconds. A failed checkpoint is never reported as a failed audio worker.
 
 The maintained API unit tests cover bounded input, duplicate-control rejection and atomic publication. The real HTTP/process playback test additionally covers failed replacement, disk-error isolation, clean-daemon restart and explicit Resume without boot autoplay. Physical power-loss/device timing remains a hardware gate.
+
+## Apply device settings to the current tone
+
+Settings → Audio → Current device & buffers exposes the existing session's sample
+rate, buffer size/periods and channel routing. **Apply & restart audio** interrupts
+the stream, reopens it with the proposed settings and restores confirmed scalar
+edits before reporting readiness. It does not recall another preset or overwrite
+the offline draft. After stopping to check another duplex interface, **Use checked
+interface** copies those checks into this candidate and **Apply & resume audio**
+starts the same tone on it. Invalid input is rejected before releasing audio.
+
+`AudioAction::Reconfigure` is revision-checked and supervisor-owned across browser
+disconnects. A failed preparation retains the previous configuration and controls;
+if the old stream was running, the supervisor attempts to restore it. A failed
+rollback stays visibly failed with explicit Resume available. Successful changes
+are checkpointed by session recovery; the separate opt-in boot preference is not
+rewritten. This is an interrupting reconfiguration, not prepared/gapless switching.
+No capability range negotiation, clock compensation or automatic fallback device
+is implied. Physical device support and dropout/latency behavior remain unqualified.

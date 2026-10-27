@@ -117,6 +117,84 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
             state["revision"]
         );
     }
+    // Apply keeps the immutable tone identity and unsaved controls. Invalid
+    // candidates are rejected before releasing the currently running stream.
+    let before_apply = state.clone();
+    let mut stream = settings["stream"].clone();
+    stream["input"]["sample_rate"] = json!(44100);
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"reconfigure", "stream":stream})
+        )
+        .await
+        .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "audio").await, before_apply);
+    stream["output"]["sample_rate"] = json!(44100);
+    stream["input"]["period_frames"] = json!(256);
+    stream["output"]["period_frames"] = json!(256);
+    stream["input_map"] = json!([0, 0]);
+    let applied = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"reconfigure", "stream":stream}),
+    )
+    .await;
+    assert_eq!(applied.status(), 200);
+    state = applied.json().await.unwrap();
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["configured"]["stream"], stream);
+    assert_eq!(
+        state["configured"]["preset_id"],
+        before_apply["configured"]["preset_id"]
+    );
+    assert_eq!(state["controls"], before_apply["controls"]);
+    assert_eq!(state["modified"], true);
+    // Restore the fixture settings through the same real process path.
+    let restored = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"reconfigure", "stream":settings["stream"]}),
+    )
+    .await;
+    assert_eq!(restored.status(), 200);
+    state = restored.json().await.unwrap();
+    // A missing source defeats both candidate preparation and rollback. Keep the
+    // previous settings/edits for explicit recovery instead of accepting the candidate.
+    let original_path = root
+        .join("presets")
+        .join(format!("{}.t3kpreset", preset.sha256));
+    let displaced = root.join("displaced-preset");
+    std::fs::rename(&original_path, &displaced).unwrap();
+    let failed = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"reconfigure", "stream":stream}),
+    )
+    .await;
+    assert_eq!(failed.status(), 409);
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "failed");
+    assert_eq!(state["device_owned"], false);
+    assert_eq!(state["configured"], before_apply["configured"]);
+    assert!(
+        state["error"]
+            .as_str()
+            .unwrap()
+            .contains("Previous session could not resume")
+    );
+    std::fs::rename(&displaced, &original_path).unwrap();
+    let resumed = send(&client, &url, &state, json!({"kind":"resume"})).await;
+    assert_eq!(resumed.status(), 200);
+    state = resumed.json().await.unwrap();
+    assert_eq!(state["controls"], before_apply["controls"]);
     let mut measured = false;
     for _ in 0..30 {
         let m = get(&client, &url, "monitor").await;
