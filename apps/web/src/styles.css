@@ -1776,3 +1776,130 @@ textarea {
 .control-stack > .form-grid {
   margin-block: 0;
 }
+
+/* Secondary explanations yield space to controls, without shrinking touch targets. */
+.control-help {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.control-help > summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+.control-help > p {
+  margin: 0 0 0.75rem;
+  color: var(--muted-foreground);
+}
+.control-stack > p {
+  margin: 0;
+}
+.native-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: var(--action-gap);
+}
+.native-parameter-grid .native-value-trigger {
+  min-height: 88px;
+  height: auto;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  text-align: left;
+  white-space: normal;
+}
+.native-parameter-grid .native-value-trigger > span {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  flex: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.native-parameter-grid .native-value-trigger > strong {
+  font: 600 1.125rem/1.2 var(--font-mono);
+  flex: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.app-shell:not([data-view='rig']) .page-heading {
+  margin-bottom: 12px;
+}
+.app-shell:not([data-view='rig']) .page-heading .eyebrow {
+  display: none;
+}
+.app-shell:not([data-view='rig']) .page-heading h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.artwork-deck {
+  display: grid;
+  gap: var(--action-gap);
+  min-width: 0;
+}
+.artwork-deck > button {
+  justify-self: start;
+  max-width: 100%;
+}
+.artwork-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--control-gap);
+}
+.artwork-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  max-width: 100%;
+}
+.artwork-entry figcaption {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.artwork-entry figcaption strong,
+.artwork-entry figcaption span {
+  display: block;
+}
+.artwork-entry figcaption span {
+  color: var(--muted-foreground);
+}
+.artwork-thumb {
+  width: 56px;
+  flex-shrink: 0;
+}
+[data-artwork-density='compact'] .artwork-thumb {
+  width: 36px;
+}
+[data-artwork-density='compact'] .artwork-entry figcaption strong {
+  display: none;
+}
+.artwork-placeholder {
+  font-size: 0.7rem;
+  padding: 4px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.control-help > summary {
+  justify-content: space-between;
+  gap: 12px;
+}
+.control-help > summary::after {
+  content: '+';
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.control-help[open] > summary::after {
+  content: '−';
+}
+.channel-routing {
+  grid-column: 1 / -1;
+  width: 100%;
+}

@@ -65,60 +65,56 @@ export function ArtworkDeck({
   const shown = items.filter((item) => !blockId || item.block_id === blockId);
   if (!shown.length) return null;
   const pending = shown.some((item) => item.key && !item.cached);
+  const pictured = shown.filter((item) => item.key);
+  const missing = shown.filter((item) => !item.key);
+  const entry = (item: AssetArtwork) => (
+    <figure key={item.block_id} className="artwork-entry">
+      {item.key && (
+        <div className="artwork-thumb" data-artwork-image>
+          <ArtworkImage
+            key={`${item.block_id}-${item.key}-${item.cached}`}
+            src={item.cached ? artworkPath(id, owned, item.key) : undefined}
+            title={item.title}
+            gear={item.gear}
+          />
+        </div>
+      )}
+      <figcaption>
+        <strong>{item.title}</strong>
+        <span>
+          {item.gear} ·{' '}
+          {item.cached
+            ? 'Saved offline'
+            : item.key
+              ? 'Image not saved'
+              : 'No image supplied'}
+        </span>
+      </figcaption>
+    </figure>
+  );
   return (
     <div
-      className="space-y-2"
+      className="artwork-deck"
       aria-label="Asset artwork"
       data-artwork-density={compact ? 'compact' : 'gallery'}
     >
-      <div className="flex flex-wrap gap-2">
-        {shown.map((item) => (
-          <figure
-            key={item.block_id}
-            className={
-              compact
-                ? 'flex min-w-0 items-center gap-2 py-1'
-                : 'max-w-36 min-w-0 flex-1 basis-24'
-            }
-          >
-            <div
-              className={compact ? 'w-10 shrink-0' : undefined}
-              data-artwork-image
-            >
-              <ArtworkImage
-                key={`${item.block_id}-${item.key}-${item.cached}`}
-                src={
-                  item.cached && item.key
-                    ? artworkPath(id, owned, item.key)
-                    : undefined
-                }
-                title={item.title}
-                gear={item.gear}
-              />
-            </div>
-            <figcaption className="mt-1 text-xs wrap-anywhere">
-              {!compact && (
-                <>
-                  <strong>{item.title}</strong>
-                  <br />
-                </>
-              )}
-              {item.gear}
-              <span className="flex">
-                {item.cached
-                  ? 'Saved offline'
-                  : item.key
-                    ? 'Image not saved'
-                    : 'No image supplied'}
-              </span>
-            </figcaption>
-          </figure>
-        ))}
-      </div>
+      {pictured.length > 0 && (
+        <div className="artwork-list">{pictured.map(entry)}</div>
+      )}
+      {missing.length > 0 && !compact && (
+        <details className="control-help">
+          <summary>
+            {missing.length} {missing.length === 1 ? 'asset' : 'assets'} without
+            artwork
+          </summary>
+          <div className="artwork-list">{missing.map(entry)}</div>
+        </details>
+      )}
+
       {pending && !compact && (
         <Button
           variant="outline"
-          className="h-auto min-h-11 w-full whitespace-normal"
+          className="h-auto min-h-11 whitespace-normal"
           disabled={busy}
           onClick={() => void save()}
         >
@@ -156,7 +152,7 @@ function ArtworkImage({
     />
   ) : (
     <div
-      className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-current/50 p-2 text-center text-xs"
+      className="artwork-placeholder"
       aria-label={`${title}: image unavailable`}
     >
       {gear}

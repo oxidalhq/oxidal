@@ -277,8 +277,8 @@ impl Engine {
             .filter(|p| crate::protocol::live_writable(&p.id))
             .map(|p| LiveControl {
                 target: p.id.clone(),
-                label: live_label(&p.id).to_owned(),
-                display: live_display(&p),
+                label: parameter_label(&p.id).to_owned(),
+                display: parameter_display(&p),
                 value: p.normalized as f32,
                 toggle: p.toggle,
             })
@@ -527,7 +527,7 @@ impl Drop for Engine {
 
 // Physical presentation follows the pinned processor and native KnobScale.h;
 // values sent to DSP remain normalized, never double-converted.
-fn live_label(id: &str) -> &str {
+pub(crate) fn parameter_label(id: &str) -> &str {
     match id {
         "inputLevel" => "Input level",
         "outputLevel" => "Output level",
@@ -540,10 +540,13 @@ fn live_label(id: &str) -> &str {
         "gateRelease" => "Gate release",
         "gateHold" => "Gate hold",
         "gateRange" => "Gate depth",
+        "inputCalibrationLevel" => "Input calibration",
+        "osEnabled" => "Oversampling",
+        "osFactor" => "Oversampling factor",
         _ => id,
     }
 }
-fn live_display(p: &crate::protocol::Parameter) -> String {
+pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
     if p.toggle {
         return if p.value == 0.0 {
             "Off".into()

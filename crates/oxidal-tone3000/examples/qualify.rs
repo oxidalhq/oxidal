@@ -1013,6 +1013,33 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
             owned: false,
         },
     )?;
+    assert_eq!(
+        initial
+            .parameters
+            .iter()
+            .find(|p| p.id == "toneBass")
+            .unwrap()
+            .label,
+        "Bass"
+    );
+    assert!(
+        initial
+            .parameters
+            .iter()
+            .find(|p| p.id == "outputLevel")
+            .unwrap()
+            .display
+            .ends_with(" dB")
+    );
+    assert!(
+        initial
+            .parameters
+            .iter()
+            .find(|p| p.id == "gateHold")
+            .unwrap()
+            .display
+            .ends_with(" ms")
+    );
     let editable: Vec<_> = initial.parameters.iter().filter(|p| p.writable).collect();
     assert_eq!(editable.len(), 14);
     assert_eq!(

@@ -91,9 +91,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
   return (
     <section className="panel control-stack" aria-label="Audio devices">
       <h2>Audio devices</h2>
-      <p>
-        Inspect Linux audio interfaces while keeping the editor available.
-        Configuration checks do not start playback.
+      <p className="caption">
+        Check your interface, then start a saved preset.
       </p>
       <Button
         variant="outline"
@@ -104,11 +103,6 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       </Button>
       {inventory?.backend_available && inventory.endpoints.length > 0 && (
         <>
-          <p className="muted">
-            Checking briefly opens and releases one endpoint. It does not play,
-            record, save settings or select the live output. Check input and
-            output separately; this does not prove a duplex configuration.
-          </p>
           <fieldset
             disabled={busy || !connected}
             className="audio-probe-fields"
@@ -202,11 +196,19 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 />
               </label>
             </div>
-            <p className="caption">
-              Buffer size is the number of samples processed per block. Buffer
-              periods sets the total queued capacity. These settings affect
-              latency and stability; they are not a measured round-trip latency.
-            </p>
+            <details className="control-help">
+              <summary>Buffers &amp; configuration checks</summary>
+              <p>
+                Smaller buffers reduce delay but need more processing headroom.
+                Periods set queued capacity; this is not measured round-trip
+                latency.
+              </p>
+              <p>
+                Check input and output separately. A check briefly opens and
+                releases the device; it does not start playback or save the
+                setup.
+              </p>
+            </details>
             <Button
               variant="outline"
               disabled={!endpoint}

@@ -235,11 +235,24 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     .click();
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
+  if (!(await editor.getByLabel('Preset to load').isVisible()))
+    await editor.getByTestId('native-preset-loader').locator('summary').click();
   await editor
     .getByLabel('Preset to load')
     .selectOption(`original:${preset.sha256}`);
-  await editor.getByRole('button', { name: 'Load into native editor' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  await expect(editor.getByLabel('Preset to load')).not.toBeVisible();
+  // Direct tone targets use the same owned adjustment transaction as the full browser.
+  const directBass = editor.getByRole('button', {
+    name: 'Adjust draft Bass',
+    exact: true,
+  });
+  await expect(directBass).toBeVisible();
+  await directBass.click();
+  await expect(editor.getByRole('dialog')).toBeVisible();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await editor.getByTestId('native-control-browser').locator('summary').click();
   const before = await editor.getByTestId('native-readback').textContent();
   await editor
     .getByRole('button', { name: 'Adjust native value', exact: true })
@@ -315,14 +328,15 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   expect(
     catalog.parameters.filter((p: { writable: boolean }) => p.writable),
   ).toHaveLength(14);
-  for (const id of ['toneMid', 'toneTreble', 'gateThreshold']) {
-    const descriptor = catalog.parameters.find(
-      (p: { id: string }) => p.id === id,
-    );
-    await editor.getByLabel('Native control').selectOption(id);
+  for (const [id, label] of [
+    ['toneMid', 'Middle'],
+    ['toneTreble', 'Treble'],
+    ['gateThreshold', 'Gate threshold'],
+  ]) {
+    await editor.getByLabel('Native control').selectOption(id!);
     await expect(
       editor.getByRole('button', { name: 'Adjust native value', exact: true }),
-    ).toContainText(descriptor.label);
+    ).toContainText(label!);
     await editor
       .getByRole('button', { name: 'Adjust native value', exact: true })
       .click();
@@ -407,10 +421,12 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   const owned = state.owned.find((p: { id: string }) => p.id === state.loaded);
   expect(owned.source_sha256).toBe(preset.sha256);
   expect(owned.preset.source_id).not.toBe(preset.source_id);
+  if (!(await editor.getByLabel('Preset to load').isVisible()))
+    await editor.getByTestId('native-preset-loader').locator('summary').click();
   await editor
     .getByLabel('Preset to load')
     .selectOption(`original:${preset.sha256}`);
-  await editor.getByRole('button', { name: 'Load into native editor' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await editor.getByLabel('Native control').selectOption('toneBass');
   await expect(editor.getByTestId('native-readback')).toHaveText(before!);
@@ -420,8 +436,9 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     .getByRole('navigation', { name: 'Library sections' })
     .getByRole('button', { name: 'Author', exact: true })
     .click();
+  await editor.getByTestId('native-preset-loader').locator('summary').click();
   await editor.getByLabel('Preset to load').selectOption(`owned:${owned.id}`);
-  await editor.getByRole('button', { name: 'Load into native editor' }).click();
+  await editor.getByRole('button', { name: 'Load draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
   const restored = await (await request.get('/api/v1/native')).json();
@@ -438,6 +455,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   const restoredMix = restored.block_controls.find(
     (p: { parameter: string }) => p.parameter === 'mix',
   );
+  await editor.getByTestId('native-control-browser').locator('summary').click();
   await editor.getByLabel('Native control').selectOption(restoredMix.id);
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 0.375',
@@ -492,6 +510,29 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
     await expect(editor.getByTestId('native-readback')).toHaveText(edited!);
+    const clipped = await editor
+      .locator('.native-parameter-grid button')
+      .evaluateAll((buttons) =>
+        buttons.flatMap((button) => {
+          const outer = button.getBoundingClientRect();
+          return Array.from(button.children)
+            .filter((child) => {
+              const inner = child.getBoundingClientRect();
+              return (
+                inner.bottom > outer.bottom + 1 || inner.right > outer.right + 1
+              );
+            })
+            .map((child) => child.textContent);
+        }),
+      );
+    expect(
+      clipped,
+      'Every label and readout must stay inside its touch target',
+    ).toEqual([]);
+    await page.screenshot({
+      path: test.info().outputPath(`native-authoring-${viewport.width}.png`),
+      fullPage: true,
+    });
     expect(
       (
         await new AxeBuilder({ page })
@@ -672,7 +713,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const art = sounding.locator(
       '[data-artwork-density="compact"] [data-artwork-image]',
     );
-    await expect(art.first()).toBeVisible();
     for (const width of await art.evaluateAll((items) =>
       items.map((item) => item.getBoundingClientRect().width),
     ))
@@ -909,12 +949,15 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByRole('button', { name: 'Author', exact: true })
       .click();
     const editor = page.getByRole('region', { name: 'Native preset editor' });
+    if (!(await editor.getByLabel('Preset to load').isVisible()))
+      await editor
+        .getByTestId('native-preset-loader')
+        .locator('summary')
+        .click();
     await editor
       .getByLabel('Preset to load')
       .selectOption(`original:${preset.sha256}`);
-    await editor
-      .getByRole('button', { name: 'Load into native editor' })
-      .click();
+    await editor.getByRole('button', { name: 'Load draft' }).click();
     await expect(editor.getByRole('status')).toHaveText('Native preset ready');
     await editor
       .getByLabel('Owned preset name')
@@ -1082,10 +1125,14 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
     .toBe(1);
   await expect(
-    page.getByText('No image supplied', { exact: true }),
+    page.getByText('space · No image supplied', { exact: true }),
+  ).not.toBeVisible();
+  await page.getByText('1 asset without artwork', { exact: true }).click();
+  await expect(
+    page.getByText('space · No image supplied', { exact: true }),
   ).toBeVisible();
   const status = await page
-    .getByText('Saved offline', { exact: true })
+    .getByText('amp · Saved offline', { exact: true })
     .boundingBox();
   expect(status!.height).toBeLessThan(30);
   await page

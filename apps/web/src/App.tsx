@@ -565,7 +565,7 @@ export default function App() {
                     className="panel control-stack"
                     aria-label="Display preferences"
                   >
-                    <h2>Display</h2>
+                    <h2 className="sr-only">Display</h2>
                     <label className="field display-mode">
                       <span>Display mode</span>
                       <select
@@ -578,7 +578,7 @@ export default function App() {
                         <option value="epaper">E-paper</option>
                       </select>
                     </label>
-                    <p>Your choice is saved on this browser.</p>
+
                     <div className="action-row">
                       <Button
                         variant="outline"
@@ -625,18 +625,20 @@ export default function App() {
                     {screen.fullscreenError && (
                       <p role="alert">{screen.fullscreenError}</p>
                     )}
-                    <p className="caption">
-                      Keep-awake applies across Oxidal views while this page is
-                      visible. We retry when you return. Browser and
-                      power-saving settings may release it; fullscreen alone
-                      does not prevent screen timeout.
-                    </p>
-                    <p className="muted">
-                      Sunlight strengthens contrast; Dark stage reduces bright
-                      surfaces. E-paper uses plain monochrome surfaces without
-                      transitions. Screen brightness and e-paper refresh remain
-                      device settings.
-                    </p>
+                    <details className="control-help">
+                      <summary>Display &amp; screen help</summary>
+                      <p>
+                        Preferences are saved on this browser. Keep-awake works
+                        while Oxidal is visible and retries when you return.
+                        Browser power settings can release it; fullscreen alone
+                        does not prevent sleep.
+                      </p>
+                      <p>
+                        Sunlight increases contrast. Dark stage dims surfaces.
+                        E-paper removes colour and motion. Set brightness and
+                        e-paper refresh on your device.
+                      </p>
+                    </details>
                   </section>
                 </>
               )}

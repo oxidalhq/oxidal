@@ -192,6 +192,8 @@ impl Editor {
             serde_json::from_value(self.engine.catalog().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
         for parameter in &mut self.state.parameters {
+            parameter.label = crate::native::parameter_label(&parameter.id).to_owned();
+            parameter.display = crate::native::parameter_display(parameter);
             parameter.writable = writable(&parameter.id);
             parameter.staged = staged(&parameter.id);
         }

@@ -112,11 +112,6 @@ export function PlaybackSettings({
   return (
     <section className="control-stack" aria-label="Playback controls">
       <h3>Audio playback</h3>
-      <p>
-        Stop audio releases the interface while keeping the library and silent
-        authoring open. Saved presets play in a separate session; editing a
-        draft does not change its sound.
-      </p>
       <p role="status">
         Audio: {state?.phase ?? 'checking'}
         {state?.device_owned ? ' · interface reserved' : ''}
@@ -128,9 +123,8 @@ export function PlaybackSettings({
         </p>
       ) : (
         <>
-          <p className="muted">
-            Experimental playback — physical audio and live performance are not
-            qualified yet. Boot playback is opt-in; there is no device fallback.
+          <p className="caption">
+            Prototype audio · hardware qualification pending.
           </p>
           <div className="action-row">
             <Button
@@ -180,30 +174,34 @@ export function PlaybackSettings({
               ? 'Disable boot playback'
               : 'Use this session on boot'}
           </Button>
-          <p className="caption">
-            Stop, Resume and Restart retain confirmed live adjustments while the
-            daemon stays running. A new playback session starts from its
-            selected saved preset.
-          </p>
-          <p className="muted">
-            Boot playback restores the preset and device settings saved when
-            enabled. Later edits and session changes do not overwrite it.
-            Disable and enable again to replace it. Stop audio keeps this boot
-            preference.
-          </p>
-          <p>
-            To hand the interface to another application, stop audio and wait
-            for “stopped”. Launch the application separately; close its audio
-            session before resuming here.
-          </p>
+          <details className="control-help">
+            <summary>Playback &amp; boot help</summary>
+            <p>
+              Stop releases the interface and keeps Oxidal open. Resume and
+              Restart retain live adjustments. The last confirmed session is
+              checkpointed for recovery after a daemon restart.
+            </p>
+            <p>
+              Boot playback uses the saved preset and device setup captured when
+              enabled. Later edits are not saved to boot; disable and enable
+              again to replace it.
+            </p>
+            <p>
+              To use another audio app, stop here first. Close that app’s audio
+              session before resuming.
+            </p>
+          </details>
           {state?.configured && (
-            <section aria-label="Playback session configuration">
-              <h4>Playback session configuration</h4>
+            <details
+              className="control-help"
+              aria-label="Playback session configuration"
+            >
+              <summary>Current device &amp; buffers</summary>
               <p>Input: {configurationLabel(state.configured.stream.input)}</p>
               <p>
                 Output: {configurationLabel(state.configured.stream.output)}
               </p>
-            </section>
+            </details>
           )}
           <fieldset
             className="control-stack"
@@ -213,9 +211,8 @@ export function PlaybackSettings({
           >
             <legend>New playback session</legend>
             <p>
-              Check input and output above, then choose a saved preset. Both
-              directions must use the same hardware endpoint, rate and period
-              size.
+              Check input and output, then choose a preset. Use matching device,
+              rate and buffer settings.
             </p>
             <p aria-label="Checked audio configuration">
               Input: {input ? configurationLabel(input) : 'Not checked'} ·
@@ -242,40 +239,45 @@ export function PlaybackSettings({
                   ))}
                 </select>
               </label>
-              {(
-                [
-                  'Input left',
-                  'Input right',
-                  'Output left',
-                  'Output right',
-                ] as const
-              ).map((label, i) => {
-                const capture = i < 2;
-                const index = (i % 2) as 0 | 1;
-                const values = capture ? inputMap : outputMap;
-                return (
-                  <label key={label} className="field">
-                    {label} channel (1-based)
-                    <input
-                      type="number"
-                      min={1}
-                      max={(capture ? input : output)?.channels ?? 64}
-                      value={values[index] + 1}
-                      onChange={(e) => {
-                        const next: [number, number] = [...values];
-                        next[index] = Number(e.target.value) - 1;
-                        if (capture) setInputMap(next);
-                        else setOutputMap(next);
-                      }}
-                    />
-                  </label>
-                );
-              })}
+              <details className="control-help channel-routing">
+                <summary>Channel routing</summary>
+                <div className="form-grid">
+                  {(
+                    [
+                      'Input left',
+                      'Input right',
+                      'Output left',
+                      'Output right',
+                    ] as const
+                  ).map((label, i) => {
+                    const capture = i < 2;
+                    const index = (i % 2) as 0 | 1;
+                    const values = capture ? inputMap : outputMap;
+                    return (
+                      <label key={label} className="field">
+                        {label} channel (1-based)
+                        <input
+                          type="number"
+                          min={1}
+                          max={(capture ? input : output)?.channels ?? 64}
+                          value={values[index] + 1}
+                          onChange={(e) => {
+                            const next: [number, number] = [...values];
+                            next[index] = Number(e.target.value) - 1;
+                            if (capture) setInputMap(next);
+                            else setOutputMap(next);
+                          }}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                <p>
+                  Repeat an input channel for mono. Repeat an output channel to
+                  mix stereo to mono.
+                </p>
+              </details>
             </div>
-            <p className="muted">
-              Use the same input channel twice for mono input. Use the same
-              output channel twice for an equal stereo-to-mono mix.
-            </p>
             <Button
               disabled={!settings}
               onClick={() =>
