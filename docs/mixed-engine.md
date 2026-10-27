@@ -75,8 +75,7 @@ mono LV2 branches, removes its temporary input file, reopens the complete bundle
 and compares weighted parallel rendering with separate reference processors.
 It also exercises bypass, invalid-input recovery, resource-budget rejection,
 unsupported Preserve policy and 162-node explicit routing with overload latching.
-The current qualified DSP scope is whole native or guarded paired amp/cab plus scalar-only LV2; portable
-opaque LV2 state/assets, required-feature admission, one-port native stage layouts,
+The current qualified DSP scope is whole native or guarded paired amp/cab plus scalar LV2 and explicitly declared portable LV2 state/assets. Browser state/file authoring, required-feature admission, one-port native stage layouts,
 complete LV2 feature support and live prepared replacement still need integration.
 
 The older saved-render comparison retains its 400-block prewarm window because
@@ -120,8 +119,7 @@ phase variation. The older stereo executor remains uncompensated.
 
 `PreparedPorts::from_bundle` preflights every native profile, installed LV2 URI,
 audio-port declaration, complete control set and host buffer budget before creating
-processors. Unknown required extensions, opaque LV2 state/assets, unsupported
-features and Preserve tails are rejected. It loads exact verified native payloads
+processors. Unknown required extensions, unsupported features and Preserve tails are rejected. It loads exact verified native payloads
 and instantiates installed LV2 libraries; clients cannot supply library paths.
 
 The native codec baseline is derived from the pinned adapter source revision by
@@ -425,7 +423,29 @@ contain the model assets and are not committed.
 
 This is not browser conversion or live structural replacement. The source is a
 saved preset, not arbitrary unsaved native machine state. Pitch remains internal
-to the amp. General cab formats, opaque LV2 state, non-48-kHz split stages,
+to the amp. General cab formats, browser LV2 state authoring, non-48-kHz split stages,
 prepared switching, trails and physical timing remain unqualified.
 
-Atom Sequence transport exists in the LV2 library, but portable scalar-only recall rejects Atom effects until typed message/state persistence is implemented. It must not silently save a resource-loading plugin without its model/file state.
+Atom effects require an explicit portable state resource; scalar-only browser composition still excludes them. Live typed-message/file authoring remains pending.
+
+## Portable LV2 state and assets
+
+An LV2 instance can declare a version-1 `PluginState` JSON resource and exclusively
+owned asset resources. Verified asset bytes are materialized in a private directory
+before restore; the resource paths serve as portable aliases. Plugins finish
+cleanup and background work before the directory is removed, including failed
+preparation. Source filesystem paths are never needed for recall. State JSON is
+bounded to 8 MiB, with the LV2 library's property and payload budgets applied too.
+
+Isolated Save reconstructs the source and confirmed scalar edits, captures each
+declared state, updates its content hash, and verifies fresh restore and recapture
+before publishing the revision. This preserves imported resource state; it does
+not capture unconfirmed Atom messages or DSP history from the playing worker.
+Plugin-created files, nested Atom state and arbitrary required features remain
+unsupported. The browser picker stays scalar-only until typed resource authoring
+is integrated.
+
+The existing native qualification runner tests source-file removal, a missing
+alias with an unaffected existing session, isolated Save and fresh rendered recall.
+These tests establish offline persistence, not gapless transitions or physical
+real-time performance.

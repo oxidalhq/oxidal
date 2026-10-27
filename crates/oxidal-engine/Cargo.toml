@@ -17,6 +17,7 @@ oxidal-audio = { path = "../oxidal-audio", version = "0.1.0" }
 oxidal-graph.workspace = true
 oxidal-presets = { path = "../oxidal-presets", version = "0.1.0" }
 serde_json.workspace = true
+sha2 = "0.10"
 oxidal-tone3000 = { path = "../oxidal-tone3000", version = "0.1.0" }
 oxidal-lv2 = { path = "../oxidal-lv2", version = "0.1.0" }
 

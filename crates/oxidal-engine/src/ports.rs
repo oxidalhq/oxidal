@@ -61,8 +61,8 @@ struct Source {
     delay: Delay,
 }
 /// One owner, fixed blocks, explicit split/merge gains. This executes prepared
-/// instances with reported-delay compensation; it does not import plugins, restore
-/// opaque LV2 state, or promise callback-safe transitions.
+/// instances with reported-delay compensation and verified LV2 state/assets.
+/// It does not promise callback-safe transitions.
 #[derive(Debug)]
 pub struct PreparedPorts {
     nodes: Vec<PortNode>,
@@ -74,6 +74,8 @@ pub struct PreparedPorts {
     failed: bool,
     buffer_bytes: usize,
     latency_frames: u32,
+    // Declared after nodes so plugins finish worker cleanup before files disappear.
+    assets: crate::lv2_state::Assets,
 }
 impl PreparedPorts {
     /// The caller supplies processors prepared from this same verified document.
@@ -81,7 +83,7 @@ impl PreparedPorts {
     /// in bytes; there is no fixed instance count. Plugin allocations are separate.
     pub fn new(
         bundle: &Bundle,
-        mut processors: BTreeMap<String, Processor>,
+        processors: BTreeMap<String, Processor>,
         rate: f64,
         frames: usize,
         buffer_budget: usize,
@@ -106,16 +108,12 @@ impl PreparedPorts {
         if host.recall.tails != Tails::Cut {
             return Err("Preserve tails requires a qualified transition host".into());
         }
-        if host
-            .lv2
-            .iter()
-            .any(|p| p.state.is_some() || !p.assets.is_empty() || !p.required_features.is_empty())
-        {
-            return Err(
-                "Portable LV2 state, assets or declared features require unsupported restoration"
-                    .into(),
-            );
+        if host.lv2.iter().any(|p| !p.required_features.is_empty()) {
+            return Err("Unsupported declared LV2 features".into());
         }
+        let assets = crate::lv2_state::Assets::new(bundle)?;
+        // The moved parameter must drop before assets on every error path too.
+        let mut processors = processors;
         let indices: BTreeMap<_, _> = host
             .graph
             .nodes
@@ -191,6 +189,7 @@ impl PreparedPorts {
                     for (port, value) in crate::loading::control_values(instance, info)? {
                         p.set(port, value)?;
                     }
+                    assets.restore(p, instance, bundle)?;
                 }
                 NodeKind::Input => input = index,
                 NodeKind::Output => output = index,
@@ -299,7 +298,19 @@ impl PreparedPorts {
             failed: false,
             buffer_bytes,
             latency_frames: latency[output],
+            assets,
         })
+    }
+    pub(crate) fn lv2_state(
+        &mut self,
+        node: &str,
+        instance: &str,
+    ) -> Result<oxidal_lv2::PluginState, String> {
+        let paths = self.assets.paths(instance)?.to_vec();
+        let Some(Processor::Lv2(plugin)) = self.processor_mut(node) else {
+            return Err("Missing LV2 state processor".into());
+        };
+        plugin.save_state(&paths)
     }
     pub fn channels(&self) -> (usize, usize) {
         (

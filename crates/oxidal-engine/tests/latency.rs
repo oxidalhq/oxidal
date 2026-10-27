@@ -211,3 +211,136 @@ fn failed_latency_rollback_invalidates_the_session() {
     assert_eq!(l, [0.0; 64]);
     assert_eq!(r, [0.0; 64]);
 }
+
+fn state_bundle(world: &World, bad_alias: bool) -> Bundle {
+    use oxidal_lv2::{Plugin, StatePath};
+    use sha2::{Digest, Sha256};
+    let path = std::env::temp_dir().join(format!(
+        "oxidal-state-source-{}-{bad_alias}",
+        std::process::id()
+    ));
+    let model = 0.375_f32.to_ne_bytes().to_vec();
+    std::fs::write(&path, &model).unwrap();
+    let mut plugin = Plugin::new_ports(world, "urn:oxidal:test:atoms", 48000.0, 64).unwrap();
+    plugin.prepare_latency().unwrap();
+    let absolute = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+    plugin
+        .queue_atom(
+            2,
+            0,
+            "http://lv2plug.in/ns/ext/atom#Path",
+            absolute.as_bytes_with_nul(),
+        )
+        .unwrap();
+    plugin.process_mono(&mut [1.0; 64]).unwrap();
+    let state = plugin
+        .save_state(&[StatePath {
+            absolute: path.clone(),
+            alias: if bad_alias {
+                "assets/missing.bin"
+            } else {
+                "assets/model.bin"
+            }
+            .into(),
+        }])
+        .unwrap();
+    drop(plugin);
+    std::fs::remove_file(path).unwrap(); // No source pathname is available to the engine.
+    let state = serde_json::to_vec(&state).unwrap();
+    let mut value = serde_json::to_value(bundle(0, 0, false).manifest()).unwrap();
+    let host = &mut value["oxidal"];
+    host["lv2"][0] = json!({"id":"fx","pluginUri":"urn:oxidal:test:atoms","controls":{"mode":0},"state":"state","assets":["asset"],"requiredFeatures":[]});
+    value["resources"] = json!([
+        {"id":"state","path":"state.json","kind":"lv2-state","bytes":state.len(),"sha256":format!("{:x}", Sha256::digest(&state))},
+        {"id":"asset","path":"assets/model.bin","kind":"lv2-asset","bytes":model.len(),"sha256":format!("{:x}", Sha256::digest(&model))}
+    ]);
+    Bundle::from_parts(
+        serde_json::to_vec(&value).unwrap(),
+        BTreeMap::from([("state".into(), state), ("asset".into(), model)]),
+    )
+    .unwrap()
+}
+
+#[test]
+fn portable_state_assets_survive_isolated_save_without_original_files() {
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let fixture = state_bundle(&world, false);
+    let mut session = Session::new(fixture.clone(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    let render = |session: &mut Session| {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        session
+            .process(&[&[1.0; 64], &[0.5; 64]], &mut [&mut l, &mut r])
+            .unwrap();
+        assert_eq!(l, [0.84375; 64]); // 0.25 * restored model gain + 0.75 dry
+        assert_eq!(r, [0.5; 64]);
+    };
+    render(&mut session);
+    assert!(Session::new(state_bundle(&world, true), &world, 48000.0, 64, 1024 * 1024).is_err());
+    render(&mut session); // A failed candidate cannot damage the existing owner.
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-portable-state-store-{}",
+        std::process::id()
+    ));
+    let store = BundleStore::new(root.clone());
+    let revision = store.save(&fixture).unwrap();
+    let input = oxidal_audio::AudioProbe {
+        endpoint: "hw:CARD=Qualification,DEV=0".into(),
+        direction: oxidal_audio::Direction::Capture,
+        sample_rate: 48000,
+        channels: 2,
+        format: oxidal_audio::SampleFormat::S16,
+        period_frames: 64,
+        periods: 3,
+    };
+    let mut output = input.clone();
+    output.direction = oxidal_audio::Direction::Playback;
+    let request = SaveRequest {
+        settings: StartRig {
+            revision,
+            stream: oxidal_audio::StreamConfig {
+                input,
+                output,
+                input_map: [0, 1],
+                output_map: [0, 1],
+            },
+            recall: None,
+        },
+        recall: session.snapshot().recall(),
+        name: "Offline state".into(),
+    };
+    // Exercise the same separate export process used by the daemon. The child
+    // discovers the fixture through the normal installed-plugin path.
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+    let fixture_path = oxidal_lv2::qualification_bundle();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oxidal-rig-worker"))
+        .arg("--save-revision")
+        .env("OXIDAL_BUNDLE_STORE", &root)
+        .env("LV2_PATH", fixture_path.parent().unwrap())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    serde_json::to_writer(&mut input, &request).unwrap();
+    input.write_all(b"\n").unwrap();
+    drop(input);
+    let result = child.wait_with_output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let saved: String = serde_json::from_slice(&result.stdout).unwrap();
+    let direct = oxidal_engine::save_revision(&store, &world, request).unwrap();
+    assert_eq!(saved, direct);
+    drop(session);
+    drop(fixture);
+    let saved = store.read(&saved).unwrap();
+    std::fs::remove_dir_all(root).unwrap(); // Playback owns materialized bundle assets.
+    let mut restored = Session::new(saved, &world, 48000.0, 64, 1024 * 1024).unwrap();
+    render(&mut restored);
+}

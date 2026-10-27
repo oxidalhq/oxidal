@@ -37,11 +37,9 @@ impl PreparedPorts {
             .as_ref()
             .ok_or("Explicit host graph required")?;
         if host.recall.tails != Tails::Cut
-            || host.lv2.iter().any(|p| {
-                p.state.is_some() || !p.assets.is_empty() || !p.required_features.is_empty()
-            })
+            || host.lv2.iter().any(|p| !p.required_features.is_empty())
         {
-            return Err("Unsupported portable state, feature or tail policy".into());
+            return Err("Unsupported declared feature or tail policy".into());
         }
         let samples = host
             .graph
@@ -136,8 +134,8 @@ pub(crate) fn control_values(
     instance: &Lv2Instance,
     info: &PluginInfo,
 ) -> Result<Vec<(u32, f32)>, String> {
-    if info.ports.iter().any(|p| p.atom) {
-        return Err("Atom effects need message/state persistence before portable recall".into());
+    if info.ports.iter().any(|p| p.atom) && instance.state.is_none() {
+        return Err("Atom effects require an explicit portable state resource".into());
     }
     let controls: Vec<_> = info.ports.iter().filter(|p| p.input && p.control).collect();
     if controls.len() != instance.controls.len() {

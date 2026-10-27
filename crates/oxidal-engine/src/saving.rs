@@ -6,6 +6,7 @@ use oxidal_presets::{
     Bundle, BundleStore,
     manifest::{Origin, Resource, ResourceKind},
 };
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn save_revision(
@@ -149,6 +150,29 @@ pub fn save_revision(
             ResourceKind::Tone3000Preset,
         )?;
     }
+    let mut captured_states = BTreeMap::new();
+    for plugin in &host.lv2 {
+        let Some(state_id) = &plugin.state else {
+            continue;
+        };
+        let node = host
+            .graph
+            .nodes
+            .iter()
+            .find(|n| n.instance.as_ref() == Some(&plugin.id))
+            .ok_or("Missing LV2 state node")?;
+        let state = session.graph.lv2_state(&node.id, &plugin.id)?;
+        let bytes = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+        let resource = manifest
+            .resources
+            .iter_mut()
+            .find(|r| &r.id == state_id)
+            .ok_or("Missing state resource")?;
+        resource.bytes = bytes.len() as u64;
+        resource.sha256 = format!("{:x}", Sha256::digest(&bytes));
+        resources.insert(state_id.clone(), bytes);
+        captured_states.insert(plugin.id.clone(), (node.id.clone(), state));
+    }
     let used: BTreeSet<_> = manifest
         .tone3000
         .instances
@@ -178,6 +202,14 @@ pub fn save_revision(
             })
         {
             return Err("Saved partition controls did not survive fresh recall".into());
+        }
+    }
+    if !captured_states.is_empty() {
+        let mut reopened = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?;
+        for (instance, (node, expected)) in captured_states {
+            if reopened.graph.lv2_state(&node, &instance)? != expected {
+                return Err("Saved LV2 state did not survive fresh recall".into());
+            }
         }
     }
     store.save(&bundle).map_err(|e| e.to_string())

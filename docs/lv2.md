@@ -68,9 +68,10 @@ structured-Atom state and arbitrary restore-time features remain unsupported.
 Scalar controls are separate from opaque state and must also be restored by the
 caller. These APIs follow [LV2 State](https://lv2plug.in/ns/ext/state).
 
-This library capability is not yet connected to portable bundle Save/recovery or
-the browser file picker. Those workflows continue rejecting Atom effects rather
-than claiming a complete state save. Successful resource restoration is not a
+The mixed engine connects explicit state/assets to portable bundle restore and
+isolated Save with fresh recapture verification; see [mixed engine](mixed-engine.md).
+The browser file picker and live Atom editing remain pending. Scalar-only browser
+composition still rejects Atom effects. Successful resource restoration is not a
 prepared-switching, gapless or real-time performance guarantee.
 
 ## Background plugin work

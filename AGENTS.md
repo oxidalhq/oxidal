@@ -49,4 +49,4 @@ The portable mixed executor aligns valid LV2 reported latency after a zero-frame
 
 The LV2 host now supports bounded background Worker scheduling with owner-thread responses and drained teardown. Declared-port Atom Sequence transport is qualified separately; portable Atom/state authoring and full resource-loading plugin compatibility remain pending. Scalar-only authoring rejects Atom effects to avoid incomplete saves; see docs/lv2.md.
 
-The declared-port LV2 library supports bounded portable POD state and explicit asset aliases, with synchronous restore work and a maintained optional TooB NAM/A2 relocation test. Portable mixed Save and browser state authoring are still separate pending integrations; see docs/lv2.md.
+The declared-port LV2 library supports bounded portable POD state and explicit asset aliases, with synchronous restore work and a maintained optional TooB NAM/A2 relocation test. Portable mixed restore and isolated Save now retain explicit state/assets and verify fresh recapture; browser state/file authoring and live Atom edits remain pending. See docs/lv2.md and docs/mixed-engine.md.
