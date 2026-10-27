@@ -22,6 +22,7 @@ import { DebugConsole } from './DebugConsole';
 const WebTerminal = lazy(() =>
   import('./WebTerminal').then((m) => ({ default: m.WebTerminal })),
 );
+import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
@@ -643,7 +644,10 @@ export default function App() {
                 </>
               )}
               {settingsSection === 'connections' && (
-                <NetworkSettings connected={connected} />
+                <>
+                  <NetworkSettings connected={connected} />
+                  <Tone3000Account connected={connected} />
+                </>
               )}
               {settingsSection === 'audio' && (
                 <AudioSettings connected={connected} />

@@ -1016,3 +1016,37 @@ async fn terminal_is_optional_and_rejects_foreign_origin() {
     }
     task.abort();
 }
+
+#[tokio::test]
+async fn account_api_is_available_without_audio_and_rejects_secret_keys_and_stale_commands() {
+    let (url, task, root) = start(false).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/account/tone3000"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["phase"], "disconnected");
+    let request = json!({"session":state["session"],"expected_revision":state["revision"],"action":{"kind":"connect","client_id":"t3k_cs_do-not-accept"}});
+    let response = client
+        .post(format!("{url}/account/tone3000"))
+        .json(&request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 409);
+    let body = response.text().await.unwrap();
+    assert!(!body.contains("t3k_cs_do-not-accept"));
+    let response = client
+        .post(format!("{url}/account/tone3000"))
+        .json(&json!({"session":"stale","expected_revision":0,"action":{"kind":"disconnect"}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 409);
+    task.abort();
+    let _ = std::fs::remove_dir_all(root.with_extension("presets"));
+}

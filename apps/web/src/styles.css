@@ -30,9 +30,11 @@ select,
 input:not([type='checkbox']) {
   min-height: var(--touch-target);
 }
-a {
-  color: inherit;
-  text-decoration: none;
+@layer base {
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 .masthead {
   min-height: 64px;

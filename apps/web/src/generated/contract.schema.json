@@ -4,6 +4,12 @@
   "description": "Schema generation root. Rust wire types are the contract source of truth.\n@see docs/architecture.md",
   "type": "object",
   "properties": {
+    "account_command": {
+      "$ref": "#/$defs/AccountCommand"
+    },
+    "account_state": {
+      "$ref": "#/$defs/AccountState"
+    },
     "artwork": {
       "type": "array",
       "items": {
@@ -84,6 +90,8 @@
     }
   },
   "required": [
+    "account_state",
+    "account_command",
     "snapshot",
     "command",
     "rig",
@@ -136,6 +144,141 @@
         "signal",
         "security",
         "active"
+      ]
+    },
+    "AccountAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "client_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "connect"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "client_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cancel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "disconnect"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "AccountCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/AccountAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "action"
+      ]
+    },
+    "AccountPhase": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "requesting",
+        "waiting",
+        "connected",
+        "reconnecting",
+        "error"
+      ]
+    },
+    "AccountState": {
+      "type": "object",
+      "properties": {
+        "client_id": {
+          "description": "Public application identifier, never the secret key or an access token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "phase": {
+          "$ref": "#/$defs/AccountPhase"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        },
+        "user_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verification_uri": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "phase"
       ]
     },
     "Action": {

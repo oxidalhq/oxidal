@@ -8,6 +8,7 @@ mod native_editor;
 mod playback;
 mod playback_recovery;
 mod presets;
+mod provider;
 mod terminal;
 use axum::{
     Json, Router,
@@ -50,6 +51,8 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub account_state: provider::AccountState,
+    pub account_command: provider::AccountCommand,
     pub snapshot: Snapshot,
     pub command: Command,
     pub rig: Rig,
@@ -95,6 +98,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    account: provider::Account,
     artwork_work: Arc<tokio::sync::Semaphore>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
@@ -157,6 +161,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
     let shared = Arc::new(Shared {
+        account: provider::Account::new(
+            config.preset_dir.join("accounts"),
+            config.shutdown.clone(),
+        )?,
         artwork_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
@@ -191,6 +199,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     });
     let api = Router::new()
         .route("/health", get(health))
+        .route(
+            "/account/tone3000",
+            get(provider::state).post(provider::command),
+        )
         .route("/monitor", get(monitor::state))
         .route("/debug", get(debug::state).post(debug::command))
         .route("/terminal/{mode}", post(terminal::command))

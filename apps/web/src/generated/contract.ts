@@ -1,5 +1,17 @@
 /* Generated from Rust. Run pnpm contract:generate; do not edit. */
 
+export type AccountAction =
+  | {
+      client_id: string;
+      kind: "connect";
+    }
+  | {
+      kind: "cancel";
+    }
+  | {
+      kind: "disconnect";
+    };
+export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
 export type AudioAction =
   | {
       kind: "start";
@@ -254,6 +266,8 @@ export type TerminalCommand =
  * @see docs/architecture.md
  */
 export interface Contract {
+  account_command: AccountCommand;
+  account_state: AccountState;
   artwork: AssetArtwork[];
   audio_command: AudioCommand;
   audio_devices: AudioDevices;
@@ -279,6 +293,24 @@ export interface Contract {
   terminal_command: TerminalCommand;
   terminal_state: TerminalState;
   validation: Validation;
+}
+export interface AccountCommand {
+  action: AccountAction;
+  expected_revision: number;
+  session: string;
+}
+export interface AccountState {
+  /**
+   * Public application identifier, never the secret key or an access token.
+   */
+  client_id?: string | null;
+  error?: string | null;
+  expires_at?: number | null;
+  phase: AccountPhase;
+  revision: number;
+  session: string;
+  user_code?: string | null;
+  verification_uri?: string | null;
 }
 export interface AssetArtwork {
   block_id: string;

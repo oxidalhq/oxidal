@@ -334,3 +334,33 @@ export async function terminalCommand(
     throw new Error('Incompatible terminal service');
   return body;
 }
+
+export type AccountState = Contract['account_state'];
+export type AccountAction = Contract['account_command']['action'];
+const accountValidator = ajv.compile<AccountState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AccountState',
+});
+export async function tone3000Account(command?: {
+  state: AccountState;
+  action: AccountAction;
+}): Promise<AccountState> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/account/tone3000',
+      command
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session: command.state.session,
+              expected_revision: command.state.revision,
+              action: command.action,
+            }),
+          }
+        : undefined,
+    ),
+  );
+  if (!accountValidator(body)) throw new Error('Incompatible account response');
+  return body;
+}
