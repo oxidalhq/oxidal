@@ -101,3 +101,23 @@ test('empty mono and stereo working rigs need no invented native payload', () =>
     assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
   }
 });
+
+test('Rust and JSON Schema share manifest conformance vectors', () => {
+  for (const entry of read('conformance.json')) {
+    const value = read(`examples/${entry.base}.json`);
+    for (const change of entry.changes) {
+      const parts = change.path.slice(1).split('/');
+      const key = parts.pop();
+      const parent = parts.reduce((v, part) => v[part], value);
+      if (change.op === 'remove') {
+        if (Array.isArray(parent)) parent.splice(Number(key), 1);
+        else delete parent[key];
+      } else parent[key] = change.value;
+    }
+    assert.equal(
+      validate(value),
+      entry.shape,
+      `${entry.name}: ${JSON.stringify(validate.errors)}`,
+    );
+  }
+});

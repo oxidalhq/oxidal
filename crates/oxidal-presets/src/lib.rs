@@ -2,6 +2,7 @@
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
 mod graph;
+pub mod manifest;
 pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod model;
 mod native;

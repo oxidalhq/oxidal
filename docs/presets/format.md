@@ -1,6 +1,6 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). It does not yet implement this `.oxpreset` bundle importer, authoring, exporter, stripping operation or sync transport. Normative MUST/MUST NOT requirements describe the intended implementation.
+**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). The portable manifest reader now implements strict JSON/shape and graph/resource-reference semantics. ZIP interchange, runtime mixed authoring, export/stripping and sync are not yet implemented. Normative MUST/MUST NOT requirements describe the intended implementation.
 
 ## Purpose and choice
 
@@ -98,7 +98,7 @@ current payload. No dummy native instance or asset may be inserted to satisfy sh
 V1 graph nodes are logical `input`, `output`, `tone3000`, `lv2`, `split` and `merge`. A node declares audio input/output port counts. Each edge joins one scalar audio output port to one scalar audio input port by zero-based index. Stereo needs two explicit edges; never infer stereo or sum signals implicitly. Input/output nodes refer to logical rig I/O, not hardware addresses. V1 has one input and one output node, each with one or two channels. No feedback cycles are supported.
 
 - Node, instance and resource IDs MUST be unique in their scopes. Every reference resolves to the declared kind; every instance is used exactly once, and all nodes lie on an input-to-output path. Unused source provenance is allowed; unused processing instances are not.
-- Ports MUST be in range; input nodes have no inputs, output nodes no outputs, and edge pairs are unique. Each destination port has at most one source. Every declared input port of a processing/output node is connected. Sources can fan out only via an explicit split node.
+- Ports MUST be in range; input nodes have no inputs, output nodes no outputs, and edge pairs are unique. Each destination port has at most one source. Every declared input port of a processing/output node is connected. Each source port has at most one destination; fan-out uses distinct outputs of an explicit split node.
 - TONE3000 nodes have one/two corresponding input and output channels according to a qualified backend profile. LV2 port counts match discovered audio ports in their declared index order; MIDI/Atom/Control ports are not audio edges.
 - Split nodes have one input and two or more outputs, each copying that scalar input at unity. Merge nodes have two or more inputs and one output; `inputGains.length` equals input count and output is the explicit weighted sum. Use two split/merge nodes for independent stereo channels. Gain/level behavior is never implicit normalization.
 - LV2 instances retain plugin URI, numeric control-port values keyed by stable symbols, portable state resource when needed, owned asset resource IDs and required feature URIs. Discover the installed binary; the bundle contains no plugin executable. A plugin that cannot save portable state is not silently treated as portable.
@@ -161,7 +161,21 @@ Eligibility and conversion previews bind to the active document revision, SHA-25
 [Pure edited manifest](examples/pure-edited.json), [mixed delay manifest](examples/mixed-delay.json), [separate compatible-copy manifest](examples/compatible-copy.json), and
 [LV2-only manifest](examples/lv2-only.json) illustrate structure. These are **manifest-only, synthetic documentation examples**: sizes/hashes where present are placeholders, the example plugin URIs name no real plugins, and no native/audio payload is bundled. They pass shape validation but MUST fail full admission without actual matching native resources. They are not factory presets or audio compatibility fixtures.
 
-`pnpm presets:check` validates the schema and examples and rejects representative invalid manifest shapes; it does not decode native payloads or implement eligibility. Before format 1 is frozen or runtime compatibility is claimed, implement and pass:
+`pnpm presets:check` validates the schema, examples and shared
+[conformance vectors](conformance.json). `cargo test -p oxidal-presets` checks those
+same vectors against the Rust reader and adds duplicate/escaped JSON keys, bounded
+parsing, explicit split/merge routing, cycles, instance ownership, resource budgets
+and a 100-native-instance document. This is document validation, not DSP capacity.
+
+`manifest::Manifest::parse` preserves unknown optional extension objects and
+validates document declarations. `check_required_extensions` separately rejects
+unknown required capabilities; format 1 currently supports none. Parsing neither
+reads resource files nor loads plugins. Native profile, role/state fidelity,
+installed plugin ports/features, scalar ranges and requested tail policy still
+require backend qualification before preparation. A valid document is not a
+playable rig or authorization to export it.
+
+Before format 1 is frozen or runtime compatibility is claimed, implement and pass:
 
 | Gate                    | Required evidence                                                                                                                                                                                              |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

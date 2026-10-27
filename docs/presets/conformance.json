@@ -1,0 +1,776 @@
+[
+  {
+    "name": "example pure-edited",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": true,
+    "changes": []
+  },
+  {
+    "name": "example mixed-delay",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": true,
+    "changes": []
+  },
+  {
+    "name": "example compatible-copy",
+    "base": "compatible-copy",
+    "shape": true,
+    "valid": true,
+    "changes": []
+  },
+  {
+    "name": "example lv2-only",
+    "base": "lv2-only",
+    "shape": true,
+    "valid": true,
+    "changes": []
+  },
+  {
+    "name": "missing required nullable host",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "remove",
+        "path": "/oxidal"
+      }
+    ]
+  },
+  {
+    "name": "explicit null optional role",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/processingRole",
+        "value": null
+      }
+    ]
+  },
+  {
+    "name": "explicit null provenance",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/origin",
+        "value": null
+      }
+    ]
+  },
+  {
+    "name": "integer notation",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/formatVersion",
+        "value": 1.0
+      },
+      {
+        "op": "add",
+        "path": "/resources/0/bytes",
+        "value": 512.0
+      }
+    ]
+  },
+  {
+    "name": "unknown version",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/formatVersion",
+        "value": 2
+      }
+    ]
+  },
+  {
+    "name": "claimed export eligibility",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000Compatible",
+        "value": true
+      }
+    ]
+  },
+  {
+    "name": "wrong format",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/format",
+        "value": "t3k"
+      }
+    ]
+  },
+  {
+    "name": "invalid UUID",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/id",
+        "value": "not-a-uuid"
+      }
+    ]
+  },
+  {
+    "name": "Unicode name",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/name",
+        "value": "音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音"
+      }
+    ]
+  },
+  {
+    "name": "oversized Unicode name",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/name",
+        "value": "音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音"
+      }
+    ]
+  },
+  {
+    "name": "empty name",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/name",
+        "value": ""
+      }
+    ]
+  },
+  {
+    "name": "pure with no native",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances",
+        "value": []
+      }
+    ]
+  },
+  {
+    "name": "pure extracted role",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/processingRole",
+        "value": "amp"
+      }
+    ]
+  },
+  {
+    "name": "mixed extracted role",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/processingRole",
+        "value": "amp"
+      }
+    ]
+  },
+  {
+    "name": "invalid extracted role",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/processingRole",
+        "value": "preamp"
+      }
+    ]
+  },
+  {
+    "name": "wrong resource kind",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/kind",
+        "value": "lv2-state"
+      }
+    ]
+  },
+  {
+    "name": "missing native payload reference",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/preset",
+        "value": "missing"
+      }
+    ]
+  },
+  {
+    "name": "wrong origin kind",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/tone3000/instances/0/origin/resource",
+        "value": "currentTone3000Preset"
+      }
+    ]
+  },
+  {
+    "name": "duplicate resource identifier",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/1/id",
+        "value": "currentTone3000Preset"
+      }
+    ]
+  },
+  {
+    "name": "path traversal",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "../payload"
+      }
+    ]
+  },
+  {
+    "name": "path absolute",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "/tmp/payload"
+      }
+    ]
+  },
+  {
+    "name": "path backslash",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "a\\payload"
+      }
+    ]
+  },
+  {
+    "name": "path drive",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "C:/payload"
+      }
+    ]
+  },
+  {
+    "name": "path empty segment",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "a//payload"
+      }
+    ]
+  },
+  {
+    "name": "path dot",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "a/./payload"
+      }
+    ]
+  },
+  {
+    "name": "manifest overwrite",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/path",
+        "value": "Manifest.json"
+      }
+    ]
+  },
+  {
+    "name": "case collision",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/1/path",
+        "value": "TONE3000/CURRENT.T3KPRESET"
+      }
+    ]
+  },
+  {
+    "name": "case alias directories",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/1/path",
+        "value": "Tone3000/source.t3kpreset"
+      }
+    ]
+  },
+  {
+    "name": "file ancestor collision",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/1/path",
+        "value": "tone3000/current.t3kpreset/source"
+      }
+    ]
+  },
+  {
+    "name": "invalid digest",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/sha256",
+        "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    ]
+  },
+  {
+    "name": "resource overflow",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/bytes",
+        "value": 268435457
+      }
+    ]
+  },
+  {
+    "name": "resource zero",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/resources/0/bytes",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "name": "required extension missing",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/requiredExtensions",
+        "value": ["urn:future:effect"]
+      }
+    ]
+  },
+  {
+    "name": "required extension retained for capability check",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/requiredExtensions",
+        "value": ["urn:future:effect"]
+      },
+      {
+        "op": "add",
+        "path": "/extensions",
+        "value": {
+          "urn:future:effect": {
+            "gain": 2
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "duplicate required extensions",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/requiredExtensions",
+        "value": ["urn:future:effect", "urn:future:effect"]
+      }
+    ]
+  },
+  {
+    "name": "unknown optional metadata retained",
+    "base": "pure-edited",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/extensions",
+        "value": {
+          "urn:future:metadata": {
+            "name": "future"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "invalid extension namespace",
+    "base": "pure-edited",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/extensions",
+        "value": {
+          "unscoped": {}
+        }
+      }
+    ]
+  },
+  {
+    "name": "unknown nested node property",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/nodes/0/device",
+        "value": "hw:0"
+      }
+    ]
+  },
+  {
+    "name": "input with bypass field",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/nodes/0/bypassed",
+        "value": false
+      }
+    ]
+  },
+  {
+    "name": "processor missing bypass",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "remove",
+        "path": "/oxidal/graph/nodes/1/bypassed"
+      }
+    ]
+  },
+  {
+    "name": "port wrong type",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/edges/0/from/port",
+        "value": "0"
+      }
+    ]
+  },
+  {
+    "name": "port out of range",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/edges/0/from/port",
+        "value": 2
+      }
+    ]
+  },
+  {
+    "name": "edge node missing",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/edges/0/from/node",
+        "value": "missing"
+      }
+    ]
+  },
+  {
+    "name": "implicit fan-in",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/edges/1/to/port",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "name": "implicit fan-out",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/edges/1/from/port",
+        "value": 0
+      }
+    ]
+  },
+  {
+    "name": "unconnected input",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "remove",
+        "path": "/oxidal/graph/edges/0"
+      }
+    ]
+  },
+  {
+    "name": "duplicate node",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/nodes/1/id",
+        "value": "input"
+      }
+    ]
+  },
+  {
+    "name": "wrong instance kind",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/graph/nodes/1/instance",
+        "value": "delay"
+      }
+    ]
+  },
+  {
+    "name": "duplicate instance scope",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/id",
+        "value": "tone3000Main"
+      }
+    ]
+  },
+  {
+    "name": "missing LV2 state",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/state",
+        "value": "missing"
+      }
+    ]
+  },
+  {
+    "name": "wrong LV2 asset kind",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/assets",
+        "value": ["delayState"]
+      }
+    ]
+  },
+  {
+    "name": "state null",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/state",
+        "value": null
+      }
+    ]
+  },
+  {
+    "name": "invalid control symbol",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/controls",
+        "value": {
+          "not-a-symbol": 0
+        }
+      }
+    ]
+  },
+  {
+    "name": "control non numeric",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/lv2/0/controls/mix",
+        "value": "25%"
+      }
+    ]
+  },
+  {
+    "name": "unreferenced state",
+    "base": "mixed-delay",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "remove",
+        "path": "/oxidal/lv2/0/state"
+      }
+    ]
+  },
+  {
+    "name": "invalid tail policy",
+    "base": "mixed-delay",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "add",
+        "path": "/oxidal/recall/tails",
+        "value": "best-effort"
+      }
+    ]
+  }
+]
