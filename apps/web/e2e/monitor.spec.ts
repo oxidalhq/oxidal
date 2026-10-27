@@ -86,6 +86,20 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(panel.getByRole('status')).toHaveText('Saved preset · live');
   mixed = true;
   await expect(panel.getByRole('status')).toHaveText('Mixed rig · live');
+  const wrapped = await panel
+    .locator('.meter-heading > *')
+    .evaluateAll((items) =>
+      items.some((item) => {
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        const lines = new Set(
+          Array.from(range.getClientRects()).map((r) => Math.round(r.top)),
+        );
+        return lines.size > 1 || item.scrollWidth > item.clientWidth + 1;
+      }),
+    );
+  expect(wrapped).toBe(false);
+
   await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
   await expect(
     panel.getByRole('meter', { name: 'Output L peak' }),

@@ -49,7 +49,7 @@ function Meter({
       : 0;
   return (
     <div className="grid min-w-0 gap-1 rounded-md border border-border p-3">
-      <div className="flex justify-between gap-2 text-sm">
+      <div className="meter-heading">
         <strong>{label}</strong>
         <span
           className={clips > 0 ? 'text-destructive' : 'text-muted-foreground'}
@@ -184,24 +184,26 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
             : error ||
               (state?.source
                 ? `${state.source} · ${stale ? 'waiting for live readings' : 'live'}`
-                : 'No audio worker running')}
+                : 'Audio stopped')}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
+            aria-label={frozen ? 'Resume readings' : 'Freeze readings'}
             aria-pressed={frozen}
             onClick={() => setFrozen((v) => !v)}
           >
-            {frozen ? 'Resume readings' : 'Freeze readings'}
+            {frozen ? 'Resume' : 'Freeze'}
           </Button>
           <Button
             variant="outline"
+            aria-label="Reset view"
             onClick={() => {
               setBaseline(channels.map((c) => c.clips));
               setHistory([]);
             }}
           >
-            Reset view
+            Reset
           </Button>
           <Button
             variant="outline"
@@ -344,19 +346,20 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </dd>
         </div>
       </dl>
-      <p className="caption break-words">
-        Saved preset worker: {state?.audio_phase || 'reading'} · Graph worker:{' '}
-        {state?.graph_phase || 'reading'} · Mixed rig:{' '}
-        {state?.rig_phase || 'reading'}
-        {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
-      </p>
       {state?.error && (
         <p role="alert" className="error">
           {state.error}
         </p>
       )}
       <details>
-        <summary>About these measurements</summary>
+        <summary>Measurement details</summary>
+        <p className="caption break-words">
+          Saved preset worker: {state?.audio_phase || 'reading'} · Graph worker:{' '}
+          {state?.graph_phase || 'reading'} · Mixed rig:{' '}
+          {state?.rig_phase || 'reading'}
+          {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
+        </p>
+
         <p className="caption">
           Levels measure the mapped DSP input/output, before physical output
           mixing. −120 dBFS is the display floor. Clip counts are full-scale

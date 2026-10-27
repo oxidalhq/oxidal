@@ -34,6 +34,21 @@ async function fits(page: Page) {
       )
         problems.push(`${name}: effect content overflows`);
     }
+    const navigation = Array.from(
+      document.querySelectorAll<HTMLElement>('.masthead nav > button'),
+    );
+    for (const [index, button] of navigation.entries()) {
+      const rect = button.getBoundingClientRect();
+      if (button.scrollWidth > button.clientWidth + 1)
+        problems.push(`${button.textContent}: navigation label overflows`);
+      if (rect.width < 43.5)
+        problems.push(`${button.textContent}: navigation target too narrow`);
+      if (
+        index &&
+        rect.left - navigation[index - 1]!.getBoundingClientRect().right < 7.5
+      )
+        problems.push('Navigation targets need visible separation');
+    }
     // Visible separation is essential even when controls technically fit the viewport.
     for (const group of document.querySelectorAll('.action-row, .form-grid')) {
       const controls = Array.from(group.children)
