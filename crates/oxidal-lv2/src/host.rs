@@ -12,6 +12,7 @@ unsafe extern "C" {
     fn ox_lv2_count(w: *mut c_void) -> u32;
     fn ox_lv2_plugin(w: *mut c_void, index: u32) -> *const c_void;
     fn ox_lv2_uri(p: *const c_void) -> *const c_char;
+    fn ox_lv2_name(p: *const c_void) -> *const c_char;
     fn ox_lv2_ports(p: *const c_void) -> u32;
     fn ox_lv2_symbol(p: *const c_void, index: u32) -> *const c_char;
     fn ox_lv2_port(
@@ -115,8 +116,11 @@ impl World {
             )
         };
         let mut unsupported = (supported != 0).then(error);
+        // SAFETY: p borrows this live world; immediately copy the native name.
+        let name = unsafe { text(ox_lv2_name(p)) }.unwrap_or_else(|_| uri.clone());
         if !(1..=128).contains(&count) {
             return Ok(PluginInfo {
+                name,
                 uri,
                 ports: vec![],
                 unsupported: Some("Port count outside 1–128".into()),
@@ -173,6 +177,7 @@ impl World {
             unsupported = Some("Require mono/mono or stereo/stereo audio".into());
         }
         Ok(PluginInfo {
+            name,
             uri,
             ports,
             unsupported,

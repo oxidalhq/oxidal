@@ -8,6 +8,7 @@ fn contract_features_lifetime_bounds_readback_and_poison() {
     let catalog = world.plugins(48000.0).unwrap();
     assert_eq!(catalog.len(), 3);
     let info = catalog.iter().find(|p| p.uri == URI).unwrap();
+    assert!(!info.name.is_empty());
     assert!(info.unsupported.is_none());
     assert_eq!(info.ports.len(), 6);
     assert!(Plugin::new(&world, "urn:oxidal:test:unsupported", 48000.0, 64).is_err());

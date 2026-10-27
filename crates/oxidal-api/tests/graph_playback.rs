@@ -70,6 +70,40 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         .timeout(Duration::from_secs(20))
         .build()
         .unwrap();
+    for path in ["plugins/lv2", "plugins/lv2?sample_rate=48000&path=/tmp"] {
+        assert_eq!(
+            c.get(format!("{url}/{path}"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            400
+        );
+    }
+    assert_eq!(
+        c.get(format!("{url}/plugins/lv2?sample_rate=1"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    let catalog = get(&c, &url, "plugins/lv2?sample_rate=48000").await;
+    assert_eq!(catalog["sample_rate"], 48000);
+    let plugins = catalog["plugins"].as_array().unwrap();
+    let amp = plugins
+        .iter()
+        .find(|p| p["uri"] == "http://plugin.org.uk/swh-plugins/amp")
+        .unwrap();
+    assert_eq!(amp["name"], "Simple amplifier");
+    assert!(amp["unsupported"].is_null());
+    assert_eq!(amp["ports"][0]["symbol"], "gain");
+    assert_eq!(amp["ports"][0]["minimum"], -70.0);
+    let gverb = plugins
+        .iter()
+        .find(|p| p["uri"] == "http://plugin.org.uk/swh-plugins/gverb")
+        .unwrap();
+    assert!(gverb["unsupported"].is_string());
     let original = get(&c, &url, "state").await;
     let mut s = get(&c, &url, "graph-audio").await;
     assert_eq!(s["phase"], "stopped");
@@ -110,6 +144,16 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     assert!(s["processed_frames"].as_u64().unwrap() > 0);
     assert!(s["telemetry"]["frames"].as_u64().unwrap() > 0);
     assert!(s["telemetry"]["deadline_us"].as_f64().unwrap() > 0.0);
+    // A fresh scan (also used after apt installation) does not take the device,
+    // stop playback, change controls or open any plugin instance.
+    let rescanned = get(&c, &url, "plugins/lv2?sample_rate=96000").await;
+    assert_eq!(rescanned["sample_rate"], 96000);
+    let after_scan = get(&c, &url, "graph-audio").await;
+    assert_eq!(after_scan["phase"], "running");
+    assert_eq!(after_scan["control"], s["control"]);
+    assert!(
+        after_scan["processed_frames"].as_u64().unwrap() >= s["processed_frames"].as_u64().unwrap()
+    );
     let session = s["control"]["session"].clone();
     let action = control(&s, json!({"type":"set","target":"amp.gain","value":0.25}));
     apply(&c, &url, &mut s, action.clone()).await;

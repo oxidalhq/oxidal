@@ -35,6 +35,18 @@ const LilvPlugin* ox_lv2_plugin(void* world, uint32_t index) {
     return NULL;
 }
 const char* ox_lv2_uri(const LilvPlugin* p) { return lilv_node_as_uri(lilv_plugin_get_uri(p)); }
+// Lilv returns an owned name node. Copy before releasing it; Rust copies this
+// thread-local result before any subsequent metadata call.
+const char* ox_lv2_name(const LilvPlugin* p) {
+    static _Thread_local char name[4097];
+    LilvNode* n = lilv_plugin_get_name(p);
+    const char* text = n ? lilv_node_as_string(n) : NULL;
+    if (!text || !*text || strlen(text) >= sizeof(name)) {
+        lilv_node_free(n); return NULL;
+    }
+    memcpy(name, text, strlen(text) + 1);
+    lilv_node_free(n); return name;
+}
 uint32_t ox_lv2_ports(const LilvPlugin* p) { return lilv_plugin_get_num_ports(p); }
 const char* ox_lv2_symbol(const LilvPlugin* p, uint32_t index) {
     const LilvPort* port = lilv_plugin_get_port_by_index(p, index);

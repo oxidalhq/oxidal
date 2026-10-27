@@ -291,6 +291,7 @@ export interface Contract {
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
   library: Library;
+  lv2_catalog: PluginCatalog;
   model_page: Page2;
   model_query: ModelQuery;
   monitoring: Monitoring;
@@ -674,6 +675,35 @@ export interface Inspection {
   sha256: string;
   size_bytes: number;
   source_id?: string | null;
+}
+/**
+ * Fresh installed metadata, checked against the same admission rules as the host.
+ * This is not an instantiation, state-restoration or real-time guarantee.
+ */
+export interface PluginCatalog {
+  plugins: PluginInfo[];
+  sample_rate: number;
+}
+export interface PluginInfo {
+  name: string;
+  ports: Port[];
+  unsupported?: string | null;
+  uri: string;
+}
+export interface Port {
+  audio: boolean;
+  control: boolean;
+  default?: number | null;
+  index: number;
+  input: boolean;
+  integer: boolean;
+  latency: boolean;
+  logarithmic: boolean;
+  maximum?: number | null;
+  minimum?: number | null;
+  output: boolean;
+  symbol: string;
+  toggled: boolean;
 }
 export interface Page2 {
   data: Model[];

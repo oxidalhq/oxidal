@@ -8,9 +8,10 @@ mod host;
 pub use host::{Plugin, World};
 pub mod protocol;
 pub use protocol::Binding;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Port {
     pub index: u32,
     pub symbol: String,
@@ -73,8 +74,9 @@ impl Port {
         Ok((lo, hi))
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PluginInfo {
+    pub name: String,
     pub uri: String,
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
@@ -120,5 +122,53 @@ mod tests {
         p.maximum = Some(1.0);
         assert_eq!(p.denormalize(0.49).unwrap(), 0.0);
         assert_eq!(p.denormalize(0.5).unwrap(), 1.0);
+    }
+}
+
+/// Fresh installed metadata, checked against the same admission rules as the host.
+/// This is not an instantiation, state-restoration or real-time guarantee.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PluginCatalog {
+    pub sample_rate: u32,
+    pub plugins: Vec<PluginInfo>,
+}
+pub const CATALOG_LIMIT: usize = 4 * 1024 * 1024;
+impl PluginCatalog {
+    pub fn validate(&self) -> Result<(), String> {
+        if !(8000..=192000).contains(&self.sample_rate) || self.plugins.len() > 4096 {
+            return Err("Invalid LV2 catalog bounds".into());
+        }
+        let mut uris = std::collections::BTreeSet::new();
+        for plugin in &self.plugins {
+            if plugin.uri.is_empty()
+                || plugin.uri.len() > 4096
+                || plugin.name.is_empty()
+                || plugin.name.len() > 4096
+                || plugin.uri.contains(char::is_control)
+                || plugin.name.contains(char::is_control)
+                || !uris.insert(&plugin.uri)
+                || plugin.ports.len() > 128
+                || plugin.unsupported.as_ref().is_some_and(|s| s.len() > 4096)
+            {
+                return Err("Invalid LV2 catalog metadata".into());
+            }
+            let mut symbols = std::collections::BTreeSet::new();
+            for (index, port) in plugin.ports.iter().enumerate() {
+                if port.index as usize != index
+                    || port.symbol.is_empty()
+                    || port.symbol.len() > 4096
+                    || port.symbol.contains(char::is_control)
+                    || !symbols.insert(&port.symbol)
+                    || [port.minimum, port.maximum, port.default]
+                        .into_iter()
+                        .flatten()
+                        .any(|v| !v.is_finite())
+                {
+                    return Err("Invalid LV2 port metadata".into());
+                }
+            }
+        }
+        Ok(())
     }
 }

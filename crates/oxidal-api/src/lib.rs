@@ -7,6 +7,7 @@ mod monitor;
 mod native_editor;
 mod playback;
 mod playback_recovery;
+mod plugins;
 mod presets;
 mod provider;
 mod terminal;
@@ -51,6 +52,7 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub lv2_catalog: oxidal_lv2::PluginCatalog,
     pub stage_model: provider::download::StageModel,
     pub staged_model: provider::download::StagedModel,
     pub tone_page: provider::catalog::Page<provider::catalog::Tone>,
@@ -106,6 +108,7 @@ pub struct Config {
 struct Shared {
     account: provider::Account,
     artwork_work: Arc<tokio::sync::Semaphore>,
+    catalog_work: Arc<tokio::sync::Semaphore>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
     playback: playback::Playback,
@@ -172,6 +175,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             config.shutdown.clone(),
         )?,
         artwork_work: Arc::new(tokio::sync::Semaphore::new(1)),
+        catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
         playback: playback::Playback::new(&config)?,
@@ -222,6 +226,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/graph-audio",
             get(graph_playback::state).post(graph_playback::command),
         )
+        .route("/plugins/lv2", get(plugins::catalog))
         .route("/audio/devices", get(audio::devices))
         .route("/audio/probe", post(audio::probe))
         .route(

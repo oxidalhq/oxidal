@@ -53,3 +53,24 @@ Every lifecycle request includes the outer lifecycle session and expected revisi
 IPC uses newline-delimited JSON, bounded to 64 KiB requests and 256 KiB replies. Reader/writer threads have single-slot queues. Control and expiry run on the graph owner between transport steps, outside the DSP callback; commands may allocate and the owner loop is **not real-time qualified**. Worker status is polled by its daemon actor every 200 ms, without a request backlog. PCM no-progress, IPC timeout, process exit and malformed replies fail closed. Browser graph controls/SSE are not connected to this endpoint yet; status and commands are available through the versioned API.
 
 `pnpm lv2:check` builds a separate `qualification` feature with explicit ALSA-null access and runs `crates/oxidal-api/tests/graph_playback.rs`. It checks actual processing progress, scalar/native readback, injected MIDI feedback, owned cancel and autonomous expiry, edge routing, stale revisions, malformed input, HTTP disconnect, competing device ownership, stop/restart, forced child death and daemon shutdown/reaping. It uses the installed SWH amplifier, with no physical output. Ordinary `worker` builds cannot enable the null fixture. The null path is a test fixture, not an audio-quality or physical-device result.
+
+## Installed effects catalog
+
+`GET /api/v1/plugins/lv2?sample_rate=48000` rescans the configured graph worker's
+standard Lilv search paths. Use the actual session sample rate: sample-rate-dependent
+port ranges are resolved at discovery. Installing an LV2 package with the system
+package manager is followed by another scan; the daemon need not restart.
+
+The response contains plugin names, stable URIs, port metadata and an `unsupported`
+reason when the same host admission checks reject a plugin. It is metadata admission,
+not proof of successful instantiation, state recall or real-time performance. Optional
+features and opaque plugin state still require explicit host support/qualification.
+No browser-supplied bundle path or executable is accepted.
+
+Discovery runs in a disposable process without acquiring PCM or instantiating plugins.
+One scan can run at a time. Responses are limited to 4 MiB and discovery to ten seconds;
+failed workers are killed/reaped, including after the requesting browser disconnects.
+Unavailable/failed discovery returns an error rather than an empty successful catalog.
+The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
+rescanning while the graph worker continues processing. Browser New preset integration
+and persistent mixed-native/LV2 rigs remain separate work.
