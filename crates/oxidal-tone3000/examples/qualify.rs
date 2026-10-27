@@ -347,6 +347,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_editor(&root, &preset)?;
     qualify_editor_scalars(&root, &preset)?;
     qualify_factories()?;
+    qualify_model_preparation(&root, &preset)?;
     println!(
         "{}",
         serde_json::json!({"parameters":43,"tone_parameters":36,"machine_defaults":4,"dry_max_error":dry_error,"restored_a2_max_error":restore_error,"state_bytes":model_state.byte_len(),"non_a2_local_load_rejected":true,"live_audio_qualified":false})
@@ -1288,4 +1289,117 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
     assert_eq!(store.original(&original.sha256)?, bytes);
     eprintln!("qualify: 14 descriptor-driven globals preview/cancel/commit/save/reopen passed");
     Ok(())
+}
+
+fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<(), Box<dyn Error>> {
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(preset)?;
+    engine.wait_ready()?;
+    let target = engine.runtime()?["blocks"][0]["blockId"]
+        .as_str()
+        .ok_or("missing model target")?
+        .to_owned();
+    let path = root.join("prepared-a2.nam");
+    std::fs::copy(std::env::var("OXIDAL_TONE3000_TEST_MODEL")?, &path)?;
+    let tone = serde_json::json!({"id":7,"title":"Audition fixture","format":"nam","gear":"amp",
+        "models":[{"id":9,"name":"Prepared A2","model_url":"oxidal-model://fixture/model.nam"}]});
+    let before = engine.chain()?;
+    assert!(
+        engine
+            .prepare_model("missing-target", &path, &tone)
+            .is_err()
+    );
+    assert_eq!(engine.chain()?, before);
+    // Failed candidate parsing must not change metadata, loaded state or the selected block.
+    let corrupt = root.join("corrupt-a2.nam");
+    std::fs::write(&corrupt, b"not a NAM")?;
+    engine.prepare_model(&target, &corrupt, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "failed");
+    assert_eq!(engine.chain()?, before);
+    assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    engine.prepare_model(&target, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    assert_eq!(
+        engine.chain()?,
+        before,
+        "prepared is not yet audible/committed"
+    );
+    engine.model_preparation(2)?;
+    assert_eq!(engine.chain()?, before, "cancel retains exact chain");
+    engine.prepare_model(&target, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    engine.set_block(&target, "mix", 0.7)?;
+    let changed = engine.chain()?;
+    assert_eq!(
+        engine.model_preparation(0)?["phase"],
+        "failed",
+        "intervening control edit invalidates prepared snapshot"
+    );
+    assert_eq!(engine.chain()?, changed);
+    engine.prepare_model(&target, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    engine.model_preparation(1)?;
+    let applied = wait_preparation(&mut engine)?;
+    assert_eq!(applied["phase"], "applied", "{applied}");
+    assert_eq!(applied["block_id"], target);
+    assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    let controls = engine.live_controls()?;
+    assert!(controls.iter().any(|c| c.target.contains(&target)
+        && c.target.ends_with("mix")
+        && (c.value - 0.7).abs() < 1e-5));
+    let committed_chain = engine.chain()?;
+    engine.prepare_model(&target, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    engine.model_preparation(1)?;
+    assert_eq!(engine.model_preparation(2)?["phase"], "cancelled");
+    assert_eq!(
+        engine.chain()?,
+        committed_chain,
+        "cancel during transition retains metadata"
+    );
+    let insert = committed_chain["chain"]
+        .as_array()
+        .ok_or("missing chain")?
+        .iter()
+        .find(|b| b["kind"] == "insert")
+        .and_then(|b| b["blockId"].as_str())
+        .ok_or("missing insert")?
+        .to_owned();
+    let count = engine.runtime()?["blocks"].as_array().unwrap().len();
+    engine.prepare_model(&insert, &path, &tone)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "ready");
+    assert_eq!(engine.runtime()?["blocks"].as_array().unwrap().len(), count);
+    engine.model_preparation(1)?;
+    assert_eq!(wait_preparation(&mut engine)?["phase"], "applied");
+    assert_eq!(
+        engine.runtime()?["blocks"].as_array().unwrap().len(),
+        count + 1
+    );
+    let saved = engine.save_preset("Prepared offline recall")?;
+    drop(engine);
+    std::fs::remove_file(path)?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(&saved)?;
+    engine.wait_ready()?;
+    assert_eq!(engine.runtime()?["blocks"][0]["blockId"], target);
+    assert_eq!(engine.runtime()?["blocks"][0]["loaded"], true);
+    assert!(serde_json::to_string(&engine.chain()?)?.contains("Audition fixture"));
+    eprintln!(
+        "qualify: model prepare/failure/cancel/stale target/commit/offline embedded recall passed"
+    );
+    Ok(())
+}
+fn wait_preparation(engine: &mut Engine) -> Result<Value, Box<dyn Error>> {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        engine.process(&mut [0.01; 128], &mut [0.01; 128])?;
+        let status = engine.model_preparation(0)?;
+        if !matches!(status["phase"].as_str(), Some("preparing" | "applying")) {
+            return Ok(status);
+        }
+        if Instant::now() > deadline {
+            return Err("model preparation timeout".into());
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
 }

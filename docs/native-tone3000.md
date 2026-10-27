@@ -85,3 +85,29 @@ This API is control-thread preparation only. There is no browser hybrid conversi
 or simultaneous multi-instance host yet. Additional instance filters and processing
 cost mean a successful split is not an audio-equivalence, latency or gapless claim.
 Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).
+
+## Prepared model audition boundary
+
+`Engine::prepare_model` parses and prewarms one verified NAM/IR asset on a
+background thread while retaining the current block. The owner polls readiness,
+then explicitly commits or cancels. Missing targets, failed preparation and stale
+block/settings snapshots reject the candidate without replacing the previous
+model. Target settings are compared directly because native revision increments
+can be coalesced during continuous gestures. Existing block identity and controls
+survive replacement; insertion requires an exact existing insert slot.
+
+The commit currently uses the native wet-mute transition. It is **not gapless**
+and has not been qualified against physical audio deadlines. The adapter retains
+old engines until preparation disposal; allocation, retirement and native locks
+still need real-time review. Model preparation cancellation does not interrupt
+an already-running parser, but prevents its result from being committed.
+
+The maintained native qualification example covers invalid targets, failed
+parsing, cancellation, stale edits, replacement, exact-slot insertion and
+embedded offline recall after deleting the input asset. This is a native adapter
+boundary only: the sounding worker, browser selection, recovery and Save path
+must be connected before live provider audition is a delivered workflow.
+
+The build can migrate explicitly hash-pinned previous overlays in its owned
+source cache. Unknown local changes still fail; reference checkouts are never
+rewritten by that migration.

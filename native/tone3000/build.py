@@ -92,6 +92,14 @@ def prepare(seed=None):
         actual = digest(normalized(path))
         if actual == patch['after']:
             continue
+        if actual in patch.get('previous_after', []):
+            # Only a hash-pinned earlier overlay may migrate. Recover the exact
+            # pinned input in this owned build copy, never reset arbitrary edits.
+            original = subprocess.check_output(['git', 'show', f"HEAD:{patch['path']}"], cwd=repo).replace(b'\r\n', b'\n')
+            if digest(original) != patch['before']:
+                raise ValueError('Pinned overlay migration input differs')
+            path.write_bytes(original)
+            actual = digest(original)
         if actual != patch['before']:
             raise ValueError(f"Pinned patch input differs: {patch['path']}")
         # Patches use LF; exact input and output digests disallow fuzz/drift.

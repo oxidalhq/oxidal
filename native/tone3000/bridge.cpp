@@ -7,6 +7,7 @@
 #include <memory>
 #include <thread>
 #include "split.h"
+#include "audition.h"
 
 #define EXPORT extern "C" __attribute__((visibility("default")))
 namespace {
@@ -19,9 +20,10 @@ struct Engine {
   juce::MidiBuffer midi;
   juce::MemoryBlock captured;
   oxidal::SplitState split;
+  std::unique_ptr<OxidalModelPreparation> preparation;
   std::thread::id owner = std::this_thread::get_id();
   explicit Engine(int frames) : audio(2, frames) {}
-  ~Engine() { processor.releaseResources(); }
+  ~Engine() { preparation.reset(); processor.releaseResources(); }
 };
 Engine& engine(void* ptr) {
   if (!ptr) throw std::runtime_error("null engine");
@@ -300,5 +302,24 @@ EXPORT int oxidal_t3k_remove_block(void* ptr, const char* id) noexcept {
     auto& p = engine(ptr).processor;
     if (!id || !*id || std::strlen(id) > 128 || !p.removeChainBlock(id))
       throw std::runtime_error("Missing, stale or non-removable block");
+  });
+}
+
+EXPORT int oxidal_t3k_prepare_model(void* ptr, const char* target, const char* path, const char* metadata) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!target || !path || !metadata || std::strlen(metadata) > 32768) throw std::runtime_error("invalid preparation input");
+    if (e.preparation && !e.preparation->finishedPreparing()) throw std::runtime_error("previous model still preparing");
+    e.preparation.reset();
+    e.preparation = std::make_unique<OxidalModelPreparation>(e.processor, target, juce::File(path), juce::JSON::parse(metadata));
+  });
+}
+EXPORT int oxidal_t3k_preparation(void* ptr, int action, char* out, size_t capacity, size_t* written) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!e.preparation || action < 0 || action > 2) throw std::runtime_error("no model preparation");
+    if (action == 1) e.preparation->commit();
+    if (action == 2) e.preparation->cancel();
+    json(e.preparation->status(), out, capacity, written);
   });
 }

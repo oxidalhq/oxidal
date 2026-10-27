@@ -62,6 +62,19 @@ class NativeSources(unittest.TestCase):
         self.builder.prepare()
         self.assertEqual(target.read_text(), 'after\n')
 
+    def test_reviewed_previous_overlay_migrates_without_accepting_drift(self):
+        b = self.builder
+        target = b.REPOSITORIES['audiodsp'] / 'alias.h'
+        target.write_text('previous overlay\n')
+        b.PINS['patches'][0]['previous_after'] = [sha(b'previous overlay\n')]
+        b.prepare()
+        self.assertEqual(target.read_text(), 'after\n')
+        b.prepare()
+        self.assertEqual(target.read_text(), 'after\n')
+        target.write_text('unreviewed overlay\n')
+        with self.assertRaisesRegex(ValueError, 'Pinned patch input differs'):
+            b.prepare()
+
     def test_reviewed_path_does_not_allow_unreviewed_bytes(self):
         self.builder.prepare()
         (self.builder.REPOSITORIES['audiodsp'] / 'alias.h').write_text('drift\n')

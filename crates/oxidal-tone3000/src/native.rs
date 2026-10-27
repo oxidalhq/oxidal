@@ -16,6 +16,19 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_prepare_model(
+        engine: *mut c_void,
+        target: *const c_char,
+        path: *const c_char,
+        metadata: *const c_char,
+    ) -> i32;
+    fn oxidal_t3k_preparation(
+        engine: *mut c_void,
+        action: i32,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
     fn oxidal_t3k_remove_block(engine: *mut c_void, id: *const c_char) -> i32;
     fn oxidal_t3k_input_mode(engine: *mut c_void, mode: i32) -> i32;
     fn oxidal_t3k_chain(
@@ -500,6 +513,48 @@ impl Engine {
     pub fn pump(&mut self) -> Result<()> {
         // SAFETY: !Send/!Sync and exclusive borrow retain owner-thread message dispatch.
         checked(unsafe { oxidal_t3k_pump(self.ptr.as_ptr()) })
+    }
+    /// Start parsing/prewarming away from the DSP owner. No chain mutation until commit.
+    pub fn prepare_model(
+        &mut self,
+        target: &str,
+        path: &std::path::Path,
+        tone: &serde_json::Value,
+    ) -> Result<()> {
+        if target.is_empty() || target.len() > 128 || !path.is_absolute() || !path.is_file() {
+            return Err(NativeError(
+                "Invalid model preparation target or path".into(),
+            ));
+        }
+        let metadata = serde_json::to_string(tone)
+            .map_err(|_| NativeError("Invalid model metadata".into()))?;
+        if metadata.len() > 32768 {
+            return Err(NativeError("Model metadata exceeds limit".into()));
+        }
+        let target = string(target)?;
+        let path = string(
+            path.to_str()
+                .ok_or_else(|| NativeError("Non-UTF8 path".into()))?,
+        )?;
+        let metadata = string(&metadata)?;
+        // SAFETY: owner-thread handle and live NUL-terminated strings; native copies before returning.
+        checked(unsafe {
+            oxidal_t3k_prepare_model(
+                self.ptr.as_ptr(),
+                target.as_ptr(),
+                path.as_ptr(),
+                metadata.as_ptr(),
+            )
+        })
+    }
+    /// Poll, commit (1), or cancel (2) the pending preparation. Commit uses a native
+    /// wet-mute splice; this is not a prepared gapless engine crossfade.
+    pub fn model_preparation(&mut self, action: i32) -> Result<serde_json::Value> {
+        if !(0..=2).contains(&action) {
+            return Err(NativeError("Invalid preparation action".into()));
+        }
+        // SAFETY: same bounded JSON contract and exclusive owner as other adapter calls.
+        self.json(|p, b, n, w| unsafe { oxidal_t3k_preparation(p, action, b, n, w) })
     }
     pub fn load_local_model(&mut self, path: &std::path::Path) -> Result<serde_json::Value> {
         if !path.is_absolute() || !path.is_file() {
