@@ -1,7 +1,9 @@
 //! Bounded native preset inspection and immutable original storage.
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
+mod model;
 mod native;
+pub use model::{ModelAsset, ModelStore};
 mod owned;
 pub use owned::{OwnedPreset, OwnedStore};
 mod store;

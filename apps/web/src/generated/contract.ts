@@ -292,6 +292,8 @@ export interface Contract {
   preset: Inspection;
   rig: Rig;
   snapshot: Snapshot;
+  stage_model: StageModel;
+  staged_model: StagedModel;
   terminal_command: TerminalCommand;
   terminal_state: TerminalState;
   tone_page: Page;
@@ -790,6 +792,18 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface StageModel {
+  model_id: number;
+  tone_id: number;
+}
+export interface StagedModel {
+  id: string;
+  model_id: number;
+  name: string;
+  sha256: string;
+  title: string;
+  tone_id: number;
 }
 export interface TerminalState {
   available: boolean;

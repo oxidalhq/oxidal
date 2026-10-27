@@ -8,10 +8,12 @@ use axum::{
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 static NEXT: AtomicUsize = AtomicUsize::new(0);
-fn tone() -> serde_json::Value {
+pub(in crate::provider) fn tone() -> serde_json::Value {
     json!({"id": 7,"title":"Fixture amp", "user":{"username":"creator","display_name":null}, "gear":"amp","format":"nam","license":"t3k","images":["https://images.example.test/amp.png"],"url":"https://www.tone3000.com/tones/fixture","models_count":1,"a2_models_count":1})
 }
-async fn account(app: Router) -> (Account, tokio::task::JoinHandle<()>, std::path::PathBuf) {
+pub(in crate::provider) async fn account(
+    app: Router,
+) -> (Account, tokio::task::JoinHandle<()>, std::path::PathBuf) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let origin = format!("http://{}", listener.local_addr().unwrap());
     let app = app.route("/api/v1/oauth/token",post(|| async { Json(json!({"access_token":"fixture-access", "refresh_token":"fixture-refresh", "expires_in":3600,"token_type":"bearer"})) }));

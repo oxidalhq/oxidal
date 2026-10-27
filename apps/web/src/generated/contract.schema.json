@@ -85,6 +85,12 @@
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
+    "stage_model": {
+      "$ref": "#/$defs/StageModel"
+    },
+    "staged_model": {
+      "$ref": "#/$defs/StagedModel"
+    },
     "terminal_command": {
       "$ref": "#/$defs/TerminalCommand"
     },
@@ -102,6 +108,8 @@
     }
   },
   "required": [
+    "stage_model",
+    "staged_model",
     "tone_page",
     "model_page",
     "tone_query",
@@ -3048,6 +3056,62 @@
         "process_us_max",
         "deadline_us",
         "invalid_samples"
+      ]
+    },
+    "StageModel": {
+      "type": "object",
+      "properties": {
+        "model_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tone_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tone_id",
+        "model_id"
+      ]
+    },
+    "StagedModel": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "model_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "tone_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "tone_id",
+        "model_id",
+        "title",
+        "name",
+        "sha256"
       ]
     },
     "StartAudio": {

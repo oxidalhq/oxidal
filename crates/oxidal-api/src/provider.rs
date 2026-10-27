@@ -19,6 +19,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Instant;
 pub(super) mod catalog;
+pub(super) mod download;
 mod storage;
 #[cfg(test)]
 mod tests;

@@ -129,7 +129,7 @@ fn https(value: &str) -> bool {
     })
 }
 impl Tone {
-    fn valid(&self) -> bool {
+    pub(super) fn valid(&self) -> bool {
         self.id > 0
             && text(&self.title, 512)
             && text(&self.user.username, 128)
@@ -145,7 +145,7 @@ impl Tone {
     }
 }
 impl Model {
-    fn valid(&self) -> bool {
+    pub(super) fn valid(&self) -> bool {
         self.id > 0
             && self.tone_id > 0
             && text(&self.name, 512)
@@ -239,7 +239,7 @@ impl Account {
         Ok(tone)
     }
 }
-async fn fetch<T: serde::de::DeserializeOwned>(
+pub(super) async fn fetch<T: serde::de::DeserializeOwned>(
     access: &Access,
     path: &str,
     query: &[(&str, String)],
@@ -294,4 +294,4 @@ pub(crate) async fn tone(State(shared): State<Arc<Shared>>, Path(id): Path<u64>)
     reply(shared.account.tone(id).await)
 }
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

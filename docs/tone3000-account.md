@@ -47,3 +47,20 @@ These metadata endpoints do not yet change the sounding chain or establish
 live model audition/offline-save readiness. The selection transaction must prepare
 the requested model before changing its exact target and retain the previous
 sound on failure; the upstream replacement failure path can bypass that block.
+
+`POST /api/v1/tone3000/stage` accepts only `tone_id` and `model_id`, verifies
+both against the connected account, and downloads the selected NAM/IR. It does
+not accept browser-supplied URLs or filesystem paths. The initial authenticated
+request must use the exact provider model-download path. Redirects allow only
+HTTPS on `api.tone3000.com`, without the account Bearer token. Interrupted,
+empty, oversized, unavailable and untrusted downloads do not publish an asset.
+Account changes invalidate transfer replies as well as catalog replies.
+
+Audition assets live under `OXIDAL_PRESET_DIR/audition-models`, separate from the
+saved-preset library. A content hash verifies model bytes; a second hash identifies
+metadata including creator/license/source information and the selected model.
+Atomic publication, file and directory sync, regular-file checks and verified
+reads support restart/offline reuse and reject tampering. Expiring download URLs
+and tokens are not persisted in asset metadata. Artwork URLs are retained but
+this slice does not yet download artwork. Native preparation must still validate
+model contents before applying them; cache integrity is not DSP readiness.
