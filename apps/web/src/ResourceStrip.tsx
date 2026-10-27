@@ -25,11 +25,15 @@ export function ResourceStrip({
     let sequence: number | undefined;
     let advanced = performance.now();
     async function refresh() {
+      if (!active) return;
+      clearTimeout(timer);
+      pending?.abort();
       const abort = new AbortController();
       pending = abort;
       const deadline = setTimeout(() => abort.abort(), 4000);
       try {
         const next = await monitoring(abort.signal);
+        if (!active || pending !== abort) return;
         if (sequence !== next.sequence) {
           sequence = next.sequence;
           advanced = performance.now();
@@ -41,18 +45,27 @@ export function ResourceStrip({
           setDisconnected(false);
         }
       } catch {
-        if (active) setDisconnected(true);
+        if (active && pending === abort) setDisconnected(true);
       } finally {
         clearTimeout(deadline);
-        if (active)
+        if (active && pending === abort)
           timer = setTimeout(
             () => void refresh(),
             displayMode === 'epaper' ? 5000 : 1000,
           );
       }
     }
+    // Poll remains the fallback. Lifecycle SSE only invalidates the snapshot;
+    // it never guesses state from a button click or increases meter refresh rates.
+    const events = new EventSource('/api/v1/monitor/events');
+    events.addEventListener('lifecycle', () => {
+      sequence = undefined;
+      advanced = performance.now();
+      void refresh();
+    });
     void refresh();
     return () => {
+      events.close();
       active = false;
       pending?.abort();
       clearTimeout(timer);
@@ -62,8 +75,20 @@ export function ResourceStrip({
     state?.audio_phase === 'running' ||
     state?.graph_phase === 'running' ||
     state?.rig_phase === 'running';
+  const starting = [
+    state?.audio_phase,
+    state?.graph_phase,
+    state?.rig_phase,
+  ].includes('starting');
+  const stopping = [
+    state?.audio_phase,
+    state?.graph_phase,
+    state?.rig_phase,
+  ].includes('stopping');
   const failed =
     !running &&
+    !starting &&
+    !stopping &&
     (state?.audio_phase === 'failed' ||
       state?.graph_phase === 'failed' ||
       state?.rig_phase === 'failed');
@@ -99,13 +124,19 @@ export function ResourceStrip({
     ? 'Disconnected'
     : !state
       ? 'Connecting'
-      : failed
-        ? 'Audio failed'
-        : running
-          ? fresh
-            ? 'Audio running'
-            : 'Audio stale'
-          : 'Audio stopped';
+      : running
+        ? fresh
+          ? 'Audio running'
+          : state.audio
+            ? 'Audio stale'
+            : 'Awaiting meters'
+        : starting
+          ? 'Audio starting'
+          : stopping
+            ? 'Audio stopping'
+            : failed
+              ? 'Audio failed'
+              : 'Audio stopped';
   return (
     <aside className="resource-strip" aria-label="DSP and system resources">
       <div className="resource-strip-state">

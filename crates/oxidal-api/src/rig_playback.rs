@@ -748,6 +748,9 @@ impl RigPlayback {
             state,
         })
     }
+    pub(super) fn subscribe(&self) -> watch::Receiver<RigAudioState> {
+        self.state.clone()
+    }
     pub fn snapshot(&self) -> RigAudioState {
         let mut state = self.state.borrow().clone();
         state.start_on_boot = self.boot.enabled(Role::Mixed);

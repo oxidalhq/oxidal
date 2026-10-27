@@ -2585,6 +2585,10 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   await expect(
     rig.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeVisible();
+  // Lifecycle invalidation bypasses the BOOX five-second meter poll.
+  await expect(page.getByTestId('resource-state')).toHaveText('Audio running', {
+    timeout: 2500,
+  });
   for (const size of [
     viewport,
     { width: viewport.height, height: viewport.width },

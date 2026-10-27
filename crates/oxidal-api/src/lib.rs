@@ -239,6 +239,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))
         .route("/tone3000/models", get(provider::catalog::models))
         .route("/monitor", get(monitor::state))
+        .route("/monitor/events", get(monitor::events))
         .route("/debug", get(debug::state).post(debug::command))
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))

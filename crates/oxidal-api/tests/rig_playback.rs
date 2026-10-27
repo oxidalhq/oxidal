@@ -308,7 +308,46 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     }
     assert!(monitored);
     assert!(before_frames > 0);
+    // The monitor sends lifecycle invalidations immediately, not every meter sample.
+    // This is the same stream used to bypass BOOX's five-second polling interval.
+    let mut events = c.get(format!("{url}/monitor/events")).send().await.unwrap();
+    assert!(events.status().is_success());
+    assert!(
+        events.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/event-stream")
+    );
+    let first = events.chunk().await.unwrap().unwrap();
+    assert!(
+        std::str::from_utf8(&first)
+            .unwrap()
+            .contains("event: lifecycle")
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1100), events.chunk())
+            .await
+            .is_err(),
+        "steady meters must not wake e-paper"
+    );
     apply(&c, &url, json!({"kind":"stop"})).await;
+    let changed = tokio::time::timeout(Duration::from_millis(750), events.chunk())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        std::str::from_utf8(&changed)
+            .unwrap()
+            .contains("event: lifecycle")
+    );
+    let monitor = get(&c, &url, "monitor").await;
+    assert!(matches!(
+        monitor["rig_phase"].as_str(),
+        Some("stopping" | "stopped")
+    ));
+    assert!(monitor["audio"].is_null());
+    drop(events);
     assert_ne!(
         c.post(format!("{url}/audio/probe"))
             .json(&stream()["input"])

@@ -1,10 +1,19 @@
 //! Decimated monitoring outside worker/audio threads. Unsupported host values stay null.
 use crate::Shared;
-use axum::{Json, extract::State, http::header, response::IntoResponse};
+use axum::{
+    Json,
+    extract::State,
+    http::header,
+    response::{
+        IntoResponse, Sse,
+        sse::{Event, KeepAlive},
+    },
+};
 use oxidal_audio::{StreamConfig, lifecycle::AudioPhase, meter::Snapshot};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
+    convert::Infallible,
     fs::File,
     io::Read,
     sync::{Arc, Weak},
@@ -121,23 +130,49 @@ fn phase(p: AudioPhase) -> String {
     .into()
 }
 pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
+    let Some(initial) = shared.upgrade() else {
+        return;
+    };
+    let mut native_updates = initial.playback.subscribe();
+    let mut graph_updates = initial.graph_playback.subscribe();
+    let mut rig_updates = initial.rig_playback.subscribe();
+    drop(initial);
     tokio::spawn(async move {
         let mut previous = None;
+        let mut host = Host::default();
+        let mut phases = None;
         let mut sequence = 0;
         let mut graph_frames = None;
         let mut graph_time = Instant::now();
         let mut timer = tokio::time::interval(Duration::from_secs(1));
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            timer.tick().await;
+            let timed = tokio::select! {
+                _ = timer.tick() => true,
+                change = native_updates.changed() => { if change.is_err() { break; } false },
+                change = graph_updates.changed() => { if change.is_err() { break; } false },
+                change = rig_updates.changed() => { if change.is_err() { break; } false },
+            };
+            let current = (
+                native_updates.borrow_and_update().phase,
+                graph_updates.borrow_and_update().phase,
+                rig_updates.borrow_and_update().phase,
+            );
+            if !timed && phases == Some(current) {
+                continue;
+            }
+            phases = Some(current);
             let Some(shared) = shared.upgrade() else {
                 break;
             };
-            let Ok((host, next)) = tokio::task::spawn_blocking(move || sample(previous)).await
-            else {
-                continue;
-            };
-            previous = next;
+            // Host sampling stays at 1 Hz; lifecycle notifications do not inflate CPU deltas.
+            if timed
+                && let Ok((next_host, next)) =
+                    tokio::task::spawn_blocking(move || sample(previous)).await
+            {
+                host = next_host;
+                previous = next;
+            }
             sequence += 1;
             let native = shared.playback.snapshot();
             let graph = shared.graph_playback.snapshot();
@@ -180,7 +215,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
             };
             updates.send_replace(Monitoring {
                 sequence,
-                host,
+                host: host.clone(),
                 audio_phase: phase(native.phase),
                 graph_phase: phase(graph.phase),
                 rig_phase: phase(rig.phase),
@@ -207,6 +242,35 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> impl IntoRespons
         [(header::CACHE_CONTROL, "no-store")],
         Json(shared.monitor.borrow().clone()),
     )
+}
+/// A read-only invalidation stream, not an audio meter stream. Slow displays
+/// immediately re-fetch the authoritative snapshot when playback changes.
+pub(super) async fn events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
+    let mut receiver = shared.monitor.clone();
+    let mut shutdown = shared.config.shutdown.clone();
+    let stream = async_stream::stream! {
+        let mut previous = None;
+        loop {
+            let key = {
+                let snapshot = receiver.borrow_and_update();
+                (snapshot.audio_phase.clone(), snapshot.graph_phase.clone(), snapshot.rig_phase.clone(), snapshot.audio.is_some())
+            };
+            if previous.as_ref() != Some(&key) {
+                previous = Some(key);
+                yield Ok::<Event, Infallible>(Event::default().event("lifecycle").data("refresh"));
+            }
+            tokio::select! {
+                changed = receiver.changed() => { if changed.is_err() { break; } },
+                _ = async {
+                    match shutdown.as_mut() {
+                        Some(signal) => { let _ = signal.changed().await; },
+                        None => std::future::pending::<()>().await,
+                    }
+                } => break,
+            }
+        }
+    };
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
 }
 #[cfg(test)]
 mod tests {

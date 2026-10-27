@@ -528,6 +528,9 @@ impl GraphPlayback {
             finished,
         })
     }
+    pub(super) fn subscribe(&self) -> watch::Receiver<GraphAudioState> {
+        self.state.clone()
+    }
     pub fn snapshot(&self) -> GraphAudioState {
         let mut state = self.state.borrow().clone();
         state.start_on_boot = self.boot.enabled(Role::Effects);

@@ -1010,6 +1010,9 @@ impl Playback {
     pub fn telemetry(&self) -> Option<(oxidal_audio::meter::Snapshot, std::time::Instant)> {
         *self.meters.borrow()
     }
+    pub(super) fn subscribe(&self) -> watch::Receiver<AudioState> {
+        self.state.clone()
+    }
     pub fn snapshot(&self) -> AudioState {
         let mut state = self.state.borrow().clone();
         state.boot_error = self.boot.error();
