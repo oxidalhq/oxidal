@@ -12,6 +12,7 @@ mod presets;
 mod provider;
 mod rig_library;
 mod rig_playback;
+mod rig_recovery;
 mod terminal;
 use axum::{
     Json, Router,

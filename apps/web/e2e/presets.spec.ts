@@ -1896,6 +1896,68 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       });
     }
   }
+  // Real checkpoint failures are covered by rig_playback.rs. Inject only the
+  // warning text here to qualify its layout and usable controls on each device.
+  const warning =
+    'Mixed session recovery could not be saved: /var/lib/oxidal/presets/last-rig-session.tmp is unavailable. Current session remains in memory.';
+  await page.route('**/api/v1/rig-audio', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const state = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...state, recovery_error: warning },
+    });
+  });
+  const notice = rig.locator('.recovery-notice');
+  await expect(notice.getByRole('alert')).toHaveText(
+    'Session recovery unavailable',
+  );
+  await expect(notice.getByText(warning, { exact: true })).not.toBeVisible();
+  await expect(
+    rig.getByRole('button', { name: 'Stop audio', exact: true }),
+  ).toBeEnabled();
+  const recoveryViewport = page.viewportSize()!;
+  for (const viewport of [
+    recoveryViewport,
+    { width: recoveryViewport.height, height: recoveryViewport.width },
+  ]) {
+    await page.setViewportSize(viewport);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await notice.locator('summary').click();
+    await expect(notice.getByText(warning, { exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await notice.locator('summary').click();
+    await page.screenshot({
+      path: info.outputPath(`mixed-recovery-warning-${viewport.width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Audio', exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Playback controls' })
+      .getByRole('alert')
+      .filter({ hasText: 'Session recovery unavailable' }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.unroute('**/api/v1/rig-audio');
   await command({ kind: 'stop' });
 });
 

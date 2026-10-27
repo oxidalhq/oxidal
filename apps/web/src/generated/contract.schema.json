@@ -4018,6 +4018,13 @@
           "format": "uint64",
           "minimum": 0
         },
+        "recovery_error": {
+          "description": "Checkpoint failure is separate from playback state and command authority.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "revision": {
           "type": "integer",
           "format": "uint64",

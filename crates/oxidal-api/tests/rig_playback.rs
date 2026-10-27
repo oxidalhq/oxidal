@@ -99,7 +99,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let revision = bundle.revision().to_owned();
     let settings = json!({"revision":revision,"stream":stream(),"recall":null});
     let (shutdown, signal) = tokio::sync::watch::channel(false);
-    let (app, stopped) = router_with_shutdown(Config {
+    let config = Config {
         debug_socket: None,
         device_socket: None,
         simulator: false,
@@ -111,8 +111,8 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         preset_dir: root.join("presets"),
         ui_dir: root.join("ui"),
         shutdown: Some(signal),
-    })
-    .unwrap();
+    };
+    let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
@@ -362,6 +362,52 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     }
     drop(connection);
     phase(&c, &url, "running").await;
+    // A checkpoint failure must not stop PCM or invalidate confirmed commands.
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    let recovery_path = root.join("presets/last-rig-session.json");
+    let recovery_tmp = recovery_path.with_extension("tmp");
+    let previous_bytes = std::fs::read(&recovery_path).unwrap();
+    std::fs::create_dir(&recovery_tmp).unwrap();
+    let state = apply(&c, &url, json!({"kind":"restart"})).await;
+    let edited = apply(&c, &url, set(&state, native.clone(), 0.37)).await;
+    let edited = apply(&c, &url, set(&edited, gain.clone(), -11.0)).await;
+    let mut observed = false;
+    for _ in 0..100 {
+        let state = get(&c, &url, "rig-audio").await;
+        if state["recovery_error"]
+            .as_str()
+            .is_some_and(|e| e.contains("could not be saved"))
+        {
+            assert_eq!(state["phase"], "running");
+            assert_eq!(state["revision"], edited["revision"]);
+            assert_eq!(state["control"], edited["control"]);
+            assert!(
+                state["processed_frames"].as_u64().unwrap()
+                    > edited["processed_frames"].as_u64().unwrap()
+            );
+            observed = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(observed, "checkpoint failure must be reported");
+    assert_eq!(std::fs::read(&recovery_path).unwrap(), previous_bytes);
+    std::fs::remove_dir(&recovery_tmp).unwrap();
+    let mut repaired = false;
+    for _ in 0..140 {
+        let state = get(&c, &url, "rig-audio").await;
+        if state["recovery_error"].is_null() {
+            assert_eq!(state["revision"], edited["revision"]);
+            assert_eq!(state["control"], edited["control"]);
+            repaired = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(repaired, "checkpoint retry did not recover");
+    // Shutdown flushes another unsaved edit before the two-second coalescing timer.
+    let last = apply(&c, &url, set(&edited, native.clone(), 0.43)).await;
+    let confirmed = last["configured"].clone();
     apply(
         &c,
         &url,
@@ -387,6 +433,100 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
             .status(),
         409
     );
+    server.abort();
+    let checkpoint: Value =
+        serde_json::from_slice(&std::fs::read(&recovery_path).unwrap()).unwrap();
+    assert_eq!(checkpoint["settings"], confirmed);
+    // A new daemon restores metadata but never starts unrequested audio.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let recovered = get(&c, &url, "rig-audio").await;
+    assert_eq!(recovered["phase"], "stopped");
+    assert_eq!(recovered["device_owned"], false);
+    assert!(recovered["control"].is_null());
+    assert!(recovered["recovery_error"].is_null());
+    assert_eq!(recovered["configured"], confirmed);
+    assert!(pids(&executable).is_empty());
+    let resumed = apply(&c, &url, json!({"kind":"restart"})).await;
+    assert_eq!(control(&resumed, &gain), -11.0);
+    assert!((control(&resumed, &native) - 0.43).abs() < 1e-5);
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    let durable = std::fs::read(&recovery_path).unwrap();
+    // A valid declaration with an absent bundle must not replace recovery.
+    let mut missing = confirmed.clone();
+    missing["revision"] = json!("f".repeat(64));
+    missing["recall"] = Value::Null;
+    let state = get(&c, &url, "rig-audio").await;
+    assert_eq!(
+        post(&c, &url, &state, json!({"kind":"start","settings":missing}))
+            .await
+            .status(),
+        200
+    );
+    let failed = phase(&c, &url, "failed").await;
+    assert_eq!(failed["configured"], confirmed);
+    assert_eq!(std::fs::read(&recovery_path).unwrap(), durable);
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    assert_eq!(std::fs::read(&recovery_path).unwrap(), durable);
+    // Failed preparation did not poison the next daemon's explicit Resume.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    assert_eq!(get(&c, &url, "rig-audio").await["configured"], confirmed);
+    let resumed = apply(&c, &url, json!({"kind":"restart"})).await;
+    assert_eq!(control(&resumed, &gain), -11.0);
+    assert!((control(&resumed, &native) - 0.43).abs() < 1e-5);
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    // A corrupt checkpoint is an observable warning, not a daemon/library outage.
+    std::fs::write(&recovery_path, b"interrupted record").unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let invalid = get(&c, &url, "rig-audio").await;
+    assert_eq!(invalid["phase"], "stopped");
+    assert_eq!(invalid["device_owned"], false);
+    assert!(invalid["configured"].is_null());
+    assert!(
+        invalid["recovery_error"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid mixed recovery")
+    );
+    get(&c, &url, "presets/rigs").await;
+    apply(&c, &url, json!({"kind":"start","settings":confirmed})).await;
+    let repaired = apply(&c, &url, json!({"kind":"stop"})).await;
+    assert!(repaired["recovery_error"].is_null());
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }

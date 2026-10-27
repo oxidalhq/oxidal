@@ -1007,6 +1007,10 @@ export interface RigAudioState {
   error?: string | null;
   phase: AudioPhase;
   processed_frames: number;
+  /**
+   * Checkpoint failure is separate from playback state and command authority.
+   */
+  recovery_error?: string | null;
   revision: number;
   save?: SaveState | null;
   session: string;

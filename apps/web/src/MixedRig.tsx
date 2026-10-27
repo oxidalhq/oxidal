@@ -1,3 +1,4 @@
+import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { rigNodeLabel } from './rigDraft';
 import { Button } from './components/ui/button';
@@ -283,6 +284,7 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
         <p role="alert" className="error">
           {error || readError || state.error}

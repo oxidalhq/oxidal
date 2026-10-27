@@ -333,3 +333,27 @@ The maintained browser scenario composes and reorders actual native/LV2 processo
 checks explicit mono routing and hidden draft status, saves while running, and recalls
 the named revision. It covers both orientations on XR, Fold and BOOX. Portable schema
 checks exercise empty routing, repeated native instances and all mono-input policies.
+
+## Confirmed session recovery
+
+The daemon checkpoints the last worker-confirmed mixed bundle revision, stream
+settings and complete scalar recall to `last-rig-session.json`. Touch changes are
+coalesced over two seconds; Stop and clean shutdown flush pending confirmed edits.
+The record is bounded, validated and atomically replaced. A failed or cancelled
+candidate never replaces the previous confirmed checkpoint or Resume configuration.
+The bundle itself remains immutable; recovery does not create a named preset copy.
+
+Daemon startup restores configuration without opening audio. Resume explicitly
+re-verifies the bundle/assets and restores native, LV2, bypass and merge controls.
+Recovery write errors appear separately from audio errors and are retried while
+PCM continues; they do not change control revision authority. Abrupt power loss
+may lose edits newer than the last successful checkpoint. Corrupt records report
+an error while library/authoring remain available.
+
+The maintained API test exercises actual mixed DSP/ALSA-null playback during a
+checkpoint failure, retry, unsaved edits flushed at shutdown, a new daemon's
+explicit Resume and failed-bundle preservation. Unit tests cover interrupted,
+oversized, malformed and invalid records. This is scalar recovery for the supported
+profile, not opaque plugin state, DSP tail history or automatic boot playback.
+Native-only boot policy still exists separately; unified opt-in boot ownership
+remains required before mixed boot support is claimed.

@@ -131,6 +131,31 @@ h2 {
   margin-bottom: 20px;
   overflow-wrap: anywhere;
 }
+.recovery-notice {
+  min-width: 0;
+  padding-inline: 12px;
+  border-inline-start: 3px solid var(--destructive);
+  color: var(--destructive);
+}
+.recovery-notice summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+.recovery-notice summary svg {
+  flex-shrink: 0;
+}
+.recovery-notice[open] summary svg {
+  transform: rotate(180deg);
+}
+.recovery-notice p {
+  margin: 4px 0 8px;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
 .panel {
   padding: var(--panel-space);
   border: 1px solid var(--border);

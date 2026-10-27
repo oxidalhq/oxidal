@@ -1,3 +1,4 @@
+import { RecoveryNotice } from './RecoveryNotice';
 import { useState } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
@@ -73,6 +74,7 @@ export function MixedPlaybackSettings({
         </Button>
       </div>
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
+      <RecoveryNotice message={state.recovery_error} />
       <p className="caption">
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods
@@ -82,6 +84,10 @@ export function MixedPlaybackSettings({
         aria-label="Playback session configuration"
       >
         <summary>Current device &amp; buffers</summary>
+        <p className="caption">
+          Confirmed edits are kept for Resume after a restart. Save creates a
+          separate preset copy.
+        </p>
         <AudioReconfigure
           key={JSON.stringify(stream)}
           initial={stream}

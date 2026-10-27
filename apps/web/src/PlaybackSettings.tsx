@@ -1,3 +1,4 @@
+import { RecoveryNotice } from './RecoveryNotice';
 import { useEffect, useState } from 'react';
 import {
   playbackState,
@@ -151,6 +152,7 @@ export function PlaybackSettings({
   return (
     <section className="control-stack" aria-label="Playback controls">
       <h3>Audio playback</h3>
+      <RecoveryNotice message={mixed?.recovery_error} />
       {input && output && (
         <div className="action-row">
           <Button

@@ -34,6 +34,7 @@ process. `pnpm native:check` includes actual mixed worker and HTTP/ALSA-null tes
 See docs/mixed-engine.md for byte/resource admission, startup limits and qualification.
 The browser exposes confirmed mixed controls and isolated Save/recall with actual-worker
 XR, Fold and BOOX regression checks. The serial composer combines saved native tones and scalar LV2 effects with explicit mono routing. Mixed Audio settings retain confirmed controls through rate/buffer changes and restore the previous configuration if preparation fails.
+Confirmed mixed scalar sessions are checkpointed for explicit Resume after daemon restart; storage failures are reported without stopping audio. Mixed automatic boot ownership remains pending.
 Live structural replacement, complete native controls,
 extracted-stage persistence, opaque LV2 state, prepared replacement and gapless/physical
 acceptance remain open.

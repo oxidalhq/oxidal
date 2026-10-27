@@ -1,5 +1,5 @@
 //! Actor-owned mixed worker. Accepted operations outlive the requesting HTTP connection.
-use crate::{Config, Shared, failure};
+use crate::{Config, Shared, failure, rig_recovery::Recovery};
 use axum::{
     Json,
     extract::{State, rejection::JsonRejection},
@@ -84,10 +84,42 @@ struct Owner {
     export: Option<Export>,
     rollback: Option<StartRig>,
     restored_error: Option<String>,
+    recovery_path: PathBuf,
+    confirmed: Option<StartRig>,
+    recovery_due: Option<Instant>,
     state: RigAudioState,
     updates: watch::Sender<RigAudioState>,
 }
 impl Owner {
+    fn schedule_recovery(&mut self) {
+        // Continuous touch gestures still checkpoint every two seconds.
+        self.recovery_due
+            .get_or_insert_with(|| Instant::now() + Duration::from_secs(2));
+    }
+    fn checkpoint(&mut self) {
+        if self.recovery_due.is_none() {
+            return;
+        }
+        let Some(settings) = self.confirmed.clone() else {
+            return;
+        };
+        match Recovery::new(settings).write(&self.recovery_path) {
+            Ok(()) => {
+                self.recovery_due = None;
+                if self.state.recovery_error.take().is_some() {
+                    self.publish();
+                }
+            }
+            Err(error) => {
+                self.recovery_due = Some(Instant::now() + Duration::from_secs(5));
+                self.state.recovery_error = Some(format!(
+                    "Mixed session recovery could not be saved: {error}. Current session remains in memory."
+                ));
+                // Persistence does not change command authority or stop PCM.
+                self.publish();
+            }
+        }
+    }
     fn publish(&mut self) {
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
@@ -116,15 +148,19 @@ impl Owner {
         {
             return Err("Mixed worker returned inconsistent readback".into());
         }
-        if self
+        let changed = self
             .state
             .control
             .as_ref()
-            .is_none_or(|old| old.revision != reply.control.revision)
-        {
-            self.state.revision += 1;
-        }
+            .is_none_or(|old| old.revision != reply.control.revision);
         settings.recall = Some(reply.control.recall());
+        if changed {
+            self.state.revision += 1;
+            // Only a successful worker readback may replace durable recovery.
+            // A starting/cancelled/failed candidate is never checkpointed.
+            self.confirmed = Some(settings.clone());
+            self.schedule_recovery();
+        }
         self.state.control = Some(reply.control);
         self.state.telemetry = Some(reply.telemetry);
         self.state.processed_frames = reply.processed_frames;
@@ -165,6 +201,9 @@ impl Owner {
             Ok(()) => error,
             Err(e) => format!("{error}; {e}"),
         };
+        if let Some(confirmed) = &self.confirmed {
+            self.state.configured = Some(confirmed.clone());
+        }
         self.phase(AudioPhase::Failed, Some(error.clone()));
         error
     }
@@ -508,8 +547,13 @@ impl Owner {
             }
             RigAudioAction::Reconfigure { stream } => self.reconfigure(stream).await?,
             RigAudioAction::Stop => {
+                self.checkpoint();
                 if let Some(previous) = self.rollback.take() {
                     self.state.configured = Some(previous);
+                } else if self.state.phase == AudioPhase::Starting
+                    && let Some(confirmed) = &self.confirmed
+                {
+                    self.state.configured = Some(confirmed.clone());
                 }
                 self.rollback = None;
                 self.restored_error = None;
@@ -583,6 +627,9 @@ impl Owner {
             }
         }
         self.poll_export().await;
+        if self.recovery_due.is_some_and(|due| due <= Instant::now()) {
+            self.checkpoint();
+        }
     }
 }
 impl RigPlayback {
@@ -594,6 +641,10 @@ impl RigPlayback {
         {
             return Err("Mixed worker must be a configured absolute executable".into());
         }
+        let recovery_path = config.preset_dir.join("last-rig-session.json");
+        let recovery = Recovery::read(&recovery_path);
+        let recovery_error = recovery.as_ref().err().cloned();
+        let recovered = recovery.ok().flatten().map(|r| r.settings);
         let initial = RigAudioState {
             session: format!(
                 "rig-owner-{}-{}",
@@ -609,7 +660,8 @@ impl RigPlayback {
             } else {
                 AudioPhase::Unavailable
             },
-            configured: None,
+            configured: recovered.clone(),
+            recovery_error,
             control: None,
             telemetry: None,
             processed_frames: 0,
@@ -628,6 +680,9 @@ impl RigPlayback {
             export: None,
             rollback: None,
             restored_error: None,
+            recovery_path,
+            confirmed: recovered,
+            recovery_due: None,
             state: initial,
             updates,
         };
@@ -643,6 +698,7 @@ impl RigPlayback {
                     _=interval.tick()=>owner.poll().await,
                 }
             }
+            owner.checkpoint();
             while owner.worker.is_some() || owner.export.is_some() {
                 let _ = owner.release().await;
                 let _ = owner.cancel_export().await;
