@@ -186,6 +186,45 @@ impl Owner {
             return Err("Graph worker unavailable".into());
         }
         match command.action {
+            GraphAudioAction::Configure { stream } => {
+                if self.worker.is_some() {
+                    return Err(
+                        "Stop effects audio before changing its device configuration".into(),
+                    );
+                }
+                let settings = if let Some(mut previous) = self.state.configured.clone() {
+                    previous.stream = stream;
+                    previous
+                } else {
+                    StartGraph {
+                        stream,
+                        recall: None,
+                        bindings: vec![],
+                        rig: oxidal_graph::Rig {
+                            nodes: vec![
+                                oxidal_graph::Node {
+                                    id: "in".into(),
+                                    kind: oxidal_graph::BlockKind::Input,
+                                    level: 1.0,
+                                },
+                                oxidal_graph::Node {
+                                    id: "out".into(),
+                                    kind: oxidal_graph::BlockKind::Output,
+                                    level: 1.0,
+                                },
+                            ],
+                            edges: vec![oxidal_graph::Edge {
+                                from: "in".into(),
+                                to: "out".into(),
+                            }],
+                        },
+                    }
+                };
+                settings.validate()?;
+                self.state.configured = Some(settings);
+                self.state.revision += 1;
+                self.publish();
+            }
             GraphAudioAction::Start { settings } => {
                 self.start(*settings).await?;
             }

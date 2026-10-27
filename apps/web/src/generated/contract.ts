@@ -139,6 +139,10 @@ export type Command2 =
     };
 export type GraphAudioAction =
   | {
+      kind: "configure";
+      stream: StreamConfig;
+    }
+  | {
       kind: "start";
       settings: StartGraph;
     }

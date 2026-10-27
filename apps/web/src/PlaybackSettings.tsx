@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   playbackState,
+  graphAudioState,
+  graphAudioCommand,
   playbackCommand,
   presetLibrary,
   nativeState,
@@ -28,6 +30,7 @@ export function PlaybackSettings({
 }) {
   const [state, setState] = useState<AudioState | null>(null);
   const [error, setError] = useState('');
+  const [graphMessage, setGraphMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [presets, setPresets] = useState<
     { id: string; owned: boolean; name: string }[]
@@ -113,6 +116,40 @@ export function PlaybackSettings({
   return (
     <section className="control-stack" aria-label="Playback controls">
       <h3>Audio playback</h3>
+      {input && output && (
+        <div className="action-row">
+          <Button
+            variant="outline"
+            disabled={!connected || busy}
+            onClick={async () => {
+              setBusy(true);
+              setError('');
+              setGraphMessage('');
+              try {
+                const graph = await graphAudioState();
+                await graphAudioCommand(graph, {
+                  kind: 'configure',
+                  stream: {
+                    input,
+                    output,
+                    input_map: inputMap,
+                    output_map: outputMap,
+                  },
+                });
+                setGraphMessage('Audio setup ready for New preset.');
+              } catch (cause) {
+                setError(String(cause));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Use for new rigs
+          </Button>
+          {graphMessage && <p role="status">{graphMessage}</p>}
+        </div>
+      )}
+
       <p role="status">
         Audio: {state?.phase ?? 'checking'}
         {state?.device_owned ? ' · interface reserved' : ''}

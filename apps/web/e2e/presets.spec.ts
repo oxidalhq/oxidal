@@ -1346,3 +1346,159 @@ async function nativeValue(editor: Locator, value: string) {
       .click();
   await input.fill(value);
 }
+
+test('graph authoring creates an installed effect rig and saves live controls', async ({
+  page,
+  request,
+}, testInfo) => {
+  test.skip(
+    process.env.OXIDAL_GRAPH_QUALIFY_NULL !== '1',
+    'Requires the real Linux graph worker and explicit ALSA-null fixture',
+  );
+  test.setTimeout(90000);
+  const endpoint = '/api/v1/graph-audio';
+  const read = async () => (await request.get(endpoint)).json();
+  const send = async (action: unknown) => {
+    const s = await read();
+    const response = await request.post(endpoint, {
+      data: { session: s.session, expected_revision: s.revision, action },
+    });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return response.json();
+  };
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  await send({ kind: 'stop' });
+  const configured = await send({
+    kind: 'configure',
+    stream: {
+      input,
+      output: { ...input, direction: 'playback' },
+      input_map: [0, 1],
+      output_map: [0, 1],
+    },
+  });
+  expect(configured.device_owned).toBe(false);
+  await page.goto('/');
+  if (testInfo.project.name === 'boox-air3c')
+    await setDisplayMode(page, 'epaper');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Effects authoring' });
+  const name = `Practice ${testInfo.project.name}`;
+  await editor.getByLabel('Preset name', { exact: true }).fill(name);
+  await editor.getByRole('button', { name: 'Add effect', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Add effect' });
+  await picker
+    .getByLabel('Search effects', { exact: true })
+    .fill('Simple amplifier');
+  const select = picker.getByRole('button', {
+    name: 'Simple amplifier',
+    exact: true,
+  });
+  await expect(select).toBeEnabled();
+  const viewport = page.viewportSize()!;
+  for (const [orientation, size] of [
+    [
+      'portrait',
+      {
+        width: Math.min(viewport.width, viewport.height),
+        height: Math.max(viewport.width, viewport.height),
+      },
+    ],
+    [
+      'landscape',
+      {
+        width: Math.max(viewport.width, viewport.height),
+        height: Math.min(viewport.width, viewport.height),
+      },
+    ],
+  ] as const) {
+    await page.setViewportSize(size);
+    await expect(select).toBeInViewport();
+    expect(
+      await picker.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    ).toBeTruthy();
+    const box = await select.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({
+      path: testInfo.outputPath(`effects-picker-${orientation}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize(viewport);
+  await select.click();
+  await editor
+    .getByRole('button', { name: 'Audition rig', exact: true })
+    .click();
+  await expect(
+    editor.getByRole('button', { name: 'Save preset', exact: true }),
+  ).toBeVisible();
+  const adjust = editor.getByRole('button', {
+    name: 'Adjust gain value',
+    exact: true,
+  });
+  await adjust.click();
+  const dialog = page.getByRole('dialog', { name: 'gain', exact: true });
+  await dialog.getByText('Enter value', { exact: true }).click();
+  await dialog.getByLabel('Draft gain (%)', { exact: true }).fill('25');
+  await expect
+    .poll(async () => (await read()).native_values[0].value)
+    .toBe(-35);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect.poll(async () => (await read()).native_values[0].value).toBe(0);
+  await adjust.click();
+  await dialog.getByText('Enter value', { exact: true }).click();
+  await dialog.getByLabel('Draft gain (%)', { exact: true }).fill('25');
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect
+    .poll(async () => (await read()).native_values[0].value)
+    .toBe(-35);
+  await editor
+    .getByRole('button', { name: 'Save preset', exact: true })
+    .click();
+  await expect(editor.getByText('Saved copy', { exact: true })).toBeVisible();
+  const saved = (await read()).saved_copy;
+  expect(saved).toMatch(/^[a-f0-9]{64}$/);
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Effects authoring' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Audio stopped', exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId('resource-state')).toHaveText('Audio running', {
+    timeout: 12000,
+  });
+  const effect = page.getByRole('region', {
+    name: '1 · Simple amplifier',
+    exact: true,
+  });
+  await expect(effect).toBeVisible();
+  await expect(effect.locator('output')).toHaveText('-35');
+  await page.screenshot({
+    path: testInfo.outputPath('effects-live.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await expect.poll(async () => (await read()).device_owned).toBe(false);
+  await page.reload();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await editor.getByRole('button', { name, exact: true }).click();
+  await editor
+    .getByRole('button', { name: 'Audition rig', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await read()).native_values[0]?.value)
+    .toBe(-35);
+  await editor.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await expect.poll(async () => (await read()).device_owned).toBe(false);
+});

@@ -1862,6 +1862,23 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "configure"
+            },
+            "stream": {
+              "$ref": "#/$defs/StreamConfig"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stream"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "start"
             },
             "settings": {

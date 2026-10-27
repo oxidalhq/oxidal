@@ -166,6 +166,7 @@ pub struct GraphAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GraphAudioAction {
+    Configure { stream: StreamConfig },
     Start { settings: Box<StartGraph> },
     Stop,
     Restart,

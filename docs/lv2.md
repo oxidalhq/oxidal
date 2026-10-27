@@ -21,7 +21,7 @@ On Debian/Ubuntu install `liblilv-dev lv2-dev swh-lv2`, then run `pnpm lv2:check
 
 The suite checks feature delivery with a project-authored contract plugin and renders the independently installed SWH amplifier and delay. It verifies native gain, exact impulse delay and separate left/right histories, invalid ports/values, feature rejection, world lifetime and nonfinite-output containment. The contract plugin is infrastructure evidence, not musical-effect fidelity evidence.
 
-These tests do not qualify physical audio, real-time deadlines, reverb, TONE3000 LV2 preset parity, whole-graph replacement/trails, or physical MIDI devices. The existing native TONE3000 playback worker remains separate. The graph worker below connects this library to its own PCM loop and daemon API; the browser rig editor still controls the simulator.
+These tests do not qualify physical audio, real-time deadlines, reverb, TONE3000 LV2 preset parity, whole-graph replacement/trails, or physical MIDI devices. The existing native TONE3000 playback worker remains separate. The graph worker below connects this library to its own PCM loop and daemon API; the browser installed-effects flow controls the real graph worker; the development simulator remains separate.
 
 ## Prepared graph and control bridge
 
@@ -33,9 +33,9 @@ Commands and edit expiry run **between blocks on the same owner**, outside the r
 
 Global bypass returns dry input while processing silence through the effects, draining their histories silently. It is not a wet-tail preservation or gapless preset-switching implementation. There is no gain smoothing or sample-accurate control scheduling yet. A caller must poll edit expiry between blocks; it is not tied to an autonomous timer in this library.
 
-`pnpm lv2:check` also covers serial/parallel rendered outputs, route edits with retained histories, failed replacement preparation, shared MIDI/web ownership and stale revisions, edit expiry, dry bypass, discrete native readback/feedback, nonfinite-output containment, and mapped MIDI gain changes through the independently installed SWH amplifier. This is control-to-DSP integration coverage; browser E2E still exercises the separate simulated graph and native saved-preset authoring/playback flows. The same qualification command also runs the real graph-worker HTTP/ALSA-null tests described below.
+`pnpm lv2:check` also covers serial/parallel rendered outputs, route edits with retained histories, failed replacement preparation, shared MIDI/web ownership and stale revisions, edit expiry, dry bypass, discrete native readback/feedback, nonfinite-output containment, and mapped MIDI gain changes through the independently installed SWH amplifier. This is control-to-DSP integration coverage; browser E2E also exercises real installed-effect creation, audible-worker adjustments and saved graph recall. The same qualification command also runs the real graph-worker HTTP/ALSA-null tests described below.
 
-Next integration steps are a real-time-safe control handoff, browser graph ownership, plugin state/assets, smoothing/switching/trails and physical MIDI/audio qualification. No hardware availability flag is enabled by this library.
+Next integration steps are a real-time-safe control handoff, plugin state/assets, smoothing/switching/trails and physical MIDI/audio qualification. No hardware availability flag is enabled by this library.
 
 ## Isolated experimental graph playback
 
@@ -50,7 +50,7 @@ Build `cargo build --locked -p oxidal-lv2 --features worker --bin oxidal-graph-w
 
 Every lifecycle request includes the outer lifecycle session and expected revision. Control snapshots have their own revision, so periodic frame-count updates do not invalidate otherwise current commands. Failed commands never automatically retry. A timeout or malformed/closed worker reply terminates and reaps the worker before restart is allowed. HTTP disconnect does not cancel an already accepted operation. Playback, saved-preset playback and audio probing share one semaphore; competing device operations reject before spawning/opening another stream. Graph failure or Stop leaves the library, simulated rig, HTTP service and separate native authoring process available.
 
-IPC uses newline-delimited JSON, bounded to 64 KiB requests and 256 KiB replies. Reader/writer threads have single-slot queues. Control and expiry run on the graph owner between transport steps, outside the DSP callback; commands may allocate and the owner loop is **not real-time qualified**. Worker status is polled by its daemon actor every 200 ms, without a request backlog. PCM no-progress, IPC timeout, process exit and malformed replies fail closed. Browser graph controls/SSE are not connected to this endpoint yet; status and commands are available through the versioned API.
+IPC uses newline-delimited JSON, bounded to 64 KiB requests and 256 KiB replies. Reader/writer threads have single-slot queues. Control and expiry run on the graph owner between transport steps, outside the DSP callback; commands may allocate and the owner loop is **not real-time qualified**. Worker status is polled by its daemon actor every 200 ms, without a request backlog. PCM no-progress, IPC timeout, process exit and malformed replies fail closed. Browser controls use this versioned API with serial status polling and session/revision checks; graph SSE is not implemented.
 
 `pnpm lv2:check` builds a separate `qualification` feature with explicit ALSA-null access and runs `crates/oxidal-api/tests/graph_playback.rs`. It checks actual processing progress, scalar/native readback, injected MIDI feedback, owned cancel and autonomous expiry, edge routing, stale revisions, malformed input, HTTP disconnect, competing device ownership, stop/restart, forced child death and daemon shutdown/reaping. It uses the installed SWH amplifier, with no physical output. Ordinary `worker` builds cannot enable the null fixture. The null path is a test fixture, not an audio-quality or physical-device result.
 
@@ -72,8 +72,7 @@ One scan can run at a time. Responses are limited to 4 MiB and discovery to ten 
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
 The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
-rescanning while the graph worker continues processing. Browser New preset integration
-and persistent mixed-native/LV2 rigs remain separate work.
+rescanning while the graph worker continues processing. The browser uses this catalog in New preset; persistent mixed-native/LV2 rigs remain separate work.
 
 ## Graph snapshots
 
@@ -89,4 +88,27 @@ sample-rate-dependent controls. This version captures scalar-only LV2 rigs, incl
 empty input-to-output rigs. It does not embed installed plugin binaries, opaque plugin
 state or file assets, and does not claim TONE3000-compatible export or mixed NAM/LV2
 support. Snapshot validation and exact port-readback checks reject incompatible recall
-rather than silently omitting controls. Browser authoring remains the next integration.
+rather than silently omitting controls. The browser can create and recall these documents through Library → New preset.
+
+## Browser authoring
+
+In Settings → Audio setup, select and probe the input/output device, then choose
+**Use for new rigs**. This configures a stopped graph without opening audio or requiring
+an imported preset. Configuration currently survives within the daemon session only.
+
+Library → New preset creates an empty input-to-output draft. Add effect scans installed
+plugins and explains unsupported entries. Repeated effects have numbered control groups.
+Audition starts the real graph worker; tapping a parameter previews it immediately, Done
+keeps the adjustment, and Cancel restores its opening value. Save preset stores a named
+copy without interrupting processing. Saved rigs can be recalled after a browser reload.
+The Rig view shows these actual controls and the measured resource strip.
+
+Structural additions are currently made while stopped. Live node insertion, removal and
+reordering, native NAM/IR creation, mixed graphs and TONE3000 export remain unfinished.
+The native preset audition path remains separately available; the UI prevents both workers
+from acquiring the audio device at once. No switch between these workers is gapless.
+
+`pnpm lv2:check` includes this create → audition → preview/cancel/commit → save → reload
+journey against the actual worker and SWH plugin on desktop, mobile, XR WebKit, Fold cover,
+Fold open and BOOX profiles. It captures portrait/landscape picker and live-control views,
+checks tap targets/overflow, and waits for real metadata and monitoring before captures.

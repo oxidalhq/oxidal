@@ -9,6 +9,9 @@ import {
 import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { LiveRig } from './LiveRig';
+const GraphAuthor = lazy(() =>
+  import('./GraphAuthor').then((m) => ({ default: m.GraphAuthor })),
+);
 import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
 import { SignalChain } from './SignalChain';
@@ -41,7 +44,8 @@ import {
 export default function App() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
-  const audioRunning = playingName !== null;
+  const [graphName, setGraphName] = useState<string | null>(null);
+  const audioRunning = playingName !== null || graphName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
   const [simulator, setSimulator] = useState(false);
@@ -334,6 +338,7 @@ export default function App() {
               <h1 data-testid="active-preset">
                 {view === 'rig'
                   ? (playingName ??
+                    graphName ??
                     (!developmentSimulator
                       ? 'Your rig'
                       : !state
@@ -431,8 +436,15 @@ export default function App() {
                 onPlaying={setPlayingName}
                 onLibrary={() => setView('library')}
                 onAudioSetup={showSettings}
-                hideInactive={developmentSimulator}
+                hideInactive={developmentSimulator || graphName !== null}
               />
+              <Suspense fallback={null}>
+                <GraphAuthor
+                  connected={connected}
+                  liveOnly
+                  onPlaying={setGraphName}
+                />
+              </Suspense>
               {developmentSimulator && !audioRunning && (
                 <>
                   <section

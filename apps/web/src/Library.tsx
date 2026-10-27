@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { importPreset, presetLibrary, type Preset } from './api';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
+import { GraphAuthor } from './GraphAuthor';
 import { Button } from './components/ui/button';
 
 /** Immutable native originals; playback has its own explicitly started session.
  * @see docs/presets/format.md
  */
 export function Library({ connected }: { connected: boolean }) {
-  const [page, setPage] = useState<'browse' | 'author'>('browse');
+  const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);
@@ -75,8 +76,17 @@ export function Library({ connected }: { connected: boolean }) {
         >
           Author
         </Button>
+        <Button
+          variant={page === 'new' ? 'secondary' : 'ghost'}
+          aria-current={page === 'new' ? 'page' : undefined}
+          onClick={() => setPage('new')}
+        >
+          New preset
+        </Button>
       </nav>
-      {page === 'browse' ? (
+      {page === 'new' ? (
+        <GraphAuthor connected={connected} />
+      ) : page === 'browse' ? (
         <>
           <h2 className="sr-only">Native preset library</h2>
           <p>

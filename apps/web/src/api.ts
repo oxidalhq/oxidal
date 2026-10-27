@@ -438,3 +438,62 @@ export async function stageTone3000(
     throw new Error('Downloaded model identity differs');
   return body;
 }
+
+export type GraphAudioState = Contract['graph_audio_state'];
+export type GraphAudioAction = Contract['graph_audio_command']['action'];
+export type GraphSettings = NonNullable<GraphAudioState['configured']>;
+export type Lv2Plugin = Contract['lv2_catalog']['plugins'][number];
+export type SavedGraph = Contract['graph_presets'][number];
+const graphStateValidator = ajv.compile<GraphAudioState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/GraphAudioState',
+});
+const graphLibraryValidator = ajv.compile<Contract['graph_presets']>({
+  $defs: schema.$defs,
+  type: 'array',
+  items: { $ref: '#/$defs/SavedGraph' },
+});
+const lv2CatalogValidator = ajv.compile<Contract['lv2_catalog']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/PluginCatalog',
+});
+export async function graphAudioState(): Promise<GraphAudioState> {
+  const body = await presetResponse(await fetch('/api/v1/graph-audio'));
+  if (!graphStateValidator(body)) throw new Error('Incompatible graph state');
+  return body;
+}
+export async function graphAudioCommand(
+  state: GraphAudioState,
+  action: GraphAudioAction,
+): Promise<GraphAudioState> {
+  const body = await presetResponse(
+    await fetch('/api/v1/graph-audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: state.session,
+        expected_revision: state.revision,
+        action,
+      }),
+    }),
+  );
+  if (!graphStateValidator(body)) throw new Error('Incompatible graph state');
+  return body;
+}
+export async function graphLibrary(): Promise<SavedGraph[]> {
+  const body = await presetResponse(await fetch('/api/v1/presets/graphs'));
+  if (!graphLibraryValidator(body))
+    throw new Error('Incompatible graph library');
+  return body;
+}
+export async function installedLv2(
+  sampleRate: number,
+  signal?: AbortSignal,
+): Promise<Lv2Plugin[]> {
+  const body = await presetResponse(
+    await fetch(`/api/v1/plugins/lv2?sample_rate=${sampleRate}`, { signal }),
+  );
+  if (!lv2CatalogValidator(body) || body.sample_rate !== sampleRate)
+    throw new Error('Incompatible effects catalog');
+  return body.plugins;
+}

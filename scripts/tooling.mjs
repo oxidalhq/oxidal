@@ -111,6 +111,15 @@ if (mode === 'bootstrap') {
       },
     },
   );
+  run('pnpm', ['test:e2e', '--grep', 'graph authoring'], {
+    cwd: join(root, 'apps/web'),
+    env: {
+      ...env,
+      OXIDAL_GRAPH_QUALIFY_NULL: '1',
+      OXIDAL_EXPERIMENTAL_GRAPH: '1',
+      LV2_PATH: env.OXIDAL_LV2_EXTERNAL_DIR,
+    },
+  });
 } else if (mode === 'native-check') {
   run('python3', ['native/tone3000/build.py']);
   const env = {
@@ -323,6 +332,27 @@ if (mode === 'bootstrap') {
       },
     );
   }
+  if (process.env.OXIDAL_EXPERIMENTAL_GRAPH === '1') {
+    if (process.platform !== 'linux')
+      throw new Error('Graph playback requires Linux ALSA.');
+    const qualify = process.env.OXIDAL_GRAPH_QUALIFY_NULL === '1';
+    if (qualify && mode !== 'e2e-server')
+      throw new Error('Null fixture is only enabled by the E2E server.');
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-lv2',
+        '--features',
+        qualify ? 'qualification' : 'worker',
+        '--bin',
+        'oxidal-graph-worker',
+      ],
+      { env: rustEnv() },
+    );
+  }
   const mappingPath =
     mode === 'e2e-server'
       ? join(mkdtempSync(join(tmpdir(), 'oxidal-e2e-')), 'mappings.json')
@@ -341,6 +371,9 @@ if (mode === 'bootstrap') {
   const env = {
     ...process.env,
     OXIDAL_SIMULATOR: '1',
+    ...(process.env.OXIDAL_EXPERIMENTAL_GRAPH === '1'
+      ? { OXIDAL_GRAPH_WORKER: join(targetDir, 'debug/oxidal-graph-worker') }
+      : {}),
     ...(process.env.OXIDAL_EXPERIMENTAL_AUDIO === '1'
       ? { OXIDAL_AUDIO_WORKER: join(targetDir, 'debug/oxidal-audio-worker') }
       : {}),

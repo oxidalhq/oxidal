@@ -11,11 +11,15 @@ export function ControlEditor({
   state,
   connected,
   accept,
+  send = sendCommand,
+  formatValue = (value: number) => `${Number((value * 100).toFixed(2))}%`,
 }: {
   parameter: Parameter;
   state: Snapshot;
   connected: boolean;
   accept: (next: Snapshot, session: string) => void;
+  send?: typeof sendCommand;
+  formatValue?: (value: number) => string;
 }) {
   const [owner] = useState(() => crypto.randomUUID());
   const [opened, setOpened] = useState(false);
@@ -49,7 +53,7 @@ export function ControlEditor({
     const fail = (cause: unknown) => {
       if (alive.current) setError(String(cause));
     };
-    const ready = sendCommand(
+    const ready = send(
       {
         type: 'edit',
         edit: { phase: 'begin', owner, token, target: parameter.id },
@@ -61,7 +65,7 @@ export function ControlEditor({
       owner,
       token,
       ready,
-      (edit) => sendCommand({ type: 'edit', edit }, null, session),
+      (edit) => send({ type: 'edit', edit }, null, session),
       report,
       fail,
     );
@@ -125,7 +129,7 @@ export function ControlEditor({
           />
         </svg>
         <output data-testid={`value-${parameter.id}`}>
-          {Math.round(parameter.value * 100)}%
+          {formatValue(parameter.value)}
         </output>
       </button>
       {opened && (
@@ -151,7 +155,7 @@ export function ControlEditor({
               step={parameter.step}
               disabled={unavailable}
               onChange={preview}
-              format={(value) => `${Number((value * 100).toFixed(2))}%`}
+              format={formatValue}
             />
             <details className="exact-entry">
               <summary>Enter value</summary>
