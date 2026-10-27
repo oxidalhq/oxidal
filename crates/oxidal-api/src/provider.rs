@@ -18,6 +18,7 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Instant;
+pub(super) mod catalog;
 mod storage;
 #[cfg(test)]
 mod tests;
@@ -66,6 +67,8 @@ type Reply = Result<AccountState, &'static str>;
 #[derive(Debug)]
 pub(super) struct Account {
     state: watch::Receiver<AccountState>,
+    access: mpsc::Sender<oneshot::Sender<Result<Access, &'static str>>>,
+    requests: tokio::sync::Semaphore,
     commands: mpsc::Sender<(AccountCommand, oneshot::Sender<Reply>)>,
 }
 impl Account {
@@ -117,6 +120,7 @@ impl Account {
         }
         let (updates, receive) = watch::channel(state.clone());
         let (commands, inbox) = mpsc::channel(8);
+        let (access, access_inbox) = mpsc::channel(4);
         let owner = Owner {
             state,
             updates,
@@ -129,11 +133,24 @@ impl Account {
             next: Instant::now(),
             shutdown,
         };
-        tokio::spawn(owner.run(inbox));
+        tokio::spawn(owner.run(inbox, access_inbox));
         Ok(Self {
             state: receive,
             commands,
+            access,
+            requests: tokio::sync::Semaphore::new(2),
         })
+    }
+    async fn access(&self) -> Result<Access, &'static str> {
+        let (reply, receive) = oneshot::channel();
+        self.access
+            .try_send(reply)
+            .map_err(|_| "Account service busy")?;
+        receive.await.map_err(|_| "Account service stopped")?
+    }
+    fn current(&self, access: &Access) -> bool {
+        let state = self.state.borrow();
+        state.phase == AccountPhase::Connected && state.revision == access.revision
     }
     async fn command(&self, command: AccountCommand) -> Reply {
         let (reply, receive) = oneshot::channel();
@@ -142,6 +159,13 @@ impl Account {
             .map_err(|_| "Account service busy; refresh before retrying")?;
         receive.await.map_err(|_| "Account service stopped")?
     }
+}
+// Internal capability only. Never Serialize or Debug credentials.
+struct Access {
+    client: reqwest::Client,
+    origin: String,
+    token: String,
+    revision: u64,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -337,7 +361,11 @@ impl Owner {
             }
         }
     }
-    async fn run(mut self, mut inbox: mpsc::Receiver<(AccountCommand, oneshot::Sender<Reply>)>) {
+    async fn run(
+        mut self,
+        mut inbox: mpsc::Receiver<(AccountCommand, oneshot::Sender<Reply>)>,
+        mut access: mpsc::Receiver<oneshot::Sender<Result<Access, &'static str>>>,
+    ) {
         let mut timer = tokio::time::interval(Duration::from_millis(250));
         loop {
             if self.shutdown.as_ref().is_some_and(|s| *s.borrow()) {
@@ -348,6 +376,13 @@ impl Owner {
                 command = inbox.recv() => match command {
                     Some((command, reply)) => { let _ = reply.send(self.command(command)); },
                     None => break,
+                },
+                Some(reply) = access.recv() => {
+                    let result = self.tokens.as_ref()
+                        .filter(|t| self.state.phase == AccountPhase::Connected && t.expires_at > epoch() + 15)
+                        .map(|t| Access { client: self.client.clone(), origin: self.origin.clone(), token: t.access_token.clone(), revision: self.state.revision })
+                        .ok_or("Connect your TONE3000 account before browsing");
+                    let _ = reply.send(result);
                 },
                 result = async { match self.job.as_mut() { Some(job) => job.await, None => std::future::pending().await } } => self.completed(result),
                 _ = timer.tick() => self.schedule(),

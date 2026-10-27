@@ -282,6 +282,8 @@ export interface Contract {
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
   library: Library;
+  model_page: Page2;
+  model_query: ModelQuery;
   monitoring: Monitoring;
   native_command: EditorCommand;
   native_editor: EditorSnapshot;
@@ -292,6 +294,8 @@ export interface Contract {
   snapshot: Snapshot;
   terminal_command: TerminalCommand;
   terminal_state: TerminalState;
+  tone_page: Page;
+  tone_query: ToneQuery;
   validation: Validation;
 }
 export interface AccountCommand {
@@ -642,6 +646,23 @@ export interface Inspection {
   size_bytes: number;
   source_id?: string | null;
 }
+export interface Page2 {
+  data: Model[];
+  page?: number;
+  total_pages?: number;
+}
+export interface Model {
+  architecture_version?: string | null;
+  id: number;
+  name: string;
+  size?: string | null;
+  tone_id: number;
+}
+export interface ModelQuery {
+  architecture?: "1" | "2" | "custom";
+  page?: number;
+  tone_id: number;
+}
 export interface Monitoring {
   audio?: Snapshot2 | null;
   audio_age_ms?: number | null;
@@ -785,6 +806,34 @@ export interface TerminalSession {
   next_input: number;
   running: boolean;
   start: number;
+}
+export interface Page {
+  data: Tone[];
+  page?: number;
+  total_pages?: number;
+}
+export interface Tone {
+  a1_models_count?: number;
+  a2_models_count?: number;
+  custom_models_count?: number;
+  format: string;
+  gear: string;
+  id: number;
+  images?: string[] | null;
+  license: string;
+  models_count: number;
+  title: string;
+  url: string;
+  user: Creator;
+}
+export interface Creator {
+  display_name?: string | null;
+  username: string;
+}
+export interface ToneQuery {
+  collection?: "favorites" | "downloaded" | "created" | "trending" | "latest";
+  page?: number;
+  query?: string;
 }
 export interface Validation {
   errors: string[];

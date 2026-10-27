@@ -51,6 +51,10 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub tone_page: provider::catalog::Page<provider::catalog::Tone>,
+    pub model_page: provider::catalog::Page<provider::catalog::Model>,
+    pub tone_query: provider::catalog::ToneQuery,
+    pub model_query: provider::catalog::ModelQuery,
     pub account_state: provider::AccountState,
     pub account_command: provider::AccountCommand,
     pub snapshot: Snapshot,
@@ -203,6 +207,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/account/tone3000",
             get(provider::state).post(provider::command),
         )
+        .route("/tone3000/tones", get(provider::catalog::tones))
+        .route("/tone3000/tones/{id}", get(provider::catalog::tone))
+        .route("/tone3000/models", get(provider::catalog::models))
         .route("/monitor", get(monitor::state))
         .route("/debug", get(debug::state).post(debug::command))
         .route("/terminal/{mode}", post(terminal::command))
