@@ -25,6 +25,10 @@ async fn apply(c: &Client, url: &str, action: Value) -> Value {
             continue;
         }
         assert!(status.is_success(), "{status}: {body}");
+        if matches!(action["kind"].as_str(), Some("start" | "restart")) {
+            assert_eq!(body["phase"], "starting");
+            return phase(c, url, "running").await;
+        }
         return body;
     }
     panic!("revision changed repeatedly");
@@ -165,7 +169,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         post(&c, &url, &s, json!({"kind":"start","settings":bad}))
             .await
             .status(),
-        409
+        200
     );
     s = phase(&c, &url, "failed").await;
     assert_eq!(s["device_owned"], false);

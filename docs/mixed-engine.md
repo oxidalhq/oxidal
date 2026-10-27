@@ -171,7 +171,11 @@ playback and device inspection. Stop/crash recovery release it only after reapin
 the child. An accepted HTTP command belongs to the actor even if its connection
 disappears. Restart restores the complete confirmed scalar recall; it is an
 interrupting stop/start, not gapless switching. Startup currently waits up to
-60 seconds for preparation; cancellation during preparation needs further work.
+60 seconds for preparation. Start/Restart acknowledge `starting` before waiting for
+readiness; clients poll until `running` or `failed`. Stop and shutdown cancel the
+pending startup exchange, close its pipes and reap the child before releasing the
+device permit. A late readiness reply cannot revive the cancelled session. The
+maintained slow-worker test covers cancellation and shutdown before readiness.
 
 Save acknowledges a captured control revision and runs independently of subsequent
 control commands. `save.source_session` and `source_control_revision` identify what

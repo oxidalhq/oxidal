@@ -29,21 +29,18 @@ pub(super) struct RigPlayback {
 struct Worker {
     child: Child,
     input: Option<ChildStdin>,
-    output: BufReader<ChildStdout>,
+    output: Option<BufReader<ChildStdout>>,
+    preparing: Option<Preparing>,
     _permit: tokio::sync::SemaphorePermit<'static>,
+}
+type ReadyPipes = (ChildStdin, BufReader<ChildStdout>, WorkerReply);
+struct Preparing {
+    task: tokio::task::JoinHandle<Result<ReadyPipes, String>>,
+    started: Instant,
 }
 impl Worker {
     async fn read(&mut self) -> Result<WorkerReply, String> {
-        let mut bytes = Vec::new();
-        (&mut self.output)
-            .take((REPLY_LIMIT + 1) as u64)
-            .read_until(b'\n', &mut bytes)
-            .await
-            .map_err(|e| e.to_string())?;
-        if bytes.len() > REPLY_LIMIT || bytes.last() != Some(&b'\n') {
-            return Err("Invalid mixed worker reply".into());
-        }
-        serde_json::from_slice(&bytes).map_err(|_| "Invalid mixed worker protocol".into())
+        read_reply(self.output.as_mut().ok_or("Mixed worker is preparing")?).await
     }
     async fn write<T: serde::Serialize>(&mut self, value: &T) -> Result<(), String> {
         self.input
@@ -53,6 +50,18 @@ impl Worker {
             .await
             .map_err(|e| e.to_string())
     }
+}
+async fn read_reply(output: &mut BufReader<ChildStdout>) -> Result<WorkerReply, String> {
+    let mut bytes = Vec::new();
+    output
+        .take((REPLY_LIMIT + 1) as u64)
+        .read_until(b'\n', &mut bytes)
+        .await
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > REPLY_LIMIT || bytes.last() != Some(&b'\n') {
+        return Err("Invalid mixed worker reply".into());
+    }
+    serde_json::from_slice(&bytes).map_err(|_| "Invalid mixed worker protocol".into())
 }
 fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
@@ -124,6 +133,12 @@ impl Owner {
         let Some(worker) = self.worker.as_mut() else {
             return Ok(());
         };
+        if let Some(preparing) = worker.preparing.take() {
+            // Drop startup pipes and prevent a late reply from reviving a stopped
+            // session. The device permit stays with the child until it is reaped.
+            preparing.task.abort();
+            let _ = preparing.task.await;
+        }
         worker.input.take();
         if !matches!(
             tokio::time::timeout(Duration::from_secs(2), worker.child.wait()).await,
@@ -157,6 +172,7 @@ impl Owner {
     }
     async fn start(&mut self, settings: StartRig) -> Result<(), String> {
         settings.validate()?;
+        let bytes = encode(&settings)?;
         if self.worker.is_some() {
             return Err("Stop mixed audio before changing its configuration".into());
         }
@@ -177,37 +193,67 @@ impl Owner {
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| e.to_string())?;
-        let input = child.stdin.take().ok_or("Mixed stdin unavailable")?;
-        let output = BufReader::new(child.stdout.take().ok_or("Mixed stdout unavailable")?);
+        let mut input = child.stdin.take().ok_or("Mixed stdin unavailable")?;
+        let mut output = BufReader::new(child.stdout.take().ok_or("Mixed stdout unavailable")?);
+        let task = tokio::spawn(async move {
+            input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            let reply = read_reply(&mut output).await?;
+            Ok((input, output, reply))
+        });
         self.worker = Some(Worker {
             child,
-            input: Some(input),
-            output,
+            input: None,
+            output: None,
+            preparing: Some(Preparing {
+                task,
+                started: Instant::now(),
+            }),
             _permit: permit,
         });
-        self.state.configured = Some(settings.clone());
+        self.state.configured = Some(settings);
         self.state.control = None;
         self.state.telemetry = None;
         self.state.processed_frames = 0;
         self.phase(AudioPhase::Starting, None);
-        let result = tokio::time::timeout(Duration::from_secs(60), async {
-            let worker = self.worker.as_mut().unwrap();
-            worker.write(&settings).await?;
-            worker.read().await
-        })
-        .await
-        .map_err(|_| "Mixed startup timed out".to_owned())
-        .and_then(|r| r);
+        Ok(())
+    }
+    async fn poll_preparing(&mut self) {
+        let Some(worker) = self.worker.as_mut() else {
+            return;
+        };
+        let Some(preparing) = worker.preparing.as_ref() else {
+            return;
+        };
+        if preparing.started.elapsed() > Duration::from_secs(60) {
+            self.fault("Mixed startup timed out".into()).await;
+            return;
+        }
+        if !preparing.task.is_finished() {
+            return;
+        }
+        let result = worker
+            .preparing
+            .take()
+            .unwrap()
+            .task
+            .await
+            .map_err(|_| "Mixed preparation task failed".to_owned())
+            .and_then(|r| r);
         match result {
-            Ok(reply) if reply.error.is_none() && reply.processed_frames > 0 => {
-                if let Err(e) = self.readback(reply) {
-                    return Err(self.fault(e).await);
+            Ok((input, output, reply)) => {
+                worker.input = Some(input);
+                worker.output = Some(output);
+                if reply.error.is_some() || reply.processed_frames == 0 {
+                    self.fault("Mixed worker rejected startup".into()).await;
+                } else if let Err(e) = self.readback(reply) {
+                    self.fault(e).await;
+                } else {
+                    self.phase(AudioPhase::Running, None);
                 }
-                self.phase(AudioPhase::Running, None);
-                Ok(())
             }
-            Ok(_) => Err(self.fault("Mixed worker rejected startup".into()).await),
-            Err(e) => Err(self.fault(e).await),
+            Err(e) => {
+                self.fault(e).await;
+            }
         }
     }
     async fn save(&mut self, name: String) -> Result<(), String> {
@@ -413,6 +459,8 @@ impl Owner {
                 if self.release().await.is_ok() {
                     self.publish();
                 }
+            } else if self.state.phase == AudioPhase::Starting {
+                self.poll_preparing().await;
             } else {
                 let result = match self.exchange(&WorkerRequest::Status).await {
                     Ok(r) if r.error.is_none() => self.readback(r),
@@ -524,5 +572,103 @@ pub(super) async fn command(
     match shared.rig_playback.dispatch(command).await {
         Ok(s) => Json(s).into_response(),
         Err(e) => failure(StatusCode::CONFLICT, &e),
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    #[tokio::test]
+    async fn preparation_is_cancellable_and_shutdown_reaps_before_releasing_device() {
+        let root =
+            std::env::temp_dir().join(format!("oxidal-prepare-cancel-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let executable = root.join("slow-worker");
+        // An exec replaces the shell: no grandchildren survive forced teardown.
+        std::fs::write(&executable, "#!/bin/sh\nexec sleep 60\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let (shutdown, signal) = watch::channel(false);
+        let rig = RigPlayback::new(&Config {
+            debug_socket: None,
+            device_socket: None,
+            simulator: false,
+            native_worker: None,
+            audio_worker: None,
+            graph_worker: None,
+            rig_worker: Some(executable),
+            mapping_path: root.join("mapping"),
+            preset_dir: root.join("presets"),
+            ui_dir: root.join("ui"),
+            shutdown: Some(signal),
+        })
+        .unwrap();
+        let probe = oxidal_audio::AudioProbe {
+            endpoint: "hw:CARD=Test,DEV=0".into(),
+            direction: oxidal_audio::Direction::Capture,
+            sample_rate: 48000,
+            channels: 2,
+            format: oxidal_audio::SampleFormat::S16,
+            period_frames: 128,
+            periods: 3,
+        };
+        let mut output = probe.clone();
+        output.direction = oxidal_audio::Direction::Playback;
+        let settings = StartRig {
+            revision: "a".repeat(64),
+            stream: oxidal_audio::StreamConfig {
+                input: probe,
+                output,
+                input_map: [0, 1],
+                output_map: [0, 1],
+            },
+            recall: None,
+        };
+        for iteration in 0..2 {
+            let s = rig.snapshot();
+            let starting = tokio::time::timeout(
+                Duration::from_secs(1),
+                rig.dispatch(RigAudioCommand {
+                    session: s.session,
+                    expected_revision: s.revision,
+                    action: RigAudioAction::Start {
+                        settings: Box::new(settings.clone()),
+                    },
+                }),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(starting.phase, AudioPhase::Starting);
+            assert!(starting.device_owned);
+            assert!(crate::audio::PROBE.try_acquire().is_err());
+            if iteration == 0 {
+                let stopped = tokio::time::timeout(
+                    Duration::from_secs(4),
+                    rig.dispatch(RigAudioCommand {
+                        session: starting.session,
+                        expected_revision: starting.revision,
+                        action: RigAudioAction::Stop,
+                    }),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                assert_eq!(stopped.phase, AudioPhase::Stopped);
+                assert!(!stopped.device_owned);
+                assert!(crate::audio::PROBE.try_acquire().is_ok());
+                tokio::time::sleep(Duration::from_millis(250)).await;
+                assert_eq!(rig.snapshot().phase, AudioPhase::Stopped);
+            } else {
+                shutdown.send_replace(true);
+                let mut done = rig.finished.clone();
+                tokio::time::timeout(Duration::from_secs(4), done.wait_for(|v| *v))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert!(crate::audio::PROBE.try_acquire().is_ok());
+            }
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
