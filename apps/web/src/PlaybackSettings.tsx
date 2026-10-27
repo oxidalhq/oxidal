@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
   playbackState,
+  rigAudioState,
+  type RigAudioState,
   graphAudioState,
   graphAudioCommand,
   playbackCommand,
@@ -12,6 +14,7 @@ import {
   type StartAudio,
 } from './api';
 import { Button } from './components/ui/button';
+import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 import { AudioReconfigure } from './AudioReconfigure';
 
 function configurationLabel(configuration: AudioProbe) {
@@ -29,6 +32,15 @@ export function PlaybackSettings({
   output: AudioProbe | null;
 }) {
   const [state, setState] = useState<AudioState | null>(null);
+  const [mixed, setMixed] = useState<RigAudioState | null>(null);
+  const [graphOwnsDevice, setGraphOwnsDevice] = useState(false);
+  function acceptMixed(next: RigAudioState) {
+    setMixed((current) =>
+      current?.session === next.session && current.revision > next.revision
+        ? current
+        : next,
+    );
+  }
   const [error, setError] = useState('');
   const [graphMessage, setGraphMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -50,8 +62,16 @@ export function PlaybackSettings({
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
-        const next = await playbackState();
-        if (active) accept(next);
+        const [next, rig, graph] = await Promise.all([
+          playbackState(),
+          rigAudioState(),
+          graphAudioState(),
+        ]);
+        if (active) {
+          accept(next);
+          acceptMixed(rig);
+          setGraphOwnsDevice(graph.device_owned);
+        }
       } catch (cause) {
         if (active) setError(String(cause));
       } finally {
@@ -113,6 +133,21 @@ export function PlaybackSettings({
   const unavailable = !state || state.phase === 'unavailable';
   const transitioning =
     state?.phase === 'starting' || state?.phase === 'stopping';
+  if (
+    mixed?.configured &&
+    mixed.phase !== 'unavailable' &&
+    !state?.device_owned &&
+    !graphOwnsDevice
+  )
+    return (
+      <MixedPlaybackSettings
+        state={mixed}
+        connected={connected}
+        input={input}
+        output={output}
+        onState={acceptMixed}
+      />
+    );
   return (
     <section className="control-stack" aria-label="Playback controls">
       <h3>Audio playback</h3>

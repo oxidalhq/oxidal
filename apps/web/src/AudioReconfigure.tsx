@@ -40,6 +40,7 @@ export function AudioReconfigure({
         Number.isInteger(side.period_frames) &&
         side.period_frames >= 16 &&
         side.period_frames <= 2048 &&
+        (side.period_frames & (side.period_frames - 1)) === 0 &&
         Number.isInteger(side.periods) &&
         side.periods >= 2 &&
         side.periods <= 8,
@@ -144,8 +145,8 @@ export function AudioReconfigure({
       </p>
       {changed && !valid && (
         <p role="alert">
-          Use matching input/output devices and valid rate, buffer and channel
-          numbers.
+          Use matching devices, a power-of-two buffer (16–2048), and valid rate
+          and channel numbers.
         </p>
       )}
       <div className="action-row">

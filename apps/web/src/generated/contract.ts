@@ -266,6 +266,10 @@ export type RigAudioAction =
       kind: "restart";
     }
   | {
+      kind: "reconfigure";
+      stream: StreamConfig;
+    }
+  | {
       command: ControlCommand;
       kind: "control";
     }

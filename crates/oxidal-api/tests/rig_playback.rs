@@ -25,7 +25,10 @@ async fn apply(c: &Client, url: &str, action: Value) -> Value {
             continue;
         }
         assert!(status.is_success(), "{status}: {body}");
-        if matches!(action["kind"].as_str(), Some("start" | "restart")) {
+        if matches!(
+            action["kind"].as_str(),
+            Some("start" | "restart" | "reconfigure")
+        ) {
             assert_eq!(body["phase"], "starting");
             return phase(c, url, "running").await;
         }
@@ -236,10 +239,60 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let s = apply(&c, &url, json!({"kind":"restart"})).await;
     assert_eq!(control(&s, &gain), -9.0);
     assert!((control(&s, &native) - 0.6).abs() < 1e-5);
+    // Rate/buffer changes reconstruct the confirmed unsaved controls.
+    let mut updated_stream = stream();
+    updated_stream["input"]["sample_rate"] = json!(44100);
+    updated_stream["output"]["sample_rate"] = json!(44100);
+    updated_stream["input"]["period_frames"] = json!(256);
+    updated_stream["output"]["period_frames"] = json!(256);
+    let s = apply(
+        &c,
+        &url,
+        json!({"kind":"reconfigure","stream":updated_stream}),
+    )
+    .await;
+    assert_eq!(s["configured"]["stream"], updated_stream);
+    assert_eq!(control(&s, &gain), -9.0);
+    assert!((control(&s, &native) - 0.6).abs() < 1e-5);
+    assert_eq!(pids(&executable).len(), 1);
+    let stable_session = s["control"]["session"].clone();
+    let mut invalid = updated_stream.clone();
+    invalid["input"]["period_frames"] = json!(129);
+    invalid["output"]["period_frames"] = json!(129);
+    assert_eq!(
+        post(&c, &url, &s, json!({"kind":"reconfigure","stream":invalid}))
+            .await
+            .status(),
+        409
+    );
+    assert_eq!(
+        get(&c, &url, "rig-audio").await["control"]["session"],
+        stable_session
+    );
+    // A valid but unavailable device fails in preparation and rolls back once.
+    let mut unavailable = updated_stream.clone();
+    unavailable["input"]["endpoint"] = json!("hw:CARD=MissingDevice,DEV=0");
+    unavailable["output"]["endpoint"] = json!("hw:CARD=MissingDevice,DEV=0");
+    let restored = apply(&c, &url, json!({"kind":"reconfigure","stream":unavailable})).await;
+    assert_eq!(restored["configured"]["stream"], updated_stream);
+    assert_eq!(control(&restored, &gain), -9.0);
+    assert!((control(&restored, &native) - 0.6).abs() < 1e-5);
+    assert!(
+        restored["error"]
+            .as_str()
+            .unwrap()
+            .contains("previous settings restored")
+    );
+    assert_eq!(pids(&executable).len(), 1);
+    // A deliberate restart clears the old warning, retaining the recovered rig.
+    apply(&c, &url, json!({"kind":"restart"})).await;
+    // Monitoring is decimated independently of the lifecycle response. Require
+    // a newly sampled status, not the prior recovered session's warning.
+    let monitor_sequence = get(&c, &url, "monitor").await["sequence"].as_u64().unwrap();
     let mut monitored = false;
     for _ in 0..100 {
         let m = get(&c, &url, "monitor").await;
-        if m["source"] == "Mixed rig" {
+        if m["source"] == "Mixed rig" && m["sequence"].as_u64().unwrap() > monitor_sequence {
             assert_eq!(m["rig_phase"], "running");
             assert!(m["error"].is_null());
             assert!(m["audio"]["frames"].as_u64().unwrap() > 0);

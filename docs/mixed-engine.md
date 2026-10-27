@@ -160,7 +160,7 @@ Set `OXIDAL_RIG_WORKER` to the absolute installed worker executable. The daemon
 uses `preset_dir/bundles` for verified revisions and separate `rig-runtime/playback`
 and `rig-runtime/export` scratch roots. `GET /api/v1/rig-audio` reports the lifecycle
 and confirmed controls. POST accepts `RigAudioCommand` with its current owner
-session/revision and one of Start, Stop, Restart, Control or Save. Start references
+session/revision and one of Start, Stop, Restart, Reconfigure, Control or Save. Start references
 a saved bundle revision; no request may select an executable or library path.
 
 The actor holds the same `audio::PROBE` permit as native saved playback, LV2 graph
@@ -173,6 +173,23 @@ readiness; clients poll until `running` or `failed`. Stop and shutdown cancel th
 pending startup exchange, close its pipes and reap the child before releasing the
 device permit. A late readiness reply cannot revive the cancelled session. The
 maintained slow-worker test covers cancellation and shutdown before readiness.
+
+Reconfigure applies a new duplex device/rate/buffer/channel-map configuration to the
+same rig and its confirmed unsaved scalar controls. Invalid declarations fail before
+interrupting audio. Preparation errors restore the previous configuration once; if
+restoration also fails, the actor reports failure rather than retrying indefinitely.
+Cancel during preparation stops the worker and retains the previous configuration
+for a deliberate Resume. The actor keeps the device permit across normal restart,
+reconfiguration and rollback child replacement; if the replacement cannot spawn,
+restoration may fail if another owner acquired the released permit. These changes
+interrupt audio and do not establish seamless switching or durable mixed boot recall.
+
+Settings → Audio follows the actual mixed owner and exposes the shared current
+session editor for rate, power-of-two buffers, periods and channel mapping. A checked
+interface can be applied after the current audio is stopped for device inspection.
+When all owners are stopped and more than one has a remembered configuration, this
+prototype settings view prefers the mixed session; each Rig view remains explicit
+about the owner it resumes. A unified persisted active-session selection remains open.
 
 Save acknowledges a captured control revision and runs independently of subsequent
 control commands. `save.source_session` and `source_control_revision` identify what

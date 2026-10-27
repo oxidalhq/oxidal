@@ -3906,6 +3906,23 @@
         {
           "type": "object",
           "properties": {
+            "kind": {
+              "type": "string",
+              "const": "reconfigure"
+            },
+            "stream": {
+              "$ref": "#/$defs/StreamConfig"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stream"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "command": {
               "$ref": "#/$defs/ControlCommand"
             },

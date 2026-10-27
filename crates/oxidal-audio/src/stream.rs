@@ -36,6 +36,15 @@ impl Duplex {
     /// ALSA null is a software fixture, not hardware qualification. Unavailable in ordinary builds.
     #[cfg(feature = "qualification")]
     pub fn qualification_null(mut config: StreamConfig) -> Result<Self, String> {
+        config.validate()?;
+        if [&config.input, &config.output].iter().any(|side| {
+            !matches!(
+                side.endpoint.as_str(),
+                "null" | "hw:CARD=Qualification,DEV=0"
+            )
+        }) {
+            return Err("Unknown software qualification device".into());
+        }
         config.input.endpoint = "null".into();
         config.output.endpoint = "null".into();
         config.validate()?;

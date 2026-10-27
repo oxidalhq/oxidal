@@ -163,6 +163,7 @@ pub enum RigAudioAction {
     Start { settings: Box<StartRig> },
     Stop,
     Restart,
+    Reconfigure { stream: oxidal_audio::StreamConfig },
     Control { command: ControlCommand },
     Save { name: String },
 }

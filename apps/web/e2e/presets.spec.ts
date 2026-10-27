@@ -1673,6 +1673,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     'Maintained Linux native gate supplies the mixed worker and fixture',
   );
   test.setTimeout(120000);
+  page.setDefaultTimeout(20000);
   const root = process.env.OXIDAL_MIXED_TEST_ROOT!;
   const revision = readFileSync(
     join(root, 'mixed-preset-revision'),
@@ -1734,6 +1735,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   });
   await expect.poll(async () => (await get()).phase).toBe('running');
   await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText(manifest.name);
@@ -1772,8 +1774,69 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   const changed = await value();
   await expect(rig.getByRole('status').first()).toHaveText('Session modified');
+  // Settings must follow this sounding owner, preserving edits before named Save.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const audioSettings = page.getByRole('region', { name: 'Playback controls' });
+  await expect(
+    audioSettings.getByRole('heading', { name: 'Rig audio' }),
+  ).toBeVisible();
+  await audioSettings
+    .getByText('Current device & buffers', { exact: true })
+    .click();
+  const buffers = audioSettings.getByRole('group', {
+    name: 'Adjust current session',
+  });
+  await buffers.getByLabel('Session buffer (samples)').fill('129');
+  await expect(
+    buffers.getByRole('button', { name: 'Apply & restart audio', exact: true }),
+  ).toBeDisabled();
+  await buffers.getByLabel('Session buffer (samples)').fill('256');
+  await buffers.getByLabel('Session sample rate (Hz)').fill('44100');
+  await buffers
+    .getByRole('button', { name: 'Apply & restart audio', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).configured.stream.input.period_frames)
+    .toBe(256);
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await expect.poll(value).toBe(changed);
+  expect((await get()).configured.stream.input.sample_rate).toBe(44100);
+  await expect(audioSettings.getByRole('status')).toHaveText('running');
+  const settingsViewport = page.viewportSize()!;
+  for (const viewport of [
+    settingsViewport,
+    { width: settingsViewport.height, height: settingsViewport.width },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`mixed-audio-settings-${viewport.width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.setViewportSize(settingsViewport);
+  // A slow document response must not overwrite a name entered after Settings.
+  let releaseDocument = () => {};
+  const pendingDocument = new Promise<void>((resolve) => {
+    releaseDocument = resolve;
+  });
+  const documentUrl = `**/api/v1/presets/rigs/${document.revision}`;
+  await page.route(documentUrl, async (route) => {
+    await pendingDocument;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  const nameInput = rig.getByLabel('Preset name', { exact: true });
+  await expect(nameInput).toBeDisabled();
+  releaseDocument();
   const name = `Offline mixed ${info.project.name}`;
-  await rig.getByLabel('Preset name', { exact: true }).fill(name);
+  await nameInput.fill(name);
+  await page.unroute(documentUrl);
   await rig.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(
     rig.getByText('Saved for offline use', { exact: true }),

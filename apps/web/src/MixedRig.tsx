@@ -429,13 +429,20 @@ export function MixedRig({
         <label className="field">
           Preset name
           <input
+            disabled={!matching}
             value={name}
             maxLength={128}
             onChange={(e) => setName(e.target.value)}
           />
         </label>
         <Button
-          disabled={disabled || !!edit || !!state.save?.running || !name.trim()}
+          disabled={
+            disabled ||
+            !matching ||
+            !!edit ||
+            !!state.save?.running ||
+            !name.trim()
+          }
           onClick={() => void command({ kind: 'save', name: name.trim() })}
         >
           {state.save?.running ? 'Saving…' : 'Save'}

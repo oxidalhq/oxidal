@@ -82,6 +82,8 @@ struct Owner {
     runtime: PathBuf,
     worker: Option<Worker>,
     export: Option<Export>,
+    rollback: Option<StartRig>,
+    restored_error: Option<String>,
     state: RigAudioState,
     updates: watch::Sender<RigAudioState>,
 }
@@ -130,8 +132,14 @@ impl Owner {
         Ok(())
     }
     async fn release(&mut self) -> Result<(), String> {
+        drop(self.release_reserved().await?);
+        Ok(())
+    }
+    async fn release_reserved(
+        &mut self,
+    ) -> Result<Option<tokio::sync::SemaphorePermit<'static>>, String> {
         let Some(worker) = self.worker.as_mut() else {
-            return Ok(());
+            return Ok(None);
         };
         if let Some(preparing) = worker.preparing.take() {
             // Drop startup pipes and prevent a late reply from reviving a stopped
@@ -150,8 +158,7 @@ impl Owner {
                 .map_err(|_| "Mixed worker not reaped; device remains owned")?
                 .map_err(|e| e.to_string())?;
         }
-        self.worker = None;
-        Ok(())
+        Ok(self.worker.take().map(|worker| worker._permit))
     }
     async fn fault(&mut self, error: String) -> String {
         let error = match self.release().await {
@@ -171,15 +178,25 @@ impl Owner {
         .map_err(|_| "Mixed worker response timed out".to_owned())?
     }
     async fn start(&mut self, settings: StartRig) -> Result<(), String> {
+        self.start_reserved(settings, None).await
+    }
+    async fn start_reserved(
+        &mut self,
+        settings: StartRig,
+        reserved: Option<tokio::sync::SemaphorePermit<'static>>,
+    ) -> Result<(), String> {
         settings.validate()?;
         let bytes = encode(&settings)?;
         if self.worker.is_some() {
             return Err("Stop mixed audio before changing its configuration".into());
         }
         let executable = self.executable.as_ref().ok_or("Mixed worker unavailable")?;
-        let permit = crate::audio::PROBE
-            .try_acquire()
-            .map_err(|_| "Audio device operation already in progress")?;
+        let permit = match reserved {
+            Some(permit) => permit,
+            None => crate::audio::PROBE
+                .try_acquire()
+                .map_err(|_| "Audio device operation already in progress")?,
+        };
         std::fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
         let root = std::fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
         let runtime = self.runtime.join("playback");
@@ -217,6 +234,69 @@ impl Owner {
         self.phase(AudioPhase::Starting, None);
         Ok(())
     }
+    async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Result<(), String> {
+        if !matches!(self.state.phase, AudioPhase::Running | AudioPhase::Stopped) {
+            return Err("Wait for mixed audio to finish preparing before changing settings".into());
+        }
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("No mixed configuration")?;
+        let mut next = previous.clone();
+        next.stream = stream;
+        // Invalid declarations cannot interrupt the current stream.
+        next.validate()?;
+        self.phase(AudioPhase::Stopping, None);
+        let reserved = match self.release_reserved().await {
+            Ok(permit) => permit,
+            Err(error) => {
+                self.phase(AudioPhase::Failed, Some(error.clone()));
+                return Err(error);
+            }
+        };
+        self.rollback = Some(previous);
+        self.restored_error = None;
+        if let Err(error) = self.start_reserved(next, reserved).await {
+            self.preparation_failed(error).await;
+        }
+        Ok(())
+    }
+    async fn preparation_failed(&mut self, error: String) {
+        let Some(previous) = self.rollback.take() else {
+            let reason = match self.restored_error.take() {
+                Some(original) => format!("{original}; previous settings also failed: {error}"),
+                None => error,
+            };
+            self.fault(reason).await;
+            return;
+        };
+        let reserved = match self.release_reserved().await {
+            Ok(permit) => permit,
+            Err(reap) => {
+                self.state.configured = Some(previous);
+                self.phase(AudioPhase::Failed, Some(format!("{error}; {reap}")));
+                return;
+            }
+        };
+        // Recreate the last confirmed scalar state; do not retry the rejected settings.
+        self.state.configured = Some(previous.clone());
+        match self.start_reserved(previous, reserved).await {
+            Ok(()) => {
+                self.restored_error = Some(format!(
+                    "Audio settings rejected ({error}); previous settings restored"
+                ));
+                self.state.error = Some(format!(
+                    "Audio settings rejected ({error}); restoring previous settings"
+                ));
+                self.publish();
+            }
+            Err(restore) => {
+                self.fault(format!("{error}; previous settings also failed: {restore}"))
+                    .await;
+            }
+        }
+    }
     async fn poll_preparing(&mut self) {
         let Some(worker) = self.worker.as_mut() else {
             return;
@@ -225,7 +305,8 @@ impl Owner {
             return;
         };
         if preparing.started.elapsed() > Duration::from_secs(60) {
-            self.fault("Mixed startup timed out".into()).await;
+            self.preparation_failed("Mixed startup timed out".into())
+                .await;
             return;
         }
         if !preparing.task.is_finished() {
@@ -244,15 +325,22 @@ impl Owner {
                 worker.input = Some(input);
                 worker.output = Some(output);
                 if reply.error.is_some() || reply.processed_frames == 0 {
-                    self.fault("Mixed worker rejected startup".into()).await;
+                    self.preparation_failed(
+                        reply
+                            .error
+                            .unwrap_or_else(|| "Mixed worker rejected startup".into()),
+                    )
+                    .await;
                 } else if let Err(e) = self.readback(reply) {
-                    self.fault(e).await;
+                    self.preparation_failed(e).await;
                 } else {
-                    self.phase(AudioPhase::Running, None);
+                    self.rollback = None;
+                    let error = self.restored_error.take();
+                    self.phase(AudioPhase::Running, error);
                 }
             }
             Err(e) => {
-                self.fault(e).await;
+                self.preparation_failed(e).await;
             }
         }
     }
@@ -413,8 +501,18 @@ impl Owner {
             return Err("Mixed worker unavailable".into());
         }
         match command.action {
-            RigAudioAction::Start { settings } => self.start(*settings).await?,
+            RigAudioAction::Start { settings } => {
+                self.start(*settings).await?;
+                self.rollback = None;
+                self.restored_error = None;
+            }
+            RigAudioAction::Reconfigure { stream } => self.reconfigure(stream).await?,
             RigAudioAction::Stop => {
+                if let Some(previous) = self.rollback.take() {
+                    self.state.configured = Some(previous);
+                }
+                self.rollback = None;
+                self.restored_error = None;
                 self.phase(AudioPhase::Stopping, None);
                 if let Err(e) = self.release().await {
                     self.phase(AudioPhase::Failed, Some(e.clone()));
@@ -423,17 +521,27 @@ impl Owner {
                 self.phase(AudioPhase::Stopped, None);
             }
             RigAudioAction::Restart => {
+                if self.state.phase == AudioPhase::Starting {
+                    return Err("Cancel preparation before restarting".into());
+                }
+                self.rollback = None;
+                self.restored_error = None;
                 let settings = self
                     .state
                     .configured
                     .clone()
                     .ok_or("No mixed configuration")?;
                 self.phase(AudioPhase::Stopping, None);
-                if let Err(e) = self.release().await {
-                    self.phase(AudioPhase::Failed, Some(e.clone()));
-                    return Err(e);
+                let reserved = match self.release_reserved().await {
+                    Ok(permit) => permit,
+                    Err(e) => {
+                        self.phase(AudioPhase::Failed, Some(e.clone()));
+                        return Err(e);
+                    }
+                };
+                if let Err(error) = self.start_reserved(settings, reserved).await {
+                    return Err(self.fault(error).await);
                 }
-                self.start(settings).await?;
             }
             RigAudioAction::Control { command } => {
                 if self.state.phase != AudioPhase::Running {
@@ -518,6 +626,8 @@ impl RigPlayback {
             runtime: config.preset_dir.join("rig-runtime"),
             worker: None,
             export: None,
+            rollback: None,
+            restored_error: None,
             state: initial,
             updates,
         };
@@ -661,6 +771,33 @@ mod tests {
                 assert!(crate::audio::PROBE.try_acquire().is_ok());
                 tokio::time::sleep(Duration::from_millis(250)).await;
                 assert_eq!(rig.snapshot().phase, AudioPhase::Stopped);
+                let mut candidate = settings.stream.clone();
+                candidate.input.period_frames = 256;
+                candidate.output.period_frames = 256;
+                let preparing = rig
+                    .dispatch(RigAudioCommand {
+                        session: stopped.session,
+                        expected_revision: stopped.revision,
+                        action: RigAudioAction::Reconfigure { stream: candidate },
+                    })
+                    .await
+                    .unwrap();
+                assert_eq!(preparing.phase, AudioPhase::Starting);
+                assert!(crate::audio::PROBE.try_acquire().is_err());
+                let cancelled = rig
+                    .dispatch(RigAudioCommand {
+                        session: preparing.session,
+                        expected_revision: preparing.revision,
+                        action: RigAudioAction::Stop,
+                    })
+                    .await
+                    .unwrap();
+                assert_eq!(cancelled.phase, AudioPhase::Stopped);
+                assert_eq!(
+                    cancelled.configured.unwrap().stream.input.period_frames,
+                    128
+                );
+                assert!(crate::audio::PROBE.try_acquire().is_ok());
             } else {
                 shutdown.send_replace(true);
                 let mut done = rig.finished.clone();
