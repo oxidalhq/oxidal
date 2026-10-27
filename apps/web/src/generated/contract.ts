@@ -667,9 +667,14 @@ export interface Parameter2 {
   maximum: number;
   minimum: number;
   normalized: number;
+  staged?: boolean;
   toggle: boolean;
   tone: boolean;
   value: number;
+  /**
+   * Adapter qualification, separate from the native automation flag.
+   */
+  writable?: boolean;
 }
 export interface Settings {
   home_ssid: string;

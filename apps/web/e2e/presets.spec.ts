@@ -309,6 +309,35 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(editor.getByTestId('native-readback')).toContainText(
     'normalized 1',
   );
+  // Qualified controls come from native descriptors, including controls that
+  // were previously absent from the hard-coded authoring list.
+  const catalog = await (await request.get('/api/v1/native')).json();
+  expect(
+    catalog.parameters.filter((p: { writable: boolean }) => p.writable),
+  ).toHaveLength(14);
+  for (const id of ['toneMid', 'toneTreble', 'gateThreshold']) {
+    const descriptor = catalog.parameters.find(
+      (p: { id: string }) => p.id === id,
+    );
+    await editor.getByLabel('Native control').selectOption(id);
+    await expect(
+      editor.getByRole('button', { name: 'Adjust native value', exact: true }),
+    ).toContainText(descriptor.label);
+    await editor
+      .getByRole('button', { name: 'Adjust native value', exact: true })
+      .click();
+    await nativeValue(editor, '0.25');
+    await editor.getByRole('button', { name: 'Done', exact: true }).click();
+  }
+  await editor.getByLabel('Native control').selectOption('gateEnabled');
+  await editor
+    .getByRole('button', { name: 'Adjust native value', exact: true })
+    .click();
+  await nativeValue(editor, '0.5');
+  await expect(
+    editor.getByRole('button', { name: 'Done', exact: true }),
+  ).toBeDisabled();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   // Select a native block, exercise exact toggles and cancellable mix on every
   // device project, then include the committed block change in the saved copy.
   const blockState = await (await request.get('/api/v1/native')).json();
@@ -401,6 +430,11 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
       (p: { parameter: string }) => p.parameter === 'slimSize',
     ).value,
   ).toBe(0.75);
+  for (const id of ['toneMid', 'toneTreble', 'gateThreshold']) {
+    expect(
+      restored.parameters.find((p: { id: string }) => p.id === id).normalized,
+    ).toBeCloseTo(0.25, 4);
+  }
   const restoredMix = restored.block_controls.find(
     (p: { parameter: string }) => p.parameter === 'mix',
   );

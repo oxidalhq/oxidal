@@ -345,6 +345,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     drop(engine);
     eprintln!("qualify: owned editor workflow");
     qualify_editor(&root, &preset)?;
+    qualify_editor_scalars(&root, &preset)?;
     qualify_factories()?;
     println!(
         "{}",
@@ -982,5 +983,166 @@ fn qualify_split(engine: &mut Engine, amp: &str, cab: &str) -> Result<(), Box<dy
     eprintln!(
         "native split: source preservation, independent asset restore, 43-parameter allocation, pitch extraction and rejection guards passed"
     );
+    Ok(())
+}
+
+// Exercise every advertised global editor capability through owned transactions,
+// including serialization and a new engine. This is part of native:check.
+fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
+    use oxidal_tone3000::{
+        editor::Editor,
+        protocol::{EditorAction as A, EditorCommand, EditorSnapshot},
+    };
+    let store_root = root.join("editor-scalars");
+    let mut store = oxidal_presets::Store::new(store_root.clone());
+    let original = store.import(bytes)?;
+    let mut editor = Editor::new(store_root.clone())?;
+    let send = |editor: &mut Editor, action: A| -> Result<EditorSnapshot, Box<dyn Error>> {
+        let state = editor.snapshot()?;
+        Ok(editor.command(EditorCommand {
+            session: state.session,
+            expected_revision: state.revision,
+            request_id: format!("request-{}", state.revision),
+            action,
+        })?)
+    };
+    let initial = send(
+        &mut editor,
+        A::Load {
+            id: original.sha256.clone(),
+            owned: false,
+        },
+    )?;
+    let editable: Vec<_> = initial.parameters.iter().filter(|p| p.writable).collect();
+    assert_eq!(editable.len(), 14);
+    assert_eq!(
+        initial.parameters.len(),
+        43,
+        "retain unsupported descriptors"
+    );
+    for parameter in initial.parameters.iter().filter(|p| !p.writable) {
+        assert!(
+            send(
+                &mut editor,
+                A::Begin {
+                    owner: "owner".into(),
+                    token: format!("unsupported-{}", parameter.id),
+                    target: parameter.id.clone()
+                }
+            )
+            .is_err()
+        );
+    }
+    for (index, parameter) in editable.iter().enumerate() {
+        let before = editor.snapshot()?;
+        let token = format!("cancel-{index}");
+        let changed = if parameter.toggle {
+            1.0 - parameter.normalized as f32
+        } else {
+            0.25
+        };
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.clone(),
+                target: parameter.id.clone(),
+            },
+        )?;
+        if parameter.toggle {
+            assert!(
+                send(
+                    &mut editor,
+                    A::Commit {
+                        owner: "owner".into(),
+                        token: token.clone(),
+                        sequence: 1,
+                        value: 0.5
+                    }
+                )
+                .is_err()
+            );
+            let rejected = editor.snapshot()?;
+            assert_eq!(rejected.state_captures, before.state_captures);
+            assert_eq!(rejected.dirty, before.dirty);
+        }
+        let preview = send(
+            &mut editor,
+            A::Preview {
+                owner: "owner".into(),
+                token: token.clone(),
+                sequence: 1,
+                value: changed,
+            },
+        );
+        assert_eq!(preview.is_err(), parameter.staged);
+        let cancelled = send(
+            &mut editor,
+            A::Cancel {
+                owner: "owner".into(),
+                token,
+            },
+        )?;
+        for (a, b) in before.parameters.iter().zip(&cancelled.parameters) {
+            assert!(
+                (a.value - b.value).abs() < 1e-5,
+                "cancel {} must preserve {}",
+                parameter.id,
+                a.id
+            );
+        }
+        let token = format!("commit-{index}");
+        send(
+            &mut editor,
+            A::Begin {
+                owner: "owner".into(),
+                token: token.clone(),
+                target: parameter.id.clone(),
+            },
+        )?;
+        let committed = send(
+            &mut editor,
+            A::Commit {
+                owner: "owner".into(),
+                token,
+                sequence: 1,
+                value: changed,
+            },
+        )?;
+        assert_eq!(committed.dirty, before.dirty || parameter.tone);
+        assert_eq!(committed.state_captures, before.state_captures + 1);
+        // Save after each edit so the next parameter must set dirty independently.
+        send(
+            &mut editor,
+            A::Save {
+                name: format!("Scalar {index}"),
+            },
+        )?;
+    }
+    let confirmed = editor.snapshot()?;
+    let owned = confirmed.loaded.clone().unwrap();
+    drop(editor);
+    let mut editor = Editor::new(store_root)?;
+    let reopened = send(
+        &mut editor,
+        A::Load {
+            id: owned,
+            owned: true,
+        },
+    )?;
+    for before in confirmed.parameters.iter().filter(|p| p.writable && p.tone) {
+        let after = reopened
+            .parameters
+            .iter()
+            .find(|p| p.id == before.id)
+            .unwrap();
+        assert!(
+            (before.value - after.value).abs() < 1e-5,
+            "save/reopen {}",
+            before.id
+        );
+    }
+    assert_eq!(store.original(&original.sha256)?, bytes);
+    eprintln!("qualify: 14 descriptor-driven globals preview/cancel/commit/save/reopen passed");
     Ok(())
 }

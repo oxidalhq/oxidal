@@ -114,6 +114,10 @@ impl Editor {
         self.state.parameters =
             serde_json::from_value(self.engine.catalog().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        for parameter in &mut self.state.parameters {
+            parameter.writable = writable(&parameter.id);
+            parameter.staged = staged(&parameter.id);
+        }
         self.state.block_controls = self.engine.block_controls().map_err(|e| e.to_string())?;
         self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
         Ok(self.state.clone())
@@ -281,12 +285,19 @@ impl Editor {
             .map_err(|e| e.to_string())?
             .into_iter()
             .find(|p| p.id == target);
+        let parameters: Vec<Parameter> =
+            serde_json::from_value(self.engine.catalog().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        let parameter = parameters.iter().find(|p| p.id == target);
         let requires_commit = staged(&target) || block.as_ref().is_some_and(|p| p.staged);
         if requires_commit && !commit {
             return Err("Processing changes apply only on commit".into());
         }
-        if block.as_ref().is_some_and(|p| p.step == 1.0) && value != 0.0 && value != 1.0 {
-            return Err("Block toggles require 0 or 1".into());
+        if (block.as_ref().is_some_and(|p| p.step == 1.0) || parameter.is_some_and(|p| p.toggle))
+            && value != 0.0
+            && value != 1.0
+        {
+            return Err("Toggles require 0 or 1".into());
         }
         let changed = if let Some(p) = &block {
             self.engine.set_block(&p.block_id, &p.parameter, value)
@@ -311,7 +322,7 @@ impl Editor {
                 self.finish();
                 return Err(error);
             }
-            self.state.dirty |= block.is_some() || target == "toneBass" || target == "outputLevel";
+            self.state.dirty |= block.is_some() || parameter.is_some_and(|p| p.tone);
             self.finish();
         } else {
             let g = self.gesture.as_mut().unwrap();

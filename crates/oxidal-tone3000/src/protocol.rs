@@ -18,6 +18,11 @@ pub struct Parameter {
     pub automatable: bool,
     pub tone: bool,
     pub machine_default: bool,
+    /// Adapter qualification, separate from the native automation flag.
+    #[serde(default)]
+    pub writable: bool,
+    #[serde(default)]
+    pub staged: bool,
 }
 /// Native block readback, with a server-issued edit target. Values are normalized 0–1.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -107,10 +112,7 @@ pub enum WorkerReply {
 }
 /// This initial slice exposes only controls whose behavior is exercised by native tests.
 pub fn writable(id: &str) -> bool {
-    matches!(
-        id,
-        "toneBass" | "outputLevel" | "inputCalibrationLevel" | "osEnabled" | "osFactor"
-    )
+    live_writable(id) || matches!(id, "inputCalibrationLevel" | "osEnabled" | "osFactor")
 }
 pub fn staged(id: &str) -> bool {
     matches!(id, "osEnabled" | "osFactor")

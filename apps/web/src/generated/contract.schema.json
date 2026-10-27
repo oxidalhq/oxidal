@@ -2341,6 +2341,10 @@
           "type": "number",
           "format": "double"
         },
+        "staged": {
+          "type": "boolean",
+          "default": false
+        },
         "toggle": {
           "type": "boolean"
         },
@@ -2350,6 +2354,11 @@
         "value": {
           "type": "number",
           "format": "double"
+        },
+        "writable": {
+          "description": "Adapter qualification, separate from the native automation flag.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,

@@ -13,13 +13,6 @@ import { TouchAdjust } from './TouchAdjust';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 
-const controlLabels: Record<string, string> = {
-  toneBass: 'Bass',
-  outputLevel: 'Output level',
-  inputCalibrationLevel: 'Input calibration',
-  osEnabled: 'Oversampling',
-  osFactor: 'Oversampling factor',
-};
 const blockLabels: Record<string, string> = {
   enabled: 'Enabled',
   normalize: 'Normalise',
@@ -50,11 +43,14 @@ export function NativeEditor({
   const [error, setError] = useState('');
   const [selection, setSelection] = useState('');
   const [requestedTarget, setTarget] = useState('toneBass');
+  const editableParameters = state?.parameters.filter((p) => p.writable) ?? [];
   const target =
-    requestedTarget.startsWith('block:') &&
-    !state?.block_controls.some((p) => p.id === requestedTarget)
-      ? 'toneBass'
-      : requestedTarget;
+    state?.block_controls.some((p) => p.id === requestedTarget) ||
+    editableParameters.some((p) => p.id === requestedTarget)
+      ? requestedTarget
+      : (editableParameters.find((p) => p.id === 'toneBass')?.id ??
+        editableParameters[0]?.id ??
+        '');
   const [value, setValue] = useState('0.5');
   const [name, setName] = useState('My preset');
   const [owner] = useState(() => crypto.randomUUID());
@@ -232,17 +228,24 @@ export function NativeEditor({
   const blockControl = state?.block_controls.find((p) => p.id === target);
   const step =
     blockControl?.step ??
-    (target === 'osEnabled' ? 1 : target === 'osFactor' ? 0.5 : 0.01);
+    (parameter?.toggle
+      ? 1
+      : parameter &&
+          parameter.interval >= 1 &&
+          parameter.maximum > parameter.minimum
+        ? parameter.interval / (parameter.maximum - parameter.minimum)
+        : 0.01);
   const ours = state?.edit?.owner === owner && state.edit.target === target;
-  const staged =
-    blockControl?.staged || target === 'osEnabled' || target === 'osFactor';
+  const staged = blockControl?.staged || parameter?.staged;
   const blocked = busy || !connected || !state;
   const valid =
     value.trim() !== '' &&
     Number.isFinite(Number(value)) &&
     Number(value) >= 0 &&
     Number(value) <= 1 &&
-    (blockControl?.step !== 1 || Number(value) === 0 || Number(value) === 1);
+    (!(blockControl?.step === 1 || parameter?.toggle) ||
+      Number(value) === 0 ||
+      Number(value) === 1);
   return (
     <section aria-label="Native preset editor">
       <h3>Native preset editor</h3>
@@ -315,21 +318,22 @@ export function NativeEditor({
               setValue(String(controlValue(state, e.target.value)));
             }}
           >
-            <optgroup label="Tone">
-              <option value="toneBass">Bass</option>
-              <option value="outputLevel">Output level</option>
-            </optgroup>
-            <optgroup label="Device processing">
-              <option value="inputCalibrationLevel">
-                Input calibration · device
-              </option>
-              <option value="osEnabled">
-                Oversampling enabled · device, staged
-              </option>
-              <option value="osFactor">
-                Oversampling factor · device, staged
-              </option>
-            </optgroup>
+            {[
+              { label: 'Tone', tone: true },
+              { label: 'Device processing', tone: false },
+            ].map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {editableParameters
+                  .filter((p) => p.tone === group.tone)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                      {!p.tone ? ' · device' : ''}
+                      {p.staged ? ' · staged' : ''}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
             <optgroup label="Tone blocks">
               {state?.block_controls.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -344,13 +348,13 @@ export function NativeEditor({
           className="native-value-trigger"
           aria-label="Adjust native value"
           aria-haspopup="dialog"
-          disabled={blocked || !state?.loaded || !!state.edit}
+          disabled={blocked || !state?.loaded || !target || !!state.edit}
           onClick={() => void begin()}
         >
           <span>
             {blockControl
               ? `${blockControl.name} · ${blockLabels[blockControl.parameter]}`
-              : (controlLabels[target] ?? target)}
+              : (parameter?.label ?? target)}
           </span>
           <strong>
             {blockControl
@@ -359,7 +363,7 @@ export function NativeEditor({
                   ? 'On'
                   : 'Off'
                 : `${Math.round(blockControl.value * 100)}%`
-              : `${parameter?.display ?? '—'} ${parameter?.label ?? ''}`}
+              : (parameter?.display ?? '—')}
           </strong>
           <span className="sr-only" data-testid="native-readback">
             Confirmed value: {blockControl?.value ?? parameter?.value ?? '—'} ·
@@ -371,7 +375,7 @@ export function NativeEditor({
             title={
               blockControl
                 ? `${blockControl.name} · ${blockLabels[blockControl.parameter]}`
-                : (controlLabels[target] ?? target)
+                : (parameter?.label ?? target)
             }
             onCancel={() => {
               if (!blocked) void finish(true);
@@ -398,7 +402,7 @@ export function NativeEditor({
                 step={step}
                 disabled={blocked}
                 format={(v) =>
-                  blockControl?.step === 1
+                  blockControl?.step === 1 || parameter?.toggle
                     ? v === 1
                       ? 'On'
                       : 'Off'
@@ -430,7 +434,7 @@ export function NativeEditor({
                       Number.isFinite(Number(next)) &&
                       Number(next) >= 0 &&
                       Number(next) <= 1 &&
-                      (blockControl?.step !== 1 ||
+                      (!(blockControl?.step === 1 || parameter?.toggle) ||
                         Number(next) === 0 ||
                         Number(next) === 1)
                     )
