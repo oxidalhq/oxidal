@@ -28,7 +28,7 @@ unsafe extern "C" {
     fn ox_lv2_free(h: *mut c_void);
     fn ox_lv2_set(h: *mut c_void, port: u32, value: f32);
     fn ox_lv2_get(h: *mut c_void, port: u32) -> f32;
-    fn ox_lv2_refresh_outputs(h: *mut c_void);
+    fn ox_lv2_refresh_outputs(h: *mut c_void) -> i32;
     fn ox_lv2_run(h: *mut c_void, l: *mut f32, r: *mut f32, frames: u32) -> i32;
 }
 fn text(p: *const c_char) -> Result<String, String> {
@@ -318,7 +318,7 @@ impl Plugin {
             return Err("Failed plugin must be recreated".into());
         }
         if self.latency_port.is_some() {
-            self.refresh_outputs();
+            self.refresh_outputs()?;
         }
         let frames = self.latency_frames()?;
         if self.prepared_latency.is_some_and(|old| old != frames) {
@@ -337,12 +337,14 @@ impl Plugin {
         }
         Ok(frames as u32)
     }
-    fn refresh_outputs(&mut self) {
+    fn refresh_outputs(&mut self) -> Result<(), String> {
         // SAFETY: live activated instance, all buffers connected, serialized owner.
         // Latent plugins must tolerate the core run(0) special case.
-        unsafe {
-            ox_lv2_refresh_outputs(self.left.ptr.as_ptr());
+        if unsafe { ox_lv2_refresh_outputs(self.left.ptr.as_ptr()) } != 0 {
+            self.failed = true;
+            return Err(error());
         }
+        Ok(())
     }
     fn check_latency(&self) -> Result<(), String> {
         if self.latency_port.is_none() {
@@ -376,7 +378,7 @@ impl Plugin {
             }
         }
         if self.latency_port.is_some() && self.prepared_latency.is_some() {
-            self.refresh_outputs();
+            self.refresh_outputs()?;
             if self.check_latency().is_err() {
                 // Reject this scalar transaction before publishing its readback.
                 // No audio was consumed; restore the previous control immediately.
@@ -384,7 +386,7 @@ impl Plugin {
                 unsafe {
                     ox_lv2_set(self.left.ptr.as_ptr(), index, previous);
                 }
-                self.refresh_outputs();
+                self.refresh_outputs()?;
                 if self.check_latency().is_err() {
                     self.failed = true;
                     return Err("LV2 latency rollback failed; recreate the graph".into());

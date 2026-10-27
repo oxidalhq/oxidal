@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 // Authored ABI/processing fixture, not a musical effect or a model of a third-party plugin.
 #include <lv2/core/lv2.h>
 #include <lv2/urid/urid.h>
@@ -5,6 +6,11 @@
 #include <lv2/buf-size/buf-size.h>
 #include <lv2/atom/atom.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <lv2/worker/worker.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <time.h>
 #include <math.h>
 #include <string.h>
 typedef struct {float* p[6];float history[2][2048];uint32_t frames;} Test;
@@ -59,4 +65,78 @@ static void latent_run(LV2_Handle h,uint32_t n) {
 static const LV2_Descriptor latency={"urn:oxidal:test:latency",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
 static const LV2_Descriptor latency_legacy={"urn:oxidal:test:latency-legacy",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
 static const LV2_Descriptor latency_stereo={"urn:oxidal:test:latency-stereo",latent_create,latent_connect,NULL,latent_run,NULL,cleanup,NULL};
-LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:NULL;}
+// Deliberately stalls only the background work to prove scheduling is bounded,
+// copied and delivered on the owner, including teardown with outstanding work.
+typedef struct {
+    float* p[8];const LV2_Worker_Schedule* schedule;pthread_t owner;
+    atomic_uint release, worked, responded, completed;
+    uint32_t accepted, received, ends;int dispatched;float gain;
+} Async;
+static LV2_Handle async_create(const LV2_Descriptor* d,double rate,const char* path,const LV2_Feature*const* features) {
+    (void)d;(void)rate;(void)path;
+    Async* a=calloc(1,sizeof(Async));if(!a)return NULL;
+    a->owner=pthread_self();a->gain=1;
+    atomic_init(&a->release,0);atomic_init(&a->worked,0);atomic_init(&a->responded,0);atomic_init(&a->completed,0);
+    for(int i=0;features && features[i];i++)if(!strcmp(features[i]->URI,LV2_WORKER__schedule))a->schedule=features[i]->data;
+    if(!a->schedule){free(a);return NULL;}return a;
+}
+static void async_connect(LV2_Handle h,uint32_t p,void* data){if(p<8)((Async*)h)->p[p]=data;}
+static void async_run(LV2_Handle h,uint32_t n) {
+    Async* a=h;assert(pthread_equal(a->owner,pthread_self()));
+    *a->p[7]=0;
+    if(*a->p[2]>=2)atomic_store(&a->release,1);
+    if(*a->p[2]>0 && !a->dispatched) {
+        a->dispatched=1;uint32_t count=*a->p[2]==1?64:1;
+        for(uint32_t i=1;i<=count;i++) {
+            uint32_t message[2]={i,(uint32_t)*a->p[2]};
+            LV2_Worker_Status status=a->schedule->schedule_work(a->schedule->handle,sizeof(message),message);
+            if(status==LV2_WORKER_SUCCESS)a->accepted++;else {assert(status==LV2_WORKER_ERR_NO_SPACE);(*a->p[4])++;}
+            message[0]=999; // Host must have copied stack bytes before returning.
+        }
+        char oversized[4097]={0};
+        assert(a->schedule->schedule_work(a->schedule->handle,sizeof(oversized),oversized)==LV2_WORKER_ERR_NO_SPACE);
+        *a->p[3]=(float)a->accepted;
+    }
+    if(*a->p[2]==5 && !a->received) {
+        // This fixture deliberately blocks its own run only to saturate the
+        // response queue deterministically; production plugin RT safety is separate.
+        const struct timespec pause={0,1000000};unsigned attempts=0;
+        while(!atomic_load(&a->completed) && attempts++<3000)nanosleep(&pause,NULL);
+        assert(atomic_load(&a->completed));assert(a->received==0);
+    }
+    for(uint32_t i=0;i<n;i++)a->p[1][i]=a->p[0][i]*a->gain;
+}
+static LV2_Worker_Status async_work(LV2_Handle h,LV2_Worker_Respond_Function respond,LV2_Worker_Respond_Handle handle,uint32_t size,const void* data) {
+    Async* a=h;assert(!pthread_equal(a->owner,pthread_self()));assert(size==2*sizeof(uint32_t));
+    const uint32_t* message=data;assert(message[0]==atomic_load(&a->worked)+1);
+    const struct timespec pause={0,1000000};while(!atomic_load(&a->release))nanosleep(&pause,NULL);
+    if(message[1]==3 || message[1]==5) {const struct timespec delay={0,20000000};nanosleep(&delay,NULL);}
+    atomic_fetch_add(&a->worked,1);
+    if(message[1]==4)return LV2_WORKER_ERR_UNKNOWN;
+    uint32_t count=message[1]==5?64:1;
+    for(uint32_t i=0;i<count;i++) {
+        uint32_t response=message[1]==5?i+1:message[0];
+        LV2_Worker_Status status=respond(handle,sizeof(response),&response);
+        if(status==LV2_WORKER_SUCCESS)atomic_fetch_add(&a->responded,1);
+        else {assert(status==LV2_WORKER_ERR_NO_SPACE);break;}
+        response=999;
+    }
+    atomic_store(&a->completed,1);return LV2_WORKER_SUCCESS;
+}
+static LV2_Worker_Status async_response(LV2_Handle h,uint32_t size,const void* data) {
+    Async* a=h;assert(pthread_equal(a->owner,pthread_self()));assert(size==sizeof(uint32_t));
+    assert(*(const uint32_t*)data==a->received+1);a->received++;a->gain=(float)a->received;
+    *a->p[5]=(float)a->received;return LV2_WORKER_SUCCESS;
+}
+static LV2_Worker_Status async_end(LV2_Handle h) {
+    Async* a=h;assert(pthread_equal(a->owner,pthread_self()));*a->p[6]=(float)++a->ends;return LV2_WORKER_SUCCESS;
+}
+static const LV2_Worker_Interface async_interface={async_work,async_response,async_end};
+static const void* async_extension(const char* uri){return !strcmp(uri,LV2_WORKER__interface)?&async_interface:NULL;}
+static void async_cleanup(LV2_Handle h) {
+    Async* a=h;assert(pthread_equal(a->owner,pthread_self()));
+    assert(a->accepted==atomic_load(&a->worked));assert(a->received==atomic_load(&a->responded));free(a);
+}
+static const LV2_Descriptor async_descriptor={"urn:oxidal:test:worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,async_extension};
+static const LV2_Descriptor missing_worker={"urn:oxidal:test:missing-worker",async_create,async_connect,NULL,async_run,NULL,async_cleanup,NULL};
+LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index){return index==0?&descriptor:index==1?&quantized:index==2?&latency:index==3?&latency_legacy:index==4?&latency_stereo:index==5?&async_descriptor:index==6?&missing_worker:NULL;}

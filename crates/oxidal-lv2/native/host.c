@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 // Bounded Lilv/LV2 ownership boundary. Plugins are trusted native code, not sandboxed.
 #include <lilv/lilv.h>
 #include <lv2/atom/atom.h>
@@ -5,6 +6,10 @@
 #include <lv2/options/options.h>
 #include <lv2/parameters/parameters.h>
 #include <lv2/urid/urid.h>
+#include <lv2/worker/worker.h>
+#include <stdatomic.h>
+#include <stddef.h>
+#include <time.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -86,7 +91,7 @@ static int features_ok(LilvWorld* w, const LilvPlugin* p) {
     LILV_FOREACH(nodes,i,required) {
         const char* uri=lilv_node_as_uri(lilv_nodes_get(required,i));
         if (!uri || (strcmp(uri,LV2_URID__map) && strcmp(uri,LV2_URID__unmap)
-            && strcmp(uri,LV2_OPTIONS__options) && strcmp(uri,LV2_BUF_SIZE__boundedBlockLength)
+            && strcmp(uri,LV2_WORKER__schedule) && strcmp(uri,LV2_OPTIONS__options) && strcmp(uri,LV2_BUF_SIZE__boundedBlockLength)
             && strcmp(uri,LV2_BUF_SIZE__fixedBlockLength) && strcmp(uri,LV2_BUF_SIZE__powerOf2BlockLength))) {
             fail(uri?uri:"Invalid required feature"); ok=0;break;
         }
@@ -104,6 +109,96 @@ static int features_ok(LilvWorld* w, const LilvPlugin* p) {
     lilv_nodes_free(required);return ok;
 }
 int ox_lv2_supported(void* w,const LilvPlugin* p) { return features_ok(w,p)?0:-1; }
+// SPSC queues: audio owner produces requests and consumes responses; the
+// background worker does the inverse. No allocation, lock or wake syscall in
+// schedule_work/respond. Publication uses release/acquire, never volatile.
+#define WORK_SLOTS 16
+#define WORK_BYTES 4096
+typedef struct {uint32_t size; _Alignas(max_align_t) unsigned char data[WORK_BYTES];} WorkMessage;
+typedef struct {atomic_uint read, write; WorkMessage slots[WORK_SLOTS];} WorkQueue;
+typedef struct {
+    WorkQueue requests, responses;
+    atomic_uint stopping, failed, finished;
+    pthread_t thread;
+    int started;
+    LilvInstance* instance;
+    const LV2_Worker_Interface* interface;
+    LV2_Worker_Schedule schedule;
+} Worker;
+static LV2_Worker_Status enqueue(WorkQueue* q,uint32_t size,const void* data) {
+    if (size>WORK_BYTES) return LV2_WORKER_ERR_NO_SPACE;
+    if (size && !data) return LV2_WORKER_ERR_UNKNOWN;
+    unsigned w=atomic_load_explicit(&q->write,memory_order_relaxed);
+    unsigned r=atomic_load_explicit(&q->read,memory_order_acquire);
+    if (w-r>=WORK_SLOTS) return LV2_WORKER_ERR_NO_SPACE;
+    WorkMessage* m=&q->slots[w%WORK_SLOTS];m->size=size;
+    if (size) memcpy(m->data,data,size);
+    atomic_store_explicit(&q->write,w+1,memory_order_release);
+    return LV2_WORKER_SUCCESS;
+}
+static LV2_Worker_Status schedule_work(void* handle,uint32_t size,const void* data) {
+    Worker* w=handle;
+    if (atomic_load_explicit(&w->stopping,memory_order_acquire)) return LV2_WORKER_ERR_UNKNOWN;
+    return enqueue(&w->requests,size,data);
+}
+static LV2_Worker_Status respond_work(void* handle,uint32_t size,const void* data) {
+    return enqueue(&((Worker*)handle)->responses,size,data);
+}
+static void worker_responses(Worker* w) {
+    unsigned r=atomic_load_explicit(&w->responses.read,memory_order_relaxed);
+    // Snapshot bounds this cycle even when work_response schedules more work.
+    unsigned end=atomic_load_explicit(&w->responses.write,memory_order_acquire);
+    while (r!=end) {
+        WorkMessage* m=&w->responses.slots[r%WORK_SLOTS];
+        if (w->interface->work_response(lilv_instance_get_handle(w->instance),m->size,m->size?m->data:NULL)!=LV2_WORKER_SUCCESS)
+            atomic_store_explicit(&w->failed,1,memory_order_release);
+        atomic_store_explicit(&w->responses.read,++r,memory_order_release);
+    }
+}
+static void* worker_main(void* raw) {
+    Worker* w=raw;
+    for (;;) {
+        unsigned r=atomic_load_explicit(&w->requests.read,memory_order_relaxed);
+        unsigned end=atomic_load_explicit(&w->requests.write,memory_order_acquire);
+        if (r==end) {
+            if (atomic_load_explicit(&w->stopping,memory_order_acquire)) break;
+            const struct timespec pause={0,1000000};nanosleep(&pause,NULL);continue;
+        }
+        WorkMessage* m=&w->requests.slots[r%WORK_SLOTS];
+        if (w->interface->work(lilv_instance_get_handle(w->instance),respond_work,w,m->size,m->size?m->data:NULL)!=LV2_WORKER_SUCCESS)
+            atomic_store_explicit(&w->failed,1,memory_order_release);
+        atomic_store_explicit(&w->requests.read,r+1,memory_order_release);
+    }
+    atomic_store_explicit(&w->finished,1,memory_order_release);
+    return NULL;
+}
+static Worker* worker_new(void) {
+    Worker* w=calloc(1,sizeof(Worker));if (!w) return NULL;
+    atomic_init(&w->requests.read,0);atomic_init(&w->requests.write,0);
+    atomic_init(&w->responses.read,0);atomic_init(&w->responses.write,0);
+    atomic_init(&w->stopping,0);atomic_init(&w->failed,0);atomic_init(&w->finished,0);
+    if (!atomic_is_lock_free(&w->requests.read)) {free(w);return NULL;}
+    w->schedule=(LV2_Worker_Schedule){w,schedule_work};return w;
+}
+static void worker_stop(Worker* w) {
+    if (!w) return;
+    atomic_store_explicit(&w->stopping,1,memory_order_release);
+    // Shutdown is non-real-time. Drain all accepted work before freeing the
+    // instance, then deliver every accepted response on the original owner.
+    if (w->started) {
+        while (!atomic_load_explicit(&w->finished,memory_order_acquire)) {
+            worker_responses(w);
+            const struct timespec pause={0,1000000};nanosleep(&pause,NULL);
+        }
+        pthread_join(w->thread,NULL);worker_responses(w);
+    }
+}
+static int wants_worker(LilvWorld* world,const LilvPlugin* p) {
+    LilvNode* schedule=lilv_new_uri(world,LV2_WORKER__schedule);
+    LilvNode* interface=lilv_new_uri(world,LV2_WORKER__interface);
+    int result=lilv_plugin_has_feature(p,schedule)||lilv_plugin_has_extension_data(p,interface);
+    lilv_node_free(schedule);lilv_node_free(interface);return result;
+}
 typedef struct {
     LilvInstance* instance;
     int active;
@@ -118,8 +213,9 @@ typedef struct {
     int32_t block_size;
     float sample_rate;
     LV2_Options_Option options[5];
-    LV2_Feature features[6];
-    const LV2_Feature* feature_ptrs[7];
+    Worker* worker;
+    LV2_Feature features[7];
+    const LV2_Feature* feature_ptrs[8];
 } Host;
 static LV2_URID map_uri(void* handle,const char* uri) {
     Host* h=handle;if (!uri || strlen(uri)>=256) return 0;
@@ -136,9 +232,10 @@ static const char* unmap_uri(void* handle,LV2_URID id) {
 }
 void ox_lv2_free(void* raw) {
     Host* h=raw;if (!h) return;
+    worker_stop(h->worker);
     if (h->instance) {if (h->active) lilv_instance_deactivate(h->instance);lilv_instance_free(h->instance);}
     for (uint32_t i=0;i<h->ports;i++) free(h->audio[i]);
-    pthread_mutex_destroy(&h->urid_lock);free(h);
+    pthread_mutex_destroy(&h->urid_lock);free(h->worker);free(h);
 }
 void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     if (!isfinite(rate)||rate<8000||rate>192000||!frames||frames>2048||(frames&(frames-1))) {fail("Require power-of-two block size 1–2048 and rate 8000–192000");return NULL;}
@@ -157,6 +254,12 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     h->features[4]=(LV2_Feature){LV2_BUF_SIZE__fixedBlockLength,NULL};
     h->features[5]=(LV2_Feature){LV2_BUF_SIZE__powerOf2BlockLength,NULL};
     for (int i=0;i<6;i++) h->feature_ptrs[i]=&h->features[i];
+    if (wants_worker(world,p)) {
+        h->worker=worker_new();
+        if (!h->worker) {fail("Worker queue allocation/lock-free atomics unavailable");goto failed;}
+        h->features[6]=(LV2_Feature){LV2_WORKER__schedule,&h->worker->schedule};
+        h->feature_ptrs[6]=&h->features[6];
+    }
     uint32_t latency_ports=0;
     for (uint32_t i=0;i<ports;i++) {
         float d,lo,hi;int flags=ox_lv2_port(world,p,i,&d,&lo,&hi);
@@ -180,12 +283,30 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     h->instance=lilv_plugin_instantiate(p,rate,h->feature_ptrs);
     if (!h->instance) {fail("Plugin instantiate rejected supplied features");goto failed;}
     for (uint32_t i=0;i<ports;i++) lilv_instance_connect_port(h->instance,i,h->audio[i]?h->audio[i]:&h->control[i]);
+    if (h->worker) {
+        Worker* w=h->worker;w->instance=h->instance;
+        w->interface=lilv_instance_get_extension_data(h->instance,LV2_WORKER__interface);
+        if (!w->interface || !w->interface->work || !w->interface->work_response) {fail("Missing LV2 worker callbacks");goto failed;}
+        if (pthread_create(&w->thread,NULL,worker_main,w)) {fail("Worker thread creation failed");goto failed;}
+        w->started=1;
+    }
     lilv_instance_activate(h->instance);h->active=1;return h;
 failed: ox_lv2_free(h);return NULL;
 }
 // Core LV2 run(0) updates instant control outputs without consuming audio.
 // Called only during latency preparation or a control transaction, never discovery.
-void ox_lv2_refresh_outputs(void* raw) {Host* h=raw;lilv_instance_run(h->instance,0);}
+static void run_cycle(Host* h,uint32_t frames) {
+    lilv_instance_run(h->instance,frames);
+    if (h->worker) {
+        worker_responses(h->worker);
+        if (h->worker->interface->end_run && h->worker->interface->end_run(lilv_instance_get_handle(h->instance))!=LV2_WORKER_SUCCESS)
+            atomic_store_explicit(&h->worker->failed,1,memory_order_release);
+    }
+}
+int ox_lv2_refresh_outputs(void* raw) {
+    Host* h=raw;run_cycle(h,0);
+    return h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)?fail("LV2 worker callback failed"):0;
+}
 // Rust validates port kind/range; every call is serialized on the instance owner.
 void ox_lv2_set(void* raw,uint32_t port,float value) {Host* h=raw;h->control[port]=value;}
 float ox_lv2_get(void* raw,uint32_t port) {Host* h=raw;return h->control[port];}
@@ -193,7 +314,8 @@ int ox_lv2_run(void* raw,float* left,float* right,uint32_t frames) {
     Host* h=raw;if (frames!=h->frames) return fail("Block length differs from instantiate options");
     memcpy(h->audio[h->input[0]],left,frames*sizeof(float));
     if (h->ins==2) memcpy(h->audio[h->input[1]],right,frames*sizeof(float));
-    lilv_instance_run(h->instance,frames);
+    run_cycle(h,frames);
+    if (h->worker && atomic_load_explicit(&h->worker->failed,memory_order_acquire)) return fail("LV2 worker callback failed");
     for (uint32_t n=0;n<frames;n++) {
         left[n]=h->audio[h->output[0]][n];
         if (h->outs==2) right[n]=h->audio[h->output[1]][n];

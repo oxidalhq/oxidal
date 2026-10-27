@@ -6,7 +6,7 @@ const URI: &str = "urn:oxidal:test:contract";
 fn contract_features_lifetime_bounds_readback_and_poison() {
     let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
     let catalog = world.plugins(48000.0).unwrap();
-    assert_eq!(catalog.len(), 8);
+    assert_eq!(catalog.len(), 10);
     let info = catalog.iter().find(|p| p.uri == URI).unwrap();
     assert!(!info.name.is_empty());
     assert!(info.unsupported.is_none());
@@ -221,4 +221,66 @@ fn stereo_latency_keeps_channels_separate_and_contains_runtime_change() {
     assert!(p.process(&mut l, &mut r).is_err());
     assert_eq!(l, [0.0; 64]);
     assert_eq!(r, [0.0; 64]);
+}
+
+#[test]
+fn worker_copies_messages_bounds_queues_and_drains_before_cleanup() {
+    use std::time::{Duration, Instant};
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+    assert_eq!(p.prepare_latency().unwrap(), 0);
+    assert_eq!(p.value(6).unwrap(), 1.0); // end_run even for run(0)
+    p.set(2, 1.0).unwrap(); // schedules while worker is deliberately blocked
+    p.process_mono(&mut [1.0; 64]).unwrap();
+    assert_eq!(p.value(3).unwrap(), 16.0);
+    assert_eq!(p.value(4).unwrap(), 48.0);
+    assert_eq!(p.value(5).unwrap(), 0.0);
+    p.set(2, 2.0).unwrap(); // release background work
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while p.value(5).unwrap() < 16.0 {
+        assert!(Instant::now() < deadline, "worker responses timed out");
+        p.process_mono(&mut [1.0; 64]).unwrap();
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let mut audio = [0.25; 64];
+    p.process_mono(&mut audio).unwrap();
+    assert_eq!(audio, [4.0; 64]);
+    drop(p); // fixture asserts every accepted request/response completed on correct threads
+    for _ in 0..8 {
+        let mut p = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+        p.prepare_latency().unwrap();
+        p.set(2, 3.0).unwrap();
+        p.process_mono(&mut [1.0; 64]).unwrap();
+        drop(p); // slow outstanding work must finish before plugin memory/library is freed
+    }
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+    p.prepare_latency().unwrap();
+    p.set(2, 4.0).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let mut audio = [1.0; 64];
+        if p.process_mono(&mut audio).is_err() {
+            assert_eq!(audio, [0.0; 64]);
+            break;
+        }
+        assert!(Instant::now() < deadline, "worker failure not observed");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(p.set(2, 0.0).is_err());
+}
+
+#[test]
+fn worker_response_backpressure_and_missing_interface_are_explicit() {
+    let world = World::bundle(Path::new(env!("OXIDAL_LV2_FIXTURE"))).unwrap();
+    assert!(
+        Plugin::new_ports(&world, "urn:oxidal:test:missing-worker", 48000.0, 64)
+            .unwrap_err()
+            .contains("Missing LV2 worker callbacks")
+    );
+    let mut p = Plugin::new_ports(&world, "urn:oxidal:test:worker", 48000.0, 64).unwrap();
+    p.prepare_latency().unwrap();
+    p.set(2, 5.0).unwrap();
+    // Fixture holds its run until the response burst completes; the host must
+    // preserve exactly the accepted messages and report overflow to the plugin.
+    assert_eq!(p.value(5).unwrap(), 16.0);
 }

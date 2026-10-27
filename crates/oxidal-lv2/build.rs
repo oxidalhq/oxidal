@@ -75,6 +75,7 @@ fn main() {
             "-shared",
             "-fPIC",
             "tests/fixtures/plugin.c",
+            "-pthread",
             "-o",
         ])
         .arg(bundle.join("plugin.so")));
