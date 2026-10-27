@@ -887,10 +887,13 @@ dependencies = [
 name = "oxidal-engine"
 version = "0.1.0"
 dependencies = [
+ "oxidal-audio",
  "oxidal-graph",
  "oxidal-lv2",
  "oxidal-presets",
  "oxidal-tone3000",
+ "schemars",
+ "serde",
  "serde_json",
 ]
 

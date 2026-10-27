@@ -204,6 +204,7 @@ pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dy
         "portable mixed recall: exact embedded native payload, two explicit mono LV2 declarations, weighted split/merge, bypass retained, cache-independent disk recall; settled_max_error={stable_difference}; startup_max_error={difference}; host_buffers={} bytes",
         graph.buffer_bytes()
     );
+    super::worker::qualify(world, &bundle, root)?;
     Ok(())
 }
 

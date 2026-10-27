@@ -7,8 +7,13 @@ publish.workspace = true
 
 [features]
 native = ["oxidal-tone3000/native", "oxidal-lv2/native"]
+worker = ["native", "oxidal-audio/alsa"]
+qualification = ["worker", "oxidal-audio/qualification"]
 
 [dependencies]
+serde.workspace = true
+schemars.workspace = true
+oxidal-audio = { path = "../oxidal-audio", version = "0.1.0" }
 oxidal-graph.workspace = true
 oxidal-presets = { path = "../oxidal-presets", version = "0.1.0" }
 serde_json.workspace = true
@@ -21,3 +26,8 @@ workspace = true
 [[example]]
 name = "qualify_mixed"
 required-features = ["native"]
+
+[[bin]]
+name = "oxidal-rig-worker"
+path = "src/bin/oxidal-rig-worker.rs"
+required-features = ["worker"]

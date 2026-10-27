@@ -1,4 +1,4 @@
-//! Owned native/LV2 graph preparation. Not yet connected to a playback worker.
+//! Owned native/LV2 graph preparation and isolated experimental rig worker.
 //! Construction, routing and controls require the existing single DSP owner.
 #[cfg(feature = "native")]
 mod prepared;
@@ -14,3 +14,13 @@ pub use ports::PreparedPorts;
 mod loading;
 #[cfg(feature = "native")]
 pub use loading::native_profile_id;
+
+pub mod protocol;
+#[cfg(feature = "native")]
+mod session;
+#[cfg(feature = "native")]
+pub use session::Session;
+#[cfg(feature = "native")]
+mod saving;
+#[cfg(feature = "native")]
+pub use saving::save_revision;

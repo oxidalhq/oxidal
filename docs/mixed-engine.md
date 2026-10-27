@@ -1,8 +1,8 @@
 # Owned native/LV2 graph core
 
 `oxidal-engine/native` prepares a single-owner stereo DAG from already prepared
-native and LV2 processors. It is an integration core, not yet a daemon playback
-worker or browser authoring mode. Native handles and LV2 instances remain non-Send
+native and LV2 processors. It now also has the isolated worker described below; daemon/browser integration
+remains separate from this process-level qualification. Native handles and LV2 instances remain non-Send
 and non-Sync; discovery, loading, readiness waits, controls and teardown stay on
 that owner. Construction must happen before streaming. The owner must service native
 message-pump/control work between processing calls; the graph does not dispatch
@@ -114,3 +114,46 @@ fixture. It rejects mismatched profiles, extracted roles and unsupported install
 plugin declarations before playback. Loading, readiness waits and plugin discovery
 remain owner-thread preparation operations, never concurrent with the same plugin
 library's running callback. This is not live replacement or gapless switching.
+
+## Mixed worker and confirmed scalar Save
+
+Build `cargo build --locked -p oxidal-engine --features worker --bin oxidal-rig-worker`
+on Linux with both native backends installed. `OXIDAL_BUNDLE_STORE` names the trusted
+application-owned expanded-bundle directory. Startup accepts an immutable revision,
+exact `StreamConfig` and an optional complete confirmed recall. Native scratch data
+uses the existing isolated `OXIDAL_QUALIFICATION_DATA` root. No browser-supplied
+filesystem or plugin-library path belongs in the protocol.
+
+The worker owns native/LV2 instances and ALSA on its main thread. Bounded reader and
+writer queues carry requests and replies; EOF ends PCM. It requires two logical
+input/output ports, with hardware channels selected by the existing transport map.
+Status includes actual native/LV2 controls, host bypass/merge gains, cumulative
+processed frames, stereo telemetry and host routing-buffer bytes. Byte admission
+limits IPC and host buffers rather than imposing a fixed instance count; this is
+not complete native/plugin memory admission or a real-time performance claim.
+
+Scalar commands require the current worker session and control revision. Invalid
+values and stale commands leave sound intact; accepted changes use backend
+readback and immediately affect processing. An ambiguous backend failure stops
+the worker rather than publishing stale confirmed state. Native controls currently
+cover the same qualified subset as saved-preset playback, not every upstream
+parameter. Owned touch-preview leases, MIDI, full controls and structural live
+changes remain pending for this session. Existing editor paths are unchanged.
+
+A separate `oxidal-rig-worker --save-revision` process reconstructs a complete
+confirmed scalar snapshot from its source bundle. It updates actual LV2 values,
+host routing controls and modified native payloads, verifies native values in a
+fresh engine, and atomically publishes another immutable revision. Unchanged native
+payloads retain exact bytes; the first native edit retains original source bytes.
+Instances sharing an initial native resource receive independent revised resources.
+Saving must never run inside the playing session. This preserves current sound
+and the original revision, but does not transfer transient delay/looper histories
+or certify all native field fidelity.
+
+`pnpm native:check` builds the qualification-only null-ALSA worker and extends the
+existing mixed example with audible scalar changes, invalid/stale rejection, actual
+worker control/readback, concurrent isolated export, independent shared native
+resources, exact unchanged payloads, offline child recall and EOF teardown.
+Ordinary builds cannot open the null qualification route. The daemon must still
+connect this worker to the shared device permit, actor shutdown, HTTP contracts
+and a single authoring UI before this becomes a user-facing mixed mode.

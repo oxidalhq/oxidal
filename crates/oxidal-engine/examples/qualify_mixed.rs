@@ -1,6 +1,8 @@
 //! Actual native A2 + installed LV2 composition, part of the Linux native gate.
 #[path = "qualify_mixed/portable.rs"]
 mod portable;
+#[path = "qualify_mixed/worker.rs"]
+mod worker;
 use oxidal_engine::{PreparedRig, Processor};
 use oxidal_graph::{BlockKind, Edge, Node, Rig};
 use oxidal_lv2::{Plugin, World};

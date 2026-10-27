@@ -143,7 +143,7 @@ if (mode === 'bootstrap') {
       '--workspace',
       '--features',
       process.platform === 'linux'
-        ? 'oxidal-tone3000/audio-qualification,oxidal-api/alsa,oxidal-engine/native'
+        ? 'oxidal-tone3000/audio-qualification,oxidal-api/alsa,oxidal-engine/qualification'
         : 'oxidal-tone3000/native',
       '--all-targets',
       '--',
@@ -167,6 +167,21 @@ if (mode === 'bootstrap') {
     { env },
   );
   if (process.platform === 'linux') {
+    run(
+      'cargo',
+      [
+        'build',
+        '--locked',
+        '-p',
+        'oxidal-engine',
+        '--features',
+        'qualification',
+        '--bin',
+        'oxidal-rig-worker',
+      ],
+      { env },
+    );
+    env.OXIDAL_TEST_RIG_WORKER = join(targetDir, 'debug/oxidal-rig-worker');
     // Reuse the authored embedded fixture and isolated data root from the native
     // qualifier; no downloaded test scripts or extra provider credentials.
     run(

@@ -242,6 +242,43 @@ impl PreparedPorts {
             .processor
             .as_mut()
     }
+    pub(crate) fn host_value(
+        &mut self,
+        target: &crate::protocol::Target,
+        value: f64,
+    ) -> Result<(), String> {
+        if self.failed {
+            return Err("Failed port graph".into());
+        }
+        use crate::protocol::Target;
+        match target {
+            Target::Bypass { node } => {
+                let n = self
+                    .nodes
+                    .iter_mut()
+                    .find(|n| &n.id == node && n.processor.is_some())
+                    .ok_or("Unknown bypass")?;
+                if value != 0.0 && value != 1.0 {
+                    return Err("Invalid bypass".into());
+                }
+                n.bypassed = value == 1.0;
+            }
+            Target::Merge { node, port } => {
+                let n = self
+                    .nodes
+                    .iter_mut()
+                    .find(|n| &n.id == node && n.kind == NodeKind::Merge)
+                    .ok_or("Unknown merge")?;
+                let gain = n.gains.get_mut(*port).ok_or("Unknown merge port")?;
+                if !value.is_finite() || !(0.0..=4.0).contains(&value) {
+                    return Err("Invalid merge gain".into());
+                }
+                *gain = value as f32;
+            }
+            _ => return Err("Not a host control".into()),
+        }
+        Ok(())
+    }
     pub fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) -> Result<(), String> {
         if self.failed
             || inputs.len() != self.channels().0
