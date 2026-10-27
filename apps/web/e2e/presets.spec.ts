@@ -731,6 +731,16 @@ test('playback lifecycle keeps native authoring available after stop and restart
     expect((await (await request.get('/api/v1/native')).json()).revision).toBe(
       nativeBefore.revision,
     );
+    // Capture the instrument from the top; full-page screenshots otherwise retain
+    // the sticky rail at the previous scroll offset and obscure the preset header.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const headingBox = await page.getByTestId('active-preset').boundingBox();
+    const railBox = await page
+      .getByRole('complementary', { name: 'DSP and system resources' })
+      .boundingBox();
+    expect(
+      headingBox && railBox && headingBox.y >= railBox.y + railBox.height,
+    ).toBe(true);
     await page.screenshot({
       path: test.info().outputPath('sounding-rig.png'),
       fullPage: true,
