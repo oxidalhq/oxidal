@@ -6,7 +6,7 @@ The implementation follows [TONE3000's authentication and device authorization d
 
 ## Current boundary
 
-This supplies account connection, cancellation, persistent sign-in, refresh and local disconnection. It does not yet provide an online tone browser, provider preset/model downloads, ownership/library synchronization, remote authoring, or real-account acceptance evidence. Those must be integrated and qualified separately. Real account testing requires an application publishable key and user authorization. Local HTTP fixtures are protocol evidence, not proof of production account access.
+This supplies account connection, cancellation, persistent sign-in, refresh and local disconnection. It does not yet provide an online tone browser, provider preset/model downloads, ownership/library synchronization, or remote authoring. Those must be integrated and qualified separately. Real account testing requires an application publishable key and user authorization. Local HTTP fixtures are protocol evidence, not proof of production account access.
 
 Disconnect removes saved tokens from this device. It does not delete local presets, delete the provider account, or promise remote token revocation. Disconnect does not interrupt audio. Reset connection is available after a saved-account or authorization error; a storage failure is surfaced rather than falsely confirming removal.
 
