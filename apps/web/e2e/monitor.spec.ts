@@ -10,6 +10,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   let sequence = 1;
   let stale = false;
   let disconnected = false;
+  let mixed = false;
   const channel = { peak_dbfs: -6, rms_dbfs: -12, clips: 2 };
   await page.route('**/api/v1/monitor', async (route) => {
     if (disconnected) return route.abort('failed');
@@ -22,9 +23,10 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
         temperature_c: 48.2,
         temperature_sensor: 'cpu-thermal',
       },
-      audio_phase: 'running',
+      audio_phase: mixed ? 'failed' : 'running',
       graph_phase: 'stopped',
-      source: 'Saved preset',
+      rig_phase: mixed ? 'running' : 'stopped',
+      source: mixed ? 'Mixed rig' : 'Saved preset',
       audio_age_ms: stale ? 5000 : 150,
       xruns: null,
       error: null,
@@ -82,6 +84,9 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     name: 'Audio and system monitoring',
   });
   await expect(panel.getByRole('status')).toHaveText('Saved preset · live');
+  mixed = true;
+  await expect(panel.getByRole('status')).toHaveText('Mixed rig · live');
+  await expect(strip.getByTestId('resource-state')).toHaveText('Audio running');
   await expect(
     panel.getByRole('meter', { name: 'Output L peak' }),
   ).toHaveAttribute('aria-valuenow', '-3');
@@ -160,7 +165,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   });
   stale = true;
   await expect(panel.getByRole('status')).toHaveText(
-    'Saved preset · waiting for live readings',
+    'Mixed rig · waiting for live readings',
   );
   await expect(
     panel.getByRole('meter', { name: 'Output L peak' }),

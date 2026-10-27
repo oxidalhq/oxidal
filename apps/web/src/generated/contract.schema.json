@@ -91,6 +91,12 @@
     "rig": {
       "$ref": "#/$defs/Rig"
     },
+    "rig_audio_command": {
+      "$ref": "#/$defs/RigAudioCommand"
+    },
+    "rig_audio_state": {
+      "$ref": "#/$defs/RigAudioState"
+    },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
@@ -140,6 +146,8 @@
     "network_state",
     "network_command",
     "audio_state",
+    "rig_audio_state",
+    "rig_audio_command",
     "graph_audio_state",
     "graph_audio_command",
     "audio_command",
@@ -1402,6 +1410,80 @@
             "uuid"
           ]
         }
+      ]
+    },
+    "Control": {
+      "type": "object",
+      "properties": {
+        "display": {
+          "type": "string"
+        },
+        "integer": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "logarithmic": {
+          "type": "boolean"
+        },
+        "maximum": {
+          "type": "number",
+          "format": "double"
+        },
+        "minimum": {
+          "type": "number",
+          "format": "double"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "toggle": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "label",
+        "value",
+        "minimum",
+        "maximum",
+        "integer",
+        "toggle",
+        "logarithmic",
+        "display"
+      ]
+    },
+    "ControlCommand": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "target",
+        "value"
       ]
     },
     "Creator": {
@@ -2728,6 +2810,9 @@
         "host": {
           "$ref": "#/$defs/Host"
         },
+        "rig_phase": {
+          "type": "string"
+        },
         "sequence": {
           "type": "integer",
           "format": "uint64",
@@ -2764,7 +2849,8 @@
         "sequence",
         "host",
         "audio_phase",
-        "graph_phase"
+        "graph_phase",
+        "rig_phase"
       ]
     },
     "NativeSlot": {
@@ -3264,6 +3350,25 @@
         "channels"
       ]
     },
+    "Recall": {
+      "type": "object",
+      "properties": {
+        "source_revision": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Value"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source_revision",
+        "values"
+      ]
+    },
     "Rig": {
       "description": "Persisted routing data, independent of UI layout and audio resources.\n@see docs/architecture.md",
       "type": "object",
@@ -3287,6 +3392,187 @@
         "edges"
       ]
     },
+    "RigAudioAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "start"
+            },
+            "settings": {
+              "$ref": "#/$defs/StartRig"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "settings"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "restart"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/ControlCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "control"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "RigAudioCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/RigAudioAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "action"
+      ]
+    },
+    "RigAudioState": {
+      "type": "object",
+      "properties": {
+        "configured": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartRig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "control": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Snapshot3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "device_owned": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/AudioPhase"
+        },
+        "processed_frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "save": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SaveState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "session": {
+          "type": "string"
+        },
+        "telemetry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Snapshot2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "phase",
+        "processed_frames",
+        "device_owned"
+      ]
+    },
     "SampleFormat": {
       "type": "string",
       "enum": [
@@ -3295,6 +3581,40 @@
         "s24_packed",
         "s32",
         "float"
+      ]
+    },
+    "SaveState": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "saved_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_control_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source_session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source_session",
+        "source_control_revision",
+        "running"
       ]
     },
     "SavedGraph": {
@@ -3535,6 +3855,41 @@
         "invalid_samples"
       ]
     },
+    "Snapshot3": {
+      "type": "object",
+      "properties": {
+        "buffer_bytes": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Control"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        },
+        "source_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "revision",
+        "source_revision",
+        "controls",
+        "buffer_bytes"
+      ]
+    },
     "StageModel": {
       "type": "object",
       "properties": {
@@ -3651,6 +4006,32 @@
         "bindings"
       ]
     },
+    "StartRig": {
+      "type": "object",
+      "properties": {
+        "recall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Recall"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "string"
+        },
+        "stream": {
+          "$ref": "#/$defs/StreamConfig"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "stream"
+      ]
+    },
     "State": {
       "type": "object",
       "properties": {
@@ -3733,6 +4114,92 @@
         "output",
         "input_map",
         "output_map"
+      ]
+    },
+    "Target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "native"
+            },
+            "node": {
+              "type": "string"
+            },
+            "parameter": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "node",
+            "parameter"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "lv2"
+            },
+            "node": {
+              "type": "string"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "node",
+            "symbol"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "bypass"
+            },
+            "node": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "node"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "merge"
+            },
+            "node": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "node",
+            "port"
+          ]
+        }
       ]
     },
     "TerminalCommand": {
@@ -4069,6 +4536,23 @@
       "required": [
         "valid",
         "errors"
+      ]
+    },
+    "Value": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "value"
       ]
     }
   }

@@ -161,6 +161,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     let store_path = root.join("worker-rigs");
     let store = BundleStore::new(store_path.clone());
     let revision = store.save(bundle)?;
+    std::fs::write(root.join("mixed-preset-revision"), &revision)?;
     let start = StartRig {
         revision: revision.clone(),
         stream: stream(),

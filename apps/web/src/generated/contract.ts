@@ -254,6 +254,45 @@ export type Command3 =
     };
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
+export type RigAudioAction =
+  | {
+      kind: "start";
+      settings: StartRig;
+    }
+  | {
+      kind: "stop";
+    }
+  | {
+      kind: "restart";
+    }
+  | {
+      command: ControlCommand;
+      kind: "control";
+    }
+  | {
+      kind: "save";
+      name: string;
+    };
+export type Target =
+  | {
+      kind: "native";
+      node: string;
+      parameter: string;
+    }
+  | {
+      kind: "lv2";
+      node: string;
+      symbol: string;
+    }
+  | {
+      kind: "bypass";
+      node: string;
+    }
+  | {
+      kind: "merge";
+      node: string;
+      port: number;
+    };
 export type TerminalCommand =
   | {
       cursor: number;
@@ -315,6 +354,8 @@ export interface Contract {
   network_state: NetworkState;
   preset: Inspection;
   rig: Rig;
+  rig_audio_command: RigAudioCommand;
+  rig_audio_state: RigAudioState;
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
@@ -784,6 +825,7 @@ export interface Monitoring {
   error?: string | null;
   graph_phase: string;
   host: Host;
+  rig_phase: string;
   sequence: number;
   source?: string | null;
   stream?: StreamConfig | null;
@@ -907,6 +949,67 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface RigAudioCommand {
+  action: RigAudioAction;
+  expected_revision: number;
+  session: string;
+}
+export interface StartRig {
+  recall?: Recall | null;
+  revision: string;
+  stream: StreamConfig;
+}
+export interface Recall {
+  source_revision: string;
+  values: Value[];
+}
+export interface Value {
+  target: Target;
+  value: number;
+}
+export interface ControlCommand {
+  expected_revision: number;
+  session: string;
+  target: Target;
+  value: number;
+}
+export interface RigAudioState {
+  configured?: StartRig | null;
+  control?: Snapshot3 | null;
+  device_owned: boolean;
+  error?: string | null;
+  phase: AudioPhase;
+  processed_frames: number;
+  revision: number;
+  save?: SaveState | null;
+  session: string;
+  telemetry?: Snapshot2 | null;
+}
+export interface Snapshot3 {
+  buffer_bytes: number;
+  controls: Control[];
+  revision: number;
+  session: string;
+  source_revision: string;
+}
+export interface Control {
+  display: string;
+  integer: boolean;
+  label: string;
+  logarithmic: boolean;
+  maximum: number;
+  minimum: number;
+  target: Target;
+  toggle: boolean;
+  value: number;
+}
+export interface SaveState {
+  error?: string | null;
+  running: boolean;
+  saved_revision?: string | null;
+  source_control_revision: number;
+  source_session: string;
 }
 export interface StageModel {
   model_id: number;

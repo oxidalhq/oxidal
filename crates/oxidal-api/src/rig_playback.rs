@@ -1,0 +1,528 @@
+//! Actor-owned mixed worker. Accepted operations outlive the requesting HTTP connection.
+use crate::{Config, Shared, failure};
+use axum::{
+    Json,
+    extract::{State, rejection::JsonRejection},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use oxidal_audio::lifecycle::AudioPhase;
+use oxidal_engine::protocol::*;
+use std::{
+    path::PathBuf,
+    process::Stdio,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    process::{Child, ChildStdin, ChildStdout},
+    sync::{mpsc, oneshot, watch},
+};
+type Reply = Result<RigAudioState, String>;
+#[derive(Debug)]
+pub(super) struct RigPlayback {
+    pub(super) finished: watch::Receiver<bool>,
+    commands: mpsc::Sender<(RigAudioCommand, oneshot::Sender<Reply>)>,
+    state: watch::Receiver<RigAudioState>,
+}
+struct Worker {
+    child: Child,
+    input: Option<ChildStdin>,
+    output: BufReader<ChildStdout>,
+    _permit: tokio::sync::SemaphorePermit<'static>,
+}
+impl Worker {
+    async fn read(&mut self) -> Result<WorkerReply, String> {
+        let mut bytes = Vec::new();
+        (&mut self.output)
+            .take((REPLY_LIMIT + 1) as u64)
+            .read_until(b'\n', &mut bytes)
+            .await
+            .map_err(|e| e.to_string())?;
+        if bytes.len() > REPLY_LIMIT || bytes.last() != Some(&b'\n') {
+            return Err("Invalid mixed worker reply".into());
+        }
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid mixed worker protocol".into())
+    }
+    async fn write<T: serde::Serialize>(&mut self, value: &T) -> Result<(), String> {
+        self.input
+            .as_mut()
+            .ok_or("Mixed worker stopped")?
+            .write_all(&encode(value)?)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
+fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, String> {
+    let mut bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;
+    if bytes.len() >= REQUEST_LIMIT {
+        return Err("Mixed command exceeds byte limit".into());
+    }
+    bytes.push(b'\n');
+    Ok(bytes)
+}
+struct Export {
+    child: Child,
+    started: Instant,
+    name: String,
+}
+struct Owner {
+    executable: Option<PathBuf>,
+    root: PathBuf,
+    runtime: PathBuf,
+    worker: Option<Worker>,
+    export: Option<Export>,
+    state: RigAudioState,
+    updates: watch::Sender<RigAudioState>,
+}
+impl Owner {
+    fn publish(&mut self) {
+        self.state.device_owned = self.worker.is_some();
+        self.updates.send_replace(self.state.clone());
+    }
+    fn changed(&mut self) {
+        self.state.revision += 1;
+        self.publish();
+    }
+    fn phase(&mut self, phase: AudioPhase, error: Option<String>) {
+        self.state.phase = phase;
+        self.state.error = error;
+        self.changed();
+    }
+    fn readback(&mut self, reply: WorkerReply) -> Result<(), String> {
+        let settings = self
+            .state
+            .configured
+            .as_mut()
+            .ok_or("Missing mixed configuration")?;
+        if reply.control.source_revision != settings.revision
+            || reply.processed_frames < self.state.processed_frames
+            || self.state.control.as_ref().is_some_and(|old| {
+                old.session != reply.control.session || old.revision > reply.control.revision
+            })
+            || reply.control.controls.iter().any(|c| !c.accepts(c.value))
+        {
+            return Err("Mixed worker returned inconsistent readback".into());
+        }
+        if self
+            .state
+            .control
+            .as_ref()
+            .is_none_or(|old| old.revision != reply.control.revision)
+        {
+            self.state.revision += 1;
+        }
+        settings.recall = Some(reply.control.recall());
+        self.state.control = Some(reply.control);
+        self.state.telemetry = Some(reply.telemetry);
+        self.state.processed_frames = reply.processed_frames;
+        self.publish();
+        Ok(())
+    }
+    async fn release(&mut self) -> Result<(), String> {
+        let Some(worker) = self.worker.as_mut() else {
+            return Ok(());
+        };
+        worker.input.take();
+        if !matches!(
+            tokio::time::timeout(Duration::from_secs(2), worker.child.wait()).await,
+            Ok(Ok(_))
+        ) {
+            worker.child.start_kill().map_err(|e| e.to_string())?;
+            tokio::time::timeout(Duration::from_secs(2), worker.child.wait())
+                .await
+                .map_err(|_| "Mixed worker not reaped; device remains owned")?
+                .map_err(|e| e.to_string())?;
+        }
+        self.worker = None;
+        Ok(())
+    }
+    async fn fault(&mut self, error: String) -> String {
+        let error = match self.release().await {
+            Ok(()) => error,
+            Err(e) => format!("{error}; {e}"),
+        };
+        self.phase(AudioPhase::Failed, Some(error.clone()));
+        error
+    }
+    async fn exchange(&mut self, request: &WorkerRequest) -> Result<WorkerReply, String> {
+        let worker = self.worker.as_mut().ok_or("Mixed audio is not running")?;
+        tokio::time::timeout(Duration::from_secs(3), async {
+            worker.write(request).await?;
+            worker.read().await
+        })
+        .await
+        .map_err(|_| "Mixed worker response timed out".to_owned())?
+    }
+    async fn start(&mut self, settings: StartRig) -> Result<(), String> {
+        settings.validate()?;
+        if self.worker.is_some() {
+            return Err("Stop mixed audio before changing its configuration".into());
+        }
+        let executable = self.executable.as_ref().ok_or("Mixed worker unavailable")?;
+        let permit = crate::audio::PROBE
+            .try_acquire()
+            .map_err(|_| "Audio device operation already in progress")?;
+        std::fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
+        let root = std::fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
+        let runtime = self.runtime.join("playback");
+        std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(executable)
+            .env("OXIDAL_BUNDLE_STORE", root)
+            .env("OXIDAL_QUALIFICATION_DATA", runtime)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        let input = child.stdin.take().ok_or("Mixed stdin unavailable")?;
+        let output = BufReader::new(child.stdout.take().ok_or("Mixed stdout unavailable")?);
+        self.worker = Some(Worker {
+            child,
+            input: Some(input),
+            output,
+            _permit: permit,
+        });
+        self.state.configured = Some(settings.clone());
+        self.state.control = None;
+        self.state.telemetry = None;
+        self.state.processed_frames = 0;
+        self.phase(AudioPhase::Starting, None);
+        let result = tokio::time::timeout(Duration::from_secs(60), async {
+            let worker = self.worker.as_mut().unwrap();
+            worker.write(&settings).await?;
+            worker.read().await
+        })
+        .await
+        .map_err(|_| "Mixed startup timed out".to_owned())
+        .and_then(|r| r);
+        match result {
+            Ok(reply) if reply.error.is_none() && reply.processed_frames > 0 => {
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                self.phase(AudioPhase::Running, None);
+                Ok(())
+            }
+            Ok(_) => Err(self.fault("Mixed worker rejected startup".into()).await),
+            Err(e) => Err(self.fault(e).await),
+        }
+    }
+    async fn save(&mut self, name: String) -> Result<(), String> {
+        if self.export.is_some() {
+            return Err("A mixed revision is already saving".into());
+        }
+        if self.state.phase != AudioPhase::Running
+            || !oxidal_audio::lifecycle::valid_preset_name(&name)
+        {
+            return Err("Start mixed audio and enter a valid preset name".into());
+        }
+        let control = self.state.control.as_ref().ok_or("No confirmed controls")?;
+        let request = SaveRequest {
+            settings: self
+                .state
+                .configured
+                .clone()
+                .ok_or("Missing mixed configuration")?,
+            recall: control.recall(),
+            name: name.clone(),
+        };
+        let bytes = encode(&request)?;
+        let runtime = self.runtime.join("export");
+        std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(
+            self.executable.as_ref().ok_or("Mixed worker unavailable")?,
+        )
+        .arg("--save-revision")
+        .env("OXIDAL_BUNDLE_STORE", &self.root)
+        .env("OXIDAL_QUALIFICATION_DATA", runtime)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+        let mut input = child.stdin.take().ok_or("Export stdin unavailable")?;
+        self.export = Some(Export {
+            child,
+            started: Instant::now(),
+            name,
+        });
+        self.state.save = Some(SaveState {
+            source_session: control.session.clone(),
+            source_control_revision: control.revision,
+            running: true,
+            saved_revision: None,
+            error: None,
+        });
+        self.changed();
+        let result = tokio::time::timeout(Duration::from_secs(3), input.write_all(&bytes))
+            .await
+            .map_err(|_| "Export input timed out".to_owned())
+            .and_then(|r| r.map_err(|e| e.to_string()));
+        drop(input);
+        if let Err(e) = result {
+            self.export_error(e.clone()).await;
+            return Err(e);
+        }
+        Ok(())
+    }
+    async fn cancel_export(&mut self) -> Result<(), String> {
+        if let Some(export) = self.export.as_mut() {
+            export.child.start_kill().map_err(|e| e.to_string())?;
+            tokio::time::timeout(Duration::from_secs(2), export.child.wait())
+                .await
+                .map_err(|_| "Export child not reaped")?
+                .map_err(|e| e.to_string())?;
+            self.export = None;
+        }
+        Ok(())
+    }
+    async fn export_error(&mut self, error: String) {
+        let error = match self.cancel_export().await {
+            Ok(()) => error,
+            Err(e) => format!("{error}; {e}"),
+        };
+        if let Some(save) = &mut self.state.save {
+            save.running = self.export.is_some();
+            save.error = Some(error);
+        }
+        self.changed();
+    }
+    async fn poll_export(&mut self) {
+        let Some(export) = self.export.as_mut() else {
+            return;
+        };
+        if export.started.elapsed() > Duration::from_secs(60) {
+            self.export_error("Save timed out; check stored revisions before retrying".into())
+                .await;
+            return;
+        }
+        let status = match export.child.try_wait() {
+            Ok(Some(status)) => status,
+            Ok(None) => return,
+            Err(e) => {
+                self.export_error(e.to_string()).await;
+                return;
+            }
+        };
+        if !status.success() {
+            self.export_error("Mixed export failed; playback was not changed".into())
+                .await;
+            return;
+        }
+        // Child is already reaped; bound protocol read separately from PCM ownership.
+        let result = async {
+            let mut output = Vec::new();
+            let mut stdout = export.child.stdout.take().ok_or("Missing export output")?;
+            tokio::time::timeout(
+                Duration::from_secs(2),
+                (&mut stdout).take(1024).read_to_end(&mut output),
+            )
+            .await
+            .map_err(|_| "Export output timed out")?
+            .map_err(|e| e.to_string())?;
+            let id: String =
+                serde_json::from_slice(&output).map_err(|_| "Invalid saved revision")?;
+            if !valid_revision(&id) {
+                return Err("Invalid saved revision".into());
+            }
+            let root = self.root.clone();
+            let expected = export.name.clone();
+            let revision = id.clone();
+            tokio::task::spawn_blocking(move || {
+                let bundle = oxidal_presets::BundleStore::new(root)
+                    .read(&revision)
+                    .map_err(|e| e.to_string())?;
+                if bundle.manifest().name != expected {
+                    return Err("Saved name differs".to_owned());
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|_| "Saved revision check failed")??;
+            Ok::<_, String>(id)
+        }
+        .await;
+        self.export = None;
+        if let Some(save) = &mut self.state.save {
+            save.running = false;
+            match result {
+                Ok(id) => save.saved_revision = Some(id),
+                Err(e) => save.error = Some(e),
+            }
+        }
+        self.changed();
+    }
+    async fn command(&mut self, command: RigAudioCommand) -> Reply {
+        if command.session != self.state.session || command.expected_revision != self.state.revision
+        {
+            return Err("rig_audio_state_conflict; refresh status".into());
+        }
+        if self.executable.is_none() {
+            return Err("Mixed worker unavailable".into());
+        }
+        match command.action {
+            RigAudioAction::Start { settings } => self.start(*settings).await?,
+            RigAudioAction::Stop => {
+                self.phase(AudioPhase::Stopping, None);
+                if let Err(e) = self.release().await {
+                    self.phase(AudioPhase::Failed, Some(e.clone()));
+                    return Err(e);
+                }
+                self.phase(AudioPhase::Stopped, None);
+            }
+            RigAudioAction::Restart => {
+                let settings = self
+                    .state
+                    .configured
+                    .clone()
+                    .ok_or("No mixed configuration")?;
+                self.phase(AudioPhase::Stopping, None);
+                if let Err(e) = self.release().await {
+                    self.phase(AudioPhase::Failed, Some(e.clone()));
+                    return Err(e);
+                }
+                self.start(settings).await?;
+            }
+            RigAudioAction::Control { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Control { command }).await {
+                    Ok(r) => r,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                let error = reply.error.clone();
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                if let Some(e) = error {
+                    return Err(e);
+                }
+            }
+            RigAudioAction::Save { name } => self.save(name).await?,
+        }
+        Ok(self.state.clone())
+    }
+    async fn poll(&mut self) {
+        if self.worker.is_some() {
+            if self.state.phase == AudioPhase::Failed {
+                if self.release().await.is_ok() {
+                    self.publish();
+                }
+            } else {
+                let result = match self.exchange(&WorkerRequest::Status).await {
+                    Ok(r) if r.error.is_none() => self.readback(r),
+                    Ok(_) => Err("Invalid mixed status reply".into()),
+                    Err(e) => Err(e),
+                };
+                if let Err(e) = result {
+                    self.fault(e).await;
+                }
+            }
+        }
+        self.poll_export().await;
+    }
+}
+impl RigPlayback {
+    pub fn new(config: &Config) -> Result<Self, String> {
+        if config
+            .rig_worker
+            .as_ref()
+            .is_some_and(|p| !p.is_absolute() || !p.is_file())
+        {
+            return Err("Mixed worker must be a configured absolute executable".into());
+        }
+        let initial = RigAudioState {
+            session: format!(
+                "rig-owner-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_err(|e| e.to_string())?
+                    .as_nanos()
+            ),
+            revision: 0,
+            phase: if config.rig_worker.is_some() {
+                AudioPhase::Stopped
+            } else {
+                AudioPhase::Unavailable
+            },
+            configured: None,
+            control: None,
+            telemetry: None,
+            processed_frames: 0,
+            device_owned: false,
+            error: None,
+            save: None,
+        };
+        let (updates, state) = watch::channel(initial.clone());
+        let (commands, mut receiver) =
+            mpsc::channel::<(RigAudioCommand, oneshot::Sender<Reply>)>(1);
+        let mut owner = Owner {
+            executable: config.rig_worker.clone(),
+            root: config.preset_dir.join("bundles"),
+            runtime: config.preset_dir.join("rig-runtime"),
+            worker: None,
+            export: None,
+            state: initial,
+            updates,
+        };
+        let mut shutdown = config.shutdown.clone();
+        let (done, finished) = watch::channel(false);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_millis(200));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {biased;
+                    _=async{match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
+                    item=receiver.recv()=>match item{Some((command,response))=>{let _=response.send(owner.command(command).await);},None=>break},
+                    _=interval.tick()=>owner.poll().await,
+                }
+            }
+            while owner.worker.is_some() || owner.export.is_some() {
+                let _ = owner.release().await;
+                let _ = owner.cancel_export().await;
+                if owner.worker.is_some() || owner.export.is_some() {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+            done.send_replace(true);
+        });
+        Ok(Self {
+            finished,
+            commands,
+            state,
+        })
+    }
+    pub fn snapshot(&self) -> RigAudioState {
+        self.state.borrow().clone()
+    }
+    async fn dispatch(&self, command: RigAudioCommand) -> Reply {
+        let (response, received) = oneshot::channel();
+        self.commands
+            .try_send((command, response))
+            .map_err(|_| "rig_audio_busy")?;
+        received
+            .await
+            .map_err(|_| "Mixed owner stopped".to_owned())?
+    }
+}
+pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Json<RigAudioState> {
+    Json(shared.rig_playback.snapshot())
+}
+pub(super) async fn command(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<RigAudioCommand>, JsonRejection>,
+) -> Response {
+    let Ok(Json(command)) = body else {
+        return failure(StatusCode::BAD_REQUEST, "invalid_rig_audio_command");
+    };
+    match shared.rig_playback.dispatch(command).await {
+        Ok(s) => Json(s).into_response(),
+        Err(e) => failure(StatusCode::CONFLICT, &e),
+    }
+}

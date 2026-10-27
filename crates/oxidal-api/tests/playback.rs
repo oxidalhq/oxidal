@@ -20,6 +20,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         debug_socket: None,
         device_socket: None,
         graph_worker: None,
+        rig_worker: None,
         audio_worker: Some(audio_worker.into()),
         native_worker: Some(native_worker.into()),
         shutdown: Some(signal),

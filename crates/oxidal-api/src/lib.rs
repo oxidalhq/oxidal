@@ -10,6 +10,7 @@ mod playback_recovery;
 mod plugins;
 mod presets;
 mod provider;
+mod rig_playback;
 mod terminal;
 use axum::{
     Json, Router,
@@ -75,6 +76,8 @@ pub struct Contract {
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
+    pub rig_audio_state: oxidal_engine::protocol::RigAudioState,
+    pub rig_audio_command: oxidal_engine::protocol::RigAudioCommand,
     pub graph_audio_state: oxidal_lv2::protocol::GraphAudioState,
     pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
     pub audio_command: oxidal_audio::lifecycle::AudioCommand,
@@ -99,6 +102,7 @@ pub struct Config {
     pub native_worker: Option<PathBuf>,
     pub audio_worker: Option<PathBuf>,
     pub graph_worker: Option<PathBuf>,
+    pub rig_worker: Option<PathBuf>,
     pub mapping_path: PathBuf,
     pub preset_dir: PathBuf,
     pub ui_dir: PathBuf,
@@ -114,6 +118,7 @@ struct Shared {
     monitor: watch::Receiver<monitor::Monitoring>,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
+    rig_playback: rig_playback::RigPlayback,
     control: Mutex<Control>,
     native: Arc<Mutex<Option<native_editor::Worker>>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
@@ -132,10 +137,11 @@ pub fn router(config: Config) -> Result<Router, String> {
 pub struct WorkersStopped {
     audio: watch::Receiver<bool>,
     graph: watch::Receiver<bool>,
+    rig: watch::Receiver<bool>,
 }
 impl WorkersStopped {
     pub async fn wait(mut self) -> Result<(), String> {
-        for done in [&mut self.audio, &mut self.graph] {
+        for done in [&mut self.audio, &mut self.graph, &mut self.rig] {
             done.wait_for(|v| *v)
                 .await
                 .map_err(|_| "Playback owner exited without cleanup acknowledgement")?;
@@ -181,6 +187,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         monitor,
         playback: playback::Playback::new(&config)?,
         graph_playback: graph_playback::GraphPlayback::new(&config)?,
+        rig_playback: rig_playback::RigPlayback::new(&config)?,
         control: Mutex::new(control),
         native: Arc::new(Mutex::new(native_editor::Worker::start(&config)?)),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
@@ -193,6 +200,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
+        rig: shared.rig_playback.finished.clone(),
     };
     let weak = Arc::downgrade(&shared);
     tokio::spawn(async move {
@@ -226,6 +234,14 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route(
             "/graph-audio",
             get(graph_playback::state).post(graph_playback::command),
+        )
+        .route(
+            "/rig-audio",
+            get(rig_playback::state)
+                .post(rig_playback::command)
+                .layer(DefaultBodyLimit::max(
+                    oxidal_engine::protocol::REQUEST_LIMIT,
+                )),
         )
         .route("/plugins/lv2", get(plugins::catalog))
         .route("/presets/graphs", get(presets::graphs))

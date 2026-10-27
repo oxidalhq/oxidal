@@ -14,6 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device_socket: std::env::var_os("OXIDAL_DEVICE_SOCKET").map(PathBuf::from),
         shutdown: Some(shutdown),
         graph_worker: std::env::var_os("OXIDAL_GRAPH_WORKER").map(PathBuf::from),
+        rig_worker: std::env::var_os("OXIDAL_RIG_WORKER").map(PathBuf::from),
         audio_worker: std::env::var_os("OXIDAL_AUDIO_WORKER").map(PathBuf::from),
         native_worker: std::env::var_os("OXIDAL_NATIVE_WORKER").map(PathBuf::from),
         simulator: std::env::var("OXIDAL_SIMULATOR").is_ok_and(|v| v == "1"),

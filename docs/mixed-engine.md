@@ -1,8 +1,8 @@
 # Owned native/LV2 graph core
 
 `oxidal-engine/native` prepares a single-owner stereo DAG from already prepared
-native and LV2 processors. It now also has the isolated worker described below; daemon/browser integration
-remains separate from this process-level qualification. Native handles and LV2 instances remain non-Send
+native and LV2 processors. It also has an isolated worker and daemon lifecycle, described below; the mixed
+browser authoring workflow remains separate integration work. Native handles and LV2 instances remain non-Send
 and non-Sync; discovery, loading, readiness waits, controls and teardown stay on
 that owner. Construction must happen before streaming. The owner must service native
 message-pump/control work between processing calls; the graph does not dispatch
@@ -34,7 +34,7 @@ The current integration boundary remains explicit:
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
   payloads and roles, routing, LV2 declarations and opaque resources. The mixed
-  worker/HTTP/browser lifecycle is not connected yet; the portable loader below
+  browser authoring workflow is not connected yet; the portable loader below
   now restores the qualified whole-native/scalar-LV2 subset.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
@@ -154,6 +154,40 @@ or certify all native field fidelity.
 existing mixed example with audible scalar changes, invalid/stale rejection, actual
 worker control/readback, concurrent isolated export, independent shared native
 resources, exact unchanged payloads, offline child recall and EOF teardown.
-Ordinary builds cannot open the null qualification route. The daemon must still
-connect this worker to the shared device permit, actor shutdown, HTTP contracts
-and a single authoring UI before this becomes a user-facing mixed mode.
+Ordinary builds cannot open the null qualification route. The daemon lifecycle below connects device ownership and HTTP control. A single
+mixed authoring UI remains required before this becomes a user-facing mixed mode.
+
+## Daemon ownership and HTTP lifecycle
+
+Set `OXIDAL_RIG_WORKER` to the absolute installed worker executable. The daemon
+uses `preset_dir/bundles` for verified revisions and separate `rig-runtime/playback`
+and `rig-runtime/export` scratch roots. `GET /api/v1/rig-audio` reports the lifecycle
+and confirmed controls. POST accepts `RigAudioCommand` with its current owner
+session/revision and one of Start, Stop, Restart, Control or Save. Start references
+a saved bundle revision; no request may select an executable or library path.
+
+The actor holds the same `audio::PROBE` permit as native saved playback, LV2 graph
+playback and device inspection. Stop/crash recovery release it only after reaping
+the child. An accepted HTTP command belongs to the actor even if its connection
+disappears. Restart restores the complete confirmed scalar recall; it is an
+interrupting stop/start, not gapless switching. Startup currently waits up to
+60 seconds for preparation; cancellation during preparation needs further work.
+
+Save acknowledges a captured control revision and runs independently of subsequent
+control commands. `save.source_session` and `source_control_revision` identify what
+was saved; completion must not mark later edits clean. Status exposes progress,
+the published revision or an error. A failed export never stops the separate PCM
+child. Daemon shutdown reaps both children. Publication may complete before a lost
+reply/timeout, so inspect stored revisions before retrying an uncertain export.
+
+Monitoring includes the mixed worker's actual stereo telemetry, running/failed
+phase and sample progress. The persistent resource strip recognizes this sounding
+path. This does not add an xrun recovery counter or measured physical latency.
+
+The maintained `pnpm native:check` also runs `oxidal-api/tests/rig_playback.rs`
+against the real mixed child and ALSA null: missing/invalid revision rejection,
+shared device exclusion, confirmed native/LV2 edits, stale commands, independent
+Save versus later edits, restart/offline recall, monitoring, client disconnect,
+crash recovery and shutdown during export. The existing native/LV2 paths remain
+available until their authoring workflows are migrated; this endpoint alone does
+not claim full authoring, model audition in mixed graphs or gapless transitions.

@@ -431,6 +431,7 @@ mod tests {
             debug_socket: None,
             device_socket: None,
             graph_worker: None,
+            rig_worker: None,
             audio_worker: None,
             native_worker: None,
             shutdown: None,

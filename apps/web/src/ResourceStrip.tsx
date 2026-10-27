@@ -59,9 +59,14 @@ export function ResourceStrip({
     };
   }, [displayMode]);
   const running =
-    state?.audio_phase === 'running' || state?.graph_phase === 'running';
+    state?.audio_phase === 'running' ||
+    state?.graph_phase === 'running' ||
+    state?.rig_phase === 'running';
   const failed =
-    state?.audio_phase === 'failed' || state?.graph_phase === 'failed';
+    !running &&
+    (state?.audio_phase === 'failed' ||
+      state?.graph_phase === 'failed' ||
+      state?.rig_phase === 'failed');
   const fresh =
     !disconnected &&
     running &&

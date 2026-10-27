@@ -346,7 +346,8 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       </dl>
       <p className="caption break-words">
         Saved preset worker: {state?.audio_phase || 'reading'} · Graph worker:{' '}
-        {state?.graph_phase || 'reading'}
+        {state?.graph_phase || 'reading'} · Mixed rig:{' '}
+        {state?.rig_phase || 'reading'}
         {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
       </p>
       {state?.error && (

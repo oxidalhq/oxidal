@@ -25,3 +25,12 @@ server simulator capability. A separate export worker saves verified named copie
 confirmed scalar settings without changing audio/editor state; full native authoring,
 prepared switching and physical timing remain unqualified. The adapter also ports
 guarded amp/cab partitioning as an offline preparation API; see docs/native-tone3000.md.
+
+The experimental `oxidal-engine` mixed worker now restores verified portable
+bundles containing whole native presets and qualified scalar LV2 plugins. Its
+`/api/v1/rig-audio` actor shares device exclusion with existing playback, confirms
+live native/LV2/bypass/merge controls, and exports immutable revisions in a separate
+process. `pnpm native:check` includes actual mixed worker and HTTP/ALSA-null tests.
+See docs/mixed-engine.md for byte/resource admission, startup limits and qualification.
+Mixed browser authoring, complete native controls, extracted-stage persistence,
+opaque LV2 state, prepared replacement and gapless/physical acceptance remain open.

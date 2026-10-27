@@ -235,6 +235,36 @@ if (mode === 'bootstrap') {
         '--features',
         'alsa',
         '--test',
+        'rig_playback',
+        '--',
+        '--ignored',
+      ],
+      {
+        env: {
+          ...audioEnv,
+          OXIDAL_RIG_QUALIFY_NULL: '1',
+          OXIDAL_TEST_RIG_WORKER: env.OXIDAL_TEST_RIG_WORKER,
+          OXIDAL_TEST_BUNDLE_ROOT: join(
+            env.OXIDAL_QUALIFICATION_DATA,
+            'worker-rigs',
+          ),
+          OXIDAL_TEST_RIG_REVISION_FILE: join(
+            env.OXIDAL_QUALIFICATION_DATA,
+            'mixed-preset-revision',
+          ),
+        },
+      },
+    );
+    run(
+      'cargo',
+      [
+        'test',
+        '--locked',
+        '-p',
+        'oxidal-api',
+        '--features',
+        'alsa',
+        '--test',
         'playback',
         '--',
         '--ignored',

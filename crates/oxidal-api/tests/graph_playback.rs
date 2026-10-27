@@ -52,6 +52,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         debug_socket: None,
         device_socket: None,
         graph_worker: Some(executable.clone()),
+        rig_worker: None,
         audio_worker: Some(executable.clone()),
         native_worker: None,
         simulator: true,

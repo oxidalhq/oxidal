@@ -828,6 +828,7 @@ dependencies = [
  "oxidal-control",
  "oxidal-debug",
  "oxidal-device",
+ "oxidal-engine",
  "oxidal-graph",
  "oxidal-lv2",
  "oxidal-presets",

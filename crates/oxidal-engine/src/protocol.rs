@@ -131,3 +131,43 @@ pub struct SaveRequest {
     pub recall: Recall,
     pub name: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SaveState {
+    pub source_session: String,
+    pub source_control_revision: u64,
+    pub running: bool,
+    pub saved_revision: Option<String>,
+    pub error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RigAudioState {
+    pub session: String,
+    pub revision: u64,
+    pub phase: oxidal_audio::lifecycle::AudioPhase,
+    pub configured: Option<StartRig>,
+    pub control: Option<Snapshot>,
+    pub telemetry: Option<oxidal_audio::meter::Snapshot>,
+    pub processed_frames: u64,
+    pub device_owned: bool,
+    pub error: Option<String>,
+    pub save: Option<SaveState>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RigAudioAction {
+    Start { settings: Box<StartRig> },
+    Stop,
+    Restart,
+    Control { command: ControlCommand },
+    Save { name: String },
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RigAudioCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub action: RigAudioAction,
+}

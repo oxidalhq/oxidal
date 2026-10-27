@@ -27,6 +27,7 @@ pub struct Monitoring {
     pub host: Host,
     pub audio_phase: String,
     pub graph_phase: String,
+    pub rig_phase: String,
     pub source: Option<String>,
     pub stream: Option<StreamConfig>,
     pub audio: Option<Snapshot>,
@@ -140,6 +141,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
             sequence += 1;
             let native = shared.playback.snapshot();
             let graph = shared.graph_playback.snapshot();
+            let rig = shared.rig_playback.snapshot();
             let (source, stream, audio, age) = if native.phase == AudioPhase::Running {
                 let meter = shared.playback.telemetry();
                 (
@@ -160,6 +162,18 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                     graph.telemetry,
                     Some(graph_time.elapsed().as_millis() as u64),
                 )
+            } else if rig.phase == AudioPhase::Running {
+                let identity = (rig.session.clone(), rig.telemetry.map(|s| s.frames));
+                if graph_frames.as_ref() != Some(&identity) {
+                    graph_frames = Some(identity);
+                    graph_time = Instant::now();
+                }
+                (
+                    Some("Mixed rig".into()),
+                    rig.configured.as_ref().map(|s| s.stream.clone()),
+                    rig.telemetry,
+                    Some(graph_time.elapsed().as_millis() as u64),
+                )
             } else {
                 graph_frames = None;
                 (None, None, None, None)
@@ -169,12 +183,21 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                 host,
                 audio_phase: phase(native.phase),
                 graph_phase: phase(graph.phase),
+                rig_phase: phase(rig.phase),
                 source,
                 stream,
                 audio,
                 audio_age_ms: age,
                 xruns: None,
-                error: native.error.or(graph.error),
+                error: if native.phase == AudioPhase::Running {
+                    native.error
+                } else if graph.phase == AudioPhase::Running {
+                    graph.error
+                } else if rig.phase == AudioPhase::Running {
+                    rig.error
+                } else {
+                    rig.error.or(graph.error).or(native.error)
+                },
             });
         }
     });
