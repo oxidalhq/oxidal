@@ -8,7 +8,13 @@ import { Button } from './components/ui/button';
 /** Immutable native originals; playback has its own explicitly started session.
  * @see docs/presets/format.md
  */
-export function Library({ connected }: { connected: boolean }) {
+export function Library({
+  connected,
+  onOpenRig,
+}: {
+  connected: boolean;
+  onOpenRig: () => void;
+}) {
   const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -85,7 +91,7 @@ export function Library({ connected }: { connected: boolean }) {
         </Button>
       </nav>
       {page === 'new' ? (
-        <GraphAuthor connected={connected} />
+        <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
       ) : page === 'browse' ? (
         <>
           <h2 className="sr-only">Native preset library</h2>

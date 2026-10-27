@@ -131,6 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     meter_send.try_send(PlaybackEvent::Ready {
                         preset_name: preset_name.clone(),
                         controls: engine.live_controls()?,
+                        slots: engine.slots()?,
                     })?;
                 }
             }
@@ -186,6 +187,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         serial: request.serial,
                         progress,
                         controls: engine.live_controls()?,
+                        slots: engine.slots()?,
                         error,
                     }
                 }

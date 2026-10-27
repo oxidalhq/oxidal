@@ -166,8 +166,11 @@ The audio owner verifies cached bytes on a separate thread, then prepares the
 native engine off-thread. Its supervisor polls readiness and commits to the exact
 existing block. Failed preparation preserves the previous model and PCM stream.
 Cancellation identifies the exact selection within its audio session. Progress
-and errors appear beside the sounding controls. This path replaces an existing
-block; empty-rig insertion and arbitrary structural authoring are separate work.
+and errors appear beside the sounding controls. Add NAM uses the same preparation
+path for a current insertion slot, including rigs created from Library → New preset.
+The supervisor supplies the exact slot position; replay preserves insertion chronology
+even after replacing an earlier model. Arbitrary routing and mixed native/LV2 structural
+authoring remain separate work.
 The current transition uses native wet muting, **not gapless switching**.
 
 Confirmed model assignments and scalar controls survive Stop/Resume/Restart,

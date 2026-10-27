@@ -334,3 +334,11 @@ EXPORT int oxidal_t3k_preparation(void* ptr, int action, char* out, size_t capac
     json(e.preparation->status(), out, capacity, written);
   });
 }
+
+EXPORT int oxidal_t3k_restore_slot(void* ptr, const char* target, int lane, int index) noexcept {
+  return guard([&] {
+    auto& e = engine(ptr);
+    if (!target || (e.preparation && !e.preparation->finishedPreparing())) throw std::runtime_error("replay preparation busy");
+    OxidalModelPreparation::restoreSlot(e.processor, target, lane, index);
+  });
+}

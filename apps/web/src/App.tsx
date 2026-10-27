@@ -427,7 +427,7 @@ export default function App() {
             </Suspense>
           ) : view === 'library' ? (
             <Suspense fallback={<p>Loading library…</p>}>
-              <Library connected={connected} />
+              <Library connected={connected} onOpenRig={() => setView('rig')} />
             </Suspense>
           ) : view === 'rig' ? (
             <>

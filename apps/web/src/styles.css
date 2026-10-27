@@ -6,6 +6,8 @@
   color: var(--foreground);
   background: var(--background);
   font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   line-height: 1.45;
 }
 * {
@@ -1579,7 +1581,7 @@ button.block:focus-visible {
 }
 .live-parameter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
   gap: 0.5rem;
 }
 .live-value-trigger,
@@ -1595,9 +1597,24 @@ button.block:focus-visible {
   color: var(--foreground);
   text-align: left;
 }
+/* Normal block flow avoids WebKit button intrinsic sizing on wrapped readouts. */
+.live-value-trigger {
+  display: block;
+  appearance: none;
+  height: auto;
+  white-space: normal;
+}
+.live-value-trigger > * {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+.live-value-trigger > strong {
+  margin-top: 0.3rem;
+}
 .live-value-trigger strong {
   color: var(--readout-foreground);
-  font: 600 1.2rem var(--font-mono);
+  font: 600 1.125rem/1.2 var(--font-mono);
 }
 .live-value-trigger span {
   font-size: 0.8rem;

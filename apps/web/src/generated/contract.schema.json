@@ -930,6 +930,13 @@
         "session": {
           "type": "string"
         },
+        "slots": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NativeSlot"
+          }
+        },
         "start_on_boot": {
           "description": "Explicitly opt in to restoring this saved preset/device configuration after daemon startup.",
           "type": "boolean"
@@ -2575,11 +2582,22 @@
       ]
     },
     "ModelAssignment": {
-      "description": "Immutable verified asset assigned to an existing native block.",
+      "description": "Immutable verified asset assigned to a native block. Insert position is issued\nby the playback owner, preserving replay order from the immutable working base.",
       "type": "object",
       "properties": {
         "asset": {
           "type": "string"
+        },
+        "insertion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlotPosition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "target": {
           "type": "string"
@@ -2729,6 +2747,22 @@
         "host",
         "audio_phase",
         "graph_phase"
+      ]
+    },
+    "NativeSlot": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/SlotPosition"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "position"
       ]
     },
     "NativeValue": {
@@ -3303,6 +3337,27 @@
         "interface",
         "mode",
         "home_ssid"
+      ]
+    },
+    "SlotPosition": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "lane": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "lane",
+        "index"
       ]
     },
     "Snapshot": {

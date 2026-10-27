@@ -109,6 +109,7 @@ mod tests {
         };
         let mut state = Recovery::new(settings, Some(vec![control.clone()]), vec![]);
         state.models = vec![ModelAssignment {
+            insertion: None,
             target: "block-one".into(),
             asset: "a".repeat(64),
         }];

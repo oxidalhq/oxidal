@@ -1192,6 +1192,119 @@ test('playback lifecycle keeps native authoring available after stop and restart
           .analyze()
       ).violations,
     ).toEqual([]);
+    // Start from empty through the shared picker, then extend the actual native rig.
+    const originalsBeforeNew = await (
+      await request.get('/api/v1/presets')
+    ).json();
+    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await page.getByRole('button', { name: 'New preset', exact: true }).click();
+    const newRig = page.getByRole('region', { name: 'Effects authoring' });
+    await newRig
+      .getByLabel('Preset name', { exact: true })
+      .fill(`Created ${test.info().project.name}`);
+    await newRig
+      .getByRole('button', { name: 'Add effect', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Add effect' })
+      .getByRole('button', { name: 'NAM model', exact: true })
+      .click();
+    await picker.getByRole('button', { name: /Audition fixture/ }).click();
+    await picker.getByRole('button', { name: /Prepared A2/ }).click();
+    await expect(picker).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).model_change
+            ?.phase,
+      )
+      .toBe('applied');
+    await expect(sounding.locator('.live-effect')).toHaveCount(1);
+    await sounding
+      .getByRole('button', { name: 'Add NAM', exact: true })
+      .click();
+    await picker.getByRole('button', { name: /Audition fixture/ }).click();
+    await picker.getByRole('button', { name: /Prepared A2/ }).click();
+    await expect(picker).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).models.length,
+      )
+      .toBe(2);
+    await expect(sounding.locator('.live-effect')).toHaveCount(2);
+    const created = await (await request.get('/api/v1/audio')).json();
+    expect(created.configured.draft).toBe(true);
+    expect(created.saved_copy).toBeNull();
+    expect(await (await request.get('/api/v1/presets')).json()).toEqual(
+      originalsBeforeNew,
+    );
+    await expect(page.getByTestId('resource-state')).toHaveText(
+      'Audio running',
+      { timeout: 12000 },
+    );
+    for (const [orientation, size] of [
+      ['portrait', portrait],
+      ['landscape', { width: portrait.height, height: portrait.width }],
+    ] as const) {
+      await page.setViewportSize(size);
+      await expect(
+        sounding.getByRole('button', { name: 'Add NAM', exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      expect(
+        await sounding.locator('.live-value-trigger').evaluateAll((buttons) =>
+          buttons.flatMap((button) => {
+            const box = button.getBoundingClientRect();
+            return Array.from(button.children).flatMap((child) => {
+              const value = child.getBoundingClientRect();
+              return value.bottom <= box.bottom + 1 &&
+                value.right <= box.right + 1
+                ? []
+                : [
+                    {
+                      text: child.textContent,
+                      style: {
+                        display: getComputedStyle(button).display,
+                        font: getComputedStyle(child).font,
+                        sizing: getComputedStyle(
+                          document.documentElement,
+                        ).getPropertyValue('-webkit-text-size-adjust'),
+                      },
+                      box: box.toJSON(),
+                      value: value.toJSON(),
+                    },
+                  ];
+            });
+          }),
+        ),
+      ).toEqual([]);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({
+        path: test.info().outputPath(`created-native-${orientation}.png`),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize(portrait);
+    await sounding.getByText('Save copy', { exact: true }).click();
+    await sounding
+      .getByLabel('Name for sounding copy')
+      .fill(`New NAM ${test.info().project.name}`);
+    await sounding
+      .getByRole('button', { name: 'Save sounding copy', exact: true })
+      .click();
+    await expect(sounding.getByTestId('live-saved')).toBeVisible();
+    const createdCopy = await (await request.get('/api/v1/audio')).json();
+    const nativeCopies = await (await request.get('/api/v1/native')).json();
+    expect(
+      nativeCopies.owned.find(
+        (copy: { id: string }) => copy.id === createdCopy.saved_copy,
+      ).source_sha256,
+    ).toBeNull();
   } finally {
     const finalState = await (await request.get('/api/v1/audio')).json();
     if (finalState.device_owned) {

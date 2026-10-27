@@ -56,6 +56,12 @@ unsafe extern "C" {
     ) -> i32;
 
     fn oxidal_t3k_reset_empty(engine: *mut c_void) -> i32;
+    fn oxidal_t3k_restore_slot(
+        engine: *mut c_void,
+        target: *const c_char,
+        lane: i32,
+        index: i32,
+    ) -> i32;
     fn oxidal_t3k_load_preset(engine: *mut c_void, bytes: *const u8, length: usize) -> i32;
     fn oxidal_t3k_save_preset(
         engine: *mut c_void,
@@ -404,6 +410,56 @@ impl Engine {
     pub fn restore(&mut self, state: &State) -> Result<()> {
         // SAFETY: State is only constructible from this backend's bounded capture, and lives through call.
         checked(unsafe { oxidal_t3k_restore(self.ptr.as_ptr(), state.0.as_ptr(), state.0.len()) })
+    }
+    /// Current insertion targets, read from the actual native chain.
+    pub fn slots(&mut self) -> Result<Vec<oxidal_audio::lifecycle::NativeSlot>> {
+        use oxidal_audio::lifecycle::{NativeSlot, SlotPosition, valid_slots};
+        let chain = self.chain()?;
+        let mut slots = vec![];
+        for (lane, key) in ["chain", "chainRight"].iter().enumerate() {
+            if let Some(blocks) = chain[key].as_array() {
+                for (index, block) in blocks
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, b)| b["kind"] == "insert")
+                {
+                    slots.push(NativeSlot {
+                        target: block["blockId"]
+                            .as_str()
+                            .ok_or_else(|| NativeError("Missing native slot identity".into()))?
+                            .into(),
+                        position: SlotPosition {
+                            lane: lane as u8,
+                            index: index as u32,
+                        },
+                    });
+                }
+            }
+        }
+        if !valid_slots(&slots) {
+            return Err(NativeError("Native insertion catalog invalid".into()));
+        }
+        Ok(slots)
+    }
+    /// Restore a recorded insertion coordinate on an isolated owner before PCM.
+    pub fn restore_slot(
+        &mut self,
+        target: &str,
+        position: &oxidal_audio::lifecycle::SlotPosition,
+    ) -> Result<()> {
+        if !position.valid() {
+            return Err(NativeError("Invalid insertion coordinate".into()));
+        }
+        let target = string(target)?;
+        // SAFETY: live uniquely owned handle and string; native boundary checks slot and identity.
+        checked(unsafe {
+            oxidal_t3k_restore_slot(
+                self.ptr.as_ptr(),
+                target.as_ptr(),
+                position.lane.into(),
+                position.index as i32,
+            )
+        })
     }
     /// Create an empty native working chain on an isolated preparation owner.
     /// Preset-scoped parameters reset; machine/device settings retain their scope.

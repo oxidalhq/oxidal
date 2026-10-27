@@ -72,5 +72,7 @@ filesystem path. The browser's opening audio revision guards against concurrent
 session edits. Close cancels a pending download; once preparation is accepted,
 **Cancel model** targets that exact preparation. Save sounding copy embeds confirmed
 models for offline recall. See [audio lifecycle](audio.md#live-nam-audition-and-offline-copies)
-for the transition, persistence and qualification boundaries. This does not yet
-provide New preset, general LV2/hybrid authoring or provider preset export.
+for the transition, persistence and qualification boundaries. Library → New preset also
+supports starting an empty native rig with a selected NAM model; Add NAM fills its next
+left-lane slot. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
+provider preset export remain unfinished.

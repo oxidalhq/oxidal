@@ -60,6 +60,8 @@ pub struct AudioState {
     pub models: Vec<ModelAssignment>,
     #[serde(default)]
     pub model_change: Option<ModelProgress>,
+    #[serde(default)]
+    pub slots: Vec<NativeSlot>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -140,6 +142,7 @@ pub enum PlaybackEvent {
     Ready {
         preset_name: String,
         controls: Vec<LiveControl>,
+        slots: Vec<NativeSlot>,
     },
     Control {
         serial: u64,
@@ -150,6 +153,7 @@ pub enum PlaybackEvent {
         serial: u64,
         progress: Option<ModelProgress>,
         controls: Vec<LiveControl>,
+        slots: Vec<NativeSlot>,
         error: Option<String>,
     },
     Meter {
@@ -191,16 +195,49 @@ pub fn valid_preset_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= 100 && !name.chars().any(char::is_control)
 }
 
-/// Immutable verified asset assigned to an existing native block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SlotPosition {
+    pub lane: u8,
+    pub index: u32,
+}
+impl SlotPosition {
+    pub fn valid(&self) -> bool {
+        self.lane < 2 && self.index < 128
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NativeSlot {
+    pub target: String,
+    pub position: SlotPosition,
+}
+pub fn valid_slots(slots: &[NativeSlot]) -> bool {
+    slots.len() <= 256
+        && slots.iter().enumerate().all(|(i, s)| {
+            !s.target.is_empty()
+                && s.target.len() <= 128
+                && !s.target.chars().any(char::is_control)
+                && s.position.valid()
+                && slots[..i]
+                    .iter()
+                    .all(|p| p.target != s.target && p.position != s.position)
+        })
+}
+/// Immutable verified asset assigned to a native block. Insert position is issued
+/// by the playback owner, preserving replay order from the immutable working base.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ModelAssignment {
     pub target: String,
     pub asset: String,
+    #[serde(default)]
+    pub insertion: Option<SlotPosition>,
 }
 impl ModelAssignment {
     pub fn valid(&self) -> bool {
-        !self.target.is_empty()
+        self.insertion.as_ref().is_none_or(SlotPosition::valid)
+            && !self.target.is_empty()
             && self.target.len() <= 128
             && !self.target.chars().any(char::is_control)
             && self.asset.len() == 64

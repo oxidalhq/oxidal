@@ -8,6 +8,22 @@
 class OxidalModelPreparation {
 public:
   enum Phase { preparing, ready, applying, applied, failed, cancelled };
+  // Only used while rebuilding an isolated working session, before PCM opens.
+  // New trailing insert slots receive fresh native UUIDs; replay binds the exact
+  // recorded identity back to its empty coordinate before filling it.
+  static void restoreSlot(TONE3000Processor& p, const std::string& target, int lane, int index) {
+    if (target.empty() || target.size() > 128 || lane < 0 || lane > 1 || index < 0 || index >= 128)
+      throw std::runtime_error("invalid replay slot");
+    juce::ScopedLock lock(p.chainMutex);
+    if (static_cast<size_t>(index) >= p.lanes[lane].size()) throw std::runtime_error("replay slot missing");
+    auto* block = p.lanes[lane][static_cast<size_t>(index)].get();
+    if (auto* existing = p.findBlockById(target)) {
+      if (existing != block) throw std::runtime_error("replay identity moved");
+      return;
+    }
+    if (block->type != ChainBlockType::INSERT) throw std::runtime_error("replay slot occupied");
+    block->id = target;
+  }
   explicit OxidalModelPreparation(TONE3000Processor& owner, const std::string& target,
                                   const juce::File& source, const juce::var& tone)
       : p(owner), targetId(target) {

@@ -129,5 +129,13 @@ persistence foundations. The playback `create` action accepts an audio stream an
 prepares a verified empty base in the private `working-native` store, then opens audio.
 It does not add an imported original or a named library copy. Stop/Resume retain the
 working base; Save produces a source-free owned copy that recalls without the draft.
-Boot playback requires explicitly saving and recalling that copy. The browser New
-preset/model-insertion flow and live insertion/replay still need integration. They do not establish full authoring or gapless behavior.
+Boot playback requires explicitly saving and recalling that copy. Library → New preset
+can now start this flow by selecting NAM model in Add effect. The sounding rig exposes
+Add NAM for the next available left-lane insert slot. Preparation, cancellation and
+revision checks use the same path as replacement. Slot identities and insertion order
+are recorded for replay; replacing an inserted model preserves its original position
+in that replay sequence. The maintained HTTP test fills beyond the initial slot count,
+replaces an early insertion, restarts, then recalls a saved copy with both working and
+audition stores hidden. Browser coverage creates, inserts, auditions and saves on all
+six device profiles. Native/LV2 mixing, general routing, full authoring and gapless
+switching remain separate work.

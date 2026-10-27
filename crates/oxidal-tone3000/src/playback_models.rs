@@ -39,15 +39,21 @@ impl Models {
                 {
                     return Err("Invalid assignment or previous model still preparing".into());
                 }
-                // This initial public path replaces existing blocks only. Insert-slot
-                // identity reconstruction belongs to full working-graph persistence.
                 let runtime = engine.runtime().map_err(|e| e.to_string())?;
                 if !runtime["blocks"].as_array().is_some_and(|blocks| {
                     blocks
                         .iter()
                         .any(|b| b["blockId"].as_str() == Some(&assignment.target))
-                }) {
-                    return Err("Select an existing tone block".into());
+                }) && !engine
+                    .slots()
+                    .map_err(|e| e.to_string())?
+                    .iter()
+                    .any(|slot| {
+                        slot.target == assignment.target
+                            && Some(&slot.position) == assignment.insertion.as_ref()
+                    })
+                {
+                    return Err("Select an existing tone block or current insertion slot".into());
                 }
                 let store = ModelStore::new(root.join("audition-models"));
                 let id = assignment.asset.clone();
@@ -167,6 +173,9 @@ pub fn restore(
     let store = ModelStore::new(root.join("audition-models"));
     for assignment in assignments {
         let (asset, path) = store.read(&assignment.asset)?;
+        if let Some(position) = &assignment.insertion {
+            engine.restore_slot(&assignment.target, position)?;
+        }
         engine.prepare_model(&assignment.target, &path, &asset.tone)?;
         let started = Instant::now();
         loop {

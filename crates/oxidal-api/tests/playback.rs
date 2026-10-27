@@ -743,7 +743,10 @@ async fn qualify_models(
     assert_eq!(result.status(), 200, "{}", result.text().await.unwrap());
     state = wait_model(client, url, "applied").await;
     assert_eq!(state["phase"], "running");
-    assert_eq!(state["models"], json!([{"target":target,"asset":good}]));
+    assert_eq!(
+        state["models"],
+        json!([{"target":target,"asset":good,"insertion":null}])
+    );
     assert!(
         state["controls"]
             .to_string()
@@ -778,6 +781,11 @@ async fn qualify_created_rig(
     let owned = oxidal_presets::OwnedStore::new(root.join("presets/owned"));
     let count = owned.list().unwrap().len();
     let mut state = get(client, url, "audio").await;
+    let asset = state["models"][0]["asset"].clone();
+    assert!(
+        asset.is_string(),
+        "earlier workflow staged a verified fixture"
+    );
     let response = send(
         client,
         url,
@@ -816,6 +824,61 @@ async fn qualify_created_rig(
             state["revision"]
         );
     }
+    let initial_slots = state["slots"].clone();
+    let mut targets = vec![];
+    let initial_count = initial_slots
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["position"]["lane"] == 0)
+        .count();
+    for _ in 0..=initial_count {
+        let slot = state["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["position"]["lane"] == 0)
+            .unwrap()
+            .clone();
+        let result = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"replace_model","assignment":{"target":slot["target"],"asset":asset}}),
+        )
+        .await;
+        assert_eq!(result.status(), 200, "{}", result.text().await.unwrap());
+        state = wait_model(client, url, "applied").await;
+        assert!(
+            state["controls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|c| c["target"]
+                    == format!("block:{}:enabled", slot["target"].as_str().unwrap()))
+        );
+        targets.push(slot["target"].clone());
+    }
+    assert!(
+        !initial_slots
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| Some(&s["target"]) == targets.last()),
+        "last insert was created after exhausting the immutable base slots"
+    );
+    // Replacing the first model must not move its replay behind the dependent second insert.
+    let result = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"replace_model","assignment":{"target":targets[0],"asset":asset}}),
+    )
+    .await;
+    assert_eq!(result.status(), 200);
+    state = wait_model(client, url, "applied").await;
+    assert_eq!(state["models"][0]["target"], targets[0]);
+    assert_eq!(state["models"][1]["target"], targets[1]);
     let edited = send(
         client,
         url,
@@ -849,6 +912,11 @@ async fn qualify_created_rig(
     std::fs::rename(
         root.join("presets/working-native"),
         root.join("drafts-hidden-for-offline-test"),
+    )
+    .unwrap();
+    std::fs::rename(
+        root.join("presets/audition-models"),
+        root.join("models-hidden-for-created-recall"),
     )
     .unwrap();
     let reopened = send(

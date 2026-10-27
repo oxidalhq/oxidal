@@ -397,11 +397,17 @@ export interface StartAudio {
   stream: StreamConfig;
 }
 /**
- * Immutable verified asset assigned to an existing native block.
+ * Immutable verified asset assigned to a native block. Insert position is issued
+ * by the playback owner, preserving replay order from the immutable working base.
  */
 export interface ModelAssignment {
   asset: string;
+  insertion?: SlotPosition | null;
   target: string;
+}
+export interface SlotPosition {
+  index: number;
+  lane: number;
 }
 export interface AudioDevices {
   backend_available: boolean;
@@ -454,6 +460,7 @@ export interface AudioState {
    */
   saved_copy?: string | null;
   session: string;
+  slots?: NativeSlot[];
   /**
    * Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
    */
@@ -477,6 +484,10 @@ export interface ModelProgress {
    * Start-command serial within the audio session; rejects cancellation of a newer selection.
    */
   request: number;
+}
+export interface NativeSlot {
+  position: SlotPosition;
+  target: string;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.

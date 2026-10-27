@@ -10,7 +10,7 @@ use axum::{
 use oxidal_audio::lifecycle::{
     AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, ModelAssignment,
     ModelOperation, ModelPhase, ModelRequest, PlaybackEvent, PlaybackStart, SavePlayback,
-    StartAudio, valid_controls, valid_models, valid_preset_name,
+    StartAudio, valid_controls, valid_models, valid_preset_name, valid_slots,
 };
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
@@ -113,6 +113,7 @@ impl Owner {
         self.state.phase = phase;
         if phase != AudioPhase::Running {
             self.state.controls.clear();
+            self.state.slots.clear();
             self.state.modified = false;
             self.state.saved_copy = None;
             self.state.model_change = None;
@@ -271,15 +272,21 @@ impl Owner {
             let PlaybackEvent::Ready {
                 preset_name,
                 controls,
+                slots,
             } = event
             else {
                 return Err("Expected native readiness".into());
             };
-            if preset_name.is_empty() || preset_name.len() > 1024 || !valid_controls(&controls) {
+            if preset_name.is_empty()
+                || preset_name.len() > 1024
+                || !valid_controls(&controls)
+                || !valid_slots(&slots)
+            {
                 return Err("Invalid native controls".into());
             }
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
+            self.state.slots = slots;
             self.state.modified = self.state.configured.as_ref().is_some_and(|s| s.draft)
                 || self.resume_controls.is_some()
                 || !self.state.models.is_empty();
@@ -424,9 +431,11 @@ impl Owner {
                     serial: actual,
                     controls,
                     progress,
+                    slots,
                     ..
                 } if *actual == serial
                     && valid_controls(controls)
+                    && valid_slots(slots)
                     && progress.as_ref().is_none_or(|p| {
                         p.assignment.valid() && p.error.as_ref().is_none_or(|s| s.len() <= 1024)
                     }) =>
@@ -463,6 +472,7 @@ impl Owner {
         let PlaybackEvent::Model {
             progress,
             controls,
+            slots,
             error,
             ..
         } = event
@@ -487,10 +497,18 @@ impl Owner {
             if let Some(p) = &progress
                 && p.phase == ModelPhase::Applied
             {
-                self.state
+                // Preserve insertion chronology: later slots depend on earlier fills.
+                if let Some(previous) = self
+                    .state
                     .models
-                    .retain(|m| m.target != p.assignment.target);
-                self.state.models.push(p.assignment.clone());
+                    .iter_mut()
+                    .find(|m| m.target == p.assignment.target)
+                {
+                    *previous = p.assignment.clone();
+                } else {
+                    self.state.models.push(p.assignment.clone());
+                }
+                self.state.slots = slots;
                 self.state.controls = controls.clone();
                 self.resume_controls = Some(controls);
                 self.state.modified = true;
@@ -760,7 +778,7 @@ impl Owner {
         let result = match command.action {
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
             // A failed export must not mark the independently running audio failed.
-            AudioAction::ReplaceModel { assignment } => {
+            AudioAction::ReplaceModel { mut assignment } => {
                 if self.state.phase != AudioPhase::Running
                     || !assignment.valid()
                     || self.model_pending()
@@ -768,9 +786,27 @@ impl Owner {
                     return Err("Start audio and finish or cancel the pending model first".into());
                 }
                 let target = format!("block:{}:enabled", assignment.target);
-                if !self.state.controls.iter().any(|c| c.target == target) {
-                    return Err("Select an existing sounding tone block".into());
+                let insertion = if self.state.controls.iter().any(|c| c.target == target) {
+                    self.state
+                        .models
+                        .iter()
+                        .find(|m| m.target == assignment.target)
+                        .and_then(|m| m.insertion.clone())
+                } else {
+                    Some(
+                        self.state
+                            .slots
+                            .iter()
+                            .find(|s| s.target == assignment.target)
+                            .ok_or("Select an existing sounding block or current insertion slot")?
+                            .position
+                            .clone(),
+                    )
+                };
+                if assignment.insertion.is_some() && assignment.insertion != insertion {
+                    return Err("Insertion position changed; refresh the sounding chain".into());
                 }
+                assignment.insertion = insertion;
                 return self
                     .model_command(ModelOperation::Prepare { assignment })
                     .await;
@@ -938,6 +974,7 @@ impl Playback {
                 .map(|r| r.models.clone())
                 .unwrap_or_default(),
             model_change: None,
+            slots: vec![],
             phase: if config.audio_worker.is_some() {
                 AudioPhase::Stopped
             } else {

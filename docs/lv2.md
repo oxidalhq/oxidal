@@ -103,8 +103,9 @@ keeps the adjustment, and Cancel restores its opening value. Save preset stores 
 copy without interrupting processing. Saved rigs can be recalled after a browser reload.
 The Rig view shows these actual controls and the measured resource strip.
 
-Structural additions are currently made while stopped. Live node insertion, removal and
-reordering, native NAM/IR creation, mixed graphs and TONE3000 export remain unfinished.
+LV2 structural additions are currently made while stopped. Live LV2 node insertion, removal
+and reordering, mixed graphs and TONE3000 export remain unfinished. Native New preset and
+NAM insertion use the separate playback path described in [audio lifecycle](audio.md).
 The native preset audition path remains separately available; the UI prevents both workers
 from acquiring the audio device at once. No switch between these workers is gapless.
 

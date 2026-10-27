@@ -13,10 +13,12 @@ import {
 /** Selection is tied to the opening audio revision. Closing a download never applies it. */
 export function ModelPicker({
   name,
+  intent = 'replace',
   onClose,
   onAudition,
 }: {
   name: string;
+  intent?: 'add' | 'replace';
   onClose: () => void;
   onAudition: (asset: string) => Promise<void>;
 }) {
@@ -101,7 +103,9 @@ export function ModelPicker({
   return (
     <AdjustmentDialog title="Choose NAM" onCancel={close}>
       <div className="space-y-3">
-        <p className="truncate text-sm text-muted-foreground">Replace {name}</p>
+        <p className="truncate text-sm text-muted-foreground">
+          {intent === 'add' ? 'Add to' : 'Replace'} {name}
+        </p>
         {!tone ? (
           <>
             <label className="field">

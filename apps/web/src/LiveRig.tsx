@@ -30,6 +30,7 @@ export function LiveRig({
     target: string;
     name: string;
     opening: AudioState;
+    insert?: boolean;
   } | null>(null);
   const [target, setTarget] = useState('outputLevel');
   const [draft, setDraft] = useState<{
@@ -318,6 +319,7 @@ export function LiveRig({
               {c.label.replace(/ · enabled$/, '')}
             </Button>
             {state.configured &&
+              !state.configured.draft &&
               !state.models?.some(
                 (m) => m.target === c.target.slice(6, -8),
               ) && (
@@ -355,9 +357,27 @@ export function LiveRig({
           </div>
         ))}
       </div>
+      {state.slots?.some((s) => s.position.lane === 0) && (
+        <Button
+          variant="outline"
+          disabled={disabled || !!draft}
+          onClick={() => {
+            const slot = state.slots!.find((s) => s.position.lane === 0)!;
+            setPicker({
+              target: slot.target,
+              name: `slot ${slot.position.index + 1}`,
+              opening: state,
+              insert: true,
+            });
+          }}
+        >
+          Add NAM
+        </Button>
+      )}
       {picker && (
         <ModelPicker
           name={picker.name}
+          intent={picker.insert ? 'add' : 'replace'}
           onClose={() => setPicker(null)}
           onAudition={async (asset) => {
             generation.current += 1;

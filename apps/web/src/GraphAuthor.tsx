@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { ControlEditor } from './ControlEditor';
+import { ModelPicker } from './ModelPicker';
 import {
   graphAudioState,
   graphAudioCommand,
   graphLibrary,
   installedLv2,
   playbackState,
+  playbackCommand,
   type GraphAudioState,
   type GraphAudioAction,
   type GraphSettings,
@@ -30,10 +32,12 @@ export function GraphAuthor({
   connected,
   liveOnly = false,
   onPlaying,
+  onOpenRig,
 }: {
   connected: boolean;
   liveOnly?: boolean;
   onPlaying?: (name: string | null) => void;
+  onOpenRig?: () => void;
 }) {
   const [state, setState] = useState<GraphAudioState | null>(null);
   const [audio, setAudio] = useState<AudioState | null>(null);
@@ -51,6 +55,8 @@ export function GraphAuthor({
     'New rig';
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
+  const [namPicker, setNamPicker] = useState(false);
+  const newNative = useRef<AudioState | null>(null);
   const [query, setQuery] = useState('');
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -189,6 +195,49 @@ export function GraphAuthor({
     });
     setPicker(false);
   }
+  async function addNam(asset: string) {
+    if (!stream || draft.bindings.length || running)
+      throw new Error('Choose an empty rig and audio device first');
+    setBusy(true);
+    generation.current += 1;
+    try {
+      let next = await playbackState();
+      if (
+        newNative.current &&
+        next.session === newNative.current.session &&
+        next.configured?.preset_id ===
+          newNative.current.configured?.preset_id &&
+        next.phase === 'running'
+      ) {
+        // Retry an assignment failure against the same created working rig.
+      } else {
+        if (next.device_owned)
+          throw new Error(
+            'Stop the current audio session before creating another rig',
+          );
+        next = await playbackCommand(next, {
+          kind: 'create',
+          stream,
+          name: name.trim(),
+        });
+        newNative.current = next;
+      }
+      const slot = next.slots?.find((s) => s.position.lane === 0);
+      if (!slot)
+        throw new Error('No insertion slot available in this working rig');
+      const updated = await playbackCommand(next, {
+        kind: 'replace_model',
+        assignment: { target: slot.target, asset },
+      });
+      if (alive.current) {
+        setAudio(updated);
+        setNamPicker(false);
+        onOpenRig?.();
+      }
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
   async function send(
     action: Action,
     revision: number | null,
@@ -273,10 +322,10 @@ export function GraphAuthor({
           </label>
           <div className="action-row">
             <Button
-              disabled={disabled}
+              disabled={!connected || busy || (!state && !audio)}
               onClick={() => {
                 setPicker(true);
-                void loadCatalog();
+                if (state?.phase !== 'unavailable') void loadCatalog();
               }}
             >
               Add effect
@@ -293,8 +342,8 @@ export function GraphAuthor({
             </Button>
           </div>
           <p className="caption">
-            Installed LV2 effects. NAM and mixed-chain creation are still being
-            connected.
+            Add a NAM model or installed effects. Mixing native NAM with LV2 is
+            still being connected.
           </p>
         </>
       )}
@@ -480,6 +529,14 @@ export function GraphAuthor({
           </div>
         </div>
       )}
+      {namPicker && (
+        <ModelPicker
+          name={name}
+          intent="add"
+          onClose={() => setNamPicker(false)}
+          onAudition={addNam}
+        />
+      )}
       {picker && (
         <AdjustmentDialog
           title="Add effect"
@@ -489,6 +546,34 @@ export function GraphAuthor({
           }}
         >
           <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              disabled={
+                !stream ||
+                audio?.phase === 'unavailable' ||
+                audio?.device_owned ||
+                !!draft.bindings.length ||
+                !name.trim()
+              }
+              onClick={() => {
+                setPicker(false);
+                scan.current?.abort();
+                setNamPicker(true);
+              }}
+            >
+              NAM model
+            </Button>
+            {!!draft.bindings.length && (
+              <p className="caption">
+                Mixed NAM/LV2 routing is not available yet.
+              </p>
+            )}
+            {!stream && (
+              <p className="caption">
+                Choose an audio device in Audio setup first.
+              </p>
+            )}
             <label className="field">
               Search effects
               <input value={query} onChange={(e) => setQuery(e.target.value)} />
