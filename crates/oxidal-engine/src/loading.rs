@@ -6,7 +6,6 @@ use oxidal_presets::{
     manifest::{Lv2Instance, NodeKind, ProcessingRole, Tails},
 };
 use oxidal_tone3000::{Engine, InputMode};
-use std::collections::BTreeMap;
 
 use crate::native_profile_id;
 impl PreparedPorts {
@@ -65,7 +64,7 @@ impl PreparedPorts {
             if native.profile != profile {
                 return Err("Unsupported native preset profile".into());
             }
-            if native.role() != ProcessingRole::Whole {
+            if native.role() != ProcessingRole::Whole && native.partition.is_none() {
                 return Err("Extracted stages require paired state restoration".into());
             }
         }
@@ -102,8 +101,11 @@ impl PreparedPorts {
                 _ => {}
             }
         }
-        let mut processors = BTreeMap::new();
+        let mut processors = crate::partition::prepare(bundle, rate, frames)?;
         for native in &manifest.tone3000.instances {
+            if native.partition.is_some() {
+                continue;
+            }
             let mut engine = Engine::new(rate, frames).map_err(|e| e.to_string())?;
             engine
                 .load_preset(

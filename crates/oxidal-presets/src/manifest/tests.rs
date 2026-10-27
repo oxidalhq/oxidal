@@ -208,3 +208,45 @@ fn resource_budget_and_exclusive_lv2_ownership_are_checked_without_allocating_as
             .contains("Unused processing")
     );
 }
+
+#[test]
+fn partition_peers_bind_source_roles_recipe_and_complete_graph_ownership() {
+    let mut value = fixture("mixed-delay");
+    value["resources"].as_array_mut().unwrap().pop();
+    value["oxidal"]["lv2"] = json!([]);
+    let mut amp = value["tone3000"]["instances"][0].clone();
+    amp["id"] = json!("amp");
+    amp["processingRole"] = json!("amp");
+    amp["partition"] = json!({"version":1,"pair":"pair","amp":"sourceAmp","cab":"sourceCab","input":"left","controls":{}});
+    let mut cab = amp.clone();
+    cab["id"] = json!("cab");
+    cab["processingRole"] = json!("cab");
+    value["tone3000"]["instances"] = json!([amp, cab]);
+    value["oxidal"]["graph"] = json!({"nodes":[
+        {"id":"in","kind":"input","audioInputs":0,"audioOutputs":1},
+        {"id":"amp","kind":"tone3000","audioInputs":1,"audioOutputs":1,"instance":"amp","bypassed":false},
+        {"id":"cab","kind":"tone3000","audioInputs":1,"audioOutputs":1,"instance":"cab","bypassed":false},
+        {"id":"out","kind":"output","audioInputs":1,"audioOutputs":0}],
+        "edges":[{"from":{"node":"in","port":0},"to":{"node":"amp","port":0}},
+            {"from":{"node":"amp","port":0},"to":{"node":"cab","port":0}},
+            {"from":{"node":"cab","port":0},"to":{"node":"out","port":0}}]});
+    parse(&value).unwrap();
+    for (path, replacement) in [
+        ("/tone3000/instances/1/processingRole", json!("amp")),
+        ("/tone3000/instances/1/profile", json!("other")),
+        ("/tone3000/instances/1/partition/input", json!("right")),
+        ("/tone3000/instances/1/partition/amp", json!("different")),
+        ("/tone3000/instances/1/partition/cab", json!("sourceAmp")),
+        ("/tone3000/instances/1/partition/pair", json!("missing")),
+        (
+            "/tone3000/instances/0/partition/controls",
+            json!({"outputLevel":1.1}),
+        ),
+    ] {
+        let mut invalid = value.clone();
+        *invalid.pointer_mut(path).unwrap() = replacement;
+        assert!(parse(&invalid).is_err(), "Accepted {path}");
+    }
+    let encoded = parse(&value).unwrap().encode().unwrap();
+    assert_eq!(parse(&value).unwrap(), Manifest::parse(&encoded).unwrap());
+}

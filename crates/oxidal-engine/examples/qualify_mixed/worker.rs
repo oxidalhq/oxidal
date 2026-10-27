@@ -108,6 +108,115 @@ fn compare(a: &Snapshot, b: &Snapshot) {
         );
     }
 }
+fn replies(
+    child: &mut ChildGuard,
+) -> Result<mpsc::Receiver<std::result::Result<WorkerReply, String>>> {
+    let output = child.0.stdout.take().ok_or("missing stdout")?;
+    let (send_reply, received) = mpsc::sync_channel(2);
+    std::thread::spawn(move || {
+        let mut output = std::io::BufReader::new(output);
+        loop {
+            let mut bytes = Vec::new();
+            let result = (&mut output)
+                .take((REPLY_LIMIT + 1) as u64)
+                .read_until(b'\n', &mut bytes);
+            if result.is_err() || bytes.is_empty() || bytes.len() > REPLY_LIMIT {
+                break;
+            }
+            let parsed = serde_json::from_slice::<WorkerReply>(&bytes).map_err(|e| e.to_string());
+            if send_reply.send(parsed).is_err() {
+                break;
+            }
+        }
+    });
+    Ok(received)
+}
+
+pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
+    let path = root.join("partition-worker-rigs");
+    let store = BundleStore::new(path.clone());
+    let revision = store.save(bundle)?;
+    let start = StartRig {
+        revision: revision.clone(),
+        stream: stream(),
+        recall: None,
+    };
+    let mut child = spawn(&path, &root.join("partition-child"), false)?;
+    let received = replies(&mut child)?;
+    send(&mut child, &start)?;
+    let state = received.recv_timeout(Duration::from_secs(30))??;
+    assert!(state.error.is_none() && state.processed_frames > 0);
+    send(
+        &mut child,
+        &WorkerRequest::Control {
+            command: ControlCommand {
+                session: state.control.session.clone(),
+                expected_revision: state.control.revision,
+                target: Target::Native {
+                    node: "amp".into(),
+                    parameter: "inputLevel".into(),
+                },
+                value: 0.56,
+            },
+        },
+    )?;
+    let changed = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(changed.error.is_none());
+    let mut saver = spawn(&path, &root.join("partition-export"), true)?;
+    send(
+        &mut saver,
+        &SaveRequest {
+            settings: start,
+            recall: changed.control.recall(),
+            name: "Worker partition copy".into(),
+        },
+    )?;
+    saver.0.stdin.take();
+    wait(&mut saver, 60)?;
+    let mut bytes = Vec::new();
+    saver
+        .0
+        .stdout
+        .take()
+        .unwrap()
+        .take(1024)
+        .read_to_end(&mut bytes)?;
+    let saved: String = serde_json::from_slice(&bytes)?;
+    send(&mut child, &WorkerRequest::Status)?;
+    let after = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(after.processed_frames > changed.processed_frames);
+    compare(&changed.control, &after.control);
+    child.0.stdin.take();
+    wait(&mut child, 5)?;
+    assert_eq!(
+        store.read(&saved)?.resource("source"),
+        bundle.resource("source")
+    );
+    assert_eq!(
+        store.read(&revision)?.manifest_bytes(),
+        bundle.manifest_bytes()
+    );
+    let mut recalled = spawn(&path, &root.join("partition-recall"), false)?;
+    let received = replies(&mut recalled)?;
+    send(
+        &mut recalled,
+        &StartRig {
+            revision: saved,
+            stream: stream(),
+            recall: None,
+        },
+    )?;
+    let state = received.recv_timeout(Duration::from_secs(30))??;
+    assert!(state.error.is_none() && state.processed_frames > 0);
+    compare(&changed.control, &state.control);
+    recalled.0.stdin.take();
+    wait(&mut recalled, 5)?;
+    println!(
+        "partition actual worker, continued PCM during isolated Save, immutable source and fresh child recall pass"
+    );
+    Ok(())
+}
+
 pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     let bypass = Target::Bypass {
         node: "tone".into(),
@@ -173,24 +282,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         recall: None,
     };
     let mut child = spawn(&store_path, &root.join("rig-child"), false)?;
-    let output = child.0.stdout.take().ok_or("missing stdout")?;
-    let (send_reply, received) = mpsc::sync_channel(2);
-    std::thread::spawn(move || {
-        let mut output = std::io::BufReader::new(output);
-        loop {
-            let mut bytes = Vec::new();
-            let result = (&mut output)
-                .take((REPLY_LIMIT + 1) as u64)
-                .read_until(b'\n', &mut bytes);
-            if result.is_err() || bytes.is_empty() || bytes.len() > REPLY_LIMIT {
-                break;
-            }
-            let parsed = serde_json::from_slice::<WorkerReply>(&bytes).map_err(|e| e.to_string());
-            if send_reply.send(parsed).is_err() {
-                break;
-            }
-        }
-    });
+    let received = replies(&mut child)?;
     send(&mut child, &start)?;
     let mut state = received.recv_timeout(Duration::from_secs(30))??;
     assert!(state.error.is_none() && state.processed_frames > 0);

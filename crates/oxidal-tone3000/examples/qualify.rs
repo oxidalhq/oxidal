@@ -941,6 +941,14 @@ fn qualify_factories() -> Result<(), Box<dyn Error>> {
                 .unwrap();
             qualify_split(&mut engine, amp, cab)?;
             qualify_split_rendered(&mut engine, amp, cab)?;
+            // Persist the authored embedded source for the maintained mixed
+            // qualifier. The fixture is private generated data, not bundled weights.
+            let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
+            std::fs::write(
+                root.join("split-source.t3kpreset"),
+                engine.save_preset("Partition source")?,
+            )?;
+
             split_count += 1;
         }
     }

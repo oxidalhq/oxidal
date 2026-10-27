@@ -91,6 +91,21 @@ impl Manifest {
                 id(&native.id) && id(&native.preset) && text(&native.profile, 128),
                 "Invalid native instance declaration",
             )?;
+            if let Some(partition) = &native.partition {
+                let target = |value: &str, limit| {
+                    text(value, limit) && value.bytes().all(|b| b.is_ascii_graphic())
+                };
+                require(
+                    partition.version == 1
+                        && id(&partition.pair)
+                        && target(&partition.amp, 128)
+                        && target(&partition.cab, 128)
+                        && partition.controls.iter().all(|(key, value)| {
+                            target(key, 192) && value.is_finite() && (0.0..=1.0).contains(value)
+                        }),
+                    "Invalid native partition recipe",
+                )?;
+            }
             if let Some(origin) = &native.origin {
                 require(
                     id(&origin.resource)
@@ -206,6 +221,33 @@ impl Manifest {
             self.tone3000.instances.iter().map(|n| (n.id.as_str(), n)),
             "Duplicate native instance",
         )?;
+        let mut pairs: BTreeMap<&str, Vec<&NativeInstance>> = BTreeMap::new();
+        for n in native.values() {
+            if let Some(p) = &n.partition {
+                require(
+                    n.role() != ProcessingRole::Whole && p.amp != p.cab,
+                    "Partition needs an extracted role and distinct blocks",
+                )?;
+                pairs.entry(&p.pair).or_default().push(n);
+            }
+        }
+        for pair in pairs.values() {
+            require(
+                pair.len() == 2,
+                "Partition needs exactly one amp and one cab",
+            )?;
+            let (a, b) = (pair[0], pair[1]);
+            let (x, y) = (a.partition.as_ref().unwrap(), b.partition.as_ref().unwrap());
+            require(
+                a.role() != b.role()
+                    && a.preset == b.preset
+                    && a.profile == b.profile
+                    && x.amp == y.amp
+                    && x.cab == y.cab
+                    && x.input == y.input,
+                "Partition pair declarations disagree",
+            )?;
+        }
         let mut used_resources = BTreeSet::new();
         for n in native.values() {
             reference(

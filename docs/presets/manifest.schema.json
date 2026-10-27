@@ -150,6 +150,9 @@
         },
         "processingRole": {
           "enum": ["whole", "amp", "cab"]
+        },
+        "partition": {
+          "$ref": "#/$defs/nativePartition"
         }
       },
       "required": ["id", "preset", "profile"],
@@ -466,6 +469,41 @@
         }
       },
       "required": ["id", "path", "kind", "sha256", "bytes"],
+      "additionalProperties": false
+    },
+    "nativePartition": {
+      "type": "object",
+      "properties": {
+        "pair": {
+          "$ref": "#/$defs/localId"
+        },
+        "amp": {
+          "type": "string",
+          "pattern": "^[!-~]{1,128}$"
+        },
+        "cab": {
+          "type": "string",
+          "pattern": "^[!-~]{1,128}$"
+        },
+        "input": {
+          "enum": ["left", "right"]
+        },
+        "controls": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[!-~]{1,192}$"
+          },
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": ["version", "pair", "amp", "cab", "input", "controls"],
       "additionalProperties": false
     }
   }

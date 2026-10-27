@@ -127,12 +127,40 @@ pub struct NativeInstance {
         skip_serializing_if = "Option::is_none"
     )]
     pub processing_role: Option<ProcessingRole>,
+    #[serde(
+        default,
+        deserialize_with = "optional",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub partition: Option<NativePartition>,
 }
 impl NativeInstance {
     pub fn role(&self) -> ProcessingRole {
         self.processing_role.unwrap_or(ProcessingRole::Whole)
     }
 }
+/// Reproducible guarded derivation from the exact source preset, never imported
+/// opaque JUCE bytes. Both roles share a pair/recipe; scalar overrides are local.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableNativePartition")]
+pub struct NativePartition {
+    #[serde(deserialize_with = "integer")]
+    pub version: u32,
+    pub pair: String,
+    pub amp: String,
+    pub cab: String,
+    pub input: PartitionInput,
+    pub controls: BTreeMap<String, f64>,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(rename = "PortablePartitionInput")]
+pub enum PartitionInput {
+    Left,
+    Right,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 #[schemars(rename = "PortableProcessingRole")]

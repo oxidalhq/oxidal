@@ -3587,6 +3587,16 @@
             }
           ]
         },
+        "partition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortableNativePartition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "preset": {
           "type": "string"
         },
@@ -3624,6 +3634,45 @@
       "additionalProperties": false,
       "required": [
         "instances"
+      ]
+    },
+    "PortableNativePartition": {
+      "description": "Reproducible guarded derivation from the exact source preset, never imported\nopaque JUCE bytes. Both roles share a pair/recipe; scalar overrides are local.",
+      "type": "object",
+      "properties": {
+        "amp": {
+          "type": "string"
+        },
+        "cab": {
+          "type": "string"
+        },
+        "controls": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "input": {
+          "$ref": "#/$defs/PortablePartitionInput"
+        },
+        "pair": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "pair",
+        "amp",
+        "cab",
+        "input",
+        "controls"
       ]
     },
     "PortableNode": {
@@ -3705,6 +3754,13 @@
       "additionalProperties": false,
       "required": [
         "resource"
+      ]
+    },
+    "PortablePartitionInput": {
+      "type": "string",
+      "enum": [
+        "left",
+        "right"
       ]
     },
     "PortableProcessingRole": {

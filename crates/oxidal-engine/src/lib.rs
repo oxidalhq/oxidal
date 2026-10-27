@@ -12,6 +12,8 @@ pub use ports::PreparedPorts;
 
 #[cfg(feature = "native")]
 mod loading;
+#[cfg(feature = "native")]
+mod partition;
 
 pub mod protocol;
 #[cfg(feature = "native")]

@@ -1,4 +1,6 @@
 //! Actual native A2 + installed LV2 composition, part of the Linux native gate.
+#[path = "qualify_mixed/partition.rs"]
+mod partition;
 #[path = "qualify_mixed/portable.rs"]
 mod portable;
 #[path = "qualify_mixed/worker.rs"]
@@ -64,6 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
     qualify_admission_and_failure(&world)?;
+    partition::qualify(&world, Path::new(&root))?;
     portable::qualify(&world, &bytes, Path::new(&root))?;
     let frames = 128;
     let mut fx = Plugin::new(

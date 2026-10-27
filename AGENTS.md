@@ -36,5 +36,10 @@ The browser exposes confirmed mixed controls and isolated Save/recall with actua
 XR, Fold and BOOX regression checks. The serial composer combines saved native tones and scalar LV2 effects with explicit mono routing. Mixed Audio settings retain confirmed controls through rate/buffer changes and restore the previous configuration if preparation fails.
 Confirmed mixed scalar sessions are checkpointed for explicit Resume after daemon restart; storage failures are reported without stopping audio. A shared explicit boot choice restores one confirmed native, mixed or scalar-LV2 session, with native model assignments and scalar edits. Effects Audio settings preserve confirmed controls/routing/mappings through Apply and rollback.
 Live structural replacement, complete native controls,
-extracted-stage persistence, opaque LV2 state, prepared replacement and gapless/physical
+browser split conversion, opaque LV2 state, prepared replacement and gapless/physical
 acceptance remain open.
+
+The portable mixed loader restores versioned guarded amp/cab derivation recipes at
+48 kHz from exact source preset bytes. Stage-local scalar Save preserves that source
+and verifies fresh derivation. See docs/mixed-engine.md for scope; browser split
+conversion, unsaved whole-rig conversion and non-48-kHz stage processing remain open.

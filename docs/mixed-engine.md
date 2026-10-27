@@ -34,7 +34,7 @@ executor below has separate admission and delay alignment):
 
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
-  payloads and roles, routing, LV2 declarations and opaque resources. The portable loader and browser restore the qualified whole-native/scalar-LV2 subset.
+  payloads and roles, routing, LV2 declarations and opaque resources. The browser composes whole-native/scalar-LV2 rigs; the portable loader also restores the guarded paired-stage subset described below.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
   audible discontinuity and is not a gapless switch.
@@ -75,8 +75,8 @@ mono LV2 branches, removes its temporary input file, reopens the complete bundle
 and compares weighted parallel rendering with separate reference processors.
 It also exercises bypass, invalid-input recovery, resource-budget rejection,
 unsupported Preserve policy and 162-node explicit routing with overload latching.
-The current qualified DSP scope is whole native plus scalar-only LV2; portable
-opaque LV2 state/assets, required-feature admission, mono native stage restoration,
+The current qualified DSP scope is whole native or guarded paired amp/cab plus scalar-only LV2; portable
+opaque LV2 state/assets, required-feature admission, one-port native stage layouts,
 general latency-reporting LV2 support and live prepared replacement still need integration.
 
 The older saved-render comparison retains its 400-block prewarm window because
@@ -136,7 +136,7 @@ Native mono chains perform their own fold, while native stereo chains retain the
 two lanes. The loader does not silently inherit the native Left input default.
 
 The maintained mixed qualification now uses this loader to reopen the persisted
-fixture. It rejects mismatched profiles, extracted roles and unsupported installed
+fixture. It rejects mismatched profiles, extracted roles without a qualified recipe and unsupported installed
 plugin declarations before playback. Loading, readiness waits and plugin discovery
 remain owner-thread preparation operations, never concurrent with the same plugin
 library's running callback. This is not live replacement or gapless switching.
@@ -371,3 +371,24 @@ intact, native disable cannot clear a mixed selection, captured edits restore af
 daemon restart, exactly one worker owns audio, and disabling returns startup to
 metadata-only recovery. Browser tests exercise the shared control on XR, Fold and
 BOOX layouts. Physical boot/audio acceptance and opaque plugin state remain open.
+
+## Persistent paired amp/cab derivation
+
+An extracted native instance can carry the version-1 `partition` recipe in the
+[preset format](presets/format.md#native-processing-roles). Two declared roles share
+one exact source preset; restoration reruns the guarded native partition rather
+than decoding imported opaque instance bytes. The amp omits the final DC blocker,
+and the cab applies it once. Input selection and per-stage scalar catalogs are
+explicit. Sources and embedded assets stay unchanged through scalar Save.
+
+The mixed qualifier compares the reopened pair with whole-native rendering for
+left and right input at 48 kHz, and separately checks actual LV2 gain between the
+stages, live input/output edits, isolated Save and fresh recall. Unknown/incomplete
+controls, wrong-stage controls, invalid pair declarations and other sample rates
+are rejected. This extends the existing native suite; generated private fixtures
+contain the model assets and are not committed.
+
+This is not browser conversion or live structural replacement. The source is a
+saved preset, not arbitrary unsaved native machine state. Pitch remains internal
+to the amp. General cab formats, opaque LV2 state, non-48-kHz split stages,
+prepared switching, trails and physical timing remain unqualified.

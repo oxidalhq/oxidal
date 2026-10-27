@@ -312,6 +312,7 @@ export type Target =
 export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge";
 export type PortableTails = "cut" | "preserve";
 export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
+export type PortablePartitionInput = "left" | "right";
 export type PortableProcessingRole = "whole" | "amp" | "cab";
 export type ResourceSource =
   | {
@@ -1142,6 +1143,7 @@ export interface PortableNativeInstances {
 export interface PortableNativeInstance {
   id: string;
   origin?: PortableOrigin | null;
+  partition?: PortableNativePartition | null;
   preset: string;
   processingRole?: PortableProcessingRole | null;
   profile: string;
@@ -1149,6 +1151,20 @@ export interface PortableNativeInstance {
 export interface PortableOrigin {
   resource: string;
   sourcePresetId?: string | null;
+}
+/**
+ * Reproducible guarded derivation from the exact source preset, never imported
+ * opaque JUCE bytes. Both roles share a pair/recipe; scalar overrides are local.
+ */
+export interface PortableNativePartition {
+  amp: string;
+  cab: string;
+  controls: {
+    [k: string]: number;
+  };
+  input: PortablePartitionInput;
+  pair: string;
+  version: number;
 }
 export interface RigPage {
   native_profile: string;

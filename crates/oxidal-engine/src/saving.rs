@@ -100,6 +100,12 @@ pub fn save_revision(
         let Some(Processor::Native(engine)) = session.graph.processor_mut(&node.id) else {
             return Err("Missing native processor".into());
         };
+        if native.partition.is_some() {
+            // Preserve exact source bytes; standalone .t3kpreset serialization
+            // would discard host roles and instance-only input/control allocation.
+            crate::partition::capture(native, engine)?;
+            continue;
+        }
         let expected = engine.live_controls().map_err(|e| e.to_string())?;
         let bytes = engine
             .save_preset(&request.name)
@@ -155,6 +161,25 @@ pub fn save_revision(
     resources.retain(|id, _| manifest.resources.iter().any(|r| &r.id == id));
     let bundle = Bundle::from_parts(manifest.encode().map_err(|e| e.to_string())?, resources)
         .map_err(|e| e.to_string())?;
+    // A saved partition must survive fresh derivation, not merely serialization.
+    if bundle
+        .manifest()
+        .tone3000
+        .instances
+        .iter()
+        .any(|n| n.partition.is_some())
+    {
+        let reopened = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?.snapshot();
+        if reopened.controls.len() != confirmed.controls.len()
+            || confirmed.controls.iter().any(|c| {
+                !reopened.controls.iter().any(|actual| {
+                    actual.target == c.target && (actual.value - c.value).abs() < 1e-5
+                })
+            })
+        {
+            return Err("Saved partition controls did not survive fresh recall".into());
+        }
+    }
     store.save(&bundle).map_err(|e| e.to_string())
 }
 fn append(

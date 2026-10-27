@@ -100,9 +100,10 @@ would therefore resample twice. A rendered 44.1 kHz comparison exposed this mism
 A shared graph boundary is required before admitting other split-stage rates.
 Whole-preset playback retains its existing rate support.
 
-This API is control-thread preparation only. There is no browser hybrid conversion
-or connected native/LV2 playback worker yet. The [mixed graph core](mixed-engine.md)
-prepares both backend types but has no streaming handoff or browser lifecycle. Preparing processors waits for model loads; it is not
+This API is control-thread preparation only. The [mixed worker](mixed-engine.md)
+now restores paired derivation recipes and scalar Save/recall at 48 kHz. Whole-native
+and LV2 composition have a browser lifecycle; browser split conversion and live
+structural replacement remain open. Preparing processors waits for model loads; it is not
 a streaming callback operation or a latency, real-time or gapless claim.
 Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).
 

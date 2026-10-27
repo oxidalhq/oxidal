@@ -68,7 +68,7 @@ Top-level metadata is intentionally small. Accounts, credentials, machine paths,
 
 ### Native tone state and provenance
 
-The current native payload is the sole persistent authority for that TONE3000 instance. Browser projections and sliders are views, not a second tone store. A save MUST wait for confirmed backend changes and native serialization of that same committed revision; do not pair newer displayed controls with stale bytes. Assets embedded by upstream remain embedded. Do not copy factory/capture weights into the source repository to satisfy examples.
+For a whole-role instance, the current native payload is its persistent tone authority. Extracted roles use the explicit source-and-derivation contract below. Browser projections and sliders are views, not a second tone store. A save MUST wait for confirmed backend changes and native serialization of that same committed revision; do not pair newer displayed controls with stale bytes. Assets embedded by upstream remain embedded. Do not copy factory/capture weights into the source repository to satisfy examples.
 
 For an unedited import, retain the original payload byte-for-byte. Once edited, store the current native payload separately from immutable `origin.resource`. Preserve unknown native bytes on no-op saves. If a selected backend would discard unknown native fields during editing, reject the incompatible edit or provide a proven preservation path; do not silently claim full fidelity. Unknown/unsupported native formats may be retained for recovery but MUST NOT be applied or declared exportable merely because their hashes match.
 
@@ -85,6 +85,31 @@ amp-head/cab split: verify state, control allocation and assets before preparati
 Do not relabel a combined capture. Current paired-stage processing requires 48 kHz;
 other rates require a shared resampling boundary and must be rejected until supported.
 An extracted role is never directly TONE3000-export eligible.
+
+The optional `partition` records a guarded, versioned derivation rather than raw
+imported JUCE state: `{version: 1, pair, amp, cab, input, controls}`. `pair` identifies
+exactly one amp instance and one cab instance, with the same source preset, profile,
+source block IDs and `left`/`right` input selection. A role without this recipe
+remains an unsupported declaration at runtime. Whole-role instances cannot carry it.
+Version 1 keeps native pitch in the amp; it does not claim external pitch support.
+
+The loader reopens the exact verified source `.t3kpreset` and reruns the existing
+classification, embedded-asset, mono-routing and processing guards on every recall.
+It derives instance states on the native owner; no arbitrary serialized JUCE state
+crosses the import boundary. The source preserves preset-scope settings; input
+selection is explicit, and other machine-scoped settings use the isolated backend
+profile defaults. Converting an unsaved live whole rig with additional machine
+settings is not implemented and must not silently discard those settings.
+
+`controls` is either empty (the derived defaults) or the complete confirmed,
+normalized scalar catalog of that stage. Unknown/incomplete catalogs and inexact
+toggles fail preparation. Only allocated global controls are exposed: input/gate
+on the amp and output/tone stack on the cab, alongside their respective block
+controls. Saving stage edits updates this host derivation state while preserving
+the source bytes, assets and unknown fields exactly. A fresh derivation/readback
+must match before publishing the new revision. No standalone native export is
+allowed for these host roles. Changing source blocks/assets or splitting live
+whole-native state still needs an explicit authoring transaction.
 
 The format permits no native instances and no resources for an LV2-only scalar
 rig, with the explicit host graph and installed plugin declarations still required.

@@ -144,7 +144,7 @@
       {
         "op": "add",
         "path": "/name",
-        "value": "音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音"
+        "value": "\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3"
       }
     ]
   },
@@ -157,7 +157,7 @@
       {
         "op": "add",
         "path": "/name",
-        "value": "音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音音"
+        "value": "\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3\u97f3"
       }
     ]
   },
@@ -772,5 +772,128 @@
         "value": "best-effort"
       }
     ]
+  },
+  {
+    "name": "partition shape on a whole role is not semantically valid",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "pair": "p",
+          "amp": "a",
+          "cab": "b",
+          "input": "left",
+          "controls": {},
+          "version": 1
+        }
+      }
+    ],
+    "shape": true,
+    "valid": false
+  },
+  {
+    "name": "partition unknown input",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "pair": "p",
+          "amp": "a",
+          "cab": "b",
+          "input": "stereo",
+          "controls": {},
+          "version": 1
+        }
+      }
+    ],
+    "shape": false,
+    "valid": false
+  },
+  {
+    "name": "partition out of range scalar",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "pair": "p",
+          "amp": "a",
+          "cab": "b",
+          "input": "left",
+          "controls": {
+            "inputLevel": 1.1
+          },
+          "version": 1
+        }
+      }
+    ],
+    "shape": false,
+    "valid": false
+  },
+  {
+    "name": "partition unsafe block ID",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "pair": "p",
+          "amp": "a\n",
+          "cab": "b",
+          "input": "left",
+          "controls": {},
+          "version": 1
+        }
+      }
+    ],
+    "shape": false,
+    "valid": false
+  },
+  {
+    "name": "partition unknown field",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "pair": "p",
+          "amp": "a",
+          "cab": "b",
+          "input": "left",
+          "controls": {},
+          "extra": true,
+          "version": 1
+        }
+      }
+    ],
+    "shape": false,
+    "valid": false
+  },
+  {
+    "name": "partition unsupported derivation version",
+    "base": "mixed-delay",
+    "changes": [
+      {
+        "op": "set",
+        "path": "/tone3000/instances/0/partition",
+        "value": {
+          "version": 2,
+          "pair": "p",
+          "amp": "a",
+          "cab": "b",
+          "input": "left",
+          "controls": {}
+        }
+      }
+    ],
+    "shape": false,
+    "valid": false
   }
 ]

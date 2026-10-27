@@ -376,7 +376,18 @@ impl Engine {
             serde_json::from_value(self.catalog()?).map_err(|e| NativeError(e.to_string()))?;
         let mut controls: Vec<_> = parameters
             .into_iter()
-            .filter(|p| crate::protocol::live_writable(&p.id))
+            .filter(|p| {
+                crate::protocol::live_writable(&p.id)
+                    && match self.role {
+                        ProcessingRole::WholePreset => true,
+                        ProcessingRole::Amp => {
+                            p.id == "inputLevel"
+                                || p.id.starts_with("gate")
+                                || p.id.starts_with("pitch")
+                        }
+                        ProcessingRole::Cab => p.id == "outputLevel" || p.id.starts_with("tone"),
+                    }
+            })
             .map(|p| LiveControl {
                 target: p.id.clone(),
                 label: parameter_label(&p.id).to_owned(),
