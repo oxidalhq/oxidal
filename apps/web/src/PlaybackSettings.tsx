@@ -34,13 +34,20 @@ export function PlaybackSettings({
   const [selected, setSelected] = useState('');
   const [inputMap, setInputMap] = useState<[number, number]>([0, 1]);
   const [outputMap, setOutputMap] = useState<[number, number]>([0, 1]);
+  function accept(next: AudioState) {
+    setState((current) =>
+      current?.session === next.session && current.revision > next.revision
+        ? current
+        : next,
+    );
+  }
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       try {
         const next = await playbackState();
-        if (active) setState(next);
+        if (active) accept(next);
       } catch (cause) {
         if (active) setError(String(cause));
       } finally {
@@ -78,12 +85,12 @@ export function PlaybackSettings({
     setBusy(true);
     setError('');
     try {
-      setState(await playbackCommand(state, action));
+      accept(await playbackCommand(state, action));
     } catch (cause) {
       setError(String(cause));
     } finally {
       try {
-        setState(await playbackState());
+        accept(await playbackState());
       } catch {
         /* Keep last known state; do not assume stopped. */
       }
@@ -152,12 +159,9 @@ export function PlaybackSettings({
                 state?.device_owned ||
                 !state?.configured
               }
-              onClick={() =>
-                state?.configured &&
-                void command({ kind: 'start', settings: state.configured })
-              }
+              onClick={() => void command({ kind: 'resume' })}
             >
-              Resume saved session
+              Resume session
             </Button>
           </div>
           <Button
@@ -176,6 +180,11 @@ export function PlaybackSettings({
               ? 'Disable boot playback'
               : 'Use this session on boot'}
           </Button>
+          <p className="caption">
+            Stop, Resume and Restart retain confirmed live adjustments while the
+            daemon stays running. A new playback session starts from its
+            selected saved preset.
+          </p>
           <p className="muted">
             Boot playback restores the preset and device settings saved when
             enabled. Later edits and session changes do not overwrite it.

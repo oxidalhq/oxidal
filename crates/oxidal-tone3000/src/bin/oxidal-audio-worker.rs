@@ -2,7 +2,7 @@
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::{
-        lifecycle::{LiveRequest, PlaybackEvent, StartAudio},
+        lifecycle::{LiveRequest, PlaybackEvent, PlaybackStart},
         stream::{Duplex, Step},
     };
     use oxidal_tone3000::Engine;
@@ -23,7 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
         return Err("invalid startup frame".into());
     }
-    let settings: StartAudio = serde_json::from_slice(&bytes)?;
+    let startup: PlaybackStart = serde_json::from_slice(&bytes)?;
+    let settings = startup.settings;
     settings.validate()?;
     drop(input);
     let stop = Arc::new(AtomicBool::new(false));
@@ -61,6 +62,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     engine.load_preset(&preset)?;
     engine.wait_ready()?;
+    if let Some(controls) = startup.controls {
+        engine.apply_live_snapshot(&controls)?;
+        engine.wait_ready()?;
+    }
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }

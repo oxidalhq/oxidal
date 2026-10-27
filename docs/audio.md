@@ -116,3 +116,12 @@ The checked and last playback configurations include sample rate, channel count,
 format and total buffer capacity. Changing a candidate configuration, a failed
 check, or device refresh invalidates the relevant prior check before a new session
 can start. Those checks do not measure round-trip latency or qualify hotplug.
+
+Confirmed scalar adjustments survive Stop → Resume and Restart during the daemon's
+lifetime. A supervisor-owned startup envelope restores the complete validated
+control catalog before the replacement worker opens PCM and reports readiness.
+Stale/incomplete catalogs fail explicitly; there is no silent fallback to the
+original sound. An explicitly selected new playback session starts from its saved
+preset. This in-memory recovery is not daemon-crash persistence, boot autosave,
+structural state restoration, or gapless switching. Boot selection still captures
+the immutable preset/device configuration documented above.

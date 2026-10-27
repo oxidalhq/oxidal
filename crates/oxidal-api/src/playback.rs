@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oxidal_audio::lifecycle::{
-    AudioAction, AudioCommand, AudioPhase, AudioState, LiveRequest, PlaybackEvent, SavePlayback,
-    StartAudio, valid_controls, valid_preset_name,
+    AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, PlaybackEvent,
+    PlaybackStart, SavePlayback, StartAudio, valid_controls, valid_preset_name,
 };
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
@@ -46,6 +46,7 @@ struct Owner {
     executable: Option<PathBuf>,
     preset_dir: PathBuf,
     state: AudioState,
+    resume_controls: Option<Vec<LiveControl>>,
     updates: watch::Sender<AudioState>,
     meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
@@ -137,7 +138,11 @@ impl Owner {
         self.worker = None; // Only reaping releases the shared device permit.
         Ok(())
     }
-    async fn start(&mut self, settings: StartAudio) -> Result<(), String> {
+    async fn start(
+        &mut self,
+        settings: StartAudio,
+        controls: Option<Vec<LiveControl>>,
+    ) -> Result<(), String> {
         settings.validate()?;
         let executable = self
             .executable
@@ -173,9 +178,11 @@ impl Owner {
             _permit: permit,
         });
         self.state.configured = Some(settings.clone());
+        self.resume_controls = controls.clone();
         self.publish(AudioPhase::Starting, None);
         let startup = tokio::time::timeout(Duration::from_secs(25), async {
-            let mut bytes = serde_json::to_vec(&settings).map_err(|e| e.to_string())?;
+            let mut bytes = serde_json::to_vec(&PlaybackStart { settings, controls })
+                .map_err(|e| e.to_string())?;
             if bytes.len() > 65535 {
                 return Err("Audio settings too large".into());
             }
@@ -220,6 +227,7 @@ impl Owner {
             }
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
+            self.state.modified = self.resume_controls.is_some();
             Ok(())
         })
         .await
@@ -308,6 +316,7 @@ impl Owner {
         .and_then(|r| r);
         match result {
             Ok(controls) => {
+                self.resume_controls = Some(controls.clone());
                 self.state.controls = controls;
                 self.state.modified = true;
                 self.state.saved_copy = None;
@@ -437,7 +446,18 @@ impl Owner {
                         "Audio already owns the device; stop before applying changes".into(),
                     );
                 }
-                self.start(settings).await
+                self.start(settings, None).await
+            }
+            AudioAction::Resume => {
+                let settings = self
+                    .state
+                    .configured
+                    .clone()
+                    .ok_or("No previous audio configuration")?;
+                if self.worker.is_some() {
+                    return Err("Audio is already running".into());
+                }
+                self.start(settings, self.resume_controls.clone()).await
             }
             AudioAction::Stop => {
                 self.publish(AudioPhase::Stopping, None);
@@ -471,7 +491,7 @@ impl Owner {
                     .ok_or("No previous audio configuration")?;
                 self.publish(AudioPhase::Stopping, None);
                 match self.release().await {
-                    Ok(()) => self.start(settings).await,
+                    Ok(()) => self.start(settings, self.resume_controls.clone()).await,
                     Err(e) => Err(e),
                 }
             }
@@ -544,6 +564,7 @@ impl Playback {
             executable: config.audio_worker.clone(),
             preset_dir: config.preset_dir.clone(),
             state: initial,
+            resume_controls: None,
             updates,
             meters,
         };
@@ -552,7 +573,7 @@ impl Playback {
         tokio::spawn(async move {
             match boot {
                 Ok(Some(settings)) if owner.executable.is_some() => {
-                    if let Err(error) = owner.start(settings).await {
+                    if let Err(error) = owner.start(settings, None).await {
                         owner.publish(AudioPhase::Failed, Some(error));
                     }
                 }

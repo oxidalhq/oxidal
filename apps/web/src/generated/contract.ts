@@ -12,6 +12,9 @@ export type AudioAction =
       kind: "restart";
     }
   | {
+      kind: "resume";
+    }
+  | {
       enabled: boolean;
       kind: "set_boot";
     }

@@ -57,6 +57,7 @@ pub enum AudioAction {
     Start { settings: StartAudio },
     Stop,
     Restart,
+    Resume,
     SetBoot { enabled: bool },
     SetControl { target: String, value: f32 },
     SaveCopy { name: String },
@@ -124,6 +125,15 @@ pub fn valid_controls(controls: &[LiveControl]) -> bool {
             .iter()
             .enumerate()
             .all(|(i, c)| controls[..i].iter().all(|p| p.target != c.target))
+}
+
+/// Supervisor-owned startup envelope. Restore confirmed scalar edits before PCM
+/// opens; this is not an untrusted preset state or a prepared graph transition.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlaybackStart {
+    pub settings: StartAudio,
+    pub controls: Option<Vec<LiveControl>>,
 }
 
 /// Immutable reconstruction request for a separate, non-PCM export worker.

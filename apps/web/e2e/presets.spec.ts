@@ -933,11 +933,23 @@ test('playback lifecycle keeps native authoring available after stop and restart
       page.getByLabel('Example preset', { exact: true }),
     ).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await audio.getByRole('button', { name: 'Resume saved session' }).click();
+    await audio.getByRole('button', { name: 'Resume session' }).click();
     await expect(audio.getByRole('status')).toContainText('Audio: running');
+    expect(
+      (await (await request.get('/api/v1/audio')).json()).controls,
+    ).toEqual(savedLive.controls);
+    const restarted = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/audio') &&
+        response.request().method() === 'POST' &&
+        response.request().postDataJSON()?.action.kind === 'restart',
+    );
     await audio
       .getByRole('button', { name: 'Restart audio', exact: true })
       .click();
+    const restartResponse = await restarted;
+    expect(restartResponse.ok(), await restartResponse.text()).toBe(true);
+    expect((await restartResponse.json()).controls).toEqual(savedLive.controls);
     await expect(
       audio.getByRole('button', { name: 'Stop audio', exact: true }),
     ).toBeEnabled();

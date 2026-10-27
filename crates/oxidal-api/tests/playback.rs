@@ -221,6 +221,17 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     );
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "running");
+    assert_eq!(
+        state["controls"], controls_before_save,
+        "restart must keep unsaved live controls"
+    );
+    assert_eq!(state["modified"], true);
+    assert_eq!(
+        send(&client, &url, &state, json!({"kind":"resume"}))
+            .await
+            .status(),
+        409
+    );
     assert!(
         send(&client, &url, &state, json!({"kind":"stop"}))
             .await
@@ -230,6 +241,21 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
     assert_eq!(state["device_owned"], false);
+    let resumed = send(&client, &url, &state, json!({"kind":"resume"})).await;
+    assert_eq!(resumed.status(), 200);
+    state = resumed.json().await.unwrap();
+    assert_eq!(
+        state["controls"], controls_before_save,
+        "stop/resume must restore before worker readiness"
+    );
+    assert_eq!(state["modified"], true);
+    assert_eq!(
+        send(&client, &url, &state, json!({"kind":"stop"}))
+            .await
+            .status(),
+        200
+    );
+    state = get(&client, &url, "audio").await;
     // Reopen the copy in the real PCM worker; every normalized control must match.
     let mut saved_settings = settings.clone();
     saved_settings["preset_id"] = json!(saved_id);
@@ -245,6 +271,10 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = reopened.json().await.unwrap();
     assert_eq!(state["controls"], controls_before_save);
     assert_eq!(state["preset_name"], "Sounding copy");
+    assert_eq!(
+        state["modified"], false,
+        "explicit new session starts from its saved source"
+    );
     assert_eq!(
         send(&client, &url, &state, json!({"kind":"stop"}))
             .await
