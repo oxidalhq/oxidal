@@ -1,5 +1,9 @@
 import type { Lv2Plugin, Preset, RigDocument } from './api';
-import type { ResourceSource, RigPublish } from './generated/contract';
+import type {
+  PortableNativePartition,
+  ResourceSource,
+  RigPublish,
+} from './generated/contract';
 
 export type MonoInput = 'sum' | 'left' | 'right';
 export type DraftEffect =
@@ -9,6 +13,7 @@ export type DraftEffect =
       name: string;
       preset: Preset;
       source: ResourceSource;
+      stage?: { role: 'amp' | 'cab'; recipe: PortableNativePartition };
     }
   | {
       id: string;
@@ -43,6 +48,86 @@ export function lv2Effect(plugin: Lv2Plugin): DraftEffect {
   };
 }
 
+export type NativeDraft = Extract<DraftEffect, { kind: 'native' }>;
+
+/** Metadata identifies candidates only; the native loader rechecks every guard. */
+export function splitNative(
+  effect: NativeDraft,
+  amp: string,
+  cab: string,
+  input: 'left' | 'right',
+): [NativeDraft, NativeDraft] {
+  if (effect.stage || !amp || !cab || amp === cab)
+    throw new Error('Choose separate amp and cab blocks from a whole tone.');
+  const pair = `pair-${crypto.randomUUID()}`;
+  const make = (role: 'amp' | 'cab'): NativeDraft => ({
+    ...effect,
+    id: `${role}-${crypto.randomUUID()}`,
+    name: `${role === 'amp' ? 'Amp' : 'Cab'} · ${effect.name}`,
+    stage: {
+      role,
+      recipe: { version: 1, pair, amp, cab, input, controls: {} },
+    },
+  });
+  return [make('amp'), make('cab')];
+}
+
+function stagePair(effect: DraftEffect) {
+  return effect.kind === 'native' ? effect.stage?.recipe.pair : undefined;
+}
+
+/** Removal cannot strand a stage whose source/processing allocation has a peer. */
+export function removeEffect(effects: DraftEffect[], id: string) {
+  const effect = effects.find((e) => e.id === id);
+  const pair = effect && stagePair(effect);
+  return effects.filter((e) => e.id !== id && (!pair || stagePair(e) !== pair));
+}
+
+/** Keep each source's amp before its cab while allowing effects between them. */
+export function canMoveEffect(
+  effects: DraftEffect[],
+  index: number,
+  step: -1 | 1,
+) {
+  const next = index + step;
+  if (
+    index < 0 ||
+    index >= effects.length ||
+    next < 0 ||
+    next >= effects.length
+  )
+    return false;
+  const pair = stagePair(effects[index]!);
+  return !pair || pair !== stagePair(effects[next]!);
+}
+
+function validateStages(effects: DraftEffect[]) {
+  const pairs = new Map<string, NativeDraft[]>();
+  for (const effect of effects) {
+    if (effect.kind !== 'native' || !effect.stage) continue;
+    const pair = effect.stage.recipe.pair;
+    const members = pairs.get(pair) ?? [];
+    members.push(effect);
+    pairs.set(pair, members);
+  }
+  for (const members of pairs.values()) {
+    const [amp, cab] = members;
+    if (
+      members.length !== 2 ||
+      amp?.stage?.role !== 'amp' ||
+      cab?.stage?.role !== 'cab' ||
+      amp.preset.sha256 !== cab.preset.sha256 ||
+      amp.stage.recipe.version !== cab.stage.recipe.version ||
+      amp.stage.recipe.amp !== cab.stage.recipe.amp ||
+      amp.stage.recipe.cab !== cab.stage.recipe.cab ||
+      amp.stage.recipe.input !== cab.stage.recipe.input
+    )
+      throw new Error(
+        'Keep each amp/cab pair together, with its amp before its cab.',
+      );
+  }
+}
+
 /** Construct explicit scalar routing. No backend/plugin code runs in the browser. */
 export function serialRig(
   id: string,
@@ -50,6 +135,7 @@ export function serialRig(
   effects: DraftEffect[],
   profile: string,
 ): RigPublish {
+  validateStages(effects);
   const manifest: RigDocument['manifest'] = {
     format: 'oxidal.preset',
     formatVersion: 1,
@@ -132,7 +218,8 @@ export function serialRig(
         id: effect.id,
         preset: resource,
         profile,
-        processingRole: 'whole',
+        processingRole: effect.stage?.role ?? 'whole',
+        ...(effect.stage ? { partition: effect.stage.recipe } : {}),
       });
     } else {
       host.lv2.push({

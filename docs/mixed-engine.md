@@ -34,7 +34,7 @@ executor below has separate admission and delay alignment):
 
 - Portable manifest validation and immutable expanded-bundle storage now live in
   `oxidal-presets`; see [preset format](presets/format.md). They preserve native
-  payloads and roles, routing, LV2 declarations and opaque resources. The browser composes whole-native/scalar-LV2 rigs; the portable loader also restores the guarded paired-stage subset described below.
+  payloads and roles, routing, LV2 declarations and opaque resources. The browser composes whole-native/scalar-LV2 rigs and the guarded paired-stage subset described below.
 - No callback-safe structural admission, independent preparation thread, atomic
   swap, latency compensation or Preserve/Fade/Cut tails. Rerouting can cause an
   audible discontinuity and is not a gapless switch.
@@ -126,11 +126,12 @@ and instantiates installed LV2 libraries; clients cannot supply library paths.
 The native codec baseline is derived from the pinned adapter source revision by
 `native_profile_id`. This identifier is not a binary signature or evidence of full
 upstream field/settings fidelity; installed-library identity remains a build/image
-qualification responsibility. Extracted amp/cab roles are rejected by this loader
-until paired state restoration is implemented. The lower-level prepared-binding
-API continues to exercise the separately qualified paired-stage adapter.
+qualification responsibility. Extracted amp/cab roles require the versioned paired
+derivation recipe described below. Role labels alone cannot authorize an arbitrary
+native state.
 
-Native blocks receive explicit Stereo input mode. Hardware channel selection stays
+Whole-native blocks receive explicit Stereo input mode; paired stages retain
+the recipe's explicit mono input and validated downstream allocation. Hardware channel selection stays
 in `StreamConfig.input_map`; a single capture channel can be mapped to both inputs.
 Native mono chains perform their own fold, while native stereo chains retain their
 two lanes. The loader does not silently inherit the native Left input default.
@@ -180,7 +181,7 @@ or certify all native field fidelity.
 existing mixed example with audible scalar changes, invalid/stale rejection, actual
 worker control/readback, concurrent isolated export, independent shared native
 resources, exact unchanged payloads, offline child recall and EOF teardown.
-Ordinary builds cannot open the null qualification route. The daemon lifecycle below connects device ownership and HTTP control. Browser readback/recall is described below; interactive structural composition remains open.
+Ordinary builds cannot open the null qualification route. The daemon lifecycle below connects device ownership and HTTP control. Browser readback/recall and serial composition are described below; live structural replacement remains open.
 
 ## Daemon ownership and HTTP lifecycle
 
@@ -201,6 +202,9 @@ readiness; clients poll until `running` or `failed`. Stop and shutdown cancel th
 pending startup exchange, close its pipes and reap the child before releasing the
 device permit. A late readiness reply cannot revive the cancelled session. The
 maintained slow-worker test covers cancellation and shutdown before readiness.
+A terminal failure frame preserves a bounded native preparation error even before
+a valid snapshot exists; it never fabricates controls or telemetry for a rejected
+candidate. Malformed failure messages remain protocol errors.
 
 Reconfigure applies a new duplex device/rate/buffer/channel-map configuration to the
 same rig and its confirmed unsaved scalar controls. Invalid declarations fail before
@@ -210,7 +214,7 @@ Cancel during preparation stops the worker and retains the previous configuratio
 for a deliberate Resume. The actor keeps the device permit across normal restart,
 reconfiguration and rollback child replacement; if the replacement cannot spawn,
 restoration may fail if another owner acquired the released permit. These changes
-interrupt audio and do not establish seamless switching or durable mixed boot recall.
+interrupt audio and do not establish seamless switching. Confirmed recovery and shared boot capture are described below.
 
 Settings → Audio follows the actual mixed owner and exposes the shared current
 session editor for rate, power-of-two buffers, periods and channel mapping. A checked
@@ -333,6 +337,36 @@ The maintained browser scenario composes and reorders actual native/LV2 processo
 checks explicit mono routing and hidden draft status, saves while running, and recalls
 the named revision. It covers both orientations on XR, Fold and BOOX. Portable schema
 checks exercise empty routing, repeated native instances and all mono-input policies.
+
+## Separate amp/cab authoring
+
+In the serial composer, **Separate amp & cab** selects classified amp and cab blocks
+from an immutable imported/owned native tone. Metadata identifies candidates only;
+the player confirms an amp-head capture without a baked-in cabinet and explicitly
+chooses Left or Right input. Actual native preparation reruns every guard. A classified
+label alone does not make a combined capture separable.
+
+The two draft stages share source identity and a versioned recipe. Effects can be
+moved between stages; the composer keeps the amp before its matching cab and removes
+both when removing a pair. The original preset remains unchanged. Qualified stage
+controls adjust live after Play, and Save captures them in the portable recipe for
+independent offline recall. These host stages cannot be exported as standalone
+TONE3000 presets.
+
+Preparation requires 48 kHz; the browser reports an incompatible configured rate
+instead of silently changing the audio device. A rejected candidate leaves the draft
+open for correction. Play changes views only after confirmed running state, and a
+pending preparation has a Cancel action. Publication and successful HTTP Start alone
+are not treated as audible readiness. Navigation away does not revoke an already
+accepted daemon command.
+
+The maintained mixed browser gate uses the native qualifier's authored mono-IR
+fixture after its cache-independent worker proof. It covers confirmation/cancel,
+rotations, effects between stages, real native rejection of a forged block ID with
+draft retention, live stage-specific controls, source hash preservation and fresh
+saved recall on XR, Fold and BOOX. This is saved-source derivation: unsaved whole-rig
+conversion, independent amp/cab source pairing, mixed model audition, other rates and
+continuous structural replacement remain open.
 
 ## Confirmed session recovery
 

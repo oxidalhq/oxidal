@@ -3,9 +3,13 @@ import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { ArtworkDeck } from './AssetArtwork';
+import { NativeSplitDialog } from './NativeSplitDialog';
 import {
   lv2Effect,
   serialRig,
+  canMoveEffect,
+  removeEffect,
+  type NativeDraft,
   type DraftEffect,
   type MonoInput,
 } from './rigDraft';
@@ -48,7 +52,15 @@ export function RigComposer({
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const preparation = useRef<{
+    session: string;
+    revision: string;
+    cancelRequested: boolean;
+  } | null>(null);
   const [error, setError] = useState('');
+  const [split, setSplit] = useState<NativeDraft | null>(null);
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
@@ -88,8 +100,9 @@ export function RigComposer({
     void load();
     return () => controller.abort();
   }, [picker]);
-  function move(index: number, step: number) {
+  function move(index: number, step: -1 | 1) {
     setEffects((old) => {
+      if (!canMoveEffect(old, index, step)) return old;
       const next = [...old];
       [next[index], next[index + step]] = [next[index + step]!, next[index]!];
       return next;
@@ -116,18 +129,75 @@ export function RigComposer({
         throw new Error(
           'Choose the input, output and buffer in Settings → Audio first.',
         );
+      if (
+        effects.some((e) => e.kind === 'native' && e.stage) &&
+        (stream.input.sample_rate !== 48000 ||
+          stream.output.sample_rate !== 48000)
+      )
+        throw new Error(
+          'Separate amp/cab stages need 48 kHz. Choose it in Settings → Audio.',
+        );
       const document = await publishRig(
         serialRig(id, name, effects, library.native_profile),
       );
-      await rigAudioCommand(rig, {
+      let next = await rigAudioCommand(rig, {
         kind: 'start',
         settings: { revision: document.revision, stream, recall: null },
       });
-      if (alive.current) onOpenRig();
+      const expected = {
+        session: next.session,
+        revision: document.revision,
+        cancelRequested: false,
+      };
+      preparation.current = expected;
+      if (alive.current) setPreparing(true);
+      while (alive.current) {
+        if (next.session !== expected.session)
+          throw new Error('Another audio session replaced this draft.');
+        // A rejected candidate restores the previous confirmed configuration.
+        // Retain the actual failure before checking the running revision.
+        if (next.phase !== 'starting' && next.phase !== 'running')
+          throw new Error(
+            next.error ?? 'Preparation stopped. Your draft is still here.',
+          );
+        if (next.configured?.revision !== expected.revision)
+          throw new Error('Another audio session replaced this draft.');
+        if (next.phase === 'running' && !expected.cancelRequested) {
+          onOpenRig();
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (!alive.current) break;
+        next = await rigAudioState();
+      }
     } catch (cause) {
       if (alive.current) setError(String(cause));
     } finally {
-      if (alive.current) setBusy(false);
+      preparation.current = null;
+      if (alive.current) {
+        setBusy(false);
+        setPreparing(false);
+      }
+    }
+  }
+  async function cancelPreparation() {
+    if (cancelling || !preparation.current) return;
+    const expected = preparation.current;
+    expected.cancelRequested = true;
+    setCancelling(true);
+    try {
+      const state = await rigAudioState();
+      if (
+        state.session !== expected.session ||
+        state.configured?.revision !== expected.revision
+      )
+        throw new Error('Another audio session replaced this draft.');
+      await rigAudioCommand(state, { kind: 'stop' });
+    } catch (cause) {
+      expected.cancelRequested = false;
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (alive.current) setCancelling(false);
     }
   }
   return (
@@ -177,6 +247,15 @@ export function RigComposer({
           {busy ? 'Preparing…' : 'Play draft'}
         </Button>
       </div>
+      {preparing && (
+        <Button
+          variant="outline"
+          disabled={cancelling}
+          onClick={() => void cancelPreparation()}
+        >
+          {cancelling ? 'Cancelling…' : 'Cancel preparation'}
+        </Button>
+      )}
       <ol className="space-y-2" aria-label="Draft signal chain">
         <li className="caption">Input · L / R</li>
         {effects.map((effect, index) => (
@@ -194,7 +273,7 @@ export function RigComposer({
                   variant="outline"
                   className="h-11 w-11 p-0"
                   aria-label={`Move ${effect.name} earlier`}
-                  disabled={busy || index === 0}
+                  disabled={busy || !canMoveEffect(effects, index, -1)}
                   onClick={() => move(index, -1)}
                 >
                   <ArrowUp size={18} />
@@ -203,7 +282,7 @@ export function RigComposer({
                   variant="outline"
                   className="h-11 w-11 p-0"
                   aria-label={`Move ${effect.name} later`}
-                  disabled={busy || index === effects.length - 1}
+                  disabled={busy || !canMoveEffect(effects, index, 1)}
                   onClick={() => move(index, 1)}
                 >
                   <ArrowDown size={18} />
@@ -211,16 +290,37 @@ export function RigComposer({
                 <Button
                   variant="ghost"
                   className="h-11 w-11 p-0"
-                  aria-label={`Remove ${effect.name}`}
+                  aria-label={
+                    effect.kind === 'native' && effect.stage
+                      ? `Remove amp/cab pair ${effect.name}`
+                      : `Remove ${effect.name}`
+                  }
                   disabled={busy}
                   onClick={() =>
-                    setEffects((old) => old.filter((e) => e.id !== effect.id))
+                    setEffects((old) => removeEffect(old, effect.id))
                   }
                 >
                   <Trash size={18} />
                 </Button>
               </div>
             </div>
+            {effect.kind === 'native' && !effect.stage && (
+              <Button
+                variant="outline"
+                disabled={busy || !connected}
+                onClick={() => setSplit(effect)}
+              >
+                Separate amp & cab
+              </Button>
+            )}
+            {effect.kind === 'native' && effect.stage && (
+              <p className="caption">
+                {effect.stage.role === 'amp'
+                  ? `Amp · ${effect.stage.recipe.input === 'left' ? 'L' : 'R'} input`
+                  : 'Cab / IR'}{' '}
+                · linked pair · 48 kHz
+              </p>
+            )}
             {effect.kind === 'lv2' &&
               effect.plugin.ports.filter((p) => p.audio && p.input).length ===
                 1 && (
@@ -257,6 +357,18 @@ export function RigComposer({
       <Button variant="ghost" disabled={busy} onClick={onBack}>
         Discard composition
       </Button>
+      {split && (
+        <NativeSplitDialog
+          effect={split}
+          onCancel={() => setSplit(null)}
+          onSplit={(pair) => {
+            setEffects((old) =>
+              old.flatMap((e) => (e.id === split.id ? pair : [e])),
+            );
+            setSplit(null);
+          }}
+        />
+      )}
       {picker && (
         <AdjustmentDialog
           title={picker === 'tones' ? 'Add saved tone' : 'Add effect'}
@@ -297,7 +409,10 @@ export function RigComposer({
                           {t.preset.name}
                           {t.source.kind === 'owned' ? ' · saved copy' : ''}
                         </Button>
-                        <ArtworkDeck id={t.preset.sha256} />
+                        <ArtworkDeck
+                          id={t.preset.sha256}
+                          owned={t.source.kind === 'owned'}
+                        />
                       </div>
                     ))
                 : catalog

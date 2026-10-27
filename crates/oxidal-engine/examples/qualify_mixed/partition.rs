@@ -269,5 +269,8 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
     }
     std::fs::remove_file(root.join("split-source.t3kpreset"))?;
     super::worker::qualify_partition(&restored, root)?;
+    // Reuse the verified authored fixture in the maintained browser gate only
+    // after proving worker recall without the external source file.
+    std::fs::write(root.join("partition-browser.t3kpreset"), bytes)?;
     Ok(())
 }

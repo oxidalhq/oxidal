@@ -228,8 +228,31 @@ export function MixedRig({
       (n) =>
         selection && selection.revision === revision && n.id === selection.node,
     ) ?? nodes.find((n) => n.kind !== 'output');
-  const controls =
-    state.control?.controls.filter((c) => c.target.node === selected?.id) ?? [];
+  const stageRole = matching?.manifest.tone3000.instances.find(
+    (n) => n.id === selected?.instance,
+  )?.processingRole;
+  const stageLabels: Record<string, string> = {
+    enabled: stageRole === 'cab' ? 'IR enabled' : 'Capture enabled',
+    normalize: 'Normalize',
+    inputGain: 'Input gain',
+    outputGain: 'Output gain',
+    mix: 'Mix',
+  };
+  const controls = (
+    state.control?.controls.filter((c) => c.target.node === selected?.id) ?? []
+  ).map((c) => {
+    // A guarded stage has exactly one source block; its selected tile supplies
+    // context. Keep qualified globals and whole/multi-block labels unchanged.
+    if (
+      (stageRole === 'amp' || stageRole === 'cab') &&
+      c.target.kind === 'native' &&
+      c.target.parameter.startsWith('block:')
+    ) {
+      const label = stageLabels[c.target.parameter.split(':').at(-1)!];
+      if (label) return { ...c, label };
+    }
+    return c;
+  });
   const currentSave =
     state.save?.source_session === state.control?.session ? state.save : null;
   const changed =

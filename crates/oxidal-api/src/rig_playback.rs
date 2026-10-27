@@ -63,7 +63,7 @@ async fn read_reply(output: &mut BufReader<ChildStdout>) -> Result<WorkerReply, 
     if bytes.len() > REPLY_LIMIT || bytes.last() != Some(&b'\n') {
         return Err("Invalid mixed worker reply".into());
     }
-    serde_json::from_slice(&bytes).map_err(|_| "Invalid mixed worker protocol".into())
+    decode_worker_reply(&bytes)
 }
 fn encode<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec(value).map_err(|e| e.to_string())?;

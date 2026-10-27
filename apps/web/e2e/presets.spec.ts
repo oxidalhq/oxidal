@@ -1,5 +1,5 @@
 import { setDisplayMode } from './display';
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,6 +8,29 @@ const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,
 );
+
+/** Exercise the real paged library instead of assuming the saved hash sorts first. */
+async function playSavedRig(page: Page, name: string) {
+  const library = page.getByRole('region', { name: 'Saved rigs', exact: true });
+  await expect(library).toBeVisible();
+  const play = library.getByRole('button', {
+    name: `Play ${name}`,
+    exact: true,
+  });
+  while ((await play.count()) === 0) {
+    const more = library.getByRole('button', {
+      name: 'Load more',
+      exact: true,
+    });
+    await expect(more).toBeVisible();
+    const before = await library.getByRole('heading', { level: 3 }).count();
+    await more.click();
+    await expect
+      .poll(() => library.getByRole('heading', { level: 3 }).count())
+      .toBeGreaterThan(before);
+  }
+  await play.click();
+}
 
 test('rig controls follow the actual session without example effects', async ({
   page,
@@ -2023,10 +2046,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
   await expect.poll(async () => (await get()).phase).toBe('stopped');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page
-    .getByRole('region', { name: 'Saved rigs', exact: true })
-    .getByRole('button', { name: `Play ${name}`, exact: true })
-    .click();
+  await playSavedRig(page, name);
   await expect(rig).toBeVisible();
   await expect.poll(async () => (await get()).phase).toBe('running');
   await expect.poll(value).toBe(changed);
@@ -2283,15 +2303,303 @@ test('mixed rig authoring composes native and LV2 effects without saving an audi
   await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
   await expect.poll(async () => (await state()).phase).toBe('stopped');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page
-    .getByRole('region', { name: 'Saved rigs' })
-    .getByRole('button', { name: `Play ${name}`, exact: true })
-    .click();
+  await playSavedRig(page, name);
   await expect
     .poll(async () => {
       const s = await state();
       return { phase: s.phase, revision: s.configured?.revision };
     })
     .toEqual({ phase: 'running', revision: saved });
+  await command('rig-audio', { kind: 'stop' });
+});
+
+test('mixed rig authoring separates guarded amp/cab stages and saves their live settings', async ({
+  page,
+  request,
+}, info) => {
+  test.skip(
+    process.env.OXIDAL_RIG_QUALIFY_NULL !== '1' ||
+      process.env.OXIDAL_GRAPH_QUALIFY_NULL !== '1' ||
+      !process.env.OXIDAL_MIXED_TEST_ROOT,
+    'Maintained Linux native gate provides verified stage fixture and actual workers',
+  );
+  test.setTimeout(150000);
+  page.setDefaultTimeout(20000);
+  const state = async (path = 'rig-audio') =>
+    (await request.get(`/api/v1/${path}`)).json();
+  const command = async (path: string, action: unknown) => {
+    const s = await state(path);
+    const response = await request.post(`/api/v1/${path}`, {
+      data: { session: s.session, expected_revision: s.revision, action },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return response.json();
+  };
+  await command('rig-audio', { kind: 'stop' });
+  await command('graph-audio', { kind: 'stop' });
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const stream = {
+    input,
+    output: { ...input, direction: 'playback' },
+    input_map: [0, 1],
+    output_map: [0, 1],
+  };
+  // Set the already configured mixed owner too: it has precedence over graph settings.
+  const previous = await state();
+  if (previous.configured) {
+    await command('rig-audio', { kind: 'reconfigure', stream });
+    await expect.poll(async () => (await state()).phase).toBe('running');
+    await command('rig-audio', { kind: 'stop' });
+  }
+  await command('graph-audio', { kind: 'configure', stream });
+  const imported = await request.post('/api/v1/presets', {
+    data: readFileSync(
+      join(process.env.OXIDAL_MIXED_TEST_ROOT!, 'partition-browser.t3kpreset'),
+    ),
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok(), await imported.text()).toBe(true);
+  const tone = await imported.json();
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add saved tone', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: tone.name, exact: true })
+    .click();
+  const composer = page.getByRole('region', { name: 'Compose rig' });
+  const name = `Split ${info.project.name}`;
+  await composer.getByLabel('Preset name', { exact: true }).fill(name);
+  await composer
+    .getByRole('button', { name: 'Separate amp & cab', exact: true })
+    .click();
+  let dialog = page.getByRole('dialog', { name: 'Separate amp & cab' });
+  await expect(dialog.getByLabel('Amp block')).not.toHaveValue('');
+  await expect(dialog.getByLabel('Cab / IR block')).not.toHaveValue('');
+  await expect(
+    dialog.getByRole('button', { name: 'Separate', exact: true }),
+  ).toBeDisabled();
+  await dialog
+    .getByRole('combobox', { name: 'Amp input', exact: true })
+    .selectOption('right');
+  await dialog.getByRole('checkbox').check();
+  const viewport = page.viewportSize()!;
+  for (const size of [
+    viewport,
+    { width: viewport.height, height: viewport.width },
+  ]) {
+    await page.setViewportSize(size);
+    await expect(
+      dialog.getByRole('button', { name: 'Separate', exact: true }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`split-dialog-${size.width}.png`),
+    });
+  }
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.setViewportSize(viewport);
+  await dialog
+    .getByRole('button', { name: 'Keep whole tone', exact: true })
+    .click();
+  await expect(composer.locator('[data-effect]')).toHaveCount(1);
+  await composer
+    .getByRole('button', { name: 'Separate amp & cab', exact: true })
+    .click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('checkbox').check();
+  await dialog
+    .getByRole('combobox', { name: 'Amp input', exact: true })
+    .selectOption('right');
+  await dialog.getByRole('button', { name: 'Separate', exact: true }).click();
+  await expect(composer.locator('[data-effect]')).toHaveCount(2);
+  await expect(
+    composer.getByLabel(`Move Amp · ${tone.name} later`),
+  ).toBeDisabled();
+  await composer
+    .getByRole('button', { name: 'Add effect', exact: true })
+    .click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Search', { exact: true }).fill('Simple amplifier');
+  await dialog
+    .getByRole('button', { name: 'Simple amplifier', exact: true })
+    .click();
+  await composer.getByLabel('Move Simple amplifier earlier').click();
+  await expect(composer.locator('[data-effect]').nth(1)).toContainText(
+    'Simple amplifier',
+  );
+  for (const size of [
+    viewport,
+    { width: viewport.height, height: viewport.width },
+  ]) {
+    await page.setViewportSize(size);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`split-chain-${size.width}.png`),
+      fullPage: true,
+    });
+  }
+  // Forge a structurally valid but nonexistent source ID in transit. The actual
+  // native worker must reject it, and the editor must retain the correct draft.
+  const publishUrl = '**/api/v1/presets/rigs';
+  await page.route(publishUrl, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const body = route.request().postDataJSON();
+    const manifest = JSON.parse(body.manifest_json);
+    for (const instance of manifest.tone3000.instances)
+      instance.partition.amp = 'nonexistent-amp';
+    body.manifest_json = JSON.stringify(manifest);
+    await route.continue({ postData: JSON.stringify(body) });
+  });
+  await composer
+    .getByRole('button', { name: 'Play draft', exact: true })
+    .click();
+  await expect.poll(async () => (await state()).phase).toBe('failed');
+  await expect(composer.getByRole('alert')).toContainText(
+    'Choose exactly one NAM amp',
+  );
+  await expect(composer.locator('[data-effect]')).toHaveCount(3);
+  await expect(
+    composer.getByRole('button', { name: 'Play draft', exact: true }),
+  ).toBeEnabled();
+  await expect.poll(async () => (await state()).device_owned).toBe(false);
+  await page.unroute(publishUrl);
+  await composer
+    .getByRole('button', { name: 'Play draft', exact: true })
+    .click();
+  await expect.poll(async () => (await state()).phase).toBe('running');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await expect(rig).toBeVisible();
+  const document = await (
+    await request.get(
+      `/api/v1/presets/rigs/${(await state()).configured.revision}`,
+    )
+  ).json();
+  const [amp, cab] = document.manifest.tone3000.instances;
+  expect(amp.processingRole).toBe('amp');
+  expect(cab.processingRole).toBe('cab');
+  expect(amp.partition.input).toBe('right');
+  expect(amp.partition.pair).toBe(cab.partition.pair);
+  expect(document.manifest.resources).toHaveLength(1);
+  expect(document.manifest.resources[0].sha256).toBe(tone.sha256);
+  const changes: { node: string; parameter: string; value: number }[] = [];
+  for (const [node, parameter, forbidden] of [
+    [amp.id, 'inputLevel', 'outputLevel'],
+    [cab.id, 'outputLevel', 'inputLevel'],
+  ]) {
+    const controls = (await state()).control.controls;
+    expect(
+      controls.some(
+        (c: { target: { kind: string; node: string; parameter: string } }) =>
+          c.target.kind === 'native' &&
+          c.target.node === node &&
+          c.target.parameter === forbidden,
+      ),
+    ).toBe(false);
+    const selected = controls.find(
+      (c: { target: { kind: string; node: string; parameter: string } }) =>
+        c.target.kind === 'native' &&
+        c.target.node === node &&
+        c.target.parameter === parameter,
+    );
+    const value = async () =>
+      (await state()).control.controls.find(
+        (c: { target: unknown }) =>
+          JSON.stringify(c.target) === JSON.stringify(selected.target),
+      ).value;
+    await rig
+      .locator(`[data-node="${node}"]`)
+      .getByRole('button')
+      .first()
+      .click();
+    await rig
+      .getByRole('button', { name: `Adjust ${selected.label}`, exact: true })
+      .click();
+    dialog = page.getByRole('dialog');
+    await dialog.getByRole('slider').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(value).toBeGreaterThan(selected.value);
+    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+    changes.push({ node, parameter, value: await value() });
+  }
+  await rig.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect
+    .poll(async () => (await state()).save?.saved_revision)
+    .toBeTruthy();
+  const saved = (await state()).save.saved_revision;
+  const savedDoc = await (
+    await request.get(`/api/v1/presets/rigs/${saved}`)
+  ).json();
+  expect(savedDoc.manifest.resources[0].sha256).toBe(tone.sha256);
+  expect(savedDoc.manifest.oxidal.lv2).toHaveLength(1);
+  for (const change of changes)
+    expect(
+      savedDoc.manifest.tone3000.instances.find(
+        (n: { id: string }) => n.id === change.node,
+      ).partition.controls[change.parameter],
+    ).toBe(change.value);
+  await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+  await expect.poll(async () => (await state()).phase).toBe('stopped');
+  await page.reload();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await playSavedRig(page, name);
+  await expect.poll(async () => (await state()).phase).toBe('running');
+  expect((await state()).configured.revision).toBe(saved);
+  for (const change of changes)
+    expect(
+      (await state()).control.controls.find(
+        (c: { target: { kind: string; node: string; parameter: string } }) =>
+          c.target.kind === 'native' &&
+          c.target.node === change.node &&
+          c.target.parameter === change.parameter,
+      ).value,
+    ).toBe(change.value);
+  await expect(rig).toBeVisible();
+  await expect(
+    rig.getByRole('button', { name: 'Stop audio', exact: true }),
+  ).toBeVisible();
+  for (const size of [
+    viewport,
+    { width: viewport.height, height: viewport.width },
+  ]) {
+    await page.setViewportSize(size);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`split-sounding-${size.width}.png`),
+      fullPage: true,
+    });
+  }
   await command('rig-audio', { kind: 'stop' });
 });

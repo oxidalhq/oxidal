@@ -1,7 +1,14 @@
 import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
 import schema from '../../../docs/presets/manifest.schema.json';
-import { lv2Effect, serialRig, type DraftEffect } from './rigDraft';
+import {
+  lv2Effect,
+  serialRig,
+  splitNative,
+  removeEffect,
+  canMoveEffect,
+  type NativeDraft,
+} from './rigDraft';
 import type { Lv2Plugin, Preset } from './api';
 const validator = new Ajv({ strict: false }).compile(schema);
 const mono: Lv2Plugin = {
@@ -60,7 +67,7 @@ const preset: Preset = {
   parameter_count: 0,
   playback_available: false,
 };
-const native: DraftEffect = {
+const native: NativeDraft = {
   id: 'tone1',
   kind: 'native',
   name: 'Tone',
@@ -118,4 +125,59 @@ it('makes mono channel policy explicit and retains raw LV2 values', () => {
   expect(() =>
     lv2Effect({ ...mono, unsupported: 'Requires Atom events' }),
   ).toThrow('Requires Atom');
+});
+
+it('derives linked stages without modifying the source or merging their controls', () => {
+  const original = structuredClone(native);
+  const [amp, cab] = splitNative(native, 'source-amp', 'source-cab', 'right');
+  const fx = lv2Effect(mono);
+  amp.stage!.recipe.controls.inputLevel = 0.6;
+  expect(cab.stage!.recipe.controls).toEqual({});
+  const request = serialRig(
+    crypto.randomUUID(),
+    'Hybrid',
+    [amp, fx, cab],
+    'profile',
+  );
+  const manifest = JSON.parse(request.manifest_json);
+  expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+  expect(manifest.resources).toHaveLength(1);
+  expect(Object.keys(request.resources)).toHaveLength(1);
+  expect(
+    manifest.tone3000.instances.map(
+      (n: { processingRole: string }) => n.processingRole,
+    ),
+  ).toEqual(['amp', 'cab']);
+  expect(manifest.tone3000.instances[0].partition).toMatchObject({
+    version: 1,
+    input: 'right',
+    amp: 'source-amp',
+    cab: 'source-cab',
+    controls: { inputLevel: 0.6 },
+  });
+  expect(manifest.tone3000.instances[1].partition.pair).toBe(
+    manifest.tone3000.instances[0].partition.pair,
+  );
+  expect(native).toEqual(original);
+});
+it('keeps stage pairs complete and ordered without preventing effects between them', () => {
+  const [amp, cab] = splitNative(native, 'amp', 'cab', 'left');
+  const fx = lv2Effect(mono);
+  expect(canMoveEffect([amp, cab, fx], 1, -1)).toBe(false);
+  expect(canMoveEffect([amp, cab, fx], 1, 1)).toBe(true);
+  expect(canMoveEffect([amp, fx, cab], 1, -1)).toBe(true);
+  expect(canMoveEffect([amp, cab], 0, -1)).toBe(false);
+  expect(removeEffect([amp, fx, cab], amp.id)).toEqual([fx]);
+  expect(removeEffect([amp, fx, cab], cab.id)).toEqual([fx]);
+  expect(removeEffect([amp, fx, cab], fx.id)).toEqual([amp, cab]);
+  for (const effects of [
+    [amp],
+    [cab, amp],
+    [amp, cab, { ...cab, id: 'duplicate' }],
+  ])
+    expect(() =>
+      serialRig(crypto.randomUUID(), 'Invalid', effects, 'profile'),
+    ).toThrow('pair');
+  expect(() => splitNative(amp, 'amp', 'cab', 'left')).toThrow('whole tone');
+  expect(() => splitNative(native, 'same', 'same', 'left')).toThrow('separate');
 });

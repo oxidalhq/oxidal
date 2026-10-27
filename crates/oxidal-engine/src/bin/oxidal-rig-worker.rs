@@ -1,6 +1,36 @@
 //! One main-thread native/LV2 owner; EOF terminates PCM. Export runs separately.
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+    let result = run();
+    if let Err(error) = &result
+        && std::env::args().len() == 1
+    {
+        // run() has dropped the response sender and all processor ownership.
+        // The writer releases stdout before this terminal frame is emitted.
+        // Preparation may fail before any valid control snapshot exists.
+        let message: String = error
+            .to_string()
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(1024)
+            .collect();
+        let failure = oxidal_engine::protocol::WorkerFailure {
+            failure: if message.trim().is_empty() {
+                "Mixed worker failed".into()
+            } else {
+                message
+            },
+        };
+        let mut stdout = std::io::stdout().lock();
+        serde_json::to_writer(&mut stdout, &failure)?;
+        stdout.write_all(b"\n")?;
+        stdout.flush()?;
+    }
+    result
+}
+#[cfg(target_os = "linux")]
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::stream::{Duplex, Step};
     use oxidal_engine::{Session, protocol::*};
     use oxidal_lv2::World;

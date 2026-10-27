@@ -32,3 +32,7 @@ Independent button actions use `.action-row`: wrapping, aligned controls and the
 The maintained device suite checks visible gaps as well as target size, overflow and alignment, and captures every Settings section in both orientations. Review the screenshots: a passing geometry check is not a UX sign-off or proof of physical stage usability.
 
 Secondary setup explanations are collapsed under labelled help disclosures. Native draft tone controls are directly tappable; the full block/device control selector remains available under All controls. Artwork without an image is compact metadata behind a count, while cached images stay visible and served locally. A silent draft is labelled explicitly; these presentation changes do not imply shared structural authoring with the playing worker.
+
+## Mixed composition
+
+Library → New preset can combine saved native tones and installed scalar LV2 effects. A compatible saved tone can become linked amp/cab stages with explicit input and amp-head confirmation; effects can sit between them. The original tone stays unchanged. Failed preparation keeps the draft open, and pending preparation can be cancelled. Rig appears only after confirmed running state. Stage controls use the same touch adjustment surface and separate offline Save. See [mixed engine](mixed-engine.md) for the qualified source/rate limits and remaining live structural authoring work.

@@ -101,8 +101,8 @@ A shared graph boundary is required before admitting other split-stage rates.
 Whole-preset playback retains its existing rate support.
 
 This API is control-thread preparation only. The [mixed worker](mixed-engine.md)
-now restores paired derivation recipes and scalar Save/recall at 48 kHz. Whole-native
-and LV2 composition have a browser lifecycle; browser split conversion and live
+now restores paired derivation recipes and scalar Save/recall at 48 kHz. Whole-native, saved-source amp/cab
+and LV2 composition have a browser lifecycle; unsaved whole-rig conversion and live
 structural replacement remain open. Preparing processors waits for model loads; it is not
 a streaming callback operation or a latency, real-time or gapless claim.
 Attribution is in [NOTICE-split.md](../native/tone3000/NOTICE-split.md).

@@ -1980,3 +1980,15 @@ textarea {
   grid-column: 1 / -1;
   width: 100%;
 }
+
+/* Split choices share one row in short landscape; retain actions while scrolling. */
+.adjustment-dialog.stage-split-dialog {
+  width: min(
+    36rem,
+    calc(100% - max(8px, var(--safe-left)) - max(8px, var(--safe-right)))
+  );
+}
+
+.stage-split-dialog .field {
+  margin: 0;
+}

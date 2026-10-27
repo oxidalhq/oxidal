@@ -128,6 +128,27 @@ pub struct WorkerReply {
     pub processed_frames: u64,
     pub error: Option<String>,
 }
+/// Terminal worker failure, including preparation before a valid snapshot exists.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerFailure {
+    pub failure: String,
+}
+/// Failure is never promoted to a synthetic control/telemetry snapshot.
+pub fn decode_worker_reply(bytes: &[u8]) -> Result<WorkerReply, String> {
+    if let Ok(reply) = serde_json::from_slice::<WorkerReply>(bytes) {
+        return Ok(reply);
+    }
+    if let Ok(failure) = serde_json::from_slice::<WorkerFailure>(bytes)
+        && !failure.failure.trim().is_empty()
+        && failure.failure.len() <= 4096
+        && !failure.failure.chars().any(char::is_control)
+    {
+        return Err(failure.failure);
+    }
+    Err("Invalid mixed worker protocol".into())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveRequest {
@@ -179,4 +200,27 @@ pub struct RigAudioCommand {
     pub session: String,
     pub expected_revision: u64,
     pub action: RigAudioAction,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn terminal_failures_preserve_reason_without_fake_readback() {
+        assert_eq!(
+            decode_worker_reply(br#"{"failure":"Unsupported cab encoding"}"#).unwrap_err(),
+            "Unsupported cab encoding"
+        );
+        for value in [
+            serde_json::json!({"failure":""}),
+            serde_json::json!({"failure":"bad\nmessage"}),
+            serde_json::json!({"failure":"x".repeat(4097)}),
+            serde_json::json!({"failure":"ignored", "control":{}}),
+        ] {
+            assert_eq!(
+                decode_worker_reply(&serde_json::to_vec(&value).unwrap()).unwrap_err(),
+                "Invalid mixed worker protocol"
+            );
+        }
+    }
 }

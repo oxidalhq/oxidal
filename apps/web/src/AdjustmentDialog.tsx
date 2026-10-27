@@ -6,10 +6,12 @@ export function AdjustmentDialog({
   title,
   onCancel,
   children,
+  className = '',
 }: {
   title: string;
   onCancel: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const heading = useId();
@@ -49,7 +51,7 @@ export function AdjustmentDialog({
   return (
     <dialog
       ref={ref}
-      className="adjustment-dialog"
+      className={`adjustment-dialog ${className}`}
       aria-labelledby={heading}
       onCancel={(event) => {
         event.preventDefault();
