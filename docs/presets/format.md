@@ -1,6 +1,6 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.2. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). It does not yet implement this `.oxpreset` bundle importer, authoring, exporter, stripping operation or sync transport. Normative MUST/MUST NOT requirements describe the intended implementation.
+**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). It does not yet implement this `.oxpreset` bundle importer, authoring, exporter, stripping operation or sync transport. Normative MUST/MUST NOT requirements describe the intended implementation.
 
 ## Purpose and choice
 
@@ -55,14 +55,14 @@ An unpacked directory with the same contents is permitted for local storage/deve
 
 The [JSON Schema](manifest.schema.json) defines field shapes, bounds, enum values and unknown-field rejection. The semantic rules below are equally mandatory. A schema-valid manifest is not a valid preset or an export authorization.
 
-| Field                              | Contract                                                                                                                                                                                                                    |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                       |
-| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                     |
-| `tone3000.instances`               | One or more native tone instances, each with a stable local ID, a resource ID for its current `.t3kpreset`, a compatibility-profile ID, and optional original import provenance. Multiple instances make a rig Oxidal-only. |
-| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                         |
-| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                    |
-| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. V1 defines no extension semantics.                   |
+| Field                              | Contract                                                                                                                                                                                                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `format`, `formatVersion`          | Exactly `oxidal.preset` and integer `1`. Unsupported versions fail without rewriting.                                                                                                                                                                                          |
+| `id`, `name`                       | Oxidal UUID identity and display name. Name is not a path. A modified import/new copy has a new Oxidal identity, independent of the source TONE3000 ID.                                                                                                                        |
+| `tone3000.instances`               | Zero or more native tone instances, each with a stable local ID, current `.t3kpreset` resource, compatibility profile, optional host processing role and original import provenance. An empty list requires an explicit host graph. Multiple instances make a rig Oxidal-only. |
+| `oxidal`                           | `null` for the canonical pure-native tone, otherwise the host graph, LV2 instances and recall policy. It is the only place v1 host processing/routing is described.                                                                                                            |
+| `resources`                        | Complete resource catalog: local ID, bundle-relative path, kind, lowercase SHA-256 and exact uncompressed byte count. References use IDs, not external filesystem paths.                                                                                                       |
+| `extensions`, `requiredExtensions` | URI-keyed extension objects and required extension identifiers. Required extensions MUST exist in `extensions`; an unknown required extension blocks load/edit/export. V1 defines no extension semantics.                                                                      |
 
 Top-level metadata is intentionally small. Accounts, credentials, machine paths, device identifiers, live CPU/meter readings, authentication/session tokens and export-eligibility flags MUST NOT be serialized. Format extensions require an explicit capability/version contract, not arbitrary unknown top-level fields. Unknown optional extensions may be preserved as opaque metadata but MUST NOT silently affect sound. Any unrecognized extension blocks TONE3000 export until explicitly removed in a separate copy or qualified as non-sonic.
 
@@ -73,6 +73,25 @@ The current native payload is the sole persistent authority for that TONE3000 in
 For an unedited import, retain the original payload byte-for-byte. Once edited, store the current native payload separately from immutable `origin.resource`. Preserve unknown native bytes on no-op saves. If a selected backend would discard unknown native fields during editing, reject the incompatible edit or provide a proven preservation path; do not silently claim full fidelity. Unknown/unsupported native formats may be retained for recovery but MUST NOT be applied or declared exportable merely because their hashes match.
 
 An origin is provenance, not the active sound and not authority to overwrite a remote preset. `sourcePresetId`, when present, is opaque. Changes only to external effects MUST NOT reserialize/alter the TONE3000 payload. Backend lifecycle/build qualification and full session state remain separate from tone-preset bytes.
+
+### Native processing roles
+
+`processingRole` is optional; absence means `whole` for existing draft documents.
+`amp` and `cab` describe Oxidal host processing of explicitly derived native states,
+not a change to the embedded TONE3000 preset format. They require an explicit host
+graph and a backend profile supporting those roles. The amp omits the final native
+DC blocker; the cab applies it once. A role label alone is not proof of a valid
+amp-head/cab split: verify state, control allocation and assets before preparation.
+Do not relabel a combined capture. Current paired-stage processing requires 48 kHz;
+other rates require a shared resampling boundary and must be rejected until supported.
+An extracted role is never directly TONE3000-export eligible.
+
+The format permits no native instances and no resources for an LV2-only scalar
+rig, with the explicit host graph and installed plugin declarations still required.
+An empty passthrough rig may contain only connected input/output nodes, without a
+dummy native payload or plugin.
+`oxidal: null` instead requires exactly one whole native instance and its verified
+current payload. No dummy native instance or asset may be inserted to satisfy shape.
 
 ### Graph and LV2 state
 
@@ -100,7 +119,7 @@ Readers MUST reject duplicate JSON keys; numbers must be finite; manifest/schema
 4. Verify every declared resource's size/hash, then decode native preset and LV2 state with bounded parsers and the declared qualified profiles. Hash integrity does not prove compatibility or authenticity.
 5. Prepare resources/plugin instances off the audio callback and verify state/readiness. Only an explicit load action may commit a prepared rig; parsing or importing alone changes no sound.
 
-Reject unlisted non-directory archive entries, missing files, duplicate/case-colliding paths, absolute/drive/UNC paths, backslashes, NUL, dot/dot-dot components, symlinks, special devices, encrypted files and methods other than ZIP Store/Deflate. Paths use the schema's restricted ASCII namespace; display names remain Unicode. Baseline import limits: 1 MiB manifest, 4,096 resources, 256 MiB per resource, 1 GiB total uncompressed data, depth 64 for structured native/state data, and 256 graph nodes. Enforce limits during streaming/decompression, not after extraction. Implementations may lower admission limits with a clear error; no truncation. An expanded directory receives equivalent containment/symlink checks. Never trust ZIP sizes alone.
+Reject unlisted non-directory archive entries, missing files, duplicate/case-colliding paths, absolute/drive/UNC paths, backslashes, NUL, dot/dot-dot components, symlinks, special devices, encrypted files and methods other than ZIP Store/Deflate. Paths use the schema's restricted ASCII namespace; display names remain Unicode. Baseline import limits: 1 MiB manifest, 4,096 resources, 256 MiB per resource, 1 GiB total uncompressed data, depth 64 for structured native/state data, and no fixed NAM-instance or graph-node count. The manifest byte budget bounds parsed declarations; actual DSP admission depends on resources and backend capability. Enforce limits during streaming/decompression, not after extraction. Storage/decoder admission may enforce lower byte/resource budgets with a clear error; no truncation. A fixed product NAM-instance ceiling is not part of this draft. Existing runtime graph limits remain an implementation gap, not a format requirement. An expanded directory receives equivalent containment/symlink checks. Never trust ZIP sizes alone.
 
 An edit, rename/save, or extension change to an imported tone creates an Oxidal preset identity on first modification. Further saves retain that Oxidal ID; “Save as”/“Create compatible copy” creates a new ID. The original import is not overwritten. Save the complete consistent state or fail atomically, leaving the previous saved file and active rig intact. Define retention/garbage collection separately from logical deletion of shared resources.
 
@@ -108,7 +127,7 @@ An edit, rename/save, or extension change to an imported tone creates an Oxidal 
 
 Eligibility is **computed**, never a trusted manifest boolean. All of the following MUST hold:
 
-- Exactly one TONE3000 instance and a fully decoded, supported, current native payload with all required assets and tone parameters intact.
+- Exactly one whole-role TONE3000 instance and a fully decoded, supported, current native payload with all required assets and tone parameters intact.
 - `oxidal` is `null`. An explicit host graph, external LV2 instance/resource, alternate engine, host bypass/mix/routing/recall behavior or other non-native sonic setting blocks export. An equivalent identity graph may be converted to the canonical null form only through verified normalization; no graph is assumed equivalent just because it contains one tone node.
 - No undeclared/unreferenced processing resources, required extensions or unknown extension semantics. Immutable original-tone provenance and explicitly qualified non-sonic metadata do not affect the sound.
 - Every retained tone setting is expressible by the selected TONE3000 writer/profile. No dropped effects, approximate mappings or silent routing flattening.
@@ -139,7 +158,8 @@ Eligibility and conversion previews bind to the active document revision, SHA-25
 
 ## Examples and conformance gates
 
-[Pure edited manifest](examples/pure-edited.json), [mixed delay manifest](examples/mixed-delay.json), and [separate compatible-copy manifest](examples/compatible-copy.json) illustrate structure. These are **manifest-only, synthetic documentation examples**: sizes/hashes are placeholders, the example delay URI names no real plugin, and no native/audio payload is bundled. They pass shape validation but MUST fail full admission without actual matching native resources. They are not factory presets or audio compatibility fixtures.
+[Pure edited manifest](examples/pure-edited.json), [mixed delay manifest](examples/mixed-delay.json), [separate compatible-copy manifest](examples/compatible-copy.json), and
+[LV2-only manifest](examples/lv2-only.json) illustrate structure. These are **manifest-only, synthetic documentation examples**: sizes/hashes where present are placeholders, the example plugin URIs name no real plugins, and no native/audio payload is bundled. They pass shape validation but MUST fail full admission without actual matching native resources. They are not factory presets or audio compatibility fixtures.
 
 `pnpm presets:check` validates the schema and examples and rejects representative invalid manifest shapes; it does not decode native payloads or implement eligibility. Before format 1 is frozen or runtime compatibility is claimed, implement and pass:
 

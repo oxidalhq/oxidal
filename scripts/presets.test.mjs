@@ -22,8 +22,13 @@ test('preset schema is a valid strict draft 2020-12 schema', () => {
   assert.equal(ajv.validateSchema(schema), true);
 });
 
-test('all three documentation manifests satisfy shape validation only', () => {
-  for (const name of ['pure-edited', 'mixed-delay', 'compatible-copy']) {
+test('documentation manifests satisfy shape validation only', () => {
+  for (const name of [
+    'pure-edited',
+    'mixed-delay',
+    'compatible-copy',
+    'lv2-only',
+  ]) {
     assert.equal(
       validate(read(`examples/${name}.json`)),
       true,
@@ -63,4 +68,36 @@ test('extension keys are namespaced and required capability IDs are unique', () 
     (value) =>
       (value.requiredExtensions = ['urn:example:future', 'urn:example:future']),
   );
+});
+
+test('format admits resource-budgeted native instances and explicit processing roles', () => {
+  const fixture = mixed();
+  fixture.tone3000.instances = Array.from({ length: 32 }, (_, i) => ({
+    ...fixture.tone3000.instances[0],
+    id: `native${i}`,
+    processingRole: i % 2 ? 'amp' : 'cab',
+  }));
+  // Shape only: references/role semantics and DSP admission still need validation.
+  assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
+  fixture.tone3000.instances[0].processingRole = 'unknown';
+  assert.equal(validate(fixture), false);
+});
+
+test('empty mono and stereo working rigs need no invented native payload', () => {
+  for (const channels of [1, 2]) {
+    const fixture = read('examples/lv2-only.json');
+    fixture.oxidal.lv2 = [];
+    fixture.oxidal.graph.nodes = [
+      { id: 'input', kind: 'input', audioInputs: 0, audioOutputs: channels },
+      { id: 'output', kind: 'output', audioInputs: channels, audioOutputs: 0 },
+    ];
+    fixture.oxidal.graph.edges = Array.from(
+      { length: channels },
+      (_, port) => ({
+        from: { node: 'input', port },
+        to: { node: 'output', port },
+      }),
+    );
+    assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
+  }
 });
