@@ -169,6 +169,73 @@ impl PreparedGraph {
             failed: false,
         })
     }
+    /// Restore only before opening PCM. Unknown/missing ports fail instead of
+    /// silently dropping a control after a plugin upgrade.
+    pub fn restore(&mut self, recall: &crate::protocol::GraphRecall) -> Result<(), String> {
+        recall.validate()?;
+        let initial = self.snapshot();
+        if recall.values.len() != initial.parameters.len()
+            || recall
+                .values
+                .iter()
+                .any(|v| !initial.parameters.iter().any(|p| p.id == v.target))
+        {
+            return Err("Plugin controls changed; graph recall is incompatible".into());
+        }
+        for value in &recall.values {
+            let current = self.snapshot();
+            self.apply(
+                Command {
+                    session: current.session,
+                    protocol: 1,
+                    request_id: format!("restore-{}", current.revision),
+                    expected_revision: Some(current.revision),
+                    action: oxidal_control::Action::Set {
+                        target: value.target.clone(),
+                        value: value.normalized,
+                    },
+                },
+                false,
+            )?;
+        }
+        let current = self.snapshot();
+        self.apply(
+            Command {
+                session: current.session,
+                protocol: 1,
+                request_id: "restore-bypass".into(),
+                expected_revision: Some(current.revision),
+                action: oxidal_control::Action::Set {
+                    target: "rig.bypass".into(),
+                    value: if recall.bypassed { 1.0 } else { 0.0 },
+                },
+            },
+            false,
+        )?;
+        let current = self.snapshot();
+        self.apply(
+            Command {
+                session: current.session,
+                protocol: 1,
+                request_id: "restore-mappings".into(),
+                expected_revision: Some(current.revision),
+                action: oxidal_control::Action::Mappings {
+                    file: recall.mappings.clone(),
+                },
+            },
+            false,
+        )?;
+        let actual = self.snapshot();
+        if recall.values.iter().any(|v| {
+            !actual
+                .parameters
+                .iter()
+                .any(|p| p.id == v.target && (p.value - v.normalized).abs() < 1e-5)
+        }) {
+            return Err("Restored graph control differs".into());
+        }
+        Ok(())
+    }
     pub fn snapshot(&self) -> Snapshot {
         self.control.snapshot()
     }

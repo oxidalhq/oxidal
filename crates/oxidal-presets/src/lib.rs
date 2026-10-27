@@ -1,6 +1,8 @@
 //! Bounded native preset inspection and immutable original storage.
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
+mod graph;
+pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod model;
 mod native;
 pub use model::{ModelAsset, ModelStore};

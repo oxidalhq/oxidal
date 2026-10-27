@@ -117,6 +117,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings.stream.input.sample_rate.into(),
         settings.stream.input.period_frames as usize,
     )?;
+    if let Some(recall) = &settings.recall {
+        graph.restore(recall)?;
+    }
     #[cfg(feature = "qualification")]
     let null = std::env::var("OXIDAL_GRAPH_QUALIFY_NULL").is_ok_and(|v| v == "1");
     #[cfg(not(feature = "qualification"))]

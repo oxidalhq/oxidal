@@ -57,6 +57,7 @@ impl Worker {
 struct Owner {
     midi_enabled: bool,
     executable: Option<PathBuf>,
+    preset_root: PathBuf,
     worker: Option<Worker>,
     state: GraphAudioState,
     updates: watch::Sender<GraphAudioState>,
@@ -73,6 +74,20 @@ impl Owner {
         self.publish();
     }
     fn readback(&mut self, reply: WorkerReply) {
+        if self.state.control.as_ref().is_none_or(|old| {
+            old.session != reply.control.session || old.revision != reply.control.revision
+        }) {
+            self.state.revision += 1;
+            self.state.saved_copy = None;
+        }
+        // Retain only settled adjustments; an abandoned gesture must not become
+        // the restart value. Running DSP owns the preview until commit/cancel.
+        if let Ok(recall) = GraphRecall::from_snapshot(&reply.control)
+            && let Some(settings) = &mut self.state.configured
+        {
+            settings.rig = reply.control.rig.clone();
+            settings.recall = Some(recall);
+        }
         self.state.telemetry = Some(reply.telemetry);
         self.state.control = Some(reply.control);
         self.state.native_values = reply.native_values;
@@ -200,6 +215,40 @@ impl Owner {
                     return Err(e);
                 }
             }
+            GraphAudioAction::SaveCopy { name } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Graph audio is not running".into());
+                }
+                let control = self
+                    .state
+                    .control
+                    .as_ref()
+                    .ok_or("No confirmed graph controls")?;
+                let settings = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .ok_or("No configured graph")?;
+                let preset = oxidal_presets::GraphPreset {
+                    version: 1,
+                    name,
+                    sample_rate: settings.stream.input.sample_rate,
+                    rig: control.rig.clone(),
+                    bindings: settings.bindings.clone(),
+                    recall: GraphRecall::from_snapshot(control)?,
+                };
+                preset.validate().map_err(|e| e.to_string())?;
+                let root = self.preset_root.clone();
+                let saved = tokio::task::spawn_blocking(move || {
+                    oxidal_presets::GraphStore::new(root).save(preset)
+                })
+                .await
+                .map_err(|_| "Graph save task failed")?
+                .map_err(|e| e.to_string())?;
+                self.state.saved_copy = Some(saved.id);
+                self.state.revision += 1;
+                self.publish();
+            }
             GraphAudioAction::Control { command } => {
                 if !self.midi_enabled
                     && matches!(command.action, oxidal_control::Action::Midi { .. })
@@ -273,6 +322,7 @@ impl GraphPlayback {
             device_owned: false,
             error: None,
             experimental: true,
+            saved_copy: None,
         };
         let (updates, state) = watch::channel(initial.clone());
         let (commands, mut receiver) =
@@ -280,6 +330,7 @@ impl GraphPlayback {
         let mut owner = Owner {
             midi_enabled: config.simulator,
             executable: config.graph_worker.clone(),
+            preset_root: config.preset_dir.join("graphs"),
             worker: None,
             state: initial,
             updates,

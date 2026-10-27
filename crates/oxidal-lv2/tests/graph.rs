@@ -375,3 +375,44 @@ fn successful_graph_blocks_do_not_allocate_rust_memory() {
     assert_eq!(ALLOCATIONS.with(|n| n.get()), 0);
     assert_eq!(l, [0.5; 64]);
 }
+
+#[test]
+fn recalled_controls_and_bypass_reach_audio_and_reject_changed_ports() {
+    let mut original = setup(false);
+    set(&mut original, "a.gain", 0.25);
+    set(&mut original, "b.gain", 0.375);
+    send(&mut original, mappings(false, MidiMode::Absolute));
+    let recall = oxidal_lv2::protocol::GraphRecall::from_snapshot(&original.snapshot()).unwrap();
+    let mut restored = setup(false);
+    restored.restore(&recall).unwrap();
+    check_audio(&mut restored, 0.09375);
+    assert_eq!(restored.snapshot().mappings.mappings.len(), 1);
+    set(&mut original, "rig.bypass", 1.0);
+    restored
+        .restore(&oxidal_lv2::protocol::GraphRecall::from_snapshot(&original.snapshot()).unwrap())
+        .unwrap();
+    check_audio(&mut restored, 0.25);
+    let mut changed = recall.clone();
+    changed.values[0].target = "removed.port".into();
+    assert!(setup(false).restore(&changed).is_err());
+    changed = recall.clone();
+    changed.values.pop();
+    assert!(setup(false).restore(&changed).is_err());
+    changed = recall.clone();
+    changed.values.push(changed.values[0].clone());
+    assert!(changed.validate().is_err());
+    changed = recall.clone();
+    changed.values[0].normalized = f64::NAN;
+    assert!(changed.validate().is_err());
+    send(
+        &mut original,
+        Action::Edit {
+            edit: Edit::Begin {
+                owner: "web".into(),
+                token: "unfinished".into(),
+                target: "a.gain".into(),
+            },
+        },
+    );
+    assert!(oxidal_lv2::protocol::GraphRecall::from_snapshot(&original.snapshot()).is_err());
+}

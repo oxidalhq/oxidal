@@ -73,3 +73,17 @@ pub(super) async fn original(
     })
     .await
 }
+
+/// Graph documents are independent of native original/owned files. They contain
+/// plugin URIs and scalar/MIDI state, never executable paths or device bindings.
+pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
+    let root = shared.config.preset_dir.join("graphs");
+    match tokio::task::spawn_blocking(move || oxidal_presets::GraphStore::new(root).list()).await {
+        Ok(Ok(presets)) => Json(presets).into_response(),
+        Ok(Err(error)) => failure(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
+        Err(_) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Graph library task failed",
+        ),
+    }
+}

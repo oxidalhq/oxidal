@@ -52,6 +52,12 @@
     "graph_audio_state": {
       "$ref": "#/$defs/GraphAudioState"
     },
+    "graph_presets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SavedGraph"
+      }
+    },
     "library": {
       "$ref": "#/$defs/Library"
     },
@@ -112,6 +118,7 @@
   },
   "required": [
     "lv2_catalog",
+    "graph_presets",
     "stage_model",
     "staged_model",
     "tone_page",
@@ -1896,6 +1903,23 @@
         {
           "type": "object",
           "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_copy"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "command": {
               "$ref": "#/$defs/Command"
             },
@@ -1988,6 +2012,12 @@
           "format": "uint64",
           "minimum": 0
         },
+        "saved_copy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "session": {
           "type": "string"
         },
@@ -2011,6 +2041,87 @@
         "processed_frames",
         "device_owned",
         "experimental"
+      ]
+    },
+    "GraphPreset": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Binding"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "recall": {
+          "$ref": "#/$defs/GraphRecall"
+        },
+        "rig": {
+          "$ref": "#/$defs/Rig"
+        },
+        "sample_rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "name",
+        "sample_rate",
+        "rig",
+        "bindings",
+        "recall"
+      ]
+    },
+    "GraphRecall": {
+      "description": "Durable scalar/MIDI values, independent of transient command sessions and edit leases.",
+      "type": "object",
+      "properties": {
+        "bypassed": {
+          "type": "boolean"
+        },
+        "mappings": {
+          "$ref": "#/$defs/MappingFile"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GraphValue"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "bypassed",
+        "values",
+        "mappings"
+      ]
+    },
+    "GraphValue": {
+      "type": "object",
+      "properties": {
+        "normalized": {
+          "type": "number",
+          "format": "double"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "normalized"
       ]
     },
     "Host": {
@@ -3093,6 +3204,22 @@
         "float"
       ]
     },
+    "SavedGraph": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "preset": {
+          "$ref": "#/$defs/GraphPreset"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "preset"
+      ]
+    },
     "SavedNetwork": {
       "type": "object",
       "properties": {
@@ -3379,6 +3506,17 @@
           "items": {
             "$ref": "#/$defs/Binding"
           }
+        },
+        "recall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GraphRecall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "rig": {
           "$ref": "#/$defs/Rig"

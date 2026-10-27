@@ -149,6 +149,10 @@ export type GraphAudioAction =
       kind: "restart";
     }
   | {
+      kind: "save_copy";
+      name: string;
+    }
+  | {
       command: Command;
       kind: "control";
     };
@@ -290,6 +294,7 @@ export interface Contract {
   error: ApiError;
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
+  graph_presets: SavedGraph[];
   library: Library;
   lv2_catalog: PluginCatalog;
   model_page: Page2;
@@ -552,12 +557,25 @@ export interface GraphAudioCommand {
 }
 export interface StartGraph {
   bindings: Binding[];
+  recall?: GraphRecall | null;
   rig: Rig;
   stream: StreamConfig;
 }
 export interface Binding {
   node: string;
   uri: string;
+}
+/**
+ * Durable scalar/MIDI values, independent of transient command sessions and edit leases.
+ */
+export interface GraphRecall {
+  bypassed: boolean;
+  mappings: MappingFile;
+  values: GraphValue[];
+}
+export interface GraphValue {
+  normalized: number;
+  target: string;
 }
 export interface GraphAudioState {
   configured?: StartGraph | null;
@@ -569,6 +587,7 @@ export interface GraphAudioState {
   phase: AudioPhase;
   processed_frames: number;
   revision: number;
+  saved_copy?: string | null;
   session: string;
   telemetry?: Snapshot2 | null;
 }
@@ -658,6 +677,18 @@ export interface Channel {
   clips: number;
   peak_dbfs: number;
   rms_dbfs: number;
+}
+export interface SavedGraph {
+  id: string;
+  preset: GraphPreset;
+}
+export interface GraphPreset {
+  bindings: Binding[];
+  name: string;
+  recall: GraphRecall;
+  rig: Rig;
+  sample_rate: number;
+  version: number;
 }
 export interface Library {
   presets: Inspection[];

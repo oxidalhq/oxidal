@@ -46,7 +46,7 @@ Build `cargo build --locked -p oxidal-lv2 --features worker --bin oxidal-graph-w
 - `start` carries `settings`: an exact `stream` configuration, validated `rig` with input/LV2/output nodes, and one `{node, uri}` binding per LV2 node. Start acknowledges after PCM has processed the priming blocks.
 - `control` carries the ordinary `Command`, using the worker control snapshot's session/revision. Set/adjust, owned editing, mappings, injected MIDI, bypass and edge-only routing execute in that worker. Injected MIDI is permitted only when the daemon simulator capability is enabled; physical MIDI transport remains pending.
 - `stop` closes worker input, requests EOF shutdown, and acknowledges only after the child has been reaped and the shared audio-device permit released. A timeout escalates to process termination while retaining ownership until reaping.
-- `restart` reopens the last configured graph with **plugin defaults and a fresh control session**. It does not restore unsaved parameter edits, mappings or routes. Stop retains the last readback for inspection; stopped graph controls cannot be edited through the playback API yet.
+- `restart` reopens the last confirmed graph with its scalar values, global bypass, MIDI mappings and routes, using a fresh control session. Settled edits survive without Save. An unfinished gesture is excluded from restart recall. Stop retains the last readback for inspection; stopped graph controls cannot be edited through the playback API yet. Plugin delay/reverb histories and opaque state are not restored. Changed/missing controls reject recall before PCM opens.
 
 Every lifecycle request includes the outer lifecycle session and expected revision. Control snapshots have their own revision, so periodic frame-count updates do not invalidate otherwise current commands. Failed commands never automatically retry. A timeout or malformed/closed worker reply terminates and reaps the worker before restart is allowed. HTTP disconnect does not cancel an already accepted operation. Playback, saved-preset playback and audio probing share one semaphore; competing device operations reject before spawning/opening another stream. Graph failure or Stop leaves the library, simulated rig, HTTP service and separate native authoring process available.
 
@@ -74,3 +74,19 @@ Unavailable/failed discovery returns an error rather than an empty successful ca
 The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
 rescanning while the graph worker continues processing. Browser New preset integration
 and persistent mixed-native/LV2 rigs remain separate work.
+
+## Graph snapshots
+
+While graph audio is running, `save_copy` with a name stores the authoritative
+settled graph, plugin URIs, normalized control values, global bypass and MIDI mappings.
+It does not require a native original or stop audio. An active adjustment must finish
+before Save; disk work runs off the audio process. `GET /api/v1/presets/graphs` lists
+these immutable, content-addressed documents. Recall passes their rig, bindings and
+recall fields to graph Start with an explicitly selected device configuration.
+
+The document records the original sample rate; changing it can change the meaning of
+sample-rate-dependent controls. This version captures scalar-only LV2 rigs, including
+empty input-to-output rigs. It does not embed installed plugin binaries, opaque plugin
+state or file assets, and does not claim TONE3000-compatible export or mixed NAM/LV2
+support. Snapshot validation and exact port-readback checks reject incompatible recall
+rather than silently omitting controls. Browser authoring remains the next integration.

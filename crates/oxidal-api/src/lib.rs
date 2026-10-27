@@ -53,6 +53,7 @@ pub struct ApiError {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
     pub lv2_catalog: oxidal_lv2::PluginCatalog,
+    pub graph_presets: Vec<oxidal_presets::SavedGraph>,
     pub stage_model: provider::download::StageModel,
     pub staged_model: provider::download::StagedModel,
     pub tone_page: provider::catalog::Page<provider::catalog::Tone>,
@@ -227,6 +228,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(graph_playback::state).post(graph_playback::command),
         )
         .route("/plugins/lv2", get(plugins::catalog))
+        .route("/presets/graphs", get(presets::graphs))
         .route("/audio/devices", get(audio::devices))
         .route("/audio/probe", post(audio::probe))
         .route(

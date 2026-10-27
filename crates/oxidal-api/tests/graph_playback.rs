@@ -229,7 +229,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         .as_array_mut()
         .unwrap()
         .push(json!({"from":"in","to":"out"}));
-    let action = control(&s, json!({"type":"routing","rig":routed}));
+    let action = control(&s, json!({"type":"routing","rig":routed.clone()}));
     apply(&c, &url, &mut s, action).await;
     assert_eq!(s["control"]["rig"]["edges"].as_array().unwrap().len(), 3);
     assert_eq!(
@@ -242,6 +242,19 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
             .status(),
         400
     );
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"save_copy","name":"Authored LV2 rig"}),
+    )
+    .await;
+    let saved_id = s["saved_copy"].clone();
+    let saved = get(&c, &url, "presets/graphs").await;
+    assert_eq!(saved.as_array().unwrap().len(), 1);
+    assert_eq!(saved[0]["id"], saved_id);
+    assert_eq!(saved[0]["preset"]["rig"], routed);
+    assert_eq!(saved[0]["preset"]["recall"]["values"][0]["normalized"], 1.0);
     let frames = s["processed_frames"].as_u64().unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
     s = get(&c, &url, "graph-audio").await;
@@ -251,8 +264,28 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     assert_eq!(get(&c, &url, "state").await, original);
     apply(&c, &url, &mut s, json!({"kind":"restart"})).await;
     assert_ne!(s["control"]["session"], session);
-    // Restart intentionally reloads configured graph defaults, not an unsaved control draft.
-    assert_eq!(s["native_values"][0]["value"], 0.0);
+    // Restart preserves confirmed values, routing, and mappings before Save.
+    assert_eq!(s["native_values"][0]["value"], 70.0);
+    assert_eq!(s["control"]["rig"], routed);
+    assert_eq!(
+        s["control"]["mappings"]["mappings"][0]["target"],
+        "amp.gain"
+    );
+    // Reopen the durable document through a fresh Start, not retained worker state.
+    apply(&c, &url, &mut s, json!({"kind":"stop"})).await;
+    let mut recalled = settings();
+    for key in ["rig", "bindings", "recall"] {
+        recalled[key] = saved[0]["preset"][key].clone();
+    }
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"start","settings":recalled}),
+    )
+    .await;
+    assert_eq!(s["native_values"][0]["value"], 70.0);
+    assert_eq!(s["control"]["rig"], routed);
     // Kill only our direct child with the verified graph-worker executable. No user processes.
     let pid = worker_pid(&executable);
     assert!(
