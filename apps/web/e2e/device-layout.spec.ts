@@ -333,7 +333,7 @@ test('stage display modes persist and stay accessible in both orientations', asy
   test.setTimeout(120000);
   const portrait = page.viewportSize()!;
   mkdirSync('../../.local/previews/stage', { recursive: true });
-  for (const mode of ['sunlight', 'stage']) {
+  for (const mode of ['sunlight', 'stage'] as const) {
     await setDisplayMode(page, mode);
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-display', mode);

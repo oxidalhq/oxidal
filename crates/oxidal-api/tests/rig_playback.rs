@@ -503,7 +503,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
         shutdown: Some(signal),
-        ..config
+        ..config.clone()
     })
     .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -525,6 +525,99 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     apply(&c, &url, json!({"kind":"start","settings":confirmed})).await;
     let repaired = apply(&c, &url, json!({"kind":"stop"})).await;
     assert!(repaired["recovery_error"].is_null());
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    // An explicit boot snapshot is independent from the later recovery checkpoint.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let state = get(&c, &url, "rig-audio").await;
+    assert_eq!(
+        post(&c, &url, &state, json!({"kind":"set_boot","enabled":true}))
+            .await
+            .status(),
+        409
+    );
+    let state = apply(&c, &url, json!({"kind":"restart"})).await;
+    let boot_path = root.join("presets/boot-audio.json");
+    std::fs::create_dir(boot_path.with_extension("tmp")).unwrap();
+    assert_eq!(
+        post(&c, &url, &state, json!({"kind":"set_boot","enabled":true}))
+            .await
+            .status(),
+        409
+    );
+    let running = get(&c, &url, "rig-audio").await;
+    assert_eq!(running["phase"], "running");
+    assert_eq!(running["control"], state["control"]);
+    assert_eq!(running["start_on_boot"], false);
+    std::fs::remove_dir(boot_path.with_extension("tmp")).unwrap();
+    let selected = apply(&c, &url, json!({"kind":"set_boot","enabled":true})).await;
+    assert_eq!(selected["start_on_boot"], true);
+    assert_eq!(selected["control"], state["control"]);
+    let boot_bytes = std::fs::read(&boot_path).unwrap();
+    let other = get(&c, &url, "audio").await;
+    assert_eq!(other["start_on_boot"], false);
+    let response=c.post(format!("{url}/audio")).json(&json!({"session":other["session"],"expected_revision":other["revision"],"action":{"kind":"set_boot","enabled":false}})).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(std::fs::read(&boot_path).unwrap(), boot_bytes);
+    apply(&c, &url, set(&selected, native.clone(), 0.67)).await;
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let booted = phase(&c, &url, "running").await;
+    assert_eq!(booted["start_on_boot"], true);
+    assert_eq!(control(&booted, &gain), -11.0);
+    assert!((control(&booted, &native) - 0.43).abs() < 1e-5);
+    assert_eq!(pids(&executable).len(), 1);
+    let other = get(&c, &url, "audio").await;
+    assert_eq!(other["phase"], "stopped");
+    assert_eq!(other["device_owned"], false);
+    assert_eq!(other["start_on_boot"], false);
+    let disabled = apply(&c, &url, json!({"kind":"set_boot","enabled":false})).await;
+    assert_eq!(disabled["phase"], "running");
+    assert_eq!(disabled["start_on_boot"], false);
+    assert_eq!(disabled["control"], booted["control"]);
+    assert!(!boot_path.exists());
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    // Disabled boot is metadata-only again, with no stray process/device permit.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let state = get(&c, &url, "rig-audio").await;
+    assert_eq!(state["phase"], "stopped");
+    assert_eq!(state["start_on_boot"], false);
+    assert!(pids(&executable).is_empty());
     shutdown.send_replace(true);
     stopped.wait().await.unwrap();
     server.abort();

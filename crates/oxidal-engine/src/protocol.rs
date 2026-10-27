@@ -148,6 +148,7 @@ pub struct SaveState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RigAudioState {
+    pub start_on_boot: bool,
     /// Checkpoint failure is separate from playback state and command authority.
     pub recovery_error: Option<String>,
     pub session: String,
@@ -164,6 +165,7 @@ pub struct RigAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RigAudioAction {
+    SetBoot { enabled: bool },
     Start { settings: Box<StartRig> },
     Stop,
     Restart,

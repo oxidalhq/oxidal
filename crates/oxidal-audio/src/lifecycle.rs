@@ -47,7 +47,9 @@ pub struct AudioState {
     /// Remains true until the worker is reaped, including failed shutdowns.
     pub device_owned: bool,
     pub experimental: bool,
-    /// Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
+    /// Shared boot policy failure; clearing it never requires a working audio device.
+    pub boot_error: Option<String>,
+    /// Explicitly opt in to restoring the captured confirmed session after daemon startup.
     pub start_on_boot: bool,
     /// Confirmed controls of the sounding worker; cleared whenever it stops.
     pub controls: Vec<LiveControl>,

@@ -32,7 +32,7 @@ impl Recovery {
             models,
         }
     }
-    fn validate(&self) -> Result<(), String> {
+    pub(super) fn validate(&self) -> Result<(), String> {
         if self.schema != 1
             || !valid_models(&self.models)
             || self.controls.as_ref().is_some_and(|c| !valid_controls(c))

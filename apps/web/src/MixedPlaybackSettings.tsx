@@ -1,5 +1,5 @@
 import { RecoveryNotice } from './RecoveryNotice';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
 import {
@@ -17,7 +17,9 @@ export function MixedPlaybackSettings({
   input,
   output,
   onState,
+  boot,
 }: {
+  boot: ReactNode;
   state: RigAudioState;
   connected: boolean;
   input: AudioProbe | null;
@@ -73,6 +75,7 @@ export function MixedPlaybackSettings({
           {state.device_owned ? 'Restart audio' : 'Resume session'}
         </Button>
       </div>
+      {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
       <RecoveryNotice message={state.recovery_error} />
       <p className="caption">

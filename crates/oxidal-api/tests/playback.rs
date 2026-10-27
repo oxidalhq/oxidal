@@ -442,6 +442,17 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     );
     state = get(&client, &url, "audio").await;
     assert!(!state["start_on_boot"].as_bool().unwrap());
+    let edited = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"outputLevel","value":0.36}),
+    )
+    .await;
+    assert_eq!(edited.status(), 200);
+    state = edited.json().await.unwrap();
+    let boot_controls = state["controls"].clone();
+
     assert!(
         send(
             &client,
@@ -456,6 +467,16 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = get(&client, &url, "audio").await;
     assert_eq!(state["start_on_boot"], true);
     assert!(root.join("presets/boot-audio.json").is_file());
+    let edited = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"outputLevel","value":0.47}),
+    )
+    .await;
+    assert_eq!(edited.status(), 200);
+    state = edited.json().await.unwrap();
+
     assert!(
         send(&client, &url, &state, json!({"kind":"stop"}))
             .await
@@ -481,6 +502,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["start_on_boot"], true);
     assert_eq!(state["configured"], settings);
+    assert_eq!(state["controls"], boot_controls);
     assert!(
         send(
             &client,
@@ -571,6 +593,47 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     );
     assert_eq!(state["modified"], true);
     assert_eq!(state["models"], recovery_models);
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_boot","enabled":true})
+        )
+        .await
+        .status(),
+        200
+    );
+    shutdown.send_replace(true);
+    task.abort();
+    stopped.wait().await.unwrap();
+    // Boot also restores confirmed NAM/IR assignments and their scalar controls.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config.clone()
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    state = wait_phase(&client, &url, "running").await;
+    assert_eq!(state["start_on_boot"], true);
+    assert_eq!(state["controls"], recovery_controls);
+    assert_eq!(state["models"], recovery_models);
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_boot","enabled":false})
+        )
+        .await
+        .status(),
+        200
+    );
     shutdown.send_replace(true);
     task.abort();
     stopped.wait().await.unwrap();
@@ -589,14 +652,9 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     let task = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    for _ in 0..100 {
-        state = get(&client, &url, "audio").await;
-        if state["phase"] == "failed" {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    }
-    assert_eq!(state["phase"], "failed");
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "stopped");
+    assert!(state["boot_error"].is_string());
     assert_eq!(state["device_owned"], false);
     assert!(get(&client, &url, "native").await["session"].is_string());
     assert!(
@@ -610,6 +668,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         .status()
         .is_success()
     );
+    assert!(get(&client, &url, "audio").await["boot_error"].is_null());
     qualify_created_rig(&client, &url, &settings["stream"], &root).await;
     shutdown.send_replace(true);
     task.abort();

@@ -658,6 +658,84 @@ test('native editor rejects stale ownership and replay then expires abandoned ed
   ).toBe(409);
 });
 
+test('playback lifecycle clears a corrupt boot preference without a worker', async ({
+  page,
+  request,
+}, info) => {
+  // UI failure fixture; the actual HTTP suite corrupts and clears the on-disk record.
+  const baseline = await (await request.get('/api/v1/audio')).json();
+  let audio = {
+    ...baseline,
+    phase: 'unavailable',
+    configured: null,
+    device_owned: false,
+    start_on_boot: false,
+    controls: [],
+    boot_error: 'Invalid boot audio configuration',
+  };
+  let cleared = false;
+  await page.route('**/api/v1/audio', async (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().postDataJSON().action).toEqual({
+        kind: 'set_boot',
+        enabled: false,
+      });
+      cleared = true;
+      audio = { ...audio, revision: audio.revision + 1, boot_error: null };
+    }
+    await route.fulfill({ json: audio });
+  });
+  const mixed = await (await request.get('/api/v1/rig-audio')).json();
+  await page.route('**/api/v1/rig-audio', (route) =>
+    route.fulfill({
+      json: {
+        ...mixed,
+        phase: 'unavailable',
+        configured: null,
+        device_owned: false,
+        start_on_boot: false,
+      },
+    }),
+  );
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Playback controls' });
+  const clear = panel.getByRole('button', {
+    name: 'Clear invalid boot setup',
+    exact: true,
+  });
+  await expect(clear).toBeEnabled();
+  const initial = page.viewportSize()!;
+  for (const viewport of [
+    initial,
+    { width: initial.height, height: initial.width },
+  ]) {
+    await page.setViewportSize(viewport);
+    await clear.scrollIntoViewIfNeeded();
+    expect((await clear.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await panel.screenshot({
+      path: info.outputPath(`boot-recovery-${viewport.width}.png`),
+    });
+  }
+  await clear.click();
+  await expect.poll(() => cleared).toBe(true);
+  await expect(
+    panel.getByRole('button', {
+      name: 'Use this session on boot',
+      exact: true,
+    }),
+  ).toBeDisabled();
+  expect(audio.phase).toBe('unavailable');
+  expect(audio.device_owned).toBe(false);
+});
+
 test('playback lifecycle keeps native authoring available after stop and restart', async ({
   page,
   request,
@@ -1802,6 +1880,23 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect.poll(value).toBe(changed);
   expect((await get()).configured.stream.input.sample_rate).toBe(44100);
   await expect(audioSettings.getByRole('status')).toHaveText('running');
+  await audioSettings
+    .getByRole('button', { name: 'Use this session on boot' })
+    .click();
+  await expect(
+    audioSettings.getByRole('button', { name: 'Disable boot playback' }),
+  ).toBeVisible();
+  await expect.poll(async () => (await get()).start_on_boot).toBe(true);
+  expect(
+    (await (await request.get('/api/v1/audio')).json()).start_on_boot,
+  ).toBe(false);
+  await expect.poll(value).toBe(changed);
+  await audioSettings
+    .getByRole('button', { name: 'Disable boot playback' })
+    .click();
+  await expect.poll(async () => (await get()).start_on_boot).toBe(false);
+  await expect(audioSettings.getByRole('status')).toHaveText('running');
+
   const settingsViewport = page.viewportSize()!;
   for (const viewport of [
     settingsViewport,
@@ -1857,8 +1952,8 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect(page.getByTestId('active-preset')).toHaveText(name);
   await rig.locator('[data-node="fx_l"]').getByRole('button').first().click();
   for (const mode of info.project.name === 'boox-air3c'
-    ? ['epaper']
-    : ['stage']) {
+    ? (['epaper'] as const)
+    : (['stage'] as const)) {
     await setDisplayMode(page, mode);
     const portrait = page.viewportSize()!;
     for (const viewport of [

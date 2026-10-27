@@ -31,7 +31,7 @@ Controls and remaining handoff scope:
 
 Start, Stop, Restart and Resume saved session now work through `/api/v1/audio` and Settings when the experimental worker is enabled. States distinguish unavailable, stopped, starting, running, stopping and failed. Session/revision checks reject stale commands. The supervisor owns accepted commands even if an HTTP client disconnects. Stop closes worker stdin, waits up to two seconds, then requests termination and waits again; it acknowledges release only after reaping the child. A failed stop retains ownership and blocks new probes/starts. A startup error, xrun, disconnect, nonfinite sample or two seconds without block progress fails closed without automatic fallback/restart.
 
-The native editor and playback use separate processes, owner threads and native data roots. Playback loads one saved original/owned preset; changes to the draft or generic rig/MIDI controls do not affect it. Stop does not destroy the editor session. Resume uses the last confirmed device settings and scalar adjustments. Recovery is checkpointed separately from boot playback; when boot playback is disabled, daemon startup restores the configuration without opening the interface and Resume is explicit. **Use this session on boot** explicitly saves a successfully running immutable preset and exact device configuration; the daemon makes one startup attempt on later launches. Disable boot playback to remove that preference. Subsequent session changes do not overwrite the saved boot session; disable and enable again to replace it. Missing devices, missing presets and corrupt boot settings leave the web/editor reachable with an audio error. Stop releases audio but retains the boot preference. Use TONE3000/Return to Oxidal app launching and tracking remain planned. For now, stop and wait for `stopped`, then launch the external app manually; release its interface before resuming.
+The native editor and playback use separate processes, owner threads and native data roots. Playback loads one saved original/owned preset; changes to the draft or generic rig/MIDI controls do not affect it. Stop does not destroy the editor session. Resume uses the last confirmed device settings and scalar adjustments. Recovery is checkpointed separately from boot playback; when boot playback is disabled, daemon startup restores the configuration without opening the interface and Resume is explicit. **Use this session on boot** captures the successfully running native or mixed session, its confirmed scalar/model edits and exact device configuration; the daemon makes one startup attempt on later launches. One shared boot choice prevents competing owners. Disable boot playback to remove that preference. Subsequent session changes do not overwrite the saved boot session; disable and enable again to replace it. Missing devices or presets leave the web/editor reachable with an audio error; corrupt boot settings are reported separately and start no audio. Stop releases audio but retains the boot preference. Use TONE3000/Return to Oxidal app launching and tracking remain planned. For now, stop and wait for `stopped`, then launch the external app manually; release its interface before resuming.
 
 Use narrowly authorized lifecycle operations and configured executables. Avoid automatic restart races and preserve an explicit user choice after app exit/failure. The browser must not acquire arbitrary service-manager or shell permissions.
 
@@ -124,14 +124,13 @@ control catalog before the replacement worker opens PCM and reports readiness.
 Stale/incomplete catalogs fail explicitly; there is no silent fallback to the
 original sound. An explicitly selected new playback session starts from its saved
 preset. Checkpointed scalar recovery also survives daemon restart as described below;
-this is not full structural state restoration, boot autosave, or gapless switching. Boot selection still captures
-the immutable preset/device configuration documented above.
+this is not full structural state restoration, boot autosave, or gapless switching. Boot selection captures a separate confirmed snapshot as documented above.
 
 ## Last-session recovery
 
-The supervisor writes `last-audio-session.json` atomically after successful startup and confirmed scalar changes. Updates are coalesced into at most one checkpoint per two seconds during normal adjustment, with flushes on Stop and orderly daemon shutdown. A sudden loss of power can lose the most recent uncheckpointed changes. This file stores an immutable starting preset identity, exact device/channel/buffer configuration and optional scalar overrides; it is not complete opaque graph state.
+The supervisor writes `last-audio-session.json` atomically after successful startup and confirmed scalar changes. Updates are coalesced into at most one checkpoint per two seconds during normal adjustment, with flushes on Stop and orderly daemon shutdown. A sudden loss of power can lose the most recent uncheckpointed changes. This file stores an immutable starting preset identity, exact device/channel/buffer configuration, model assignments and optional scalar overrides; it is not complete opaque graph state.
 
-With boot playback disabled, startup reads and validates recovery metadata but does not open a device. Resume reconstructs the last confirmed scalar session before PCM opens. Explicit boot playback retains its existing saved-preset policy and may establish a new last session. Failed replacements retain the previous recovery settings. Corrupt recovery is surfaced while authoring remains available; checkpoint failures keep current sound and state in memory and retry after five seconds. A failed checkpoint is never reported as a failed audio worker.
+With boot playback disabled, startup reads and validates recovery metadata but does not open a device. Resume reconstructs the last confirmed scalar session before PCM opens. Explicit boot playback restores the confirmed snapshot captured when enabled, including native model assignments, and may establish a new last session. Failed replacements retain the previous recovery settings. Corrupt recovery is surfaced while authoring remains available; checkpoint failures keep current sound and state in memory and retry after five seconds. A failed checkpoint is never reported as a failed audio worker.
 
 The maintained API unit tests cover bounded input, duplicate-control rejection and atomic publication. The real HTTP/process playback test additionally covers failed replacement, disk-error isolation, clean-daemon restart and explicit Resume without boot autoplay. Physical power-loss/device timing remains a hardware gate.
 
@@ -191,3 +190,24 @@ transport fixtures with an actual verified asset and actual native worker; it
 captures the picker across target device orientations. Real provider downloading
 is checked separately. Physical audio deadlines, gapless transitions, unrestricted
 model counts and artwork for newly assigned models remain separate gates.
+
+## Shared boot selection
+
+Native and mixed Audio settings expose the same boot control. Enabling captures a
+confirmed running session; a native working draft must first be saved and recalled.
+Only one owner is selected. Stop does not disable it, later edits do not overwrite
+it, and disabling it does not interrupt current audio. The control remains reachable
+when another session is selected or the audio worker is unavailable. Invalid stored
+settings can be cleared from the browser without opening an audio device.
+
+`boot-audio.json` schema 2 contains one native or mixed choice. Schema 1 native
+records remain readable and are upgraded only on an explicit new selection. Writes
+are validated, byte-bounded, atomically replaced and synced. Rejected writes preserve
+the preceding published choice; policy failures are independent of playing PCM.
+Daemon startup never launches both selected owners. A failed startup leaves the UI
+available and does not silently select a different worker. This is session restoration,
+not gapless switching, hardware hotplug negotiation or opaque LV2 state recovery.
+
+The older scalar-only LV2 graph owner does not yet participate in boot selection.
+A portable mixed rig containing only LV2 processors uses the mixed policy above;
+legacy graph boot integration remains a separate tracked requirement.

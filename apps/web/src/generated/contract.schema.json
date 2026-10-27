@@ -890,6 +890,13 @@
     "AudioState": {
       "type": "object",
       "properties": {
+        "boot_error": {
+          "description": "Shared boot policy failure; clearing it never requires a working audio device.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "configured": {
           "anyOf": [
             {
@@ -974,7 +981,7 @@
           }
         },
         "start_on_boot": {
-          "description": "Explicitly opt in to restoring this saved preset/device configuration after daemon startup.",
+          "description": "Explicitly opt in to restoring the captured confirmed session after daemon startup.",
           "type": "boolean"
         }
       },
@@ -3863,6 +3870,23 @@
         {
           "type": "object",
           "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_boot"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "start"
@@ -4043,6 +4067,9 @@
         "session": {
           "type": "string"
         },
+        "start_on_boot": {
+          "type": "boolean"
+        },
         "telemetry": {
           "anyOf": [
             {
@@ -4056,6 +4083,7 @@
       },
       "additionalProperties": false,
       "required": [
+        "start_on_boot",
         "session",
         "revision",
         "phase",

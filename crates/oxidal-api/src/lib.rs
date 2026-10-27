@@ -1,5 +1,6 @@
 mod artwork;
 mod audio;
+mod audio_boot;
 mod debug;
 mod device;
 mod graph_playback;
@@ -183,6 +184,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let ui = ServeDir::new(&config.ui_dir)
         .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
+    let boot = Arc::new(audio_boot::Policy::new(
+        config.preset_dir.join("boot-audio.json"),
+    ));
     let shared = Arc::new(Shared {
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
@@ -193,9 +197,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
-        playback: playback::Playback::new(&config)?,
+        playback: playback::Playback::new(&config, boot.clone())?,
         graph_playback: graph_playback::GraphPlayback::new(&config)?,
-        rig_playback: rig_playback::RigPlayback::new(&config)?,
+        rig_playback: rig_playback::RigPlayback::new(&config, boot)?,
         control: Mutex::new(control),
         native: Arc::new(Mutex::new(native_editor::Worker::start(&config)?)),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(

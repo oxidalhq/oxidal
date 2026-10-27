@@ -1,4 +1,5 @@
 //! One actor owns playback and the ALSA permit, independently of HTTP request lifetimes.
+use crate::audio_boot::{Choice, Policy, Role};
 use crate::playback_recovery::Recovery;
 use crate::{Config, Shared, failure};
 use axum::{
@@ -22,6 +23,7 @@ use tokio::{
 type Reply = Result<AudioState, String>;
 #[derive(Debug)]
 pub(super) struct Playback {
+    boot: Arc<Policy>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(AudioCommand, oneshot::Sender<Reply>)>,
     state: watch::Receiver<AudioState>,
@@ -44,6 +46,7 @@ impl Drop for Worker {
     }
 }
 struct Owner {
+    boot: Arc<Policy>,
     worker: Option<Worker>,
     executable: Option<PathBuf>,
     preset_dir: PathBuf,
@@ -53,59 +56,6 @@ struct Owner {
     recovery_error: Option<String>,
     updates: watch::Sender<AudioState>,
     meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
-}
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct BootConfig {
-    schema: u32,
-    settings: StartAudio,
-}
-fn read_boot(path: &std::path::Path) -> Result<Option<StartAudio>, String> {
-    match std::fs::read(path) {
-        Ok(bytes) => {
-            if bytes.len() > 65536 {
-                return Err("Boot audio configuration exceeds 64 KiB".into());
-            }
-            let config: BootConfig = serde_json::from_slice(&bytes)
-                .map_err(|e| format!("Invalid boot audio configuration: {e}"))?;
-            if config.schema != 1 {
-                return Err("Unsupported boot audio configuration".into());
-            }
-            config.settings.validate()?;
-            Ok(Some(config.settings))
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("Cannot read boot audio configuration: {e}")),
-    }
-}
-fn write_boot(path: &std::path::Path, settings: Option<StartAudio>) -> Result<(), String> {
-    use std::io::Write;
-    let parent = path
-        .parent()
-        .ok_or("Boot audio configuration has no directory")?;
-    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    if let Some(settings) = settings {
-        let temporary = path.with_extension("tmp");
-        let bytes = serde_json::to_vec(&BootConfig {
-            schema: 1,
-            settings,
-        })
-        .map_err(|e| e.to_string())?;
-        let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
-        file.write_all(&bytes)
-            .and_then(|()| file.sync_all())
-            .map_err(|e| e.to_string())?;
-        std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
-    } else {
-        match std::fs::remove_file(path) {
-            Ok(()) => (),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-    std::fs::File::open(parent)
-        .and_then(|f| f.sync_all())
-        .map_err(|e| e.to_string())
 }
 impl Owner {
     fn publish(&mut self, phase: AudioPhase, error: Option<String>) {
@@ -772,7 +722,9 @@ impl Owner {
         {
             return Err("audio_state_conflict; refresh status before retrying".into());
         }
-        if self.executable.is_none() {
+        if self.executable.is_none()
+            && !matches!(command.action, AudioAction::SetBoot { enabled: false })
+        {
             return Err("Experimental audio worker unavailable".into());
         }
         let result = match command.action {
@@ -879,21 +831,23 @@ impl Owner {
                 }
             }
             AudioAction::SetBoot { enabled } => {
-                let settings = if enabled {
-                    if self.state.phase != AudioPhase::Running {
-                        return Err("Start and verify audio before enabling boot playback".into());
+                if enabled {
+                    if self.state.phase != AudioPhase::Running || self.model_pending() {
+                        return Err("Start audio and finish pending model changes before enabling boot playback".into());
                     }
-                    if self.state.configured.as_ref().is_some_and(|s| s.draft) {
-                        return Err(
-                            "Save and recall the new rig before enabling boot playback".into()
-                        );
-                    }
-                    self.state.configured.clone()
+                    self.boot.set(Choice::Native {
+                        settings: self
+                            .state
+                            .configured
+                            .clone()
+                            .ok_or("No audio configuration")?,
+                        controls: self.resume_controls.clone(),
+                        models: self.state.models.clone(),
+                    })?;
                 } else {
-                    None
-                };
-                write_boot(&self.preset_dir.join("boot-audio.json"), settings)?;
-                self.state.start_on_boot = enabled;
+                    self.boot.clear(Role::Native)?;
+                }
+                self.state.start_on_boot = self.boot.enabled(Role::Native);
                 self.publish(self.state.phase, self.state.error.clone());
                 Ok(())
             }
@@ -945,17 +899,18 @@ impl Owner {
     }
 }
 impl Playback {
-    pub fn new(config: &Config) -> Result<Self, String> {
+    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
         if let Some(path) = &config.audio_worker
             && (!path.is_absolute() || !path.is_file())
         {
             return Err("Audio worker must be a configured absolute executable".into());
         }
-        let boot = read_boot(&config.preset_dir.join("boot-audio.json"));
+        let boot = policy.snapshot();
         let recovery = Recovery::read(&config.preset_dir.join("last-audio-session.json"));
         let recovery_error = recovery.as_ref().err().cloned();
         let recovery = recovery.ok().flatten();
         let initial = AudioState {
+            boot_error: policy.error(),
             session: format!(
                 "audio-{}-{}",
                 std::process::id(),
@@ -984,12 +939,13 @@ impl Playback {
             error: recovery_error.clone(),
             device_owned: false,
             experimental: true,
-            start_on_boot: matches!(boot, Ok(Some(_))),
+            start_on_boot: policy.enabled(Role::Native),
         };
         let (updates, state) = watch::channel(initial.clone());
         let (meters, meter_state) = watch::channel(None);
         let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            boot: policy.clone(),
             worker: None,
             executable: config.audio_worker.clone(),
             preset_dir: config.preset_dir.clone(),
@@ -1004,12 +960,16 @@ impl Playback {
         let (done, finished) = watch::channel(false);
         tokio::spawn(async move {
             match boot {
-                Ok(Some(settings)) if owner.executable.is_some() => {
-                    if let Err(error) = owner.start(settings, None, vec![]).await {
+                Ok(Some(Choice::Native {
+                    settings,
+                    controls,
+                    models,
+                })) if owner.executable.is_some() => {
+                    if let Err(error) = owner.start(settings, controls, models).await {
                         owner.publish(AudioPhase::Failed, Some(error));
                     }
                 }
-                Err(error) => owner.publish(AudioPhase::Failed, Some(error)),
+                // A corrupt preference is reported separately; audio was never started.
                 _ => (),
             }
             let mut interval = tokio::time::interval(Duration::from_millis(100));
@@ -1040,6 +1000,7 @@ impl Playback {
             done.send_replace(true);
         });
         Ok(Self {
+            boot: policy,
             commands,
             state,
             finished,
@@ -1050,7 +1011,10 @@ impl Playback {
         *self.meters.borrow()
     }
     pub fn snapshot(&self) -> AudioState {
-        self.state.borrow().clone()
+        let mut state = self.state.borrow().clone();
+        state.boot_error = self.boot.error();
+        state.start_on_boot = self.boot.enabled(Role::Native);
+        state
     }
     async fn dispatch(&self, command: AudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
@@ -1058,9 +1022,12 @@ impl Playback {
             .try_send((command, response))
             .map_err(|_| "audio_busy")?;
         // The owner retains its command even when this client disconnects.
-        received
+        let mut state = received
             .await
-            .map_err(|_| "Audio owner stopped".to_owned())?
+            .map_err(|_| "Audio owner stopped".to_owned())??;
+        state.boot_error = self.boot.error();
+        state.start_on_boot = self.boot.enabled(Role::Native);
+        Ok(state)
     }
 }
 pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Json<AudioState> {

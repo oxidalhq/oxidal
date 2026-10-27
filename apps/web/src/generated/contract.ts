@@ -256,6 +256,10 @@ export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type RigAudioAction =
   | {
+      enabled: boolean;
+      kind: "set_boot";
+    }
+  | {
       kind: "start";
       settings: StartRig;
     }
@@ -502,6 +506,10 @@ export interface AudioProbeResult {
   streaming_available: boolean;
 }
 export interface AudioState {
+  /**
+   * Shared boot policy failure; clearing it never requires a working audio device.
+   */
+  boot_error?: string | null;
   configured?: StartAudio | null;
   /**
    * Confirmed controls of the sounding worker; cleared whenever it stops.
@@ -529,7 +537,7 @@ export interface AudioState {
   session: string;
   slots?: NativeSlot[];
   /**
-   * Explicitly opt in to restoring this saved preset/device configuration after daemon startup.
+   * Explicitly opt in to restoring the captured confirmed session after daemon startup.
    */
   start_on_boot: boolean;
 }
@@ -1014,6 +1022,7 @@ export interface RigAudioState {
   revision: number;
   save?: SaveState | null;
   session: string;
+  start_on_boot: boolean;
   telemetry?: Snapshot2 | null;
 }
 export interface Snapshot3 {

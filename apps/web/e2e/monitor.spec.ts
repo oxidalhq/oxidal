@@ -118,7 +118,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await panel.getByRole('button', { name: 'Reset view' }).click();
   await expect(panel.getByText('CLIP · 2')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Resume readings' }).click();
-  for (const mode of ['stage', 'sunlight', 'epaper']) {
+  for (const mode of ['stage', 'sunlight', 'epaper'] as const) {
     await setDisplayMode(page, mode);
     expect(
       await page.evaluate(

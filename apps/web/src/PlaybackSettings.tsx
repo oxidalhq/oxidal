@@ -1,3 +1,4 @@
+import { BootPlayback } from './BootPlayback';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useEffect, useState } from 'react';
 import {
@@ -134,6 +135,21 @@ export function PlaybackSettings({
   const unavailable = !state || state.phase === 'unavailable';
   const transitioning =
     state?.phase === 'starting' || state?.phase === 'stopping';
+  const boot = (
+    <BootPlayback
+      native={state}
+      mixed={mixed}
+      disabled={
+        !connected ||
+        busy ||
+        transitioning ||
+        mixed?.phase === 'starting' ||
+        mixed?.phase === 'stopping'
+      }
+      onNative={accept}
+      onMixed={acceptMixed}
+    />
+  );
   if (
     mixed?.configured &&
     mixed.phase !== 'unavailable' &&
@@ -147,6 +163,7 @@ export function PlaybackSettings({
         input={input}
         output={output}
         onState={acceptMixed}
+        boot={boot}
       />
     );
   return (
@@ -191,6 +208,7 @@ export function PlaybackSettings({
         Audio: {state?.phase ?? 'checking'}
         {state?.device_owned ? ' · interface reserved' : ''}
       </p>
+      {boot}
       {unavailable ? (
         <p className="muted">
           Experimental Linux playback is not enabled. Silent authoring remains
@@ -229,33 +247,12 @@ export function PlaybackSettings({
               </Button>
             ) : null}
           </div>
-          <Button
-            variant="outline"
-            disabled={
-              !connected ||
-              busy ||
-              transitioning ||
-              (!state?.start_on_boot && state?.phase !== 'running')
-            }
-            onClick={() =>
-              void command({ kind: 'set_boot', enabled: !state?.start_on_boot })
-            }
-          >
-            {state?.start_on_boot
-              ? 'Disable boot playback'
-              : 'Use this session on boot'}
-          </Button>
           <details className="control-help">
-            <summary>Playback &amp; boot help</summary>
+            <summary>Playback help</summary>
             <p>
               Stop releases the interface and keeps Oxidal open. Resume and
               Restart retain live adjustments. The last confirmed session is
               checkpointed for recovery after a daemon restart.
-            </p>
-            <p>
-              Boot playback uses the saved preset and device setup captured when
-              enabled. Later edits are not saved to boot; disable and enable
-              again to replace it.
             </p>
             <p>
               To use another audio app, stop here first. Close that app’s audio

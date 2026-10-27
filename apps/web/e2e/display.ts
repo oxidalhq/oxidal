@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 
-export async function setDisplayMode(page: Page, mode: string) {
+export async function setDisplayMode(
+  page: Page,
+  mode: 'orchid' | 'stage' | 'sunlight' | 'epaper',
+) {
   const navigation = page.getByRole('navigation', {
     name: 'Instrument navigation',
   });

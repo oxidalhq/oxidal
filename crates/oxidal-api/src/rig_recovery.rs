@@ -19,7 +19,7 @@ impl Recovery {
             settings,
         }
     }
-    fn validate(&self) -> Result<(), String> {
+    pub(super) fn validate(&self) -> Result<(), String> {
         if self.schema != 1 || self.settings.recall.is_none() {
             return Err("Invalid mixed recovery state".into());
         }

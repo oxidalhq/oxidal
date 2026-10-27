@@ -357,3 +357,18 @@ oversized, malformed and invalid records. This is scalar recovery for the suppor
 profile, not opaque plugin state, DSP tail history or automatic boot playback.
 Native-only boot policy still exists separately; unified opt-in boot ownership
 remains required before mixed boot support is claimed.
+
+### Explicit boot playback
+
+Audio settings can capture the confirmed mixed revision, controls and device setup
+for automatic playback on the next daemon start. The shared boot record selects
+either native or mixed playback, never both. Later edits keep updating recovery but
+do not change the boot snapshot. Disable and enable boot playback again to replace
+it. Stop retains the preference. Corrupt boot records remain recoverable in the web
+interface. See [audio lifecycle](audio.md#shared-boot-selection).
+
+The maintained HTTP suite proves failed writes leave PCM and the preceding policy
+intact, native disable cannot clear a mixed selection, captured edits restore after a
+daemon restart, exactly one worker owns audio, and disabling returns startup to
+metadata-only recovery. Browser tests exercise the shared control on XR, Fold and
+BOOX layouts. Physical boot/audio acceptance and opaque plugin state remain open.

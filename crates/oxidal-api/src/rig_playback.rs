@@ -1,4 +1,5 @@
 //! Actor-owned mixed worker. Accepted operations outlive the requesting HTTP connection.
+use crate::audio_boot::{Choice, Policy, Role};
 use crate::{Config, Shared, failure, rig_recovery::Recovery};
 use axum::{
     Json,
@@ -22,6 +23,7 @@ use tokio::{
 type Reply = Result<RigAudioState, String>;
 #[derive(Debug)]
 pub(super) struct RigPlayback {
+    boot: Arc<Policy>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(RigAudioCommand, oneshot::Sender<Reply>)>,
     state: watch::Receiver<RigAudioState>,
@@ -77,6 +79,7 @@ struct Export {
     name: String,
 }
 struct Owner {
+    boot: Arc<Policy>,
     executable: Option<PathBuf>,
     root: PathBuf,
     runtime: PathBuf,
@@ -536,7 +539,9 @@ impl Owner {
         {
             return Err("rig_audio_state_conflict; refresh status".into());
         }
-        if self.executable.is_none() {
+        if self.executable.is_none()
+            && !matches!(command.action, RigAudioAction::SetBoot { enabled: false })
+        {
             return Err("Mixed worker unavailable".into());
         }
         match command.action {
@@ -604,6 +609,22 @@ impl Owner {
                 }
             }
             RigAudioAction::Save { name } => self.save(name).await?,
+            RigAudioAction::SetBoot { enabled } => {
+                if enabled {
+                    if self.state.phase != AudioPhase::Running {
+                        return Err(
+                            "Start and verify mixed audio before enabling boot playback".into()
+                        );
+                    }
+                    self.boot.set(Choice::Mixed {
+                        settings: self.confirmed.clone().ok_or("No confirmed mixed session")?,
+                    })?;
+                } else {
+                    self.boot.clear(Role::Mixed)?;
+                }
+                self.state.start_on_boot = self.boot.enabled(Role::Mixed);
+                self.changed();
+            }
         }
         Ok(self.state.clone())
     }
@@ -633,7 +654,7 @@ impl Owner {
     }
 }
 impl RigPlayback {
-    pub fn new(config: &Config) -> Result<Self, String> {
+    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
         if config
             .rig_worker
             .as_ref()
@@ -641,11 +662,13 @@ impl RigPlayback {
         {
             return Err("Mixed worker must be a configured absolute executable".into());
         }
+        let boot = policy.snapshot();
         let recovery_path = config.preset_dir.join("last-rig-session.json");
         let recovery = Recovery::read(&recovery_path);
         let recovery_error = recovery.as_ref().err().cloned();
         let recovered = recovery.ok().flatten().map(|r| r.settings);
         let initial = RigAudioState {
+            start_on_boot: policy.enabled(Role::Mixed),
             session: format!(
                 "rig-owner-{}-{}",
                 std::process::id(),
@@ -673,6 +696,7 @@ impl RigPlayback {
         let (commands, mut receiver) =
             mpsc::channel::<(RigAudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            boot: policy.clone(),
             executable: config.rig_worker.clone(),
             root: config.preset_dir.join("bundles"),
             runtime: config.preset_dir.join("rig-runtime"),
@@ -689,6 +713,15 @@ impl RigPlayback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         tokio::spawn(async move {
+            match boot {
+                Ok(Some(Choice::Mixed { settings })) if owner.executable.is_some() => {
+                    if let Err(error) = owner.start(settings).await {
+                        owner.fault(error).await;
+                    }
+                }
+                // The shared boot error remains recoverable without changing PCM state.
+                _ => (),
+            }
             let mut interval = tokio::time::interval(Duration::from_millis(200));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
@@ -709,22 +742,27 @@ impl RigPlayback {
             done.send_replace(true);
         });
         Ok(Self {
+            boot: policy,
             finished,
             commands,
             state,
         })
     }
     pub fn snapshot(&self) -> RigAudioState {
-        self.state.borrow().clone()
+        let mut state = self.state.borrow().clone();
+        state.start_on_boot = self.boot.enabled(Role::Mixed);
+        state
     }
     async fn dispatch(&self, command: RigAudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
         self.commands
             .try_send((command, response))
             .map_err(|_| "rig_audio_busy")?;
-        received
+        let mut state = received
             .await
-            .map_err(|_| "Mixed owner stopped".to_owned())?
+            .map_err(|_| "Mixed owner stopped".to_owned())??;
+        state.start_on_boot = self.boot.enabled(Role::Mixed);
+        Ok(state)
     }
 }
 pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Json<RigAudioState> {
@@ -757,19 +795,22 @@ mod tests {
         std::fs::write(&executable, "#!/bin/sh\nexec sleep 60\n").unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
         let (shutdown, signal) = watch::channel(false);
-        let rig = RigPlayback::new(&Config {
-            debug_socket: None,
-            device_socket: None,
-            simulator: false,
-            native_worker: None,
-            audio_worker: None,
-            graph_worker: None,
-            rig_worker: Some(executable),
-            mapping_path: root.join("mapping"),
-            preset_dir: root.join("presets"),
-            ui_dir: root.join("ui"),
-            shutdown: Some(signal),
-        })
+        let rig = RigPlayback::new(
+            &Config {
+                debug_socket: None,
+                device_socket: None,
+                simulator: false,
+                native_worker: None,
+                audio_worker: None,
+                graph_worker: None,
+                rig_worker: Some(executable),
+                mapping_path: root.join("mapping"),
+                preset_dir: root.join("presets"),
+                ui_dir: root.join("ui"),
+                shutdown: Some(signal),
+            },
+            Arc::new(Policy::new(root.join("presets/boot-audio.json"))),
+        )
         .unwrap();
         let probe = oxidal_audio::AudioProbe {
             endpoint: "hw:CARD=Test,DEV=0".into(),
