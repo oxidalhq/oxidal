@@ -67,7 +67,7 @@ wrap it into ordered rows with explicit split/merge indicators. Controls stay sc
 Inputs use 16px text, primary controls have 44px minimum height, and landscape
 safe areas keep content clear of cutouts. Zoom remains enabled.
 
-On BOOX, enable **Display mode → E-paper** in the header. This browser-local
+On BOOX, enable **Settings → Display → E-paper**. This browser-local
 preference survives reloads and uses plain black/white surfaces, stronger borders,
 larger supporting text and no transitions/shadows. It can be disabled to restore
 Orchid. It does not control the device's refresh mode or claim to eliminate
@@ -114,7 +114,7 @@ Live audio and physical MIDI remain outside this UI qualification.
 
 ### Live display modes
 
-The header's **Display mode** selector is available on every view. **Sunlight**
+The **Display mode** selector lives in Settings → Display. **Sunlight**
 uses white surfaces and strong borders; **Dark stage** uses dark surfaces with
 bright values and Orchid accents. Both use 48px primary-control heights.
 **E-paper** adds monochrome and removes transitions. Choices persist locally;
@@ -158,3 +158,5 @@ meters or implied processing indicators.
 The supplied Balanced wordmark lives in `public/brand/` as font-free SVG masters. The header uses a CSS mask so it follows each display mode, including e-paper. `pnpm brand:render` from the repository root derives the PNG touch icon, wordmark and Linux boot splash using the pinned browser. It never needs the private design folder. The mark is also the browser favicon.
 
 `SignalChain` uses the shared shadcn-style Button and one responsive grid. At narrow widths the input/NAM and effects occupy separate rows; the merge arrow preserves direction. Effect tiles have equal heights and unbroken names. The device E2E matrix checks geometry, accessibility and portrait/landscape editing. `prettier-plugin-tailwindcss` sorts JSX and `cva`/`clsx` utilities automatically against the stylesheet; run the normal formatter.
+
+Fullscreen and keep-awake are independent controls in Settings → Display; see [screen-session behavior](../../docs/interface.md#fullscreen-and-screen-timeout) for browser requirements and physical-test limits.

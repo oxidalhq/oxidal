@@ -426,3 +426,97 @@ async function enterValue(page: Page, label: string, value: string) {
       .click();
   await input.fill(value);
 }
+
+test('stage display keeps screen awake across views and exposes fullscreen availability', async ({
+  page,
+}, testInfo) => {
+  // Browser API fixture tests app ownership; real device timeout remains a physical check.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: async () => {
+          const lock = Object.assign(new EventTarget(), {
+            released: false,
+            release: async () => {
+              lock.released = true;
+              lock.dispatchEvent(new Event('release'));
+            },
+          });
+          return lock;
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  const navigation = page.getByRole('navigation', {
+    name: 'Instrument navigation',
+  });
+  const showDisplay = async () => {
+    await navigation
+      .getByRole('button', { name: 'Settings', exact: true })
+      .click();
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: 'Display', exact: true })
+      .click();
+  };
+  await showDisplay();
+  if (testInfo.project.name === 'boox-air3c')
+    await page.getByLabel('Display mode').selectOption('epaper');
+  const wake = page.getByRole('button', {
+    name: 'Keep screen awake',
+    exact: true,
+  });
+  await wake.click();
+  await expect(
+    page.getByRole('status', { name: 'Screen awake status' }),
+  ).toHaveText('Screen awake: active');
+  await navigation.getByRole('button', { name: 'Rig', exact: true }).click();
+  await showDisplay();
+  await expect(wake).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('status', { name: 'Screen awake status' }),
+  ).toHaveText('Screen awake: active');
+  const original = page.viewportSize()!;
+  await page.setViewportSize({
+    width: original.height,
+    height: original.width,
+  });
+  await fits(page);
+  await page.screenshot({
+    path: testInfo.outputPath('display-session-landscape.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize(original);
+  await page.reload();
+  await showDisplay();
+  await expect(wake).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    page.getByRole('status', { name: 'Screen awake status' }),
+  ).toHaveText('Screen awake: active');
+  const enter = page.getByRole('button', {
+    name: 'Enter fullscreen',
+    exact: true,
+  });
+  if (await enter.isEnabled()) {
+    await enter.click();
+    const exit = page.getByRole('button', {
+      name: 'Exit fullscreen',
+      exact: true,
+    });
+    await expect(exit).toBeVisible();
+    await exit.click();
+    await expect(enter).toBeVisible();
+  } else {
+    await expect(
+      page.getByText('Page fullscreen is unavailable in this browser.'),
+    ).toBeVisible();
+  }
+  await wake.click();
+  await expect(
+    page.getByRole('status', { name: 'Screen awake status' }),
+  ).toHaveText('Screen awake: off');
+  await fits(page);
+  await accessible(page);
+});

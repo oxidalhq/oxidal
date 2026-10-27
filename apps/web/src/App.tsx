@@ -9,6 +9,7 @@ import {
 import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { LiveRig } from './LiveRig';
+import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
 import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
@@ -37,6 +38,7 @@ import {
  * @see docs/architecture.md
  */
 export default function App() {
+  const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
   const audioRunning = playingName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
@@ -574,6 +576,58 @@ export default function App() {
                       </select>
                     </label>
                     <p>Your choice is saved on this browser.</p>
+                    <div className="flex flex-wrap gap-2 py-3">
+                      <Button
+                        variant="outline"
+                        disabled={!screen.fullscreenSupported}
+                        onClick={() => void screen.toggleFullscreen()}
+                      >
+                        {screen.fullscreen
+                          ? 'Exit fullscreen'
+                          : 'Enter fullscreen'}
+                      </Button>
+                      <Button
+                        variant={screen.keepAwake ? 'secondary' : 'outline'}
+                        aria-pressed={screen.keepAwake}
+                        disabled={!screen.wakeSupported}
+                        onClick={() => screen.setKeepAwake(!screen.keepAwake)}
+                      >
+                        Keep screen awake
+                      </Button>
+                      {screen.keepAwake &&
+                        screen.wakeSupported &&
+                        ['paused', 'denied'].includes(screen.wakeStatus) && (
+                          <Button variant="outline" onClick={screen.retryWake}>
+                            Retry keep-awake
+                          </Button>
+                        )}
+                    </div>
+                    <p role="status" aria-label="Screen awake status">
+                      {!screen.wakeSupported
+                        ? 'Keep-awake unavailable: use HTTPS and a supported browser.'
+                        : {
+                            off: 'Screen awake: off',
+                            requesting: 'Screen awake: requesting',
+                            active: 'Screen awake: active',
+                            paused: 'Screen awake: paused by browser',
+                            denied:
+                              'Screen awake: not allowed by browser or power settings',
+                          }[screen.wakeStatus]}
+                    </p>
+                    {!screen.fullscreenSupported && (
+                      <p className="caption">
+                        Page fullscreen is unavailable in this browser.
+                      </p>
+                    )}
+                    {screen.fullscreenError && (
+                      <p role="alert">{screen.fullscreenError}</p>
+                    )}
+                    <p className="caption">
+                      Keep-awake applies across Oxidal views while this page is
+                      visible. We retry when you return. Browser and
+                      power-saving settings may release it; fullscreen alone
+                      does not prevent screen timeout.
+                    </p>
                     <p className="muted">
                       Sunlight strengthens contrast; Dark stage reduces bright
                       surfaces. E-paper uses plain monochrome surfaces without
