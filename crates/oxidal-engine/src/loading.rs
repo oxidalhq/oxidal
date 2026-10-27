@@ -8,18 +8,7 @@ use oxidal_presets::{
 use oxidal_tone3000::{Engine, InputMode};
 use std::collections::BTreeMap;
 
-/// Codec baseline for the pinned adapter sources. It is not a binary signature
-/// or a claim that every upstream field/setting has passed fidelity qualification.
-/// Installed library identity remains the build/image qualification's responsibility.
-pub fn native_profile_id() -> Result<String, String> {
-    let pins: serde_json::Value =
-        serde_json::from_str(include_str!("../../../native/tone3000/sources.json"))
-            .map_err(|_| "Invalid native source pins")?;
-    let revision = pins["tone3000"]["revision"]
-        .as_str()
-        .ok_or("Missing native revision")?;
-    Ok(format!("tone3000-plugin:{revision}"))
-}
+use crate::native_profile_id;
 impl PreparedPorts {
     /// Load exact verified payloads and installed plugins. Discovery/instantiation
     /// must not overlap a running DSP callback from the same plugin library.

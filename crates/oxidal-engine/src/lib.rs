@@ -12,8 +12,6 @@ pub use ports::PreparedPorts;
 
 #[cfg(feature = "native")]
 mod loading;
-#[cfg(feature = "native")]
-pub use loading::native_profile_id;
 
 pub mod protocol;
 #[cfg(feature = "native")]
@@ -24,3 +22,16 @@ pub use session::Session;
 mod saving;
 #[cfg(feature = "native")]
 pub use saving::save_revision;
+
+/// Codec baseline for the pinned adapter sources. It is not a binary signature
+/// or a claim that every upstream field/setting has passed fidelity qualification.
+/// Installed library identity remains the build/image qualification's responsibility.
+pub fn native_profile_id() -> Result<String, String> {
+    let pins: serde_json::Value =
+        serde_json::from_str(include_str!("../../../native/tone3000/sources.json"))
+            .map_err(|_| "Invalid native source pins")?;
+    let revision = pins["tone3000"]["revision"]
+        .as_str()
+        .ok_or("Missing native revision")?;
+    Ok(format!("tone3000-plugin:{revision}"))
+}

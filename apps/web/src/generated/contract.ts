@@ -293,6 +293,24 @@ export type Target =
       node: string;
       port: number;
     };
+export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge";
+export type PortableTails = "cut" | "preserve";
+export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
+export type PortableProcessingRole = "whole" | "amp" | "cab";
+export type ResourceSource =
+  | {
+      kind: "original";
+      preset: string;
+    }
+  | {
+      kind: "owned";
+      preset: string;
+    }
+  | {
+      kind: "bundle";
+      resource: string;
+      revision: string;
+    };
 export type TerminalCommand =
   | {
       cursor: number;
@@ -356,6 +374,9 @@ export interface Contract {
   rig: Rig;
   rig_audio_command: RigAudioCommand;
   rig_audio_state: RigAudioState;
+  rig_document: RigDocument;
+  rig_library: RigPage;
+  rig_publish: RigPublish;
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
@@ -1010,6 +1031,109 @@ export interface SaveState {
   saved_revision?: string | null;
   source_control_revision: number;
   source_session: string;
+}
+export interface RigDocument {
+  manifest: PortableManifest;
+  revision: string;
+}
+export interface PortableManifest {
+  extensions: {
+    [k: string]: {
+      [k: string]: any;
+    };
+  };
+  format: string;
+  formatVersion: number;
+  id: string;
+  name: string;
+  oxidal?: PortableHost | null;
+  requiredExtensions: string[];
+  resources: PortableResource[];
+  tone3000: PortableNativeInstances;
+}
+export interface PortableHost {
+  graph: PortableGraph;
+  lv2: PortableLv2Instance[];
+  recall: PortableRecall;
+}
+export interface PortableGraph {
+  edges: PortableEdge[];
+  nodes: PortableNode[];
+}
+export interface PortableEdge {
+  from: PortableEndpoint;
+  to: PortableEndpoint;
+}
+export interface PortableEndpoint {
+  node: string;
+  port: number;
+}
+export interface PortableNode {
+  audioInputs: number;
+  audioOutputs: number;
+  bypassed?: boolean | null;
+  id: string;
+  inputGains?: number[] | null;
+  instance?: string | null;
+  kind: PortableNodeKind;
+}
+export interface PortableLv2Instance {
+  assets: string[];
+  controls: {
+    [k: string]: number;
+  };
+  id: string;
+  pluginUri: string;
+  requiredFeatures: string[];
+  state?: string | null;
+}
+export interface PortableRecall {
+  tails: PortableTails;
+}
+export interface PortableResource {
+  bytes: number;
+  id: string;
+  kind: PortableResourceKind;
+  path: string;
+  sha256: string;
+}
+export interface PortableNativeInstances {
+  instances: PortableNativeInstance[];
+}
+export interface PortableNativeInstance {
+  id: string;
+  origin?: PortableOrigin | null;
+  preset: string;
+  processingRole?: PortableProcessingRole | null;
+  profile: string;
+}
+export interface PortableOrigin {
+  resource: string;
+  sourcePresetId?: string | null;
+}
+export interface RigPage {
+  native_profile: string;
+  next?: string | null;
+  presets: RigEntry[];
+}
+export interface RigEntry {
+  id: string;
+  lv2_instances: number;
+  name: string;
+  native_instances: number;
+  revision: string;
+}
+export interface RigPublish {
+  /**
+   * Exact manifest JSON: strict parsing also rejects duplicate keys in metadata.
+   */
+  manifest_json: string;
+  /**
+   * Each declared resource maps to an existing verified local payload.
+   */
+  resources: {
+    [k: string]: ResourceSource;
+  };
 }
 export interface StageModel {
   model_id: number;

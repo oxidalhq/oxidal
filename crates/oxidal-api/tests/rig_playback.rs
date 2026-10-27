@@ -89,7 +89,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let root = std::env::temp_dir().join(format!("oxidal-rig-http-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let store = BundleStore::new(root.join("presets/bundles"));
-    let revision = store.save(&bundle).unwrap();
+    let revision = bundle.revision().to_owned();
     let settings = json!({"revision":revision,"stream":stream(),"recall":null});
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
@@ -115,6 +115,32 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         .timeout(Duration::from_secs(70))
         .build()
         .unwrap();
+    // Enter through the public authoring boundary, not by installing an already
+    // assembled fixture behind the daemon. Every payload is a verified import.
+    let mut bindings = serde_json::Map::new();
+    for resource in &bundle.manifest().resources {
+        let response = c
+            .post(format!("{url}/presets"))
+            .body(bundle.resource(&resource.id).unwrap().to_vec())
+            .send()
+            .await
+            .unwrap();
+        assert!(response.status().is_success());
+        let imported: Value = response.json().await.unwrap();
+        bindings.insert(
+            resource.id.clone(),
+            json!({"kind":"original","preset":imported["sha256"]}),
+        );
+    }
+    let response=c.post(format!("{url}/presets/rigs")).json(&json!({"manifest_json":std::str::from_utf8(bundle.manifest_bytes()).unwrap(),"resources":bindings})).send().await.unwrap();
+    assert!(
+        response.status().is_success(),
+        "{}",
+        response.text().await.unwrap_or_default()
+    );
+    let published: Value = response.json().await.unwrap();
+    assert_eq!(published["revision"], revision);
+    assert_eq!(store.read(&revision).unwrap().manifest(), bundle.manifest());
     let initial = get(&c, &url, "state").await;
     // Leave a failed inactive legacy worker behind. It must not poison live
     // mixed monitoring after its process has been reaped and released the device.

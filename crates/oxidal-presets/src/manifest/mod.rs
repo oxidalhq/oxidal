@@ -7,6 +7,7 @@ mod tests;
 mod validation;
 
 use crate::{Error, Result};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
@@ -42,8 +43,9 @@ fn host<'de, D: Deserializer<'de>>(d: D) -> std::result::Result<Option<Host>, D:
     Option::<Host>::deserialize(d)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(rename = "PortableManifest")]
 pub struct Manifest {
     pub format: String,
     #[serde(deserialize_with = "integer")]
@@ -100,13 +102,15 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableNativeInstances")]
 pub struct NativeInstances {
     pub instances: Vec<NativeInstance>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(rename = "PortableNativeInstance")]
 pub struct NativeInstance {
     pub id: String,
     pub preset: String,
@@ -129,15 +133,17 @@ impl NativeInstance {
         self.processing_role.unwrap_or(ProcessingRole::Whole)
     }
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[schemars(rename = "PortableProcessingRole")]
 pub enum ProcessingRole {
     Whole,
     Amp,
     Cab,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(rename = "PortableOrigin")]
 pub struct Origin {
     pub resource: String,
     #[serde(
@@ -147,8 +153,9 @@ pub struct Origin {
     )]
     pub source_preset_id: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableResource")]
 pub struct Resource {
     pub id: String,
     pub path: String,
@@ -157,34 +164,39 @@ pub struct Resource {
     #[serde(deserialize_with = "integer")]
     pub bytes: u64,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+#[schemars(rename = "PortableResourceKind")]
 pub enum ResourceKind {
     Tone3000Preset,
     Tone3000Source,
     Lv2State,
     Lv2Asset,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableHost")]
 pub struct Host {
     pub graph: Graph,
     pub lv2: Vec<Lv2Instance>,
     pub recall: Recall,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableRecall")]
 pub struct Recall {
     pub tails: Tails,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[schemars(rename = "PortableTails")]
 pub enum Tails {
     Cut,
     Preserve,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(rename = "PortableLv2Instance")]
 pub struct Lv2Instance {
     pub id: String,
     pub plugin_uri: String,
@@ -198,14 +210,16 @@ pub struct Lv2Instance {
     pub assets: Vec<String>,
     pub required_features: Vec<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableGraph")]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[schemars(rename = "PortableNode")]
 pub struct Node {
     pub id: String,
     pub kind: NodeKind,
@@ -232,8 +246,9 @@ pub struct Node {
     )]
     pub input_gains: Option<Vec<f64>>,
 }
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[schemars(rename = "PortableNodeKind")]
 pub enum NodeKind {
     Input,
     Output,
@@ -242,14 +257,16 @@ pub enum NodeKind {
     Split,
     Merge,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableEdge")]
 pub struct Edge {
     pub from: Endpoint,
     pub to: Endpoint,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
+#[schemars(rename = "PortableEndpoint")]
 pub struct Endpoint {
     pub node: String,
     #[serde(deserialize_with = "integer")]

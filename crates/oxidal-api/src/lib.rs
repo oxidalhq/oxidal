@@ -10,6 +10,7 @@ mod playback_recovery;
 mod plugins;
 mod presets;
 mod provider;
+mod rig_library;
 mod rig_playback;
 mod terminal;
 use axum::{
@@ -53,6 +54,9 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub rig_document: rig_library::RigDocument,
+    pub rig_library: rig_library::RigPage,
+    pub rig_publish: rig_library::RigPublish,
     pub lv2_catalog: oxidal_lv2::PluginCatalog,
     pub graph_presets: Vec<oxidal_presets::SavedGraph>,
     pub stage_model: provider::download::StageModel,
@@ -113,6 +117,7 @@ pub struct Config {
 struct Shared {
     account: provider::Account,
     artwork_work: Arc<tokio::sync::Semaphore>,
+    bundle_work: Arc<tokio::sync::Semaphore>,
     catalog_work: Arc<tokio::sync::Semaphore>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
@@ -182,6 +187,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             config.shutdown.clone(),
         )?,
         artwork_work: Arc::new(tokio::sync::Semaphore::new(1)),
+        bundle_work: Arc::new(tokio::sync::Semaphore::new(1)),
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
         monitor,
@@ -245,6 +251,13 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/plugins/lv2", get(plugins::catalog))
         .route("/presets/graphs", get(presets::graphs))
+        .route(
+            "/presets/rigs",
+            get(rig_library::list)
+                .post(rig_library::publish)
+                .layer(DefaultBodyLimit::max(rig_library::PUBLISH_LIMIT)),
+        )
+        .route("/presets/rigs/{revision}", get(rig_library::read))
         .route("/audio/devices", get(audio::devices))
         .route("/audio/probe", post(audio::probe))
         .route(

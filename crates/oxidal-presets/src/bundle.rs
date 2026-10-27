@@ -93,6 +93,18 @@ impl BundleStore {
         }
         Ok(self.root.join(revision))
     }
+    /// Hash-verified declarations for library browsing. Payload verification still
+    /// happens in `read` before preparation; this does not establish playability.
+    pub fn manifest(&self, revision: &str) -> Result<Manifest> {
+        directory(&self.root)?;
+        let root = self.path(revision)?;
+        directory(&root)?;
+        let bytes = read_bounded(&root.join("manifest.json"), MAX_MANIFEST_BYTES as u64)?;
+        if digest(&bytes) != revision {
+            return Err(Error::Invalid("Bundle manifest integrity failed"));
+        }
+        Manifest::parse(&bytes)
+    }
     pub fn read(&self, revision: &str) -> Result<Bundle> {
         directory(&self.root)?;
         let root = self.path(revision)?;

@@ -191,3 +191,36 @@ Save versus later edits, restart/offline recall, monitoring, client disconnect,
 crash recovery and shutdown during export. The existing native/LV2 paths remain
 available until their authoring workflows are migrated; this endpoint alone does
 not claim full authoring, model audition in mixed graphs or gapless transitions.
+
+## Portable rig authoring API
+
+`GET /api/v1/presets/rigs` returns at most 20 immutable revisions plus an optional
+`next` cursor (`?after=<revision>`). It includes the pinned native profile for new
+declarations. Catalog entries check manifest integrity; they do not claim installed
+plugin compatibility or validate every resource. `GET /api/v1/presets/rigs/{revision}`
+verifies all payloads before returning the typed document.
+
+`POST /api/v1/presets/rigs` accepts `manifest_json` (the exact format-1 JSON string)
+and `resources`, a map from each declared resource ID to a local source:
+
+- `{ "kind": "original", "preset": "<native import hash>" }`
+- `{ "kind": "owned", "preset": "<saved native copy hash>" }`
+- `{ "kind": "bundle", "revision": "<rig revision>", "resource": "<source resource ID>" }`
+
+The last form supports composing multiple existing revisions without changing their
+native bytes or assets. Empty/LV2-only rigs need no resource bindings. Clients create
+a new UUID for a new preset and retain it for later revisions. Publication verifies
+strict manifest JSON, graph semantics, binding kinds, sizes and payload hashes;
+unknown optional metadata survives. Required extensions remain capability-gated.
+Original imports, previous revisions and the current audible session are unchanged.
+There are no arbitrary file paths or embedded executables in these requests.
+
+One blocking library operation is admitted at a time, including after a client
+disconnect; work is outside audio/async threads. The manifest remains capped at
+1 MiB (the request permits JSON-string escaping). Resource byte budgets apply before
+retaining payload copies. The typed response contains the immutable revision and
+manifest, not an assertion that it plays. Start uses `/rig-audio` and performs actual
+backend admission. Publishing alone does not apply structural edits live, save DSP
+histories or provide gapless switching. The maintained HTTP suite covers persistence
+and integrity; `native:check` now publishes its mixed fixture through this boundary
+before actual worker/control/export/offline-recall qualification.

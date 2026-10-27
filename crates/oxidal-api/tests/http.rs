@@ -1053,3 +1053,140 @@ async fn account_api_is_available_without_audio_and_rejects_secret_keys_and_stal
     task.abort();
     let _ = std::fs::remove_dir_all(root.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn portable_library_publishes_verified_revisions_without_changing_audio() {
+    let (url, task, path) = start(false).await;
+    let c = reqwest::Client::new();
+    async fn get(c: &reqwest::Client, url: &str, route: &str) -> Value {
+        let r = c.get(format!("{url}/{route}")).send().await.unwrap();
+        assert!(r.status().is_success());
+        r.json().await.unwrap()
+    }
+    async fn publish(
+        c: &reqwest::Client,
+        url: &str,
+        m: &Value,
+        sources: Value,
+    ) -> reqwest::Response {
+        c.post(format!("{url}/presets/rigs"))
+            .json(&json!({"manifest_json":m.to_string(),"resources":sources}))
+            .send()
+            .await
+            .unwrap()
+    }
+    let page = get(&c, &url, "presets/rigs").await;
+    assert_eq!(page["presets"], json!([]));
+    assert!(
+        page["native_profile"]
+            .as_str()
+            .unwrap()
+            .starts_with("tone3000-plugin:")
+    );
+    let before = get(&c, &url, "rig-audio").await;
+    let mut m = json!({"format":"oxidal.preset","formatVersion":1,"id":"21915afb-b95b-4b74-a88c-537f06d3594a","name":"New rig","tone3000":{"instances":[]},"oxidal":{"graph":{"nodes":[{"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},{"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],"edges":[{"from":{"node":"in","port":0},"to":{"node":"out","port":0}},{"from":{"node":"in","port":1},"to":{"node":"out","port":1}}]},"lv2":[],"recall":{"tails":"cut"}},"resources":[],"extensions":{"urn:example:annotation":{"value":"retain me"}},"requiredExtensions":[]});
+    let r = publish(&c, &url, &m, json!({})).await;
+    assert!(
+        r.status().is_success(),
+        "{}",
+        r.text().await.unwrap_or_default()
+    );
+    let first: Value = r.json().await.unwrap();
+    let repeated: Value = publish(&c, &url, &m, json!({})).await.json().await.unwrap();
+    assert_eq!(first, repeated);
+    let revision = first["revision"].as_str().unwrap();
+    assert_eq!(
+        get(&c, &url, &format!("presets/rigs/{revision}")).await,
+        first
+    );
+    let bad = m.to_string().replace(
+        "\"formatVersion\":1",
+        "\"formatVersion\":1,\"formatVersion\":1",
+    );
+    assert_eq!(
+        c.post(format!("{url}/presets/rigs"))
+            .json(&json!({"manifest_json":bad,"resources":{}}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    let bytes = include_bytes!("../../oxidal-presets/tests/fixtures/authored-current.t3kpreset");
+    let imported: Value = c
+        .post(format!("{url}/presets"))
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = imported["sha256"].as_str().unwrap();
+    m["tone3000"]["instances"] =
+        json!([{"id":"native","preset":"payload","profile":page["native_profile"]}]);
+    m["resources"] = json!([{"id":"payload","path":"native/current.t3kpreset","kind":"tone3000-preset","sha256":id,"bytes":bytes.len()}]);
+    m["oxidal"]["graph"]["nodes"].as_array_mut().unwrap().push(json!({"id":"tone","kind":"tone3000","audioInputs":2,"audioOutputs":2,"instance":"native","bypassed":false}));
+    m["oxidal"]["graph"]["edges"] = json!(
+        (0..2)
+            .flat_map(|p| vec![
+                json!({"from":{"node":"in","port":p},"to":{"node":"tone","port":p}}),
+                json!({"from":{"node":"tone","port":p},"to":{"node":"out","port":p}})
+            ])
+            .collect::<Vec<_>>()
+    );
+    let binding = json!({"payload":{"kind":"original","preset":id}});
+    let mut forged = m.clone();
+    forged["resources"][0]["bytes"] = json!(1);
+    assert_eq!(
+        publish(&c, &url, &forged, binding.clone()).await.status(),
+        422
+    );
+    assert_eq!(publish(&c, &url, &m, json!({})).await.status(), 422);
+    let r = publish(&c, &url, &m, binding).await;
+    assert!(
+        r.status().is_success(),
+        "{}",
+        r.text().await.unwrap_or_default()
+    );
+    let native: Value = r.json().await.unwrap();
+    let from_native =
+        json!({"payload":{"kind":"bundle","revision":native["revision"],"resource":"payload"}});
+    m["name"] = json!("Renamed copy");
+    let changed: Value = publish(&c, &url, &m, from_native.clone())
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_ne!(changed["revision"], native["revision"]);
+    assert_eq!(
+        changed["manifest"]["extensions"],
+        first["manifest"]["extensions"]
+    );
+    let store = oxidal_presets::BundleStore::new(path.with_extension("presets").join("bundles"));
+    let b = store.read(changed["revision"].as_str().unwrap()).unwrap();
+    assert_eq!(b.resource("payload").unwrap(), bytes);
+    assert!(store.read(native["revision"].as_str().unwrap()).is_ok());
+    m["resources"][0]["sha256"] = json!("a".repeat(64));
+    assert_eq!(publish(&c, &url, &m, from_native).await.status(), 422);
+    assert_eq!(get(&c, &url, "rig-audio").await, before);
+    // Metadata pagination is bounded, independent of immutable payload size.
+    let mut empty = first["manifest"].clone();
+    for n in 0..20 {
+        empty["name"] = json!(format!("Page {n}"));
+        assert!(
+            publish(&c, &url, &empty, json!({}))
+                .await
+                .status()
+                .is_success()
+        );
+    }
+    let page = get(&c, &url, "presets/rigs").await;
+    assert_eq!(page["presets"].as_array().unwrap().len(), 20);
+    let next = page["next"].as_str().unwrap();
+    let page2 = get(&c, &url, &format!("presets/rigs?after={next}")).await;
+    assert_eq!(page2["presets"].as_array().unwrap().len(), 3);
+    assert!(page2["next"].is_null());
+    task.abort();
+    std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
+}

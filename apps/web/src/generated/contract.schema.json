@@ -97,6 +97,15 @@
     "rig_audio_state": {
       "$ref": "#/$defs/RigAudioState"
     },
+    "rig_document": {
+      "$ref": "#/$defs/RigDocument"
+    },
+    "rig_library": {
+      "$ref": "#/$defs/RigPage"
+    },
+    "rig_publish": {
+      "$ref": "#/$defs/RigPublish"
+    },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
@@ -123,6 +132,9 @@
     }
   },
   "required": [
+    "rig_document",
+    "rig_library",
+    "rig_publish",
     "lv2_catalog",
     "graph_presets",
     "stage_model",
@@ -3321,6 +3333,394 @@
         "latency"
       ]
     },
+    "PortableEdge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/PortableEndpoint"
+        },
+        "to": {
+          "$ref": "#/$defs/PortableEndpoint"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "PortableEndpoint": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "port"
+      ]
+    },
+    "PortableGraph": {
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortableEdge"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortableNode"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "edges"
+      ]
+    },
+    "PortableHost": {
+      "type": "object",
+      "properties": {
+        "graph": {
+          "$ref": "#/$defs/PortableGraph"
+        },
+        "lv2": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortableLv2Instance"
+          }
+        },
+        "recall": {
+          "$ref": "#/$defs/PortableRecall"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "graph",
+        "lv2",
+        "recall"
+      ]
+    },
+    "PortableLv2Instance": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "controls": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "pluginUri": {
+          "type": "string"
+        },
+        "requiredFeatures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "pluginUri",
+        "controls",
+        "assets",
+        "requiredFeatures"
+      ]
+    },
+    "PortableManifest": {
+      "type": "object",
+      "properties": {
+        "extensions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "format": {
+          "type": "string"
+        },
+        "formatVersion": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "oxidal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortableHost"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requiredExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortableResource"
+          }
+        },
+        "tone3000": {
+          "$ref": "#/$defs/PortableNativeInstances"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "formatVersion",
+        "id",
+        "name",
+        "tone3000",
+        "resources",
+        "extensions",
+        "requiredExtensions"
+      ]
+    },
+    "PortableNativeInstance": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortableOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "preset": {
+          "type": "string"
+        },
+        "processingRole": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortableProcessingRole"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "preset",
+        "profile"
+      ]
+    },
+    "PortableNativeInstances": {
+      "type": "object",
+      "properties": {
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortableNativeInstance"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "instances"
+      ]
+    },
+    "PortableNode": {
+      "type": "object",
+      "properties": {
+        "audioInputs": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "audioOutputs": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "bypassed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputGains": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/PortableNodeKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "audioInputs",
+        "audioOutputs"
+      ]
+    },
+    "PortableNodeKind": {
+      "type": "string",
+      "enum": [
+        "input",
+        "output",
+        "tone3000",
+        "lv2",
+        "split",
+        "merge"
+      ]
+    },
+    "PortableOrigin": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "sourcePresetId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resource"
+      ]
+    },
+    "PortableProcessingRole": {
+      "type": "string",
+      "enum": [
+        "whole",
+        "amp",
+        "cab"
+      ]
+    },
+    "PortableRecall": {
+      "type": "object",
+      "properties": {
+        "tails": {
+          "$ref": "#/$defs/PortableTails"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tails"
+      ]
+    },
+    "PortableResource": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/PortableResourceKind"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "sha256",
+        "bytes"
+      ]
+    },
+    "PortableResourceKind": {
+      "type": "string",
+      "enum": [
+        "tone3000-preset",
+        "tone3000-source",
+        "lv2-state",
+        "lv2-asset"
+      ]
+    },
+    "PortableTails": {
+      "type": "string",
+      "enum": [
+        "cut",
+        "preserve"
+      ]
+    },
     "PowerAction": {
       "type": "string",
       "enum": [
@@ -3367,6 +3767,65 @@
       "required": [
         "source_revision",
         "values"
+      ]
+    },
+    "ResourceSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "original"
+            },
+            "preset": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "preset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "owned"
+            },
+            "preset": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "preset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "bundle"
+            },
+            "resource": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "revision",
+            "resource"
+          ]
+        }
       ]
     },
     "Rig": {
@@ -3571,6 +4030,100 @@
         "phase",
         "processed_frames",
         "device_owned"
+      ]
+    },
+    "RigDocument": {
+      "type": "object",
+      "properties": {
+        "manifest": {
+          "$ref": "#/$defs/PortableManifest"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "manifest"
+      ]
+    },
+    "RigEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "lv2_instances": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "native_instances": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "id",
+        "name",
+        "native_instances",
+        "lv2_instances"
+      ]
+    },
+    "RigPage": {
+      "type": "object",
+      "properties": {
+        "native_profile": {
+          "type": "string"
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "presets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RigEntry"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "presets",
+        "native_profile"
+      ]
+    },
+    "RigPublish": {
+      "type": "object",
+      "properties": {
+        "manifest_json": {
+          "description": "Exact manifest JSON: strict parsing also rejects duplicate keys in metadata.",
+          "type": "string"
+        },
+        "resources": {
+          "description": "Each declared resource maps to an existing verified local payload.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ResourceSource"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "manifest_json",
+        "resources"
       ]
     },
     "SampleFormat": {
