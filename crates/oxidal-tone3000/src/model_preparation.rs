@@ -1,5 +1,5 @@
 //! Model verification runs away from PCM; only the owner touches the native engine.
-use crate::Engine;
+use crate::{Engine, State};
 use oxidal_audio::lifecycle::{
     ModelAssignment, ModelOperation, ModelPhase, ModelProgress, valid_models,
 };
@@ -15,6 +15,7 @@ type Verified = Result<(ModelAsset, PathBuf), String>;
 #[derive(Debug, Default)]
 pub struct Models {
     progress: Option<ModelProgress>,
+    history_before: Option<State>,
     verification: Option<(JoinHandle<()>, mpsc::Receiver<Verified>)>,
 }
 impl Models {
@@ -39,6 +40,7 @@ impl Models {
                 {
                     return Err("Invalid assignment or previous model still preparing".into());
                 }
+                self.history_before = None;
                 let runtime = engine.runtime().map_err(|e| e.to_string())?;
                 if !runtime["blocks"].as_array().is_some_and(|blocks| {
                     blocks
@@ -86,9 +88,19 @@ impl Models {
                 {
                     return Err("Model is not ready".into());
                 }
+                if engine.processing_role() == crate::ProcessingRole::WholePreset {
+                    match engine.capture() {
+                        Ok(before) => self.history_before = Some(before),
+                        Err(error) => {
+                            self.fail(error.to_string());
+                            return Ok(self.progress.clone());
+                        }
+                    }
+                }
                 self.native(engine, 1)?;
             }
             ModelOperation::Cancel => {
+                self.history_before = None;
                 if let Some(progress) = &mut self.progress {
                     if progress.phase == ModelPhase::Verifying {
                         progress.phase = ModelPhase::Cancelled;
@@ -100,7 +112,26 @@ impl Models {
         }
         Ok(self.progress.clone())
     }
+    /// Take the pre-splice state only once the candidate really owns the block.
+    pub fn take_applied_history(&mut self) -> Option<State> {
+        if self
+            .progress
+            .as_ref()
+            .is_some_and(|p| p.phase == ModelPhase::Applied)
+        {
+            self.history_before.take()
+        } else {
+            None
+        }
+    }
+    /// Called only after the history owner has restored the previous sound.
+    pub fn reject_history(&mut self, error: String) -> Option<ModelProgress> {
+        self.history_before = None;
+        self.fail(error);
+        self.progress.clone()
+    }
     fn fail(&mut self, error: String) {
+        self.history_before = None;
         if let Some(p) = &mut self.progress {
             p.phase = ModelPhase::Failed;
             p.error = Some(error);
@@ -115,6 +146,9 @@ impl Models {
         if let Some(p) = &mut self.progress {
             if status["block_id"].as_str() != Some(&p.assignment.target) {
                 return Err("Model target identity changed".into());
+            }
+            if matches!(phase, ModelPhase::Failed | ModelPhase::Cancelled) {
+                self.history_before = None;
             }
             p.phase = phase;
             p.error = status["error"]

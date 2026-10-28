@@ -649,6 +649,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(changed.status(), 200);
     state = changed.json().await.unwrap();
     state = qualify_models(&client, &url, state, &root).await;
+    let recovery_settings = state["configured"].clone();
     let recovery_models = state["models"].clone();
     let recovery_eq = state["eq"].clone();
     let recovery_controls = state["controls"].clone();
@@ -705,7 +706,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["phase"], "stopped");
     assert_eq!(state["device_owned"], false);
     assert_eq!(state["start_on_boot"], false);
-    assert_eq!(state["configured"], settings);
+    assert_eq!(state["configured"], recovery_settings);
     assert!(state["controls"].as_array().unwrap().is_empty());
     let resumed = send(&client, &url, &state, json!({"kind":"resume"})).await;
     assert_eq!(resumed.status(), 200);
@@ -918,6 +919,30 @@ async fn qualify_models(
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     state = get(client, url, "audio").await;
     assert_eq!(state["models"], original_models);
+    // A prepared candidate must roll back if its owned working checkpoint cannot publish.
+    let checkpoints = root.join("presets/native-checkpoints");
+    let held = root.join("presets/held-native-checkpoints");
+    let had_checkpoints = checkpoints.exists();
+    if had_checkpoints {
+        std::fs::rename(&checkpoints, &held).unwrap();
+    }
+    std::fs::write(&checkpoints, b"blocked").unwrap();
+    let failed = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"replace_model","assignment":{"target":target,"asset":good}}),
+    )
+    .await;
+    assert_eq!(failed.status(), 200);
+    state = wait_model(client, url, "failed").await;
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["controls"], original_controls);
+    assert_eq!(state["models"], original_models);
+    std::fs::remove_file(&checkpoints).unwrap();
+    if had_checkpoints {
+        std::fs::rename(&held, &checkpoints).unwrap();
+    }
     let result = send(
         client,
         url,
@@ -943,6 +968,44 @@ async fn qualify_models(
             .map(|c| c["label"].as_str().unwrap())
             .collect::<Vec<_>>()
     );
+    if state["controls"] != original_controls {
+        let applied_controls = state["controls"].clone();
+        assert_eq!(state["authoring"]["can_undo"], true);
+        assert!(state["configured"]["working"].is_string());
+        let response = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"authoring","action":{"kind":"undo"}}),
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+        assert_eq!(
+            state["controls"], original_controls,
+            "Model Undo must keep the preceding scalar adjustment"
+        );
+        let response = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"authoring","action":{"kind":"redo"}}),
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+        assert_eq!(state["controls"], applied_controls);
+        // Re-selecting the same cached model also retains the existing provenance projection.
+        let response = send(
+            client,
+            url,
+            &state,
+            json!({"kind":"replace_model","assignment":{"target":target,"asset":good}}),
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        state = wait_model(client, url, "applied").await;
+    }
     let copied_models = state["models"].clone();
     let copied_working = state["configured"]["working"].clone();
     let copied = send(

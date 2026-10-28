@@ -531,3 +531,25 @@ relative direction, channel/edit guards and unavailable targets. HTTP/worker tes
 cover unavailable-input health, invalid-map rejection, restart retention, disable
 and telemetry cursor stability. The focused browser authoring scenario configures
 and disables the actual worker and verifies disconnected learning stays disabled.
+
+## Model audition history
+
+A successful whole-native NAM/IR replacement or insertion now records one logical
+edit using the state immediately before its prepared splice. Scalar changes made
+before audition remain in that baseline. Undo restores the previous model; Redo
+restores the candidate, without requiring provider access. The applied state also
+gets a verified working receipt before completion is exposed to the client.
+
+Checkpoint failure restores the previous native state and reports a terminal model
+failure while the healthy worker continues. An ambiguous/failed rollback stops the
+worker. Cancellation, rejected candidates and still-preparing models do not add
+history. Whole-native mixed nodes share this owner; guarded extracted stages keep
+their existing replacement contract. Model history remains within the existing
+runtime entry/byte budget; history stacks do not yet survive worker replacement.
+
+Maintained actual native HTTP tests cover Undo/Redo preserving prior scalars,
+failed checkpoint rollback and working-state recovery. The mixed model gate also
+checks actual native Undo/Redo, fresh prepared reconstruction, isolated Save and
+cache-free matching PCM. The existing local NAM/IR browser flow exercises the same
+history buttons and offline Save. These are functional authoring checks, not a
+real-time or gapless model-splice claim.

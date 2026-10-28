@@ -847,6 +847,12 @@ impl Owner {
                     && valid_controls(controls)
                     && valid_slots(slots)
                     && valid_snapshot(eq)
+                    && match &event {
+                        PlaybackEvent::Model { authoring, .. } => authoring
+                            .as_ref()
+                            .is_none_or(|s| s.valid() && s.working.is_some()),
+                        _ => false,
+                    }
                     && progress.as_ref().is_none_or(|p| {
                         p.assignment.valid() && p.error.as_ref().is_none_or(|s| s.len() <= 1024)
                     }) =>
@@ -895,6 +901,7 @@ impl Owner {
             }
         };
         let PlaybackEvent::Model {
+            authoring,
             progress,
             controls,
             slots,
@@ -920,7 +927,8 @@ impl Owner {
             return Err("Model assignment reply differs".into());
         }
         if self.state.model_change != progress {
-            let refresh_authoring = self.state.authoring.is_some()
+            let refresh_authoring = authoring.is_none()
+                && self.state.authoring.is_some()
                 && progress
                     .as_ref()
                     .is_some_and(|p| p.phase == ModelPhase::Applied);
@@ -939,7 +947,16 @@ impl Owner {
                     self.state.models.push(p.assignment.clone());
                 }
                 self.state.slots = slots;
-                self.state.authoring = None;
+                if let Some(status) = authoring {
+                    self.state
+                        .configured
+                        .as_mut()
+                        .ok_or("Missing native configuration")?
+                        .working = status.working.clone();
+                    self.state.authoring = Some(status);
+                } else {
+                    self.state.authoring = None;
+                }
                 self.state.eq = eq.clone();
                 self.resume_eq = Some(eq);
                 self.state.controls = controls.clone();

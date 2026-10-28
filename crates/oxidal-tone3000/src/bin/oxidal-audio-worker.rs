@@ -301,11 +301,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         models.operation(&mut engine, &root, request.model, request.serial)
                     };
-                    let (progress, error) = match result {
+                    let (mut progress, error) = match result {
                         Ok(p) => (p, None),
                         Err(e) => (None, Some(e)),
                     };
+                    let status = if let Some(before) = models.take_applied_history() {
+                        match authoring.record_external(&mut engine, before) {
+                            Ok(status) => Some(status),
+                            Err(error) => {
+                                if authoring.failed() {
+                                    return Err(error.into());
+                                }
+                                progress = models.reject_history(error);
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
                     PlaybackEvent::Model {
+                        authoring: status,
                         serial: request.serial,
                         progress,
                         controls: engine.live_controls()?,

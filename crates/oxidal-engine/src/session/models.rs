@@ -115,7 +115,54 @@ impl Session {
         self.model_node = Some(command.node.clone());
         self.record_model(&command.node, progress)
     }
-    fn record_model(&mut self, node: &str, progress: Option<ModelProgress>) -> Result<(), String> {
+    fn record_model(
+        &mut self,
+        node: &str,
+        mut progress: Option<ModelProgress>,
+    ) -> Result<(), String> {
+        if let Some(before) = self.model_task.take_applied_history() {
+            let root = self
+                .model_root
+                .as_ref()
+                .ok_or("Missing model history store")?
+                .clone();
+            let source = super::authoring::origin(self.source_revision(), node);
+            let receipt = self
+                .state
+                .working
+                .iter()
+                .find(|r| r.node == node)
+                .map(|r| r.receipt.clone());
+            let Some(Processor::Native(engine)) = self.graph.processor_mut(node) else {
+                return Err("Missing model history processor".into());
+            };
+            let owner = self
+                .authoring_histories
+                .entry(node.into())
+                .or_insert_with(|| {
+                    oxidal_tone3000::working::Authoring::for_source(&root, source, receipt)
+                });
+            match owner.record_external(engine, before) {
+                Ok(status) => {
+                    let receipt = status.working.ok_or("Missing model history receipt")?;
+                    if let Some(row) = self.state.working.iter_mut().find(|r| r.node == node) {
+                        row.receipt = receipt;
+                    } else {
+                        self.state.working.push(NodeWorking {
+                            node: node.into(),
+                            receipt,
+                        });
+                    }
+                }
+                Err(error) => {
+                    if owner.failed() {
+                        self.failed = true;
+                        return Err(error);
+                    }
+                    progress = self.model_task.reject_history(error);
+                }
+            }
+        }
         let next = progress.map(|progress| NodeModelChange {
             node: node.into(),
             progress,

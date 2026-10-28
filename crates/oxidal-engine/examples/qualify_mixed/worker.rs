@@ -655,7 +655,7 @@ fn advance(session: &mut Session, failed: bool) -> Result<()> {
         std::thread::sleep(Duration::from_millis(2));
     }
 }
-fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
+pub fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     use oxidal_presets::{ModelAsset, ModelStore};
     use sha2::{Digest, Sha256};
     let data = root.join("mixed-model-case");
@@ -718,6 +718,37 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         .is_err()
     );
     advance(&mut session, false)?;
+    let applied = session.snapshot();
+    assert!(
+        applied
+            .authoring
+            .iter()
+            .find(|a| a.node == node)
+            .unwrap()
+            .status
+            .can_undo
+    );
+    for (action, expected) in [
+        (oxidal_audio::structure::AuthoringAction::Undo, &original),
+        (oxidal_audio::structure::AuthoringAction::Redo, &applied),
+    ] {
+        let cursor = session.snapshot();
+        session.authoring_command(
+            AuthoringCommand {
+                session: cursor.session,
+                expected_revision: cursor.revision,
+                node: node.clone(),
+                action,
+            },
+            &data,
+        )?;
+        compare(expected, &session.snapshot());
+    }
+    session.model_command(
+        model_command(&session.snapshot(), &node, &target, &nam),
+        &data,
+    )?;
+    advance(&mut session, false)?;
     for asset in [&nam, &ir] {
         let state = session.snapshot();
         let slot = state
@@ -744,7 +775,14 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     assert_eq!(expected.models[0].assignments.len(), 3);
     assert!(expected.valid_model_state());
     assert!(expected.modified);
-    let mut restored = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let mut restored = Session::new_with_working(
+        bundle.clone(),
+        world,
+        48000.0,
+        128,
+        BUFFER_BUDGET,
+        Some((&data, &expected.working)),
+    )?;
     restored.restore_with_models(&expected.recall(), &data)?;
     compare(&expected, &restored.snapshot());
     assert_eq!(restored.snapshot().models, expected.models);

@@ -3808,6 +3808,17 @@ test('local NAM and IR files audition without provider login and save offline in
   await expect
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
+  const appliedNam = (await get()).control;
+  await rig.getByText('Chain actions', { exact: true }).click();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.controls)
+    .toEqual(before.controls);
+  await rig.getByRole('button', { name: 'Redo change', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.controls)
+    .toEqual(appliedNam.controls);
+  await rig.getByText('Chain actions', { exact: true }).click();
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
   picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker

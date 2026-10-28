@@ -1092,3 +1092,12 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
     );
     Ok(())
 }
+
+/// Focused selection of the same model gate also called by the full qualifier.
+pub fn qualify_models(world: &World, bytes: &[u8], root: &Path) -> Result<(), Box<dyn Error>> {
+    let bundle = Bundle::from_parts(
+        serde_json::to_vec(&declaration(bytes)?)?,
+        BTreeMap::from([("current".into(), bytes.to_vec())]),
+    )?;
+    super::worker::qualify_models(world, &bundle, root)
+}

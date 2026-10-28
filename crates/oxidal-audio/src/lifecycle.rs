@@ -227,6 +227,8 @@ pub enum PlaybackEvent {
     },
     Model {
         serial: u64,
+        #[serde(default)]
+        authoring: Option<crate::structure::AuthoringStatus>,
         progress: Option<ModelProgress>,
         controls: Vec<LiveControl>,
         slots: Vec<NativeSlot>,

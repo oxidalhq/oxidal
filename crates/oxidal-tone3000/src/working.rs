@@ -471,6 +471,44 @@ impl Authoring {
         self.trim_history();
         self.snapshot(engine)
     }
+    /// A prepared model splice is one logical edit, separate from older knob
+    /// gestures. Publish its verified working state before exposing Undo/Redo.
+    pub fn record_external(
+        &mut self,
+        engine: &mut Engine,
+        before: State,
+    ) -> Result<AuthoringStatus, String> {
+        if self.failed || self.gesture_pending() || self.measurement_pending() {
+            return Err("Finish the active native edit before checkpointing models".into());
+        }
+        let result = (|| -> Result<(State, String), String> {
+            self.snapshot(engine)?;
+            let after = engine.capture().map_err(|e| e.to_string())?;
+            let receipt = write(&self.root, &self.source, &after)?;
+            Ok((after, receipt))
+        })();
+        let (after, receipt) = match result {
+            Ok(value) => value,
+            Err(error) => {
+                if let Err(rollback) = engine.restore(&before).and_then(|_| engine.wait_ready()) {
+                    self.failed = true;
+                    return Err(format!(
+                        "Model history rollback failed: {rollback}; initial error: {error}"
+                    ));
+                }
+                return Err(error);
+            }
+        };
+        if after != before {
+            self.undo.push_back(before);
+            self.redo.clear();
+        }
+        self.working = Some(receipt);
+        self.tools.balance = Default::default();
+        self.tools.alignment = Default::default();
+        self.trim_history();
+        self.snapshot(engine)
+    }
     fn trim_history(&mut self) {
         while self.undo.len() + self.redo.len() > HISTORY_ENTRIES
             || self

@@ -66,6 +66,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--models"] {
+        return portable::qualify_models(&world, &bytes, Path::new(&root));
+    }
     if args == ["--authoring"] {
         return portable::qualify_authoring(&world, &bytes, Path::new(&root));
     }

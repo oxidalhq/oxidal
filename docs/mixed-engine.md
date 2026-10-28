@@ -673,3 +673,14 @@ Maintained tests cover raw bytes to actual LV2/host controls, A2 native readback
 missing-controller PCM progress, boot/recovery settings, learned-message freshness
 and cancellation, and the actual browser/daemon/worker mapping flow. These software
 checks do not establish physical USB input or real-time deadlines.
+
+### Whole-native model history
+
+Successful whole-native model audition now commits its pre-splice state into the
+same bounded owner history used by scalar/EQ/structure edits. It publishes a verified
+working receipt with the applied model. Undo/Redo retain preceding controls and
+actual embedded models; isolated Save/reconstruction use fresh working-state
+preparation before scalar/model replay. A rejected checkpoint restores the previous
+sound and reports a terminal model failure. Guarded extracted-stage replacement
+and physical timing limits are unchanged. `qualify_mixed --models` selects the same
+maintained model gate already exercised by full native qualification.
