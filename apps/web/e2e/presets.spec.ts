@@ -2699,6 +2699,62 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     ),
   ).toBe(true);
   await page.unroute('**/api/v1/rig-audio');
+  // Library management does not rewrite a portable rig or touch the sounding owner.
+  const playingBefore = await get();
+  const managedRevision = playingBefore.configured.revision;
+  const originalDocument = await (
+    await request.get(`/api/v1/presets/rigs/${managedRevision}`)
+  ).json();
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Manage library', exact: true })
+    .click();
+  const management = page.getByRole('region', {
+    name: 'Manage library',
+    exact: true,
+  });
+  const row = management.locator(
+    `[data-library-kind="rig"][data-library-entry="${managedRevision}"]`,
+  );
+  const label = `Managed ${info.project.name}`;
+  await row.getByRole('textbox').fill(label);
+  await row.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(row.getByRole('textbox')).toHaveValue(label);
+  await expect(
+    page.getByRole('button', { name: `Play ${label}`, exact: true }),
+  ).toBeVisible();
+  await row
+    .getByRole('button', { name: `Move ${label} up`, exact: true })
+    .click();
+  await expect(
+    row.getByRole('button', { name: `Remove ${label}`, exact: true }),
+  ).toBeEnabled();
+  await row
+    .getByRole('button', { name: `Remove ${label}`, exact: true })
+    .click();
+  await expect(row).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: `Play ${label}`, exact: true }),
+  ).toHaveCount(0);
+  await management
+    .getByRole('button', { name: 'Show removed', exact: true })
+    .click();
+  await row
+    .getByRole('button', { name: `Restore ${label}`, exact: true })
+    .click();
+  await expect(row).toHaveCount(0);
+  await management
+    .getByRole('button', { name: 'Show available', exact: true })
+    .click();
+  await expect(row.getByRole('textbox')).toHaveValue(label);
+  const playingAfter = await get();
+  expect(playingAfter.phase).toBe('running');
+  expect(playingAfter.control.revision).toBe(playingBefore.control.revision);
+  expect(playingAfter.configured).toEqual(playingBefore.configured);
+  expect(
+    await (await request.get(`/api/v1/presets/rigs/${managedRevision}`)).json(),
+  ).toEqual(originalDocument);
+
   await command({ kind: 'stop' });
 });
 

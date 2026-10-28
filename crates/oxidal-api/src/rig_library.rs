@@ -58,6 +58,7 @@ pub struct RigNativeSource {
 }
 pub async fn native_sources(State(shared): State<Arc<Shared>>) -> Response {
     job(shared, true, move |root| {
+        let catalog = oxidal_presets::CatalogStore::open(root.clone())?;
         let originals = Store::new(root.clone())
             .list()?
             .presets
@@ -75,7 +76,29 @@ pub async fn native_sources(State(shared): State<Arc<Shared>>) -> Response {
                 preset: p.preset,
                 source: ResourceSource::Owned { preset: p.id },
             });
-        Ok(originals.chain(owned).collect::<Vec<_>>())
+        let mut visible = Vec::new();
+        for mut source in originals.chain(owned) {
+            let kind = match &source.source {
+                ResourceSource::Original { .. } => oxidal_presets::LibraryKind::Original,
+                _ => oxidal_presets::LibraryKind::Owned,
+            };
+            if catalog.visible(kind, &source.preset.sha256)? {
+                source.preset.name = catalog
+                    .label(kind, &source.preset.sha256, &source.preset.name)?
+                    .into();
+                visible.push(source);
+            }
+        }
+        visible.sort_by_key(|s| {
+            let kind = match &s.source {
+                ResourceSource::Original { .. } => oxidal_presets::LibraryKind::Original,
+                _ => oxidal_presets::LibraryKind::Owned,
+            };
+            catalog
+                .position(kind, &s.preset.sha256)
+                .unwrap_or(usize::MAX)
+        });
+        Ok(visible)
     })
     .await
 }
@@ -159,9 +182,6 @@ pub async fn list(
         let store = BundleStore::new(root.join("bundles"));
         let mut presets = Vec::new();
         for revision in store.list()? {
-            if query.after.as_ref().is_some_and(|after| &revision <= after) {
-                continue;
-            }
             let m = store.manifest(&revision)?;
             if m.extensions
                 .get("urn:oxidal:authoring")
@@ -177,10 +197,32 @@ pub async fn list(
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
             });
-            if presets.len() == 21 {
-                break;
+        }
+        let catalog = oxidal_presets::CatalogStore::open(root.clone())?;
+        let kind = oxidal_presets::LibraryKind::Rig;
+        let mut visible = Vec::new();
+        for mut p in presets {
+            if catalog.visible(kind, &p.revision)? {
+                p.name = catalog.label(kind, &p.revision, &p.name)?.into();
+                visible.push(p);
             }
         }
+        visible.sort_by_key(|p| catalog.position(kind, &p.revision).unwrap_or(usize::MAX));
+        let offset = match query.after {
+            Some(id) => {
+                visible
+                    .iter()
+                    .position(|p| p.revision == id)
+                    .ok_or(Error::Invalid("Rig page changed; refresh the library"))?
+                    + 1
+            }
+            None => 0,
+        };
+        let mut presets = visible
+            .into_iter()
+            .skip(offset)
+            .take(21)
+            .collect::<Vec<_>>();
         let next = if presets.len() > 20 {
             presets.pop();
             presets.last().map(|p| p.revision.clone())

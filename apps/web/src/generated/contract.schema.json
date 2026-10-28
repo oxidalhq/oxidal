@@ -61,6 +61,12 @@
     "library": {
       "$ref": "#/$defs/Library"
     },
+    "library_catalog": {
+      "$ref": "#/$defs/LibraryCatalog"
+    },
+    "library_update": {
+      "$ref": "#/$defs/LibraryUpdate"
+    },
     "local_model": {
       "$ref": "#/$defs/LocalModel"
     },
@@ -194,6 +200,8 @@
     "audio_probe",
     "audio_probe_result",
     "error",
+    "library_catalog",
+    "library_update",
     "library",
     "preset",
     "artwork",
@@ -3442,6 +3450,141 @@
       "additionalProperties": false,
       "required": [
         "presets"
+      ]
+    },
+    "LibraryAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rename"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "archived": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "visibility"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "archived"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "move"
+            },
+            "up": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "up"
+          ]
+        }
+      ]
+    },
+    "LibraryCatalog": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LibraryItem"
+          }
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "items"
+      ]
+    },
+    "LibraryItem": {
+      "type": "object",
+      "properties": {
+        "archived": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LibraryKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "source_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "name",
+        "source_name",
+        "archived"
+      ]
+    },
+    "LibraryKind": {
+      "type": "string",
+      "enum": [
+        "original",
+        "owned",
+        "graph",
+        "rig"
+      ]
+    },
+    "LibraryUpdate": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/LibraryAction"
+        },
+        "entry_kind": {
+          "$ref": "#/$defs/LibraryKind"
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "entry_kind",
+        "id",
+        "action"
       ]
     },
     "LiveControl": {

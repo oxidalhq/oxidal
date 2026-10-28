@@ -286,3 +286,24 @@ The preset must supply a reachable public image and the test machine needs
 internet access. Ordinary unit/HTTP tests exercise offline restart, integrity,
 wrong-asset rejection and response limits without contacting outside services.
 Browser tests identify their presentation fixtures explicitly.
+
+## Device library management
+
+`GET/POST /api/v1/presets/catalog` manages device-local labels, order and reversible
+removal for imported originals, owned native tones, effects graphs and portable
+rigs. Updates require the last confirmed metadata revision; stale edits return 409. The existing preset store lock serializes mutations and all file work stays
+off the audio/async threads. A bounded, validated `library.json` is published by
+atomic replacement; failed publication retains the preceding confirmed metadata.
+
+A library label does not rewrite the native preset name or rig manifest. Save a
+named copy through the sounding owner to change exported tone contents. Manual
+order is independent of explicit MIDI mappings and does not renumber scene or CC
+assignments. Library removal hides entries from browser pickers; Restore makes
+them available again. Their verified files remain addressable by existing rigs,
+boot recovery, working histories and original downloads. Removal is neither file
+reclamation nor an access-control boundary.
+
+Library → Manage library exposes these actions separately from performance
+controls. Metadata supports up to 4096 changed labels/order/removal references
+within a 1 MiB file. This storage bound is not a limit on simultaneous NAM
+instances. Preset payload stores retain their existing admission limits.

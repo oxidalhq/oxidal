@@ -27,6 +27,7 @@ where
         Ok(Ok(response)) => response,
         Ok(Err(error)) => {
             let status = match &error {
+                Error::Conflict(_) => StatusCode::CONFLICT,
                 Error::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
                 Error::Io(e) if e.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND,
                 Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -37,7 +38,17 @@ where
     }
 }
 pub(super) async fn list(State(shared): State<Arc<Shared>>) -> Response {
-    job(shared, |store| Ok(Json(store.list()?).into_response())).await
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |store| {
+        let mut library = store.list()?;
+        library.presets = visible_native(
+            &root,
+            oxidal_presets::LibraryKind::Original,
+            library.presets,
+        )?;
+        Ok(Json(library).into_response())
+    })
+    .await
 }
 pub(super) async fn import(
     State(shared): State<Arc<Shared>>,
@@ -78,7 +89,32 @@ pub(super) async fn original(
 /// plugin URIs and scalar/MIDI state, never executable paths or device bindings.
 pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
     let root = shared.config.preset_dir.join("graphs");
-    match tokio::task::spawn_blocking(move || oxidal_presets::GraphStore::new(root).list()).await {
+    match tokio::task::spawn_blocking(move || {
+        let catalog = oxidal_presets::CatalogStore::open(
+            root.parent()
+                .ok_or(Error::Invalid("Invalid graph store"))?
+                .into(),
+        )?;
+        let kind = oxidal_presets::LibraryKind::Graph;
+        let mut result = Vec::new();
+        for mut graph in oxidal_presets::GraphStore::new(root).list()? {
+            if catalog.visible(kind, &graph.id)? {
+                graph.preset.name = catalog.label(kind, &graph.id, &graph.preset.name)?.into();
+                result.push(graph);
+            }
+        }
+        result.sort_by(|a, b| {
+            catalog
+                .position(kind, &a.id)
+                .unwrap_or(usize::MAX)
+                .cmp(&catalog.position(kind, &b.id).unwrap_or(usize::MAX))
+                .then_with(|| a.preset.name.cmp(&b.preset.name))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok::<_, Error>(result)
+    })
+    .await
+    {
         Ok(Ok(presets)) => Json(presets).into_response(),
         Ok(Err(error)) => failure(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
         Err(_) => failure(
@@ -86,4 +122,91 @@ pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
             "Graph library task failed",
         ),
     }
+}
+
+/// Library metadata is separate from immutable native/graph/bundle contents.
+fn catalog_items(root: &std::path::Path) -> Result<Vec<oxidal_presets::LibraryItem>, Error> {
+    use oxidal_presets::{LibraryItem as Item, LibraryKind as Kind};
+    let mut items = Vec::new();
+    let mut push = |kind, id, name: String| {
+        items.push(Item {
+            kind,
+            id,
+            name: name.clone(),
+            source_name: name,
+            archived: false,
+        })
+    };
+    for p in Store::new(root.into()).list()?.presets {
+        push(Kind::Original, p.sha256, p.name);
+    }
+    for p in oxidal_presets::OwnedStore::new(root.join("owned")).list()? {
+        push(Kind::Owned, p.id, p.preset.name);
+    }
+    for p in oxidal_presets::GraphStore::new(root.join("graphs")).list()? {
+        push(Kind::Graph, p.id, p.preset.name);
+    }
+    let bundles = oxidal_presets::BundleStore::new(root.join("bundles"));
+    for id in bundles.list()? {
+        let manifest = bundles.manifest(&id)?;
+        if manifest
+            .extensions
+            .get("urn:oxidal:authoring")
+            .and_then(|v| v.get("draft"))
+            != Some(&serde_json::Value::Bool(true))
+        {
+            push(Kind::Rig, id, manifest.name);
+        }
+    }
+    Ok(items)
+}
+pub(super) async fn catalog(State(shared): State<Arc<Shared>>) -> Response {
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |_| {
+        Ok(
+            Json(oxidal_presets::CatalogStore::open(root.clone())?.view(catalog_items(&root)?)?)
+                .into_response(),
+        )
+    })
+    .await
+}
+pub(super) async fn manage(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<oxidal_presets::LibraryUpdate>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let request = match body {
+        Ok(Json(v)) => v,
+        Err(e) => return failure(e.status(), "Invalid library edit"),
+    };
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |_| {
+        let items = catalog_items(&root)?;
+        let result = oxidal_presets::CatalogStore::open(root)?.update(items, request)?;
+        Ok(Json(result).into_response())
+    })
+    .await
+}
+
+pub(super) fn visible_native(
+    root: &std::path::Path,
+    kind: oxidal_presets::LibraryKind,
+    items: Vec<oxidal_presets::Inspection>,
+) -> Result<Vec<oxidal_presets::Inspection>, Error> {
+    let catalog = oxidal_presets::CatalogStore::open(root.into())?;
+    let mut result = Vec::new();
+    for mut item in items {
+        if catalog.visible(kind, &item.sha256)? {
+            item.name = catalog.label(kind, &item.sha256, &item.name)?.into();
+            result.push(item);
+        }
+    }
+    result.sort_by(|a, b| {
+        catalog
+            .position(kind, &a.sha256)
+            .unwrap_or(usize::MAX)
+            .cmp(&catalog.position(kind, &b.sha256).unwrap_or(usize::MAX))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.sha256.cmp(&b.sha256))
+    });
+    Ok(result)
 }

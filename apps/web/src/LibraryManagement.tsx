@@ -1,0 +1,176 @@
+import { useEffect, useRef, useState } from 'react';
+import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
+import { Button } from './components/ui/button';
+
+export function LibraryManagement({
+  connected,
+  onChanged,
+}: {
+  connected: boolean;
+  onChanged: () => void;
+}) {
+  const [catalog, setCatalog] = useState<LibraryCatalog | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [removed, setRemoved] = useState(false);
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    void libraryCatalog()
+      .then((s) => {
+        if (alive.current) setCatalog(s);
+      })
+      .catch((e: unknown) => {
+        if (alive.current) setError(String(e));
+      });
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  async function edit(
+    item: LibraryCatalog['items'][number],
+    action: LibraryUpdate['action'],
+  ) {
+    if (!catalog) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await libraryCatalog({
+        expected_revision: catalog.revision,
+        entry_kind: item.kind,
+        id: item.id,
+        action,
+      });
+      if (alive.current) {
+        setCatalog(result);
+        onChanged();
+      }
+    } catch (e) {
+      if (alive.current) {
+        setError(String(e));
+        try {
+          setCatalog(await libraryCatalog());
+        } catch {
+          /* keep last confirmed catalog */
+        }
+      }
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+  return (
+    <section className="space-y-3" aria-label="Manage library">
+      <p className="caption">
+        Labels and order stay on this device. Removed entries can be restored.
+      </p>
+      <Button
+        variant="outline"
+        aria-pressed={removed}
+        onClick={() => setRemoved((v) => !v)}
+      >
+        {removed ? 'Show available' : 'Show removed'}
+      </Button>
+      {error && <p role="alert">{error}</p>}
+      {!catalog && <p role="status">Loading library…</p>}
+      {catalog?.items
+        .filter((i) => i.archived === removed)
+        .map((item) => (
+          <LibraryRow
+            key={`${item.kind}:${item.id}:${item.name}`}
+            item={item}
+            disabled={busy || !connected}
+            onEdit={(action) => void edit(item, action)}
+          />
+        ))}
+      {catalog && !catalog.items.some((i) => i.archived === removed) && (
+        <p className="caption">
+          {removed ? 'No removed entries.' : 'No saved entries.'}
+        </p>
+      )}
+    </section>
+  );
+}
+function LibraryRow({
+  item,
+  disabled,
+  onEdit,
+}: {
+  item: LibraryCatalog['items'][number];
+  disabled: boolean;
+  onEdit: (action: LibraryUpdate['action']) => void;
+}) {
+  const [name, setName] = useState(item.name);
+  return (
+    <div
+      className="space-y-2 border-b border-border py-3"
+      data-library-entry={item.id}
+      data-library-kind={item.kind}
+    >
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onEdit({ kind: 'rename', name });
+        }}
+      >
+        <label className="field min-w-0 flex-1">
+          {item.kind === 'original'
+            ? 'Imported tone'
+            : item.kind === 'owned'
+              ? 'Saved tone'
+              : item.kind === 'rig'
+                ? 'Rig'
+                : 'Effects rig'}
+          <input
+            aria-label={`Name for ${item.name}`}
+            value={name}
+            maxLength={120}
+            disabled={disabled}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        {name !== item.name && (
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={disabled || !name.trim()}
+          >
+            Rename
+          </Button>
+        )}
+      </form>
+      <div className="action-row">
+        {!item.archived && (
+          <>
+            <Button
+              variant="ghost"
+              disabled={disabled}
+              aria-label={`Move ${item.name} up`}
+              onClick={() => onEdit({ kind: 'move', up: true })}
+            >
+              ↑
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={disabled}
+              aria-label={`Move ${item.name} down`}
+              onClick={() => onEdit({ kind: 'move', up: false })}
+            >
+              ↓
+            </Button>
+          </>
+        )}
+        <Button
+          variant="outline"
+          disabled={disabled}
+          aria-label={`${item.archived ? 'Restore' : 'Remove'} ${item.name}`}
+          onClick={() =>
+            onEdit({ kind: 'visibility', archived: !item.archived })
+          }
+        >
+          {item.archived ? 'Restore' : 'Remove'}
+        </Button>
+      </div>
+    </div>
+  );
+}

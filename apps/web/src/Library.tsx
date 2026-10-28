@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { importPreset, presetLibrary, type Preset } from './api';
+import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
@@ -16,6 +17,8 @@ export function Library({
   connected: boolean;
   onOpenRig: () => void;
 }) {
+  const [refresh, setRefresh] = useState(0);
+  const [manage, setManage] = useState(false);
   const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -44,7 +47,7 @@ export function Library({
     return () => {
       lifecycle.current++;
     };
-  }, []);
+  }, [refresh]);
   async function upload() {
     if (!file) return;
     const request = ++generation.current;
@@ -95,7 +98,24 @@ export function Library({
         <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
       ) : page === 'browse' ? (
         <>
-          <SavedRigs connected={connected} onOpenRig={onOpenRig} />
+          <Button
+            variant={manage ? 'secondary' : 'outline'}
+            aria-expanded={manage}
+            onClick={() => setManage((v) => !v)}
+          >
+            Manage library
+          </Button>
+          {manage && (
+            <LibraryManagement
+              connected={connected}
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+          )}
+          <SavedRigs
+            connected={connected}
+            onOpenRig={onOpenRig}
+            refresh={refresh}
+          />
           <h2 className="sr-only">Native preset library</h2>
           <p>
             Keep your TONE3000 originals here. Importing does not change the

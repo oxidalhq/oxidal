@@ -369,6 +369,20 @@ export type GraphAudioAction =
       kind: "control";
     };
 export type Framing = "legacy" | "current";
+export type LibraryKind = "original" | "owned" | "graph" | "rig";
+export type LibraryAction =
+  | {
+      kind: "rename";
+      name: string;
+    }
+  | {
+      archived: boolean;
+      kind: "visibility";
+    }
+  | {
+      kind: "move";
+      up: boolean;
+    };
 export type EditorAction =
   | {
       id: string;
@@ -600,6 +614,8 @@ export interface Contract {
   graph_audio_state: GraphAudioState;
   graph_presets: SavedGraph[];
   library: Library;
+  library_catalog: LibraryCatalog;
+  library_update: LibraryUpdate;
   local_model: LocalModel;
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
@@ -1169,6 +1185,23 @@ export interface Inspection {
   sha256: string;
   size_bytes: number;
   source_id?: string | null;
+}
+export interface LibraryCatalog {
+  items: LibraryItem[];
+  revision: string;
+}
+export interface LibraryItem {
+  archived: boolean;
+  id: string;
+  kind: LibraryKind;
+  name: string;
+  source_name: string;
+}
+export interface LibraryUpdate {
+  action: LibraryAction;
+  entry_kind: LibraryKind;
+  expected_revision: string;
+  id: string;
 }
 export interface LocalModel {
   format: string;

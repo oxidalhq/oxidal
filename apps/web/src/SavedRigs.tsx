@@ -13,7 +13,9 @@ import {
 export function SavedRigs({
   connected,
   onOpenRig,
+  refresh = 0,
 }: {
+  refresh?: number;
   connected: boolean;
   onOpenRig: () => void;
 }) {
@@ -60,7 +62,7 @@ export function SavedRigs({
     return () => {
       alive.current = false;
     };
-  }, []);
+  }, [refresh]);
   async function play(revision: string) {
     setBusy(true);
     setError('');

@@ -99,6 +99,8 @@ pub struct Contract {
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
+    pub library_catalog: oxidal_presets::LibraryCatalog,
+    pub library_update: oxidal_presets::LibraryUpdate,
     pub library: oxidal_presets::Library,
     pub preset: oxidal_presets::Inspection,
     pub artwork: Vec<artwork::AssetArtwork>,
@@ -295,6 +297,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(presets::list)
                 .post(presets::import)
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
+        )
+        .route(
+            "/presets/catalog",
+            get(presets::catalog).post(presets::manage),
         )
         .route("/presets/{id}/original", get(presets::original))
         .route("/presets/{id}/artwork", get(artwork::list))

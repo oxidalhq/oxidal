@@ -351,6 +351,69 @@ async fn native_library_import_preserves_originals_and_never_mutates_the_rig() {
         .await
         .unwrap();
     assert_eq!(library["presets"].as_array().unwrap().len(), 2);
+    let endpoint = format!("{url}/presets/catalog");
+    let mut catalog: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let initial = catalog["revision"].clone();
+    let moved = catalog["items"][1]["id"].clone();
+    for (id, action) in [
+        (
+            json!(ids[0]),
+            json!({"kind":"rename","name":"My library label"}),
+        ),
+        (moved.clone(), json!({"kind":"move","up":true})),
+        (json!(ids[0]), json!({"kind":"visibility","archived":true})),
+    ] {
+        let response=client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":id,"action":action})).send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        catalog = response.json().await.unwrap();
+    }
+    assert_eq!(catalog["items"][0]["id"], moved);
+    let hidden: Value = client
+        .get(format!("{url}/presets"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(hidden["presets"].as_array().unwrap().len(), 1);
+    // Removed library entries remain available to existing rigs and exact download.
+    let original = client
+        .get(format!("{url}/presets/{}/original", ids[0]))
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    assert_eq!(original.as_ref(), CURRENT_PRESET);
+    assert_eq!(client.post(&endpoint).json(&json!({"expected_revision":initial,"entry_kind":"original","id":ids[0],"action":{"kind":"rename","name":"Stale"}})).send().await.unwrap().status(),409);
+    assert_eq!(client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":"../../escape","action":{"kind":"visibility","archived":false}})).send().await.unwrap().status(),422);
+    let response=client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":ids[0],"action":{"kind":"visibility","archived":false}})).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let visible: Value = client
+        .get(format!("{url}/presets"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(visible["presets"].as_array().unwrap().len(), 2);
+    assert!(
+        visible["presets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "My library label")
+    );
     for bytes in [
         b"not a preset".to_vec(),
         CURRENT_PRESET[..CURRENT_PRESET.len() - 1].to_vec(),
@@ -414,7 +477,7 @@ async fn native_library_import_preserves_originals_and_never_mutates_the_rig() {
         .json()
         .await
         .unwrap();
-    assert_eq!(library, after_library);
+    assert_eq!(visible, after_library);
     task.abort();
     std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
 }

@@ -29,6 +29,7 @@ const HISTORY_ENTRIES: usize = 8;
 const HISTORY_BYTES: usize = 64 * 1024 * 1024;
 #[derive(Debug)]
 pub struct Editor {
+    catalog_root: PathBuf,
     engine: Engine,
     originals: Store,
     owned: OwnedStore,
@@ -55,6 +56,7 @@ impl Editor {
                 .as_nanos()
         );
         Ok(Self {
+            catalog_root: root.clone(),
             engine,
             committed,
             originals: Store::new(root.clone()),
@@ -202,7 +204,21 @@ impl Editor {
         self.state.layout = self.engine.layout().map_err(|e| e.to_string())?;
         self.state.can_undo = !self.undo.is_empty();
         self.state.can_redo = !self.redo.is_empty();
-        self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
+        let catalog = oxidal_presets::CatalogStore::open(self.catalog_root.clone())
+            .map_err(|e| e.to_string())?;
+        let kind = oxidal_presets::LibraryKind::Owned;
+        let mut owned = Vec::new();
+        for mut p in self.owned.list().map_err(|e| e.to_string())? {
+            if catalog.visible(kind, &p.id).map_err(|e| e.to_string())? {
+                p.preset.name = catalog
+                    .label(kind, &p.id, &p.preset.name)
+                    .map_err(|e| e.to_string())?
+                    .into();
+                owned.push(p);
+            }
+        }
+        owned.sort_by_key(|p| catalog.position(kind, &p.id).unwrap_or(usize::MAX));
+        self.state.owned = owned;
         Ok(self.state.clone())
     }
     pub fn command(&mut self, command: EditorCommand) -> Result<EditorSnapshot> {

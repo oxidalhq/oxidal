@@ -1,6 +1,10 @@
 //! Bounded native inspection, portable declarations and immutable preset storage.
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
+mod catalog;
+pub use catalog::{
+    CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryUpdate,
+};
 mod bundle;
 mod graph;
 pub mod manifest;
@@ -17,13 +21,14 @@ pub use store::{Library, Store};
 
 #[derive(Debug)]
 pub enum Error {
+    Conflict(&'static str),
     Invalid(&'static str),
     Io(std::io::Error),
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Invalid(message) => f.write_str(message),
+            Self::Conflict(message) | Self::Invalid(message) => f.write_str(message),
             Self::Io(_) => f.write_str("Preset storage is unavailable"),
         }
     }

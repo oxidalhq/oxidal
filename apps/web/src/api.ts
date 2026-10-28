@@ -666,3 +666,28 @@ export async function uploadLocalModel(
     throw new Error('Incompatible local model receipt');
   return body;
 }
+
+export type LibraryCatalog = Contract['library_catalog'];
+export type LibraryUpdate = Contract['library_update'];
+const catalogValidator = ajv.compile<LibraryCatalog>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/LibraryCatalog',
+});
+export async function libraryCatalog(
+  update?: LibraryUpdate,
+): Promise<LibraryCatalog> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/presets/catalog',
+      update
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(update),
+          }
+        : undefined,
+    ),
+  );
+  if (!catalogValidator(body)) throw new Error('Incompatible library catalog');
+  return body;
+}

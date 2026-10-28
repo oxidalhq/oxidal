@@ -52,6 +52,7 @@ pub struct List {
 }
 fn error(error: Error) -> Response {
     match error {
+        Error::Conflict(message) => failure(StatusCode::CONFLICT, message),
         Error::Invalid(message) => failure(StatusCode::UNPROCESSABLE_ENTITY, message),
         Error::Io(_) => failure(
             StatusCode::INTERNAL_SERVER_ERROR,
