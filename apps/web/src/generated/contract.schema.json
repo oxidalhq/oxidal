@@ -1373,6 +1373,7 @@
               "state": "idle"
             },
             "error": null,
+            "solo": "none",
             "tuner": null,
             "tuner_enabled": false
           }
@@ -2017,6 +2018,23 @@
     },
     "Command4": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "solo"
+            },
+            "side": {
+              "$ref": "#/$defs/Solo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "side"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -6552,6 +6570,14 @@
         "latency_frames"
       ]
     },
+    "Solo": {
+      "type": "string",
+      "enum": [
+        "none",
+        "left",
+        "right"
+      ]
+    },
     "StageModel": {
       "type": "object",
       "properties": {
@@ -6796,6 +6822,10 @@
             "string",
             "null"
           ]
+        },
+        "solo": {
+          "$ref": "#/$defs/Solo",
+          "default": "none"
         },
         "tuner": {
           "anyOf": [

@@ -2243,6 +2243,27 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await rig
     .getByRole('button', { name: 'Use stereo chains', exact: true })
     .click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.layout.stereo)
+    .toBe(true);
+  const monitoringBefore = (await get()).control.authoring[0].status.working;
+  await rig.getByRole('button', { name: 'Solo left', exact: true }).click();
+  await expect(
+    rig.getByRole('button', { name: 'Solo left', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    rig.getByRole('button', { name: 'Match levels', exact: true }),
+  ).toBeDisabled();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.tools.solo)
+    .toBe('left');
+  expect((await get()).control.authoring[0].status.working).toEqual(
+    monitoringBefore,
+  );
+  await rig.getByRole('button', { name: 'Both chains', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.tools.solo)
+    .toBe('none');
   await rig.getByRole('button', { name: 'Match levels', exact: true }).click();
   await expect
     .poll(

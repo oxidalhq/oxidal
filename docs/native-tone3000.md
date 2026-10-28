@@ -591,3 +591,21 @@ missing historical entry, repair/restart/Undo, native utilities and the local-fi
 browser restart/reload/Undo/offline-Save flow qualify this software behavior. Cache
 retention and physical callback deadlines are separate from the active history
 entry/byte bound; historical immutable working receipts are not automatically pruned.
+
+## Temporary lane monitoring
+
+Whole-native stereo nodes expose exclusive Solo left / Solo right / Both chains in
+Tuner & matching. Readback comes from the native processor and the selected lane
+keeps its existing pan. Mono nodes reject solo. Level/alignment matching requires
+both lanes; finish or cancel a measurement before changing monitoring.
+
+Solo does not dirty a tone, add undo steps or enter portable preset exports. Tone
+undo retains the current solo while stereo remains available; returning to mono
+clears it. Worker reconstruction starts with both lanes audible. Closing the tools
+panel does not clear solo: its summary retains the active lane indicator until
+Both chains is selected. This is whole-native monitoring, not a global hybrid bus
+solo or CPU suspension.
+
+The maintained native utility qualifier checks exclusive stereo PCM, readback,
+measurement guards and Save exclusion. Existing HTTP and browser authoring flows
+check unchanged working receipts, explicit clearing and worker reconstruction.

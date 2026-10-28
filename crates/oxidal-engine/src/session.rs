@@ -71,6 +71,8 @@ impl Session {
                     });
                     controls.extend(native_controls(&node.id, p)?);
                     if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+                        p.set_solo(oxidal_audio::tools::Solo::None)
+                            .map_err(|e| e.to_string())?;
                         let receipt = working
                             .and_then(|(_, rows)| rows.iter().find(|r| r.node == node.id))
                             .map(|r| r.receipt.clone());

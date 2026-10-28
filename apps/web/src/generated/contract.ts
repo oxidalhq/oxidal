@@ -181,6 +181,10 @@ export type LiveGesture =
     };
 export type Command4 =
   | {
+      kind: "solo";
+      side: Solo;
+    }
+  | {
       enabled: boolean;
       kind: "tuner";
     }
@@ -196,6 +200,7 @@ export type Command4 =
   | {
       kind: "poll";
     };
+export type Solo = "none" | "left" | "right";
 export type StructureEdit =
   | {
       kind: "reset";
@@ -865,6 +870,7 @@ export interface State2 {
   alignment: Measurement;
   balance: Measurement;
   error?: string | null;
+  solo?: "none" | "left" | "right";
   tuner?: TunerReading | null;
   tuner_enabled: boolean;
 }

@@ -2597,6 +2597,119 @@ fn qualify_utilities() -> Result<(), Box<dyn Error>> {
             .as_f64()
             .ok_or("Invalid scalar")?)
     };
+    // Solo is temporary monitoring: actual PCM/readback, no tone edit/history,
+    // exclusive lanes, and no persistence in a portable preset.
+    {
+        use oxidal_audio::tools::Solo;
+        let mut engine = Engine::new(48000.0, 128)?;
+        engine.reset_empty()?;
+        let mut owner = Authoring::for_source(&root, "solo-monitoring".into(), None);
+        assert!(
+            owner
+                .command(
+                    &mut engine,
+                    A::Utility {
+                        command: C::Solo { side: Solo::Left }
+                    }
+                )
+                .is_err()
+        );
+        owner.command(
+            &mut engine,
+            A::Edit {
+                edit: E::Stereo { enabled: true },
+            },
+        )?;
+        engine.set_input_mode(oxidal_tone3000::InputMode::Stereo)?;
+        for (id, value) in [
+            ("gateEnabled", 0.0),
+            ("toneEqEnabled", 0.0),
+            ("inputLevel", 0.5),
+            ("outputLevel", 0.5),
+            ("chainPanLinked", 0.0),
+            ("chainPanLeft", 0.0),
+            ("chainPanRight", 1.0),
+            ("outputBalance", 0.5),
+        ] {
+            engine.set_normalized(id, value)?;
+        }
+        let before = owner.snapshot(&mut engine)?;
+        for side in [Solo::Left, Solo::Right, Solo::None] {
+            let status = owner.command(
+                &mut engine,
+                A::Utility {
+                    command: C::Solo { side },
+                },
+            )?;
+            assert_eq!(status.tools.solo, side);
+            assert_eq!(status.working, before.working);
+            assert_eq!(status.can_undo, before.can_undo);
+            assert_eq!(status.can_redo, before.can_redo);
+            assert_eq!(
+                read(&mut engine, "chainSoloLeft")? > 0.5,
+                side == Solo::Left
+            );
+            assert_eq!(
+                read(&mut engine, "chainSoloRight")? > 0.5,
+                side == Solo::Right
+            );
+            let (mut l, mut r) = ([0.17; 128], [-0.11; 128]);
+            for block in 0..64 {
+                for i in 0..128 {
+                    let phase = std::f32::consts::TAU * 220.0 * (block * 128 + i) as f32 / 48000.0;
+                    l[i] = phase.sin() * 0.17;
+                    r[i] = phase.sin() * -0.11;
+                }
+                engine.process(&mut l, &mut r)?;
+            }
+            let energy = |samples: &[f32]| samples.iter().map(|x| x * x).sum::<f32>();
+            assert_eq!(
+                energy(&l) > 0.0001,
+                side != Solo::Right,
+                "left PCM {side:?}"
+            );
+            assert_eq!(
+                energy(&r) > 0.0001,
+                side != Solo::Left,
+                "right PCM {side:?}"
+            );
+        }
+        owner.command(
+            &mut engine,
+            A::Utility {
+                command: C::Solo { side: Solo::Left },
+            },
+        )?;
+        assert!(
+            owner
+                .command(
+                    &mut engine,
+                    A::Utility {
+                        command: C::Balance
+                    }
+                )
+                .is_err()
+        );
+        assert!(
+            owner
+                .command(&mut engine, A::Utility { command: C::Align })
+                .is_err()
+        );
+        let saved = engine.save_preset("Monitoring excluded")?;
+        let mut fresh = Engine::new(48000.0, 128)?;
+        fresh.load_preset(&saved)?;
+        fresh.wait_ready()?;
+        assert_eq!(read(&mut fresh, "chainSoloLeft")?, 0.0);
+        assert_eq!(read(&mut fresh, "chainSoloRight")?, 0.0);
+        owner.command(&mut engine, A::Undo)?;
+        assert!(!engine.layout()?.stereo);
+        assert_eq!(owner.snapshot(&mut engine)?.tools.solo, Solo::None);
+        owner.command(&mut engine, A::Redo)?;
+        assert_eq!(owner.snapshot(&mut engine)?.tools.solo, Solo::None);
+        eprintln!(
+            "native solo: exclusive stereo PCM, readback, mono rejection, unchanged tone history, matching guards, portable Save exclusion and structural undo passed"
+        );
+    }
     for rate in [44100.0, 48000.0, 96000.0] {
         let mut engine = Engine::new(rate, 128)?;
         engine.reset_empty()?;

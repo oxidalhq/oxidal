@@ -1597,6 +1597,37 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         .await
         .unwrap();
     assert_eq!(client.post(&defaults_url).json(&json!({"expected_revision":latest_defaults["revision"],"settings":defaults_before["settings"]})).send().await.unwrap().status(),200);
+    // Monitoring is not a tone edit and never survives worker reconstruction.
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"stereo","enabled":true}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let before_solo = state.clone();
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"solo","side":"left"}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["tools"]["solo"], "left");
+    assert_eq!(
+        state["configured"]["working"],
+        before_solo["configured"]["working"]
+    );
+    assert_eq!(state["modified"], before_solo["modified"]);
+    let response = send(&client, &url, &state, json!({"kind":"restart"})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["tools"]["solo"], "none");
+    assert_eq!(
+        state["authoring"]["layout"],
+        before_solo["authoring"]["layout"]
+    );
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"undo"}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
     let pasted=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"paste","lane":"left","index":0}}})).await;
     assert_eq!(pasted.status(), 200, "{}", pasted.text().await.unwrap());
     state = pasted.json().await.unwrap();

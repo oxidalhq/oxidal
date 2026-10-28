@@ -743,6 +743,21 @@ impl Engine {
         }
         Ok(())
     }
+    /// Exclusive, temporary lane monitoring. Never part of a saved tone.
+    pub fn set_solo(&mut self, side: oxidal_audio::tools::Solo) -> Result<()> {
+        use oxidal_audio::tools::Solo;
+        if self.role != ProcessingRole::WholePreset || side != Solo::None && !self.layout()?.stereo
+        {
+            return Err(NativeError(
+                "Solo requires whole-native stereo chains".into(),
+            ));
+        }
+        self.set_normalized("chainSoloLeft", if side == Solo::Left { 1.0 } else { 0.0 })?;
+        self.set_normalized(
+            "chainSoloRight",
+            if side == Solo::Right { 1.0 } else { 0.0 },
+        )
+    }
     pub(crate) fn utility(&mut self, action: u32) -> Result<serde_json::Value> {
         if self.role != ProcessingRole::WholePreset {
             return Err(NativeError("Whole-native utility required".into()));

@@ -106,6 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(eq) = startup.eq {
         engine.restore_eq(&eq, &mut 0)?;
     }
+    engine.set_solo(oxidal_audio::tools::Solo::None)?;
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }

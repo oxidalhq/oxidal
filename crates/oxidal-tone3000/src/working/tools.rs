@@ -28,6 +28,12 @@ impl Authoring {
     ) -> Result<AuthoringStatus, String> {
         self.tools.error = None;
         match command {
+            Command::Solo { side } => {
+                if self.measurement_pending() {
+                    return Err("Finish matching before solo monitoring".into());
+                }
+                engine.set_solo(side).map_err(|e| e.to_string())?;
+            }
             Command::Tuner { enabled } => {
                 engine
                     .utility(if enabled { 1 } else { 2 })
@@ -39,6 +45,9 @@ impl Authoring {
             }
             Command::Cancel => self.cancel_tools(engine)?,
             Command::Balance | Command::Align => {
+                if self.snapshot(engine)?.tools.solo != oxidal_audio::tools::Solo::None {
+                    return Err("Clear solo before matching chains".into());
+                }
                 if self.measurement_pending() {
                     return Err("Cancel the active measurement first".into());
                 }

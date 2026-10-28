@@ -32,6 +32,8 @@ export function NativeTools({
   const measuring =
     tools.balance.state === 'listening' ||
     tools.alignment.state === 'listening';
+  const solo = tools.solo ?? 'none';
+  const soloing = solo !== 'none';
   const reading = tools.tuner;
   const midi =
     reading && reading.frequency > 0 && reading.confidence >= 0.7
@@ -53,8 +55,38 @@ export function NativeTools({
           });
       }}
     >
-      <summary>Tuner & matching</summary>
+      <summary>
+        Tuner & matching
+        {soloing && (
+          <span className="text-primary">
+            {' '}
+            · {solo === 'left' ? 'Left' : 'Right'} solo
+          </span>
+        )}
+      </summary>
       <div className="space-y-3 py-2">
+        <div className="action-row" role="group" aria-label="Chain monitoring">
+          {(['none', 'left', 'right'] as const).map((side) => (
+            <Button
+              key={side}
+              variant={solo === side ? 'secondary' : 'outline'}
+              aria-pressed={solo === side}
+              disabled={
+                disabled ||
+                measuring ||
+                (side !== 'none' && !status.layout.stereo)
+              }
+              onClick={() =>
+                void author({
+                  kind: 'utility',
+                  command: { kind: 'solo', side },
+                })
+              }
+            >
+              {side === 'none' ? 'Both chains' : `Solo ${side}`}
+            </Button>
+          ))}
+        </div>
         <div className="action-row">
           <Button
             variant="outline"
@@ -71,7 +103,7 @@ export function NativeTools({
           </Button>
           <Button
             variant="outline"
-            disabled={disabled || measuring || !status.layout.stereo}
+            disabled={disabled || measuring || soloing || !status.layout.stereo}
             onClick={() =>
               void author({ kind: 'utility', command: { kind: 'balance' } })
             }
@@ -80,7 +112,7 @@ export function NativeTools({
           </Button>
           <Button
             variant="outline"
-            disabled={disabled || measuring || !status.layout.stereo}
+            disabled={disabled || measuring || soloing || !status.layout.stereo}
             onClick={() =>
               void author({ kind: 'utility', command: { kind: 'align' } })
             }

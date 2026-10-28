@@ -370,6 +370,13 @@ impl Authoring {
         let parameters: Vec<crate::protocol::Parameter> =
             serde_json::from_value(engine.catalog().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
+        let mut tools = self.tools.clone();
+        let active = |id: &str| parameters.iter().any(|p| p.id == id && p.normalized > 0.5);
+        tools.solo = match (active("chainSoloLeft"), active("chainSoloRight")) {
+            (true, false) => oxidal_audio::tools::Solo::Left,
+            (false, true) => oxidal_audio::tools::Solo::Right,
+            _ => oxidal_audio::tools::Solo::None,
+        };
         let mut setting_steps: std::collections::BTreeMap<String, f32> = parameters
             .iter()
             .filter(|p| prepared_setting(&p.id))
@@ -425,7 +432,7 @@ impl Authoring {
             gesture: self.gesture.as_ref().map(|g| g.owner.clone()),
             settings,
             setting_steps,
-            tools: self.tools.clone(),
+            tools,
             layout: engine.layout().map_err(|e| e.to_string())?,
             can_paste: clipboard::available(&self.root),
             can_undo: !self.undo.is_empty(),
@@ -516,6 +523,7 @@ impl Authoring {
         }
         // Processing topology settings are device/session configuration, outside
         // tone history. Keep their current values while restoring an older tone.
+        let monitoring = self.snapshot(engine)?.tools.solo;
         let processing = if matches!(action, AuthoringAction::Undo | AuthoringAction::Redo) {
             self.snapshot(engine)?
                 .settings
@@ -586,6 +594,20 @@ impl Authoring {
             for setting in &processing {
                 engine
                     .set_normalized(&setting.target, setting.value)
+                    .map_err(|e| e.to_string())?;
+            }
+            if matches!(action, AuthoringAction::Undo | AuthoringAction::Redo) {
+                let side = if engine.layout().map_err(|e| e.to_string())?.stereo {
+                    monitoring
+                } else {
+                    oxidal_audio::tools::Solo::None
+                };
+                engine.set_solo(side).map_err(|e| e.to_string())?;
+            } else if matches!(action, AuthoringAction::Edit { .. })
+                && !engine.layout().map_err(|e| e.to_string())?.stereo
+            {
+                engine
+                    .set_solo(oxidal_audio::tools::Solo::None)
                     .map_err(|e| e.to_string())?;
             }
             // Hot EQ edits do not load models; do not inject a silent PCM block

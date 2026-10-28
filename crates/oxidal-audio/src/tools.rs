@@ -1,9 +1,18 @@
 //! Native utility state, separate from portable tone settings.
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Solo {
+    #[default]
+    None,
+    Left,
+    Right,
+}
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
+    Solo { side: Solo },
     Tuner { enabled: bool },
     Balance,
     Align,
@@ -46,6 +55,8 @@ pub struct Measurement {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct State {
+    #[serde(default)]
+    pub solo: Solo,
     pub tuner_enabled: bool,
     pub tuner: Option<TunerReading>,
     pub balance: Measurement,
