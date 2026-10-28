@@ -39,6 +39,15 @@ impl ResidentSet {
         settings: &StartRig,
         budget: usize,
     ) -> Result<Self, String> {
+        Self::new_with_models(store, world, settings, budget, None)
+    }
+    pub fn new_with_models(
+        store: &BundleStore,
+        world: &World,
+        settings: &StartRig,
+        budget: usize,
+        model_root: Option<&std::path::Path>,
+    ) -> Result<Self, String> {
         settings.validate()?;
         let frames = settings.stream.input.period_frames as usize;
         let rate = settings.stream.input.sample_rate;
@@ -64,7 +73,14 @@ impl ResidentSet {
                 return Err("Resident transport requires stereo logical ports".into());
             }
             if let Some(recall) = &choice.recall {
-                session.restore(recall)?;
+                if recall.models.is_empty() {
+                    session.restore(recall)?;
+                } else {
+                    session.restore_with_models(
+                        recall,
+                        model_root.ok_or("Model asset store is unavailable")?,
+                    )?;
+                }
             }
             used = used
                 .checked_add(session.buffer_bytes())
@@ -146,6 +162,7 @@ impl ResidentSet {
     pub fn switch(&mut self, command: SwitchCommand) -> Result<(), String> {
         if !self.healthy()
             || self.switching()
+            || self.residents[self.active].session.model_pending()
             || !self.residents[self.active]
                 .session
                 .matches_cursor(&command.session, command.expected_revision)

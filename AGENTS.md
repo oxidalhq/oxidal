@@ -65,3 +65,9 @@ Independent resident edits and Save receipts survive switching/reconstruction.
 Library/live controls and maintained DSP/worker/browser tests cover this path; see
 docs/mixed-engine.md. Runtime resident creation, Preserve/Fade tails, standalone
 native-worker unification, physical MIDI and physical deadlines remain open.
+
+Whole-native mixed nodes now accept verified live NAM/IR replacement and insertion,
+with shared native preparation, confirmed descriptors, per-resident recovery/boot
+recall and isolated embedded-model Save. Extracted stage recipes still reject model
+edits. The maintained mixed worker/API/browser suites exercise this path; physical
+no-dropout timing and full authoring remain open. See docs/mixed-engine.md.

@@ -317,6 +317,10 @@ export type RigAudioAction =
       kind: "switch";
     }
   | {
+      command: ModelCommand;
+      kind: "model";
+    }
+  | {
       kind: "save";
       name: string;
     };
@@ -339,6 +343,20 @@ export type Target =
       kind: "merge";
       node: string;
       port: number;
+    };
+export type ModelOperation =
+  | {
+      assignment: ModelAssignment;
+      kind: "prepare";
+    }
+  | {
+      kind: "poll";
+    }
+  | {
+      kind: "commit";
+    }
+  | {
+      kind: "cancel";
     };
 export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge";
 export type PortableTails = "cut" | "preserve";
@@ -1073,6 +1091,7 @@ export interface PreparedRecall {
 }
 export interface Recall {
   eq?: NodeEq[] | null;
+  models?: NodeModels[];
   source_revision: string;
   values: Value[];
 }
@@ -1081,6 +1100,10 @@ export interface Recall {
  */
 export interface NodeEq {
   blocks: BlockEqState[];
+  node: string;
+}
+export interface NodeModels {
+  assignments: ModelAssignment[];
   node: string;
 }
 export interface Value {
@@ -1104,6 +1127,12 @@ export interface SwitchCommand {
   expected_revision: number;
   fade_frames: number;
   revision: string;
+  session: string;
+}
+export interface ModelCommand {
+  expected_revision: number;
+  node: string;
+  operation: ModelOperation;
   session: string;
 }
 export interface RigAudioState {
@@ -1131,6 +1160,8 @@ export interface Snapshot3 {
    * Reported algorithmic and alignment delay; excludes audio devices/transport.
    */
   latency_frames: number;
+  model_change?: NodeModelChange | null;
+  models?: NodeModels[];
   /**
    * Actual scalar values differ from the immutable source bundle.
    */
@@ -1138,6 +1169,7 @@ export interface Snapshot3 {
   prepared?: PreparedStatus[];
   revision: number;
   session: string;
+  slots?: NodeSlots[];
   source_revision: string;
 }
 export interface Control {
@@ -1151,11 +1183,19 @@ export interface Control {
   toggle: boolean;
   value: number;
 }
+export interface NodeModelChange {
+  node: string;
+  progress: ModelProgress;
+}
 export interface PreparedStatus {
   error?: string | null;
   modified: boolean;
   name: string;
   revision: string;
+}
+export interface NodeSlots {
+  node: string;
+  slots: NativeSlot[];
 }
 export interface SaveState {
   error?: string | null;

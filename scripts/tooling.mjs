@@ -340,6 +340,10 @@ if (mode === 'bootstrap') {
         OXIDAL_GRAPH_QUALIFY_NULL: '1',
         OXIDAL_RIG_QUALIFY_NULL: '1',
         OXIDAL_MIXED_TEST_ROOT: env.OXIDAL_QUALIFICATION_DATA,
+        OXIDAL_NATIVE_TEST_MODELS: join(
+          env.OXIDAL_QUALIFICATION_DATA,
+          'audition-models',
+        ),
       },
     });
   }
@@ -495,7 +499,8 @@ if (mode === 'bootstrap') {
       : join(root, '.local/mappings.json');
   if (
     mode === 'e2e-server' &&
-    process.env.OXIDAL_AUDIO_QUALIFY_NULL === '1' &&
+    (process.env.OXIDAL_AUDIO_QUALIFY_NULL === '1' ||
+      process.env.OXIDAL_RIG_QUALIFY_NULL === '1') &&
     process.env.OXIDAL_NATIVE_TEST_MODELS
   ) {
     cpSync(

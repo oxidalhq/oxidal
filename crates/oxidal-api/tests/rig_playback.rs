@@ -657,7 +657,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let (shutdown, signal) = tokio::sync::watch::channel(false);
     let (app, stopped) = router_with_shutdown(Config {
         shutdown: Some(signal),
-        ..config
+        ..config.clone()
     })
     .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -730,6 +730,119 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let second = apply(&c, &url, switch(&restored, &saved)).await;
     assert_eq!(control(&second, &gain), -9.0);
     assert_eq!(second["configured"]["prepared"][0]["revision"], revision);
+    assert_eq!(pids(&executable).len(), 1);
+    // Hybrid model editing uses the same verified cache as the standalone path.
+    use sha2::{Digest, Sha256};
+    let model_bytes = std::fs::read(
+        std::env::var_os("OXIDAL_TONE3000_TEST_MODEL").expect("native model fixture"),
+    )
+    .unwrap();
+    let asset = oxidal_presets::ModelAsset {
+        schema: 1,
+        tone_id: 2701,
+        model_id: 2901,
+        title: "HTTP hybrid NAM".into(),
+        name: "NAM fixture".into(),
+        format: "nam".into(),
+        sha256: format!("{:x}", Sha256::digest(&model_bytes)),
+        tone: json!({"id":2701,"title":"HTTP hybrid NAM","format":"nam","gear":"amp","models":[{"id":2901,"name":"NAM fixture","model_url":"oxidal-model://fixture/model.nam"}]}),
+    };
+    let asset = oxidal_presets::ModelStore::new(root.join("presets/audition-models"))
+        .stage(&asset, &model_bytes)
+        .unwrap();
+    let node = second["control"]["eq"][0]["node"].as_str().unwrap();
+    let target = second["control"]["eq"][0]["blocks"][0]["block_id"]
+        .as_str()
+        .unwrap();
+    let before_models = second["control"].clone();
+    let pid = pids(&executable);
+    let loading=apply(&c,&url,json!({"kind":"model","command":{"session":second["control"]["session"],"expected_revision":second["control"]["revision"],
+        "node":node,"operation":{"kind":"prepare","assignment":{"target":target,"asset":asset}}}})).await;
+    assert_eq!(loading["phase"], "running");
+    let mut modeled = loading;
+    for _ in 0..200 {
+        if modeled["control"]["model_change"]["progress"]["phase"] == "applied" {
+            break;
+        }
+        assert_eq!(modeled["phase"], "running");
+        assert_ne!(
+            modeled["control"]["model_change"]["progress"]["phase"], "failed",
+            "{modeled}"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        modeled = get(&c, &url, "rig-audio").await;
+    }
+    assert_eq!(
+        modeled["control"]["model_change"]["progress"]["phase"],
+        "applied"
+    );
+    assert_eq!(
+        modeled["control"]["models"][0]["assignments"][0]["asset"],
+        asset
+    );
+    assert_eq!(modeled["control"]["eq"], before_models["eq"]);
+    assert_eq!(control(&modeled, &gain), -9.0);
+    assert_eq!(pids(&executable), pid);
+    let restored = apply(&c, &url, json!({"kind":"restart"})).await;
+    assert_eq!(restored["control"]["models"], modeled["control"]["models"]);
+    assert_eq!(restored["control"]["eq"], modeled["control"]["eq"]);
+    let selected = apply(&c, &url, json!({"kind":"set_boot","enabled":true})).await;
+    assert_eq!(selected["start_on_boot"], true);
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        shutdown: Some(signal),
+        ..config
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let booted = phase(&c, &url, "running").await;
+    assert_eq!(booted["start_on_boot"], true);
+    assert_eq!(booted["control"]["models"], modeled["control"]["models"]);
+    assert_eq!(booted["control"]["eq"], modeled["control"]["eq"]);
+    assert_eq!(control(&booted, &gain), -9.0);
+    let saving = apply(
+        &c,
+        &url,
+        json!({"kind":"save","name":"Offline hybrid model"}),
+    )
+    .await;
+    let mut exported = saving;
+    for _ in 0..400 {
+        if exported["save"]["running"] == false {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        exported = get(&c, &url, "rig-audio").await;
+    }
+    let saved_model = exported["save"]["saved_revision"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(exported["save"]["error"].is_null(), "{exported}");
+    apply(&c, &url, json!({"kind":"set_boot","enabled":false})).await;
+    apply(&c, &url, json!({"kind":"stop"})).await;
+    std::fs::remove_dir_all(root.join("presets/audition-models")).unwrap();
+    let offline = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{"revision":saved_model,"stream":stream(),"recall":null}}),
+    )
+    .await;
+    assert!(offline["control"]["models"].as_array().unwrap().is_empty());
+    assert_eq!(offline["control"]["eq"], modeled["control"]["eq"]);
+    assert_eq!(control(&offline, &gain), -9.0);
+    assert!(
+        offline["control"]["controls"]
+            .to_string()
+            .contains("HTTP hybrid NAM")
+    );
     assert_eq!(pids(&executable).len(), 1);
     shutdown.send_replace(true);
     stopped.wait().await.unwrap();

@@ -57,13 +57,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let store = BundleStore::new(std::path::PathBuf::from(std::env::var(
         "OXIDAL_BUNDLE_STORE",
     )?));
+    let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
         if args != ["--save-revision"] {
             return Err("Unknown rig worker mode".into());
         }
         let request: SaveRequest = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
-        let revision = oxidal_engine::save_revision(&store, &World::discover()?, request)?;
+        let world = World::discover()?;
+        let revision = if let Some(root) = &model_root {
+            oxidal_engine::save_revision_with_models(&store, &world, request, root)?
+        } else {
+            oxidal_engine::save_revision(&store, &world, request)?
+        };
         serde_json::to_writer(std::io::stdout().lock(), &revision)?;
         std::io::stdout().flush()?;
         return Ok(());
@@ -106,7 +112,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let world = World::discover()?;
-    let mut session = ResidentSet::new(&store, &world, &settings, BUFFER_BUDGET)?;
+    let mut session = ResidentSet::new_with_models(
+        &store,
+        &world,
+        &settings,
+        BUFFER_BUDGET,
+        model_root.as_deref(),
+    )?;
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }
@@ -187,6 +199,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Status => None,
                 WorkerRequest::Control { command } => session.active_mut().apply(command).err(),
                 WorkerRequest::Eq { command } => session.active_mut().apply_eq(command).err(),
+                WorkerRequest::Model { command } => match model_root.as_deref() {
+                    Some(root) => session.active_mut().model_command(command, root).err(),
+                    None => Some("Model asset store is unavailable".into()),
+                },
                 WorkerRequest::Switch { command } => match session.switch(command) {
                     Ok(()) => {
                         switch_reply = true;

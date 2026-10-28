@@ -14,6 +14,22 @@ pub fn save_revision(
     world: &World,
     request: SaveRequest,
 ) -> Result<String, String> {
+    save_with_assets(store, world, request, None)
+}
+pub fn save_revision_with_models(
+    store: &BundleStore,
+    world: &World,
+    request: SaveRequest,
+    root: &std::path::Path,
+) -> Result<String, String> {
+    save_with_assets(store, world, request, Some(root))
+}
+fn save_with_assets(
+    store: &BundleStore,
+    world: &World,
+    request: SaveRequest,
+    model_root: Option<&std::path::Path>,
+) -> Result<String, String> {
     request.settings.validate()?;
     if !oxidal_audio::lifecycle::valid_preset_name(&request.name)
         || request.recall.source_revision != request.settings.revision
@@ -26,7 +42,14 @@ pub fn save_revision(
     let rate = f64::from(request.settings.stream.input.sample_rate);
     let frames = request.settings.stream.input.period_frames as usize;
     let mut session = Session::new(original.clone(), world, rate, frames, BUFFER_BUDGET)?;
-    session.restore(&request.recall)?;
+    if request.recall.models.is_empty() {
+        session.restore(&request.recall)?;
+    } else {
+        session.restore_with_models(
+            &request.recall,
+            model_root.ok_or("Model asset store is unavailable")?,
+        )?;
+    }
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
@@ -95,9 +118,13 @@ pub fn save_revision(
                     .iter()
                     .any(|old| old.target == c.target && old.value != c.value)
         });
+        let models_changed = confirmed
+            .models
+            .iter()
+            .any(|m| m.node == node.id && !m.assignments.is_empty());
         let eq_changed = confirmed.eq.iter().find(|e| e.node == node.id)
             != session.initial_eq.iter().find(|e| e.node == node.id);
-        if !changed && !eq_changed {
+        if !changed && !eq_changed && !models_changed {
             continue;
         } // Exact unchanged native bytes, including unknown fields.
         let Some(Processor::Native(engine)) = session.graph.processor_mut(&node.id) else {
@@ -111,6 +138,8 @@ pub fn save_revision(
         }
         let expected = engine.live_controls().map_err(|e| e.to_string())?;
         let expected_eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
+        let expected_models =
+            oxidal_tone3000::model_preparation::identities(engine).map_err(|e| e.to_string())?;
         let bytes = engine
             .save_preset(&request.name)
             .map_err(|e| e.to_string())?;
@@ -121,6 +150,11 @@ pub fn save_revision(
             .map_err(|e| e.to_string())?;
         verify.wait_ready().map_err(|e| e.to_string())?;
         let actual = verify.live_controls().map_err(|e| e.to_string())?;
+        if oxidal_tone3000::model_preparation::identities(&mut verify).map_err(|e| e.to_string())?
+            != expected_models
+        {
+            return Err("Saved model identities differ".into());
+        }
         if verify.eq_snapshot().map_err(|e| e.to_string())? != expected_eq {
             return Err("Native EQ did not survive fresh recall".into());
         }

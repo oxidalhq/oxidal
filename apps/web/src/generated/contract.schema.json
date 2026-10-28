@@ -2973,6 +2973,92 @@
         "asset"
       ]
     },
+    "ModelCommand": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "node": {
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/ModelOperation"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "node",
+        "operation"
+      ]
+    },
+    "ModelOperation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "assignment": {
+              "$ref": "#/$defs/ModelAssignment"
+            },
+            "kind": {
+              "type": "string",
+              "const": "prepare"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "assignment"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "poll"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "commit"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cancel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
     "ModelPhase": {
       "type": "string",
       "enum": [
@@ -3261,6 +3347,60 @@
       "required": [
         "node",
         "blocks"
+      ]
+    },
+    "NodeModelChange": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "progress": {
+          "$ref": "#/$defs/ModelProgress"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "progress"
+      ]
+    },
+    "NodeModels": {
+      "type": "object",
+      "properties": {
+        "assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelAssignment"
+          }
+        },
+        "node": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "assignments"
+      ]
+    },
+    "NodeSlots": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NativeSlot"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "slots"
       ]
     },
     "OwnedPreset": {
@@ -4152,6 +4292,13 @@
             "$ref": "#/$defs/NodeEq"
           }
         },
+        "models": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeModels"
+          }
+        },
         "source_revision": {
           "type": "string"
         },
@@ -4372,6 +4519,23 @@
             "kind": {
               "type": "string",
               "const": "switch"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/ModelCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "model"
             }
           },
           "additionalProperties": false,
@@ -4929,6 +5093,24 @@
           "format": "uint32",
           "minimum": 0
         },
+        "model_change": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeModelChange"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "models": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeModels"
+          }
+        },
         "modified": {
           "description": "Actual scalar values differ from the immutable source bundle.",
           "type": "boolean"
@@ -4947,6 +5129,13 @@
         },
         "session": {
           "type": "string"
+        },
+        "slots": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeSlots"
+          }
         },
         "source_revision": {
           "type": "string"

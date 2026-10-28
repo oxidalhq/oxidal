@@ -329,7 +329,7 @@ pub struct ModelProgress {
     pub phase: ModelPhase,
     pub error: Option<String>,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ModelOperation {
     Prepare { assignment: ModelAssignment },

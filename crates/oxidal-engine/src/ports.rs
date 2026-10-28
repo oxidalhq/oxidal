@@ -325,6 +325,12 @@ impl PreparedPorts {
     pub fn latency_frames(&self) -> u32 {
         self.latency_frames
     }
+    pub(crate) fn frames(&self) -> usize {
+        self.frames
+    }
+    pub(crate) fn expected_latency(&self, node: &str) -> Option<u32> {
+        self.nodes.iter().find(|n| n.id == node).map(|n| n.latency)
+    }
     /// Control/qualification access, outside concurrent processing. A future Save
     /// must serialize confirmed backend state rather than reuse the initial view.
     pub fn processor_mut(&mut self, node: &str) -> Option<&mut Processor> {

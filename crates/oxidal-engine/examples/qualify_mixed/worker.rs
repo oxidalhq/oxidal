@@ -49,10 +49,21 @@ fn send<T: serde::Serialize>(child: &mut ChildGuard, value: &T) -> Result<()> {
     Ok(())
 }
 fn spawn(root: &Path, data: &Path, save: bool) -> Result<ChildGuard> {
+    spawn_with_models(root, data, save, None)
+}
+fn spawn_with_models(
+    root: &Path,
+    data: &Path,
+    save: bool,
+    models: Option<&Path>,
+) -> Result<ChildGuard> {
     std::fs::create_dir_all(data)?;
     let mut command = Command::new(std::env::var("OXIDAL_TEST_RIG_WORKER")?);
     if save {
         command.arg("--save-revision");
+    }
+    if let Some(models) = models {
+        command.env("OXIDAL_PRESET_DIR", models);
     }
     Ok(ChildGuard(
         command
@@ -589,8 +600,292 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         &expected,
         &Session::new(saved, world, 48000.0, 128, BUFFER_BUDGET)?.snapshot(),
     );
+    qualify_models(world, bundle, root)?;
     println!(
         "mixed worker: live native/LV2/bypass/merge control, audible scalar change, invalid/stale rejection, concurrent isolated export, exact provenance, shared native resource independence and unchanged native bytes, offline child recall and EOF teardown pass"
+    );
+    Ok(())
+}
+
+fn model_command(state: &Snapshot, node: &str, target: &str, asset: &str) -> ModelCommand {
+    ModelCommand {
+        session: state.session.clone(),
+        expected_revision: state.revision,
+        node: node.into(),
+        operation: oxidal_audio::lifecycle::ModelOperation::Prepare {
+            assignment: oxidal_audio::lifecycle::ModelAssignment {
+                target: target.into(),
+                asset: asset.into(),
+                insertion: None,
+            },
+        },
+    }
+}
+fn advance(session: &mut Session, failed: bool) -> Result<()> {
+    use oxidal_audio::lifecycle::ModelPhase;
+    let started = Instant::now();
+    loop {
+        session.pump()?;
+        let (mut l, mut r) = ([0.0; 128], [0.0; 128]);
+        session.process(&[&[0.02; 128], &[0.01; 128]], &mut [&mut l, &mut r])?;
+        let state = session.snapshot();
+        if let Some(change) = state.model_change {
+            match change.progress.phase {
+                ModelPhase::Applied => {
+                    assert!(!failed);
+                    return Ok(());
+                }
+                ModelPhase::Failed => {
+                    assert!(failed, "{:?}", change.progress.error);
+                    return Ok(());
+                }
+                _ => (),
+            }
+        }
+        if started.elapsed() > Duration::from_secs(20) {
+            return Err("Mixed model preparation timed out".into());
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
+    use oxidal_presets::{ModelAsset, ModelStore};
+    use sha2::{Digest, Sha256};
+    let data = root.join("mixed-model-case");
+    std::fs::create_dir_all(&data)?;
+    let assets = ModelStore::new(data.join("audition-models"));
+    let bytes = std::fs::read(
+        std::env::var_os("OXIDAL_TONE3000_TEST_MODEL").ok_or("Native model fixture required")?,
+    )?;
+    let asset = ModelAsset {
+        schema: 1,
+        tone_id: 1701,
+        model_id: 1901,
+        title: "Hybrid live NAM".into(),
+        name: "NAM fixture".into(),
+        format: "nam".into(),
+        sha256: format!("{:x}", Sha256::digest(&bytes)),
+        tone: serde_json::json!({"id":1701,"title":"Hybrid live NAM","format":"nam","gear":"amp","models":[{"id":1901,"name":"NAM fixture","model_url":"oxidal-model://fixture/model.nam"}]}),
+    };
+    let nam = assets.stage(&asset, &bytes)?;
+    let source = ModelStore::new(root.join("audition-models"));
+    let (ir, ir_path) = std::fs::read_dir(root.join("audition-models"))?
+        .filter_map(|p| p.ok())
+        .filter_map(|p| source.read(&p.file_name().to_string_lossy()).ok())
+        .find(|(a, _)| a.format == "ir")
+        .ok_or("Native IR fixture required")?;
+    let ir = assets.stage(&ir, &std::fs::read(ir_path)?)?;
+    let store = BundleStore::new(data.join("bundles"));
+    let revision = store.save(bundle)?;
+    let mut session = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let original = session.snapshot();
+    let node = original.eq[0].node.clone();
+    let target = original.eq[0].blocks[0].block_id.clone();
+    assert!(
+        session
+            .model_command(model_command(&original, &node, "missing", &nam), &data)
+            .is_err()
+    );
+    assert_eq!(session.snapshot().revision, original.revision);
+    session.model_command(
+        model_command(&original, &node, &target, &"0".repeat(64)),
+        &data,
+    )?;
+    assert!(session.model_pending());
+    advance(&mut session, true)?;
+    assert!(session.healthy());
+    compare(&original, &session.snapshot());
+    session.model_command(
+        model_command(&session.snapshot(), &node, &target, &nam),
+        &data,
+    )?;
+    assert!(
+        change(
+            &mut session,
+            Target::Native {
+                node: node.clone(),
+                parameter: "inputLevel".into()
+            },
+            0.4
+        )
+        .is_err()
+    );
+    advance(&mut session, false)?;
+    for asset in [&nam, &ir] {
+        let state = session.snapshot();
+        let slot = state
+            .slots
+            .iter()
+            .find(|s| s.node == node)
+            .unwrap()
+            .slots
+            .iter()
+            .find(|s| s.position.lane == 0)
+            .unwrap();
+        session.model_command(model_command(&state, &node, &slot.target, asset), &data)?;
+        advance(&mut session, false)?;
+    }
+    change(
+        &mut session,
+        Target::Native {
+            node: node.clone(),
+            parameter: "inputLevel".into(),
+        },
+        0.43,
+    )?;
+    let expected = session.snapshot();
+    assert_eq!(expected.models[0].assignments.len(), 3);
+    assert!(expected.valid_model_state());
+    assert!(expected.modified);
+    let mut restored = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    restored.restore_with_models(&expected.recall(), &data)?;
+    compare(&expected, &restored.snapshot());
+    assert_eq!(restored.snapshot().models, expected.models);
+    let saved = oxidal_engine::save_revision_with_models(
+        &store,
+        world,
+        SaveRequest {
+            settings: StartRig {
+                revision: revision.clone(),
+                stream: stream(),
+                recall: None,
+                prepared: vec![],
+            },
+            recall: expected.recall(),
+            name: "Hybrid NAM and IR offline".into(),
+        },
+        &data,
+    )?;
+    assert_eq!(
+        store.read(&revision)?.manifest_bytes(),
+        bundle.manifest_bytes()
+    );
+    assert_eq!(
+        store.read(&revision)?.resource("current"),
+        bundle.resource("current")
+    );
+    let mut reopened = Session::new(store.read(&saved)?, world, 48000.0, 128, BUFFER_BUDGET)?;
+    compare(&expected, &reopened.snapshot());
+    assert!(reopened.snapshot().models.is_empty());
+    assert!(!reopened.snapshot().modified);
+    let mut error = 0.0_f32;
+    let mut peak = 0.0_f32;
+    for block in 0..550 {
+        session.pump()?;
+        reopened.pump()?;
+        let input: Vec<_> = (0..128)
+            .map(|i| {
+                if block < 400 {
+                    0.0
+                } else {
+                    0.02 + 0.03 * ((block * 128 + i) as f32 * 0.019).sin()
+                }
+            })
+            .collect();
+        let (mut a, mut b, mut x, mut y) = ([0.0; 128], [0.0; 128], [0.0; 128], [0.0; 128]);
+        session.process(&[&input, &input], &mut [&mut a, &mut b])?;
+        reopened.process(&[&input, &input], &mut [&mut x, &mut y])?;
+        if block >= 400 {
+            for (old, new) in a.iter().chain(&b).zip(x.iter().chain(&y)) {
+                error = error.max((old - new).abs());
+                peak = peak.max(new.abs());
+            }
+        }
+    }
+    assert!(
+        peak > 1e-6 && error < 1e-5,
+        "Mixed model Save PCM differs: {error}, peak={peak}"
+    );
+    // Exercise the actual IPC model command and asynchronous owner polling too.
+    let mut child = spawn_with_models(
+        &data.join("bundles"),
+        &data.join("process"),
+        false,
+        Some(&data),
+    )?;
+    let received = replies(&mut child)?;
+    let start = StartRig {
+        revision: revision.clone(),
+        stream: stream(),
+        recall: None,
+        prepared: vec![],
+    };
+    send(&mut child, &start)?;
+    let mut live = received.recv_timeout(Duration::from_secs(30))??;
+    for (asset, insert) in [(&nam, false), (&nam, true), (&ir, true)] {
+        let target = if insert {
+            live.control
+                .slots
+                .iter()
+                .find(|s| s.node == node)
+                .unwrap()
+                .slots
+                .iter()
+                .find(|s| s.position.lane == 0)
+                .unwrap()
+                .target
+                .clone()
+        } else {
+            target.clone()
+        };
+        send(
+            &mut child,
+            &WorkerRequest::Model {
+                command: model_command(&live.control, &node, &target, asset),
+            },
+        )?;
+        live = received.recv_timeout(Duration::from_secs(3))??;
+        assert!(live.error.is_none(), "{:?}", live.error);
+        let started = Instant::now();
+        loop {
+            if live
+                .control
+                .model_change
+                .as_ref()
+                .is_some_and(|m| m.progress.phase == oxidal_audio::lifecycle::ModelPhase::Applied)
+            {
+                break;
+            }
+            assert!(live.control.model_change.as_ref().is_none_or(|m|m.progress.phase!=oxidal_audio::lifecycle::ModelPhase::Failed),"{:?}",live.control.model_change);
+            assert!(started.elapsed() < Duration::from_secs(20));
+            std::thread::sleep(Duration::from_millis(20));
+            send(&mut child, &WorkerRequest::Status)?;
+            live = received.recv_timeout(Duration::from_secs(3))??;
+        }
+    }
+    assert_eq!(live.control.models[0].assignments.len(), 3);
+    assert!(live.control.valid_model_state());
+    let mut saver = spawn_with_models(
+        &data.join("bundles"),
+        &data.join("export"),
+        true,
+        Some(&data),
+    )?;
+    send(
+        &mut saver,
+        &SaveRequest {
+            settings: start,
+            recall: live.control.recall(),
+            name: "Independent hybrid model export".into(),
+        },
+    )?;
+    saver.0.stdin.take();
+    wait(&mut saver, 60)?;
+    let mut output = Vec::new();
+    saver.0.stdout.take().unwrap().read_to_end(&mut output)?;
+    let saved: String = serde_json::from_slice(&output)?;
+    let before = live.processed_frames;
+    send(&mut child, &WorkerRequest::Status)?;
+    live = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(live.processed_frames > before);
+    child.0.stdin.take();
+    wait(&mut child, 5)?;
+    std::fs::remove_dir_all(data.join("audition-models"))?;
+    let fresh = Session::new(store.read(&saved)?, world, 48000.0, 128, BUFFER_BUDGET)?;
+    compare(&live.control, &fresh.snapshot());
+    assert!(fresh.snapshot().models.is_empty());
+    println!(
+        "mixed live NAM replacement/insertion + IR, failed candidate preservation, model-backed recovery, independent Save and cache-free recall passed; PCM max_error={error}"
     );
     Ok(())
 }

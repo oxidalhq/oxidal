@@ -3,6 +3,7 @@ use crate::{PreparedPorts, Processor, protocol::*};
 use oxidal_lv2::{ControlError, World};
 use oxidal_presets::{Bundle, manifest::NodeKind};
 use std::collections::BTreeSet;
+mod models;
 
 #[derive(Debug)]
 pub struct Session {
@@ -13,6 +14,9 @@ pub struct Session {
     state: Snapshot,
     failed: bool,
     replay_token: u64,
+    model_task: oxidal_tone3000::model_preparation::Models,
+    model_root: Option<std::path::PathBuf>,
+    model_node: Option<String>,
 }
 impl Session {
     pub fn new(
@@ -30,6 +34,7 @@ impl Session {
             .ok_or("Missing host graph")?;
         let mut controls = Vec::new();
         let mut eq = Vec::new();
+        let mut slots = Vec::new();
         for node in &host.graph.nodes {
             match graph.processor_mut(&node.id) {
                 Some(Processor::Native(p)) => {
@@ -37,25 +42,13 @@ impl Session {
                         node: node.id.clone(),
                         blocks: p.eq_snapshot().map_err(|e| e.to_string())?,
                     });
-                    controls.extend(
-                        p.live_controls()
-                            .map_err(|e| e.to_string())?
-                            .into_iter()
-                            .map(|c| Control {
-                                target: Target::Native {
-                                    node: node.id.clone(),
-                                    parameter: c.target,
-                                },
-                                label: c.label,
-                                value: f64::from(c.value),
-                                minimum: 0.0,
-                                maximum: 1.0,
-                                integer: c.toggle,
-                                toggle: c.toggle,
-                                logarithmic: false,
-                                display: c.display,
-                            }),
-                    );
+                    if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+                        slots.push(NodeSlots {
+                            node: node.id.clone(),
+                            slots: p.slots().map_err(|e| e.to_string())?,
+                        });
+                    }
+                    controls.extend(native_controls(&node.id, p)?);
                 }
                 Some(Processor::Lv2(p)) => {
                     for port in p.info().ports.iter().filter(|p| p.input && p.control) {
@@ -137,6 +130,9 @@ impl Session {
             buffer_bytes: graph.buffer_bytes(),
             latency_frames: graph.latency_frames(),
             prepared: Vec::new(),
+            models: Vec::new(),
+            slots,
+            model_change: None,
         };
         if serde_json::to_vec(&state).map_err(|e| e.to_string())?.len() + 65536 > REPLY_LIMIT {
             return Err("Rig controls exceed IPC byte budget".into());
@@ -149,6 +145,9 @@ impl Session {
             state,
             failed: false,
             replay_token: 0,
+            model_task: Default::default(),
+            model_root: None,
+            model_node: None,
         })
     }
     pub fn snapshot(&self) -> Snapshot {
@@ -163,6 +162,7 @@ impl Session {
             .zip(&self.initial)
             .any(|(current, initial)| current.value != initial.value)
             || self.state.eq != self.initial_eq
+            || !self.state.models.is_empty()
     }
     pub(crate) fn source_revision(&self) -> &str {
         &self.state.source_revision
@@ -209,9 +209,12 @@ impl Session {
                 break;
             }
         }
-        Ok(())
+        self.advance_model()
     }
     pub fn apply(&mut self, command: ControlCommand) -> Result<(), String> {
+        if self.model_pending() {
+            return Err("Finish model preparation before adjusting controls".into());
+        }
         if self.failed {
             return Err("Failed rig session".into());
         }
@@ -246,6 +249,9 @@ impl Session {
         Ok(())
     }
     pub fn apply_eq(&mut self, command: EqCommand) -> Result<(), String> {
+        if self.model_pending() {
+            return Err("Finish model preparation before adjusting EQ".into());
+        }
         if self.failed
             || command.session != self.state.session
             || command.expected_revision != self.state.revision
@@ -368,6 +374,10 @@ impl Session {
     }
     /// Startup/export only. Prevalidate the entire catalog before mutation.
     pub fn restore(&mut self, recall: &Recall) -> Result<(), String> {
+        if !recall.models.is_empty() {
+            return Err("Model recall requires the verified asset store".into());
+        }
+
         if self.failed || recall.source_revision != self.state.source_revision {
             return Err("Recall revision or catalog differs".into());
         }
@@ -485,4 +495,29 @@ impl Session {
         }
         Ok(())
     }
+}
+
+fn native_controls(
+    node: &str,
+    engine: &mut oxidal_tone3000::Engine,
+) -> Result<Vec<Control>, String> {
+    Ok(engine
+        .live_controls()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|c| Control {
+            target: Target::Native {
+                node: node.into(),
+                parameter: c.target,
+            },
+            label: c.label,
+            value: f64::from(c.value),
+            minimum: 0.0,
+            maximum: 1.0,
+            integer: c.toggle,
+            toggle: c.toggle,
+            logarithmic: false,
+            display: c.display,
+        })
+        .collect())
 }

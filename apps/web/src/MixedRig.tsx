@@ -1,3 +1,4 @@
+import { ModelPicker } from './ModelPicker';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -52,9 +53,20 @@ export function MixedRig({
       return null;
     }
   });
+  const [picker, setPicker] = useState<{
+    opening: RigAudioState;
+    node: string;
+    target: string;
+    name: string;
+    insert: boolean;
+    format?: 'nam' | 'ir';
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [eqBusy, setEqBusy] = useState(false);
-  const [eqSelection, setEqSelection] = useState('');
+  const [nativeSelection, setNativeSelection] = useState<{
+    node: string;
+    target: string;
+  } | null>(null);
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
@@ -282,11 +294,50 @@ export function MixedRig({
       state.save.source_session === state.control.session &&
       state.save.source_control_revision === state.control.revision
     );
-  const disabled = !connected || busy || eqBusy || !running || !!readError;
+  const modelChange = state.control?.model_change;
+  const modelPending =
+    !!modelChange &&
+    ['verifying', 'preparing', 'ready', 'applying'].includes(
+      modelChange.progress.phase,
+    );
+  const disabled =
+    !connected || busy || eqBusy || !running || !!readError || modelPending;
+  const slots =
+    state.control?.slots?.find((s) => s.node === selected?.id)?.slots ?? [];
   const eqBlocks =
     state.control?.eq?.find((e) => e.node === selected?.id)?.blocks ?? [];
+  const nativeTarget =
+    nativeSelection && nativeSelection.node === selected?.id
+      ? nativeSelection.target
+      : 'global';
   const eqBlock =
-    eqBlocks.find((e) => e.block_id === eqSelection) ?? eqBlocks[0];
+    slots.length > 0
+      ? eqBlocks.find((e) => e.block_id === nativeTarget)
+      : eqBlocks[0];
+  const visibleControls = controls
+    .filter((c) => {
+      if (c.target.kind === 'bypass') return false;
+      if (!slots.length || c.target.kind !== 'native') return true;
+      const p = c.target.parameter;
+      if (eqBlock) return p.startsWith(`block:${eqBlock.block_id}:`);
+      return (
+        !p.startsWith('block:') &&
+        (nativeTarget === 'stereo') ===
+          (p.startsWith('spread') || p === 'outputBalance')
+      );
+    })
+    .map((c) => {
+      if (!eqBlock || !slots.length || c.target.kind !== 'native') return c;
+      const suffix = c.target.parameter.split(':').at(-1)!;
+      const labels: Record<string, string> = {
+        enabled: 'Enabled',
+        normalize: 'Normalize',
+        inputGain: 'Input gain',
+        outputGain: 'Output gain',
+        mix: 'Mix',
+      };
+      return { ...c, label: labels[suffix] ?? c.label };
+    });
   const scale = edit
     ? lv2Control({
         minimum: edit.control.minimum,
@@ -298,25 +349,25 @@ export function MixedRig({
     : undefined;
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
-      <div className="section-heading">
-        <h2>Chain</h2>
-        <span role="status">
-          {state.phase === 'starting'
-            ? 'Preparing sound…'
-            : running
-              ? changed
-                ? 'Session modified'
-                : 'Playing'
-              : state.phase === 'failed'
-                ? 'Audio needs attention'
-                : 'Audio stopped'}
-        </span>
-      </div>
-      <div className="action-row">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="section-heading min-w-0 flex-1">
+          <h2>Chain</h2>
+          <span role="status">
+            {state.phase === 'starting'
+              ? 'Preparing sound…'
+              : running
+                ? changed
+                  ? 'Session modified'
+                  : 'Playing'
+                : state.phase === 'failed'
+                  ? 'Audio needs attention'
+                  : 'Audio stopped'}
+          </span>
+        </div>
         {state.device_owned ? (
           <Button
             variant="outline"
-            disabled={!connected || busy || eqBusy || !!edit}
+            disabled={!connected || busy || eqBusy || !!edit || !!picker}
             onClick={() => void command({ kind: 'stop' })}
           >
             {state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'}
@@ -381,7 +432,7 @@ export function MixedRig({
               <Button
                 className="h-11 min-w-0 flex-1 justify-start gap-1 px-2 text-left text-sm"
                 variant={n.id === selected?.id ? 'secondary' : 'outline'}
-                disabled={!!edit}
+                disabled={!!edit || !!picker}
                 aria-pressed={n.id === selected?.id}
                 onClick={() => {
                   if (!revision) return;
@@ -426,26 +477,192 @@ export function MixedRig({
           );
         })}
       </div>
+      {running && selected && slots.length > 0 && (
+        <div
+          className="flex flex-wrap gap-2"
+          aria-label="Native model controls"
+        >
+          {['global', 'stereo', ...eqBlocks.map((b) => b.block_id)].map(
+            (target, index) => {
+              const control = controls.find(
+                (c) =>
+                  c.target.kind === 'native' &&
+                  c.target.parameter === `block:${target}:enabled`,
+              );
+              const title = control?.label.replace(/ · enabled$/, '');
+              return (
+                <Button
+                  key={target}
+                  variant={nativeTarget === target ? 'secondary' : 'outline'}
+                  aria-label={
+                    index < 2
+                      ? target === 'global'
+                        ? 'Global'
+                        : 'Stereo'
+                      : `Select model ${index - 1}`
+                  }
+                  aria-pressed={nativeTarget === target}
+                  disabled={disabled || !!edit}
+                  className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
+                  onClick={() =>
+                    setNativeSelection({ node: selected.id, target })
+                  }
+                >
+                  <span className="min-w-0 break-words">
+                    {index < 2
+                      ? target === 'global'
+                        ? 'Global'
+                        : 'Stereo'
+                      : `${index - 1} · ${title ?? 'Model'}`}
+                  </span>
+                </Button>
+              );
+            },
+          )}
+          {eqBlock && (
+            <Button
+              variant="outline"
+              disabled={disabled || !!edit}
+              onClick={() =>
+                setPicker({
+                  opening: state,
+                  node: selected.id,
+                  target: eqBlock.block_id,
+                  name: 'Selected model',
+                  insert: false,
+                })
+              }
+            >
+              Change model
+            </Button>
+          )}
+          {slots.some((s) => s.position.lane === 0) &&
+            (['nam', 'ir'] as const).map((format) => (
+              <Button
+                key={format}
+                variant="outline"
+                disabled={disabled || !!edit}
+                onClick={() =>
+                  setPicker({
+                    opening: state,
+                    node: selected.id,
+                    target: slots.find((s) => s.position.lane === 0)!.target,
+                    name: format.toUpperCase(),
+                    insert: true,
+                    format,
+                  })
+                }
+              >
+                Add {format.toUpperCase()}
+              </Button>
+            ))}
+        </div>
+      )}
+      {modelPending && (
+        <div className="flex flex-wrap items-center gap-2" role="status">
+          <span>
+            {modelChange.progress.phase === 'applying'
+              ? 'Applying model…'
+              : 'Preparing model…'}
+          </span>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              generation.current++;
+              sending.current = true;
+              setBusy(true);
+              try {
+                const fresh = await rigAudioState();
+                if (
+                  fresh.control?.session !== state.control?.session ||
+                  fresh.control?.model_change?.node !== modelChange.node ||
+                  fresh.control?.model_change?.progress.request !==
+                    modelChange.progress.request
+                )
+                  throw new Error(
+                    'Model selection changed. Review it before cancelling.',
+                  );
+                accept(
+                  await rigAudioCommand(fresh, {
+                    kind: 'model',
+                    command: {
+                      session: fresh.control.session,
+                      expected_revision: fresh.control.revision,
+                      node: modelChange.node,
+                      operation: { kind: 'cancel' },
+                    },
+                  }),
+                );
+              } catch (cause) {
+                if (alive.current) setError(String(cause));
+              } finally {
+                sending.current = false;
+                if (alive.current) setBusy(false);
+              }
+            }}
+          >
+            Cancel model
+          </Button>
+        </div>
+      )}
+      {modelChange?.progress.error && (
+        <p role="alert" className="error">
+          {modelChange.progress.error}
+        </p>
+      )}
+      {picker && (
+        <ModelPicker
+          name={picker.name}
+          initialFormat={picker.format}
+          intent={picker.insert ? 'add' : 'replace'}
+          onClose={() => setPicker(null)}
+          onAudition={async (asset) => {
+            generation.current++;
+            sending.current = true;
+            setBusy(true);
+            try {
+              const control = picker.opening.control!;
+              accept(
+                await rigAudioCommand(picker.opening, {
+                  kind: 'model',
+                  command: {
+                    session: control.session,
+                    expected_revision: control.revision,
+                    node: picker.node,
+                    operation: {
+                      kind: 'prepare',
+                      assignment: { target: picker.target, asset },
+                    },
+                  },
+                }),
+              );
+              if (alive.current) setError('');
+            } finally {
+              sending.current = false;
+              if (alive.current) setBusy(false);
+            }
+          }}
+        />
+      )}
       {running && (
         <div
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
           aria-label="Selected effect controls"
         >
-          {controls
-            .filter((c) => c.target.kind !== 'bypass')
-            .map((c) => (
-              <Button
-                key={key(c)}
-                className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
-                variant="outline"
-                disabled={disabled || !!edit}
-                onClick={() => open(c)}
-                aria-label={`Adjust ${c.label}`}
-              >
-                <span className="break-words">{c.label}</span>
-                <strong className="font-mono">{c.display}</strong>
-              </Button>
-            ))}
+          {visibleControls.map((c) => (
+            <Button
+              key={key(c)}
+              className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
+              variant="outline"
+              disabled={disabled || !!edit}
+              onClick={() => open(c)}
+              aria-label={`Adjust ${c.label}`}
+            >
+              <span className="break-words">{c.label}</span>
+              <strong className="font-mono">{c.display}</strong>
+            </Button>
+          ))}
           {!matching ? (
             <p>Reading chain…</p>
           ) : (
@@ -455,29 +672,13 @@ export function MixedRig({
       )}
       {running && selected && eqBlock && (
         <div className="space-y-2">
-          {eqBlocks.length > 1 && (
-            <div className="flex flex-wrap gap-1" aria-label="Native EQ blocks">
-              {eqBlocks.map((block, index) => (
-                <Button
-                  key={block.block_id}
-                  disabled={disabled || !!edit}
-                  variant={
-                    block.block_id === eqBlock.block_id
-                      ? 'secondary'
-                      : 'outline'
-                  }
-                  onClick={() => setEqSelection(block.block_id)}
-                >
-                  EQ {index + 1}
-                </Button>
-              ))}
-            </div>
-          )}
           <LiveEq
             key={`${state.control!.session}:${selected.id}:${eqBlock.block_id}`}
             state={{ ...state, eq: eqBlocks }}
             blockId={eqBlock.block_id}
-            disabled={!connected || busy || !!edit || !!readError}
+            disabled={
+              !connected || busy || !!edit || !!readError || modelPending
+            }
             onEditing={(editing) => {
               generation.current++;
               sending.current = editing;

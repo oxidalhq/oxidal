@@ -59,6 +59,32 @@ pub struct EqCommand {
     pub block_id: String,
     pub edit: oxidal_audio::eq::EqEdit,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeModels {
+    pub node: String,
+    pub assignments: Vec<oxidal_audio::lifecycle::ModelAssignment>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeSlots {
+    pub node: String,
+    pub slots: Vec<oxidal_audio::lifecycle::NativeSlot>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeModelChange {
+    pub node: String,
+    pub progress: oxidal_audio::lifecycle::ModelProgress,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModelCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub node: String,
+    pub operation: oxidal_audio::lifecycle::ModelOperation,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
@@ -75,12 +101,45 @@ pub struct Snapshot {
     pub latency_frames: u32,
     #[serde(default)]
     pub prepared: Vec<PreparedStatus>,
+    #[serde(default)]
+    pub models: Vec<NodeModels>,
+    #[serde(default)]
+    pub slots: Vec<NodeSlots>,
+    #[serde(default)]
+    pub model_change: Option<NodeModelChange>,
 }
 impl Snapshot {
+    pub fn valid_model_state(&self) -> bool {
+        let native = |node: &str| {
+            self.controls
+                .iter()
+                .any(|c| matches!(&c.target,Target::Native {node:n,..} if n==node))
+        };
+        self.slots.iter().enumerate().all(|(i, s)| {
+            native(&s.node)
+                && self.slots[..i].iter().all(|p| p.node != s.node)
+                && oxidal_audio::lifecycle::valid_slots(&s.slots)
+        }) && self.models.iter().enumerate().all(|(i, m)| {
+            self.slots.iter().any(|s| s.node == m.node)
+                && self.models[..i].iter().all(|p| p.node != m.node)
+                && !m.assignments.is_empty()
+                && oxidal_audio::lifecycle::valid_models(&m.assignments)
+        }) && self.model_change.as_ref().is_none_or(|m| {
+            self.slots.iter().any(|s| s.node == m.node)
+                && m.progress.assignment.valid()
+                && m.progress.request > 0
+                && m.progress.request <= self.revision
+                && m.progress
+                    .error
+                    .as_ref()
+                    .is_none_or(|e| e.len() <= 1024 && !e.chars().any(char::is_control))
+        })
+    }
     pub fn recall(&self) -> Recall {
         Recall {
             source_revision: self.source_revision.clone(),
             eq: Some(self.eq.clone()),
+            models: self.models.clone(),
             values: self
                 .controls
                 .iter()
@@ -99,6 +158,8 @@ pub struct Recall {
     pub values: Vec<Value>,
     #[serde(default)]
     pub eq: Option<Vec<NodeEq>>,
+    #[serde(default)]
+    pub models: Vec<NodeModels>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -180,6 +241,7 @@ pub enum WorkerRequest {
     Control { command: ControlCommand },
     Eq { command: EqCommand },
     Switch { command: SwitchCommand },
+    Model { command: ModelCommand },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -255,6 +317,7 @@ pub enum RigAudioAction {
     Control { command: ControlCommand },
     Eq { command: EqCommand },
     Switch { command: SwitchCommand },
+    Model { command: ModelCommand },
     Save { name: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

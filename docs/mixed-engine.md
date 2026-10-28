@@ -501,3 +501,36 @@ live controls on XR, Fold and BOOX. This is resident switching with **Cut** tail
 background creation of new residents during playback, Preserve/Fade tails, physical
 MIDI selection, native standalone-worker unification and physical deadline/xrun
 acceptance remain open. Ordinary Start/Restart/reconfigure still interrupt audio.
+
+## Live whole-native model transactions
+
+Whole-native nodes expose their current inner block identities and insertion slots.
+The mixed session accepts revision-checked `Model` operations using verified local
+asset IDs; it derives insertion coordinates from the sounding node. Clients cannot
+choose a file path or impersonate another node's insertion slot. Provider selection
+uses the existing browser picker and model cache, with NAM and IR audition applied
+before named Save.
+
+Asset verification runs off the PCM owner thread. The owner pumps the shared native
+preparation state and refreshes controls, EQ and slots after confirmed application.
+Failed preparation retains the previous sound. Scalar/EQ edits, prepared switching,
+Audio Apply, named Save and boot capture wait for pending model preparation; Stop
+remains available. A reported-delay change invalidates the old graph alignment and
+requires fresh preparation rather than silently accepting an incorrect delay plan.
+This path does not establish a physical no-dropout guarantee.
+
+Confirmed assignments belong to the inner native node and are included in unsaved
+session recovery, per-resident recall and explicit boot capture. Recovery verifies
+all asset IDs before preparing an isolated candidate. Named Save reconstructs the
+confirmed model/scalar/EQ state in a separate process, embeds the native payload,
+and verifies a fresh load, including model identities. The saved bundle no longer
+needs the temporary download cache. The original source bundle remains immutable.
+Extracted amp/cab nodes reject model operations: their derivation recipes currently
+persist scalar/EQ changes only. Stage model editing needs an extended recipe before
+it can be exposed without losing an edit at Save.
+
+The maintained mixed DSP/worker and HTTP suites cover replacement, NAM/IR insertion,
+failed-candidate retention, recovery, boot capture and cache-free saved recall. The
+browser suite uses fixture provider transport with verified real assets and the
+actual daemon/worker on XR, Fold and BOOX layouts. These tests qualify the stated
+software path; physical audio timing and complete native authoring remain open.

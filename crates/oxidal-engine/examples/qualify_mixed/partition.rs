@@ -135,6 +135,29 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
     }
     let candidate = bundle(&bytes, amp, cab, "left", -6.0206)?;
     let mut graph = Session::new(candidate.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    // No model editing is exposed until the stage recipe can persist it.
+    let before_models = graph.snapshot();
+    assert!(
+        graph
+            .model_command(
+                oxidal_engine::protocol::ModelCommand {
+                    session: before_models.session.clone(),
+                    expected_revision: before_models.revision,
+                    node: "amp".into(),
+                    operation: oxidal_audio::lifecycle::ModelOperation::Prepare {
+                        assignment: oxidal_audio::lifecycle::ModelAssignment {
+                            target: amp.into(),
+                            asset: "a".repeat(64),
+                            insertion: None,
+                        },
+                    },
+                },
+                root
+            )
+            .is_err()
+    );
+    assert_eq!(graph.snapshot().revision, before_models.revision);
+    assert!(graph.healthy());
     whole.load_preset(&bytes)?;
     whole.set_input_mode(InputMode::Left)?;
     whole.wait_ready()?;

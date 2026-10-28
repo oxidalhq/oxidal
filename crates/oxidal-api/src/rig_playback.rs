@@ -94,6 +94,13 @@ struct Owner {
     updates: watch::Sender<RigAudioState>,
 }
 impl Owner {
+    fn model_pending(&self) -> bool {
+        self.state
+            .control
+            .as_ref()
+            .and_then(|c| c.model_change.as_ref())
+            .is_some_and(|m| m.progress.phase.pending())
+    }
     fn schedule_recovery(&mut self) {
         // Continuous touch gestures still checkpoint every two seconds.
         self.recovery_due
@@ -142,7 +149,8 @@ impl Owner {
             .configured
             .as_mut()
             .ok_or("Missing mixed configuration")?;
-        if reply.control.source_revision != settings.revision
+        if !reply.control.valid_model_state()
+            || reply.control.source_revision != settings.revision
             || reply.processed_frames < self.state.processed_frames
             || self.state.control.as_ref().is_some_and(|old| {
                 old.session != reply.control.session || old.revision > reply.control.revision
@@ -249,7 +257,11 @@ impl Owner {
         let runtime = self.runtime.join("playback");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(executable)
-            .env("OXIDAL_BUNDLE_STORE", root)
+            .env("OXIDAL_BUNDLE_STORE", &root)
+            .env(
+                "OXIDAL_PRESET_DIR",
+                root.parent().ok_or("Missing model store parent")?,
+            )
             .env("OXIDAL_QUALIFICATION_DATA", runtime)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -282,6 +294,9 @@ impl Owner {
         Ok(())
     }
     async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Result<(), String> {
+        if self.model_pending() {
+            return Err("Finish model preparation before applying Audio settings".into());
+        }
         if !matches!(self.state.phase, AudioPhase::Running | AudioPhase::Stopped) {
             return Err("Wait for mixed audio to finish preparing before changing settings".into());
         }
@@ -392,6 +407,9 @@ impl Owner {
         }
     }
     async fn save(&mut self, name: String) -> Result<(), String> {
+        if self.model_pending() {
+            return Err("Finish model preparation before saving".into());
+        }
         if self.export.is_some() {
             return Err("A mixed revision is already saving".into());
         }
@@ -418,6 +436,13 @@ impl Owner {
         )
         .arg("--save-revision")
         .env("OXIDAL_BUNDLE_STORE", &self.root)
+        .env(
+            "OXIDAL_PRESET_DIR",
+            std::fs::canonicalize(&self.root)
+                .map_err(|e| e.to_string())?
+                .parent()
+                .ok_or("Missing model store parent")?,
+        )
         .env("OXIDAL_QUALIFICATION_DATA", runtime)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -629,6 +654,22 @@ impl Owner {
                     return Err(e);
                 }
             }
+            RigAudioAction::Model { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Model { command }).await {
+                    Ok(r) => r,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                let error = reply.error.clone();
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                if let Some(e) = error {
+                    return Err(e);
+                }
+            }
             RigAudioAction::Switch { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
@@ -683,6 +724,9 @@ impl Owner {
             RigAudioAction::Save { name } => self.save(name).await?,
             RigAudioAction::SetBoot { enabled } => {
                 if enabled {
+                    if self.model_pending() {
+                        return Err("Finish model preparation before boot capture".into());
+                    }
                     if self.state.phase != AudioPhase::Running {
                         return Err(
                             "Start and verify mixed audio before enabling boot playback".into()

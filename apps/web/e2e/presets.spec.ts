@@ -2096,6 +2096,9 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const changed = await value();
   await expect(rig.getByRole('status').first()).toHaveText('Session modified');
   await rig.locator('[data-node="tone"]').getByRole('button').first().click();
+  await rig
+    .getByRole('button', { name: 'Select model 1', exact: true })
+    .click();
   const eq = rig.getByRole('region', { name: 'Block EQ' });
   await expect(eq).toBeVisible();
   const eqBefore = (await get()).control.eq;
@@ -2118,6 +2121,162 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button', { name: 'Done', exact: true })
     .click();
   await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
+  // Only provider transport is mocked; verified assets, actual live worker,
+  // immediate readback, settings recovery and independent export remain real.
+  const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
+  const modelFixtures = readdirSync(modelRoot)
+    .filter((id) => /^[0-9a-f]{64}$/.test(id))
+    .map((id) => ({
+      id,
+      metadata: JSON.parse(
+        readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'),
+      ),
+    }));
+  await page.route('**/api/v1/tone3000/tones?*', (route) =>
+    route.fulfill({
+      json: {
+        data: modelFixtures.map(({ metadata: m }) => ({
+          id: m.tone_id,
+          title: m.title,
+          format: m.format,
+          gear: m.format === 'nam' ? 'amp' : 'cab',
+          license: 'Test fixture',
+          models_count: 1,
+          a2_models_count: m.format === 'nam' ? 1 : 0,
+          url: 'https://www.tone3000.com',
+          user: { username: 'fixture' },
+        })),
+        page: 1,
+        total_pages: 1,
+      },
+    }),
+  );
+  await page.route('**/api/v1/tone3000/models?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const m = modelFixtures.find(
+      (f) => String(f.metadata.tone_id) === params.get('tone_id'),
+    )!.metadata;
+    expect(params.get('architecture')).toBe(m.format === 'nam' ? '2' : 'any');
+    return route.fulfill({
+      json: {
+        data: [
+          {
+            id: m.model_id,
+            tone_id: m.tone_id,
+            name: m.name,
+            size: null,
+            architecture_version: m.format === 'nam' ? '2' : null,
+          },
+        ],
+        page: 1,
+        total_pages: 1,
+      },
+    });
+  });
+  await page.route('**/api/v1/tone3000/stage', async (route) => {
+    const selected = route.request().postDataJSON();
+    const fixture = modelFixtures.find(
+      (f) =>
+        f.metadata.tone_id === selected.tone_id &&
+        f.metadata.model_id === selected.model_id,
+    )!;
+    expect(fixture).toBeTruthy();
+    const m = fixture.metadata;
+    await route.fulfill({
+      json: {
+        id: fixture.id,
+        tone_id: m.tone_id,
+        model_id: m.model_id,
+        title: m.title,
+        name: m.name,
+        sha256: m.sha256,
+      },
+    });
+  });
+
+  const change = rig.getByRole('button', { name: 'Change model', exact: true });
+  await expect(change).toBeEnabled();
+  const beforeModel = await get();
+  await change.click();
+  let picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker
+    .getByRole('button', {
+      name: modelFixtures.find((f) => f.metadata.format === 'nam')!.metadata
+        .title,
+    })
+    .click();
+  await picker
+    .getByLabel('Available models')
+    .getByRole('button')
+    .first()
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(async () => (await get()).control.model_change?.progress.phase)
+    .toBe('applied');
+  expect((await get()).control.session).toBe(beforeModel.control.session);
+  expect((await get()).processed_frames).toBeGreaterThan(
+    beforeModel.processed_frames,
+  );
+  const replacement = (await get()).control.models;
+  expect(replacement[0].assignments).toHaveLength(1);
+  await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
+  picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker
+    .getByRole('button', {
+      name: modelFixtures.find((f) => f.metadata.format === 'nam')!.metadata
+        .title,
+    })
+    .click();
+  await picker
+    .getByLabel('Available models')
+    .getByRole('button')
+    .first()
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(async () => (await get()).control.model_change?.progress.phase)
+    .toBe('applied');
+  expect((await get()).control.models[0].assignments).toHaveLength(2);
+  await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
+  picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker
+    .getByRole('button', {
+      name: modelFixtures.find((f) => f.metadata.format === 'ir')!.metadata
+        .title,
+    })
+    .click();
+  await picker
+    .getByLabel('Available models')
+    .getByRole('button')
+    .first()
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(async () => (await get()).control.model_change?.progress.phase)
+    .toBe('applied');
+  await expect(
+    rig.getByRole('button', { name: 'Add IR', exact: true }),
+  ).toBeEnabled();
+  const modelSaved = (await get()).control.models;
+  expect(modelSaved[0].assignments).toHaveLength(3);
+  await expect.poll(value).toBe(changed);
+  for (const viewport of [
+    page.viewportSize()!,
+    { width: page.viewportSize()!.height, height: page.viewportSize()!.width },
+  ]) {
+    await page.setViewportSize(viewport);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await info.attach(`mixed-live-models-${viewport.width}`, {
+      body: await rig.screenshot(),
+      contentType: 'image/png',
+    });
+  }
+  await page.setViewportSize(info.project.use.viewport!);
   const eqSaved = (await get()).control.eq;
   expect(
     await eq.evaluate((element) => element.scrollWidth <= element.clientWidth),
@@ -2152,6 +2311,9 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .toBe(256);
   await expect.poll(async () => (await get()).phase).toBe('running');
   await expect.poll(value).toBe(changed);
+  await expect
+    .poll(async () => (await get()).control.models)
+    .toEqual(modelSaved);
   expect((await get()).configured.stream.input.sample_rate).toBe(44100);
   await expect(audioSettings.getByRole('status')).toHaveText('running');
   await audioSettings
