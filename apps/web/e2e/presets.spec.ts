@@ -3809,6 +3809,11 @@ test('local NAM and IR files audition without provider login and save offline in
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
   const appliedNam = (await get()).control;
+  await command({ kind: 'restart' });
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await page.reload();
+  await expect(rig).toBeVisible();
+  await rig.locator('[data-node="tone"]').getByRole('button').first().click();
   await rig.getByText('Chain actions', { exact: true }).click();
   await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect

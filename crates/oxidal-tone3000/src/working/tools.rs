@@ -100,7 +100,7 @@ impl Authoring {
                                     return Err("Invalid native utility readback".into());
                                 }
                                 let after = engine.capture().map_err(|e| e.to_string())?;
-                                let receipt = write(&self.root, &self.source, &after)?;
+                                let receipt = self.checkpoint(&after, &baseline.state, None)?;
                                 Ok((after, receipt))
                             })();
                             match result {
@@ -110,6 +110,7 @@ impl Authoring {
                                         self.redo.clear();
                                         self.trim_history();
                                     }
+                                    self.history_error = None;
                                     self.working = Some(receipt);
                                 }
                                 Err(error) => {

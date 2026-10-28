@@ -147,6 +147,8 @@ pub enum AuthoringAction {
 #[serde(deny_unknown_fields)]
 pub struct AuthoringStatus {
     #[serde(default)]
+    pub history_error: Option<String>,
+    #[serde(default)]
     pub gesture: Option<GestureOwner>,
     pub layout: ChainLayout,
     #[serde(default)]
@@ -165,7 +167,10 @@ pub struct AuthoringStatus {
 impl AuthoringStatus {
     pub fn valid(&self) -> bool {
         let blocks: Vec<_> = self.layout.left.iter().chain(&self.layout.right).collect();
-        self.gesture.as_ref().is_none_or(GestureOwner::valid)
+        self.history_error
+            .as_ref()
+            .is_none_or(|e| !e.is_empty() && e.len() <= 1024 && !e.chars().any(char::is_control))
+            && self.gesture.as_ref().is_none_or(GestureOwner::valid)
             && self.tools.valid()
             && crate::lifecycle::catalog_fits(self)
             && (self.settings.is_empty() || crate::lifecycle::valid_controls(&self.settings))

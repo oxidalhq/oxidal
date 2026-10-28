@@ -821,6 +821,7 @@ export interface AuthoringStatus {
   can_redo: boolean;
   can_undo: boolean;
   gesture?: GestureOwner | null;
+  history_error?: string | null;
   layout: ChainLayout;
   setting_steps?: {
     [k: string]: number;

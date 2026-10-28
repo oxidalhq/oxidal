@@ -57,6 +57,11 @@ export function NativeAuthoring({
       {layout && (
         <details>
           <summary>Chain actions</summary>
+          {status.history_error && (
+            <p role="status" className="caption" title={status.history_error}>
+              Undo history unavailable
+            </p>
+          )}
           <div
             className="action-row"
             role="group"

@@ -154,7 +154,7 @@ impl Authoring {
         };
         let current = engine.capture().map_err(|e| e.to_string())?;
         if current != pending.before {
-            let receipt = match write(&self.root, &self.source, &current) {
+            let receipt = match self.checkpoint(&current, &pending.before, None) {
                 Ok(r) => r,
                 Err(e) => {
                     self.cancel_gesture(engine)?;
@@ -164,6 +164,7 @@ impl Authoring {
             let pending = self.gesture.take().unwrap();
             self.undo.push_back(pending.before);
             self.redo.clear();
+            self.history_error = None;
             self.working = Some(receipt);
             self.remember_finished(pending.owner);
             self.trim_history();

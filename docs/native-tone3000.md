@@ -545,7 +545,7 @@ failure while the healthy worker continues. An ambiguous/failed rollback stops t
 worker. Cancellation, rejected candidates and still-preparing models do not add
 history. Whole-native mixed nodes share this owner; guarded extracted stages keep
 their existing replacement contract. Model history remains within the existing
-runtime entry/byte budget; history stacks do not yet survive worker replacement.
+runtime entry/byte budget; verified history stacks now survive worker replacement.
 
 Maintained actual native HTTP tests cover Undo/Redo preserving prior scalars,
 failed checkpoint rollback and working-state recovery. The mixed model gate also
@@ -563,3 +563,31 @@ requires a currently available target; remove stale rows before applying a revis
 map. Hardware dispatch reports an unavailable target as a MIDI error while keeping
 the audio owner healthy. Channel/input/CC validation remains strict. Native actual
 worker restart and mixed actual-worker saved recall cover this recovery boundary.
+
+## Persistent bounded tone history
+
+Working cursors now include a versioned, content-addressed history index. The current
+state and history entries share verified raw captures instead of duplicating model
+bytes for each cursor. At most eight entries and 64 MiB of historical captures are
+restored per whole-native owner. Existing schema-1 working captures remain readable;
+the history index is device-local and is not part of portable preset exports.
+
+Native and mixed reconstruction restore available Undo/Redo steps before authoring
+resumes. A missing/corrupt historical entry disables that stack and reports **Undo
+history unavailable**, while the independently verified current tone remains usable.
+An invalid current state still fails admission. New accepted edits can establish a
+fresh valid history. Entry/profile/source/hash checks and non-recursive references
+prevent a history index from becoming an arbitrary file or nested-state reader.
+
+Tone Undo retains current oversampling and global pitch enable/window processing
+configuration. Those four topology settings are changed explicitly through DSP
+settings and do not add tone-history entries. This keeps old tone edits usable after
+processing changes without changing the negotiated reported latency. Other owned
+scalar/EQ/model/structure and measured-result history retains its existing scope.
+Live Undo still rejects an unexpected latency change and restores the current state.
+
+Actual scalar/EQ and mixed DAG reconstruction tests, native worker restart with a
+missing historical entry, repair/restart/Undo, native utilities and the local-file
+browser restart/reload/Undo/offline-Save flow qualify this software behavior. Cache
+retention and physical callback deadlines are separate from the active history
+entry/byte bound; historical immutable working receipts are not automatically pruned.

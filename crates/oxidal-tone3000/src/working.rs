@@ -22,9 +22,29 @@ const HISTORY_ENTRIES: usize = 8;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Header {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    history: Option<History>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    state: Option<String>,
     schema: u32,
     profile: String,
     origin: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct History {
+    undo: Vec<String>,
+    redo: Vec<String>,
+}
+impl History {
+    fn valid(&self) -> bool {
+        self.undo.len() + self.redo.len() <= HISTORY_ENTRIES
+            && self
+                .undo
+                .iter()
+                .chain(&self.redo)
+                .all(|id| valid_receipt(id))
+    }
 }
 fn profile() -> String {
     format!(
@@ -54,6 +74,17 @@ fn directory(root: &Path) -> PathBuf {
 }
 /// A checkpoint is a full captured session; scalar/model edits after it replay normally.
 pub fn read(root: &Path, id: &str, source: &str) -> Result<State, String> {
+    read_parts(root, id, source).map(|(_, state)| state)
+}
+fn read_parts(root: &Path, id: &str, source: &str) -> Result<(Header, State), String> {
+    read_envelope(root, id, source, true)
+}
+fn read_envelope(
+    root: &Path,
+    id: &str,
+    source: &str,
+    allow_history: bool,
+) -> Result<(Header, State), String> {
     if !valid_receipt(id) {
         return Err("Invalid working receipt".into());
     }
@@ -72,27 +103,67 @@ pub fn read(root: &Path, id: &str, source: &str) -> Result<State, String> {
         .filter(|n| *n <= 4096)
         .ok_or("Invalid checkpoint header")?;
     let header: Header = serde_json::from_slice(&bytes[..split]).map_err(|e| e.to_string())?;
-    if header.schema != 1
+    if !matches!(header.schema, 1 | 2)
+        || (header.schema == 2) != header.history.is_some()
+        || (header.schema == 2) != header.state.is_some()
+        || header.state.as_deref().is_some_and(|id| !valid_receipt(id))
+        || header.schema == 2 && !allow_history
+        || header
+            .history
+            .as_ref()
+            .is_some_and(|history| !history.valid())
         || header.profile != profile()
         || header.origin != source
-        || bytes.len() <= split + 5
+        || if header.schema == 1 {
+            bytes.len() <= split + 5
+        } else {
+            bytes.len() != split + 1
+        }
     {
         return Err("Native working checkpoint profile/source differs".into());
     }
-    Ok(State(bytes.split_off(split + 1)))
+    let state = if let Some(id) = &header.state {
+        read_envelope(root, id, source, false)?.1
+    } else {
+        State(bytes.split_off(split + 1))
+    };
+    Ok((header, state))
 }
 fn write(root: &Path, source: &str, state: &State) -> Result<String, String> {
-    if state.byte_len() < 5 || state.byte_len() > MAX_STATE {
+    write_envelope(root, source, state, None)
+}
+fn write_envelope(
+    root: &Path,
+    source: &str,
+    state: &State,
+    history: Option<History>,
+) -> Result<String, String> {
+    if state.byte_len() < 5
+        || state.byte_len() > MAX_STATE
+        || history.as_ref().is_some_and(|h| !h.valid())
+    {
         return Err("Invalid native checkpoint size".into());
     }
+    // The current state and stack entries share immutable raw captures; a new
+    // history cursor adds only metadata instead of duplicating large model bytes.
+    let state_id = if history.is_some() {
+        Some(write(root, source, state)?)
+    } else {
+        None
+    };
+    let indexed = state_id.is_some();
     let mut bytes = serde_json::to_vec(&Header {
-        schema: 1,
+        schema: if indexed { 2 } else { 1 },
+        history,
+        state: state_id,
         profile: profile(),
         origin: source.into(),
     })
     .map_err(|e| e.to_string())?;
     bytes.push(b'\n');
-    bytes.extend_from_slice(&state.0);
+    if !indexed {
+        bytes.extend_from_slice(&state.0);
+    }
     let id = format!("{:x}", Sha256::digest(&bytes));
     let parent = directory(root);
     std::fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
@@ -131,6 +202,68 @@ fn write(root: &Path, source: &str, state: &State) -> Result<String, String> {
     }
     result?;
     Ok(id)
+}
+fn read_history(
+    root: &Path,
+    id: &str,
+    source: &str,
+) -> Result<(VecDeque<State>, VecDeque<State>), String> {
+    let (header, _) = read_parts(root, id, source)?;
+    let Some(history) = header.history else {
+        return Ok((VecDeque::new(), VecDeque::new()));
+    };
+    let mut bytes = 0usize;
+    let mut load = |ids: Vec<String>| -> Result<VecDeque<State>, String> {
+        ids.into_iter()
+            .map(|id| {
+                let (header, state) = read_envelope(root, &id, source, false)?;
+                if header.history.is_some() {
+                    return Err("Nested native history is not supported".into());
+                }
+                bytes = bytes
+                    .checked_add(state.byte_len())
+                    .ok_or("History byte budget exceeded")?;
+                if bytes > HISTORY_BYTES {
+                    return Err("History byte budget exceeded".into());
+                }
+                Ok(state)
+            })
+            .collect()
+    };
+    Ok((load(history.undo)?, load(history.redo)?))
+}
+fn write_history(
+    root: &Path,
+    source: &str,
+    current: &State,
+    mut undo: Vec<&State>,
+    mut redo: Vec<&State>,
+) -> Result<String, String> {
+    while undo.len() + redo.len() > HISTORY_ENTRIES
+        || undo
+            .iter()
+            .chain(&redo)
+            .map(|s| s.byte_len())
+            .sum::<usize>()
+            > HISTORY_BYTES
+    {
+        if undo.is_empty() {
+            redo.remove(0);
+        } else {
+            undo.remove(0);
+        }
+    }
+    let save = |states: Vec<&State>| -> Result<Vec<String>, String> {
+        states
+            .into_iter()
+            .map(|state| write(root, source, state))
+            .collect()
+    };
+    let history = History {
+        undo: save(undo)?,
+        redo: save(redo)?,
+    };
+    write_envelope(root, source, current, Some(history))
 }
 pub fn reconstruct(
     root: &Path,
@@ -183,6 +316,7 @@ pub struct Authoring {
     undo: VecDeque<State>,
     redo: VecDeque<State>,
     failed: bool,
+    history_error: Option<String>,
     gesture: Option<gesture::Pending>,
     finished_gestures: VecDeque<(String, String)>,
     tools: oxidal_audio::tools::State,
@@ -193,12 +327,32 @@ impl Authoring {
         Self::for_source(root, origin(settings), settings.working.clone())
     }
     pub fn for_source(root: &Path, source: String, working: Option<String>) -> Self {
+        let (undo, redo, history_error) = match working
+            .as_ref()
+            .map(|id| read_history(root, id, &source))
+            .transpose()
+        {
+            Ok(Some((undo, redo))) => (undo, redo, None),
+            Ok(None) => (VecDeque::new(), VecDeque::new(), None),
+            Err(error) => (
+                VecDeque::new(),
+                VecDeque::new(),
+                Some(
+                    format!("Undo history unavailable: {error}")
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .take(240)
+                        .collect(),
+                ),
+            ),
+        };
         Self {
             root: root.into(),
             source,
             working,
-            undo: VecDeque::new(),
-            redo: VecDeque::new(),
+            undo,
+            redo,
+            history_error,
             failed: false,
             gesture: None,
             finished_gestures: VecDeque::new(),
@@ -267,6 +421,7 @@ impl Authoring {
             });
         }
         let state = AuthoringStatus {
+            history_error: self.history_error.clone(),
             gesture: self.gesture.as_ref().map(|g| g.owner.clone()),
             settings,
             setting_steps,
@@ -359,6 +514,17 @@ impl Authoring {
         {
             return Err("No authoring history available".into());
         }
+        // Processing topology settings are device/session configuration, outside
+        // tone history. Keep their current values while restoring an older tone.
+        let processing = if matches!(action, AuthoringAction::Undo | AuthoringAction::Redo) {
+            self.snapshot(engine)?
+                .settings
+                .into_iter()
+                .filter(|p| crate::protocol::staged(&p.target))
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
         let before = engine.capture().map_err(|e| e.to_string())?;
         let latency = engine.latency_samples().map_err(|e| e.to_string())?;
         let result = (|| -> Result<(State, String), String> {
@@ -417,6 +583,11 @@ impl Authoring {
                 | AuthoringAction::Utility { .. }
                 | AuthoringAction::Gesture { .. } => unreachable!(),
             }
+            for setting in &processing {
+                engine
+                    .set_normalized(&setting.target, setting.value)
+                    .map_err(|e| e.to_string())?;
+            }
             // Hot EQ edits do not load models; do not inject a silent PCM block
             // into the live processor merely to wait for an already-ready model.
             if !matches!(action, AuthoringAction::Eq { .. }) {
@@ -430,7 +601,7 @@ impl Authoring {
             engine.slots().map_err(|e| e.to_string())?;
             self.snapshot(engine)?;
             let after = engine.capture().map_err(|e| e.to_string())?;
-            let receipt = write(&self.root, &self.source, &after)?;
+            let receipt = self.checkpoint(&after, &before, Some(&action))?;
             Ok((after, receipt))
         })();
         let (after, receipt) = match result {
@@ -459,6 +630,8 @@ impl Authoring {
                 self.redo.pop_back();
                 self.undo.push_back(before);
             }
+            AuthoringAction::Parameter { parameter, .. } if crate::protocol::staged(&parameter) => {
+            }
             _ if before != after => {
                 self.undo.push_back(before);
                 self.redo.clear();
@@ -467,6 +640,7 @@ impl Authoring {
         }
         self.tools.balance = Default::default();
         self.tools.alignment = Default::default();
+        self.history_error = None;
         self.working = Some(receipt);
         self.trim_history();
         self.snapshot(engine)
@@ -484,7 +658,7 @@ impl Authoring {
         let result = (|| -> Result<(State, String), String> {
             self.snapshot(engine)?;
             let after = engine.capture().map_err(|e| e.to_string())?;
-            let receipt = write(&self.root, &self.source, &after)?;
+            let receipt = self.checkpoint(&after, &before, None)?;
             Ok((after, receipt))
         })();
         let (after, receipt) = match result {
@@ -503,11 +677,39 @@ impl Authoring {
             self.undo.push_back(before);
             self.redo.clear();
         }
+        self.history_error = None;
         self.working = Some(receipt);
         self.tools.balance = Default::default();
         self.tools.alignment = Default::default();
         self.trim_history();
         self.snapshot(engine)
+    }
+    fn checkpoint(
+        &self,
+        after: &State,
+        before: &State,
+        action: Option<&AuthoringAction>,
+    ) -> Result<String, String> {
+        let mut undo: Vec<_> = self.undo.iter().collect();
+        let mut redo: Vec<_> = self.redo.iter().collect();
+        match action {
+            Some(AuthoringAction::Parameter { parameter, .. })
+                if crate::protocol::staged(parameter) => {}
+            Some(AuthoringAction::Undo) => {
+                undo.pop();
+                redo.push(before);
+            }
+            Some(AuthoringAction::Redo) => {
+                redo.pop();
+                undo.push(before);
+            }
+            _ if after != before => {
+                undo.push(before);
+                redo.clear();
+            }
+            _ => {}
+        }
+        write_history(&self.root, &self.source, after, undo, redo)
     }
     fn trim_history(&mut self) {
         while self.undo.len() + self.redo.len() > HISTORY_ENTRIES
@@ -532,6 +734,52 @@ impl Authoring {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bounded_history_survives_replacement_and_corruption_does_not_hide_current_state() {
+        let root = std::env::temp_dir().join(format!(
+            "oxidal-history-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = "original:history-fixture";
+        let current = State(b"current private native capture".to_vec());
+        let states: Vec<_> = (0..10)
+            .map(|i| State(format!("prior private native capture {i}").into_bytes()))
+            .collect();
+        let receipt =
+            write_history(&root, source, &current, states.iter().collect(), vec![]).unwrap();
+        assert_eq!(read(&root, &receipt, source).unwrap(), current);
+        let (undo, redo) = read_history(&root, &receipt, source).unwrap();
+        assert_eq!(undo.len(), HISTORY_ENTRIES);
+        assert!(redo.is_empty());
+        assert_eq!(undo.front(), Some(&states[2]));
+        let owner = Authoring::for_source(&root, source.into(), Some(receipt.clone()));
+        assert_eq!(owner.undo, undo);
+        assert!(owner.history_error.is_none());
+        assert!(read_history(&root, &receipt, "owned:different-source").is_err());
+        let (header, _) = read_parts(&root, &receipt, source).unwrap();
+        let old = directory(&root).join(&header.history.unwrap().undo[0]);
+        let bytes = std::fs::read(&old).unwrap();
+        std::fs::write(&old, b"damaged historical capture").unwrap();
+        assert!(read_history(&root, &receipt, source).is_err());
+        assert_eq!(
+            read(&root, &receipt, source).unwrap(),
+            current,
+            "The current working tone is independently verified"
+        );
+        let degraded = Authoring::for_source(&root, source.into(), Some(receipt));
+        assert!(degraded.history_error.is_some() && degraded.undo.is_empty() && !degraded.failed());
+        std::fs::write(&old, bytes).unwrap();
+        let receipt =
+            write_history(&root, source, &current, vec![&states[0]], vec![&states[1]]).unwrap();
+        let (undo, redo) = read_history(&root, &receipt, source).unwrap();
+        assert_eq!(undo, VecDeque::from([states[0].clone()]));
+        assert_eq!(redo, VecDeque::from([states[1].clone()]));
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn checkpoints_are_atomic_content_verified_and_bound_to_source_and_profile() {
         let root = std::env::temp_dir().join(format!(

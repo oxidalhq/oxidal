@@ -137,3 +137,10 @@ Standalone native-worker MIDI now reuses the same input/scaler/panel with ordere
 readback, lifecycle capture and independent connection telemetry. Hardware output
 feedback and physical deadlines remain open. See docs/mixed-engine.md and
 docs/native-tone3000.md.
+
+Whole-native native/mixed history now survives working-session reconstruction via
+bounded verified, non-recursive capture indexes. Historical corruption disables
+Undo with a warning without invalidating a sound current capture; invalid current
+captures still fail admission. Oversampling/global pitch topology settings remain
+outside tone Undo. Actual native/mixed reconstruction, worker fault/restart and
+browser restart/reload/Save cover this path; physical deadlines remain unqualified.

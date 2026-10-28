@@ -694,3 +694,13 @@ requires a currently available target; remove stale rows before applying a revis
 map. Hardware dispatch reports an unavailable target as a MIDI error while keeping
 the audio owner healthy. Channel/input/CC validation remains strict. Native actual
 worker restart and mixed actual-worker saved recall cover this recovery boundary.
+
+### History across mixed worker replacement
+
+Whole-native working cursors retain the same bounded verified history index as
+standalone playback. Fresh graph preparation restores the current tone and its
+available history; a history-only fault reports a warning without replacing the
+current verified sound. Native authoring and model qualification cover fresh DAG
+reconstruction, and the local-file browser case restarts audio and reloads the page
+before Undo/Redo and offline Save. Oversampling/global pitch engine settings remain
+current through tone Undo. See [history scope](native-tone3000.md#persistent-bounded-tone-history).

@@ -1326,6 +1326,13 @@
           ],
           "default": null
         },
+        "history_error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "layout": {
           "$ref": "#/$defs/ChainLayout"
         },

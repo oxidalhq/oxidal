@@ -1656,6 +1656,34 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         "stale duplicate must not execute twice"
     );
     let duplicated = state["authoring"]["layout"].clone();
+    let duplicated_controls = state["controls"].clone();
+    let receipt = state["configured"]["working"].as_str().unwrap();
+    let checkpoint_bytes = std::fs::read(presets.join("native-checkpoints").join(receipt)).unwrap();
+    let header: Value =
+        serde_json::from_slice(checkpoint_bytes.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    let previous = presets
+        .join("native-checkpoints")
+        .join(header["history"]["undo"][0].as_str().unwrap());
+    let held_history = root.join("held-history-state");
+    std::fs::rename(&previous, &held_history).unwrap();
+    let response = send(&client, &url, &state, json!({"kind":"restart"})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["controls"], duplicated_controls);
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    assert!(state["authoring"]["history_error"].is_string());
+    assert_eq!(state["authoring"]["can_undo"], false);
+    std::fs::rename(&held_history, &previous).unwrap();
+    let response = send(&client, &url, &state, json!({"kind":"restart"})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    assert!(state["authoring"]["history_error"].is_null());
+    assert_eq!(
+        state["authoring"]["can_undo"], true,
+        "A fresh worker retains the bounded history"
+    );
     let response = send(
         &client,
         &url,

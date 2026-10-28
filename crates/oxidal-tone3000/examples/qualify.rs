@@ -3079,9 +3079,44 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
         },
     )?;
     assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
+    let receipt = owner
+        .working_receipt()
+        .ok_or("Missing scalar history receipt")?
+        .to_owned();
+    let mut rebuilt = Engine::new(48000.0, 128)?;
+    rebuilt.restore(&oxidal_tone3000::working::read(
+        &root,
+        &receipt,
+        "gesture-qualification",
+    )?)?;
+    rebuilt.wait_ready()?;
+    engine = rebuilt;
+    owner = Authoring::for_source(&root, "gesture-qualification".into(), Some(receipt));
+    assert!(owner.snapshot(&mut engine)?.history_error.is_none());
+    assert!(owner.snapshot(&mut engine)?.can_undo);
+    owner.prepare_parameter(&mut engine, "osEnabled".into(), 1.0)?;
+    let processing_latency = engine.latency_samples()?;
     owner.command(&mut engine, A::Undo)?;
+    assert_eq!(
+        owner
+            .snapshot(&mut engine)?
+            .settings
+            .iter()
+            .find(|p| p.target == "osEnabled")
+            .unwrap()
+            .value,
+        1.0
+    );
+    assert_eq!(
+        engine.latency_samples()?,
+        processing_latency,
+        "Undo retains current processing configuration"
+    );
     assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
     assert!(!owner.snapshot(&mut engine)?.can_undo);
+    let receipt = owner.working_receipt().unwrap().to_owned();
+    owner = Authoring::for_source(&root, "gesture-qualification".into(), Some(receipt));
+    assert!(owner.snapshot(&mut engine)?.can_redo);
     owner.command(&mut engine, A::Redo)?;
     assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
     engine.set_live_control("chainPanLinked", 1.0)?;
@@ -3256,6 +3291,27 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
             edit: oxidal_audio::eq::EqEdit::Reset,
         },
     )?;
+    assert_eq!(
+        engine.eq_snapshot()?[0].eq,
+        oxidal_audio::eq::EqState::default()
+    );
+    eq_owner.command(&mut engine, A::Undo)?;
+    assert_eq!(engine.eq_snapshot()?, edited);
+    let receipt = eq_owner
+        .working_receipt()
+        .ok_or("Missing EQ history receipt")?
+        .to_owned();
+    let mut replacement = Engine::new(48000.0, 128)?;
+    replacement.restore(&oxidal_tone3000::working::read(
+        &root,
+        &receipt,
+        "eq-gesture-qualification",
+    )?)?;
+    replacement.wait_ready()?;
+    engine = replacement;
+    eq_owner = Authoring::for_source(&root, "eq-gesture-qualification".into(), Some(receipt));
+    assert!(eq_owner.snapshot(&mut engine)?.can_redo);
+    eq_owner.command(&mut engine, A::Redo)?;
     assert_eq!(
         engine.eq_snapshot()?[0].eq,
         oxidal_audio::eq::EqState::default()

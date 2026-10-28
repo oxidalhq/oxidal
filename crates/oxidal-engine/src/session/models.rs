@@ -224,14 +224,13 @@ impl Session {
             );
         }
         let status = if engine.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
-            let fallback =
-                oxidal_tone3000::working::Authoring::for_source(Path::new("."), source, receipt);
-            Some(
-                self.authoring_histories
-                    .get(node)
-                    .unwrap_or(&fallback)
-                    .snapshot(engine)?,
-            )
+            Some(match self.authoring_histories.get(node) {
+                Some(owner) => owner.snapshot(engine)?,
+                None => {
+                    oxidal_tone3000::working::Authoring::for_source(Path::new("."), source, receipt)
+                        .snapshot(engine)?
+                }
+            })
         } else {
             None
         };

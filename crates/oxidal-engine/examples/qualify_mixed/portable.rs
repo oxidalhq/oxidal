@@ -884,6 +884,23 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
             .abs()
             < 1e-5
     );
+    let captured = target.snapshot();
+    target = Session::new_with_working(
+        store.read(&captured.source_revision)?,
+        world,
+        48000.0,
+        128,
+        BUFFER_BUDGET,
+        Some((&directory, &captured.working)),
+    )?;
+    target.restore(&captured.recall())?;
+    assert!(target.snapshot().authoring[0].status.can_undo);
+    assert!(
+        target.snapshot().authoring[0]
+            .status
+            .history_error
+            .is_none()
+    );
     send(&mut target, A::Undo)?;
     assert!(
         (target
