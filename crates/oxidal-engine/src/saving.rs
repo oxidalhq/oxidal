@@ -41,7 +41,22 @@ fn save_with_assets(
         .map_err(|e| e.to_string())?;
     let rate = f64::from(request.settings.stream.input.sample_rate);
     let frames = request.settings.stream.input.period_frames as usize;
-    let mut session = Session::new(original.clone(), world, rate, frames, BUFFER_BUDGET)?;
+    let working = if request.recall.working.is_empty() {
+        None
+    } else {
+        Some((
+            model_root.ok_or("Native working store unavailable")?,
+            request.recall.working.as_slice(),
+        ))
+    };
+    let mut session = Session::new_with_working(
+        original.clone(),
+        world,
+        rate,
+        frames,
+        BUFFER_BUDGET,
+        working,
+    )?;
     if request.recall.models.is_empty() {
         session.restore(&request.recall)?;
     } else {
@@ -171,7 +186,8 @@ fn save_with_assets(
             .any(|m| m.node == node.id && !m.assignments.is_empty());
         let eq_changed = confirmed.eq.iter().find(|e| e.node == node.id)
             != session.initial_eq.iter().find(|e| e.node == node.id);
-        if !changed && !eq_changed && !models_changed {
+        let structure_changed = confirmed.working.iter().any(|w| w.node == node.id);
+        if !changed && !eq_changed && !models_changed && !structure_changed {
             continue;
         } // Exact unchanged native bytes, including unknown fields.
         let Some(Processor::Native(engine)) = session.graph.processor_mut(&node.id) else {
@@ -184,6 +200,45 @@ fn save_with_assets(
             continue;
         }
         let expected = engine.live_controls().map_err(|e| e.to_string())?;
+        let owner = oxidal_tone3000::working::Authoring::for_source(
+            std::path::Path::new("."),
+            String::new(),
+            None,
+        );
+        let status = owner.snapshot(engine)?;
+        let instance_settings = oxidal_presets::manifest::NativeSettings {
+            input_mode: status.layout.input_mode,
+            parameters: status
+                .settings
+                .iter()
+                .map(|p| (p.target.clone(), p.value))
+                .collect(),
+        };
+        if !instance_settings.valid() {
+            return Err("Cannot capture native instance settings".into());
+        }
+        let extension = manifest
+            .extensions
+            .entry(oxidal_presets::manifest::NATIVE_SETTINGS_EXTENSION.into())
+            .or_default();
+        let instances = extension
+            .entry("instances")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .ok_or("Invalid native settings extension")?;
+        instances.insert(
+            native.id.clone(),
+            serde_json::to_value(&instance_settings).map_err(|e| e.to_string())?,
+        );
+        if !manifest
+            .required_extensions
+            .iter()
+            .any(|e| e == oxidal_presets::manifest::NATIVE_SETTINGS_EXTENSION)
+        {
+            manifest
+                .required_extensions
+                .push(oxidal_presets::manifest::NATIVE_SETTINGS_EXTENSION.into());
+        }
         let expected_eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
         let expected_models =
             oxidal_tone3000::model_preparation::identities(engine).map_err(|e| e.to_string())?;
@@ -195,6 +250,14 @@ fn save_with_assets(
         verify
             .set_input_mode(oxidal_tone3000::InputMode::Stereo)
             .map_err(|e| e.to_string())?;
+        verify
+            .set_input_mode(instance_settings.input_mode)
+            .map_err(|e| e.to_string())?;
+        for (id, value) in &instance_settings.parameters {
+            verify
+                .set_normalized(id, *value)
+                .map_err(|e| e.to_string())?;
+        }
         verify.wait_ready().map_err(|e| e.to_string())?;
         let actual = verify.live_controls().map_err(|e| e.to_string())?;
         if oxidal_tone3000::model_preparation::identities(&mut verify).map_err(|e| e.to_string())?
@@ -346,4 +409,38 @@ fn append(
     });
     resources.insert(id.clone(), bytes);
     Ok(id)
+}
+
+/// Prepare one whole-native instance away from the playing graph. Its receipt is
+/// admitted only by constructing a fresh graph (including latency compensation).
+pub fn prepare_native_setting(
+    store: &BundleStore,
+    world: &World,
+    request: PrepareNativeSetting,
+    root: &std::path::Path,
+) -> Result<Recall, String> {
+    request.settings.validate()?;
+    let bundle = store
+        .read(&request.settings.revision)
+        .map_err(|e| e.to_string())?;
+    let recall = &request
+        .settings
+        .recall
+        .as_ref()
+        .ok_or("Missing confirmed rig state")?;
+    let mut session = Session::new_with_working(
+        bundle,
+        world,
+        f64::from(request.settings.stream.input.sample_rate),
+        request.settings.stream.input.period_frames as usize,
+        BUFFER_BUDGET,
+        Some((root, &recall.working)),
+    )?;
+    if recall.models.is_empty() {
+        session.restore(recall)?;
+    } else {
+        session.restore_with_models(recall, root)?;
+    }
+    session.prepare_native_setting(&request.node, request.parameter, request.value, root)?;
+    Ok(session.snapshot().recall())
 }

@@ -591,3 +591,43 @@ Touch **On/Off** on a scene branch to fade just that branch's selector gains. Ot
 Under MIDI scenes → Independent branches, map a CC and select **Toggle on press** or **Follow CC on/off**. Toggle accepts each high CC message and ignores releases. Gate maps values 64–127 to On and 0–63 to Off. Channel selection applies to both. Collisions with scene CCs or other branch CCs are rejected. The hardware reader and the maintained decoder-to-DSP test call the same engine dispatch method, which uses current owner state and the same branch/scene transactions as the UI.
 
 Mixing adds branch signals without automatic normalization or limiting; use the native output controls and always-visible resource/clipping strip. Muting keeps processors ready and does not free their CPU. Exact-sample DSP tests cover independent fades and unchanged peer gains. Real native/LV2 worker tests and browser Save/reopen retain multiple enabled branches. This establishes the software path, not physical controller or Pi timing acceptance.
+
+### Whole-native authoring and portable instance settings
+
+The selected whole-native node exposes the shared **Chain actions** controls:
+duplicate, remove, reorder, move between lanes, mono/stereo, input mode and bounded
+structural undo/redo. Commands require both the daemon cursor and the DSP session
+cursor. Guarded extracted amp/cab stages retain their existing editing contract;
+this does not provide a host-topology or complex parallel-branch editor.
+
+Successful native changes produce immutable local working checkpoints bound to
+the bundle revision, node and native profile. Reconfigure, Restart, Resume and
+opted-in boot restore the checkpoint before admitting graph buffers and reported
+latency, then restore later scalar, EQ and model edits. Failed checkpoint storage
+rolls back the native edit; inconsistent post-edit readback fails the session closed.
+History is session-local and structural, not a persistent scalar gesture history.
+These control-owner structural operations may allocate and reset native histories;
+they are not real-time or gapless editing guarantees.
+
+**DSP settings** prepares the seven native instance settings in an isolated child
+while the current rig continues playing. Successful preparation then restarts the
+whole graph with fresh latency compensation; admission failure restores the previous
+configuration. Settings are applied before user Save. This operation interrupts
+audio and is separate from sample-ramped preloaded scenes.
+
+An independently saved hybrid bundle embeds its edited native tone resources and
+requires `urn:oxidal:native-settings:1` when retaining native instance settings. The
+extension contains `instances`, keyed by whole-native instance ID, each with an
+`input_mode` and complete normalized `parameters`: `osEnabled`, `osFactor`,
+`pitchEnabled`, `pitchWindow`, `inputCalibrationLevel`, `calibrateInput` and
+`targetLoudness`. Unknown, missing, out-of-range or fractional toggle values fail
+admission. The required-extension declaration prevents older readers silently
+ignoring sound-affecting settings. Native descriptor readback governs quantization.
+Portable bundles never reference temporary working receipts; native instance scope
+remains separate from standalone `.t3kpreset` exports.
+
+The maintained mixed qualifier checks structural history, source immutability,
+peer LV2 controls, cache-independent Save/reopen and deterministic rendered PCM.
+The actual HTTP/worker suite exercises all seven prepared settings and subsequent
+Save, configuration changes and recovery. A focused desktop browser workflow covers
+the shared control wiring; this is not a new physical-device UI qualification.

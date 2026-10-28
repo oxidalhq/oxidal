@@ -273,3 +273,48 @@ fn partition_peers_bind_source_roles_recipe_and_complete_graph_ownership() {
     let encoded = parse(&value).unwrap().encode().unwrap();
     assert_eq!(parse(&value).unwrap(), Manifest::parse(&encoded).unwrap());
 }
+
+#[test]
+fn native_instance_settings_require_explicit_support_and_complete_valid_controls() {
+    let mut value = fixture("mixed-delay");
+    let id = value["tone3000"]["instances"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    value["extensions"][NATIVE_SETTINGS_EXTENSION] = json!({"instances":{id.clone():{"input_mode":"left","parameters":{
+        "osEnabled":0.0,"osFactor":0.5,"pitchEnabled":1.0,"pitchWindow":0.0,"inputCalibrationLevel":0.6,"calibrateInput":1.0,"targetLoudness":0.7
+    }}}});
+    assert!(
+        Manifest::parse(&serde_json::to_vec(&value).unwrap()).is_err(),
+        "sonic extension must be required"
+    );
+    value["requiredExtensions"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(NATIVE_SETTINGS_EXTENSION));
+    let parsed = Manifest::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    parsed.check_required_extensions().unwrap();
+    assert_eq!(
+        parsed.native_settings().unwrap().unwrap().instances[&id].input_mode,
+        oxidal_audio::structure::InputMode::Left
+    );
+    for (key, bad) in [
+        ("osEnabled", json!(0.5)),
+        ("osFactor", json!(2.0)),
+        ("calibrateInput", json!(-1.0)),
+        ("unqualified", json!(0.5)),
+    ] {
+        let mut invalid = value.clone();
+        invalid["extensions"][NATIVE_SETTINGS_EXTENSION]["instances"][&id]["parameters"][key] = bad;
+        assert!(Manifest::parse(&serde_json::to_vec(&invalid).unwrap()).is_err());
+    }
+    let mut invalid = value.clone();
+    invalid["extensions"][NATIVE_SETTINGS_EXTENSION]["instances"][&id]["parameters"]
+        .as_object_mut()
+        .unwrap()
+        .remove("pitchWindow");
+    assert!(Manifest::parse(&serde_json::to_vec(&invalid).unwrap()).is_err());
+    value["extensions"][NATIVE_SETTINGS_EXTENSION]["instances"]["foreign"] =
+        value["extensions"][NATIVE_SETTINGS_EXTENSION]["instances"][&id].clone();
+    assert!(Manifest::parse(&serde_json::to_vec(&value).unwrap()).is_err());
+}

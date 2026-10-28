@@ -60,6 +60,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let model_root = std::env::var_os("OXIDAL_PRESET_DIR").map(std::path::PathBuf::from);
     let args: Vec<_> = std::env::args().skip(1).collect();
     if !args.is_empty() {
+        if args == ["--prepare-native-setting"] {
+            let request: PrepareNativeSetting =
+                serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
+            let world = World::discover()?;
+            let recall = oxidal_engine::prepare_native_setting(
+                &store,
+                &world,
+                request,
+                model_root.as_deref().ok_or("Model store unavailable")?,
+            )?;
+            serde_json::to_writer(std::io::stdout().lock(), &recall)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
         if args != ["--save-revision"] {
             return Err("Unknown rig worker mode".into());
         }
@@ -279,6 +293,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         {
             let error = match request {
                 WorkerRequest::Status => None,
+                WorkerRequest::Authoring { command } => match model_root.as_deref() {
+                    Some(root) => session.active_mut().authoring_command(command, root).err(),
+                    None => Some("Native working store unavailable".into()),
+                },
                 WorkerRequest::Midi { settings } => match validate_midi(&settings, &session) {
                     Err(error) => Some(error),
                     Ok(()) => {

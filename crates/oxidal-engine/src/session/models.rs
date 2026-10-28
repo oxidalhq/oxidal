@@ -153,7 +153,14 @@ impl Session {
             .ok_or("Rig revision exhausted")?;
         Ok(())
     }
-    fn refresh_model_node(&mut self, node: &str) -> Result<(), String> {
+    pub(super) fn refresh_model_node(&mut self, node: &str) -> Result<(), String> {
+        let source = super::authoring::origin(self.source_revision(), node);
+        let receipt = self
+            .state
+            .working
+            .iter()
+            .find(|r| r.node == node)
+            .map(|r| r.receipt.clone());
         let expected = self
             .graph
             .expected_latency(node)
@@ -166,6 +173,18 @@ impl Session {
                 "Native model changed reported delay; fresh graph preparation required".into(),
             );
         }
+        let status = if engine.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+            let fallback =
+                oxidal_tone3000::working::Authoring::for_source(Path::new("."), source, receipt);
+            Some(
+                self.authoring_histories
+                    .get(node)
+                    .unwrap_or(&fallback)
+                    .snapshot(engine)?,
+            )
+        } else {
+            None
+        };
         let controls = native_controls(node, engine)?;
         let eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
         let slots = if engine.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
@@ -182,6 +201,11 @@ impl Session {
             .ok_or("Missing native controls")?;
         let end = self.state.controls.iter().rposition(matches).unwrap() + 1;
         self.state.controls.splice(start..end, controls);
+        if let Some(status) = status
+            && let Some(row) = self.state.authoring.iter_mut().find(|r| r.node == node)
+        {
+            row.status = status;
+        }
         self.state
             .eq
             .iter_mut()

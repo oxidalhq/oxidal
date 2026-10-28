@@ -101,6 +101,26 @@ pub struct ModelCommand {
     pub node: String,
     pub operation: oxidal_audio::lifecycle::ModelOperation,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeWorking {
+    pub node: String,
+    pub receipt: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeAuthoring {
+    pub node: String,
+    pub status: oxidal_audio::structure::AuthoringStatus,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AuthoringCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub node: String,
+    pub action: oxidal_audio::structure::AuthoringAction,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
@@ -119,6 +139,10 @@ pub struct Snapshot {
     pub prepared: Vec<PreparedStatus>,
     #[serde(default)]
     pub models: Vec<NodeModels>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub working: Vec<NodeWorking>,
+    #[serde(default)]
+    pub authoring: Vec<NodeAuthoring>,
     #[serde(default)]
     pub slots: Vec<NodeSlots>,
     #[serde(default)]
@@ -141,7 +165,15 @@ impl Snapshot {
                 .iter()
                 .any(|c| matches!(&c.target,Target::Native {node:n,..} if n==node))
         };
-        self.slots.iter().enumerate().all(|(i, s)| {
+        self.working.iter().enumerate().all(|(i, row)| {
+            native(&row.node)
+                && valid_revision(&row.receipt)
+                && self.working[..i].iter().all(|p| p.node != row.node)
+        }) && self.authoring.iter().enumerate().all(|(i, row)| {
+            native(&row.node)
+                && row.status.valid()
+                && self.authoring[..i].iter().all(|p| p.node != row.node)
+        }) && self.slots.iter().enumerate().all(|(i, s)| {
             native(&s.node)
                 && self.slots[..i].iter().all(|p| p.node != s.node)
                 && oxidal_audio::lifecycle::valid_slots(&s.slots)
@@ -166,6 +198,7 @@ impl Snapshot {
             source_revision: self.source_revision.clone(),
             eq: Some(self.eq.clone()),
             models: self.models.clone(),
+            working: self.working.clone(),
             values: self
                 .controls
                 .iter()
@@ -186,6 +219,8 @@ pub struct Recall {
     pub eq: Option<Vec<NodeEq>>,
     #[serde(default)]
     pub models: Vec<NodeModels>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub working: Vec<NodeWorking>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -275,6 +310,9 @@ pub fn valid_revision(s: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    Authoring {
+        command: AuthoringCommand,
+    },
     Status,
     Control {
         command: ControlCommand,
@@ -364,6 +402,9 @@ pub struct RigAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RigAudioAction {
+    Authoring {
+        command: AuthoringCommand,
+    },
     SetBoot {
         enabled: bool,
     },
@@ -429,4 +470,13 @@ mod tests {
             );
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrepareNativeSetting {
+    pub settings: StartRig,
+    pub node: String,
+    pub parameter: String,
+    pub value: f32,
 }

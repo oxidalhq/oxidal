@@ -207,6 +207,73 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         409
     );
     s = apply(&c, &url, set(&s, native.clone(), 0.6)).await;
+    // The real worker admits structural transactions before Save, preserving peer LV2 state.
+    let original_layout = s["control"]["authoring"][0]["status"]["layout"].clone();
+    let block = original_layout["left"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["insert"] == false)
+        .unwrap()["id"]
+        .clone();
+    let author = |s: &Value, action: Value| json!({"kind":"authoring","command":{"session":s["control"]["session"],"expected_revision":s["control"]["revision"],"node":"tone","action":action}});
+    let duplicate = author(
+        &s,
+        json!({"kind":"edit","edit":{"kind":"duplicate","block_id":block,"lane":"left","index":0}}),
+    );
+    s = apply(&c, &url, duplicate.clone()).await;
+    let expanded = s["control"]["authoring"][0]["status"]["layout"].clone();
+    assert_ne!(expanded, original_layout);
+    assert_eq!(s["control"]["working"].as_array().unwrap().len(), 1);
+    assert_eq!(post(&c, &url, &s, duplicate).await.status(), 409);
+    s = apply(&c, &url, author(&s, json!({"kind":"undo"}))).await;
+    assert_eq!(
+        s["control"]["authoring"][0]["status"]["layout"],
+        original_layout
+    );
+    s = apply(&c, &url, author(&s, json!({"kind":"redo"}))).await;
+    assert_eq!(s["control"]["authoring"][0]["status"]["layout"], expanded);
+    assert_eq!(control(&s, &gain), -3.0);
+    // Prepared settings rebuild graph compensation and restore all confirmed peer controls.
+    for (parameter, value) in [
+        ("osEnabled", 0.0),
+        ("osFactor", 0.5),
+        ("pitchEnabled", 0.0),
+        ("pitchWindow", 0.6),
+        ("inputCalibrationLevel", 0.4),
+        ("calibrateInput", 1.0),
+        ("targetLoudness", 0.3),
+    ] {
+        s = apply(
+            &c,
+            &url,
+            author(
+                &s,
+                json!({"kind":"parameter","parameter":parameter,"value":value}),
+            ),
+        )
+        .await;
+        assert_eq!(s["phase"], "starting");
+        s = phase(&c, &url, "running").await;
+        let setting = s["control"]["authoring"][0]["status"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["target"] == parameter)
+            .unwrap();
+        let expected = if parameter == "pitchWindow" {
+            2.0 / 3.0
+        } else {
+            value
+        };
+        assert!(
+            (setting["value"].as_f64().unwrap() - expected).abs() < 1e-5,
+            "{parameter}: {setting}"
+        );
+        assert_eq!(control(&s, &gain), -3.0);
+        assert!((control(&s, &native) - 0.6).abs() < 1e-5);
+        assert_eq!(s["control"]["authoring"][0]["status"]["layout"], expanded);
+    }
     let row = s["control"]["eq"][0].clone();
     let eq_action = json!({"kind":"eq", "command": {
         "session":s["control"]["session"], "expected_revision":s["control"]["revision"],

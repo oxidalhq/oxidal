@@ -1156,6 +1156,32 @@
         }
       ]
     },
+    "AuthoringCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/AuthoringAction"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "node": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "node",
+        "action"
+      ]
+    },
     "AuthoringStatus": {
       "type": "object",
       "properties": {
@@ -3809,6 +3835,22 @@
         "level"
       ]
     },
+    "NodeAuthoring": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AuthoringStatus"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "status"
+      ]
+    },
     "NodeEq": {
       "description": "EQ belongs to a native graph node and its stable inner block identities.",
       "type": "object",
@@ -3881,6 +3923,22 @@
       "required": [
         "node",
         "slots"
+      ]
+    },
+    "NodeWorking": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "receipt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "receipt"
       ]
     },
     "OwnedPreset": {
@@ -4787,6 +4845,12 @@
           "items": {
             "$ref": "#/$defs/Value"
           }
+        },
+        "working": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NodeWorking"
+          }
         }
       },
       "additionalProperties": false,
@@ -4879,6 +4943,23 @@
     },
     "RigAudioAction": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/AuthoringCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "authoring"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
         {
           "type": "object",
           "properties": {
@@ -5737,6 +5818,13 @@
     "Snapshot3": {
       "type": "object",
       "properties": {
+        "authoring": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeAuthoring"
+          }
+        },
         "branches": {
           "type": "array",
           "default": [],
@@ -5845,6 +5933,12 @@
         },
         "source_revision": {
           "type": "string"
+        },
+        "working": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NodeWorking"
+          }
         }
       },
       "additionalProperties": false,

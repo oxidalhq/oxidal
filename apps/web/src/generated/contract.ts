@@ -346,6 +346,10 @@ export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type RigAudioAction =
   | {
+      command: AuthoringCommand;
+      kind: "authoring";
+    }
+  | {
       enabled: boolean;
       kind: "set_boot";
     }
@@ -1208,6 +1212,12 @@ export interface RigAudioCommand {
   expected_revision: number;
   session: string;
 }
+export interface AuthoringCommand {
+  action: AuthoringAction;
+  expected_revision: number;
+  node: string;
+  session: string;
+}
 export interface StartRig {
   midi?: Settings2 | null;
   /**
@@ -1252,6 +1262,7 @@ export interface Recall {
   models?: NodeModels[];
   source_revision: string;
   values: Value[];
+  working?: NodeWorking[];
 }
 /**
  * EQ belongs to a native graph node and its stable inner block identities.
@@ -1267,6 +1278,10 @@ export interface NodeModels {
 export interface Value {
   target: Target;
   value: number;
+}
+export interface NodeWorking {
+  node: string;
+  receipt: string;
 }
 export interface ControlCommand {
   expected_revision: number;
@@ -1322,6 +1337,7 @@ export interface RigAudioState {
   telemetry?: Snapshot2 | null;
 }
 export interface Snapshot3 {
+  authoring?: NodeAuthoring[];
   branches?: BranchState[];
   buffer_bytes: number;
   controls: Control[];
@@ -1345,6 +1361,11 @@ export interface Snapshot3 {
   session: string;
   slots?: NodeSlots[];
   source_revision: string;
+  working?: NodeWorking[];
+}
+export interface NodeAuthoring {
+  node: string;
+  status: AuthoringStatus;
 }
 export interface BranchState {
   enabled: boolean;

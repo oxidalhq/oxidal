@@ -1,8 +1,9 @@
-//! One DSP owner with confirmed scalar controls. No structural live replacement.
+//! One DSP owner with confirmed controls and guarded whole-native authoring.
 use crate::{PreparedPorts, Processor, protocol::*};
 use oxidal_lv2::{ControlError, World};
 use oxidal_presets::{Bundle, manifest::NodeKind};
 use std::collections::BTreeSet;
+pub(crate) mod authoring;
 mod models;
 
 #[derive(Debug)]
@@ -18,6 +19,7 @@ pub struct Session {
     model_root: Option<std::path::PathBuf>,
     model_node: Option<String>,
     rate: f64,
+    authoring_histories: std::collections::BTreeMap<String, oxidal_tone3000::working::Authoring>,
 }
 impl Session {
     pub fn new(
@@ -27,7 +29,18 @@ impl Session {
         frames: usize,
         budget: usize,
     ) -> Result<Self, String> {
-        let mut graph = PreparedPorts::from_bundle(&bundle, world, rate, frames, budget)?;
+        Self::new_with_working(bundle, world, rate, frames, budget, None)
+    }
+    pub fn new_with_working(
+        bundle: Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        budget: usize,
+        working: Option<(&std::path::Path, &[NodeWorking])>,
+    ) -> Result<Self, String> {
+        let mut graph =
+            PreparedPorts::from_bundle_working(&bundle, world, rate, frames, budget, working)?;
         let host = bundle
             .manifest()
             .oxidal
@@ -36,6 +49,7 @@ impl Session {
         let mut controls = Vec::new();
         let mut eq = Vec::new();
         let mut slots = Vec::new();
+        let mut authoring = Vec::new();
         for node in &host.graph.nodes {
             match graph.processor_mut(&node.id) {
                 Some(Processor::Native(p)) => {
@@ -55,6 +69,20 @@ impl Session {
                         },
                     });
                     controls.extend(native_controls(&node.id, p)?);
+                    if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+                        let receipt = working
+                            .and_then(|(_, rows)| rows.iter().find(|r| r.node == node.id))
+                            .map(|r| r.receipt.clone());
+                        let owner = oxidal_tone3000::working::Authoring::for_source(
+                            std::path::Path::new("."),
+                            authoring::origin(bundle.revision(), &node.id),
+                            receipt,
+                        );
+                        authoring.push(NodeAuthoring {
+                            node: node.id.clone(),
+                            status: owner.snapshot(p)?,
+                        });
+                    }
                 }
                 Some(Processor::Lv2(p)) => {
                     for port in p.info().ports.iter().filter(|p| p.input && p.control) {
@@ -137,6 +165,8 @@ impl Session {
             latency_frames: graph.latency_frames(),
             prepared: Vec::new(),
             models: Vec::new(),
+            working: working.map(|(_, rows)| rows.to_vec()).unwrap_or_default(),
+            authoring,
             slots,
             model_change: None,
             scenes: bundle.manifest().scenes().map_err(|e| e.to_string())?,
@@ -156,6 +186,7 @@ impl Session {
             model_task: Default::default(),
             model_root: None,
             model_node: None,
+            authoring_histories: Default::default(),
             rate,
         };
         if serde_json::to_vec(&result.snapshot())
@@ -238,6 +269,7 @@ impl Session {
             .any(|(current, initial)| current.value != initial.value)
             || self.state.eq != self.initial_eq
             || !self.state.models.is_empty()
+            || !self.state.working.is_empty()
     }
     pub(crate) fn source_revision(&self) -> &str {
         &self.state.source_revision
@@ -568,6 +600,14 @@ impl Session {
     }
     /// Startup/export only. Prevalidate the entire catalog before mutation.
     pub fn restore(&mut self, recall: &Recall) -> Result<(), String> {
+        if recall.working.len() != self.state.working.len()
+            || recall
+                .working
+                .iter()
+                .any(|r| !self.state.working.contains(r))
+        {
+            return Err("Working state requires fresh verified graph preparation".into());
+        }
         if !recall.models.is_empty() {
             return Err("Model recall requires the verified asset store".into());
         }

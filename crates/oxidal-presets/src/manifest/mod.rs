@@ -85,6 +85,7 @@ impl Manifest {
         self.shape()?;
         self.semantics()?;
         self.scenes()?;
+        self.native_settings()?;
         Ok(())
     }
     pub fn encode(&self) -> Result<Vec<u8>> {
@@ -102,7 +103,7 @@ impl Manifest {
         if self
             .required_extensions
             .iter()
-            .any(|key| key != SCENES_EXTENSION)
+            .any(|key| key != SCENES_EXTENSION && key != NATIVE_SETTINGS_EXTENSION)
         {
             return Err(Error::Invalid("Unsupported required preset extension"));
         }
@@ -313,4 +314,71 @@ pub struct Endpoint {
     pub node: String,
     #[serde(deserialize_with = "integer")]
     pub port: u8,
+}
+
+pub const NATIVE_SETTINGS_EXTENSION: &str = "urn:oxidal:native-settings:1";
+/// Explicit instance settings which the upstream tone preset intentionally omits.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeSettings {
+    pub input_mode: oxidal_audio::structure::InputMode,
+    pub parameters: BTreeMap<String, f32>,
+}
+impl NativeSettings {
+    pub fn valid(&self) -> bool {
+        const IDS: [&str; 7] = [
+            "osEnabled",
+            "osFactor",
+            "pitchEnabled",
+            "pitchWindow",
+            "inputCalibrationLevel",
+            "calibrateInput",
+            "targetLoudness",
+        ];
+        self.parameters.len() == IDS.len()
+            && IDS.iter().all(|id| {
+                self.parameters.get(*id).is_some_and(|v| {
+                    v.is_finite()
+                        && (0.0..=1.0).contains(v)
+                        && (!matches!(*id, "osEnabled" | "pitchEnabled" | "calibrateInput")
+                            || *v == 0.0
+                            || *v == 1.0)
+                })
+            })
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeSettingsExtension {
+    pub instances: BTreeMap<String, NativeSettings>,
+}
+impl Manifest {
+    pub fn native_settings(&self) -> Result<Option<NativeSettingsExtension>> {
+        let Some(extension) = self.extensions.get(NATIVE_SETTINGS_EXTENSION) else {
+            return Ok(None);
+        };
+        let bad = || Error::Invalid("Invalid native instance settings");
+        if !self
+            .required_extensions
+            .iter()
+            .any(|id| id == NATIVE_SETTINGS_EXTENSION)
+        {
+            return Err(bad());
+        }
+        let settings: NativeSettingsExtension =
+            serde_json::from_value(Value::Object(extension.clone())).map_err(|_| bad())?;
+        if settings.instances.is_empty()
+            || settings.instances.iter().any(|(id, settings)| {
+                !settings.valid()
+                    || !self
+                        .tone3000
+                        .instances
+                        .iter()
+                        .any(|n| n.id == *id && n.role() == ProcessingRole::Whole)
+            })
+        {
+            return Err(bad());
+        }
+        Ok(Some(settings))
+    }
 }

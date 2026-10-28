@@ -29,7 +29,7 @@ pub use resident::ResidentSet;
 #[cfg(feature = "native")]
 mod saving;
 #[cfg(feature = "native")]
-pub use saving::{save_revision, save_revision_with_models};
+pub use saving::{prepare_native_setting, save_revision, save_revision_with_models};
 
 /// Codec baseline for the pinned adapter sources. It is not a binary signature
 /// or a claim that every upstream field/setting has passed fidelity qualification.

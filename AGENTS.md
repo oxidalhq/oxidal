@@ -111,3 +111,12 @@ old worker until admission, then restarts audio with rollback on failure. This i
 functional authoring, not real-time/gapless structural qualification. See
 docs/native-tone3000.md. Hybrid node authoring and complete reference parity remain
 open. Keep UI testing focused on functional wiring during the current design changes.
+
+Whole-native hybrid nodes now expose shared structural/history/input-mode controls
+and isolated prepared instance settings. Runtime working receipts are restored
+before graph latency admission; independent Save embeds native resources and a
+required typed instance-settings extension, without runtime cache dependence.
+See docs/mixed-engine.md. Host topology authoring, automatic measurement workflows,
+full upstream action parity and physical timing remain unqualified. Keep the
+current functionality-first browser checks focused rather than repeating device
+screenshot matrices.

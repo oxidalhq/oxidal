@@ -19,6 +19,16 @@ impl PreparedPorts {
         frames: usize,
         buffer_budget: usize,
     ) -> Result<Self, String> {
+        Self::from_bundle_working(bundle, world, rate, frames, buffer_budget, None)
+    }
+    pub fn from_bundle_working(
+        bundle: &Bundle,
+        world: &World,
+        rate: f64,
+        frames: usize,
+        buffer_budget: usize,
+        working: Option<(&std::path::Path, &[crate::protocol::NodeWorking])>,
+    ) -> Result<Self, String> {
         let manifest = bundle.manifest();
         manifest.validate().map_err(|e| e.to_string())?;
         manifest
@@ -65,6 +75,24 @@ impl PreparedPorts {
             if native.role() != ProcessingRole::Whole && native.partition.is_none() {
                 return Err("Extracted stages require paired state restoration".into());
             }
+        }
+        let native_settings = manifest.native_settings().map_err(|e| e.to_string())?;
+        if let Some((root, rows)) = working
+            && (!root.is_absolute()
+                || rows.iter().enumerate().any(|(i, row)| {
+                    !crate::protocol::valid_revision(&row.receipt)
+                        || rows[..i].iter().any(|p| p.node == row.node)
+                        || !host.graph.nodes.iter().any(|node| {
+                            node.id == row.node
+                                && node.kind == NodeKind::Tone3000
+                                && manifest.tone3000.instances.iter().any(|n| {
+                                    Some(&n.id) == node.instance.as_ref()
+                                        && n.role() == ProcessingRole::Whole
+                                })
+                        })
+                }))
+        {
+            return Err("Invalid native working catalog".into());
         }
         let catalog = world.plugins(rate)?;
         // Check every declaration before instantiating any processor. A missing
@@ -118,6 +146,47 @@ impl PreparedPorts {
             engine
                 .set_input_mode(InputMode::Stereo)
                 .map_err(|e| e.to_string())?;
+            if let Some(settings) = native_settings
+                .as_ref()
+                .and_then(|s| s.instances.get(&native.id))
+            {
+                engine
+                    .set_input_mode(settings.input_mode)
+                    .map_err(|e| e.to_string())?;
+                for (id, value) in &settings.parameters {
+                    engine
+                        .set_normalized(id, *value)
+                        .map_err(|e| e.to_string())?;
+                }
+                engine.wait_ready().map_err(|e| e.to_string())?;
+                let catalog: Vec<oxidal_tone3000::protocol::Parameter> =
+                    serde_json::from_value(engine.catalog().map_err(|e| e.to_string())?)
+                        .map_err(|e| e.to_string())?;
+                if settings.parameters.iter().any(|(id, value)| {
+                    !catalog
+                        .iter()
+                        .any(|p| p.id == *id && (p.normalized - *value as f64).abs() < 1e-5)
+                }) {
+                    return Err("Native instance setting readback differs".into());
+                }
+            }
+            if let Some((root, rows)) = working {
+                let node = host
+                    .graph
+                    .nodes
+                    .iter()
+                    .find(|n| n.instance.as_ref() == Some(&native.id))
+                    .ok_or("Missing native node")?;
+                if let Some(row) = rows.iter().find(|r| r.node == node.id) {
+                    let state = oxidal_tone3000::working::read(
+                        root,
+                        &row.receipt,
+                        &crate::session::authoring::origin(bundle.revision(), &node.id),
+                    )?;
+                    engine.restore(&state).map_err(|e| e.to_string())?;
+                    engine.wait_ready().map_err(|e| e.to_string())?;
+                }
+            }
             processors.insert(native.id.clone(), Processor::Native(engine));
         }
         for plugin in &host.lv2 {

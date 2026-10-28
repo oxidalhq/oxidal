@@ -225,10 +225,17 @@ impl Owner {
     }
     async fn exchange(&mut self, request: &WorkerRequest) -> Result<WorkerReply, String> {
         let worker = self.worker.as_mut().ok_or("Mixed audio is not running")?;
-        tokio::time::timeout(Duration::from_secs(3), async {
-            worker.write(request).await?;
-            worker.read().await
-        })
+        tokio::time::timeout(
+            Duration::from_secs(if matches!(request, WorkerRequest::Authoring { .. }) {
+                25
+            } else {
+                3
+            }),
+            async {
+                worker.write(request).await?;
+                worker.read().await
+            },
+        )
         .await
         .map_err(|_| "Mixed worker response timed out".to_owned())?
     }
@@ -291,6 +298,109 @@ impl Owner {
         self.state.telemetry = None;
         self.state.processed_frames = 0;
         self.phase(AudioPhase::Starting, None);
+        Ok(())
+    }
+    async fn prepare_native_setting(&mut self, command: AuthoringCommand) -> Result<(), String> {
+        let control = self
+            .state
+            .control
+            .as_ref()
+            .ok_or("Mixed audio is not running")?;
+        let oxidal_audio::structure::AuthoringAction::Parameter { parameter, value } =
+            command.action
+        else {
+            return Err("Prepared setting required".into());
+        };
+        if self.state.phase != AudioPhase::Running
+            || self.model_pending()
+            || command.session != control.session
+            || command.expected_revision != control.revision
+            || !control
+                .authoring
+                .iter()
+                .find(|r| r.node == command.node)
+                .is_some_and(|r| {
+                    r.status
+                        .settings
+                        .iter()
+                        .any(|p| p.target == parameter && p.accepts(value))
+                })
+        {
+            return Err("Prepared native setting state conflict".into());
+        }
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("Missing mixed configuration")?;
+        let request = PrepareNativeSetting {
+            settings: previous.clone(),
+            node: command.node,
+            parameter,
+            value,
+        };
+        let bytes = encode(&request)?;
+        let root = std::fs::canonicalize(&self.root).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(self.runtime.join("prepare-native")).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(
+            self.executable.as_ref().ok_or("Mixed worker unavailable")?,
+        )
+        .arg("--prepare-native-setting")
+        .env("OXIDAL_BUNDLE_STORE", &root)
+        .env(
+            "OXIDAL_PRESET_DIR",
+            root.parent().ok_or("Missing model store")?,
+        )
+        .env(
+            "OXIDAL_QUALIFICATION_DATA",
+            self.runtime.join("prepare-native"),
+        )
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+        let result = tokio::time::timeout(Duration::from_secs(25), async {
+            let mut input = child.stdin.take().ok_or("Missing preparation input")?;
+            input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            input.shutdown().await.map_err(|e| e.to_string())?;
+            drop(input);
+            let mut output = vec![];
+            child
+                .stdout
+                .take()
+                .ok_or("Missing preparation output")?
+                .take((REPLY_LIMIT + 1) as u64)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|e| e.to_string())?;
+            if output.len() > REPLY_LIMIT
+                || !child.wait().await.map_err(|e| e.to_string())?.success()
+            {
+                return Err("Native preparation failed; playing rig unchanged".to_owned());
+            }
+            serde_json::from_slice::<Recall>(&output)
+                .map_err(|_| "Invalid prepared rig recall".to_owned())
+        })
+        .await
+        .map_err(|_| "Native preparation timed out; playing rig unchanged".to_owned())
+        .and_then(|r| r);
+        if result.is_err() {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+        }
+        let recall = result?;
+        let mut next = previous.clone();
+        next.recall = Some(recall);
+        next.validate()?;
+        self.phase(AudioPhase::Stopping, None);
+        let reserved = self.release_reserved().await?;
+        self.rollback = Some(previous);
+        self.restored_error = None;
+        if let Err(error) = self.start_reserved(next, reserved).await {
+            self.preparation_failed(error).await;
+        }
         Ok(())
     }
     async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Result<(), String> {
@@ -620,6 +730,29 @@ impl Owner {
                 };
                 if let Err(error) = self.start_reserved(settings, reserved).await {
                     return Err(self.fault(error).await);
+                }
+            }
+            RigAudioAction::Authoring { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                if matches!(
+                    command.action,
+                    oxidal_audio::structure::AuthoringAction::Parameter { .. }
+                ) {
+                    self.prepare_native_setting(command).await?;
+                    return Ok(self.state.clone());
+                }
+                let reply = match self.exchange(&WorkerRequest::Authoring { command }).await {
+                    Ok(r) => r,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                let error = reply.error.clone();
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                if let Some(e) = error {
+                    return Err(e);
                 }
             }
             RigAudioAction::Control { command } => {

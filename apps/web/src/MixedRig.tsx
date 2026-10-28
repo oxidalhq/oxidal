@@ -1,3 +1,4 @@
+import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
 import { LiveEq } from './LiveEq';
@@ -781,6 +782,35 @@ export function MixedRig({
           )}
         </div>
       )}
+      {running &&
+        selected &&
+        state.control?.authoring?.find((row) => row.node === selected.id) && (
+          <NativeAuthoring
+            key={`${state.control.session}:${selected.id}`}
+            status={
+              state.control.authoring.find((row) => row.node === selected.id)!
+                .status
+            }
+            selectedBlock={nativeTarget === 'global' ? undefined : nativeTarget}
+            disabled={disabled || !!edit}
+            busy={busy}
+            session={state.control.session}
+            revision={state.control.revision}
+            author={async (action) => {
+              const cursor = current.current?.control;
+              if (!cursor) return;
+              await command({
+                kind: 'authoring',
+                command: {
+                  session: cursor.session,
+                  expected_revision: cursor.revision,
+                  node: selected.id,
+                  action,
+                },
+              });
+            }}
+          />
+        )}
       {running && selected && eqBlock && (
         <div className="space-y-2">
           <LiveEq

@@ -2162,6 +2162,28 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await rig
     .getByRole('button', { name: 'Select model 1', exact: true })
     .click();
+  const layoutBefore = (await get()).control.authoring[0].status.layout;
+  await rig.getByText('Chain actions', { exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'Duplicate block', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await get()).control.authoring[0].status.layout.left.filter(
+          (block: { insert: boolean }) => !block.insert,
+        ).length,
+    )
+    .toBe(
+      layoutBefore.left.filter((block: { insert: boolean }) => !block.insert)
+        .length + 1,
+    );
+  await rig
+    .getByRole('button', { name: 'Undo structure', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.layout)
+    .toEqual(layoutBefore);
   const eq = rig.getByRole('region', { name: 'Block EQ' });
   await expect(eq).toBeVisible();
   const eqBefore = (await get()).control.eq;

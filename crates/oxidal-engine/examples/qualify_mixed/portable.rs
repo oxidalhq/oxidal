@@ -613,3 +613,180 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
     );
     Ok(())
 }
+
+pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(), Box<dyn Error>> {
+    use oxidal_audio::structure::{AuthoringAction as A, ChainLane as L, StructureEdit as E};
+    use oxidal_engine::{Session, protocol::*};
+    let directory = root.join(format!(
+        "hybrid-native-authoring-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&directory)?;
+    let bundle = Bundle::from_parts(
+        serde_json::to_vec(&declaration(bytes)?)?,
+        BTreeMap::from([("current".into(), bytes.to_vec())]),
+    )?;
+    let store = BundleStore::new(directory.join("bundles"));
+    let revision = store.save(&bundle)?;
+    let mut session = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let initial = session.snapshot();
+    let block = initial.authoring[0]
+        .status
+        .layout
+        .left
+        .iter()
+        .find(|b| !b.insert)
+        .unwrap()
+        .id
+        .clone();
+    let send = |session: &mut Session, action: A| -> Result<(), String> {
+        let s = session.snapshot();
+        session.authoring_command(
+            AuthoringCommand {
+                session: s.session,
+                expected_revision: s.revision,
+                node: "tone".into(),
+                action,
+            },
+            &directory,
+        )
+    };
+    send(
+        &mut session,
+        A::Edit {
+            edit: E::Duplicate {
+                block_id: block.clone(),
+                lane: L::Left,
+                index: 0,
+            },
+        },
+    )?;
+    let duplicated = session.snapshot();
+    assert!(duplicated.modified && duplicated.working.len() == 1);
+    assert_eq!(
+        duplicated.authoring[0]
+            .status
+            .layout
+            .left
+            .iter()
+            .filter(|b| !b.insert)
+            .count(),
+        2
+    );
+    assert!(
+        session
+            .authoring_command(
+                AuthoringCommand {
+                    session: initial.session,
+                    expected_revision: initial.revision,
+                    node: "tone".into(),
+                    action: A::Remove {
+                        block_id: block.clone()
+                    }
+                },
+                &directory
+            )
+            .is_err()
+    );
+    assert_eq!(session.snapshot().revision, duplicated.revision);
+    send(&mut session, A::Undo)?;
+    assert_eq!(
+        session.snapshot().authoring[0].status.layout,
+        initial.authoring[0].status.layout
+    );
+    send(&mut session, A::Redo)?;
+    assert_eq!(
+        session.snapshot().authoring[0].status.layout,
+        duplicated.authoring[0].status.layout
+    );
+    let current = session.snapshot();
+    session.apply(ControlCommand {
+        session: current.session,
+        expected_revision: current.revision,
+        target: Target::Lv2 {
+            node: "fx_l".into(),
+            symbol: "gain".into(),
+        },
+        value: -2.0,
+    })?;
+    let confirmed = session.snapshot();
+    let recall = confirmed.recall();
+    let stream: oxidal_audio::StreamConfig = serde_json::from_value(
+        json!({"input":{"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3},"output":{"endpoint":"hw:CARD=Qualification,DEV=0","direction":"playback","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3},"input_map":[0,1],"output_map":[0,1]}),
+    )?;
+    let saved = oxidal_engine::save_revision_with_models(
+        &store,
+        world,
+        SaveRequest {
+            settings: StartRig {
+                revision: revision.clone(),
+                stream,
+                recall: Some(recall.clone()),
+                prepared: vec![],
+                midi: None,
+            },
+            recall: recall.clone(),
+            name: "Hybrid authored native blocks".into(),
+        },
+        &directory,
+    )?;
+    let saved_bundle = store.read(&saved)?;
+    assert!(saved_bundle.manifest().native_settings()?.is_some());
+    let mut expected = Session::new_with_working(
+        bundle.clone(),
+        world,
+        48000.0,
+        128,
+        BUFFER_BUDGET,
+        Some((&directory, &recall.working)),
+    )?;
+    expected.restore(&recall)?;
+    let mut fresh = Session::new(saved_bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let fresh_recall = fresh.snapshot().recall();
+    fresh.restore(&fresh_recall)?;
+    assert_eq!(fresh.snapshot().controls.len(), confirmed.controls.len());
+    assert_eq!(
+        fresh.snapshot().authoring[0].status.layout,
+        duplicated.authoring[0].status.layout
+    );
+    assert!(fresh.snapshot().working.is_empty() && !fresh.snapshot().modified);
+    let mut error = 0.0_f32;
+    for chunk in 0..32 {
+        let left: Vec<f32> = (0..128)
+            .map(|i| ((chunk * 128 + i) as f32 * 0.07).sin() * 0.02)
+            .collect();
+        let right = left.clone();
+        let mut a = [0.0; 128];
+        let mut b = a;
+        let mut c = a;
+        let mut d = a;
+        expected.process(&[&left, &right], &mut [&mut a, &mut b])?;
+        fresh.process(&[&left, &right], &mut [&mut c, &mut d])?;
+        error = a
+            .into_iter()
+            .zip(c)
+            .chain(b.into_iter().zip(d))
+            .map(|(x, y)| (x - y).abs())
+            .fold(error, f32::max);
+    }
+    assert!(
+        error < 1e-5,
+        "hybrid structural offline PCM differs: {error}"
+    );
+    std::fs::rename(
+        directory.join("native-checkpoints"),
+        directory.join("checkpoints-away"),
+    )?;
+    let offline = Session::new(saved_bundle, world, 48000.0, 128, BUFFER_BUDGET)?;
+    assert_eq!(
+        offline.snapshot().authoring[0].status.layout,
+        duplicated.authoring[0].status.layout
+    );
+    assert_eq!(store.read(&revision)?.resource("current"), Some(bytes));
+    eprintln!(
+        "mixed: native duplicate/undo/redo, peer LV2 state, isolated Save, cache-free recall and deterministic PCM passed ({error})"
+    );
+    Ok(())
+}

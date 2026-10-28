@@ -62,12 +62,24 @@ impl ResidentSet {
         for choice in std::iter::once(&active).chain(&settings.prepared) {
             let bundle = store.read(&choice.revision).map_err(|e| e.to_string())?;
             let name = bundle.manifest().name.clone();
-            let mut session = Session::new(
+            let working = choice
+                .recall
+                .as_ref()
+                .filter(|r| !r.working.is_empty())
+                .map(|r| {
+                    Ok::<_, String>((
+                        model_root.ok_or("Native working store unavailable")?,
+                        r.working.as_slice(),
+                    ))
+                })
+                .transpose()?;
+            let mut session = Session::new_with_working(
                 bundle,
                 world,
                 f64::from(rate),
                 frames,
                 budget.saturating_sub(used),
+                working,
             )?;
             if session.channels() != (2, 2) {
                 return Err("Resident transport requires stereo logical ports".into());
