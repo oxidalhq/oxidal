@@ -60,6 +60,7 @@ export function MixedRig({
     name: string;
     insert: boolean;
     format?: 'nam' | 'ir';
+    allowedFormat?: 'nam' | 'ir';
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [eqBusy, setEqBusy] = useState(false);
@@ -302,22 +303,25 @@ export function MixedRig({
     );
   const disabled =
     !connected || busy || eqBusy || !running || !!readError || modelPending;
-  const slots =
-    state.control?.slots?.find((s) => s.node === selected?.id)?.slots ?? [];
+  const nativeModels = state.control?.slots?.find(
+    (s) => s.node === selected?.id,
+  );
+  const slots = nativeModels?.slots ?? [];
+  const wholeNative =
+    !!nativeModels && stageRole !== 'amp' && stageRole !== 'cab';
   const eqBlocks =
     state.control?.eq?.find((e) => e.node === selected?.id)?.blocks ?? [];
   const nativeTarget =
     nativeSelection && nativeSelection.node === selected?.id
       ? nativeSelection.target
       : 'global';
-  const eqBlock =
-    slots.length > 0
-      ? eqBlocks.find((e) => e.block_id === nativeTarget)
-      : eqBlocks[0];
+  const eqBlock = wholeNative
+    ? eqBlocks.find((e) => e.block_id === nativeTarget)
+    : eqBlocks[0];
   const visibleControls = controls
     .filter((c) => {
       if (c.target.kind === 'bypass') return false;
-      if (!slots.length || c.target.kind !== 'native') return true;
+      if (!wholeNative || c.target.kind !== 'native') return true;
       const p = c.target.parameter;
       if (eqBlock) return p.startsWith(`block:${eqBlock.block_id}:`);
       return (
@@ -327,7 +331,7 @@ export function MixedRig({
       );
     })
     .map((c) => {
-      if (!eqBlock || !slots.length || c.target.kind !== 'native') return c;
+      if (!eqBlock || !wholeNative || c.target.kind !== 'native') return c;
       const suffix = c.target.parameter.split(':').at(-1)!;
       const labels: Record<string, string> = {
         enabled: 'Enabled',
@@ -420,7 +424,24 @@ export function MixedRig({
           const plugin = matching?.manifest.oxidal?.lv2.find(
             (p) => p.id === n.instance,
           );
+          const role = matching?.manifest.tone3000.instances.find(
+            (i) => i.id === n.instance,
+          )?.processingRole;
+          const activeModel = state.control?.controls.find(
+            (c) =>
+              c.target.kind === 'native' &&
+              c.target.node === n.id &&
+              c.target.parameter.startsWith('block:') &&
+              c.target.parameter.endsWith(':enabled'),
+          );
+          const modelName = activeModel?.label.replace(
+            / · (left|right) · enabled$/,
+            '',
+          );
           const label =
+            (modelName && (role === 'amp' || role === 'cab')
+              ? `${role === 'amp' ? 'Amp' : 'Cab'} · ${modelName}`
+              : undefined) ??
             rigNodeLabel(matching, n.id) ??
             (n.kind === 'tone3000'
               ? 'TONE3000'
@@ -477,7 +498,7 @@ export function MixedRig({
           );
         })}
       </div>
-      {running && selected && slots.length > 0 && (
+      {running && selected && wholeNative && (
         <div
           className="flex flex-wrap gap-2"
           aria-label="Native model controls"
@@ -558,6 +579,24 @@ export function MixedRig({
             ))}
         </div>
       )}
+      {running && selected && nativeModels && !wholeNative && eqBlock && (
+        <Button
+          variant="outline"
+          disabled={disabled || !!edit}
+          onClick={() =>
+            setPicker({
+              opening: state,
+              node: selected.id,
+              target: eqBlock.block_id,
+              name: stageRole === 'cab' ? 'Cab IR' : 'Amp capture',
+              insert: false,
+              allowedFormat: stageRole === 'cab' ? 'ir' : 'nam',
+            })
+          }
+        >
+          {stageRole === 'cab' ? 'Change cab IR' : 'Change amp capture'}
+        </Button>
+      )}
       {modelPending && (
         <div className="flex flex-wrap items-center gap-2" role="status">
           <span>
@@ -615,6 +654,7 @@ export function MixedRig({
         <ModelPicker
           name={picker.name}
           initialFormat={picker.format}
+          allowedFormat={picker.allowedFormat}
           intent={picker.insert ? 'add' : 'replace'}
           onClose={() => setPicker(null)}
           onAudition={async (asset) => {

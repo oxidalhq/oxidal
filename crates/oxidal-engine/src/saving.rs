@@ -66,6 +66,53 @@ fn save_with_assets(
             ))
         })
         .collect::<Result<_, String>>()?;
+    if !confirmed.models.is_empty() {
+        let sources = crate::partition::model_sources(
+            &original,
+            &confirmed,
+            model_root.ok_or("Model asset store is unavailable")?,
+            frames,
+            &request.name,
+        )?;
+        for (pair, bytes) in sources {
+            let replacement = append(
+                &mut manifest.resources,
+                &mut resources,
+                bytes,
+                ResourceKind::Tone3000Preset,
+            )?;
+            let mut provenance: Option<String> = None;
+            for native in &mut manifest.tone3000.instances {
+                if native.partition.as_ref().is_none_or(|p| p.pair != pair) {
+                    continue;
+                }
+                if native.origin.is_none() {
+                    let resource = match &provenance {
+                        Some(id) => id.clone(),
+                        None => {
+                            let bytes = original
+                                .resource(&native.preset)
+                                .ok_or("Missing partition provenance")?
+                                .to_vec();
+                            let id = append(
+                                &mut manifest.resources,
+                                &mut resources,
+                                bytes,
+                                ResourceKind::Tone3000Source,
+                            )?;
+                            provenance = Some(id.clone());
+                            id
+                        }
+                    };
+                    native.origin = Some(Origin {
+                        resource,
+                        source_preset_id: None,
+                    });
+                }
+                native.preset = replacement.clone();
+            }
+        }
+    }
     let host = manifest.oxidal.as_mut().ok_or("Missing host graph")?;
     for control in &confirmed.controls {
         match &control.target {
@@ -233,7 +280,22 @@ fn save_with_assets(
         .iter()
         .any(|n| n.partition.is_some())
     {
-        let reopened = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?.snapshot();
+        let mut fresh = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?;
+        let reopened = fresh.snapshot();
+        for node in &bundle.manifest().oxidal.as_ref().unwrap().graph.nodes {
+            if let Some(Processor::Native(expected)) = session.graph.processor_mut(&node.id) {
+                let Some(Processor::Native(actual)) = fresh.graph.processor_mut(&node.id) else {
+                    return Err("Missing saved native node".into());
+                };
+                if oxidal_tone3000::model_preparation::identities(expected)
+                    .map_err(|e| e.to_string())?
+                    != oxidal_tone3000::model_preparation::identities(actual)
+                        .map_err(|e| e.to_string())?
+                {
+                    return Err("Saved partition models did not survive fresh derivation".into());
+                }
+            }
+        }
         if reopened.eq != confirmed.eq
             || reopened.controls.len() != confirmed.controls.len()
             || confirmed.controls.iter().any(|c| {

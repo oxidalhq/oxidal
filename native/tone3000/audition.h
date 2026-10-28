@@ -38,6 +38,10 @@ public:
     const auto modelId = static_cast<juce::int64>((*models)[0]["id"]);
     if (modelId < 1 || modelId > std::numeric_limits<int>::max())
       throw std::runtime_error("invalid model identity");
+    const auto role = p.oxidalProcessingRole;
+    if ((role == TONE3000Processor::OxidalProcessingRole::Amp && format != "nam") ||
+        (role == TONE3000Processor::OxidalProcessingRole::Cab && format != "ir"))
+      throw std::runtime_error("model format differs from extracted processing role");
     type = format == "nam" ? ChainBlockType::NAM : ChainBlockType::IR;
     {
       juce::ScopedLock lock(p.chainMutex);
@@ -45,6 +49,8 @@ public:
       if (!current || current->modelLoading || current->loadFailed)
         throw std::runtime_error("target missing or not ready");
       inserting = current->type == ChainBlockType::INSERT;
+      if (role != TONE3000Processor::OxidalProcessingRole::WholePreset && (inserting || current->type != type))
+        throw std::runtime_error("extracted stages support only same-format replacement");
       // The slot is the logical identity of this edit. Retain it when filling an
       // insert so replay from an immutable empty base addresses the same block.
       candidate = std::make_unique<ChainBlock>(target, type);
@@ -60,13 +66,14 @@ public:
       revision = p.chainRevision.load();
       factor = p.chainOversampleFactor.load(); voices = p.wantedNamVoices();
     }
-    task = std::thread([this, source] {
+    task = std::thread([this, source, role] {
       try {
         juce::MemoryBlock data;
         if (!source.loadFileAsData(data) || data.getSize() == 0 || data.getSize() > 32 * 1024 * 1024)
           throw std::runtime_error("model read failed");
         const auto* first = static_cast<const uint8_t*>(data.getData());
         std::vector<uint8_t> bytes(first, first + data.getSize());
+        if (role == TONE3000Processor::OxidalProcessingRole::Cab) oxidal::checkMonoCab(bytes);
         prepared = p.prepareBlockModelOffThread(type, bytes, source.getFileName(), candidate->namSlimSize);
         if (!prepared.success || (type == ChainBlockType::NAM ? !prepared.namEngine : !prepared.convolverMono))
           throw std::runtime_error("model preparation failed; previous sound retained");

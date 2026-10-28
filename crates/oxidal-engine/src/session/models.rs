@@ -1,5 +1,4 @@
-//! Verified whole-native model transactions. Extracted stages need an extended
-//! derivation recipe before admitting replacement or insertion.
+//! Verified native model transactions; extracted roles permit replacement only.
 use super::*;
 use oxidal_audio::lifecycle::{ModelOperation, ModelPhase, ModelProgress, valid_models};
 use std::path::Path;
@@ -8,19 +7,55 @@ impl Session {
     pub fn model_pending(&self) -> bool {
         self.model_task.pending()
     }
-    fn whole_model_node(&self, node: &str) -> Result<(), String> {
+    fn editable_model_node(&self, node: &str) -> Result<(), String> {
         if self.failed || !self.state.slots.iter().any(|s| s.node == node) {
-            return Err("Model editing requires a whole-native node".into());
+            return Err("Model editing requires a native node".into());
+        }
+        Ok(())
+    }
+    fn validate_model_assignment(
+        &self,
+        node_id: &str,
+        assignment: &oxidal_audio::lifecycle::ModelAssignment,
+    ) -> Result<(), String> {
+        if let Some(instance) = self
+            .bundle
+            .manifest()
+            .tone3000
+            .instances
+            .iter()
+            .find(|instance| {
+                self.bundle
+                    .manifest()
+                    .oxidal
+                    .as_ref()
+                    .unwrap()
+                    .graph
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == node_id && node.instance.as_ref() == Some(&instance.id))
+            })
+            && let Some(recipe) = &instance.partition
+        {
+            let target = match instance.role() {
+                oxidal_presets::manifest::ProcessingRole::Amp => &recipe.amp,
+                oxidal_presets::manifest::ProcessingRole::Cab => &recipe.cab,
+                _ => return Err("Invalid model processing role".into()),
+            };
+            if assignment.target != *target || assignment.insertion.is_some() {
+                return Err("Extracted stages support only their existing model".into());
+            }
         }
         Ok(())
     }
     pub fn model_command(&mut self, mut command: ModelCommand, root: &Path) -> Result<(), String> {
-        self.whole_model_node(&command.node)?;
+        self.editable_model_node(&command.node)?;
         if !self.matches_cursor(&command.session, command.expected_revision) || !root.is_absolute()
         {
             return Err("Model session conflict or invalid asset store".into());
         }
         if let ModelOperation::Prepare { assignment } = &mut command.operation {
+            self.validate_model_assignment(&command.node, assignment)?;
             let current = self.state.models.iter().find(|m| m.node == command.node);
             let coordinate = current
                 .and_then(|m| m.assignments.iter().find(|a| a.target == assignment.target))
@@ -133,7 +168,11 @@ impl Session {
         }
         let controls = native_controls(node, engine)?;
         let eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
-        let slots = engine.slots().map_err(|e| e.to_string())?;
+        let slots = if engine.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+            engine.slots().map_err(|e| e.to_string())?
+        } else {
+            vec![]
+        };
         let matches = |c: &Control| matches!(&c.target,Target::Native {node:n,..} if n==node);
         let start = self
             .state
@@ -192,7 +231,7 @@ impl Session {
         let mut seen = BTreeSet::new();
         let store = oxidal_presets::ModelStore::new(root.join("audition-models"));
         for row in &recall.models {
-            self.whole_model_node(&row.node)?;
+            self.editable_model_node(&row.node)?;
             if !seen.insert(&row.node)
                 || !valid_models(&row.assignments)
                 || row.assignments.is_empty()
@@ -200,6 +239,7 @@ impl Session {
                 return Err("Invalid model recall catalog".into());
             }
             for assignment in &row.assignments {
+                self.validate_model_assignment(&row.node, assignment)?;
                 store.read(&assignment.asset).map_err(|e| e.to_string())?;
             }
         }

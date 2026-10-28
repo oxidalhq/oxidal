@@ -68,6 +68,8 @@ native-worker unification, physical MIDI and physical deadlines remain open.
 
 Whole-native mixed nodes now accept verified live NAM/IR replacement and insertion,
 with shared native preparation, confirmed descriptors, per-resident recovery/boot
-recall and isolated embedded-model Save. Extracted stage recipes still reject model
-edits. The maintained mixed worker/API/browser suites exercise this path; physical
-no-dropout timing and full authoring remain open. See docs/mixed-engine.md.
+recall and isolated embedded-model Save. Extracted stages permit same-role model
+replacement; Save rebakes an isolated guarded source pair and retains exact original
+provenance plus local scalar/EQ recipes. Isolated replay resets histories before
+PCM. The maintained suites exercise this path; physical no-dropout timing and full
+authoring remain open. See docs/mixed-engine.md.

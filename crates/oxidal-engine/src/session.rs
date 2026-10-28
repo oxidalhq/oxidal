@@ -42,12 +42,17 @@ impl Session {
                         node: node.id.clone(),
                         blocks: p.eq_snapshot().map_err(|e| e.to_string())?,
                     });
-                    if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
-                        slots.push(NodeSlots {
-                            node: node.id.clone(),
-                            slots: p.slots().map_err(|e| e.to_string())?,
-                        });
-                    }
+                    slots.push(NodeSlots {
+                        node: node.id.clone(),
+                        // Extracted roles expose replacement, never insertion.
+                        slots: if p.processing_role()
+                            == oxidal_tone3000::ProcessingRole::WholePreset
+                        {
+                            p.slots().map_err(|e| e.to_string())?
+                        } else {
+                            vec![]
+                        },
+                    });
                     controls.extend(native_controls(&node.id, p)?);
                 }
                 Some(Processor::Lv2(p)) => {
@@ -493,7 +498,7 @@ impl Session {
             }
             self.state.eq = eq.clone();
         }
-        Ok(())
+        self.graph.finish_preparation()
     }
 }
 

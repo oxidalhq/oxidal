@@ -135,7 +135,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
     }
     let candidate = bundle(&bytes, amp, cab, "left", -6.0206)?;
     let mut graph = Session::new(candidate.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
-    // No model editing is exposed until the stage recipe can persist it.
+    // Extracted stages retain their exact model identity and cannot insert blocks.
     let before_models = graph.snapshot();
     assert!(
         graph
@@ -146,7 +146,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
                     node: "amp".into(),
                     operation: oxidal_audio::lifecycle::ModelOperation::Prepare {
                         assignment: oxidal_audio::lifecycle::ModelAssignment {
-                            target: amp.into(),
+                            target: "missing-stage-target".into(),
                             asset: "a".repeat(64),
                             insertion: None,
                         },
@@ -335,10 +335,165 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         )?;
         assert!(Session::new(invalid, world, 48000.0, 128, BUFFER_BUDGET).is_err());
     }
+    qualify_models(world, &candidate, root)?;
     std::fs::remove_file(root.join("split-source.t3kpreset"))?;
     super::worker::qualify_partition(&restored, root)?;
     // Reuse the verified authored fixture in the maintained browser gate only
     // after proving worker recall without the external source file.
     std::fs::write(root.join("partition-browser.t3kpreset"), bytes)?;
+    Ok(())
+}
+
+fn model_edit(
+    session: &mut Session,
+    root: &Path,
+    node: &str,
+    target: &str,
+    asset: &str,
+    fail: bool,
+) -> Result<()> {
+    use oxidal_audio::lifecycle::{ModelAssignment, ModelOperation, ModelPhase};
+    let before = session.snapshot();
+    session.model_command(
+        ModelCommand {
+            session: before.session,
+            expected_revision: before.revision,
+            node: node.into(),
+            operation: ModelOperation::Prepare {
+                assignment: ModelAssignment {
+                    target: target.into(),
+                    asset: asset.into(),
+                    insertion: None,
+                },
+            },
+        },
+        root,
+    )?;
+    let started = std::time::Instant::now();
+    let zero = [0.0; 128];
+    while session.model_pending() {
+        session.pump()?;
+        let (mut l, mut r) = ([0.0; 128], [0.0; 128]);
+        session.process(&[&zero, &zero], &mut [&mut l, &mut r])?;
+        if started.elapsed() > std::time::Duration::from_secs(20) {
+            return Err("Stage model timed out".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    assert!(session.healthy());
+    assert_eq!(
+        session.snapshot().model_change.unwrap().progress.phase,
+        if fail {
+            ModelPhase::Failed
+        } else {
+            ModelPhase::Applied
+        }
+    );
+    Ok(())
+}
+fn qualify_models(world: &World, candidate: &Bundle, root: &Path) -> Result<()> {
+    use oxidal_presets::ModelStore;
+    let data = root.join("stage-model-case");
+    std::fs::create_dir_all(&data)?;
+    let fixtures = ModelStore::new(root.join("audition-models"));
+    let cache = ModelStore::new(data.join("audition-models"));
+    let mut assets = BTreeMap::new();
+    for entry in std::fs::read_dir(root.join("audition-models"))? {
+        let entry = entry?;
+        if let Ok((asset, path)) = fixtures.read(&entry.file_name().to_string_lossy()) {
+            assets.insert(
+                asset.format.clone(),
+                cache.stage(&asset, &std::fs::read(path)?)?,
+            );
+        }
+    }
+    let nam = assets.get("nam").ok_or("Stage NAM fixture missing")?;
+    let ir = assets.get("ir").ok_or("Stage IR fixture missing")?;
+    let mut live = Session::new(candidate.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let original = live.snapshot();
+    let amp = original.eq.iter().find(|e| e.node == "amp").unwrap().blocks[0]
+        .block_id
+        .clone();
+    let cab = original.eq.iter().find(|e| e.node == "cab").unwrap().blocks[0]
+        .block_id
+        .clone();
+    assert!(original.slots.iter().all(|s| s.slots.is_empty()));
+    model_edit(&mut live, &data, "amp", &amp, ir, true)?;
+    assert!(live.snapshot().models.is_empty());
+    assert_eq!(live.snapshot().eq, original.eq);
+    model_edit(&mut live, &data, "amp", &amp, nam, false)?;
+    model_edit(&mut live, &data, "cab", &cab, ir, false)?;
+    change(&mut live, "amp", "inputLevel", 0.53)?;
+    change(&mut live, "cab", "outputLevel", 0.47)?;
+    let expected = live.snapshot();
+    assert_eq!(expected.models.len(), 2);
+    let mut forged = expected.recall();
+    forged.models[0].assignments[0].insertion =
+        Some(oxidal_audio::lifecycle::SlotPosition { lane: 0, index: 0 });
+    let mut isolated = Session::new(candidate.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    assert!(isolated.restore_with_models(&forged, &data).is_err());
+    assert!(!isolated.snapshot().modified);
+    let mut reference = Session::new(candidate.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    reference.restore_with_models(&expected.recall(), &data)?;
+    let store = BundleStore::new(data.join("bundles"));
+    let source = store.save(candidate)?;
+    let saved = oxidal_engine::save_revision_with_models(
+        &store,
+        world,
+        SaveRequest {
+            name: "Model-edited stages".into(),
+            settings: StartRig {
+                revision: source,
+                stream: stream(),
+                recall: None,
+                prepared: vec![],
+            },
+            recall: expected.recall(),
+        },
+        &data,
+    )?;
+    let saved = store.read(&saved)?;
+    for native in &saved.manifest().tone3000.instances {
+        let origin = native
+            .origin
+            .as_ref()
+            .ok_or("Partition provenance missing")?;
+        assert_eq!(
+            saved.resource(&origin.resource),
+            candidate.resource("source")
+        );
+        assert_ne!(native.preset, "source");
+    }
+    std::fs::remove_dir_all(data.join("audition-models"))?;
+    let mut fresh = Session::new(saved, world, 48000.0, 128, BUFFER_BUDGET)?;
+    assert!(fresh.snapshot().models.is_empty());
+    assert!(!fresh.snapshot().modified);
+    assert_eq!(fresh.snapshot().eq, expected.eq);
+    for control in &expected.controls {
+        assert!(
+            fresh
+                .snapshot()
+                .controls
+                .iter()
+                .any(|actual| actual.target == control.target
+                    && (actual.value - control.value).abs() < 1e-5)
+        );
+    }
+    let mut error = 0.0f32;
+    for block in 0..80 {
+        let input: Vec<_> = (0..128)
+            .map(|i| ((block * 128 + i) as f32 * 0.03).sin() * 0.01)
+            .collect();
+        let (mut a, mut b, mut x, mut y) = ([0.0; 128], [0.0; 128], [0.0; 128], [0.0; 128]);
+        reference.process(&[&input, &input], &mut [&mut a, &mut b])?;
+        fresh.process(&[&input, &input], &mut [&mut x, &mut y])?;
+        for (left, right) in a.iter().chain(&b).zip(x.iter().chain(&y)) {
+            error = error.max((left - right).abs());
+        }
+    }
+    assert!(error < 1e-5, "Stage model Save/recall PCM {error}");
+    println!(
+        "extracted amp/cab replacement, role rejection, forged insertion rejection, source provenance and cache-free Save/recall pass; PCM max_error={error}"
+    );
     Ok(())
 }

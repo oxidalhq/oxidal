@@ -325,6 +325,28 @@ impl PreparedPorts {
     pub fn latency_frames(&self) -> u32 {
         self.latency_frames
     }
+    /// Isolated startup/recovery only: settle native edits and establish one
+    /// stream origin after model/control replay, before any real input arrives.
+    pub(crate) fn finish_preparation(&mut self) -> Result<(), String> {
+        for node in &mut self.nodes {
+            if let Some(Processor::Native(engine)) = &mut node.processor {
+                engine.prepare_stream().map_err(|e| e.to_string())?;
+                if engine.latency_samples().map_err(|e| e.to_string())? != node.latency {
+                    return Err("Replayed native delay differs from prepared routing".into());
+                }
+            }
+            for delay in node
+                .dry
+                .iter_mut()
+                .chain(node.sources.iter_mut().map(|s| &mut s.delay))
+            {
+                delay.samples.fill(0.0);
+                delay.cursor = 0;
+            }
+        }
+        self.samples.fill(0.0);
+        Ok(())
+    }
     pub(crate) fn frames(&self) -> usize {
         self.frames
     }

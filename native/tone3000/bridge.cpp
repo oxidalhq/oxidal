@@ -115,7 +115,12 @@ EXPORT int oxidal_t3k_prepare_stream(void* ptr, unsigned int* ready) noexcept {
     if (!ready) throw std::runtime_error("null preparation output");
     *ready = 0;
     auto& e = engine(ptr);
-    if (e.preparation) throw std::runtime_error("model audition owns preparation");
+    if (e.preparation) {
+      const auto phase = e.preparation->status()["phase"].toString();
+      if (phase != "applied" && phase != "failed" && phase != "cancelled")
+        throw std::runtime_error("model audition owns preparation");
+      e.preparation.reset();
+    }
     const auto runtime = e.processor.getStageRuntime();
     const auto blocks = runtime.getProperty("blocks", {});
     if (static_cast<bool>(runtime.getProperty("truncated", false)) || !blocks.isArray())

@@ -155,3 +155,84 @@ pub(crate) fn capture(instance: &mut NativeInstance, engine: &mut Engine) -> Res
         .collect();
     Ok(())
 }
+
+/// Rebuild model-edited pair sources for an isolated named Save. Source provenance
+/// remains in the bundle; no host-role state is serialized as a native preset.
+pub(crate) fn model_sources(
+    bundle: &Bundle,
+    confirmed: &crate::protocol::Snapshot,
+    root: &std::path::Path,
+    frames: usize,
+    name: &str,
+) -> Result<BTreeMap<String, Vec<u8>>, String> {
+    let manifest = bundle.manifest();
+    let host = manifest.oxidal.as_ref().ok_or("Missing host graph")?;
+    let mut pairs: BTreeMap<&str, Vec<_>> = BTreeMap::new();
+    for instance in &manifest.tone3000.instances {
+        let Some(recipe) = &instance.partition else {
+            continue;
+        };
+        let node = host
+            .graph
+            .nodes
+            .iter()
+            .find(|n| n.instance.as_ref() == Some(&instance.id))
+            .ok_or("Missing partition node")?;
+        if let Some(models) = confirmed.models.iter().find(|m| m.node == node.id) {
+            let target = match instance.role() {
+                ProcessingRole::Amp => &recipe.amp,
+                ProcessingRole::Cab => &recipe.cab,
+                ProcessingRole::Whole => return Err("Invalid partition model role".into()),
+            };
+            if models.assignments.len() != 1
+                || models.assignments[0].target != *target
+                || models.assignments[0].insertion.is_some()
+            {
+                return Err("Partition model assignment differs from its guarded role".into());
+            }
+            pairs
+                .entry(&recipe.pair)
+                .or_default()
+                .push((instance, models));
+        }
+    }
+    let mut result = BTreeMap::new();
+    for (pair, edits) in pairs {
+        let instance = edits[0].0;
+        let recipe = instance.partition.as_ref().unwrap();
+        let mut source = Engine::new(48000.0, frames).map_err(|e| e.to_string())?;
+        source
+            .load_preset(
+                bundle
+                    .resource(&instance.preset)
+                    .ok_or("Missing partition model source")?,
+            )
+            .map_err(|e| e.to_string())?;
+        source
+            .set_input_mode(match recipe.input {
+                PartitionInput::Left => InputMode::Left,
+                PartitionInput::Right => InputMode::Right,
+            })
+            .map_err(|e| e.to_string())?;
+        source.wait_ready().map_err(|e| e.to_string())?;
+        for (_, models) in edits {
+            oxidal_tone3000::model_preparation::restore(
+                &mut source,
+                root,
+                &models.assignments,
+                frames,
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        // Re-run the full guarded partition before publishing this replacement
+        // source. It must still be a supported amp + short mono IR pair.
+        source
+            .split_amp_cab(&recipe.amp, &recipe.cab, true, false)
+            .map_err(|e| e.to_string())?;
+        result.insert(
+            pair.into(),
+            source.save_preset(name).map_err(|e| e.to_string())?,
+        );
+    }
+    Ok(result)
+}

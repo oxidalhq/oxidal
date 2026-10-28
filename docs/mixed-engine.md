@@ -525,12 +525,31 @@ all asset IDs before preparing an isolated candidate. Named Save reconstructs th
 confirmed model/scalar/EQ state in a separate process, embeds the native payload,
 and verifies a fresh load, including model identities. The saved bundle no longer
 needs the temporary download cache. The original source bundle remains immutable.
-Extracted amp/cab nodes reject model operations: their derivation recipes currently
-persist scalar/EQ changes only. Stage model editing needs an extended recipe before
-it can be exposed without losing an edit at Save.
+Extracted amp/cab nodes permit replacement of their existing capture/IR only.
+They reject insertion and cross-role formats. Cab preparation verifies short mono
+WAV content off the processing thread before committing the replacement.
 
 The maintained mixed DSP/worker and HTTP suites cover replacement, NAM/IR insertion,
 failed-candidate retention, recovery, boot capture and cache-free saved recall. The
 browser suite uses fixture provider transport with verified real assets and the
 actual daemon/worker on XR, Fold and BOOX layouts. These tests qualify the stated
 software path; physical audio timing and complete native authoring remain open.
+
+### Model-edited extracted stages
+
+Stage Save replays confirmed replacements into an isolated copy of the pair's
+whole-native source, reruns the guarded amp/cab partition and embeds the resulting
+source preset. Both roles refer to that same replacement source. The original exact
+source remains a provenance resource; subsequent saves retain that original origin.
+The existing version-2 recipes retain stage-local scalar/EQ overrides. No opaque
+host-role state or additional recipe format is needed.
+
+Fresh derivation verifies model identities, controls and EQ. The maintained DSP
+regression compares unsaved restored stages against the cache-free saved bundle
+from the first sample; it also rejects forged stage insertion coordinates and
+wrong-role assets. Isolated restoration settles terminal model preparations and
+resets native histories and host delay buffers before the first input. This reset
+is for startup/export candidates; it is never applied to the sounding session.
+Live model replacement still uses the native wet-mute splice; it is not the
+resident crossfade path or a physical gapless guarantee. Non-48-kHz stage processing,
+unsaved whole-node split conversion and full authoring remain open.

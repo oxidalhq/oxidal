@@ -15,12 +15,14 @@ export function ModelPicker({
   name,
   intent = 'replace',
   initialFormat = 'nam',
+  allowedFormat,
   onClose,
   onAudition,
 }: {
   name: string;
   intent?: 'add' | 'replace';
   initialFormat?: 'nam' | 'ir';
+  allowedFormat?: 'nam' | 'ir';
   onClose: () => void;
   onAudition: (asset: string) => Promise<void>;
 }) {
@@ -28,7 +30,7 @@ export function ModelPicker({
     collection: 'latest',
     page: 1,
   });
-  const [format, setFormat] = useState(initialFormat);
+  const [format, setFormat] = useState(allowedFormat ?? initialFormat);
   const [search, setSearch] = useState('');
   const [tones, setTones] = useState<TonePage | null>(null);
   const [tone, setTone] = useState<TonePage['data'][number] | null>(null);
@@ -113,17 +115,19 @@ export function ModelPicker({
         {!tone ? (
           <>
             <div className="action-row" aria-label="Model type">
-              {(['nam', 'ir'] as const).map((kind) => (
-                <Button
-                  key={kind}
-                  variant={format === kind ? 'secondary' : 'ghost'}
-                  aria-pressed={format === kind}
-                  disabled={!!busy}
-                  onClick={() => setFormat(kind)}
-                >
-                  {kind === 'nam' ? 'NAM' : 'Cab / IR'}
-                </Button>
-              ))}
+              {(allowedFormat ? [allowedFormat] : (['nam', 'ir'] as const)).map(
+                (kind) => (
+                  <Button
+                    key={kind}
+                    variant={format === kind ? 'secondary' : 'ghost'}
+                    aria-pressed={format === kind}
+                    disabled={!!busy}
+                    onClick={() => setFormat(kind)}
+                  >
+                    {kind === 'nam' ? 'NAM' : 'Cab / IR'}
+                  </Button>
+                ),
+              )}
             </div>
             <label className="field">
               TONE3000 library

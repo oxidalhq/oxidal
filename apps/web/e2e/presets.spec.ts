@@ -15,6 +15,86 @@ const fixtures = new URL(
   import.meta.url,
 );
 
+/** Mock provider transport only; assets and workers remain real. */
+async function routeProviderModels(
+  page: Page,
+  modelRoot: string,
+  downloadDelay = () => 0,
+) {
+  const fixtures = readdirSync(modelRoot)
+    .filter((id) => /^[0-9a-f]{64}$/.test(id))
+    .map((id) => ({
+      id,
+      metadata: JSON.parse(
+        readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'),
+      ),
+    }));
+  await page.route('**/api/v1/tone3000/tones?*', (route) =>
+    route.fulfill({
+      json: {
+        data: fixtures.map(({ metadata: m }) => ({
+          id: m.tone_id,
+          title: m.title,
+          format: m.format,
+          gear: m.format === 'nam' ? 'amp' : 'cab',
+          license: 'Test fixture',
+          models_count: 1,
+          a2_models_count: m.format === 'nam' ? 1 : 0,
+          url: 'https://www.tone3000.com',
+          user: { username: 'fixture' },
+        })),
+        page: 1,
+        total_pages: 1,
+      },
+    }),
+  );
+  await page.route('**/api/v1/tone3000/models?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const m = fixtures.find(
+      (f) => String(f.metadata.tone_id) === params.get('tone_id'),
+    )!.metadata;
+    expect(params.get('architecture')).toBe(m.format === 'nam' ? '2' : 'any');
+    return route.fulfill({
+      json: {
+        data: [
+          {
+            id: m.model_id,
+            tone_id: m.tone_id,
+            name: m.name,
+            size: null,
+            architecture_version: m.format === 'nam' ? '2' : null,
+          },
+        ],
+        page: 1,
+        total_pages: 1,
+      },
+    });
+  });
+  await page.route('**/api/v1/tone3000/stage', async (route) => {
+    const selected = route.request().postDataJSON();
+    const fixture = fixtures.find(
+      (f) =>
+        f.metadata.tone_id === selected.tone_id &&
+        f.metadata.model_id === selected.model_id,
+    )!;
+    expect(fixture).toBeTruthy();
+    const m = fixture.metadata;
+    const delay = downloadDelay();
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    await route.fulfill({
+      json: {
+        id: fixture.id,
+        tone_id: m.tone_id,
+        model_id: m.model_id,
+        title: m.title,
+        name: m.name,
+        sha256: m.sha256,
+      },
+    });
+  });
+  return fixtures;
+}
+
 /** Exercise the real paged library instead of assuming the saved hash sorts first. */
 async function playSavedRig(page: Page, name: string) {
   const library = page.getByRole('region', { name: 'Saved rigs', exact: true });
@@ -1106,81 +1186,14 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(spread).toHaveCount(0);
     // Only provider transport is a fixture. Selection, verified local asset, native
     // worker preparation, live readback and Save use the real daemon/processes.
-    const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
-    const fixtures = readdirSync(modelRoot)
-      .filter((id) => /^[0-9a-f]{64}$/.test(id))
-      .map((id) => ({
-        id,
-        metadata: JSON.parse(
-          readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'),
-        ),
-      }));
+    let holdDownload = true;
+    const fixtures = await routeProviderModels(
+      page,
+      process.env.OXIDAL_NATIVE_TEST_MODELS!,
+      () => (holdDownload ? 1500 : 0),
+    );
     const irFixture = fixtures.find((f) => f.metadata.format === 'ir')!;
     expect(irFixture).toBeTruthy();
-    await page.route('**/api/v1/tone3000/tones?*', (route) =>
-      route.fulfill({
-        json: {
-          data: fixtures.map(({ metadata: m }) => ({
-            id: m.tone_id,
-            title: m.title,
-            format: m.format,
-            gear: m.format === 'nam' ? 'amp' : 'cab',
-            license: 'Test fixture',
-            models_count: 1,
-            a2_models_count: m.format === 'nam' ? 1 : 0,
-            url: 'https://www.tone3000.com',
-            user: { username: 'fixture' },
-          })),
-          page: 1,
-          total_pages: 1,
-        },
-      }),
-    );
-    await page.route('**/api/v1/tone3000/models?*', (route) => {
-      const params = new URL(route.request().url()).searchParams;
-      const m = fixtures.find(
-        (f) => String(f.metadata.tone_id) === params.get('tone_id'),
-      )!.metadata;
-      expect(params.get('architecture')).toBe(m.format === 'nam' ? '2' : 'any');
-      return route.fulfill({
-        json: {
-          data: [
-            {
-              id: m.model_id,
-              tone_id: m.tone_id,
-              name: m.name,
-              size: null,
-              architecture_version: m.format === 'nam' ? '2' : null,
-            },
-          ],
-          page: 1,
-          total_pages: 1,
-        },
-      });
-    });
-    let holdDownload = true;
-    await page.route('**/api/v1/tone3000/stage', async (route) => {
-      const selected = route.request().postDataJSON();
-      const fixture = fixtures.find(
-        (f) =>
-          f.metadata.tone_id === selected.tone_id &&
-          f.metadata.model_id === selected.model_id,
-      )!;
-      expect(fixture).toBeTruthy();
-      const m = fixture.metadata;
-      if (holdDownload)
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-      await route.fulfill({
-        json: {
-          id: fixture.id,
-          tone_id: m.tone_id,
-          model_id: m.model_id,
-          title: m.title,
-          name: m.name,
-          sha256: m.sha256,
-        },
-      });
-    });
     const beforeModel = await (await request.get('/api/v1/audio')).json();
     await sounding
       .getByRole('button', { name: 'Change model', exact: true })
@@ -2123,77 +2136,10 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
   // Only provider transport is mocked; verified assets, actual live worker,
   // immediate readback, settings recovery and independent export remain real.
-  const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
-  const modelFixtures = readdirSync(modelRoot)
-    .filter((id) => /^[0-9a-f]{64}$/.test(id))
-    .map((id) => ({
-      id,
-      metadata: JSON.parse(
-        readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'),
-      ),
-    }));
-  await page.route('**/api/v1/tone3000/tones?*', (route) =>
-    route.fulfill({
-      json: {
-        data: modelFixtures.map(({ metadata: m }) => ({
-          id: m.tone_id,
-          title: m.title,
-          format: m.format,
-          gear: m.format === 'nam' ? 'amp' : 'cab',
-          license: 'Test fixture',
-          models_count: 1,
-          a2_models_count: m.format === 'nam' ? 1 : 0,
-          url: 'https://www.tone3000.com',
-          user: { username: 'fixture' },
-        })),
-        page: 1,
-        total_pages: 1,
-      },
-    }),
+  const modelFixtures = await routeProviderModels(
+    page,
+    process.env.OXIDAL_NATIVE_TEST_MODELS!,
   );
-  await page.route('**/api/v1/tone3000/models?*', (route) => {
-    const params = new URL(route.request().url()).searchParams;
-    const m = modelFixtures.find(
-      (f) => String(f.metadata.tone_id) === params.get('tone_id'),
-    )!.metadata;
-    expect(params.get('architecture')).toBe(m.format === 'nam' ? '2' : 'any');
-    return route.fulfill({
-      json: {
-        data: [
-          {
-            id: m.model_id,
-            tone_id: m.tone_id,
-            name: m.name,
-            size: null,
-            architecture_version: m.format === 'nam' ? '2' : null,
-          },
-        ],
-        page: 1,
-        total_pages: 1,
-      },
-    });
-  });
-  await page.route('**/api/v1/tone3000/stage', async (route) => {
-    const selected = route.request().postDataJSON();
-    const fixture = modelFixtures.find(
-      (f) =>
-        f.metadata.tone_id === selected.tone_id &&
-        f.metadata.model_id === selected.model_id,
-    )!;
-    expect(fixture).toBeTruthy();
-    const m = fixture.metadata;
-    await route.fulfill({
-      json: {
-        id: fixture.id,
-        tone_id: m.tone_id,
-        model_id: m.model_id,
-        title: m.title,
-        name: m.name,
-        sha256: m.sha256,
-      },
-    });
-  });
-
   const change = rig.getByRole('button', { name: 'Change model', exact: true });
   await expect(change).toBeEnabled();
   const beforeModel = await get();
@@ -2891,6 +2837,10 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   expect(amp.partition.pair).toBe(cab.partition.pair);
   expect(document.manifest.resources).toHaveLength(1);
   expect(document.manifest.resources[0].sha256).toBe(tone.sha256);
+  const modelFixtures = await routeProviderModels(
+    page,
+    process.env.OXIDAL_NATIVE_TEST_MODELS!,
+  );
   const changes: { node: string; parameter: string; value: number }[] = [];
   for (const [node, parameter, forbidden] of [
     [amp.id, 'inputLevel', 'outputLevel'],
@@ -2921,6 +2871,50 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
       .getByRole('button')
       .first()
       .click();
+    const format = node === amp.id ? 'nam' : 'ir';
+    await expect(
+      rig.getByRole('button', { name: 'Add NAM', exact: true }),
+    ).toHaveCount(0);
+    await rig
+      .getByRole('button', {
+        name: format === 'nam' ? 'Change amp capture' : 'Change cab IR',
+        exact: true,
+      })
+      .click();
+    const picker = page.getByRole('dialog', { name: 'Choose model' });
+    await expect(
+      picker.getByRole('button', {
+        name: format === 'nam' ? 'Cab / IR' : 'NAM',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await picker
+      .getByRole('button', {
+        name: modelFixtures.find((f) => f.metadata.format === format)!.metadata
+          .title,
+      })
+      .click();
+    await picker
+      .getByLabel('Available models')
+      .getByRole('button')
+      .first()
+      .click();
+    await expect(picker).toHaveCount(0);
+    await expect
+      .poll(async () => (await state()).control.model_change?.progress.phase)
+      .toBe('applied');
+    await expect(
+      rig.locator(`[data-node="${node}"]`).getByRole('button').first(),
+    ).toContainText(
+      modelFixtures.find((f) => f.metadata.format === format)!.metadata.title,
+    );
+
+    await expect(
+      rig.getByRole('button', {
+        name: format === 'nam' ? 'Change amp capture' : 'Change cab IR',
+        exact: true,
+      }),
+    ).toBeEnabled();
     await rig
       .getByRole('button', { name: `Adjust ${selected.label}`, exact: true })
       .click();
@@ -2948,12 +2942,41 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
       .not.toEqual(beforeEq);
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   }
+  for (const size of [
+    viewport,
+    { width: viewport.height, height: viewport.width },
+  ]) {
+    await page.setViewportSize(size);
+    await rig
+      .getByRole('button', { name: 'Change cab IR', exact: true })
+      .scrollIntoViewIfNeeded();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await info.attach(`stage-model-controls-${size.width}`, {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
+  }
+  await page.setViewportSize(viewport);
   const savedEq = (await state()).control.eq;
   const saved = await saveMixedRig(page, request, rig);
   const savedDoc = await (
     await request.get(`/api/v1/presets/rigs/${saved}`)
   ).json();
-  expect(savedDoc.manifest.resources[0].sha256).toBe(tone.sha256);
+  expect(
+    savedDoc.manifest.resources.some(
+      (r: { kind: string; sha256: string }) =>
+        r.kind === 'tone3000-source' && r.sha256 === tone.sha256,
+    ),
+  ).toBe(true);
+  expect(
+    savedDoc.manifest.tone3000.instances.every(
+      (n: { origin?: unknown }) => !!n.origin,
+    ),
+  ).toBe(true);
   expect(savedDoc.manifest.oxidal.lv2).toHaveLength(1);
   for (const change of changes)
     expect(
