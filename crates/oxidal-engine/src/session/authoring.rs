@@ -5,6 +5,11 @@ pub(crate) fn origin(revision: &str, node: &str) -> String {
     format!("mixed:{revision}:{node}")
 }
 impl Session {
+    pub(crate) fn gesture_pending(&self) -> bool {
+        self.authoring_histories
+            .values()
+            .any(|owner| owner.gesture_pending())
+    }
     pub(crate) fn measurement_pending(&self) -> bool {
         self.authoring_histories
             .values()

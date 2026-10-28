@@ -8,7 +8,7 @@ impl Session {
         self.model_task.pending()
     }
     fn editable_model_node(&self, node: &str) -> Result<(), String> {
-        if self.measurement_pending() {
+        if self.measurement_pending() || self.gesture_pending() {
             return Err("Cancel measurement before loading models".into());
         }
         if self.failed || !self.state.slots.iter().any(|s| s.node == node) {

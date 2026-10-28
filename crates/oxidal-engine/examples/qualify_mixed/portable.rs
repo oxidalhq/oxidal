@@ -773,6 +773,75 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
     send(&mut target, A::Inspect)?;
     assert!(!target.snapshot().authoring[0].status.can_paste);
     std::fs::write(&clip_path, &original_clip)?;
+    // Whole-native hybrid knobs share the same one-gesture history owner.
+    use oxidal_audio::structure::LiveGesture as G;
+    send(
+        &mut target,
+        A::Gesture {
+            edit: G::Begin {
+                owner: "mixed".into(),
+                token: "gain".into(),
+                target: "outputLevel".into(),
+            },
+        },
+    )?;
+    for sequence in 1..=5 {
+        send(
+            &mut target,
+            A::Gesture {
+                edit: G::Preview {
+                    owner: "mixed".into(),
+                    token: "gain".into(),
+                    sequence,
+                    value: 0.4 + sequence as f32 * 0.01,
+                },
+            },
+        )?;
+    }
+    send(
+        &mut target,
+        A::Gesture {
+            edit: G::Commit {
+                owner: "mixed".into(),
+                token: "gain".into(),
+                sequence: 6,
+                value: 0.5,
+            },
+        },
+    )?;
+    assert!(
+        (target
+            .snapshot()
+            .controls
+            .iter()
+            .find(|c| c.target
+                == Target::Native {
+                    node: "tone".into(),
+                    parameter: "outputLevel".into()
+                })
+            .unwrap()
+            .value
+            - 0.5)
+            .abs()
+            < 1e-5
+    );
+    send(&mut target, A::Undo)?;
+    assert!(
+        (target
+            .snapshot()
+            .controls
+            .iter()
+            .find(|c| c.target
+                == Target::Native {
+                    node: "tone".into(),
+                    parameter: "outputLevel".into()
+                })
+            .unwrap()
+            .value
+            - 0.3)
+            .abs()
+            < 1e-5
+    );
     // Clipboard contains its own model bytes, so deleting its source cannot break Paste.
     send(
         &mut session,

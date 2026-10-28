@@ -87,6 +87,10 @@ export type EqEdit =
 export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type AuthoringAction =
   | {
+      edit: LiveGesture;
+      kind: "gesture";
+    }
+  | {
       command: Command4;
       kind: "utility";
     }
@@ -115,6 +119,32 @@ export type AuthoringAction =
     }
   | {
       kind: "redo";
+    };
+export type LiveGesture =
+  | {
+      owner: string;
+      phase: "begin";
+      target: string;
+      token: string;
+    }
+  | {
+      owner: string;
+      phase: "preview";
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      owner: string;
+      phase: "commit";
+      sequence: number;
+      token: string;
+      value: number;
+    }
+  | {
+      owner: string;
+      phase: "cancel";
+      token: string;
     };
 export type Command4 =
   | {
@@ -743,6 +773,7 @@ export interface AuthoringStatus {
   can_paste?: boolean;
   can_redo: boolean;
   can_undo: boolean;
+  gesture?: GestureOwner | null;
   layout: ChainLayout;
   setting_steps?: {
     [k: string]: number;
@@ -753,6 +784,11 @@ export interface AuthoringStatus {
    * Immutable local working-state receipt; never a file path or portable preset.
    */
   working?: string | null;
+}
+export interface GestureOwner {
+  owner: string;
+  target: string;
+  token: string;
 }
 export interface ChainLayout {
   input_mode?: "stereo" | "left" | "right" | "dual";

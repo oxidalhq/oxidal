@@ -506,6 +506,13 @@ impl Owner {
             }
         };
         if let Some(error) = error {
+            self.state.authoring = Some(authoring);
+            self.state.controls = controls.clone();
+            self.state.eq = eq.clone();
+            self.state.slots = slots;
+            self.resume_controls = Some(controls);
+            self.resume_eq = Some(eq);
+            self.updates.send_replace(self.state.clone());
             return Err(error);
         }
         let mutating = mutating
@@ -523,6 +530,13 @@ impl Owner {
                 .working = authoring.working.clone();
             self.state.models.clear();
             self.state.model_change = None;
+            self.state.modified = true;
+            self.state.saved_copy = None;
+            self.schedule_recovery();
+        }
+        let scalar_changed =
+            serde_json::to_vec(&self.state.controls).ok() != serde_json::to_vec(&controls).ok();
+        if scalar_changed {
             self.state.modified = true;
             self.state.saved_copy = None;
             self.schedule_recovery();
@@ -547,7 +561,7 @@ impl Owner {
                 .state
                 .authoring
                 .as_ref()
-                .is_some_and(|s| s.tools.active())
+                .is_some_and(|s| s.tools.active() || s.gesture.is_some())
         {
             return;
         }
@@ -1125,6 +1139,18 @@ impl Owner {
             )
         {
             return Err("Wait for measurement or cancel it before changing sound".into());
+        }
+        if self
+            .state
+            .authoring
+            .as_ref()
+            .is_some_and(|s| s.gesture.is_some())
+            && !matches!(
+                &command.action,
+                AudioAction::Stop | AudioAction::Authoring { .. }
+            )
+        {
+            return Err("Finish the active adjustment before changing sound".into());
         }
         let result = match command.action {
             AudioAction::Create { stream, name } => return self.create(stream, name).await,

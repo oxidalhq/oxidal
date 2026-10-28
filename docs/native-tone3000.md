@@ -454,3 +454,20 @@ model-size default never resizes an already loaded block. Reset restores Lite,
 single-core and native built-in parameter defaults. Native properties remain
 inside the mandatory isolated data root; official TONE3000 preferences are not
 modified. Pi scheduling capacity and deadlines still require hardware testing.
+
+The shared native/mixed touch adjustment queue now sends explicit owned
+Begin/Preview/Commit/Cancel boundaries. Previews change audible values immediately;
+one committed adjustment becomes one bounded undo entry. Cancel restores the
+complete opening scalar catalog, including coupled pan controls. A late cancel
+cannot undo a completed token; stale sequence numbers and competing owners are
+rejected. Ordinary control/model/EQ commands cannot steal an active gesture.
+Daemon polling accepts the latest value after two minutes of inactivity so a
+disconnected browser cannot keep the owner locked indefinitely. A failed final
+checkpoint restores opening values or fails closed. These are control-owner
+operations outside the PCM closure, not hard-real-time guarantees.
+
+Committed scalar values use existing working/Save/recovery paths. Undo/redo stacks
+are currently bounded to eight entries/64 MiB within each worker lifetime;
+persisting those stacks through worker replacement and grouping the separate EQ
+editor remain open. MIDI automation and raw scalar API calls retain their existing
+confirmed-control path rather than creating one history entry per event.

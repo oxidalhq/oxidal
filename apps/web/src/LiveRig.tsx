@@ -108,10 +108,20 @@ export function LiveRig({
     setBusy(true);
     setError('');
     try {
-      const next = await playbackCommand(state, {
-        kind: 'set_control',
-        target: id,
-        value,
+      const token = crypto.randomUUID();
+      const started = await playbackCommand(state, {
+        kind: 'authoring',
+        action: {
+          kind: 'gesture',
+          edit: { phase: 'begin', owner: 'live', token, target: id },
+        },
+      });
+      const next = await playbackCommand(started, {
+        kind: 'authoring',
+        action: {
+          kind: 'gesture',
+          edit: { phase: 'commit', owner: 'live', token, sequence: 1, value },
+        },
       });
       if (alive.current) {
         setState(next);
@@ -184,14 +194,30 @@ export function LiveRig({
     });
     setAdjusting(true);
     setError('');
+    const token = crypto.randomUUID();
+    generation.current += 1;
+    const ready = playbackCommand(cursor, {
+      kind: 'authoring',
+      action: {
+        kind: 'gesture',
+        edit: { phase: 'begin', owner: 'live', token, target: control.target },
+      },
+    }).then((next) => {
+      cursor = next;
+      if (alive.current) setState(next);
+    });
+    void ready.catch((cause) => {
+      if (alive.current) setError(String(cause));
+    });
     adjustment.current = new EditQueue<AudioState>(
       'live',
-      crypto.randomUUID(),
-      Promise.resolve(),
+      token,
+      ready,
       async (edit) => {
         const value = edit.phase === 'cancel' ? opening : edit.value;
         // Opening/closing without adjustment must not mark the session modified.
         if (
+          edit.phase === 'preview' &&
           cursor.controls.find((item) => item.target === control.target)
             ?.value === value
         )
@@ -202,9 +228,8 @@ export function LiveRig({
           // Each accepted value advances our cursor. Never refresh and replay a
           // failed command: another client or a recalled rig may own the sound.
           cursor = await playbackCommand(cursor, {
-            kind: 'set_control',
-            target: control.target,
-            value,
+            kind: 'authoring',
+            action: { kind: 'gesture', edit },
           });
           return cursor;
         } finally {

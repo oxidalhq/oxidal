@@ -67,14 +67,14 @@ export function NativeAuthoring({
               disabled={editingDisabled || !status?.can_undo}
               onClick={() => void author({ kind: 'undo' })}
             >
-              Undo structure
+              Undo change
             </Button>
             <Button
               variant="outline"
               disabled={editingDisabled || !status?.can_redo}
               onClick={() => void author({ kind: 'redo' })}
             >
-              Redo structure
+              Redo change
             </Button>
             <Button
               variant="outline"

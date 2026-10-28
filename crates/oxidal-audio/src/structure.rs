@@ -74,9 +74,49 @@ pub enum StructureEdit {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct GestureOwner {
+    pub owner: String,
+    pub token: String,
+    pub target: String,
+}
+impl GestureOwner {
+    pub fn valid(&self) -> bool {
+        [&self.owner, &self.token, &self.target]
+            .into_iter()
+            .all(|s| !s.is_empty() && s.len() <= 128 && !s.chars().any(char::is_control))
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "phase", rename_all = "snake_case", deny_unknown_fields)]
+pub enum LiveGesture {
+    Begin {
+        owner: String,
+        token: String,
+        target: String,
+    },
+    Preview {
+        owner: String,
+        token: String,
+        sequence: u32,
+        value: f32,
+    },
+    Commit {
+        owner: String,
+        token: String,
+        sequence: u32,
+        value: f32,
+    },
+    Cancel {
+        owner: String,
+        token: String,
+    },
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthoringAction {
+    Gesture { edit: LiveGesture },
     Utility { command: crate::tools::Command },
     Copy { block_id: String },
     Inspect,
@@ -89,6 +129,8 @@ pub enum AuthoringAction {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AuthoringStatus {
+    #[serde(default)]
+    pub gesture: Option<GestureOwner>,
     pub layout: ChainLayout,
     #[serde(default)]
     pub tools: crate::tools::State,
@@ -106,7 +148,8 @@ pub struct AuthoringStatus {
 impl AuthoringStatus {
     pub fn valid(&self) -> bool {
         let blocks: Vec<_> = self.layout.left.iter().chain(&self.layout.right).collect();
-        self.tools.valid()
+        self.gesture.as_ref().is_none_or(GestureOwner::valid)
+            && self.tools.valid()
             && crate::lifecycle::catalog_fits(self)
             && (self.settings.is_empty() || crate::lifecycle::valid_controls(&self.settings))
             && self.setting_steps.len() == self.settings.len()
@@ -151,7 +194,7 @@ impl AuthoringAction {
     pub fn changes_tone(&self) -> bool {
         !matches!(
             self,
-            Self::Inspect | Self::Copy { .. } | Self::Utility { .. }
+            Self::Inspect | Self::Copy { .. } | Self::Utility { .. } | Self::Gesture { .. }
         )
     }
 }

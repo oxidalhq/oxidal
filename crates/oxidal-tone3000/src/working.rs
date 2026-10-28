@@ -13,6 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 mod clipboard;
+mod gesture;
 mod tools;
 
 const MAX_STATE: usize = 32 * 1024 * 1024;
@@ -182,6 +183,8 @@ pub struct Authoring {
     undo: VecDeque<State>,
     redo: VecDeque<State>,
     failed: bool,
+    gesture: Option<gesture::Pending>,
+    finished_gestures: VecDeque<(String, String)>,
     tools: oxidal_audio::tools::State,
     measurement: Option<tools::Baseline>,
 }
@@ -197,6 +200,8 @@ impl Authoring {
             undo: VecDeque::new(),
             redo: VecDeque::new(),
             failed: false,
+            gesture: None,
+            finished_gestures: VecDeque::new(),
             tools: Default::default(),
             measurement: None,
         }
@@ -262,6 +267,7 @@ impl Authoring {
             });
         }
         let state = AuthoringStatus {
+            gesture: self.gesture.as_ref().map(|g| g.owner.clone()),
             settings,
             setting_steps,
             tools: self.tools.clone(),
@@ -311,6 +317,30 @@ impl Authoring {
         if self.failed {
             return Err("Native authoring failed; restart required".into());
         }
+        if self
+            .gesture
+            .as_ref()
+            .is_some_and(|g| g.updated.elapsed() > std::time::Duration::from_secs(120))
+        {
+            self.finish_gesture(engine)?;
+        }
+        if let AuthoringAction::Gesture { edit } = action {
+            return self.gesture_command(engine, edit);
+        }
+        if self.gesture_pending()
+            && !matches!(
+                action,
+                AuthoringAction::Inspect
+                    | AuthoringAction::Copy { .. }
+                    | AuthoringAction::Utility {
+                        command: oxidal_audio::tools::Command::Poll
+                            | oxidal_audio::tools::Command::Tuner { .. }
+                            | oxidal_audio::tools::Command::Cancel
+                    }
+            )
+        {
+            return Err("Finish the active adjustment first".into());
+        }
         if let AuthoringAction::Utility { command } = action {
             return self.utility_command(engine, command);
         }
@@ -327,7 +357,7 @@ impl Authoring {
         if matches!(action, AuthoringAction::Undo) && self.undo.is_empty()
             || matches!(action, AuthoringAction::Redo) && self.redo.is_empty()
         {
-            return Err("No structural history available".into());
+            return Err("No authoring history available".into());
         }
         let before = engine.capture().map_err(|e| e.to_string())?;
         let latency = engine.latency_samples().map_err(|e| e.to_string())?;
@@ -381,7 +411,8 @@ impl Authoring {
                     .map_err(|e| e.to_string())?,
                 AuthoringAction::Inspect
                 | AuthoringAction::Copy { .. }
-                | AuthoringAction::Utility { .. } => unreachable!(),
+                | AuthoringAction::Utility { .. }
+                | AuthoringAction::Gesture { .. } => unreachable!(),
             }
             engine.wait_ready().map_err(|e| e.to_string())?;
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {
@@ -441,6 +472,7 @@ impl Authoring {
                 .chain(&self.redo)
                 .map(State::byte_len)
                 .sum::<usize>()
+                + self.gesture.as_ref().map_or(0, gesture::Pending::byte_len)
                 > HISTORY_BYTES
         {
             if self.undo.is_empty() {

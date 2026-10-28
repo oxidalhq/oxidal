@@ -1267,6 +1267,62 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     .await;
     assert_eq!(response.status(), 200);
     state = response.json().await.unwrap();
+    let opening = state["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["target"] == "inputLevel")
+        .unwrap()["value"]
+        .as_f64()
+        .unwrap();
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"gesture","edit":{"phase":"begin","owner":"test","token":"knob","target":"inputLevel"}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["gesture"]["token"], "knob");
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_control","target":"outputLevel","value":0.6})
+        )
+        .await
+        .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "audio").await["phase"], "running");
+    for sequence in 1..=3 {
+        let phase = if sequence == 3 { "commit" } else { "preview" };
+        let value = 0.55 + sequence as f64 * 0.03;
+        let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"gesture","edit":{"phase":phase,"owner":"test","token":"knob","sequence":sequence,"value":value}}})).await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+    }
+    assert!(state["authoring"]["gesture"].is_null());
+    assert_eq!(state["authoring"]["can_undo"], true);
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"undo"}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert!(
+        (state["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["target"] == "inputLevel")
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - opening)
+            .abs()
+            < 1e-5
+    );
+    assert_eq!(state["authoring"]["can_undo"], false);
     let layout = state["authoring"]["layout"].clone();
     let block = layout["left"]
         .as_array()
@@ -1289,6 +1345,8 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":false}}})).await;
     assert_eq!(response.status(), 200);
     state = response.json().await.unwrap();
+    let copy_working = state["configured"]["working"].clone();
+    let copy_modified = state["modified"].clone();
     let response = send(
         &client,
         &url,
@@ -1298,8 +1356,8 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     .await;
     assert_eq!(response.status(), 200);
     state = response.json().await.unwrap();
-    assert!(state["configured"]["working"].is_null());
-    assert_eq!(state["modified"], false);
+    assert_eq!(state["configured"]["working"], copy_working);
+    assert_eq!(state["modified"], copy_modified);
     assert_eq!(state["authoring"]["can_paste"], true);
     // Saved device defaults seed a fresh worker independently of source tone bytes.
     let defaults_url = format!("{url}/native/defaults");

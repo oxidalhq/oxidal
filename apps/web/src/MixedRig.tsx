@@ -169,7 +169,54 @@ export function MixedRig({
     setBusy(true);
     setError('');
     try {
-      accept(await rigAudioCommand(current.current, action));
+      if (
+        action.kind === 'control' &&
+        action.command.target.kind === 'native' &&
+        current.current.control?.authoring?.some(
+          (r) => r.node === action.command.target.node,
+        )
+      ) {
+        const target = action.command.target;
+        const token = crypto.randomUUID();
+        let cursor = current.current;
+        cursor = await rigAudioCommand(cursor, {
+          kind: 'authoring',
+          command: {
+            session: cursor.control!.session,
+            expected_revision: cursor.control!.revision,
+            node: target.node,
+            action: {
+              kind: 'gesture',
+              edit: {
+                phase: 'begin',
+                owner: 'mixed-toggle',
+                token,
+                target: target.parameter,
+              },
+            },
+          },
+        });
+        accept(
+          await rigAudioCommand(cursor, {
+            kind: 'authoring',
+            command: {
+              session: cursor.control!.session,
+              expected_revision: cursor.control!.revision,
+              node: target.node,
+              action: {
+                kind: 'gesture',
+                edit: {
+                  phase: 'commit',
+                  owner: 'mixed-toggle',
+                  token,
+                  sequence: 1,
+                  value: action.command.value,
+                },
+              },
+            },
+          }),
+        );
+      } else accept(await rigAudioCommand(current.current, action));
     } catch (cause) {
       setError(String(cause));
       try {
@@ -205,13 +252,45 @@ export function MixedRig({
     latest.current = opening;
     setEdit({ control, value: opening });
     setError('');
+    const native =
+      control.target.kind === 'native' &&
+      cursor.control?.authoring?.some((r) => r.node === control.target.node)
+        ? control.target
+        : null;
+    const token = crypto.randomUUID();
+    const ready = native
+      ? rigAudioCommand(cursor, {
+          kind: 'authoring',
+          command: {
+            session: cursor.control!.session,
+            expected_revision: cursor.control!.revision,
+            node: native.node,
+            action: {
+              kind: 'gesture',
+              edit: {
+                phase: 'begin',
+                owner: 'mixed',
+                token,
+                target: native.parameter,
+              },
+            },
+          },
+        }).then((next) => {
+          cursor = next;
+          accept(next);
+        })
+      : Promise.resolve();
+    void ready.catch((cause) => {
+      if (alive.current) setError(String(cause));
+    });
     queue.current = new EditQueue<RigAudioState>(
       'mixed',
-      crypto.randomUUID(),
-      Promise.resolve(),
+      token,
+      ready,
       async (e) => {
         const value = e.phase === 'cancel' ? opening : e.value;
         if (
+          (!native || e.phase === 'preview') &&
           cursor.control?.controls.find((c) => key(c) === key(control))
             ?.value === value
         )
@@ -220,15 +299,25 @@ export function MixedRig({
         generation.current++;
         sending.current = true;
         try {
-          cursor = await rigAudioCommand(cursor, {
-            kind: 'control',
-            command: {
-              session: cursor.control.session,
-              expected_revision: cursor.control.revision,
-              target: control.target,
-              value,
-            },
-          });
+          cursor = native
+            ? await rigAudioCommand(cursor, {
+                kind: 'authoring',
+                command: {
+                  session: cursor.control.session,
+                  expected_revision: cursor.control.revision,
+                  node: native.node,
+                  action: { kind: 'gesture', edit: e },
+                },
+              })
+            : await rigAudioCommand(cursor, {
+                kind: 'control',
+                command: {
+                  session: cursor.control.session,
+                  expected_revision: cursor.control.revision,
+                  target: control.target,
+                  value,
+                },
+              });
           return cursor;
         } finally {
           sending.current = false;

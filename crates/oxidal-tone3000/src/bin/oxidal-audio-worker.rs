@@ -209,7 +209,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 WorkerRequest::Eq(request) => {
-                    let error = if models.pending() || authoring.measurement_pending() {
+                    let error = if models.pending()
+                        || authoring.measurement_pending()
+                        || authoring.gesture_pending()
+                    {
                         Some("Finish model preparation before adjusting EQ".into())
                     } else {
                         engine
@@ -225,7 +228,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 WorkerRequest::Control(request) => {
-                    let error = if models.pending() || authoring.measurement_pending() {
+                    let error = if models.pending()
+                        || authoring.measurement_pending()
+                        || authoring.gesture_pending()
+                    {
                         Some(
                             "Model preparation is pending; cancel before adjusting controls".into(),
                         )
@@ -242,7 +248,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 WorkerRequest::Model(request) => {
-                    let result = if authoring.measurement_pending() {
+                    let result = if authoring.measurement_pending() || authoring.gesture_pending() {
                         Err("Cancel measurement before loading models".into())
                     } else {
                         models.operation(&mut engine, &root, request.model, request.serial)

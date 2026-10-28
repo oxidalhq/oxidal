@@ -2164,6 +2164,36 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .click();
   const layoutBefore = (await get()).control.authoring[0].status.layout;
   await rig.getByText('Chain actions', { exact: true }).click();
+  const nativeGain = (await get()).control.controls.find(
+    (c: { target: { kind: string; node: string; parameter?: string } }) =>
+      c.target.kind === 'native' &&
+      c.target.node === 'tone' &&
+      c.target.parameter?.endsWith(':outputGain'),
+  );
+  const nativeValue = async () =>
+    (
+      (await get()).control.controls as { target: unknown; value: number }[]
+    ).find(
+      (c) => JSON.stringify(c.target) === JSON.stringify(nativeGain.target),
+    )!.value;
+  const openingNative = await nativeValue();
+  await rig
+    .getByRole('button', { name: 'Adjust Output gain', exact: true })
+    .click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('slider').press('ArrowRight');
+  await dialog.getByRole('slider').press('ArrowRight');
+  await expect.poll(nativeValue).toBeGreaterThan(openingNative);
+  await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.gesture)
+    .toBeNull();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
+  await expect.poll(nativeValue).toBe(openingNative);
+  await rig.getByRole('button', { name: 'Redo change', exact: true }).click();
+  await expect.poll(nativeValue).toBeGreaterThan(openingNative);
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
+  await expect.poll(nativeValue).toBe(openingNative);
   await rig.getByRole('button', { name: 'Copy block', exact: true }).click();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.can_paste)
@@ -2180,9 +2210,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       layoutBefore.left.filter((b: { insert: boolean }) => !b.insert).length +
         1,
     );
-  await rig
-    .getByRole('button', { name: 'Undo structure', exact: true })
-    .click();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
@@ -2200,9 +2228,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       layoutBefore.left.filter((block: { insert: boolean }) => !block.insert)
         .length + 1,
     );
-  await rig
-    .getByRole('button', { name: 'Undo structure', exact: true })
-    .click();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
@@ -2231,9 +2257,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
       async () => (await get()).control.authoring[0].status.tools.balance.state,
     )
     .toBe('idle');
-  await rig
-    .getByRole('button', { name: 'Undo structure', exact: true })
-    .click();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
@@ -3508,11 +3532,11 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
     };
     await expect.poll(count).toBe(2);
     await actions
-      .getByRole('button', { name: 'Undo structure', exact: true })
+      .getByRole('button', { name: 'Undo change', exact: true })
       .click();
     await expect.poll(count).toBe(1);
     await actions
-      .getByRole('button', { name: 'Redo structure', exact: true })
+      .getByRole('button', { name: 'Redo change', exact: true })
       .click();
     await expect.poll(count).toBe(2);
     await sounding

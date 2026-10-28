@@ -702,6 +702,18 @@ impl Owner {
         {
             return Err("Wait for measurement or cancel it before changing sound".into());
         }
+        if self
+            .state
+            .control
+            .as_ref()
+            .is_some_and(|s| s.authoring.iter().any(|r| r.status.gesture.is_some()))
+            && !matches!(
+                &command.action,
+                RigAudioAction::Stop | RigAudioAction::Authoring { .. }
+            )
+        {
+            return Err("Finish the active adjustment before changing sound".into());
+        }
         match command.action {
             RigAudioAction::Start { settings } => {
                 self.start(*settings).await?;
@@ -983,7 +995,7 @@ impl Owner {
                 .map(|s| {
                     s.authoring
                         .iter()
-                        .filter(|r| r.status.tools.active())
+                        .filter(|r| r.status.tools.active() || r.status.gesture.is_some())
                         .map(|r| r.node.clone())
                         .collect()
                 })

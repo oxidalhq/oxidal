@@ -354,6 +354,9 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.as_slice() == ["--gestures"] {
+        return qualify_live_gestures();
+    }
     if arguments.as_slice() == ["--defaults"] {
         return qualify_device_defaults();
     }
@@ -370,6 +373,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
         return qualify_editor_structure(&root, &std::fs::read(&arguments[1])?);
     }
+    qualify_live_gestures()?;
     qualify_device_defaults()?;
     qualify_latency()?;
     qualify_spread()?;
@@ -2874,6 +2878,195 @@ fn qualify_device_defaults() -> Result<(), Box<dyn Error>> {
     );
     println!(
         "native defaults: actual NAM default, existing model preservation, multi-core readback, calibration and state recall passed"
+    );
+    Ok(())
+}
+
+fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
+    use oxidal_audio::structure::{AuthoringAction as A, LiveGesture as G};
+    use oxidal_tone3000::working::Authoring;
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?).join(format!(
+        "gestures-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root)?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.set_live_control("inputLevel", 0.5)?;
+    let mut owner = Authoring::for_source(&root, "gesture-qualification".into(), None);
+    let send = |owner: &mut Authoring, engine: &mut Engine, edit: G| {
+        owner.command(engine, A::Gesture { edit })
+    };
+    let scalar = |e: &mut Engine| -> Result<f32, Box<dyn Error>> {
+        Ok(e.live_controls()?
+            .iter()
+            .find(|c| c.target == "inputLevel")
+            .unwrap()
+            .value)
+    };
+    send(
+        &mut owner,
+        &mut engine,
+        G::Begin {
+            owner: "browser".into(),
+            token: "first".into(),
+            target: "inputLevel".into(),
+        },
+    )?;
+    assert!(owner.gesture_pending());
+    assert!(!owner.snapshot(&mut engine)?.can_undo);
+    assert!(
+        send(
+            &mut owner,
+            &mut engine,
+            G::Begin {
+                owner: "other".into(),
+                token: "other".into(),
+                target: "inputLevel".into()
+            }
+        )
+        .is_err()
+    );
+    for sequence in 1..=20 {
+        send(
+            &mut owner,
+            &mut engine,
+            G::Preview {
+                owner: "browser".into(),
+                token: "first".into(),
+                sequence,
+                value: 0.4 + sequence as f32 * 0.01,
+            },
+        )?;
+    }
+    assert!((scalar(&mut engine)? - 0.6).abs() < 1e-5);
+    assert!(!owner.snapshot(&mut engine)?.can_undo);
+    assert!(
+        send(
+            &mut owner,
+            &mut engine,
+            G::Preview {
+                owner: "browser".into(),
+                token: "first".into(),
+                sequence: 20,
+                value: 0.9
+            }
+        )
+        .is_err()
+    );
+    send(
+        &mut owner,
+        &mut engine,
+        G::Commit {
+            owner: "browser".into(),
+            token: "first".into(),
+            sequence: 21,
+            value: 0.7,
+        },
+    )?;
+    assert!(!owner.gesture_pending());
+    assert!(owner.snapshot(&mut engine)?.can_undo);
+    send(
+        &mut owner,
+        &mut engine,
+        G::Cancel {
+            owner: "browser".into(),
+            token: "first".into(),
+        },
+    )?;
+    assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
+    owner.command(&mut engine, A::Undo)?;
+    assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
+    assert!(!owner.snapshot(&mut engine)?.can_undo);
+    owner.command(&mut engine, A::Redo)?;
+    assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
+    engine.set_live_control("chainPanLinked", 1.0)?;
+    let before = engine.live_controls()?;
+    send(
+        &mut owner,
+        &mut engine,
+        G::Begin {
+            owner: "browser".into(),
+            token: "cancel".into(),
+            target: "chainPanLeft".into(),
+        },
+    )?;
+    send(
+        &mut owner,
+        &mut engine,
+        G::Preview {
+            owner: "browser".into(),
+            token: "cancel".into(),
+            sequence: 1,
+            value: 0.2,
+        },
+    )?;
+    assert!(
+        (engine
+            .live_controls()?
+            .iter()
+            .find(|c| c.target == "chainPanRight")
+            .unwrap()
+            .value
+            - 0.8)
+            .abs()
+            < 1e-5
+    );
+    send(
+        &mut owner,
+        &mut engine,
+        G::Cancel {
+            owner: "browser".into(),
+            token: "cancel".into(),
+        },
+    )?;
+    assert_eq!(
+        serde_json::to_vec(&before)?,
+        serde_json::to_vec(&engine.live_controls()?)?
+    );
+    owner.command(&mut engine, A::Undo)?;
+    assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
+    let bad_root = root.join("unwritable");
+    std::fs::create_dir_all(&bad_root)?;
+    std::fs::write(bad_root.join("native-checkpoints"), "not a directory")?;
+    let mut bad = Authoring::for_source(&bad_root, "failed-gesture".into(), None);
+    send(
+        &mut bad,
+        &mut engine,
+        G::Begin {
+            owner: "browser".into(),
+            token: "failed".into(),
+            target: "inputLevel".into(),
+        },
+    )?;
+    send(
+        &mut bad,
+        &mut engine,
+        G::Preview {
+            owner: "browser".into(),
+            token: "failed".into(),
+            sequence: 1,
+            value: 0.8,
+        },
+    )?;
+    assert!(
+        send(
+            &mut bad,
+            &mut engine,
+            G::Commit {
+                owner: "browser".into(),
+                token: "failed".into(),
+                sequence: 2,
+                value: 0.8
+            }
+        )
+        .is_err()
+    );
+    assert!(!bad.failed() && !bad.gesture_pending());
+    assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
+    println!(
+        "native gestures: audible previews, one-entry undo/redo, ownership/sequence rejection, coupled-control cancel, late terminal safety and storage rollback passed"
     );
     Ok(())
 }

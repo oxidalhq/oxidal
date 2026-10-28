@@ -1070,6 +1070,23 @@
         {
           "type": "object",
           "properties": {
+            "edit": {
+              "$ref": "#/$defs/LiveGesture"
+            },
+            "kind": {
+              "type": "string",
+              "const": "gesture"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "command": {
               "$ref": "#/$defs/Command4"
             },
@@ -1236,6 +1253,17 @@
         },
         "can_undo": {
           "type": "boolean"
+        },
+        "gesture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GestureOwner"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "layout": {
           "$ref": "#/$defs/ChainLayout"
@@ -2786,6 +2814,26 @@
         "current"
       ]
     },
+    "GestureOwner": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "token",
+        "target"
+      ]
+    },
     "GraphAudioAction": {
       "oneOf": [
         {
@@ -3316,6 +3364,120 @@
         "value",
         "display",
         "toggle"
+      ]
+    },
+    "LiveGesture": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "begin"
+            },
+            "target": {
+              "type": "string"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "preview"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "commit"
+            },
+            "sequence": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "token": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token",
+            "sequence",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string",
+              "const": "cancel"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "phase",
+            "owner",
+            "token"
+          ]
+        }
       ]
     },
     "MappingFile": {
