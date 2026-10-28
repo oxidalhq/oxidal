@@ -5,6 +5,7 @@ mod debug;
 mod device;
 mod graph_playback;
 mod monitor;
+mod native_defaults;
 mod native_editor;
 mod playback;
 mod playback_recovery;
@@ -56,6 +57,8 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub native_defaults: oxidal_tone3000::preferences::Snapshot,
+    pub native_defaults_update: oxidal_tone3000::preferences::Update,
     pub rig_document: rig_library::RigDocument,
     pub rig_library: rig_library::RigPage,
     pub rig_publish: rig_library::RigPublish,
@@ -245,6 +248,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
+        .route(
+            "/native/defaults",
+            get(native_defaults::state).post(native_defaults::update),
+        )
         .route(
             "/graph-audio",
             get(graph_playback::state).post(graph_playback::command),

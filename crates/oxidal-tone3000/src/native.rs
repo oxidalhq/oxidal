@@ -16,6 +16,7 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_defaults(engine: *mut c_void, size: f64, multi_core: bool) -> i32;
     fn oxidal_t3k_utility(
         engine: *mut c_void,
         action: u32,
@@ -265,14 +266,40 @@ impl Engine {
                 role => oxidal_t3k_create_stage(rate, frames as i32, role as i32, &mut ptr),
             }
         })?;
-        Ok(Self {
+        let mut engine = Self {
             ptr: NonNull::new(ptr).ok_or_else(|| NativeError("null native result".into()))?,
             frames,
             rate,
             role,
             owner: PhantomData,
             json_buffer: Vec::new(),
-        })
+        };
+        let defaults = match std::env::var_os("OXIDAL_PRESET_DIR") {
+            Some(root) => {
+                crate::preferences::read(std::path::Path::new(&root))
+                    .map_err(NativeError)?
+                    .settings
+            }
+            None => crate::preferences::Settings::default(),
+        };
+        engine.apply_device_defaults(&defaults)?;
+        Ok(engine)
+    }
+    /// Call before loading a tone. Existing per-block sizes and saved state win.
+    pub fn apply_device_defaults(&mut self, settings: &crate::preferences::Settings) -> Result<()> {
+        settings.validate().map_err(NativeError)?;
+        // SAFETY: the owned native handle remains on its process owner thread.
+        checked(unsafe {
+            oxidal_t3k_defaults(
+                self.ptr.as_ptr(),
+                settings.nam_size.into(),
+                settings.multi_core,
+            )
+        })?;
+        for (id, value) in &settings.parameters {
+            self.set_normalized(id, *value)?;
+        }
+        Ok(())
     }
     fn json(
         &mut self,

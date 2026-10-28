@@ -79,6 +79,12 @@
     "native_command": {
       "$ref": "#/$defs/EditorCommand"
     },
+    "native_defaults": {
+      "$ref": "#/$defs/NativeDefaults"
+    },
+    "native_defaults_update": {
+      "$ref": "#/$defs/NativeDefaultsUpdate"
+    },
     "native_editor": {
       "$ref": "#/$defs/EditorSnapshot"
     },
@@ -141,6 +147,8 @@
     }
   },
   "required": [
+    "native_defaults",
+    "native_defaults_update",
     "rig_document",
     "rig_library",
     "rig_publish",
@@ -3900,6 +3908,64 @@
         "audio_phase",
         "graph_phase",
         "rig_phase"
+      ]
+    },
+    "NativeDefaultSettings": {
+      "type": "object",
+      "properties": {
+        "multi_core": {
+          "type": "boolean"
+        },
+        "nam_size": {
+          "type": "number",
+          "format": "float"
+        },
+        "parameters": {
+          "description": "Normalized native parameter values, limited to the reference machine defaults.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "nam_size",
+        "multi_core",
+        "parameters"
+      ]
+    },
+    "NativeDefaults": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/NativeDefaultSettings"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "settings"
+      ]
+    },
+    "NativeDefaultsUpdate": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/NativeDefaultSettings"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "settings"
       ]
     },
     "NativeSlot": {

@@ -13,3 +13,5 @@ pub mod protocol;
 
 #[cfg(feature = "native")]
 pub mod working;
+
+pub mod preferences;

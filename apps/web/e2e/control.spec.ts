@@ -577,3 +577,42 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
   await expect(checked).toContainText('Input: Not checked');
 });
+
+test('native device defaults save independently of the playing tone', async ({
+  page,
+  request,
+}) => {
+  const endpoint = 'http://127.0.0.1:3210/api/v1/native/defaults';
+  const initial = await (await request.get(endpoint)).json();
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const panel = page.locator('details').filter({
+      has: page.locator('summary', { hasText: 'Native device defaults' }),
+    });
+    await panel.locator('summary').click();
+    await panel.getByLabel('NAM size for new models').selectOption('0.75');
+    await panel.getByLabel('Native multi-core processing').check();
+    await panel.getByRole('button', { name: 'Save device defaults' }).click();
+    await expect(panel.getByRole('status')).toContainText('Defaults saved');
+    const saved = await (await request.get(endpoint)).json();
+    expect(saved.settings.nam_size).toBe(0.75);
+    expect(saved.settings.multi_core).toBe(true);
+    await page.reload();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await panel.locator('summary').click();
+    await expect(panel.getByLabel('NAM size for new models')).toHaveValue(
+      '0.75',
+    );
+    await panel
+      .getByRole('button', { name: 'Reset defaults', exact: true })
+      .click();
+    await expect(panel.getByRole('status')).toContainText('Defaults saved');
+    await expect(panel.getByLabel('NAM size for new models')).toHaveValue('0');
+  } finally {
+    const latest = await (await request.get(endpoint)).json();
+    await request.post(endpoint, {
+      data: { expected_revision: latest.revision, settings: initial.settings },
+    });
+  }
+});

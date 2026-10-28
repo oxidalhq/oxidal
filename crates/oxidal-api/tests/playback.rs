@@ -1301,6 +1301,28 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     assert!(state["configured"]["working"].is_null());
     assert_eq!(state["modified"], false);
     assert_eq!(state["authoring"]["can_paste"], true);
+    // Saved device defaults seed a fresh worker independently of source tone bytes.
+    let defaults_url = format!("{url}/native/defaults");
+    let defaults_before: Value = client
+        .get(&defaults_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut defaults = defaults_before["settings"].clone();
+    defaults["parameters"]["inputCalibrationLevel"] = json!(0.65);
+    assert_eq!(
+        client
+            .post(&defaults_url)
+            .json(&json!({"expected_revision":defaults_before["revision"],"settings":defaults}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
     // Device clipboard survives a worker replacement and a different source preset.
     let stopped_response = send(&client, &url, &state, json!({"kind":"stop"})).await;
     assert_eq!(stopped_response.status(), 200);
@@ -1316,6 +1338,28 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     state = created.json().await.unwrap();
     assert_eq!(state["authoring"]["can_paste"], true);
     assert_ne!(state["configured"]["preset_id"], settings["preset_id"]);
+    assert!(
+        (state["authoring"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == "inputCalibrationLevel")
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - 0.65)
+            .abs()
+            < 1e-5
+    );
+    let latest_defaults: Value = client
+        .get(&defaults_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(client.post(&defaults_url).json(&json!({"expected_revision":latest_defaults["revision"],"settings":defaults_before["settings"]})).send().await.unwrap().status(),200);
     let pasted=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"paste","lane":"left","index":0}}})).await;
     assert_eq!(pasted.status(), 200, "{}", pasted.text().await.unwrap());
     state = pasted.json().await.unwrap();

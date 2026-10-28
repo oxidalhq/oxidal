@@ -1221,3 +1221,66 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     task.abort();
     std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
 }
+
+#[tokio::test]
+async fn native_device_defaults_are_durable_validated_and_revision_checked() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/native/defaults");
+    let initial: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(initial["settings"]["nam_size"], 0.0);
+    let request = json!({"expected_revision":initial["revision"],"settings":{"nam_size":0.75,"multi_core":true,"parameters":{"osFactor":0.5,"inputCalibrationLevel":0.6}}});
+    let response = client.post(&endpoint).json(&request).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let saved: Value = response.json().await.unwrap();
+    assert_ne!(saved["revision"], initial["revision"]);
+    assert_eq!(
+        client
+            .post(&endpoint)
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let mut invalid = request.clone();
+    invalid["expected_revision"] = saved["revision"].clone();
+    invalid["settings"]["parameters"]["outputLevel"] = json!(0.5);
+    assert_eq!(
+        client
+            .post(&endpoint)
+            .json(&invalid)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    assert_eq!(
+        client
+            .get(&endpoint)
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        saved
+    );
+    let root = path.with_extension("presets");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&std::fs::read(root.join("native-defaults.json")).unwrap())
+            .unwrap(),
+        saved["settings"]
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(root);
+}

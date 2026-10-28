@@ -442,3 +442,15 @@ inserting the copied block. Corrupt or incompatible clipboard metadata is reject
 without changing the target. Clipboard files are local runtime data, never preset
 requirements. Like structural authoring, Paste may allocate/reset histories; it
 is not a real-time or gapless operation.
+
+Settings → Audio → Native device defaults persists the default NAM size for new
+model loads, optional native multi-core scheduling and the reference machine
+parameters (input calibration, calibration level and oversampling). The
+revision-checked `/api/v1/native/defaults` store belongs to Oxidal, separately from
+preset files. Fresh native owners seed from it; explicit saved native/working or
+instance settings override it. Changes leave the current playing owner untouched
+and take effect on new instances at the next start/preparation. Changing the
+model-size default never resizes an already loaded block. Reset restores Lite,
+single-core and native built-in parameter defaults. Native properties remain
+inside the mandatory isolated data root; official TONE3000 preferences are not
+modified. Pi scheduling capacity and deadlines still require hardware testing.

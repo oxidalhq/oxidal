@@ -90,6 +90,16 @@ EXPORT int oxidal_t3k_create(double rate, int frames, void** result) noexcept {
     *result = e.release();
   });
 }
+// Owner-thread defaults affect future model loads, never browser paths/native state.
+EXPORT int oxidal_t3k_defaults(void* ptr, double size, bool multiCore) noexcept {
+  return guard([&] {
+    if (!std::isfinite(size) || size < 0 || size > 1) throw std::runtime_error("invalid NAM default");
+    auto& e=engine(ptr);
+    e.processor.setMultiCoreEnabled(multiCore, false);
+    // Native preferences are isolated by the mandatory patched data root.
+    e.processor.setNamSlimSizeDefault(size);
+  });
+}
 // Separate entry point preserves whole-preset ABI and prevents stale libraries
 // from silently treating the new constructor arguments as the old signature.
 EXPORT int oxidal_t3k_create_stage(double rate, int frames, int role, void** result) noexcept {

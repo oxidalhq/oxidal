@@ -354,6 +354,9 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.as_slice() == ["--defaults"] {
+        return qualify_device_defaults();
+    }
     if arguments.as_slice() == ["--utilities"] {
         return qualify_utilities();
     }
@@ -367,6 +370,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
         return qualify_editor_structure(&root, &std::fs::read(&arguments[1])?);
     }
+    qualify_device_defaults()?;
     qualify_latency()?;
     qualify_spread()?;
     qualify_image_authoring()?;
@@ -2788,6 +2792,88 @@ fn qualify_utilities() -> Result<(), Box<dyn Error>> {
     assert!(owner.snapshot(&mut engine)?.tools.error.is_some());
     eprintln!(
         "native utilities: automatic result storage failure rolls back while native owner remains healthy"
+    );
+    Ok(())
+}
+
+fn qualify_device_defaults() -> Result<(), Box<dyn Error>> {
+    use oxidal_tone3000::preferences::Settings;
+    let mut engine = Engine::new(48000.0, 128)?;
+    let mut settings = Settings {
+        nam_size: 0.75,
+        multi_core: true,
+        ..Default::default()
+    };
+    settings
+        .parameters
+        .insert("inputCalibrationLevel".into(), 0.65);
+    settings.parameters.insert("calibrateInput".into(), 1.0);
+    settings.parameters.insert("osEnabled".into(), 0.0);
+    engine.apply_device_defaults(&settings)?;
+    assert_eq!(engine.chain()?["namSlimSizeDefault"], 0.75);
+    assert_eq!(engine.chain()?["multiCore"], true);
+    let p = engine.catalog()?;
+    assert!(
+        (p.as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == "inputCalibrationLevel")
+            .unwrap()["normalized"]
+            .as_f64()
+            .unwrap()
+            - 0.65)
+            .abs()
+            < 1e-5
+    );
+    let model = std::env::var("OXIDAL_TONE3000_TEST_MODEL")
+        .or_else(|_| std::env::var("OXIDAL_NATIVE_TEST_MODEL"))?;
+    engine.load_local_model(std::path::Path::new(&model))?;
+    engine.wait_ready()?;
+    let id = engine
+        .block_controls()?
+        .iter()
+        .find(|p| p.parameter == "slimSize")
+        .ok_or("missing model size")?
+        .block_id
+        .clone();
+    let old_size = engine
+        .block_controls()?
+        .iter()
+        .find(|p| p.block_id == id && p.parameter == "slimSize")
+        .ok_or("missing size")?
+        .value;
+    assert!((old_size - 0.75).abs() < 1e-5);
+    settings.nam_size = 0.25;
+    settings.multi_core = false;
+    engine.apply_device_defaults(&settings)?;
+    assert!(
+        (engine
+            .block_controls()?
+            .iter()
+            .find(|p| p.block_id == id && p.parameter == "slimSize")
+            .unwrap()
+            .value
+            - old_size)
+            .abs()
+            < 1e-5
+    );
+    let state = engine.capture()?;
+    let mut recalled = Engine::new(48000.0, 128)?;
+    recalled.restore(&state)?;
+    recalled.wait_ready()?;
+    assert!(
+        (recalled
+            .block_controls()?
+            .iter()
+            .find(|p| p.parameter == "slimSize")
+            .unwrap()
+            .value
+            - 0.75)
+            .abs()
+            < 1e-5
+    );
+    println!(
+        "native defaults: actual NAM default, existing model preservation, multi-core readback, calibration and state recall passed"
     );
     Ok(())
 }

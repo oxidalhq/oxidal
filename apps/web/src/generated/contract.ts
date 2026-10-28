@@ -559,6 +559,8 @@ export interface Contract {
   model_query: ModelQuery;
   monitoring: Monitoring;
   native_command: EditorCommand;
+  native_defaults: NativeDefaults;
+  native_defaults_update: NativeDefaultsUpdate;
   native_editor: EditorSnapshot;
   network_command: Command3;
   network_state: NetworkState;
@@ -1156,6 +1158,24 @@ export interface EditorCommand {
   expected_revision: number;
   request_id: string;
   session: string;
+}
+export interface NativeDefaults {
+  revision: string;
+  settings: NativeDefaultSettings;
+}
+export interface NativeDefaultSettings {
+  multi_core: boolean;
+  nam_size: number;
+  /**
+   * Normalized native parameter values, limited to the reference machine defaults.
+   */
+  parameters: {
+    [k: string]: number;
+  };
+}
+export interface NativeDefaultsUpdate {
+  expected_revision: string;
+  settings: NativeDefaultSettings;
 }
 export interface EditorSnapshot {
   block_controls: BlockControl[];

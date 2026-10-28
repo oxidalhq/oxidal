@@ -597,3 +597,28 @@ export async function midiDevices(): Promise<MidiDevices> {
     throw new Error('Incompatible MIDI device list');
   return body;
 }
+
+export type NativeDefaults = Contract['native_defaults'];
+const nativeDefaultsValidator = ajv.compile<NativeDefaults>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/NativeDefaults',
+});
+export async function nativeDefaults(
+  update?: Contract['native_defaults_update'],
+): Promise<NativeDefaults> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/native/defaults',
+      update
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(update),
+          }
+        : undefined,
+    ),
+  );
+  if (!nativeDefaultsValidator(body))
+    throw new Error('Incompatible native defaults');
+  return body;
+}
