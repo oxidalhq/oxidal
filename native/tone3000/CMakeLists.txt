@@ -13,7 +13,7 @@ set(NAM_SRC "${TONE3000_SOURCE}/plugin/NeuralAmpModelerCore/NAM")
 add_library(NAM STATIC
   ${NAM_SRC}/activations.cpp ${NAM_SRC}/conv1d.cpp ${NAM_SRC}/container.cpp
   ${NAM_SRC}/convnet.cpp ${NAM_SRC}/dsp.cpp ${NAM_SRC}/get_dsp.cpp
-  ${NAM_SRC}/lstm.cpp ${NAM_SRC}/ring_buffer.cpp ${NAM_SRC}/util.cpp
+  ${NAM_SRC}/linear.cpp ${NAM_SRC}/lstm.cpp ${NAM_SRC}/ring_buffer.cpp ${NAM_SRC}/util.cpp
   ${NAM_SRC}/wavenet/a2_fast.cpp ${NAM_SRC}/wavenet/model.cpp ${NAM_SRC}/wavenet/slimmable.cpp)
 target_include_directories(NAM PUBLIC
   "${TONE3000_SOURCE}/plugin/NeuralAmpModelerCore"

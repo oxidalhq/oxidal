@@ -299,3 +299,20 @@ use the same bounded policy; oversized imported states fail qualification rather
 than silently truncating a successful session. The maintained real-worker test
 builds 50 NAM blocks plus an IR, then verifies live edits, Save and recovery.
 Model/preset file byte limits remain; physical DSP capacity depends on the device.
+
+## Large-chain isolated replay
+
+Insertion replay uses validated byte/resource admission and actual slot ownership;
+it has no separate 128-position ceiling. The maintained real HTTP/worker regression
+restores 130 compact Linear NAM blocks plus IR and verifies Save and recall without
+the temporary model cache. The bridge includes the pinned core's Linear factory;
+the earlier A2 workflow remains in the same regression.
+
+Cold reconstruction reuses the validated scalar/block catalogs and skips unchanged
+scalar/EQ fields. Model parsing and insertion use owner polling; only an applying
+replacement renders samples to complete its native transition handshake. These
+operations remain outside live PCM processing. The preset-file byte budget remains
+independent: a repeated large A2 fixture can reach it before an instance-count test.
+These checks establish software recovery behavior, not Pi 5 model capacity or live
+processing headroom. Raspberry Pi 5 is the deployment target; loading time, DSP
+headroom, thermal behavior, xruns and physical transitions require later device tests.

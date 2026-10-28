@@ -12,7 +12,7 @@ public:
   // New trailing insert slots receive fresh native UUIDs; replay binds the exact
   // recorded identity back to its empty coordinate before filling it.
   static void restoreSlot(TONE3000Processor& p, const std::string& target, int lane, int index) {
-    if (target.empty() || target.size() > 128 || lane < 0 || lane > 1 || index < 0 || index >= 128)
+    if (target.empty() || target.size() > 128 || lane < 0 || lane > 1 || index < 0)
       throw std::runtime_error("invalid replay slot");
     juce::ScopedLock lock(p.chainMutex);
     if (static_cast<size_t>(index) >= p.lanes[lane].size()) throw std::runtime_error("replay slot missing");

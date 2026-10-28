@@ -193,9 +193,17 @@ pub fn restore(
             if started.elapsed() > Duration::from_secs(20) {
                 return Err("Model restore timed out".into());
             }
-            left.fill(0.0);
-            right.fill(0.0);
-            engine.process(&mut left, &mut right)?;
+            // Isolated reconstruction has no audible PCM to sustain. Parsing
+            // and insertion commit need owner polling, not repeated rendering
+            // of every previously restored model. Only an applying replacement
+            // needs samples to complete its native wet-fade handshake.
+            if state["phase"] == "applying" {
+                left.fill(0.0);
+                right.fill(0.0);
+                engine.process(&mut left, &mut right)?;
+            } else {
+                engine.pump()?;
+            }
             std::thread::sleep(Duration::from_millis(1));
         }
     }

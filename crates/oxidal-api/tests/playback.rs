@@ -903,11 +903,27 @@ async fn qualify_created_rig(
     let owned = oxidal_presets::OwnedStore::new(root.join("presets/owned"));
     let count = owned.list().unwrap().len();
     let mut state = get(client, url, "audio").await;
-    let asset = state["models"][0]["asset"].clone();
     assert!(
-        asset.is_string(),
-        "earlier workflow staged a verified fixture"
+        state["models"][0]["asset"].is_string(),
+        "earlier A2 workflow staged a verified fixture"
     );
+    // Use a real compact Linear NAM for index coverage; repeating the A2 fixture
+    // 130 times exceeds the intentional 32 MiB native preset-file budget.
+    use sha2::{Digest, Sha256};
+    let bytes = br#"{"version":"0.5.4","architecture":"Linear","config":{"receptive_field":1,"bias":false},"sample_rate":48000,"weights":[1.0]}"#;
+    let compact = oxidal_presets::ModelAsset {
+        schema: 1,
+        tone_id: 3701,
+        model_id: 3901,
+        title: "Replay index fixture".into(),
+        name: "Linear unity".into(),
+        format: "nam".into(),
+        sha256: format!("{:x}", Sha256::digest(bytes)),
+        tone: json!({"id":3701,"title":"Replay index fixture","format":"nam","gear":"amp","models":[{"id":3901,"name":"Linear unity","model_url":"oxidal-model://fixture/linear.nam"}]}),
+    };
+    let asset = oxidal_presets::ModelStore::new(root.join("presets/audition-models"))
+        .stage(&compact, bytes)
+        .unwrap();
     let response = send(
         client,
         url,
@@ -954,8 +970,8 @@ async fn qualify_created_rig(
         .iter()
         .filter(|s| s["position"]["lane"] == 0)
         .count();
-    // Cross both former fixed limits: 32 assignments and 256 scalar controls.
-    for _ in 0..50.max(initial_count + 1) {
+    // Cross former fixed bounds: 32 assignments, 256 controls and native replay index 127.
+    for _ in 0..130.max(initial_count + 1) {
         let slot = state["slots"]
             .as_array()
             .unwrap()
@@ -992,6 +1008,13 @@ async fn qualify_created_rig(
     );
     assert!(state["models"].as_array().unwrap().len() > 32);
     assert!(state["controls"].as_array().unwrap().len() > 256);
+    assert!(
+        state["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["insertion"]["index"].as_u64().is_some_and(|i| i > 127))
+    );
     // Replacing the first model must not move its replay behind the dependent second insert.
     let result = send(
         client,
@@ -1050,7 +1073,7 @@ async fn qualify_created_rig(
     let controls = state["controls"].clone();
     for action in [json!({"kind":"stop"}), json!({"kind":"resume"})] {
         let response = send(client, url, &state, action).await;
-        assert_eq!(response.status(), 200);
+        assert_eq!(response.status(), 200, "{}", response.text().await.unwrap());
         state = response.json().await.unwrap();
     }
     assert_eq!(state["controls"], controls);

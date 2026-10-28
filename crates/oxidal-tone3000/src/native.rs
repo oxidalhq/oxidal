@@ -524,8 +524,12 @@ impl Engine {
             ));
         }
         let mut actions = Vec::new();
-        for state in states {
+        for (block_index, state) in states.iter().enumerate() {
+            let previous = &current[block_index].eq;
             for (index, band) in state.eq.bands.iter().enumerate() {
+                if previous.bands[index] == *band {
+                    continue;
+                }
                 actions.push(StageAction::BlockEdit {
                     edit: BlockEdit::EqBand {
                         phase: EditPhase::Commit,
@@ -535,20 +539,24 @@ impl Engine {
                     },
                 });
             }
-            actions.push(StageAction::BlockEdit {
-                edit: BlockEdit::EqPre {
-                    phase: EditPhase::Commit,
-                    block_id: state.block_id.clone(),
-                    value: state.eq.pre,
-                },
-            });
-            actions.push(StageAction::BlockEdit {
-                edit: BlockEdit::EqEnabled {
-                    phase: EditPhase::Commit,
-                    block_id: state.block_id.clone(),
-                    value: state.eq.enabled,
-                },
-            });
+            if previous.pre != state.eq.pre {
+                actions.push(StageAction::BlockEdit {
+                    edit: BlockEdit::EqPre {
+                        phase: EditPhase::Commit,
+                        block_id: state.block_id.clone(),
+                        value: state.eq.pre,
+                    },
+                });
+            }
+            if previous.enabled != state.eq.enabled {
+                actions.push(StageAction::BlockEdit {
+                    edit: BlockEdit::EqEnabled {
+                        phase: EditPhase::Commit,
+                        block_id: state.block_id.clone(),
+                        value: state.eq.enabled,
+                    },
+                });
+            }
         }
         token
             .checked_add(actions.len() as u64)
@@ -811,8 +819,26 @@ impl Engine {
                 "Live control catalog does not match source preset".into(),
             ));
         }
+        // The full catalog is already validated above. Re-reading/serializing it
+        // for every field makes large-chain recovery quadratic in JSON traffic.
+        // Reuse the owned block descriptors and only write changed values.
+        let blocks = self.block_controls()?;
         for control in controls {
-            self.set_live_control(&control.target, control.value)?;
+            if actual
+                .iter()
+                .any(|a| a.target == control.target && a.value == control.value)
+            {
+                continue;
+            }
+            if crate::protocol::live_writable(&control.target) {
+                self.set_normalized(&control.target, control.value)?;
+            } else {
+                let block = blocks
+                    .iter()
+                    .find(|b| b.id == control.target)
+                    .ok_or_else(|| NativeError("Stale native replay block".into()))?;
+                self.set_block(&block.block_id, &block.parameter, control.value)?;
+            }
         }
         let restored = self.live_controls()?;
         if controls.iter().any(|c| {
