@@ -1301,6 +1301,54 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     assert!(state["configured"]["working"].is_null());
     assert_eq!(state["modified"], false);
     assert_eq!(state["authoring"]["can_paste"], true);
+    // Device clipboard survives a worker replacement and a different source preset.
+    let stopped_response = send(&client, &url, &state, json!({"kind":"stop"})).await;
+    assert_eq!(stopped_response.status(), 200);
+    state = stopped_response.json().await.unwrap();
+    let created = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"create","stream":settings["stream"],"name":"Clipboard target"}),
+    )
+    .await;
+    assert_eq!(created.status(), 200, "{}", created.text().await.unwrap());
+    state = created.json().await.unwrap();
+    assert_eq!(state["authoring"]["can_paste"], true);
+    assert_ne!(state["configured"]["preset_id"], settings["preset_id"]);
+    let pasted=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"paste","lane":"left","index":0}}})).await;
+    assert_eq!(pasted.status(), 200, "{}", pasted.text().await.unwrap());
+    state = pasted.json().await.unwrap();
+    assert_eq!(
+        state["authoring"]["layout"]["left"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["insert"] == false)
+            .count(),
+        1
+    );
+    assert!(
+        state["authoring"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["target"].as_str().unwrap().ends_with(":slimSize")),
+        "clipboard restored an actually loaded A2 model"
+    );
+    let stopped_response = send(&client, &url, &state, json!({"kind":"stop"})).await;
+    assert_eq!(stopped_response.status(), 200);
+    state = stopped_response.json().await.unwrap();
+    let restarted = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"start","settings":settings}),
+    )
+    .await;
+    assert_eq!(restarted.status(), 200);
+    state = restarted.json().await.unwrap();
+    assert_eq!(state["authoring"]["can_paste"], true);
     let duplicate = json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"duplicate","block_id":block,"lane":"left","index":0}}});
     let before_duplicate = state.clone();
     let response = send(&client, &url, &state, duplicate.clone()).await;

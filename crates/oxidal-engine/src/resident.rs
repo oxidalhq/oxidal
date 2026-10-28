@@ -62,17 +62,16 @@ impl ResidentSet {
         for choice in std::iter::once(&active).chain(&settings.prepared) {
             let bundle = store.read(&choice.revision).map_err(|e| e.to_string())?;
             let name = bundle.manifest().name.clone();
-            let working = choice
+            let rows = choice
                 .recall
                 .as_ref()
-                .filter(|r| !r.working.is_empty())
-                .map(|r| {
-                    Ok::<_, String>((
-                        model_root.ok_or("Native working store unavailable")?,
-                        r.working.as_slice(),
-                    ))
-                })
-                .transpose()?;
+                .map(|r| r.working.as_slice())
+                .unwrap_or(&[]);
+            let working = match model_root {
+                Some(root) => Some((root, rows)),
+                None if rows.is_empty() => None,
+                None => return Err("Native working store unavailable".into()),
+            };
             let mut session = Session::new_with_working(
                 bundle,
                 world,

@@ -50,6 +50,7 @@ impl Session {
         let mut eq = Vec::new();
         let mut slots = Vec::new();
         let mut authoring = Vec::new();
+        let mut authoring_histories = std::collections::BTreeMap::new();
         for node in &host.graph.nodes {
             match graph.processor_mut(&node.id) {
                 Some(Processor::Native(p)) => {
@@ -74,7 +75,9 @@ impl Session {
                             .and_then(|(_, rows)| rows.iter().find(|r| r.node == node.id))
                             .map(|r| r.receipt.clone());
                         let owner = oxidal_tone3000::working::Authoring::for_source(
-                            std::path::Path::new("."),
+                            working
+                                .map(|(root, _)| root)
+                                .unwrap_or(std::path::Path::new(".")),
                             authoring::origin(bundle.revision(), &node.id),
                             receipt,
                         );
@@ -82,6 +85,9 @@ impl Session {
                             node: node.id.clone(),
                             status: owner.snapshot(p)?,
                         });
+                        if working.is_some() {
+                            authoring_histories.insert(node.id.clone(), owner);
+                        }
                     }
                 }
                 Some(Processor::Lv2(p)) => {
@@ -186,7 +192,7 @@ impl Session {
             model_task: Default::default(),
             model_root: None,
             model_node: None,
-            authoring_histories: Default::default(),
+            authoring_histories,
             rate,
         };
         if serde_json::to_vec(&result.snapshot())

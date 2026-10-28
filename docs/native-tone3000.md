@@ -434,3 +434,11 @@ keeps the size in the embedded tone, separately from its seven typed native
 instance settings. One focused browser workflow applies model size and waits for
 the preparation acknowledgement and new readback before continuing. Extracted
 stage size editing and persistent native-default preferences remain separate gaps.
+
+The device-local model clipboard survives changing source presets and replacing
+the worker. Copy retains verified native model bytes without dirtying the tone;
+Paste checks the pinned profile and restores the target instance settings before
+inserting the copied block. Corrupt or incompatible clipboard metadata is rejected
+without changing the target. Clipboard files are local runtime data, never preset
+requirements. Like structural authoring, Paste may allocate/reset histories; it
+is not a real-time or gapless operation.

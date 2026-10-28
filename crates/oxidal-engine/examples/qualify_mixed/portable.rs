@@ -683,6 +683,96 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
     )?;
     assert!(session.snapshot().authoring[0].status.can_paste);
     assert!(!session.snapshot().modified && session.snapshot().working.is_empty());
+    // A different rig and fresh owner share the device clipboard without copying
+    // source global/device settings into the target native instance.
+    let mut target_manifest = declaration(bytes)?;
+    target_manifest["name"] = json!("Different clipboard target");
+    let target_bundle = Bundle::from_parts(
+        serde_json::to_vec(&target_manifest)?,
+        BTreeMap::from([("current".into(), bytes.to_vec())]),
+    )?;
+    store.save(&target_bundle)?;
+    let mut target = Session::new_with_working(
+        target_bundle,
+        world,
+        48000.0,
+        128,
+        BUFFER_BUDGET,
+        Some((&directory, &[])),
+    )?;
+    assert!(target.snapshot().authoring[0].status.can_paste);
+    let cursor = target.snapshot();
+    target.apply(ControlCommand {
+        session: cursor.session,
+        expected_revision: cursor.revision,
+        target: Target::Native {
+            node: "tone".into(),
+            parameter: "outputLevel".into(),
+        },
+        value: 0.3,
+    })?;
+    send(
+        &mut target,
+        A::Edit {
+            edit: E::Paste {
+                lane: L::Left,
+                index: 0,
+            },
+        },
+    )?;
+    assert_eq!(
+        target.snapshot().authoring[0]
+            .status
+            .layout
+            .left
+            .iter()
+            .filter(|b| !b.insert)
+            .count(),
+        2
+    );
+    assert!(
+        (target
+            .snapshot()
+            .controls
+            .iter()
+            .find(|c| c.target
+                == Target::Native {
+                    node: "tone".into(),
+                    parameter: "outputLevel".into()
+                })
+            .unwrap()
+            .value
+            - 0.3)
+            .abs()
+            < 1e-5
+    );
+    let pasted = target.snapshot();
+    let clip_path = directory.join("native-clipboard.json");
+    let original_clip = std::fs::read(&clip_path)?;
+    let mut invalid: serde_json::Value = serde_json::from_slice(&original_clip)?;
+    invalid["profile"] = json!("0".repeat(64));
+    std::fs::write(&clip_path, serde_json::to_vec(&invalid)?)?;
+    assert!(
+        send(
+            &mut target,
+            A::Edit {
+                edit: E::Paste {
+                    lane: L::Left,
+                    index: 0
+                }
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(target.snapshot().revision, pasted.revision);
+    assert_eq!(
+        target.snapshot().authoring[0].status.layout,
+        pasted.authoring[0].status.layout
+    );
+    assert!(target.healthy());
+    send(&mut target, A::Inspect)?;
+    assert!(!target.snapshot().authoring[0].status.can_paste);
+    std::fs::write(&clip_path, &original_clip)?;
     // Clipboard contains its own model bytes, so deleting its source cannot break Paste.
     send(
         &mut session,

@@ -12,6 +12,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+mod clipboard;
 mod tools;
 
 const MAX_STATE: usize = 32 * 1024 * 1024;
@@ -265,9 +266,7 @@ impl Authoring {
             setting_steps,
             tools: self.tools.clone(),
             layout: engine.layout().map_err(|e| e.to_string())?,
-            can_paste: engine.chain().map_err(|e| e.to_string())?["canPasteBlock"]
-                .as_bool()
-                .unwrap_or(false),
+            can_paste: clipboard::available(&self.root),
             can_undo: !self.undo.is_empty(),
             can_redo: !self.redo.is_empty(),
             working: self.working.clone(),
@@ -319,7 +318,7 @@ impl Authoring {
             return Err("Cancel measurement before editing".into());
         }
         if let AuthoringAction::Copy { block_id } = &action {
-            engine.copy_block(block_id).map_err(|e| e.to_string())?;
+            clipboard::copy(engine, &self.root, block_id)?;
             return self.snapshot(engine);
         }
         if matches!(action, AuthoringAction::Inspect) {
@@ -335,6 +334,9 @@ impl Authoring {
         let result = (|| -> Result<(State, String), String> {
             match &action {
                 AuthoringAction::Edit { edit } => {
+                    if matches!(edit, oxidal_audio::structure::StructureEdit::Paste { .. }) {
+                        clipboard::load_into(engine, &self.root)?;
+                    }
                     engine.edit_structure(edit).map_err(|e| e.to_string())?
                 }
                 AuthoringAction::Parameter { parameter, value } => {
