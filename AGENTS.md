@@ -2,7 +2,7 @@
 
 Oxidal is a software monorepo containing Rust crates (`crates/`), a React/TypeScript web interface (`apps/web/`), OS recipes (`os/`), and shared tooling (`scripts/`). Product architecture is documented in `docs/architecture.md`; setup and commands are in README.md and `docs/development.md`.
 
-The daemon provides loopback HTTP/SSE control, rig validation, simulated MIDI synchronization, owned numeric preview/commit/cancel transactions, and immutable native preset import/list/download. The optional native worker supports offline preset loading, 39 qualified offline global controls, five per-block controls and capability-gated staged NAM size, owned-copy save and reload; physical playback remains unqualified. NAM Linear/LSTM inference has independent parity/allocation tests. The `oxidal-audio` crate and Settings inspector provide hardware discovery and exact non-streaming probes on Linux with the ALSA feature; see docs/audio.md. The optional Linux LV2/graph core is qualified separately below; live graph structural replacement, physical MIDI and WaveNet/A2 in the owned NAM crate are not implemented; the optional TONE3000 worker does exercise native A2.
+The daemon provides loopback HTTP/SSE control, rig validation, simulated MIDI synchronization, owned numeric preview/commit/cancel transactions, and immutable native preset import/list/download. The optional native worker supports offline preset loading, 39 qualified offline global controls, five per-block controls and capability-gated staged NAM size, owned-copy save and reload; physical playback remains unqualified. NAM Linear/LSTM inference has independent parity/allocation tests. The `oxidal-audio` crate and Settings inspector provide hardware discovery and exact non-streaming probes on Linux with the ALSA feature; see docs/audio.md. The optional Linux LV2/graph core is qualified separately below; live graph structural replacement, physical MIDI qualification and WaveNet/A2 in the owned NAM crate remain unfinished; the optional TONE3000 worker does exercise native A2.
 
 Commands from this repository root: `pnpm bootstrap`, `pnpm hooks:install`, `pnpm dev`, `pnpm preview`, `pnpm check`, `pnpm guardrails:prove`, `pnpm release:dry-run`. Check toolchain pins before running. Browser tests require free ports 3210 and 5173.
 
@@ -89,3 +89,9 @@ Restart/Resume/boot retain configuration outside portable preset data. Byte/bind
 actual-worker failure and web regressions cover the software path. Physical MIDI,
 independent branch-toggle mappings and scheduling remain unqualified. See
 docs/mixed-engine.md.
+
+Scene branch On/Off now changes only a declared branch gain group, permitting
+simultaneous NAM branches and exact confirmed custom-mix Save/recovery. Device-local
+CC mappings support toggle and gate behavior. The hardware reader and maintained
+byte-to-DSP tests share the engine dispatcher; internal selectors stay out of the
+main chain UI. Physical MIDI, Pi capacity and deadlines remain unqualified.

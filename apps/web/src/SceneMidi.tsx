@@ -24,6 +24,7 @@ export function SceneMidi({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const scenes = state.control?.scenes?.scenes ?? [];
+  const branches = state.control?.branches ?? [];
   async function scan() {
     setLoading(true);
     setError('');
@@ -40,6 +41,7 @@ export function SceneMidi({
       state.configured?.midi ?? {
         input: '',
         channel: 1,
+        branch_bindings: [],
         bindings: scenes.slice(0, 128).map((scene, program) => ({
           scene: scene.id,
           program,
@@ -198,9 +200,106 @@ export function SceneMidi({
             </label>
           </div>
         ))}
+        {!!branches.length && (
+          <fieldset className="space-y-2">
+            <legend className="font-semibold">Independent branches</legend>
+            {branches.map((branch, index) => {
+              const binding = draft?.branch_bindings?.find(
+                (b) => b.branch === branch.id,
+              );
+              const change = (
+                patch: Partial<
+                  NonNullable<Settings['branch_bindings']>[number]
+                >,
+              ) =>
+                setDraft(
+                  (old) =>
+                    old && {
+                      ...old,
+                      branch_bindings: (old.branch_bindings ?? []).map((b) =>
+                        b.branch === branch.id ? { ...b, ...patch } : b,
+                      ),
+                    },
+                );
+              return (
+                <div
+                  key={branch.id}
+                  className="space-y-2 rounded-md border border-border p-2"
+                >
+                  <Button
+                    variant={binding ? 'secondary' : 'outline'}
+                    aria-pressed={!!binding}
+                    aria-label={`Map branch ${branch.name}`}
+                    disabled={disabled}
+                    onClick={() =>
+                      setDraft(
+                        (old) =>
+                          old && {
+                            ...old,
+                            branch_bindings: binding
+                              ? (old.branch_bindings ?? []).filter(
+                                  (b) => b.branch !== branch.id,
+                                )
+                              : [
+                                  ...(old.branch_bindings ?? []),
+                                  {
+                                    branch: branch.id,
+                                    controller: 64 + index,
+                                    mode: 'toggle',
+                                  },
+                                ],
+                          },
+                      )
+                    }
+                  >
+                    {branch.name} · {binding ? 'Mapped' : 'Map CC'}
+                  </Button>
+                  {binding && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="field min-w-0">
+                        CC
+                        <input
+                          type="number"
+                          aria-label={`Branch ${branch.name} CC`}
+                          min={0}
+                          max={127}
+                          value={binding.controller}
+                          disabled={disabled}
+                          onChange={(event) =>
+                            change({ controller: Number(event.target.value) })
+                          }
+                        />
+                      </label>
+                      <label className="field min-w-0">
+                        Behavior
+                        <select
+                          aria-label={`Branch ${branch.name} behavior`}
+                          value={binding.mode}
+                          disabled={disabled}
+                          onChange={(event) =>
+                            change({
+                              mode: event.target.value as 'gate' | 'toggle',
+                            })
+                          }
+                        >
+                          <option value="toggle">Toggle on press</option>
+                          <option value="gate">Follow CC on/off</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </fieldset>
+        )}
         <div className="action-row">
           <Button
-            disabled={disabled || !draft?.input || !draft.bindings.length}
+            disabled={
+              disabled ||
+              !draft?.input ||
+              (!draft.bindings.length && !draft.branch_bindings?.length)
+            }
             onClick={() => void onCommand({ kind: 'midi', settings: draft })}
           >
             Apply MIDI

@@ -552,6 +552,21 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
     value["extensions"]["urn:oxidal:scenes:1"] = json!({"fade_ms":10,"scenes": [
         {"id":"clean","name":"Clean","gains":[{"node":"scene_l","port":0,"value":1},{"node":"scene_l","port":1,"value":0},{"node":"scene_r","port":0,"value":1},{"node":"scene_r","port":1,"value":0}]},
         {"id":"lead","name":"Lead","gains":[{"node":"scene_l","port":0,"value":0},{"node":"scene_l","port":1,"value":1},{"node":"scene_r","port":0,"value":0},{"node":"scene_r","port":1,"value":1}]}]});
+    value["extensions"]["urn:oxidal:scenes:1"]["branches"] = Value::Array(
+        value["extensions"]["urn:oxidal:scenes:1"]["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|scene| {
+                let mut branch = scene.clone();
+                branch["gains"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|g| g["value"].as_f64().unwrap() > 0.0);
+                branch
+            })
+            .collect(),
+    );
     let bundle = Bundle::from_parts(
         serde_json::to_vec(&value)?,
         BTreeMap::from([("current".into(), current.to_vec())]),

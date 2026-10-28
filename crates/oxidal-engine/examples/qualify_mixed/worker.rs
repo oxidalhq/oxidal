@@ -917,6 +917,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
     assert!(before.error.is_none());
     assert_eq!(before.control.scene.as_deref(), Some("clean"));
     let missing = oxidal_audio::midi::Settings {
+        branch_bindings: vec![],
         input: "hw:Unavailable,0,0".into(),
         channel: 1,
         bindings: vec![oxidal_audio::midi::Binding {
@@ -977,7 +978,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
             command: command.clone(),
         },
     )?;
-    let selected = received.recv_timeout(Duration::from_secs(3))??;
+    let mut selected = received.recv_timeout(Duration::from_secs(3))??;
     assert!(selected.error.is_none());
     assert_eq!(selected.control.scene.as_deref(), Some("lead"));
     assert!(selected.processed_frames >= before.processed_frames);
@@ -998,6 +999,20 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert!(advanced, "PCM did not finish the scene ramp");
+    send(
+        &mut child,
+        &WorkerRequest::Branch {
+            command: BranchCommand {
+                session: selected.control.session.clone(),
+                expected_revision: selected.control.revision,
+                branch: "clean".into(),
+                enabled: true,
+            },
+        },
+    )?;
+    selected = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(selected.error.is_none() && selected.control.scene.is_none());
+    assert!(selected.control.branches.iter().all(|b| b.enabled));
     let mut saver = spawn(&path, &root.join("scene-export"), true)?;
     send(
         &mut saver,
@@ -1035,7 +1050,8 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
     )?;
     let recalled = received.recv_timeout(Duration::from_secs(30))??;
     assert!(recalled.error.is_none());
-    assert_eq!(recalled.control.scene.as_deref(), Some("lead"));
+    assert!(recalled.control.scene.is_none());
+    assert!(recalled.control.branches.iter().all(|b| b.enabled));
     compare(&selected.control, &recalled.control);
     restored.0.stdin.take();
     wait(&mut restored, 10)?;

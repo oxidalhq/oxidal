@@ -9,6 +9,8 @@ pub const SCENES_EXTENSION: &str = "urn:oxidal:scenes:1";
 pub struct Scenes {
     pub fade_ms: u32,
     pub scenes: Vec<Scene>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub branches: Vec<Scene>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -98,6 +100,35 @@ impl Manifest {
                 return Err(bad());
             }
             expected = Some(targets);
+        }
+        let mut branches = BTreeSet::new();
+        let mut branch_targets = BTreeSet::new();
+        for branch in &definition.branches {
+            if !validation::id(&branch.id)
+                || !branches.insert(&branch.id)
+                || branch.name.trim().is_empty()
+                || branch.name.chars().count() > 128
+                || branch.name.chars().any(char::is_control)
+                || branch.gains.is_empty()
+            {
+                return Err(bad());
+            }
+            for gain in &branch.gains {
+                if !gain.value.is_finite()
+                    || !(0.0..=4.0).contains(&gain.value)
+                    || gain.value == 0.0
+                    || !expected
+                        .as_ref()
+                        .unwrap()
+                        .contains(&(&gain.node, gain.port))
+                    || !branch_targets.insert((&gain.node, gain.port))
+                {
+                    return Err(bad());
+                }
+            }
+        }
+        if !definition.branches.is_empty() && Some(&branch_targets) != expected.as_ref() {
+            return Err(bad());
         }
         Ok(Some(definition))
     }

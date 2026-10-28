@@ -577,6 +577,21 @@ fn scene_bundle() -> Bundle {
     value["extensions"]["urn:oxidal:scenes:1"] = json!({"fade_ms":3,"scenes":[
         {"id":"clean","name":"Clean","gains":[{"node":"merge","port":0,"value":1.0},{"node":"merge","port":1,"value":0.0}]},
         {"id":"lead","name":"Lead","gains":[{"node":"merge","port":0,"value":0.0},{"node":"merge","port":1,"value":1.0}]}]});
+    value["extensions"]["urn:oxidal:scenes:1"]["branches"] = serde_json::Value::Array(
+        value["extensions"]["urn:oxidal:scenes:1"]["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|scene| {
+                let mut branch = scene.clone();
+                branch["gains"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|g| g["value"].as_f64().unwrap() > 0.0);
+                branch
+            })
+            .collect(),
+    );
     Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
 }
 #[test]
@@ -658,6 +673,18 @@ fn scene_definitions_reject_partial_duplicate_or_foreign_targets() {
         serde_json::from_slice(source.manifest().encode().unwrap().as_slice()).unwrap();
     for (path, replacement) in [
         ("/requiredExtensions", json!([])),
+        (
+            "/extensions/urn:oxidal:scenes:1/branches/0/gains/0/value",
+            json!(0),
+        ),
+        (
+            "/extensions/urn:oxidal:scenes:1/branches/0/gains/0/port",
+            json!(1),
+        ),
+        (
+            "/extensions/urn:oxidal:scenes:1/branches/1/id",
+            json!("clean"),
+        ),
         ("/extensions/urn:oxidal:scenes:1/fade_ms", json!(0)),
         (
             "/extensions/urn:oxidal:scenes:1/scenes/1/id",
@@ -689,4 +716,112 @@ fn scene_definitions_reject_partial_duplicate_or_foreign_targets() {
         .unwrap()
         .pop();
     assert!(Bundle::from_parts(serde_json::to_vec(&partial).unwrap(), BTreeMap::new()).is_err());
+}
+
+#[test]
+fn independent_branches_mix_smoothly_without_changing_other_branch_gains() {
+    use oxidal_engine::protocol::BranchCommand;
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session = Session::new(scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    let render = |session: &mut Session| {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        session
+            .process(&[&[0.25; 64], &[0.5; 64]], &mut [&mut l, &mut r])
+            .unwrap();
+        l
+    };
+    for _ in 0..4 {
+        render(&mut session);
+    }
+    let cursor = session.snapshot();
+    let enable = BranchCommand {
+        session: cursor.session,
+        expected_revision: cursor.revision,
+        branch: "lead".into(),
+        enabled: true,
+    };
+    session.set_branch(enable.clone()).unwrap();
+    assert!(session.set_branch(enable).is_err());
+    let both = session.snapshot();
+    assert!(both.branches.iter().all(|b| b.enabled && !b.partial));
+    assert!(both.scene.is_none());
+    let mut samples = Vec::new();
+    for _ in 0..6 {
+        samples.extend(render(&mut session));
+    }
+    assert!(samples[..137].iter().all(|v| *v == 0.25));
+    for i in 0..144 {
+        assert!((samples[137 + i] - (0.25 + 0.5 * (i + 1) as f32 / 144.0)).abs() < 0.00001);
+    }
+    assert!(samples[281..].iter().all(|v| *v == 0.75));
+    let cursor = session.snapshot();
+    session
+        .set_branch(BranchCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            branch: "clean".into(),
+            enabled: false,
+        })
+        .unwrap();
+    for _ in 0..6 {
+        render(&mut session);
+    }
+    let only = session.snapshot();
+    assert_eq!(only.scene.as_deref(), Some("lead"));
+    assert!(!only.branches[0].enabled && only.branches[1].enabled);
+    let before = only.revision;
+    assert!(
+        session
+            .set_branch(BranchCommand {
+                session: only.session,
+                expected_revision: before,
+                branch: "foreign".into(),
+                enabled: true
+            })
+            .is_err()
+    );
+    assert_eq!(session.snapshot().revision, before);
+}
+
+#[test]
+fn decoded_midi_selects_scenes_and_toggles_or_gates_the_actual_branch_mix() {
+    use oxidal_audio::midi::{Binding, BranchBinding, BranchMode, Decoder, Settings};
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session = Session::new(scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    let mut settings = Settings {
+        input: "hw:Controller,0,0".into(),
+        channel: 1,
+        bindings: vec![Binding {
+            scene: "lead".into(),
+            program: Some(1),
+            controller: None,
+        }],
+        branch_bindings: vec![BranchBinding {
+            branch: "lead".into(),
+            controller: 64,
+            mode: BranchMode::Toggle,
+        }],
+    };
+    settings.validate().unwrap();
+    let feed = |session: &mut Session, settings: &Settings, bytes: &[u8]| {
+        let mut decoder = Decoder::default();
+        for byte in bytes {
+            if let Some(message) = decoder.push(*byte) {
+                session.midi_message(settings, message).unwrap();
+            }
+        }
+    };
+    feed(&mut session, &settings, &[0xb0, 64, 127, 0xf8, 64, 0]);
+    assert!(session.snapshot().branches.iter().all(|b| b.enabled));
+    feed(&mut session, &settings, &[0xb0, 64, 127]);
+    assert!(!session.snapshot().branches[1].enabled);
+    feed(&mut session, &settings, &[0xc1, 1]); // wrong channel
+    assert_eq!(session.snapshot().scene.as_deref(), Some("clean"));
+    feed(&mut session, &settings, &[0xc0, 1]);
+    assert_eq!(session.snapshot().scene.as_deref(), Some("lead"));
+    settings.branch_bindings[0].mode = BranchMode::Gate;
+    feed(&mut session, &settings, &[0xb0, 64, 0]);
+    assert!(session.snapshot().branches.iter().all(|b| !b.enabled));
+    feed(&mut session, &settings, &[0xb0, 64, 127]);
+    assert_eq!(session.snapshot().scene.as_deref(), Some("lead"));
 }

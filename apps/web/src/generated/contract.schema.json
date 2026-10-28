@@ -1157,6 +1157,86 @@
         }
       ]
     },
+    "BranchBinding": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/$defs/BranchMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "controller",
+        "mode"
+      ]
+    },
+    "BranchCommand": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "branch",
+        "enabled"
+      ]
+    },
+    "BranchMode": {
+      "type": "string",
+      "enum": [
+        "toggle",
+        "gate"
+      ]
+    },
+    "BranchState": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "partial": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "enabled",
+        "partial"
+      ]
+    },
     "Capabilities": {
       "description": "Development appliance capabilities; audio is deliberately unavailable.\n@see docs/architecture.md",
       "type": "object",
@@ -4689,6 +4769,23 @@
         {
           "type": "object",
           "properties": {
+            "command": {
+              "$ref": "#/$defs/BranchCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "branch"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "midi"
@@ -5122,6 +5219,12 @@
     "Scenes": {
       "type": "object",
       "properties": {
+        "branches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Scene"
+          }
+        },
         "fade_ms": {
           "type": "integer",
           "format": "uint32",
@@ -5168,6 +5271,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Binding2"
+          }
+        },
+        "branch_bindings": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BranchBinding"
           }
         },
         "channel": {
@@ -5369,6 +5479,13 @@
     "Snapshot3": {
       "type": "object",
       "properties": {
+        "branches": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BranchState"
+          }
+        },
         "buffer_bytes": {
           "type": "integer",
           "format": "uint",

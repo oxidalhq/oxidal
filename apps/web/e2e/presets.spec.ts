@@ -2708,6 +2708,20 @@ for (const layout of ['serial', 'scenes'] as const) {
       await expect
         .poll(async () => (await state()).control.scene_transitioning)
         .toBe(false);
+      await expect(
+        rig.getByRole('button', { name: 'Toggle branch Clean', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'false');
+      await rig
+        .getByRole('button', { name: 'Toggle branch Clean', exact: true })
+        .click();
+      await expect
+        .poll(async () =>
+          (await state()).control.branches.every(
+            (b: { enabled: boolean }) => b.enabled,
+          ),
+        )
+        .toBe(true);
+      await expect.poll(async () => (await state()).control.scene).toBeNull();
       await page.route('**/api/v1/midi/devices', (route) =>
         route.fulfill({
           json: {
@@ -2729,6 +2743,14 @@ for (const layout of ['serial', 'scenes'] as const) {
         .selectOption('control');
       await rig.getByLabel('MIDI number 2', { exact: true }).fill('20');
       await rig
+        .getByRole('button', { name: 'Map branch Clean', exact: true })
+        .click();
+      await rig.getByLabel('Branch Clean CC', { exact: true }).fill('64');
+      await rig
+        .getByLabel('Branch Clean behavior', { exact: true })
+        .selectOption('gate');
+
+      await rig
         .getByRole('button', { name: 'Apply MIDI', exact: true })
         .click();
       await expect
@@ -2738,6 +2760,11 @@ for (const layout of ['serial', 'scenes'] as const) {
         .poll(async () => (await state()).control.midi.error)
         .toBeTruthy();
       expect((await state()).phase).toBe('running');
+      expect((await state()).configured.midi.branch_bindings[0]).toMatchObject({
+        controller: 64,
+        mode: 'gate',
+      });
+
       await expect(rig.getByText(/Waiting for controller/)).toBeVisible();
       for (const viewport of [
         initialViewport,
@@ -2755,6 +2782,10 @@ for (const layout of ['serial', 'scenes'] as const) {
         await expect(
           rig.getByLabel('MIDI number 2', { exact: true }),
         ).toHaveValue('20');
+        await expect(
+          rig.getByLabel('Branch Clean behavior', { exact: true }),
+        ).toHaveValue('gate');
+
         await page.screenshot({
           path: info.outputPath(`scene-midi-${viewport.width}.png`),
           fullPage: true,
@@ -2818,10 +2849,12 @@ for (const layout of ['serial', 'scenes'] as const) {
       .toEqual({ phase: 'running', revision: saved });
     if (layout === 'scenes') {
       await expect(
-        rig
-          .getByRole('group', { name: 'Rig scenes' })
-          .getByRole('button', { name: 'Lead', exact: true }),
+        rig.getByRole('button', { name: 'Toggle branch Clean', exact: true }),
       ).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        rig.getByRole('button', { name: 'Toggle branch Lead', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      expect((await state()).control.scene).toBeNull();
       expect(
         savedDoc.manifest.extensions['urn:oxidal:scenes:1'].scenes,
       ).toHaveLength(2);

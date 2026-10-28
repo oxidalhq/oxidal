@@ -682,6 +682,22 @@ impl Owner {
                     return Err(e);
                 }
             }
+            RigAudioAction::Branch { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Branch { command }).await {
+                    Ok(r) => r,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                let error = reply.error.clone();
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                if let Some(e) = error {
+                    return Err(e);
+                }
+            }
             RigAudioAction::Eq { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());

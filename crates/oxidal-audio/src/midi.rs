@@ -23,6 +23,8 @@ pub struct Settings {
     /// 0 accepts all MIDI channels; otherwise 1–16.
     pub channel: u8,
     pub bindings: Vec<Binding>,
+    #[serde(default)]
+    pub branch_bindings: Vec<BranchBinding>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -31,6 +33,19 @@ pub struct Binding {
     /// Exactly one trigger is required. Programs are wire values 0–127.
     pub program: Option<u8>,
     pub controller: Option<u8>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BranchMode {
+    Toggle,
+    Gate,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BranchBinding {
+    pub branch: String,
+    pub controller: u8,
+    pub mode: BranchMode,
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
@@ -48,8 +63,9 @@ impl Settings {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
             || parts[1..].iter().any(|p| p.parse::<u16>().is_err())
             || self.channel > 16
-            || self.bindings.is_empty()
+            || (self.bindings.is_empty() && self.branch_bindings.is_empty())
             || self.bindings.len() > 256
+            || self.branch_bindings.len() > 128
         {
             return Err("Invalid MIDI input configuration".into());
         }
@@ -66,7 +82,48 @@ impl Settings {
                 return Err("Invalid or duplicate MIDI scene binding".into());
             }
         }
+        for (index, binding) in self.branch_bindings.iter().enumerate() {
+            if binding.branch.is_empty()
+                || binding.branch.len() > 64
+                || binding.controller > 127
+                || self
+                    .bindings
+                    .iter()
+                    .any(|scene| scene.controller == Some(binding.controller))
+                || self.branch_bindings[..index]
+                    .iter()
+                    .any(|old| old.controller == binding.controller)
+            {
+                return Err("Invalid or colliding MIDI branch binding".into());
+            }
+        }
         Ok(())
+    }
+    /// None means toggle the confirmed branch target; Some is an absolute gate.
+    pub fn branch(&self, message: Message) -> Option<(&BranchBinding, Option<bool>)> {
+        let Message::Control {
+            channel,
+            controller,
+            value,
+        } = message
+        else {
+            return None;
+        };
+        if !(1..=16).contains(&channel)
+            || value > 127
+            || (self.channel != 0 && self.channel != channel)
+        {
+            return None;
+        }
+        let binding = self
+            .branch_bindings
+            .iter()
+            .find(|b| b.controller == controller)?;
+        match binding.mode {
+            BranchMode::Toggle if value >= 64 => Some((binding, None)),
+            BranchMode::Gate => Some((binding, Some(value >= 64))),
+            _ => None,
+        }
     }
     pub fn scene(&self, message: Message) -> Option<&str> {
         let (channel, program, controller) = match message {
@@ -297,6 +354,41 @@ impl Input {
 mod tests {
     use super::*;
     #[test]
+    fn branch_gates_follow_both_values_and_toggles_ignore_release() {
+        let mut settings = Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 1,
+            bindings: vec![],
+            branch_bindings: vec![BranchBinding {
+                branch: "lead".into(),
+                controller: 20,
+                mode: BranchMode::Gate,
+            }],
+        };
+        settings.validate().unwrap();
+        let high = Message::Control {
+            channel: 1,
+            controller: 20,
+            value: 127,
+        };
+        let low = Message::Control {
+            channel: 1,
+            controller: 20,
+            value: 0,
+        };
+        assert_eq!(settings.branch(high).unwrap().1, Some(true));
+        assert_eq!(settings.branch(low).unwrap().1, Some(false));
+        settings.branch_bindings[0].mode = BranchMode::Toggle;
+        assert_eq!(settings.branch(high).unwrap().1, None);
+        assert!(settings.branch(low).is_none());
+        settings.bindings.push(Binding {
+            scene: "clean".into(),
+            controller: Some(20),
+            program: None,
+        });
+        assert!(settings.validate().is_err());
+    }
+    #[test]
     fn hardware_hints_normalize_only_the_discovered_card() {
         assert_eq!(
             hardware_hint("Controller", "hw:CARD=Controller,DEV=0"),
@@ -318,6 +410,7 @@ mod tests {
     #[test]
     fn bindings_match_channel_pc_and_cc_press_but_not_release() {
         let settings = Settings {
+            branch_bindings: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![

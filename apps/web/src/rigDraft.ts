@@ -326,6 +326,15 @@ export function sceneRig(
   manifest.requiredExtensions.push('urn:oxidal:scenes:1');
   manifest.extensions['urn:oxidal:scenes:1'] = {
     fade_ms: 10,
+    branches: tones.map((tone, port) => ({
+      id: tone.id,
+      name: tone.name,
+      gains: ['scene-left', 'scene-right'].map((node) => ({
+        node,
+        port,
+        value: 1,
+      })),
+    })),
     scenes: tones.map((tone, index) => ({
       id: tone.id,
       name: tone.name,

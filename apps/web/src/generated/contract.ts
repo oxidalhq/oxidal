@@ -321,6 +321,10 @@ export type RigAudioAction =
       kind: "scene";
     }
   | {
+      command: BranchCommand;
+      kind: "branch";
+    }
+  | {
       kind: "midi";
       settings?: Settings2 | null;
     }
@@ -332,6 +336,7 @@ export type RigAudioAction =
       kind: "save";
       name: string;
     };
+export type BranchMode = "toggle" | "gate";
 export type Target =
   | {
       kind: "native";
@@ -1121,6 +1126,7 @@ export interface StartRig {
  */
 export interface Settings2 {
   bindings: Binding2[];
+  branch_bindings?: BranchBinding[];
   /**
    * 0 accepts all MIDI channels; otherwise 1–16.
    */
@@ -1134,6 +1140,11 @@ export interface Binding2 {
    */
   program?: number | null;
   scene: string;
+}
+export interface BranchBinding {
+  branch: string;
+  controller: number;
+  mode: BranchMode;
 }
 export interface PreparedRecall {
   recall?: Recall | null;
@@ -1184,6 +1195,12 @@ export interface SceneCommand {
   scene: string;
   session: string;
 }
+export interface BranchCommand {
+  branch: string;
+  enabled: boolean;
+  expected_revision: number;
+  session: string;
+}
 export interface ModelCommand {
   expected_revision: number;
   node: string;
@@ -1208,6 +1225,7 @@ export interface RigAudioState {
   telemetry?: Snapshot2 | null;
 }
 export interface Snapshot3 {
+  branches?: BranchState[];
   buffer_bytes: number;
   controls: Control[];
   eq?: NodeEq[];
@@ -1230,6 +1248,12 @@ export interface Snapshot3 {
   session: string;
   slots?: NodeSlots[];
   source_revision: string;
+}
+export interface BranchState {
+  enabled: boolean;
+  id: string;
+  name: string;
+  partial: boolean;
 }
 export interface Control {
   display: string;
@@ -1259,6 +1283,7 @@ export interface PreparedStatus {
   revision: string;
 }
 export interface Scenes {
+  branches?: Scene[];
   fade_ms: number;
   scenes: Scene[];
 }

@@ -3,6 +3,22 @@ use oxidal_audio::StreamConfig;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BranchState {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub partial: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BranchCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub branch: String,
+    pub enabled: bool,
+}
 pub const REQUEST_LIMIT: usize = 4 * 1024 * 1024;
 pub const REPLY_LIMIT: usize = 4 * 1024 * 1024;
 /// Host routing buffers only, separate from native/plugin memory.
@@ -113,6 +129,8 @@ pub struct Snapshot {
     pub scene: Option<String>,
     #[serde(default)]
     pub scene_transitioning: bool,
+    #[serde(default)]
+    pub branches: Vec<BranchState>,
     #[serde(default)]
     pub midi: oxidal_audio::midi::Status,
 }
@@ -270,6 +288,9 @@ pub enum WorkerRequest {
     Scene {
         command: SceneCommand,
     },
+    Branch {
+        command: BranchCommand,
+    },
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,
     },
@@ -365,6 +386,9 @@ pub enum RigAudioAction {
     },
     Scene {
         command: SceneCommand,
+    },
+    Branch {
+        command: BranchCommand,
     },
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,

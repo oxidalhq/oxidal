@@ -142,12 +142,10 @@ impl Session {
             scenes: bundle.manifest().scenes().map_err(|e| e.to_string())?,
             scene: None,
             scene_transitioning: false,
+            branches: Vec::new(),
             midi: Default::default(),
         };
-        if serde_json::to_vec(&state).map_err(|e| e.to_string())?.len() + 65536 > REPLY_LIMIT {
-            return Err("Rig controls exceed IPC byte budget".into());
-        }
-        Ok(Self {
+        let result = Self {
             graph,
             bundle,
             initial: controls,
@@ -159,7 +157,16 @@ impl Session {
             model_root: None,
             model_node: None,
             rate,
-        })
+        };
+        if serde_json::to_vec(&result.snapshot())
+            .map_err(|e| e.to_string())?
+            .len()
+            + 65536
+            > REPLY_LIMIT
+        {
+            return Err("Rig controls exceed IPC byte budget".into());
+        }
+        Ok(result)
     }
     pub fn snapshot(&self) -> Snapshot {
         let mut state = self.state.clone();
@@ -185,6 +192,41 @@ impl Session {
                 .filter(matches)
                 .or_else(|| scenes.scenes.iter().find(matches));
             state.scene = selected.map(|s| s.id.clone());
+            state.branches = scenes
+                .branches
+                .iter()
+                .map(|branch| {
+                    let values: Vec<_> = branch
+                        .gains
+                        .iter()
+                        .map(|gain| {
+                            state
+                                .controls
+                                .iter()
+                                .find(|c| {
+                                    c.target
+                                        == (Target::Merge {
+                                            node: gain.node.clone(),
+                                            port: usize::from(gain.port),
+                                        })
+                                })
+                                .unwrap()
+                                .value
+                        })
+                        .collect();
+                    let enabled = values.iter().any(|v| *v != 0.0);
+                    let full = values
+                        .iter()
+                        .zip(&branch.gains)
+                        .all(|(value, gain)| *value == f64::from(gain.value as f32));
+                    BranchState {
+                        id: branch.id.clone(),
+                        name: branch.name.clone(),
+                        enabled,
+                        partial: enabled && !full,
+                    }
+                })
+                .collect();
         }
         state
     }
@@ -296,16 +338,94 @@ impl Session {
             .iter()
             .find(|s| s.id == command.scene)
             .ok_or("Unknown rig scene")?;
+        let gains = scene.gains.clone();
+        let fade_ms = scenes.fade_ms;
+        self.apply_mix(&gains, fade_ms)?;
+        self.state.scene = Some(command.scene);
+        Ok(())
+    }
+    /// Branch controls change only their declared selector inputs. Other ready
+    /// branches and shared downstream processors retain their current state.
+    pub fn set_branch(&mut self, command: BranchCommand) -> Result<(), String> {
+        if self.failed || self.model_pending() {
+            return Err("Rig is not ready for branch control".into());
+        }
+        if !self.matches_cursor(&command.session, command.expected_revision) {
+            return Err("rig_control_conflict; refresh status".into());
+        }
+        let scenes = self.state.scenes.as_ref().ok_or("Rig has no branches")?;
+        let branch = scenes
+            .branches
+            .iter()
+            .find(|b| b.id == command.branch)
+            .ok_or("Unknown rig branch")?;
+        let gains: Vec<_> = branch
+            .gains
+            .iter()
+            .cloned()
+            .map(|mut gain| {
+                if !command.enabled {
+                    gain.value = 0.0;
+                }
+                gain
+            })
+            .collect();
+        let fade_ms = scenes.fade_ms;
+        self.apply_mix(&gains, fade_ms)?;
+        self.state.scene = None;
+        Ok(())
+    }
+    /// Shared hardware/test dispatch: MIDI never owns a second copy of mix state.
+    /// True means a mapped trigger was accepted, including an unchanged target.
+    pub fn midi_message(
+        &mut self,
+        settings: &oxidal_audio::midi::Settings,
+        message: oxidal_audio::midi::Message,
+    ) -> Result<bool, String> {
+        if let Some(scene) = settings.scene(message) {
+            let cursor = self.snapshot();
+            if cursor.scene.as_deref() != Some(scene) {
+                self.select_scene(SceneCommand {
+                    session: cursor.session,
+                    expected_revision: cursor.revision,
+                    scene: scene.into(),
+                })?;
+            }
+            return Ok(true);
+        }
+        if let Some((binding, target)) = settings.branch(message) {
+            let cursor = self.snapshot();
+            let branch = cursor
+                .branches
+                .iter()
+                .find(|b| b.id == binding.branch)
+                .ok_or("MIDI branch is unavailable")?;
+            let enabled = target.unwrap_or(!branch.enabled);
+            if enabled != branch.enabled || branch.partial {
+                self.set_branch(BranchCommand {
+                    session: cursor.session,
+                    expected_revision: cursor.revision,
+                    branch: binding.branch.clone(),
+                    enabled,
+                })?;
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+    fn apply_mix(
+        &mut self,
+        gains: &[oxidal_presets::manifest::SceneGain],
+        fade_ms: u32,
+    ) -> Result<(), String> {
         let revision = self
             .state
             .revision
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
-        let frames = (self.rate * f64::from(scenes.fade_ms) / 1000.0)
-            .round()
-            .max(1.0) as u32;
-        self.graph.scene_gains(&scene.gains, frames)?;
-        for gain in &scene.gains {
+        let frames = (self.rate * f64::from(fade_ms) / 1000.0).round().max(1.0) as u32;
+        self.graph.scene_gains(gains, frames)?;
+        for gain in gains {
             let target = Target::Merge {
                 node: gain.node.clone(),
                 port: usize::from(gain.port),
@@ -319,7 +439,6 @@ impl Session {
             control.value = f64::from(gain.value as f32);
             control.display = format!("{:.3}", control.value);
         }
-        self.state.scene = Some(command.scene);
         self.state.revision = revision;
         Ok(())
     }

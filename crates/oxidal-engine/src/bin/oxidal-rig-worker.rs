@@ -145,6 +145,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             {
                 return Err("MIDI binding refers to an unavailable scene".into());
             }
+            if settings
+                .branch_bindings
+                .iter()
+                .any(|b| !scenes.branches.iter().any(|branch| branch.id == b.branch))
+            {
+                return Err("MIDI binding refers to an unavailable branch".into());
+            }
         }
         Ok(())
     }
@@ -234,18 +241,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         for message in messages.into_iter().flatten() {
                             midi_status.events = midi_status.events.saturating_add(1);
                             midi_status.last = Some(message);
-                            if let Some(scene) = settings.scene(message) {
-                                let owner = session.active_mut();
-                                let cursor = owner.snapshot();
-                                if cursor.scene.as_deref() != Some(scene) {
-                                    midi_status.error = owner
-                                        .select_scene(SceneCommand {
-                                            session: cursor.session,
-                                            expected_revision: cursor.revision,
-                                            scene: scene.into(),
-                                        })
-                                        .err();
-                                }
+                            match session.active_mut().midi_message(settings, message) {
+                                Ok(true) => midi_status.error = None,
+                                Ok(false) => {}
+                                Err(error) => midi_status.error = Some(error),
                             }
                         }
                     }
@@ -294,6 +293,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Scene { command } => {
                     session.active_mut().select_scene(command).err()
                 }
+                WorkerRequest::Branch { command } => session.active_mut().set_branch(command).err(),
                 WorkerRequest::Eq { command } => session.active_mut().apply_eq(command).err(),
                 WorkerRequest::Model { command } => match model_root.as_deref() {
                     Some(root) => session.active_mut().model_command(command, root).err(),

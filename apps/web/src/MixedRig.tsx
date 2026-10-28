@@ -252,9 +252,16 @@ export function MixedRig({
   )
     return null;
   const running = state.phase === 'running';
+  const selectorNodes = new Set(
+    state.control?.scenes?.scenes.flatMap((scene) =>
+      scene.gains.map((gain) => gain.node),
+    ) ?? [],
+  );
   const nodes =
     matching?.manifest.oxidal?.graph.nodes.filter(
-      (n) => !['input', 'output', 'split'].includes(n.kind),
+      (n) =>
+        !['input', 'output', 'split'].includes(n.kind) &&
+        !selectorNodes.has(n.id),
     ) ?? [];
   const selected =
     nodes.find(
@@ -458,6 +465,7 @@ export function MixedRig({
         aria-label="Mixed signal chain"
       >
         {nodes.map((n, index) => {
+          const branch = state.control?.branches?.find((b) => b.id === n.id);
           const bypass = state.control?.controls.find(
             (c) => c.target.kind === 'bypass' && c.target.node === n.id,
           );
@@ -512,27 +520,50 @@ export function MixedRig({
                 <span className="shrink-0">{index + 1} ·</span>
                 <span className="truncate">{label}</span>
               </Button>
-              {bypass && (
+              {branch ? (
                 <Button
                   className="h-11 min-w-16 shrink-0 px-2 text-sm"
-                  variant="outline"
-                  aria-label={`Bypass ${index + 1} ${label}`}
-                  aria-pressed={bypass.value === 1}
+                  variant={branch.enabled ? 'secondary' : 'outline'}
+                  aria-label={`Toggle branch ${branch.name}`}
+                  aria-pressed={branch.enabled}
                   disabled={disabled || !!edit}
                   onClick={() =>
                     void command({
-                      kind: 'control',
+                      kind: 'branch',
                       command: {
                         session: state.control!.session,
                         expected_revision: state.control!.revision,
-                        target: bypass.target,
-                        value: bypass.value === 1 ? 0 : 1,
+                        branch: branch.id,
+                        enabled: !branch.enabled,
                       },
                     })
                   }
                 >
-                  {bypass.value === 1 ? 'Bypassed' : 'On'}
+                  {branch.partial ? 'Mixed' : branch.enabled ? 'On' : 'Off'}
                 </Button>
+              ) : (
+                bypass && (
+                  <Button
+                    className="h-11 min-w-16 shrink-0 px-2 text-sm"
+                    variant="outline"
+                    aria-label={`Bypass ${index + 1} ${label}`}
+                    aria-pressed={bypass.value === 1}
+                    disabled={disabled || !!edit}
+                    onClick={() =>
+                      void command({
+                        kind: 'control',
+                        command: {
+                          session: state.control!.session,
+                          expected_revision: state.control!.revision,
+                          target: bypass.target,
+                          value: bypass.value === 1 ? 0 : 1,
+                        },
+                      })
+                    }
+                  >
+                    {bypass.value === 1 ? 'Bypassed' : 'On'}
+                  </Button>
+                )
               )}
             </div>
           );

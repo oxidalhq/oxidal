@@ -234,6 +234,12 @@ it('builds parallel scene branches with shared post effects and exact stereo sel
   ).toHaveLength(2);
   const scenes = manifest.extensions['urn:oxidal:scenes:1'].scenes;
   expect(scenes).toHaveLength(2);
+  const branches = manifest.extensions['urn:oxidal:scenes:1'].branches;
+  expect(branches).toHaveLength(2);
+  expect(branches[0].gains).toEqual([
+    { node: 'scene-left', port: 0, value: 1 },
+    { node: 'scene-right', port: 0, value: 1 },
+  ]);
   expect(scenes[0].gains.map((g: { value: number }) => g.value)).toEqual([
     1, 0, 1, 0,
   ]);
