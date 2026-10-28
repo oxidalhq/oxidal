@@ -2095,6 +2095,39 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   const changed = await value();
   await expect(rig.getByRole('status').first()).toHaveText('Session modified');
+  await rig.locator('[data-node="tone"]').getByRole('button').first().click();
+  const eq = rig.getByRole('region', { name: 'Block EQ' });
+  await expect(eq).toBeVisible();
+  const eqBefore = (await get()).control.eq;
+  await eq.getByRole('button', { name: 'Adjust EQ Gain', exact: true }).click();
+  await page
+    .getByRole('slider', { name: 'Adjust EQ Gain' })
+    .press('ArrowRight');
+  await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Cancel', exact: true })
+    .click();
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqBefore);
+  await eq.getByRole('button', { name: 'Adjust EQ Gain', exact: true }).click();
+  await page
+    .getByRole('slider', { name: 'Adjust EQ Gain' })
+    .press('ArrowRight');
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Done', exact: true })
+    .click();
+  await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
+  const eqSaved = (await get()).control.eq;
+  expect(
+    await eq.evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  await test
+    .info()
+    .attach('mixed-eq-controls', {
+      body: await eq.screenshot(),
+      contentType: 'image/png',
+    });
   // Settings must follow this sounding owner, preserving edits before named Save.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
@@ -2186,6 +2219,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await playSavedRig(page, name);
   await expect(rig).toBeVisible();
   await expect.poll(async () => (await get()).phase).toBe('running');
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqSaved);
   await expect.poll(value).toBe(changed);
   await expect.poll(async () => (await get()).control.modified).toBe(false);
   await page.reload();

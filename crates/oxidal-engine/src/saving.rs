@@ -95,7 +95,9 @@ pub fn save_revision(
                     .iter()
                     .any(|old| old.target == c.target && old.value != c.value)
         });
-        if !changed {
+        let eq_changed = confirmed.eq.iter().find(|e| e.node == node.id)
+            != session.initial_eq.iter().find(|e| e.node == node.id);
+        if !changed && !eq_changed {
             continue;
         } // Exact unchanged native bytes, including unknown fields.
         let Some(Processor::Native(engine)) = session.graph.processor_mut(&node.id) else {
@@ -108,6 +110,7 @@ pub fn save_revision(
             continue;
         }
         let expected = engine.live_controls().map_err(|e| e.to_string())?;
+        let expected_eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
         let bytes = engine
             .save_preset(&request.name)
             .map_err(|e| e.to_string())?;
@@ -118,6 +121,9 @@ pub fn save_revision(
             .map_err(|e| e.to_string())?;
         verify.wait_ready().map_err(|e| e.to_string())?;
         let actual = verify.live_controls().map_err(|e| e.to_string())?;
+        if verify.eq_snapshot().map_err(|e| e.to_string())? != expected_eq {
+            return Err("Native EQ did not survive fresh recall".into());
+        }
         if actual.len() != expected.len()
             || expected.iter().any(|c| {
                 !actual

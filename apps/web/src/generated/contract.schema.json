@@ -2074,6 +2074,36 @@
         "q"
       ]
     },
+    "EqCommand": {
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "edit": {
+          "$ref": "#/$defs/EqEdit"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "node": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "node",
+        "block_id",
+        "edit"
+      ]
+    },
     "EqEdit": {
       "description": "One immediate, revision-owned edit; UI cancellation sends its original value.",
       "oneOf": [
@@ -3213,6 +3243,26 @@
         "level"
       ]
     },
+    "NodeEq": {
+      "description": "EQ belongs to a whole-native graph node and its stable inner block identities.",
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BlockEqState"
+          }
+        },
+        "node": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "blocks"
+      ]
+    },
     "OwnedPreset": {
       "type": "object",
       "properties": {
@@ -4035,6 +4085,16 @@
     "Recall": {
       "type": "object",
       "properties": {
+        "eq": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "$ref": "#/$defs/NodeEq"
+          }
+        },
         "source_revision": {
           "type": "string"
         },
@@ -4221,6 +4281,23 @@
             "kind": {
               "type": "string",
               "const": "control"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/EqCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "eq"
             }
           },
           "additionalProperties": false,
@@ -4763,6 +4840,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Control"
+          }
+        },
+        "eq": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NodeEq"
           }
         },
         "latency_frames": {

@@ -148,6 +148,11 @@ impl Owner {
                 old.session != reply.control.session || old.revision > reply.control.revision
             })
             || reply.control.controls.iter().any(|c| !c.accepts(c.value))
+            || reply
+                .control
+                .eq
+                .iter()
+                .any(|e| !oxidal_audio::eq::valid_snapshot(&e.blocks))
         {
             return Err("Mixed worker returned inconsistent readback".into());
         }
@@ -597,6 +602,22 @@ impl Owner {
                     return Err("Mixed audio is not running".into());
                 }
                 let reply = match self.exchange(&WorkerRequest::Control { command }).await {
+                    Ok(r) => r,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                let error = reply.error.clone();
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+                if let Some(e) = error {
+                    return Err(e);
+                }
+            }
+            RigAudioAction::Eq { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::Eq { command }).await {
                     Ok(r) => r,
                     Err(e) => return Err(self.fault(e).await),
                 };

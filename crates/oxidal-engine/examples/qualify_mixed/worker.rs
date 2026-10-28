@@ -99,6 +99,7 @@ fn value(snapshot: &Snapshot, target: &Target) -> f64 {
         .value
 }
 fn compare(a: &Snapshot, b: &Snapshot) {
+    assert_eq!(a.eq, b.eq);
     assert_eq!(a.controls.len(), b.controls.len());
     for c in &a.controls {
         assert!(
@@ -288,12 +289,61 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     bad.values[1] = bad.values[0].clone();
     assert!(session.restore(&bad).is_err());
     compare(&before, &session.snapshot());
+    let mut bad_eq = before.recall();
+    bad_eq.eq.as_mut().unwrap()[0].blocks[0].eq.bands[1].freq_hz = 99999.0;
+    assert!(session.restore(&bad_eq).is_err());
+    assert_eq!(session.snapshot().revision, before.revision);
+    compare(&before, &session.snapshot());
+    let mut replay = before.recall();
+    let eq = &mut replay.eq.as_mut().unwrap()[0].blocks[0].eq;
+    eq.pre = !eq.pre;
+    session.restore(&replay)?;
+    assert_eq!(session.snapshot().eq, replay.eq.unwrap());
+    session.restore(&before.recall())?;
+    compare(&before, &session.snapshot());
     drop(session);
 
     let store_path = root.join("worker-rigs");
     let store = BundleStore::new(store_path.clone());
     let revision = store.save(bundle)?;
     std::fs::write(root.join("mixed-preset-revision"), &revision)?;
+    let mut eq_only = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    let initial = eq_only.snapshot();
+    let row = &initial.eq[0];
+    eq_only.apply_eq(EqCommand {
+        session: initial.session.clone(),
+        expected_revision: initial.revision,
+        node: row.node.clone(),
+        block_id: row.blocks[0].block_id.clone(),
+        edit: oxidal_audio::eq::EqEdit::Pre {
+            value: !row.blocks[0].eq.pre,
+        },
+    })?;
+    assert!(eq_only.snapshot().modified);
+    let eq_revision = oxidal_engine::save_revision(
+        &store,
+        world,
+        SaveRequest {
+            settings: StartRig {
+                revision: revision.clone(),
+                stream: stream(),
+                recall: None,
+            },
+            recall: eq_only.snapshot().recall(),
+            name: "EQ-only snapshot".into(),
+        },
+    )?;
+    let eq_recalled = Session::new(
+        store.read(&eq_revision)?,
+        world,
+        48000.0,
+        128,
+        BUFFER_BUDGET,
+    )?;
+    compare(&eq_only.snapshot(), &eq_recalled.snapshot());
+    assert!(!eq_recalled.snapshot().modified);
+    drop(eq_recalled);
+    drop(eq_only);
     let start = StartRig {
         revision: revision.clone(),
         stream: stream(),
@@ -326,7 +376,46 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         state = received.recv_timeout(Duration::from_secs(3))??;
         assert!(state.error.is_none(), "{:?}", state.error);
     }
+    let row = state.control.eq[0].clone();
+    let mut band = row.blocks[0].eq.bands[1].clone();
+    band.gain_db = 0.1;
+    for edit in [
+        oxidal_audio::eq::EqEdit::Enabled { value: true },
+        oxidal_audio::eq::EqEdit::Band { index: 1, band },
+    ] {
+        send(
+            &mut child,
+            &WorkerRequest::Eq {
+                command: EqCommand {
+                    session: state.control.session.clone(),
+                    expected_revision: state.control.revision,
+                    node: row.node.clone(),
+                    block_id: row.blocks[0].block_id.clone(),
+                    edit,
+                },
+            },
+        )?;
+        state = received.recv_timeout(Duration::from_secs(3))??;
+        assert!(state.error.is_none(), "{:?}", state.error);
+    }
     let confirmed = state.control.clone();
+    assert_ne!(confirmed.eq, vec![row.clone()]);
+    send(
+        &mut child,
+        &WorkerRequest::Eq {
+            command: EqCommand {
+                session: confirmed.session.clone(),
+                expected_revision: confirmed.revision,
+                node: row.node,
+                block_id: "missing".into(),
+                edit: oxidal_audio::eq::EqEdit::Enabled { value: false },
+            },
+        },
+    )?;
+    state = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(state.error.is_some());
+    assert_eq!(state.control.revision, confirmed.revision);
+    compare(&confirmed, &state.control);
     send(&mut child, &WorkerRequest::Control { command: stale })?;
     state = received.recv_timeout(Duration::from_secs(3))??;
     assert!(state.error.is_some());

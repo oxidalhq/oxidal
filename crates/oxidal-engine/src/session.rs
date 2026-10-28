@@ -9,8 +9,10 @@ pub struct Session {
     pub(crate) graph: PreparedPorts,
     pub(crate) bundle: Bundle,
     pub(crate) initial: Vec<Control>,
+    pub(crate) initial_eq: Vec<NodeEq>,
     state: Snapshot,
     failed: bool,
+    replay_token: u64,
 }
 impl Session {
     pub fn new(
@@ -27,9 +29,16 @@ impl Session {
             .as_ref()
             .ok_or("Missing host graph")?;
         let mut controls = Vec::new();
+        let mut eq = Vec::new();
         for node in &host.graph.nodes {
             match graph.processor_mut(&node.id) {
                 Some(Processor::Native(p)) => {
+                    if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
+                        eq.push(NodeEq {
+                            node: node.id.clone(),
+                            blocks: p.eq_snapshot().map_err(|e| e.to_string())?,
+                        });
+                    }
                     controls.extend(
                         p.live_controls()
                             .map_err(|e| e.to_string())?
@@ -126,6 +135,7 @@ impl Session {
             revision: 0,
             source_revision: bundle.revision().into(),
             controls: controls.clone(),
+            eq: eq.clone(),
             buffer_bytes: graph.buffer_bytes(),
             latency_frames: graph.latency_frames(),
         };
@@ -136,8 +146,10 @@ impl Session {
             graph,
             bundle,
             initial: controls,
+            initial_eq: eq,
             state,
             failed: false,
+            replay_token: 0,
         })
     }
     pub fn snapshot(&self) -> Snapshot {
@@ -146,7 +158,8 @@ impl Session {
             .controls
             .iter()
             .zip(&self.initial)
-            .any(|(current, initial)| current.value != initial.value);
+            .any(|(current, initial)| current.value != initial.value)
+            || state.eq != self.initial_eq;
         state
     }
     pub fn healthy(&self) -> bool {
@@ -217,6 +230,57 @@ impl Session {
         }
         self.state.revision = revision;
         Ok(())
+    }
+    pub fn apply_eq(&mut self, command: EqCommand) -> Result<(), String> {
+        if self.failed
+            || command.session != self.state.session
+            || command.expected_revision != self.state.revision
+        {
+            return Err("Stale or failed rig session".into());
+        }
+        let index = self
+            .state
+            .eq
+            .iter()
+            .position(|e| e.node == command.node)
+            .ok_or("EQ requires a whole-native node")?;
+        let mut expected = self.state.eq[index].blocks.clone();
+        let block = expected
+            .iter_mut()
+            .find(|b| b.block_id == command.block_id)
+            .ok_or("Unknown EQ block")?;
+        command.edit.apply(&mut block.eq)?;
+        if expected == self.state.eq[index].blocks {
+            return Ok(());
+        }
+        let revision = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Rig revision exhausted")?;
+        let result = (|| {
+            let Some(Processor::Native(p)) = self.graph.processor_mut(&command.node) else {
+                return Err("Missing EQ processor".to_owned());
+            };
+            p.set_eq(&command.block_id, &command.edit)
+                .map_err(|e| e.to_string())?;
+            let actual = p.eq_snapshot().map_err(|e| e.to_string())?;
+            if actual != expected {
+                return Err("EQ readback differs".into());
+            }
+            Ok(actual)
+        })();
+        match result {
+            Ok(blocks) => {
+                self.state.eq[index].blocks = blocks;
+                self.state.revision = revision;
+                Ok(())
+            }
+            Err(error) => {
+                self.failed = true;
+                Err(error)
+            }
+        }
     }
     fn set(&mut self, index: usize, value: f64) -> Result<(), ControlError> {
         let target = self.state.controls[index].target.clone();
@@ -322,6 +386,20 @@ impl Session {
         {
             return Err("Recall catalog differs".into());
         }
+        if let Some(eq) = &recall.eq
+            && (eq.len() != self.state.eq.len()
+                || eq.iter().zip(&self.state.eq).any(|(a, b)| {
+                    a.node != b.node
+                        || !oxidal_audio::eq::valid_snapshot(&a.blocks)
+                        || a.blocks.len() != b.blocks.len()
+                        || a.blocks
+                            .iter()
+                            .zip(&b.blocks)
+                            .any(|(a, b)| a.block_id != b.block_id)
+                }))
+        {
+            return Err("Recall EQ catalog differs".into());
+        }
         for value in &recall.values {
             let command = ControlCommand {
                 session: self.state.session.clone(),
@@ -330,6 +408,21 @@ impl Session {
                 value: value.value,
             };
             self.apply(command)?;
+        }
+        if let Some(eq) = &recall.eq {
+            for row in eq {
+                let Some(Processor::Native(p)) = self.graph.processor_mut(&row.node) else {
+                    return Err("Missing EQ processor".into());
+                };
+                if p.eq_snapshot().map_err(|e| e.to_string())? == row.blocks {
+                    continue;
+                }
+                if let Err(error) = p.restore_eq(&row.blocks, &mut self.replay_token) {
+                    self.failed = true;
+                    return Err(error.to_string());
+                }
+            }
+            self.state.eq = eq.clone();
         }
         Ok(())
     }

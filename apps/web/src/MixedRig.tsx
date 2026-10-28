@@ -1,3 +1,4 @@
+import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { rigNodeLabel } from './rigDraft';
@@ -52,6 +53,8 @@ export function MixedRig({
     }
   });
   const [busy, setBusy] = useState(false);
+  const [eqBusy, setEqBusy] = useState(false);
+  const [eqSelection, setEqSelection] = useState('');
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
@@ -263,7 +266,11 @@ export function MixedRig({
       state.save.source_session === state.control.session &&
       state.save.source_control_revision === state.control.revision
     );
-  const disabled = !connected || busy || !running || !!readError;
+  const disabled = !connected || busy || eqBusy || !running || !!readError;
+  const eqBlocks =
+    state.control?.eq?.find((e) => e.node === selected?.id)?.blocks ?? [];
+  const eqBlock =
+    eqBlocks.find((e) => e.block_id === eqSelection) ?? eqBlocks[0];
   const scale = edit
     ? lv2Control({
         minimum: edit.control.minimum,
@@ -406,6 +413,58 @@ export function MixedRig({
           ) : (
             !nodes.length && <p>Input → Output</p>
           )}
+        </div>
+      )}
+      {running && selected && eqBlock && (
+        <div className="space-y-2">
+          {eqBlocks.length > 1 && (
+            <div className="flex flex-wrap gap-1" aria-label="Native EQ blocks">
+              {eqBlocks.map((block, index) => (
+                <Button
+                  key={block.block_id}
+                  disabled={disabled || !!edit}
+                  variant={
+                    block.block_id === eqBlock.block_id
+                      ? 'secondary'
+                      : 'outline'
+                  }
+                  onClick={() => setEqSelection(block.block_id)}
+                >
+                  EQ {index + 1}
+                </Button>
+              ))}
+            </div>
+          )}
+          <LiveEq
+            key={`${state.control!.session}:${selected.id}:${eqBlock.block_id}`}
+            state={{ ...state, eq: eqBlocks }}
+            blockId={eqBlock.block_id}
+            disabled={!connected || busy || !!edit || !!readError}
+            onEditing={(editing) => {
+              generation.current++;
+              sending.current = editing;
+              setEqBusy(editing);
+            }}
+            onChange={accept}
+            send={async (current, edit) => {
+              const next = await rigAudioCommand(current, {
+                kind: 'eq',
+                command: {
+                  session: current.control!.session,
+                  expected_revision: current.control!.revision,
+                  node: selected.id,
+                  block_id: eqBlock.block_id,
+                  edit,
+                },
+              });
+              return {
+                ...next,
+                eq:
+                  next.control?.eq?.find((e) => e.node === selected.id)
+                    ?.blocks ?? [],
+              };
+            }}
+          />
         </div>
       )}
       {edit && (

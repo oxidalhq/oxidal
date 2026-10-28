@@ -207,6 +207,15 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         409
     );
     s = apply(&c, &url, set(&s, native.clone(), 0.6)).await;
+    let row = s["control"]["eq"][0].clone();
+    let eq_action = json!({"kind":"eq", "command": {
+        "session":s["control"]["session"], "expected_revision":s["control"]["revision"],
+        "node":row["node"], "block_id":row["blocks"][0]["block_id"],
+        "edit":{"kind":"pre", "value":!row["blocks"][0]["eq"]["pre"].as_bool().unwrap()}
+    }});
+    s = apply(&c, &url, eq_action).await;
+    let confirmed_eq = s["control"]["eq"].clone();
+    assert_ne!(confirmed_eq[0], row);
     let saving = apply(
         &c,
         &url,
@@ -238,6 +247,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     let before_frames = s["processed_frames"].as_u64().unwrap();
     let s = apply(&c, &url, json!({"kind":"restart"})).await;
     assert_eq!(control(&s, &gain), -9.0);
+    assert_eq!(s["control"]["eq"], confirmed_eq);
     assert!((control(&s, &native) - 0.6).abs() < 1e-5);
     // Rate/buffer changes reconstruct the confirmed unsaved controls.
     let mut updated_stream = stream();
@@ -276,6 +286,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     unavailable["output"]["endpoint"] = json!("hw:CARD=MissingDevice,DEV=0");
     let restored = apply(&c, &url, json!({"kind":"reconfigure","stream":unavailable})).await;
     assert_eq!(restored["configured"]["stream"], updated_stream);
+    assert_eq!(restored["control"]["eq"], confirmed_eq);
     assert_eq!(
         restored["control"]["latency_frames"],
         s["control"]["latency_frames"]
@@ -626,6 +637,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     });
     let booted = phase(&c, &url, "running").await;
     assert_eq!(booted["start_on_boot"], true);
+    assert_eq!(booted["control"]["eq"], selected["control"]["eq"]);
     assert_eq!(control(&booted, &gain), -11.0);
     assert!((control(&booted, &native) - 0.43).abs() < 1e-5);
     assert_eq!(pids(&executable).len(), 1);

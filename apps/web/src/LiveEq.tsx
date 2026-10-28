@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { playbackCommand, type AudioAction, type AudioState } from './api';
+import { type AudioAction, type AudioState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
@@ -16,18 +16,22 @@ const fields = {
 const bandNames = ['Low', '1', '2', '3', '4', 'High'];
 
 /** Direct audible EQ. The same revision-owned queue powers touch preview and Cancel. */
-export function LiveEq({
+type EqSession = Pick<AudioState, 'session' | 'revision' | 'eq'>;
+
+export function LiveEq<S extends EqSession>({
   state,
   blockId,
   disabled,
   onChange,
   onEditing,
+  send,
 }: {
-  state: AudioState;
+  state: S;
   blockId: string;
   disabled: boolean;
-  onChange: (state: AudioState) => void;
+  onChange: (state: S) => void;
   onEditing: (editing: boolean) => void;
+  send: (state: S, edit: Edit) => Promise<S>;
 }) {
   const [index, setIndex] = useState(1);
   const [error, setError] = useState('');
@@ -39,7 +43,7 @@ export function LiveEq({
     session: string;
     revision: number;
   } | null>(null);
-  const queue = useRef<EditQueue<AudioState> | null>(null);
+  const queue = useRef<EditQueue<S> | null>(null);
   const latest = useRef(0);
   const mounted = useRef(false);
   const cursor = useRef(state);
@@ -66,7 +70,7 @@ export function LiveEq({
   const locked = disabled || busy || stale;
   const display = (field: Field, value: number) =>
     `${Number(value.toFixed(field === 'freqHz' ? 0 : 2))} ${fields[field].unit}`.trim();
-  function accept(next: AudioState) {
+  function accept(next: S) {
     cursor.current = next;
     if (mounted.current) {
       setDraft((old) => (old ? { ...old, revision: next.revision } : old));
@@ -79,13 +83,7 @@ export function LiveEq({
     onEditing(true);
     setError('');
     try {
-      accept(
-        await playbackCommand(state, {
-          kind: 'set_eq',
-          block_id: blockId,
-          edit,
-        }),
-      );
+      accept(await send(state, edit));
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -108,7 +106,7 @@ export function LiveEq({
     });
     setError('');
     onEditing(true);
-    queue.current = new EditQueue<AudioState>(
+    queue.current = new EditQueue<S>(
       'live',
       crypto.randomUUID(),
       Promise.resolve(),
@@ -120,10 +118,10 @@ export function LiveEq({
         if (!current)
           throw new Error('EQ target changed. Reopen this control.');
         if (current[field] === value) return cursor.current;
-        const next = await playbackCommand(cursor.current, {
-          kind: 'set_eq',
-          block_id: blockId,
-          edit: { kind: 'band', index, band: { ...original, [field]: value } },
+        const next = await send(cursor.current, {
+          kind: 'band',
+          index,
+          band: { ...original, [field]: value },
         });
         cursor.current = next;
         return next;

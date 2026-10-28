@@ -449,3 +449,11 @@ The existing native qualification runner tests source-file removal, a missing
 alias with an unaffected existing session, isolated Save and fresh rendered recall.
 These tests establish offline persistence, not gapless transitions or physical
 real-time performance.
+
+## Whole-native EQ authoring
+
+Whole-native graph nodes expose stable inner-block six-band EQ through the shared touch panel. Edits reach the sounding worker immediately with both actor and DSP session/revision checks. Invalid bands, missing targets and stale revisions leave the confirmed session unchanged; ambiguous native readback fails the worker closed. Cancel restores the opening value through the same queue.
+
+Confirmed EQ is part of mixed recovery and explicit boot capture. Legacy records without EQ retain their source preset values. Reconfiguration and isolated export replay EQ only on prepared, non-sounding candidates. Save detects EQ-only changes, verifies fresh native recall, and keeps unchanged native resources byte-identical. The maintained mixed worker/HTTP/browser suites exercise these paths.
+
+Guarded extracted amp/cab recipes still do not expose EQ: their role-specific recipe must retain it before live editing is admitted. This does not add live structural replacement, automatic alignment, gapless switching or physical real-time acceptance.

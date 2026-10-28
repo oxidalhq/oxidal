@@ -554,6 +554,13 @@ export function LiveRig({
             key={`${state.session}:${row.block_id}`}
             state={state}
             blockId={row.block_id}
+            send={(current, edit) =>
+              playbackCommand(current, {
+                kind: 'set_eq',
+                block_id: row.block_id,
+                edit,
+              })
+            }
             disabled={!connected || busy || !!draft || modelPending}
             onEditing={setEqEditing}
             onChange={(next) => {

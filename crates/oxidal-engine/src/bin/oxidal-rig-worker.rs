@@ -186,6 +186,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let error = match request {
                 WorkerRequest::Status => None,
                 WorkerRequest::Control { command } => session.apply(command).err(),
+                WorkerRequest::Eq { command } => session.apply_eq(command).err(),
             };
             if !session.healthy() {
                 return Err(error.unwrap_or_else(|| "Rig failed".into()).into());

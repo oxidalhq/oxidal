@@ -309,6 +309,10 @@ export type RigAudioAction =
       kind: "control";
     }
   | {
+      command: EqCommand;
+      kind: "eq";
+    }
+  | {
       kind: "save";
       name: string;
     };
@@ -1056,8 +1060,16 @@ export interface StartRig {
   stream: StreamConfig;
 }
 export interface Recall {
+  eq?: NodeEq[] | null;
   source_revision: string;
   values: Value[];
+}
+/**
+ * EQ belongs to a whole-native graph node and its stable inner block identities.
+ */
+export interface NodeEq {
+  blocks: BlockEqState[];
+  node: string;
 }
 export interface Value {
   target: Target;
@@ -1068,6 +1080,13 @@ export interface ControlCommand {
   session: string;
   target: Target;
   value: number;
+}
+export interface EqCommand {
+  block_id: string;
+  edit: EqEdit;
+  expected_revision: number;
+  node: string;
+  session: string;
 }
 export interface RigAudioState {
   configured?: StartRig | null;
@@ -1089,6 +1108,7 @@ export interface RigAudioState {
 export interface Snapshot3 {
   buffer_bytes: number;
   controls: Control[];
+  eq?: NodeEq[];
   /**
    * Reported algorithmic and alignment delay; excludes audio devices/transport.
    */

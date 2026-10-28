@@ -43,6 +43,22 @@ impl Control {
             && (!self.toggle || v == self.minimum || v == self.maximum)
     }
 }
+/// EQ belongs to a whole-native graph node and its stable inner block identities.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NodeEq {
+    pub node: String,
+    pub blocks: Vec<oxidal_audio::eq::BlockEqState>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EqCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub node: String,
+    pub block_id: String,
+    pub edit: oxidal_audio::eq::EqEdit,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
@@ -52,6 +68,8 @@ pub struct Snapshot {
     pub revision: u64,
     pub source_revision: String,
     pub controls: Vec<Control>,
+    #[serde(default)]
+    pub eq: Vec<NodeEq>,
     pub buffer_bytes: usize,
     /// Reported algorithmic and alignment delay; excludes audio devices/transport.
     pub latency_frames: u32,
@@ -60,6 +78,7 @@ impl Snapshot {
     pub fn recall(&self) -> Recall {
         Recall {
             source_revision: self.source_revision.clone(),
+            eq: Some(self.eq.clone()),
             values: self
                 .controls
                 .iter()
@@ -76,6 +95,8 @@ impl Snapshot {
 pub struct Recall {
     pub source_revision: String,
     pub values: Vec<Value>,
+    #[serde(default)]
+    pub eq: Option<Vec<NodeEq>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -119,6 +140,7 @@ pub fn valid_revision(s: &str) -> bool {
 pub enum WorkerRequest {
     Status,
     Control { command: ControlCommand },
+    Eq { command: EqCommand },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -192,6 +214,7 @@ pub enum RigAudioAction {
     Restart,
     Reconfigure { stream: oxidal_audio::StreamConfig },
     Control { command: ControlCommand },
+    Eq { command: EqCommand },
     Save { name: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
