@@ -180,10 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Kept out of the DSP closure; physical deadline qualification remains required.
             let event = match request {
                 WorkerRequest::Authoring(request) => {
-                    let mutating = !matches!(
-                        request.authoring,
-                        oxidal_audio::structure::AuthoringAction::Inspect
-                    );
+                    let mutating = request.authoring.changes_tone();
                     let result = if models.pending() {
                         Err("Finish model preparation before changing the chain".into())
                     } else {

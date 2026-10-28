@@ -36,10 +36,7 @@ impl Session {
             .or_insert_with(|| {
                 oxidal_tone3000::working::Authoring::for_source(root, source, receipt)
             });
-        let mutating = !matches!(
-            command.action,
-            oxidal_audio::structure::AuthoringAction::Inspect
-        );
+        let mutating = command.action.changes_tone();
         let result = owner.command(engine, command.action);
         if owner.failed() {
             self.failed = true;

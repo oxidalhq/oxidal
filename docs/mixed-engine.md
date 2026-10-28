@@ -595,7 +595,7 @@ Mixing adds branch signals without automatic normalization or limiting; use the 
 ### Whole-native authoring and portable instance settings
 
 The selected whole-native node exposes the shared **Chain actions** controls:
-duplicate, remove, reorder, move between lanes, mono/stereo, input mode and bounded
+copy/paste, duplicate, remove, reorder, move between lanes, swap/reset, mono/stereo, input mode and bounded
 structural undo/redo. Commands require both the daemon cursor and the DSP session
 cursor. Guarded extracted amp/cab stages retain their existing editing contract;
 this does not provide a host-topology or complex parallel-branch editor.

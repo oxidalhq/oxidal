@@ -82,6 +82,40 @@ export function NativeAuthoring({
             >
               {layout.stereo ? 'Use mono chain' : 'Use stereo chains'}
             </Button>
+            <Button
+              variant="outline"
+              disabled={disabled || !layout.stereo}
+              onClick={() =>
+                void author({ kind: 'edit', edit: { kind: 'swap' } })
+              }
+            >
+              Swap left/right
+            </Button>
+            <Button
+              variant="outline"
+              disabled={disabled}
+              onClick={() =>
+                void author({ kind: 'edit', edit: { kind: 'reset' } })
+              }
+            >
+              Reset chain
+            </Button>
+            <Button
+              variant="outline"
+              disabled={disabled || !status.can_paste}
+              onClick={() =>
+                void author({
+                  kind: 'edit',
+                  edit: {
+                    kind: 'paste',
+                    lane,
+                    index: position >= 0 ? position + 1 : laneBlocks.length,
+                  },
+                })
+              }
+            >
+              Paste block
+            </Button>
             {(['stereo', 'left', 'right', 'dual'] as const).map((mode) => (
               <Button
                 key={mode}
@@ -99,6 +133,16 @@ export function NativeAuthoring({
             ))}
             {selectedBlock && position >= 0 && (
               <>
+                <Button
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() =>
+                    void author({ kind: 'copy', block_id: selectedBlock })
+                  }
+                >
+                  Copy block
+                </Button>
+
                 <Button
                   variant="outline"
                   disabled={disabled || position === 0}

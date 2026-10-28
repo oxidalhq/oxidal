@@ -230,6 +230,9 @@ impl Authoring {
             settings,
             setting_steps,
             layout: engine.layout().map_err(|e| e.to_string())?,
+            can_paste: engine.chain().map_err(|e| e.to_string())?["canPasteBlock"]
+                .as_bool()
+                .unwrap_or(false),
             can_undo: !self.undo.is_empty(),
             can_redo: !self.redo.is_empty(),
             working: self.working.clone(),
@@ -273,6 +276,10 @@ impl Authoring {
         }
         if self.failed {
             return Err("Native authoring failed; restart required".into());
+        }
+        if let AuthoringAction::Copy { block_id } = &action {
+            engine.copy_block(block_id).map_err(|e| e.to_string())?;
+            return self.snapshot(engine);
         }
         if matches!(action, AuthoringAction::Inspect) {
             return self.snapshot(engine);
@@ -318,7 +325,7 @@ impl Authoring {
                 AuthoringAction::Redo => engine
                     .restore(self.redo.back().ok_or("No redo available")?)
                     .map_err(|e| e.to_string())?,
-                AuthoringAction::Inspect => unreachable!(),
+                AuthoringAction::Inspect | AuthoringAction::Copy { .. } => unreachable!(),
             }
             engine.wait_ready().map_err(|e| e.to_string())?;
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {

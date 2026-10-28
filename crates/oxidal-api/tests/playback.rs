@@ -878,6 +878,19 @@ async fn qualify_models(
             .map(|c| c["label"].as_str().unwrap())
             .collect::<Vec<_>>()
     );
+    let copied_models = state["models"].clone();
+    let copied_working = state["configured"]["working"].clone();
+    let copied = send(
+        client,
+        url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"copy","block_id":target}}),
+    )
+    .await;
+    assert_eq!(copied.status(), 200);
+    state = copied.json().await.unwrap();
+    assert_eq!(state["models"], copied_models);
+    assert_eq!(state["configured"]["working"], copied_working);
     assert_eq!(state["saved_copy"], Value::Null, "audition precedes save");
     assert_eq!(state["modified"], true);
     state
@@ -1262,6 +1275,18 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         .find(|b| b["insert"] == false)
         .unwrap()["id"]
         .clone();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"copy","block_id":block}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert!(state["configured"]["working"].is_null());
+    assert_eq!(state["modified"], false);
+    assert_eq!(state["authoring"]["can_paste"], true);
     let duplicate = json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"duplicate","block_id":block,"lane":"left","index":0}}});
     let before_duplicate = state.clone();
     let response = send(&client, &url, &state, duplicate.clone()).await;

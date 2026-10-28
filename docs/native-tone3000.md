@@ -375,3 +375,15 @@ shared browser controls. Their working state and portable instance settings are
 specified in [mixed engine authoring](mixed-engine.md#whole-native-authoring-and-portable-instance-settings).
 Automatic measurement workflows and broader upstream action parity remain open;
 scalar input calibration is not an automatic guitar-profile calibration tool.
+
+The sounding native and hybrid chain actions additionally support **Copy block**,
+**Paste block**, **Swap left/right** and **Reset chain**. Copy does not dirty the
+sound or replace its working receipt. The clipboard is self-contained within its
+native instance: deleting the source block does not lose its embedded model.
+Paste receives a fresh block ID, and paste/swap/reset use the same verified
+checkpoint and bounded undo/redo transactions. Swap requires stereo mode; stale
+copies, empty clipboard pastes and invalid destinations fail without changing
+sound. Clipboard contents are not exported or persisted across worker replacement.
+Maintained DSP/HTTP tests cover those boundaries and independent Save/reopen;
+one shared browser workflow covers Copy/Paste/Undo. This does not claim complete
+upstream history, global clipboard or measurement-tool parity.

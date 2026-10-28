@@ -653,6 +653,68 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
             &directory,
         )
     };
+    assert!(
+        send(
+            &mut session,
+            A::Edit {
+                edit: E::Paste {
+                    lane: L::Left,
+                    index: 0
+                }
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(session.snapshot().revision, initial.revision);
+    assert!(
+        send(
+            &mut session,
+            A::Copy {
+                block_id: "stale".into()
+            }
+        )
+        .is_err()
+    );
+    send(
+        &mut session,
+        A::Copy {
+            block_id: block.clone(),
+        },
+    )?;
+    assert!(session.snapshot().authoring[0].status.can_paste);
+    assert!(!session.snapshot().modified && session.snapshot().working.is_empty());
+    // Clipboard contains its own model bytes, so deleting its source cannot break Paste.
+    send(
+        &mut session,
+        A::Remove {
+            block_id: block.clone(),
+        },
+    )?;
+    send(
+        &mut session,
+        A::Edit {
+            edit: E::Paste {
+                lane: L::Left,
+                index: 0,
+            },
+        },
+    )?;
+    assert_eq!(
+        session.snapshot().authoring[0]
+            .status
+            .layout
+            .left
+            .iter()
+            .filter(|b| !b.insert)
+            .count(),
+        1
+    );
+    send(&mut session, A::Undo)?;
+    send(&mut session, A::Undo)?;
+    assert_eq!(
+        session.snapshot().authoring[0].status.layout,
+        initial.authoring[0].status.layout
+    );
     send(
         &mut session,
         A::Edit {
@@ -785,8 +847,30 @@ pub fn qualify_authoring(world: &World, bytes: &[u8], root: &Path) -> Result<(),
         duplicated.authoring[0].status.layout
     );
     assert_eq!(store.read(&revision)?.resource("current"), Some(bytes));
+    send(
+        &mut session,
+        A::Edit {
+            edit: E::Stereo { enabled: true },
+        },
+    )?;
+    let before_swap = session.snapshot().authoring[0].status.layout.clone();
+    send(&mut session, A::Edit { edit: E::Swap })?;
+    let swapped = session.snapshot().authoring[0].status.layout.clone();
+    assert_eq!(swapped.left, before_swap.right);
+    assert_eq!(swapped.right, before_swap.left);
+    send(&mut session, A::Edit { edit: E::Reset })?;
+    assert!(
+        session.snapshot().authoring[0]
+            .status
+            .layout
+            .left
+            .iter()
+            .all(|b| b.insert)
+    );
+    send(&mut session, A::Undo)?;
+    assert_eq!(session.snapshot().authoring[0].status.layout, swapped);
     eprintln!(
-        "mixed: native duplicate/undo/redo, peer LV2 state, isolated Save, cache-free recall and deterministic PCM passed ({error})"
+        "mixed: native clipboard deletion/paste, swap/reset/undo, duplicate/undo/redo, peer LV2 state, isolated Save, cache-free recall and deterministic PCM passed ({error})"
     );
     Ok(())
 }

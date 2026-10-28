@@ -430,7 +430,7 @@ impl Owner {
                 "Start audio and finish model preparation before authoring the chain".into(),
             );
         }
-        let mutating = !matches!(action, AuthoringAction::Inspect);
+        let mutating = action.changes_tone();
         let serial = self
             .state
             .revision

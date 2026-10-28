@@ -54,6 +54,7 @@ unsafe extern "C" {
         written: *mut usize,
     ) -> i32;
     fn oxidal_t3k_structure(engine: *mut c_void, request: *const c_char) -> i32;
+    fn oxidal_t3k_copy_block(engine: *mut c_void, id: *const c_char) -> i32;
     fn oxidal_t3k_remove_block(engine: *mut c_void, id: *const c_char) -> i32;
     fn oxidal_t3k_input_mode(engine: *mut c_void, mode: i32) -> i32;
     fn oxidal_t3k_chain(
@@ -353,6 +354,14 @@ impl Engine {
         checked(unsafe { oxidal_t3k_input_mode(self.ptr.as_ptr(), mode as i32) })
     }
     /// Control-thread structural edit. Call wait_ready before accepting the result.
+    pub fn copy_block(&mut self, id: &str) -> Result<()> {
+        if self.role != ProcessingRole::WholePreset {
+            return Err(NativeError("Whole-native clipboard required".into()));
+        }
+        let id = string(id)?;
+        // SAFETY: exclusive owner handle and valid CString remain live for the call.
+        checked(unsafe { oxidal_t3k_copy_block(self.ptr.as_ptr(), id.as_ptr()) })
+    }
     pub fn remove_block(&mut self, id: &str) -> Result<()> {
         let id = string(id)?;
         // SAFETY: bounded identity and live exclusive owner; native rejects stale/insert IDs.
@@ -385,7 +394,7 @@ impl Engine {
             right: lane("chainRight")?,
         })
     }
-    /// Draft-only structural mutation; the editor owns rollback, history and revision.
+    /// Native control-owner mutation; the calling editor/session owns rollback, history and revision.
     pub fn edit_structure(&mut self, edit: &crate::protocol::StructureEdit) -> Result<()> {
         use crate::protocol::{ChainLane, StructureEdit};
         if self.role != ProcessingRole::WholePreset {
@@ -447,7 +456,22 @@ impl Engine {
                     return Err(NativeError("Invalid or stale structural target".into()));
                 }
             }
-            StructureEdit::Stereo { .. } => (),
+            StructureEdit::Reset | StructureEdit::Stereo { .. } => (),
+            StructureEdit::Swap => {
+                if !layout.stereo {
+                    return Err(NativeError("Stereo chains required".into()));
+                }
+            }
+            StructureEdit::Paste { lane, index } => {
+                if (*lane == ChainLane::Right && !layout.stereo)
+                    || *index > blocks(*lane).len()
+                    || !self.chain()?["canPasteBlock"].as_bool().unwrap_or(false)
+                {
+                    return Err(NativeError(
+                        "Clipboard unavailable or invalid paste destination".into(),
+                    ));
+                }
+            }
             StructureEdit::Input { .. } => unreachable!("handled before lane validation"),
         }
         let bytes = serde_json::to_string(edit).map_err(|e| NativeError(e.to_string()))?;

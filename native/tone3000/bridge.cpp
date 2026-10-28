@@ -412,6 +412,9 @@ EXPORT int oxidal_t3k_chain(void* ptr, char* out, size_t capacity, size_t* writt
   return guard([&] { json(engine(ptr).processor.getChainState(-1), out, capacity, written); });
 }
 
+EXPORT int oxidal_t3k_copy_block(void* ptr, const char* id) noexcept {
+  return guard([&] { if (!id || std::strlen(id)>128 || !engine(ptr).processor.copyChainBlock(id)) throw std::runtime_error("Missing or stale block to copy"); });
+}
 EXPORT int oxidal_t3k_remove_block(void* ptr, const char* id) noexcept {
   return guard([&] {
     auto& p = engine(ptr).processor;
@@ -420,7 +423,7 @@ EXPORT int oxidal_t3k_remove_block(void* ptr, const char* id) noexcept {
   });
 }
 
-// Owner-thread draft operations only. PCM use requires a separately prepared handoff.
+// Control-owner operations; Rust owns rollback and latency admission. Not callback-safe.
 EXPORT int oxidal_t3k_structure(void* ptr, const char* request) noexcept {
   return guard([&] {
     if (!request || std::strlen(request) > 262144) throw std::runtime_error("Invalid structural request");
@@ -433,6 +436,8 @@ EXPORT int oxidal_t3k_structure(void* ptr, const char* request) noexcept {
       p.setStereoMode(static_cast<bool>(edit["enabled"]));
       return;
     }
+    if (kind == "reset") { p.resetToDefault(); return; }
+    if (kind == "swap") { if (!p.swapChains()) throw std::runtime_error("Stereo chains required"); return; }
     const auto side = edit["lane"].toString();
     if (side != "left" && side != "right") throw std::runtime_error("Invalid lane");
     if (kind == "reorder") {
@@ -445,6 +450,12 @@ EXPORT int oxidal_t3k_structure(void* ptr, const char* request) noexcept {
         order.push_back(id.toString().toStdString());
       }
       if (!p.reorderChainBlocks(order)) throw std::runtime_error("Order must contain every block in one lane exactly once");
+      return;
+    }
+    if (kind == "paste") {
+      const auto index=edit["index"];
+      if ((!index.isInt() && !index.isInt64()) || static_cast<juce::int64>(index)<0 || static_cast<juce::int64>(index)>2147483647 || p.pasteChainBlock(side,static_cast<int>(index)).empty())
+        throw std::runtime_error("Clipboard cannot be pasted here");
       return;
     }
     const auto id = edit["block_id"].toString();

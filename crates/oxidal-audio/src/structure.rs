@@ -46,6 +46,12 @@ impl ChainLane {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StructureEdit {
+    Reset,
+    Swap,
+    Paste {
+        lane: ChainLane,
+        index: usize,
+    },
     Input {
         mode: InputMode,
     },
@@ -71,6 +77,7 @@ pub enum StructureEdit {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthoringAction {
+    Copy { block_id: String },
     Inspect,
     Parameter { parameter: String, value: f32 },
     Edit { edit: StructureEdit },
@@ -86,6 +93,8 @@ pub struct AuthoringStatus {
     pub settings: Vec<crate::lifecycle::LiveControl>,
     #[serde(default)]
     pub setting_steps: std::collections::BTreeMap<String, f32>,
+    #[serde(default)]
+    pub can_paste: bool,
     pub can_undo: bool,
     pub can_redo: bool,
     /// Immutable local working-state receipt; never a file path or portable preset.
@@ -132,4 +141,10 @@ pub struct PrepareParameter {
     pub playback: crate::lifecycle::SavePlayback,
     pub parameter: String,
     pub value: f32,
+}
+
+impl AuthoringAction {
+    pub fn changes_tone(&self) -> bool {
+        !matches!(self, Self::Inspect | Self::Copy { .. })
+    }
 }

@@ -217,6 +217,33 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         .unwrap()["id"]
         .clone();
     let author = |s: &Value, action: Value| json!({"kind":"authoring","command":{"session":s["control"]["session"],"expected_revision":s["control"]["revision"],"node":"tone","action":action}});
+    let before_copy = s["control"]["working"].clone();
+    s = apply(
+        &c,
+        &url,
+        author(&s, json!({"kind":"copy","block_id":block})),
+    )
+    .await;
+    assert_eq!(s["control"]["working"], before_copy);
+    assert_eq!(s["control"]["authoring"][0]["status"]["can_paste"], true);
+    s = apply(
+        &c,
+        &url,
+        author(
+            &s,
+            json!({"kind":"edit","edit":{"kind":"paste","lane":"left","index":0}}),
+        ),
+    )
+    .await;
+    assert_ne!(
+        s["control"]["authoring"][0]["status"]["layout"],
+        original_layout
+    );
+    s = apply(&c, &url, author(&s, json!({"kind":"undo"}))).await;
+    assert_eq!(
+        s["control"]["authoring"][0]["status"]["layout"],
+        original_layout
+    );
     let duplicate = author(
         &s,
         json!({"kind":"edit","edit":{"kind":"duplicate","block_id":block,"lane":"left","index":0}}),

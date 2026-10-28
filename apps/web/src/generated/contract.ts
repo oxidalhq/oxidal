@@ -87,6 +87,10 @@ export type EqEdit =
 export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type AuthoringAction =
   | {
+      block_id: string;
+      kind: "copy";
+    }
+  | {
       kind: "inspect";
     }
   | {
@@ -109,6 +113,17 @@ export type AuthoringAction =
       kind: "redo";
     };
 export type StructureEdit =
+  | {
+      kind: "reset";
+    }
+  | {
+      kind: "swap";
+    }
+  | {
+      index: number;
+      kind: "paste";
+      lane: ChainLane;
+    }
   | {
       kind: "input";
       mode: InputMode;
@@ -134,8 +149,8 @@ export type StructureEdit =
       enabled: boolean;
       kind: "stereo";
     };
-export type InputMode = "stereo" | "left" | "right" | "dual";
 export type ChainLane = "left" | "right";
+export type InputMode = "stereo" | "left" | "right" | "dual";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
@@ -701,6 +716,7 @@ export interface AudioState {
   start_on_boot: boolean;
 }
 export interface AuthoringStatus {
+  can_paste?: boolean;
   can_redo: boolean;
   can_undo: boolean;
   layout: ChainLayout;

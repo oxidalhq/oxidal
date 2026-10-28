@@ -1062,6 +1062,23 @@
         {
           "type": "object",
           "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "copy"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "inspect"
@@ -1185,6 +1202,10 @@
     "AuthoringStatus": {
       "type": "object",
       "properties": {
+        "can_paste": {
+          "type": "boolean",
+          "default": false
+        },
         "can_redo": {
           "type": "boolean"
         },
@@ -6248,6 +6269,55 @@
     },
     "StructureEdit": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "reset"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "swap"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "paste"
+            },
+            "lane": {
+              "$ref": "#/$defs/ChainLane"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "lane",
+            "index"
+          ]
+        },
         {
           "type": "object",
           "properties": {

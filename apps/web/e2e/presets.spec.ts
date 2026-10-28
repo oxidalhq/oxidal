@@ -2164,6 +2164,28 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .click();
   const layoutBefore = (await get()).control.authoring[0].status.layout;
   await rig.getByText('Chain actions', { exact: true }).click();
+  await rig.getByRole('button', { name: 'Copy block', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.can_paste)
+    .toBe(true);
+  await rig.getByRole('button', { name: 'Paste block', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await get()).control.authoring[0].status.layout.left.filter(
+          (b: { insert: boolean }) => !b.insert,
+        ).length,
+    )
+    .toBe(
+      layoutBefore.left.filter((b: { insert: boolean }) => !b.insert).length +
+        1,
+    );
+  await rig
+    .getByRole('button', { name: 'Undo structure', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.layout)
+    .toEqual(layoutBefore);
   await rig
     .getByRole('button', { name: 'Duplicate block', exact: true })
     .click();
