@@ -133,5 +133,7 @@ Mixed hardware MIDI now also maps actual native/LV2/host controls with absolute,
 toggle and two relative encoder modes. Device-local mappings share the web control
 owner and latency guards; fresh-event CC learning changes a draft before Apply.
 Maintained DSP/worker/browser/learning and recovery tests cover the software path.
-Standalone native-worker MIDI, hardware output feedback and physical deadlines
-remain open. See docs/mixed-engine.md.
+Standalone native-worker MIDI now reuses the same input/scaler/panel with ordered
+readback, lifecycle capture and independent connection telemetry. Hardware output
+feedback and physical deadlines remain open. See docs/mixed-engine.md and
+docs/native-tone3000.md.

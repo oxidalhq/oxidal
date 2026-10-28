@@ -8,8 +8,10 @@ import {
 } from './api';
 
 type Settings = NonNullable<NonNullable<RigAudioState['configured']>['midi']>;
-/** Device settings stay outside portable presets. This panel never impersonates
- * a connected controller when only its saved configuration is present. */
+type MidiView = Pick<
+  NonNullable<RigAudioState['control']>,
+  'controls' | 'scenes' | 'branches' | 'midi'
+>;
 export function SceneMidi({
   state,
   disabled,
@@ -19,6 +21,27 @@ export function SceneMidi({
   disabled: boolean;
   onCommand: (action: RigAudioAction) => Promise<void>;
 }) {
+  return (
+    <MidiControls
+      control={state.control ?? null}
+      configured={state.configured?.midi ?? null}
+      disabled={disabled}
+      onApply={(settings) => onCommand({ kind: 'midi', settings })}
+    />
+  );
+}
+/** Shared real owner readback; device settings stay outside portable presets. */
+export function MidiControls({
+  control,
+  configured,
+  disabled,
+  onApply,
+}: {
+  control: MidiView | null;
+  configured: Settings | null;
+  disabled: boolean;
+  onApply: (settings: Settings | null) => Promise<void>;
+}) {
   const [devices, setDevices] = useState<MidiDevices | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,8 +50,8 @@ export function SceneMidi({
     index: number;
     after: number;
   } | null>(null);
-  const status = state.control?.midi;
-  const savedInput = state.configured?.midi?.input;
+  const status = control?.midi;
+  const savedInput = configured?.input;
   // Consume a fresh external snapshot once; clearing the token prevents later
   // telemetry from changing the draft before the musician applies it.
   const message = status?.last;
@@ -50,8 +73,8 @@ export function SceneMidi({
     setLearning(null);
   }
 
-  const scenes = state.control?.scenes?.scenes ?? [];
-  const branches = state.control?.branches ?? [];
+  const scenes = control?.scenes?.scenes ?? [];
+  const branches = control?.branches ?? [];
   async function scan() {
     setLoading(true);
     setError('');
@@ -65,7 +88,7 @@ export function SceneMidi({
   }
   function open() {
     setDraft(
-      state.configured?.midi ?? {
+      configured ?? {
         input: '',
         channel: 1,
         branch_bindings: [],
@@ -79,8 +102,8 @@ export function SceneMidi({
     );
     void scan();
   }
-  const controls = state.control?.controls ?? [];
-  if (!state.control) return null;
+  const controls = control?.controls ?? [];
+  if (!control) return null;
   return (
     <details
       className="w-full max-w-3xl rounded-md border border-border p-3"
@@ -93,7 +116,7 @@ export function SceneMidi({
         MIDI controls
       </summary>
       <div className="space-y-3 pt-3">
-        {state.configured?.midi && (
+        {configured && (
           <p className="caption" role="status">
             {status?.connected ? 'Connected' : 'Waiting for controller'} ·{' '}
             {status?.events ?? 0} messages
@@ -521,14 +544,14 @@ export function SceneMidi({
                 !draft.branch_bindings?.length &&
                 !draft.parameter_bindings?.length)
             }
-            onClick={() => void onCommand({ kind: 'midi', settings: draft })}
+            onClick={() => void onApply(draft)}
           >
             Apply MIDI
           </Button>
           <Button
             variant="outline"
-            disabled={disabled || !state.configured?.midi}
-            onClick={() => void onCommand({ kind: 'midi', settings: null })}
+            disabled={disabled || !configured}
+            onClick={() => void onApply(null)}
           >
             Disable MIDI
           </Button>

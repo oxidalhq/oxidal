@@ -14,6 +14,10 @@ export type AccountAction =
 export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
 export type AudioAction =
   | {
+      kind: "midi";
+      settings?: Settings2 | null;
+    }
+  | {
       kind: "create";
       name: string;
       stream: StreamConfig;
@@ -64,6 +68,27 @@ export type AudioAction =
   | {
       action: AuthoringAction;
       kind: "authoring";
+    };
+export type BranchMode = "toggle" | "gate";
+export type Target =
+  | {
+      kind: "native";
+      node: string;
+      parameter: string;
+    }
+  | {
+      kind: "lv2";
+      node: string;
+      symbol: string;
+    }
+  | {
+      kind: "bypass";
+      node: string;
+    }
+  | {
+      kind: "merge";
+      node: string;
+      port: number;
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -211,6 +236,18 @@ export type StructureEdit =
 export type ChainLane = "left" | "right";
 export type InputMode = "stereo" | "left" | "right" | "dual";
 export type Phase = "idle" | "listening" | "done" | "timeout";
+export type Message =
+  | {
+      channel: number;
+      kind: "program";
+      program: number;
+    }
+  | {
+      channel: number;
+      controller: number;
+      kind: "control";
+      value: number;
+    };
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
@@ -474,27 +511,6 @@ export type RigAudioAction =
       kind: "save";
       name: string;
     };
-export type BranchMode = "toggle" | "gate";
-export type Target =
-  | {
-      kind: "native";
-      node: string;
-      parameter: string;
-    }
-  | {
-      kind: "lv2";
-      node: string;
-      symbol: string;
-    }
-  | {
-      kind: "bypass";
-      node: string;
-    }
-  | {
-      kind: "merge";
-      node: string;
-      port: number;
-    };
 export type ModelOperation =
   | {
       assignment: ModelAssignment;
@@ -508,18 +524,6 @@ export type ModelOperation =
     }
   | {
       kind: "cancel";
-    };
-export type Message =
-  | {
-      channel: number;
-      kind: "program";
-      program: number;
-    }
-  | {
-      channel: number;
-      controller: number;
-      kind: "control";
-      value: number;
     };
 export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge" | "gain";
 export type PortableTails = "cut" | "preserve";
@@ -654,6 +658,37 @@ export interface AudioCommand {
   expected_revision: number;
   session: string;
 }
+/**
+ * Device-local configuration, deliberately absent from portable sound data.
+ */
+export interface Settings2 {
+  bindings: Binding2[];
+  branch_bindings?: BranchBinding[];
+  /**
+   * 0 accepts all MIDI channels; otherwise 1–16.
+   */
+  channel: number;
+  input: string;
+  parameter_bindings?: ParameterBinding[];
+}
+export interface Binding2 {
+  controller?: number | null;
+  /**
+   * Exactly one trigger is required. Programs are wire values 0–127.
+   */
+  program?: number | null;
+  scene: string;
+}
+export interface BranchBinding {
+  branch: string;
+  controller: number;
+  mode: BranchMode;
+}
+export interface ParameterBinding {
+  controller: number;
+  mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
+  target: Target;
+}
 export interface StreamConfig {
   input: AudioProbe;
   /**
@@ -686,6 +721,7 @@ export interface StartAudio {
    * An immutable working base created locally, separate from imported/saved libraries.
    */
   draft?: boolean;
+  midi?: Settings2 | null;
   owned: boolean;
   /**
    * Immutable imported/owned preset identity, never a browser-supplied file path.
@@ -759,6 +795,7 @@ export interface AudioState {
   eq?: BlockEqState[];
   error?: string | null;
   experimental: boolean;
+  midi?: Status;
   model_change?: ModelProgress | null;
   models?: ModelAssignment[];
   /**
@@ -859,6 +896,12 @@ export interface EqState {
   bands: [EqBand, EqBand, EqBand, EqBand, EqBand, EqBand];
   enabled: boolean;
   pre: boolean;
+}
+export interface Status {
+  connected: boolean;
+  error?: string | null;
+  events: number;
+  last?: Message | null;
 }
 export interface ModelProgress {
   assignment: ModelAssignment;
@@ -1365,37 +1408,6 @@ export interface StartRig {
   revision: string;
   stream: StreamConfig;
 }
-/**
- * Device-local configuration, deliberately absent from portable sound data.
- */
-export interface Settings2 {
-  bindings: Binding2[];
-  branch_bindings?: BranchBinding[];
-  /**
-   * 0 accepts all MIDI channels; otherwise 1–16.
-   */
-  channel: number;
-  input: string;
-  parameter_bindings?: ParameterBinding[];
-}
-export interface Binding2 {
-  controller?: number | null;
-  /**
-   * Exactly one trigger is required. Programs are wire values 0–127.
-   */
-  program?: number | null;
-  scene: string;
-}
-export interface BranchBinding {
-  branch: string;
-  controller: number;
-  mode: BranchMode;
-}
-export interface ParameterBinding {
-  controller: number;
-  mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
-  target: Target;
-}
 export interface PreparedRecall {
   recall?: Recall | null;
   revision: string;
@@ -1489,7 +1501,7 @@ export interface Snapshot3 {
    * Reported algorithmic and alignment delay; excludes audio devices/transport.
    */
   latency_frames: number;
-  midi?: Status;
+  midi?: Status1;
   model_change?: NodeModelChange | null;
   models?: NodeModels[];
   /**
@@ -1527,7 +1539,7 @@ export interface Control {
   toggle: boolean;
   value: number;
 }
-export interface Status {
+export interface Status1 {
   connected: boolean;
   error?: string | null;
   events: number;

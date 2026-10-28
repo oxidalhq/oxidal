@@ -571,6 +571,29 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "midi"
+            },
+            "settings": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Settings2"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "create"
             },
             "name": {
@@ -1002,6 +1025,15 @@
         },
         "experimental": {
           "type": "boolean"
+        },
+        "midi": {
+          "$ref": "#/$defs/Status",
+          "default": {
+            "connected": false,
+            "error": null,
+            "events": 0,
+            "last": null
+          }
         },
         "model_change": {
           "anyOf": [
@@ -6576,6 +6608,16 @@
           "description": "An immutable working base created locally, separate from imported/saved libraries.",
           "type": "boolean",
           "default": false
+        },
+        "midi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Settings2"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "owned": {
           "type": "boolean"

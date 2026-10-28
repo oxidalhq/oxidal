@@ -115,6 +115,7 @@ mod tests {
             toggle: false,
         };
         let mut state = Recovery::new(settings, Some(vec![control.clone()]), vec![], None);
+        state.settings.midi=Some(serde_json::from_value(json!({"input":"hw:Controller,0,0","channel":2,"bindings":[],"branch_bindings":[],"parameter_bindings":[{"target":{"kind":"native","node":"native","parameter":"toneBass"},"controller":21,"mode":"relative_offset64"}]})).unwrap());
         state.models = vec![ModelAssignment {
             insertion: None,
             target: "block-one".into(),
@@ -122,6 +123,10 @@ mod tests {
         }];
         state.write(&path).unwrap();
         assert_eq!(Recovery::read(&path).unwrap().unwrap().models, state.models);
+        assert_eq!(
+            Recovery::read(&path).unwrap().unwrap().settings.midi,
+            state.settings.midi
+        );
         state.models.push(state.models[0].clone());
         assert!(state.write(&path).is_err());
         state.models.pop();

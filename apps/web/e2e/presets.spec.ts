@@ -3562,6 +3562,59 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
     await page.goto('/');
     const sounding = page.getByRole('region', { name: 'Sounding rig' });
     await expect(sounding).toBeVisible();
+    await page.route('**/api/v1/midi/devices', (route) =>
+      route.fulfill({
+        json: {
+          available: true,
+          inputs: [
+            { id: 'hw:Unavailable,0,0', name: 'Unavailable test controller' },
+          ],
+          warnings: [],
+        },
+      }),
+    );
+    await sounding.getByText('MIDI controls', { exact: true }).click();
+    await sounding
+      .getByLabel('MIDI input', { exact: true })
+      .selectOption('hw:Unavailable,0,0');
+    await sounding
+      .getByRole('button', { name: 'Add parameter mapping', exact: true })
+      .click();
+    await sounding.getByLabel('MIDI parameter 1', { exact: true }).selectOption(
+      JSON.stringify({
+        kind: 'native',
+        node: 'native',
+        parameter: 'inputLevel',
+      }),
+    );
+    await sounding.getByLabel('Parameter CC 1', { exact: true }).fill('21');
+    await sounding
+      .getByLabel('Parameter behavior 1', { exact: true })
+      .selectOption('relative_offset64');
+    await sounding
+      .getByRole('button', { name: 'Apply MIDI', exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).configured.midi
+            ?.parameter_bindings[0].controller,
+      )
+      .toBe(21);
+    await expect(sounding.getByText(/Waiting for controller/)).toBeVisible();
+    await expect(
+      sounding.getByRole('button', { name: 'Learn CC 1', exact: true }),
+    ).toBeDisabled();
+    await sounding
+      .getByRole('button', { name: 'Disable MIDI', exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).configured.midi,
+      )
+      .toBeUndefined();
+    await sounding.getByText('MIDI controls', { exact: true }).click();
     await sounding
       .locator('summary')
       .filter({ hasText: /^Chain actions$/ })

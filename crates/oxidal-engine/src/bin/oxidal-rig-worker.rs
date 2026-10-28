@@ -140,10 +140,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let null = std::env::var("OXIDAL_RIG_QUALIFY_NULL").is_ok_and(|v| v == "1");
     #[cfg(not(feature = "qualification"))]
     let null = false;
-    let mut midi_settings = settings.midi.clone();
-    let mut midi_status = oxidal_audio::midi::Status::default();
-    let mut midi_port: Option<oxidal_audio::midi::Input> = None;
-    let mut midi_retry = Instant::now() - Duration::from_secs(2);
     fn validate_midi(
         settings: &Option<oxidal_audio::midi::Settings>,
         session: &ResidentSet,
@@ -153,7 +149,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(())
     }
-    validate_midi(&midi_settings, &session)?;
+    validate_midi(&settings.midi, &session)?;
+    let mut midi = oxidal_audio::midi::Connection::new(settings.midi.clone());
     fn snapshot(session: &ResidentSet, midi: &oxidal_audio::midi::Status) -> Snapshot {
         let mut state = session.snapshot();
         state.midi = midi.clone();
@@ -192,7 +189,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     )
             {
                 responses.try_send(WorkerReply {
-                    control: snapshot(&session, &midi_status),
+                    control: snapshot(&session, &midi.status),
                     telemetry: stream.telemetry(),
                     processed_frames: frames,
                     error: None,
@@ -208,55 +205,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         } else if progress.elapsed() > Duration::from_secs(2) {
             return Err("Rig PCM made no progress for two seconds".into());
         }
-        // MIDI discovery/read/dispatch runs outside PCM. Bounded nonblocking
-        // input and reconnect failures never change the audio ownership state.
-        if ready
-            && !session.switching()
-            && let Some(settings) = &midi_settings
-        {
-            if midi_port.is_none() && midi_retry.elapsed() >= Duration::from_secs(2) {
-                midi_retry = Instant::now();
-                match oxidal_audio::midi::Input::open(&settings.input) {
-                    Ok(port) => {
-                        midi_port = Some(port);
-                        midi_status.connected = true;
-                        midi_status.error = None;
-                    }
-                    Err(error) => {
-                        midi_status.connected = false;
-                        midi_status.error = Some(error);
-                    }
-                }
-            }
-            if let Some(port) = &mut midi_port {
-                let mut messages = [None; 64];
-                let mut count = 0;
-                match port.read(|message| {
-                    messages[count] = Some(message);
-                    count += 1;
-                }) {
-                    Ok(_) => {
-                        for message in messages.into_iter().flatten() {
-                            midi_status.events = midi_status.events.saturating_add(1);
-                            midi_status.last = Some(message);
-                            match session.active_mut().midi_message(settings, message) {
-                                Ok(true) => midi_status.error = None,
-                                Ok(false) => {}
-                                Err(error) => midi_status.error = Some(error),
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        midi_port = None;
-                        midi_status.connected = false;
-                        midi_status.error = Some(error);
-                        midi_retry = Instant::now();
-                    }
-                }
-            }
+        // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
+        if ready && !session.switching() {
+            midi.poll(|settings, message| session.active_mut().midi_message(settings, message));
         }
-        // Control/pump work can allocate and runs outside the process closure;
-        // this owner loop is experimental, not real-time qualified.
         if pump.elapsed() >= Duration::from_millis(10) {
             session.pump()?;
             pump = Instant::now();
@@ -264,7 +216,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if switch_reply && !session.switching() {
             let error = session.take_switch_error();
             responses.try_send(WorkerReply {
-                control: snapshot(&session, &midi_status),
+                control: snapshot(&session, &midi.status),
                 telemetry: stream.telemetry(),
                 processed_frames: frames,
                 error,
@@ -284,10 +236,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Midi { settings } => match validate_midi(&settings, &session) {
                     Err(error) => Some(error),
                     Ok(()) => {
-                        midi_settings = settings;
-                        midi_port = None;
-                        midi_status = Default::default();
-                        midi_retry = Instant::now() - Duration::from_secs(2);
+                        midi.configure(settings);
                         None
                     }
                 },
@@ -303,9 +252,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 WorkerRequest::Switch { command } => match session.switch(command) {
                     Ok(()) => {
-                        midi_settings = None;
-                        midi_port = None;
-                        midi_status = Default::default();
+                        midi.configure(None);
                         switch_reply = true;
                         continue;
                     }
@@ -316,7 +263,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Err(error.unwrap_or_else(|| "Rig failed".into()).into());
             }
             responses.try_send(WorkerReply {
-                control: snapshot(&session, &midi_status),
+                control: snapshot(&session, &midi.status),
                 telemetry: stream.telemetry(),
                 processed_frames: frames,
                 error,

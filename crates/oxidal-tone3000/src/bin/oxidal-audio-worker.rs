@@ -92,6 +92,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &startup.models,
         settings.stream.input.period_frames as usize,
     )?;
+    if let Some(midi) = &settings.midi {
+        midi.validate_native(&engine.live_controls()?)?;
+    }
+    let mut midi = oxidal_audio::midi::Connection::new(settings.midi.clone());
+    let mut midi_readback_events = 0;
     let mut models = models::Models::default();
     let mut authoring = oxidal_tone3000::working::Authoring::new(&root, &settings);
     if let Some(controls) = startup.controls {
@@ -173,12 +178,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else if last_block.elapsed() > Duration::from_secs(2) {
             return Err("Audio device made no progress for two seconds".into());
         }
+        if blocks >= settings.stream.output.periods - 1 {
+            let blocked =
+                models.pending() || authoring.measurement_pending() || authoring.gesture_pending();
+            midi.poll(|settings, message| {
+                oxidal_tone3000::midi::dispatch(&mut engine, settings, message, blocked)
+            });
+        }
         if blocks >= settings.stream.output.periods - 1
             && let Ok(request) = commands.try_recv()
         {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
             let event = match request {
+                WorkerRequest::Midi(request) => {
+                    let configure = matches!(
+                        &request.midi,
+                        oxidal_audio::lifecycle::MidiOperation::Configure { .. }
+                    );
+                    let error = match request.midi {
+                        oxidal_audio::lifecycle::MidiOperation::Poll => None,
+                        oxidal_audio::lifecycle::MidiOperation::Configure { settings } => {
+                            let controls = engine.live_controls()?;
+                            match settings
+                                .as_ref()
+                                .map(|s| s.validate_native(&controls))
+                                .transpose()
+                            {
+                                Ok(_) => {
+                                    midi.configure(settings);
+                                    None
+                                }
+                                Err(error) => Some(error),
+                            }
+                        }
+                    };
+                    // Idle connection polls do not rebuild a potentially dense catalog.
+                    let controls = if configure || midi.status.events != midi_readback_events {
+                        Some(engine.live_controls()?)
+                    } else {
+                        None
+                    };
+                    midi_readback_events = midi.status.events;
+                    PlaybackEvent::Midi {
+                        serial: request.serial,
+                        status: midi.status.clone(),
+                        controls,
+                        error,
+                    }
+                }
                 WorkerRequest::Authoring(request) => {
                     let mutating = request.authoring.changes_tone();
                     let before_working = authoring.working_receipt().map(str::to_owned);

@@ -15,3 +15,6 @@ pub mod protocol;
 pub mod working;
 
 pub mod preferences;
+
+#[cfg(feature = "native")]
+pub mod midi;

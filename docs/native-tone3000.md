@@ -502,3 +502,32 @@ by the maintained suites. The ordinary provider workflow remains qualified.
 Folder imports and collections of multiple selectable local models within a
 single native tone remain open; this does not broaden the native profile to all
 NAM architectures or every WAV encoding.
+
+## Standalone native hardware MIDI
+
+The sounding native rig exposes the same MIDI controls panel as mixed rigs. Select
+an ALSA hardware input and channel, add a native parameter mapping, then Apply MIDI.
+Absolute controls, toggle switches and two relative encoder conventions use the
+shared descriptor scaler. Learn CC uses fresh confirmed hardware telemetry and
+requires an already configured input. Standalone bindings address the `native`
+node; scene/branch/LV2 targets are rejected before configuration changes.
+
+The worker shares bounded nonblocking reads and independent two-second reconnect
+with the mixed worker. It dispatches outside the PCM closure through the real
+native setter, respecting active gesture, measurement and model-preparation guards.
+Unavailable controllers report MIDI status without stopping PCM. Physical USB
+behavior and audio deadlines remain unqualified.
+
+Ordered request/reply polling returns actual changed native controls to the daemon.
+Idle polls do not rebuild dense catalogs. Connection/message telemetry alone does
+not advance the sound edit revision; actual controller changes do and enter the
+existing recovery/save flow. Save, Stop, Restart, device Apply and boot capture
+first drain current MIDI edits. Device-local settings survive reconstruction in
+`StartAudio.midi`; portable tone files do not contain hardware identifiers. Controller
+feedback output remains open.
+
+Maintained native qualification covers real decoded CC dispatch and readback,
+relative direction, channel/edit guards and unavailable targets. HTTP/worker tests
+cover unavailable-input health, invalid-map rejection, restart retention, disable
+and telemetry cursor stability. The focused browser authoring scenario configures
+and disables the actual worker and verifies disconnected learning stays disabled.

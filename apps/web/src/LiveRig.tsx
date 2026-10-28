@@ -1,3 +1,4 @@
+import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import { Power } from '@phosphor-icons/react';
 import { LiveEq } from './LiveEq';
@@ -146,6 +147,28 @@ export function LiveRig({
         }
       } catch {
         /* Preserve last confirmed state. */
+      }
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function configureMidi(
+    settings: NonNullable<NonNullable<AudioState['configured']>['midi']> | null,
+  ) {
+    if (!state || sending.current) return;
+    generation.current += 1;
+    sending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const next = await playbackCommand(state, { kind: 'midi', settings });
+      if (alive.current) setState(next);
+    } catch (cause) {
+      if (alive.current) {
+        setError(String(cause));
+        const latest = await playbackState().catch(() => null);
+        if (latest) setState(latest);
       }
     } finally {
       sending.current = false;
@@ -444,6 +467,27 @@ export function LiveRig({
           </div>
         ))}
       </div>
+      <MidiControls
+        configured={state.configured?.midi ?? null}
+        disabled={disabled}
+        onApply={configureMidi}
+        control={{
+          midi: state.midi,
+          scenes: null,
+          branches: [],
+          controls: state.controls.map((c) => ({
+            target: { kind: 'native', node: 'native', parameter: c.target },
+            label: c.label,
+            value: c.value,
+            minimum: 0,
+            maximum: 1,
+            integer: c.toggle,
+            toggle: c.toggle,
+            logarithmic: false,
+            display: c.display,
+          })),
+        }}
+      />
       {state.authoring && (
         <NativeAuthoring
           status={state.authoring}

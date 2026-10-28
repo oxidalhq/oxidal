@@ -2898,6 +2898,105 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(&root)?;
     let mut engine = Engine::new(48000.0, 128)?;
     engine.set_live_control("inputLevel", 0.5)?;
+    {
+        use oxidal_audio::midi::{
+            ControlMode, ControlTarget, Decoder, Message, ParameterBinding, Settings,
+        };
+        let mut settings = Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 2,
+            bindings: vec![],
+            branch_bindings: vec![],
+            parameter_bindings: vec![ParameterBinding {
+                target: ControlTarget::Native {
+                    node: "native".into(),
+                    parameter: "inputLevel".into(),
+                },
+                controller: 21,
+                mode: ControlMode::Absolute,
+            }],
+        };
+        settings.validate_native(&engine.live_controls()?)?;
+        let mut decoder = Decoder::default();
+        for byte in [0xb1, 21, 64, 0xf8] {
+            if let Some(message) = decoder.push(byte) {
+                assert!(oxidal_tone3000::midi::dispatch(
+                    &mut engine,
+                    &settings,
+                    message,
+                    false
+                )?);
+            }
+        }
+        let value = |engine: &mut Engine| -> Result<f32, Box<dyn Error>> {
+            Ok(engine
+                .live_controls()?
+                .iter()
+                .find(|c| c.target == "inputLevel")
+                .unwrap()
+                .value)
+        };
+        assert!((f64::from(value(&mut engine)?) - 64.0 / 127.0).abs() < 0.00051);
+        let prior = value(&mut engine)?;
+        assert!(
+            oxidal_tone3000::midi::dispatch(
+                &mut engine,
+                &settings,
+                Message::Control {
+                    channel: 2,
+                    controller: 21,
+                    value: 0
+                },
+                true
+            )
+            .is_err()
+        );
+        assert!(!oxidal_tone3000::midi::dispatch(
+            &mut engine,
+            &settings,
+            Message::Control {
+                channel: 1,
+                controller: 21,
+                value: 0
+            },
+            false
+        )?);
+        assert_eq!(value(&mut engine)?, prior);
+        settings.parameter_bindings[0].mode = ControlMode::RelativeOffset64;
+        assert!(oxidal_tone3000::midi::dispatch(
+            &mut engine,
+            &settings,
+            Message::Control {
+                channel: 2,
+                controller: 21,
+                value: 63
+            },
+            false
+        )?);
+        assert!(value(&mut engine)? < prior);
+        settings.parameter_bindings[0].target = ControlTarget::Native {
+            node: "native".into(),
+            parameter: "missing".into(),
+        };
+        assert!(settings.validate_native(&engine.live_controls()?).is_err());
+        assert!(
+            oxidal_tone3000::midi::dispatch(
+                &mut engine,
+                &settings,
+                Message::Control {
+                    channel: 2,
+                    controller: 21,
+                    value: 64
+                },
+                false
+            )
+            .is_err()
+        );
+        engine.set_live_control("inputLevel", 0.5)?;
+    }
+    println!(
+        "native MIDI: real decoder, normalized readback, encoder direction, channel/edit guards and unavailable target rejection passed"
+    );
     let mut owner = Authoring::for_source(&root, "gesture-qualification".into(), None);
     let send = |owner: &mut Authoring, engine: &mut Engine, edit: G| {
         owner.command(engine, A::Gesture { edit })

@@ -33,6 +33,102 @@ pub enum ControlMode {
     RelativeTwosComplement,
     RelativeOffset64,
 }
+/// Confirmed scalar descriptor shared by mixed and standalone native owners.
+/// Values remain in each control's actual units; native values are normalized.
+#[derive(Debug)]
+pub struct MappedControl {
+    pub value: f64,
+    pub minimum: f64,
+    pub maximum: f64,
+    pub integer: bool,
+    pub toggle: bool,
+    pub logarithmic: bool,
+}
+impl MappedControl {
+    pub fn midi_value(&self, mode: ControlMode, raw: u8) -> Result<Option<f64>, String> {
+        use ControlMode as M;
+        if raw > 127
+            || !self.accepts(self.value)
+            || !self.minimum.is_finite()
+            || !self.maximum.is_finite()
+            || self.minimum >= self.maximum
+        {
+            return Err("Invalid mapped control range".into());
+        }
+        if mode == M::Toggle {
+            return if !self.toggle {
+                Err("Toggle MIDI needs a switch control".into())
+            } else if raw < 64 {
+                Ok(None)
+            } else {
+                Ok(Some(if self.value == self.minimum {
+                    self.maximum
+                } else {
+                    self.minimum
+                }))
+            };
+        }
+        if self.toggle {
+            return if mode != M::Absolute {
+                Err("Relative MIDI cannot control a switch".into())
+            } else {
+                Ok(Some(if raw >= 64 {
+                    self.maximum
+                } else {
+                    self.minimum
+                }))
+            };
+        }
+        let logarithmic = self.logarithmic && self.minimum > 0.0;
+        let normalize = |value: f64| {
+            if logarithmic {
+                (value / self.minimum).ln() / (self.maximum / self.minimum).ln()
+            } else {
+                (value - self.minimum) / (self.maximum - self.minimum)
+            }
+        };
+        let normalized = match mode {
+            M::Absolute => f64::from(raw) / 127.0,
+            M::RelativeTwosComplement => {
+                let delta = if raw < 64 {
+                    i16::from(raw)
+                } else {
+                    i16::from(raw) - 128
+                };
+                if delta == 0 {
+                    return Ok(None);
+                }
+                normalize(self.value) + f64::from(delta) / 127.0
+            }
+            M::RelativeOffset64 => {
+                let delta = i16::from(raw) - 64;
+                if delta == 0 {
+                    return Ok(None);
+                }
+                normalize(self.value) + f64::from(delta) / 127.0
+            }
+            M::Toggle => unreachable!(),
+        }
+        .clamp(0.0, 1.0);
+        let value = if logarithmic {
+            self.minimum * (self.maximum / self.minimum).powf(normalized)
+        } else {
+            self.minimum + (self.maximum - self.minimum) * normalized
+        };
+        let value = if self.integer { value.round() } else { value };
+        let value = value.clamp(self.minimum, self.maximum);
+        if !self.accepts(value) {
+            return Err("Mapped MIDI value is invalid".into());
+        }
+        Ok(Some(value))
+    }
+    pub fn accepts(&self, v: f64) -> bool {
+        v.is_finite()
+            && (self.minimum..=self.maximum).contains(&v)
+            && (!self.integer || v.fract() == 0.0)
+            && (!self.toggle || v == self.minimum || v == self.maximum)
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ParameterBinding {
@@ -258,7 +354,7 @@ impl Settings {
             .map(|b| b.scene.as_str())
     }
 }
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
     pub connected: bool,
@@ -632,5 +728,74 @@ mod tests {
                 }
             ]
         );
+    }
+}
+
+/// Device reads and retry state shared by workers; never called inside PCM.
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+#[derive(Debug)]
+pub struct Connection {
+    settings: Option<Settings>,
+    pub status: Status,
+    port: Option<Input>,
+    retry: std::time::Instant,
+}
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+impl Connection {
+    pub fn new(settings: Option<Settings>) -> Self {
+        Self {
+            settings,
+            status: Status::default(),
+            port: None,
+            retry: std::time::Instant::now() - std::time::Duration::from_secs(2),
+        }
+    }
+    pub fn configure(&mut self, settings: Option<Settings>) {
+        *self = Self::new(settings);
+    }
+    pub fn poll(&mut self, mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>) {
+        let Some(settings) = &self.settings else {
+            return;
+        };
+        if self.port.is_none() && self.retry.elapsed() >= std::time::Duration::from_secs(2) {
+            self.retry = std::time::Instant::now();
+            match Input::open(&settings.input) {
+                Ok(port) => {
+                    self.port = Some(port);
+                    self.status.connected = true;
+                    self.status.error = None;
+                }
+                Err(error) => {
+                    self.status.connected = false;
+                    self.status.error = Some(error);
+                }
+            }
+        }
+        if let Some(port) = &mut self.port {
+            let mut messages = [None; 64];
+            let mut count = 0;
+            match port.read(|message| {
+                messages[count] = Some(message);
+                count += 1;
+            }) {
+                Ok(_) => {
+                    for message in messages.into_iter().flatten() {
+                        self.status.events = self.status.events.saturating_add(1);
+                        self.status.last = Some(message);
+                        match receive(settings, message) {
+                            Ok(true) => self.status.error = None,
+                            Ok(false) => {}
+                            Err(error) => self.status.error = Some(error),
+                        }
+                    }
+                }
+                Err(error) => {
+                    self.port = None;
+                    self.status.connected = false;
+                    self.status.error = Some(error);
+                    self.retry = std::time::Instant::now();
+                }
+            }
+        }
     }
 }

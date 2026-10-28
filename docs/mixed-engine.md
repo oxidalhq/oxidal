@@ -665,7 +665,9 @@ including gesture/model guards and live latency admission. Invalid latency-chang
 edits retain confirmed sound. The UI reads back the same actual controls; no second
 MIDI value cache impersonates the DSP. Device-local mappings remain outside portable
 presets and survive existing Restart/Resume/boot capture. Standalone native-worker
-hardware MIDI and controller output feedback are not implemented by this path.
+hardware MIDI reuses these controls through its own ordered owner, described in
+[native qualification](native-tone3000.md#standalone-native-hardware-midi). Controller
+output feedback remains open.
 
 Maintained tests cover raw bytes to actual LV2/host controls, A2 native readback,
 missing-controller PCM progress, boot/recovery settings, learned-message freshness

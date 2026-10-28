@@ -50,81 +50,15 @@ impl Control {
         mode: oxidal_audio::midi::ControlMode,
         raw: u8,
     ) -> Result<Option<f64>, String> {
-        use oxidal_audio::midi::ControlMode as M;
-        if raw > 127
-            || !self.accepts(self.value)
-            || !self.minimum.is_finite()
-            || !self.maximum.is_finite()
-            || self.minimum >= self.maximum
-        {
-            return Err("Invalid mapped control range".into());
+        oxidal_audio::midi::MappedControl {
+            value: self.value,
+            minimum: self.minimum,
+            maximum: self.maximum,
+            integer: self.integer,
+            toggle: self.toggle,
+            logarithmic: self.logarithmic,
         }
-        if mode == M::Toggle {
-            return if !self.toggle {
-                Err("Toggle MIDI needs a switch control".into())
-            } else if raw < 64 {
-                Ok(None)
-            } else {
-                Ok(Some(if self.value == self.minimum {
-                    self.maximum
-                } else {
-                    self.minimum
-                }))
-            };
-        }
-        if self.toggle {
-            return if mode != M::Absolute {
-                Err("Relative MIDI cannot control a switch".into())
-            } else {
-                Ok(Some(if raw >= 64 {
-                    self.maximum
-                } else {
-                    self.minimum
-                }))
-            };
-        }
-        let logarithmic = self.logarithmic && self.minimum > 0.0;
-        let normalize = |value: f64| {
-            if logarithmic {
-                (value / self.minimum).ln() / (self.maximum / self.minimum).ln()
-            } else {
-                (value - self.minimum) / (self.maximum - self.minimum)
-            }
-        };
-        let normalized = match mode {
-            M::Absolute => f64::from(raw) / 127.0,
-            M::RelativeTwosComplement => {
-                let delta = if raw < 64 {
-                    i16::from(raw)
-                } else {
-                    i16::from(raw) - 128
-                };
-                if delta == 0 {
-                    return Ok(None);
-                }
-                normalize(self.value) + f64::from(delta) / 127.0
-            }
-            M::RelativeOffset64 => {
-                let delta = i16::from(raw) - 64;
-                if delta == 0 {
-                    return Ok(None);
-                }
-                normalize(self.value) + f64::from(delta) / 127.0
-            }
-            M::Toggle => unreachable!(),
-        }
-        .clamp(0.0, 1.0);
-        let value = if logarithmic {
-            self.minimum * (self.maximum / self.minimum).powf(normalized)
-        } else {
-            self.minimum + (self.maximum - self.minimum) * normalized
-        };
-        let value = if self.integer { value.round() } else { value };
-        let value = value.clamp(self.minimum, self.maximum);
-        if !self.accepts(value) {
-            return Err("Mapped MIDI value is invalid".into());
-        }
-        Ok(Some(value))
+        .midi_value(mode, raw)
     }
     pub fn accepts(&self, v: f64) -> bool {
         v.is_finite()

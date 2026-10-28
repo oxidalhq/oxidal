@@ -66,6 +66,7 @@ impl Owner {
         self.state.revision += 1;
         self.state.phase = phase;
         if phase != AudioPhase::Running {
+            self.state.midi = Default::default();
             self.state.controls.clear();
             self.state.eq.clear();
             self.state.slots.clear();
@@ -302,7 +303,8 @@ impl Owner {
                     PlaybackEvent::Meter { snapshot } if snapshot.valid() => {
                         meters.send_replace(Some((snapshot, std::time::Instant::now())));
                     }
-                    reply @ (PlaybackEvent::Control { .. }
+                    reply @ (PlaybackEvent::Midi { .. }
+                    | PlaybackEvent::Control { .. }
                     | PlaybackEvent::Model { .. }
                     | PlaybackEvent::Eq { .. }
                     | PlaybackEvent::Authored { .. }) => {
@@ -576,6 +578,108 @@ impl Owner {
             let _ = self.authoring_command(AuthoringAction::Inspect).await;
             self.state.error = Some(error);
             self.updates.send_replace(self.state.clone());
+        }
+    }
+    async fn midi(
+        &mut self,
+        operation: oxidal_audio::lifecycle::MidiOperation,
+    ) -> Result<(), String> {
+        if self.state.phase != AudioPhase::Running {
+            return Err("Audio is not running".into());
+        }
+        let serial = self.state.revision + 1;
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut bytes = serde_json::to_vec(&oxidal_audio::lifecycle::MidiRequest {
+                serial,
+                midi: operation,
+            })
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let event = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Audio reply lost")?;
+            let PlaybackEvent::Midi {
+                serial: actual,
+                status,
+                controls,
+                error,
+            } = event
+            else {
+                return Err("Unexpected MIDI readback".to_string());
+            };
+            if actual != serial || controls.as_ref().is_some_and(|c| !valid_controls(c)) {
+                return Err("Invalid MIDI readback".into());
+            }
+            Ok((status, controls, error))
+        })
+        .await
+        .map_err(|_| "MIDI control timed out".to_string())
+        .and_then(|r| r);
+        let (status, controls, error) = match result {
+            Ok(reply) => reply,
+            Err(error) => {
+                self.release().await?;
+                return Err(error);
+            }
+        };
+        let changed = match controls.as_ref() {
+            Some(controls) => {
+                serde_json::to_value(controls).map_err(|e| e.to_string())?
+                    != serde_json::to_value(&self.state.controls).map_err(|e| e.to_string())?
+            }
+            None => false,
+        };
+        let status_changed = self.state.midi != status;
+        self.state.midi = status;
+        if changed {
+            let controls = controls.ok_or("Missing MIDI control readback")?;
+            self.resume_controls = Some(controls.clone());
+            self.state.controls = controls;
+            self.state.modified = true;
+            self.state.saved_copy = None;
+            self.schedule_recovery();
+        }
+        if changed {
+            self.publish(AudioPhase::Running, None);
+        } else if status_changed {
+            self.updates.send_replace(self.state.clone());
+        }
+        if let Some(error) = error {
+            return Err(error);
+        }
+        Ok(())
+    }
+    async fn poll_midi(&mut self) {
+        if self.state.phase == AudioPhase::Running
+            && self
+                .state
+                .configured
+                .as_ref()
+                .is_some_and(|s| s.midi.is_some())
+            && let Err(error) = self
+                .midi(oxidal_audio::lifecycle::MidiOperation::Poll)
+                .await
+        {
+            self.publish(
+                if self.worker.is_some() {
+                    AudioPhase::Running
+                } else {
+                    AudioPhase::Failed
+                },
+                Some(error),
+            );
         }
     }
     async fn set_control(&mut self, target: String, value: f32) -> Result<(), String> {
@@ -948,6 +1052,7 @@ impl Owner {
         let started = self
             .start(
                 StartAudio {
+                    midi: None,
                     stream,
                     preset_id: id,
                     owned: false,
@@ -1121,6 +1226,26 @@ impl Owner {
         {
             return Err("audio_state_conflict; refresh status before retrying".into());
         }
+        // Drain current hardware edits before taking a snapshot or replacing its
+        // owner. A periodic status sample alone can miss the last controller turn.
+        if self.state.phase == AudioPhase::Running
+            && self
+                .state
+                .configured
+                .as_ref()
+                .is_some_and(|s| s.midi.is_some())
+            && matches!(
+                &command.action,
+                AudioAction::SaveCopy { .. }
+                    | AudioAction::Stop
+                    | AudioAction::Restart
+                    | AudioAction::Reconfigure { .. }
+                    | AudioAction::SetBoot { enabled: true }
+            )
+        {
+            self.midi(oxidal_audio::lifecycle::MidiOperation::Poll)
+                .await?;
+        }
         if self.executable.is_none()
             && !matches!(command.action, AudioAction::SetBoot { enabled: false })
         {
@@ -1154,6 +1279,23 @@ impl Owner {
             return Err("Finish the active adjustment before changing sound".into());
         }
         let result = match command.action {
+            AudioAction::Midi { settings } => {
+                if let Some(settings) = &settings {
+                    settings.validate_native(&self.state.controls)?;
+                }
+                self.midi(oxidal_audio::lifecycle::MidiOperation::Configure {
+                    settings: settings.clone(),
+                })
+                .await?;
+                self.state
+                    .configured
+                    .as_mut()
+                    .ok_or("Audio not configured")?
+                    .midi = settings;
+                self.schedule_recovery();
+                self.publish(AudioPhase::Running, None);
+                return Ok(self.state.clone());
+            }
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
             AudioAction::Authoring {
                 action: AuthoringAction::Parameter { parameter, value },
@@ -1361,6 +1503,7 @@ impl Playback {
         let recovery_error = recovery.as_ref().err().cloned();
         let recovery = recovery.ok().flatten();
         let initial = AudioState {
+            midi: Default::default(),
             boot_error: policy.error(),
             session: format!(
                 "audio-{}-{}",
@@ -1440,6 +1583,7 @@ impl Playback {
                         owner.check_exit();
                         owner.advance_model().await;
                         owner.poll_tools().await;
+                        owner.poll_midi().await;
                         if owner.recovery_due.is_some_and(|due| due <= std::time::Instant::now()) {
                             owner.checkpoint();
                         }

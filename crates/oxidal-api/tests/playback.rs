@@ -83,6 +83,71 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["device_owned"], true);
     assert!(!state["controls"].as_array().unwrap().is_empty());
+    let midi = json!({"input":"hw:Unavailable,0,0","channel":2,"bindings":[],"branch_bindings":[],"parameter_bindings":[{"target":{"kind":"native","node":"native","parameter":"inputLevel"},"controller":21,"mode":"relative_twos_complement"}]});
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"midi","settings":midi}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let configured_revision = state["revision"].clone();
+    for _ in 0..100 {
+        state = get(&client, &url, "audio").await;
+        if state["midi"]["error"].is_string() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(state["midi"]["error"].is_string());
+    assert_eq!(
+        state["revision"], configured_revision,
+        "Connection telemetry must not invalidate a sound edit cursor"
+    );
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["configured"]["midi"], midi);
+    let mut invalid = midi.clone();
+    invalid["parameter_bindings"][0]["target"]["parameter"] = json!("missing");
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"midi","settings":invalid})
+        )
+        .await
+        .status(),
+        409
+    );
+    assert_eq!(
+        get(&client, &url, "audio").await["configured"]["midi"],
+        midi
+    );
+    let response = send(&client, &url, &state, json!({"kind":"restart"})).await;
+    assert_eq!(response.status(), 200);
+    for _ in 0..100 {
+        state = get(&client, &url, "audio").await;
+        if state["midi"]["error"].is_string() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["configured"]["midi"], midi);
+    assert!(state["midi"]["error"].is_string());
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"midi","settings":null}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert!(state["configured"]["midi"].is_null());
+    assert!(state["midi"]["error"].is_null());
     let stopped_revision = state.clone();
     let result = send(
         &client,

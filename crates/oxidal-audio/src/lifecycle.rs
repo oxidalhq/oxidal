@@ -32,6 +32,8 @@ pub fn catalog_fits<T: Serialize + ?Sized>(value: &T) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartAudio {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi: Option<crate::midi::Settings>,
     pub stream: StreamConfig,
     /// Immutable imported/owned preset identity, never a browser-supplied file path.
     pub preset_id: String,
@@ -46,6 +48,12 @@ pub struct StartAudio {
 impl StartAudio {
     pub fn validate(&self) -> Result<(), String> {
         self.stream.validate()?;
+        if let Some(midi) = &self.midi {
+            midi.validate()?;
+            if !midi.bindings.is_empty() || !midi.branch_bindings.is_empty() {
+                return Err("Standalone native MIDI supports parameter mappings".into());
+            }
+        }
         if self
             .working
             .as_deref()
@@ -75,6 +83,8 @@ pub enum AudioPhase {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AudioState {
+    #[serde(default)]
+    pub midi: crate::midi::Status,
     pub session: String,
     pub revision: u64,
     pub phase: AudioPhase,
@@ -108,6 +118,9 @@ pub struct AudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AudioAction {
+    Midi {
+        settings: Option<crate::midi::Settings>,
+    },
     Create {
         stream: StreamConfig,
         name: String,
@@ -188,6 +201,12 @@ pub struct LiveRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PlaybackEvent {
+    Midi {
+        serial: u64,
+        status: crate::midi::Status,
+        controls: Option<Vec<LiveControl>>,
+        error: Option<String>,
+    },
     Ready {
         preset_name: String,
         #[serde(default)]
@@ -371,6 +390,7 @@ pub struct ModelRequest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WorkerRequest {
+    Midi(MidiRequest),
     Authoring(crate::structure::AuthoringRequest),
     Eq(EqRequest),
     Control(LiveRequest),
@@ -427,5 +447,54 @@ mod budget_tests {
             })
             .collect();
         assert!(!valid_models(&oversized));
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum MidiOperation {
+    Configure {
+        settings: Option<crate::midi::Settings>,
+    },
+    Poll,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MidiRequest {
+    pub serial: u64,
+    pub midi: MidiOperation,
+}
+impl LiveControl {
+    pub fn midi_descriptor(&self) -> crate::midi::MappedControl {
+        crate::midi::MappedControl {
+            value: f64::from(self.value),
+            minimum: 0.0,
+            maximum: 1.0,
+            integer: self.toggle,
+            toggle: self.toggle,
+            logarithmic: false,
+        }
+    }
+}
+impl crate::midi::Settings {
+    pub fn validate_native(&self, controls: &[LiveControl]) -> Result<(), String> {
+        self.validate()?;
+        if !self.bindings.is_empty() || !self.branch_bindings.is_empty() {
+            return Err("Standalone native MIDI supports parameter mappings".into());
+        }
+        for binding in &self.parameter_bindings {
+            let crate::midi::ControlTarget::Native { node, parameter } = &binding.target else {
+                return Err("Standalone native MIDI needs a native parameter".into());
+            };
+            if node != "native" {
+                return Err("Unknown standalone native MIDI node".into());
+            }
+            let control = controls
+                .iter()
+                .find(|c| c.target == *parameter)
+                .ok_or("MIDI parameter is unavailable")?;
+            control.midi_descriptor().midi_value(binding.mode, 127)?;
+        }
+        Ok(())
     }
 }
