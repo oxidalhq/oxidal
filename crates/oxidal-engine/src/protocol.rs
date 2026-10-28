@@ -24,14 +24,7 @@ pub const REPLY_LIMIT: usize = 4 * 1024 * 1024;
 /// Host routing buffers only, separate from native/plugin memory.
 pub const BUFFER_BUDGET: usize = 64 * 1024 * 1024;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum Target {
-    Native { node: String, parameter: String },
-    Lv2 { node: String, symbol: String },
-    Bypass { node: String },
-    Merge { node: String, port: usize },
-}
+pub use oxidal_audio::midi::ControlTarget as Target;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Value {
@@ -52,6 +45,87 @@ pub struct Control {
     pub display: String,
 }
 impl Control {
+    pub fn midi_value(
+        &self,
+        mode: oxidal_audio::midi::ControlMode,
+        raw: u8,
+    ) -> Result<Option<f64>, String> {
+        use oxidal_audio::midi::ControlMode as M;
+        if raw > 127
+            || !self.accepts(self.value)
+            || !self.minimum.is_finite()
+            || !self.maximum.is_finite()
+            || self.minimum >= self.maximum
+        {
+            return Err("Invalid mapped control range".into());
+        }
+        if mode == M::Toggle {
+            return if !self.toggle {
+                Err("Toggle MIDI needs a switch control".into())
+            } else if raw < 64 {
+                Ok(None)
+            } else {
+                Ok(Some(if self.value == self.minimum {
+                    self.maximum
+                } else {
+                    self.minimum
+                }))
+            };
+        }
+        if self.toggle {
+            return if mode != M::Absolute {
+                Err("Relative MIDI cannot control a switch".into())
+            } else {
+                Ok(Some(if raw >= 64 {
+                    self.maximum
+                } else {
+                    self.minimum
+                }))
+            };
+        }
+        let logarithmic = self.logarithmic && self.minimum > 0.0;
+        let normalize = |value: f64| {
+            if logarithmic {
+                (value / self.minimum).ln() / (self.maximum / self.minimum).ln()
+            } else {
+                (value - self.minimum) / (self.maximum - self.minimum)
+            }
+        };
+        let normalized = match mode {
+            M::Absolute => f64::from(raw) / 127.0,
+            M::RelativeTwosComplement => {
+                let delta = if raw < 64 {
+                    i16::from(raw)
+                } else {
+                    i16::from(raw) - 128
+                };
+                if delta == 0 {
+                    return Ok(None);
+                }
+                normalize(self.value) + f64::from(delta) / 127.0
+            }
+            M::RelativeOffset64 => {
+                let delta = i16::from(raw) - 64;
+                if delta == 0 {
+                    return Ok(None);
+                }
+                normalize(self.value) + f64::from(delta) / 127.0
+            }
+            M::Toggle => unreachable!(),
+        }
+        .clamp(0.0, 1.0);
+        let value = if logarithmic {
+            self.minimum * (self.maximum / self.minimum).powf(normalized)
+        } else {
+            self.minimum + (self.maximum - self.minimum) * normalized
+        };
+        let value = if self.integer { value.round() } else { value };
+        let value = value.clamp(self.minimum, self.maximum);
+        if !self.accepts(value) {
+            return Err("Mapped MIDI value is invalid".into());
+        }
+        Ok(Some(value))
+    }
     pub fn accepts(&self, v: f64) -> bool {
         v.is_finite()
             && (self.minimum..=self.maximum).contains(&v)
@@ -453,6 +527,58 @@ pub struct RigAudioCommand {
 mod tests {
     use super::*;
     #[test]
+    fn midi_scaling_uses_real_ranges_and_encoder_conventions() {
+        use oxidal_audio::midi::ControlMode as M;
+        let mut c = Control {
+            target: Target::Lv2 {
+                node: "fx".into(),
+                symbol: "gain".into(),
+            },
+            label: "Gain".into(),
+            value: 0.5,
+            minimum: 0.0,
+            maximum: 1.0,
+            integer: false,
+            toggle: false,
+            logarithmic: false,
+            display: String::new(),
+        };
+        assert_eq!(c.midi_value(M::Absolute, 0).unwrap(), Some(0.0));
+        assert_eq!(c.midi_value(M::Absolute, 127).unwrap(), Some(1.0));
+        assert_eq!(c.midi_value(M::RelativeTwosComplement, 0).unwrap(), None);
+        assert_eq!(c.midi_value(M::RelativeOffset64, 64).unwrap(), None);
+        assert_eq!(
+            c.midi_value(M::RelativeTwosComplement, 1).unwrap(),
+            c.midi_value(M::RelativeOffset64, 65).unwrap()
+        );
+        assert_eq!(
+            c.midi_value(M::RelativeTwosComplement, 127).unwrap(),
+            c.midi_value(M::RelativeOffset64, 63).unwrap()
+        );
+        assert!(c.midi_value(M::Toggle, 127).is_err());
+        c.minimum = 20.0;
+        c.maximum = 20000.0;
+        c.value = 200.0;
+        c.logarithmic = true;
+        let value = c.midi_value(M::Absolute, 64).unwrap().unwrap();
+        assert!((value - 20.0_f64 * 1000.0_f64.powf(64.0 / 127.0)).abs() < 1e-9);
+        c.minimum = 0.0;
+        c.maximum = 3.0;
+        c.value = 1.0;
+        c.integer = true;
+        c.logarithmic = false;
+        assert_eq!(c.midi_value(M::Absolute, 64).unwrap(), Some(2.0));
+        c.maximum = 1.0;
+        c.value = 0.0;
+        c.toggle = true;
+        assert_eq!(c.midi_value(M::Toggle, 0).unwrap(), None);
+        assert_eq!(c.midi_value(M::Toggle, 127).unwrap(), Some(1.0));
+        assert_eq!(c.midi_value(M::Absolute, 63).unwrap(), Some(0.0));
+        assert!(c.midi_value(M::RelativeOffset64, 65).is_err());
+        c.value = f64::NAN;
+        assert!(c.midi_value(M::Absolute, 127).is_err());
+    }
+    #[test]
     fn terminal_failures_preserve_reason_without_fake_readback() {
         assert_eq!(
             decode_worker_reply(br#"{"failure":"Unsupported cab encoding"}"#).unwrap_err(),
@@ -479,4 +605,34 @@ pub struct PrepareNativeSetting {
     pub node: String,
     pub parameter: String,
     pub value: f32,
+}
+
+impl Snapshot {
+    pub fn validate_midi(&self, settings: &oxidal_audio::midi::Settings) -> Result<(), String> {
+        settings.validate()?;
+        if settings.bindings.iter().any(|b| {
+            !self
+                .scenes
+                .as_ref()
+                .is_some_and(|s| s.scenes.iter().any(|scene| scene.id == b.scene))
+        }) {
+            return Err("MIDI binding refers to an unavailable scene".into());
+        }
+        if settings
+            .branch_bindings
+            .iter()
+            .any(|b| !self.branches.iter().any(|branch| branch.id == b.branch))
+        {
+            return Err("MIDI binding refers to an unavailable branch".into());
+        }
+        for binding in &settings.parameter_bindings {
+            let control = self
+                .controls
+                .iter()
+                .find(|c| c.target == binding.target)
+                .ok_or("MIDI binding refers to an unavailable control")?;
+            control.midi_value(binding.mode, 127)?;
+        }
+        Ok(())
+    }
 }

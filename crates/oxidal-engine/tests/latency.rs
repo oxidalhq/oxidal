@@ -796,6 +796,7 @@ fn decoded_midi_selects_scenes_and_toggles_or_gates_the_actual_branch_mix() {
             program: Some(1),
             controller: None,
         }],
+        parameter_bindings: vec![],
         branch_bindings: vec![BranchBinding {
             branch: "lead".into(),
             controller: 64,
@@ -925,4 +926,106 @@ fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades()
         Session::new(input_gate_scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
     fresh.restore(&recall).unwrap();
     assert!(fresh.snapshot().branches.iter().all(|b| !b.enabled));
+}
+
+#[test]
+fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
+    use oxidal_audio::midi::{ControlMode, Decoder, ParameterBinding, Settings};
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session =
+        Session::new(bundle(137, 0, false), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    let mut settings = Settings {
+        input: "hw:Controller,0,0".into(),
+        channel: 2,
+        bindings: vec![],
+        branch_bindings: vec![],
+        parameter_bindings: vec![ParameterBinding {
+            target: Target::Merge {
+                node: "merge".into(),
+                port: 0,
+            },
+            controller: 20,
+            mode: ControlMode::Absolute,
+        }],
+    };
+    session.snapshot().validate_midi(&settings).unwrap(); // no scenes required
+    let feed = |session: &mut Session, settings: &Settings, bytes: &[u8]| -> Result<(), String> {
+        let mut decoder = Decoder::default();
+        for byte in bytes {
+            if let Some(message) = decoder.push(*byte) {
+                session.midi_message(settings, message)?;
+            }
+        }
+        Ok(())
+    };
+    let initial = session.snapshot();
+    feed(&mut session, &settings, &[0xb0, 20, 127]).unwrap();
+    assert_eq!(session.snapshot().revision, initial.revision); // wrong channel
+    feed(&mut session, &settings, &[0xb1, 20, 127]).unwrap();
+    let control = |session: &Session, target: &Target| {
+        session
+            .snapshot()
+            .controls
+            .iter()
+            .find(|c| &c.target == target)
+            .unwrap()
+            .clone()
+    };
+    let target = settings.parameter_bindings[0].target.clone();
+    assert_eq!(
+        control(&session, &target).value,
+        control(&session, &target).maximum
+    );
+    let applied = session.snapshot().revision;
+    feed(&mut session, &settings, &[0xb1, 20, 127]).unwrap();
+    assert_eq!(session.snapshot().revision, applied); // repeated value is not a new edit
+    settings.parameter_bindings[0].mode = ControlMode::RelativeTwosComplement;
+    feed(&mut session, &settings, &[0xb1, 20, 127]).unwrap();
+    assert!(control(&session, &target).value < control(&session, &target).maximum);
+    settings.parameter_bindings[0] = ParameterBinding {
+        target: Target::Bypass { node: "fx".into() },
+        controller: 20,
+        mode: ControlMode::Toggle,
+    };
+    feed(&mut session, &settings, &[0xb1, 20, 127, 0xf8, 20, 0]).unwrap();
+    assert_eq!(
+        control(&session, &settings.parameter_bindings[0].target).value,
+        1.0
+    );
+    settings.parameter_bindings[0] = ParameterBinding {
+        target: Target::Lv2 {
+            node: "fx".into(),
+            symbol: "delay".into(),
+        },
+        controller: 20,
+        mode: ControlMode::Absolute,
+    };
+    let cursor = session.snapshot();
+    session
+        .apply(ControlCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            target: Target::Merge {
+                node: "merge".into(),
+                port: 0,
+            },
+            value: 0.25,
+        })
+        .unwrap();
+    let before = session.snapshot();
+    assert!(feed(&mut session, &settings, &[0xb1, 20, 0]).is_err()); // latency admission protects sound
+    assert_eq!(session.snapshot().revision, before.revision);
+    assert!(session.healthy());
+    impulse(|input, output| session.process(input, output), 137);
+    settings.parameter_bindings[0].target = Target::Lv2 {
+        node: "missing".into(),
+        symbol: "gain".into(),
+    };
+    assert!(session.snapshot().validate_midi(&settings).is_err());
+    assert!(feed(&mut session, &settings, &[0xb1, 20, 127]).is_err());
+    assert!(session.healthy());
+    settings
+        .parameter_bindings
+        .push(settings.parameter_bindings[0].clone());
+    assert!(settings.validate().is_err());
 }

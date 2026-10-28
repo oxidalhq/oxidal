@@ -149,23 +149,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         session: &ResidentSet,
     ) -> Result<(), String> {
         if let Some(settings) = settings {
-            settings.validate()?;
-            let state = session.snapshot();
-            let scenes = state.scenes.as_ref().ok_or("This rig has no MIDI scenes")?;
-            if settings
-                .bindings
-                .iter()
-                .any(|b| !scenes.scenes.iter().any(|s| s.id == b.scene))
-            {
-                return Err("MIDI binding refers to an unavailable scene".into());
-            }
-            if settings
-                .branch_bindings
-                .iter()
-                .any(|b| !scenes.branches.iter().any(|branch| branch.id == b.branch))
-            {
-                return Err("MIDI binding refers to an unavailable branch".into());
-            }
+            session.snapshot().validate_midi(settings)?;
         }
         Ok(())
     }

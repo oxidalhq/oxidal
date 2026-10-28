@@ -899,7 +899,51 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
+pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()> {
+    use oxidal_audio::midi::{ControlMode, Decoder, ParameterBinding};
+    let native_target = {
+        let mut session = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+        let target = session
+            .snapshot()
+            .controls
+            .iter()
+            .find(|c| matches!(&c.target, Target::Native {parameter,..} if parameter == "toneBass"))
+            .ok_or("Missing native MIDI qualification control")?
+            .target
+            .clone();
+        let settings = oxidal_audio::midi::Settings {
+            input: "hw:Unavailable,0,0".into(),
+            channel: 1,
+            bindings: vec![],
+            branch_bindings: vec![],
+            parameter_bindings: vec![ParameterBinding {
+                target: target.clone(),
+                controller: 21,
+                mode: ControlMode::Absolute,
+            }],
+        };
+        session.snapshot().validate_midi(&settings)?;
+        let mut decoder = Decoder::default();
+        for byte in [0xb0, 21, 32] {
+            if let Some(message) = decoder.push(byte) {
+                assert!(session.midi_message(&settings, message)?);
+            }
+        }
+        let confirmed = session.snapshot();
+        let control = confirmed
+            .controls
+            .iter()
+            .find(|c| c.target == target)
+            .unwrap();
+        let expected = control.minimum + (control.maximum - control.minimum) * 32.0 / 127.0;
+        assert!(
+            (control.value - expected).abs() < 0.00051,
+            "MIDI native readback: {} expected {expected}",
+            control.value
+        );
+        assert!(confirmed.modified);
+        target
+    };
     let path = root.join("worker-rigs");
     let store = BundleStore::new(path.clone());
     let revision = store.save(bundle)?;
@@ -918,6 +962,11 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
     assert_eq!(before.control.scene.as_deref(), Some("clean"));
     let missing = oxidal_audio::midi::Settings {
         branch_bindings: vec![],
+        parameter_bindings: vec![ParameterBinding {
+            target: native_target,
+            controller: 21,
+            mode: ControlMode::Absolute,
+        }],
         input: "hw:Unavailable,0,0".into(),
         channel: 1,
         bindings: vec![oxidal_audio::midi::Binding {

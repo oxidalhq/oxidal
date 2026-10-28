@@ -96,6 +96,14 @@ mod tests {
         assert!(settings.midi.is_none()); // older checkpoints remain readable
         settings.midi = Some(oxidal_audio::midi::Settings {
             branch_bindings: vec![],
+            parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
+                target: oxidal_engine::protocol::Target::Native {
+                    node: "amp".into(),
+                    parameter: "toneBass".into(),
+                },
+                controller: 21,
+                mode: oxidal_audio::midi::ControlMode::RelativeTwosComplement,
+            }],
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![oxidal_audio::midi::Binding {

@@ -23,6 +23,33 @@ export function SceneMidi({
   const [draft, setDraft] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [learning, setLearning] = useState<{
+    index: number;
+    after: number;
+  } | null>(null);
+  const status = state.control?.midi;
+  const savedInput = state.configured?.midi?.input;
+  // Consume a fresh external snapshot once; clearing the token prevents later
+  // telemetry from changing the draft before the musician applies it.
+  const message = status?.last;
+  if (
+    learning &&
+    draft &&
+    status?.connected &&
+    savedInput === draft.input &&
+    status.events > learning.after &&
+    message?.kind === 'control' &&
+    (draft.channel === 0 || message.channel === draft.channel)
+  ) {
+    setDraft({
+      ...draft,
+      parameter_bindings: (draft.parameter_bindings ?? []).map((b, index) =>
+        index === learning.index ? { ...b, controller: message.controller } : b,
+      ),
+    });
+    setLearning(null);
+  }
+
   const scenes = state.control?.scenes?.scenes ?? [];
   const branches = state.control?.branches ?? [];
   async function scan() {
@@ -42,6 +69,7 @@ export function SceneMidi({
         input: '',
         channel: 1,
         branch_bindings: [],
+        parameter_bindings: [],
         bindings: scenes.slice(0, 128).map((scene, program) => ({
           scene: scene.id,
           program,
@@ -51,17 +79,18 @@ export function SceneMidi({
     );
     void scan();
   }
-  if (!scenes.length) return null;
-  const status = state.control?.midi;
+  const controls = state.control?.controls ?? [];
+  if (!state.control) return null;
   return (
     <details
       className="w-full max-w-3xl rounded-md border border-border p-3"
       onToggle={(event) => {
+        setLearning(null);
         if (event.currentTarget.open) open();
       }}
     >
       <summary className="min-h-11 cursor-pointer content-center font-semibold">
-        MIDI scenes
+        MIDI controls
       </summary>
       <div className="space-y-3 pt-3">
         {state.configured?.midi && (
@@ -293,12 +322,204 @@ export function SceneMidi({
             })}
           </fieldset>
         )}
+        <fieldset className="space-y-2">
+          <legend className="font-semibold">Parameters</legend>
+          {(draft?.parameter_bindings ?? []).map((binding, index) => {
+            const control = controls.find(
+              (c) =>
+                JSON.stringify(c.target) === JSON.stringify(binding.target),
+            );
+            const change = (
+              patch: Partial<
+                NonNullable<Settings['parameter_bindings']>[number]
+              >,
+            ) =>
+              setDraft(
+                (old) =>
+                  old && {
+                    ...old,
+                    parameter_bindings: (old.parameter_bindings ?? []).map(
+                      (b, i) => (i === index ? { ...b, ...patch } : b),
+                    ),
+                  },
+              );
+            return (
+              <div
+                key={index}
+                className="space-y-2 rounded-md border border-border p-2"
+              >
+                <label className="field min-w-0">
+                  Control
+                  <select
+                    aria-label={`MIDI parameter ${index + 1}`}
+                    value={JSON.stringify(binding.target)}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const selected = controls.find(
+                        (c) => JSON.stringify(c.target) === event.target.value,
+                      );
+                      if (selected)
+                        change({ target: selected.target, mode: 'absolute' });
+                    }}
+                  >
+                    {!control && (
+                      <option value={JSON.stringify(binding.target)}>
+                        Unavailable control
+                      </option>
+                    )}
+                    {controls.map((c) => (
+                      <option
+                        key={JSON.stringify(c.target)}
+                        value={JSON.stringify(c.target)}
+                      >
+                        {c.target.node} · {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="field min-w-0">
+                    CC
+                    <input
+                      aria-label={`Parameter CC ${index + 1}`}
+                      type="number"
+                      min={0}
+                      max={127}
+                      value={binding.controller}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        change({ controller: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="field min-w-0">
+                    Behavior
+                    <select
+                      aria-label={`Parameter behavior ${index + 1}`}
+                      value={binding.mode ?? 'absolute'}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        change({
+                          mode: e.target.value as NonNullable<
+                            typeof binding.mode
+                          >,
+                        })
+                      }
+                    >
+                      <option value="absolute">Absolute</option>
+                      {control?.toggle ? (
+                        <option value="toggle">Toggle on press</option>
+                      ) : (
+                        <>
+                          <option value="relative_twos_complement">
+                            Encoder: two’s complement
+                          </option>
+                          <option value="relative_offset64">
+                            Encoder: offset 64
+                          </option>
+                        </>
+                      )}
+                    </select>
+                  </label>
+                </div>
+                <div className="action-row">
+                  <Button
+                    variant="outline"
+                    disabled={
+                      disabled ||
+                      !status?.connected ||
+                      savedInput !== draft?.input
+                    }
+                    onClick={() =>
+                      setLearning(
+                        learning?.index === index
+                          ? null
+                          : { index, after: status?.events ?? 0 },
+                      )
+                    }
+                  >
+                    {learning?.index === index
+                      ? 'Cancel learn'
+                      : `Learn CC ${index + 1}`}
+                  </Button>
+                  {learning?.index === index && (
+                    <span role="status" className="caption">
+                      Move a controller knob
+                    </span>
+                  )}
+                </div>
+                {control && (
+                  <output className="caption">
+                    {control.display || String(control.value)}
+                  </output>
+                )}
+                <Button
+                  variant="outline"
+                  disabled={disabled}
+                  onClick={() => {
+                    setLearning(null);
+                    setDraft(
+                      (old) =>
+                        old && {
+                          ...old,
+                          parameter_bindings: (
+                            old.parameter_bindings ?? []
+                          ).filter((_, i) => i !== index),
+                        },
+                    );
+                  }}
+                >
+                  Remove mapping {index + 1}
+                </Button>
+              </div>
+            );
+          })}
+          <Button
+            variant="outline"
+            disabled={
+              disabled ||
+              !draft ||
+              !controls.length ||
+              (draft.parameter_bindings?.length ?? 0) >= 128
+            }
+            onClick={() =>
+              setDraft((old) => {
+                if (!old || !controls[0]) return old;
+                const used = new Set([
+                  ...old.bindings.map((b) => b.controller),
+                  ...(old.branch_bindings ?? []).map((b) => b.controller),
+                  ...(old.parameter_bindings ?? []).map((b) => b.controller),
+                ]);
+                const controller = Array.from(
+                  { length: 128 },
+                  (_, i) => i,
+                ).find((cc) => !used.has(cc));
+                if (controller == null) return old;
+                return {
+                  ...old,
+                  parameter_bindings: [
+                    ...(old.parameter_bindings ?? []),
+                    {
+                      target: controls[0].target,
+                      controller,
+                      mode: 'absolute',
+                    },
+                  ],
+                };
+              })
+            }
+          >
+            Add parameter mapping
+          </Button>
+        </fieldset>
         <div className="action-row">
           <Button
             disabled={
               disabled ||
               !draft?.input ||
-              (!draft.bindings.length && !draft.branch_bindings?.length)
+              (!draft.bindings.length &&
+                !draft.branch_bindings?.length &&
+                !draft.parameter_bindings?.length)
             }
             onClick={() => void onCommand({ kind: 'midi', settings: draft })}
           >

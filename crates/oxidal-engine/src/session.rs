@@ -452,6 +452,27 @@ impl Session {
             }
             return Ok(true);
         }
+        if let Some((binding, raw)) = settings.parameter(message) {
+            let control = self
+                .state
+                .controls
+                .iter()
+                .find(|c| c.target == binding.target)
+                .ok_or("MIDI parameter is unavailable")?;
+            let Some(value) = control.midi_value(binding.mode, raw)? else {
+                return Ok(true);
+            };
+            if (value as f32) != (control.value as f32) {
+                let command = ControlCommand {
+                    session: self.state.session.clone(),
+                    expected_revision: self.state.revision,
+                    target: binding.target.clone(),
+                    value,
+                };
+                self.apply(command)?;
+            }
+            return Ok(true);
+        }
         Ok(false)
     }
     fn apply_mix(

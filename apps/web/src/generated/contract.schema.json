@@ -2123,6 +2123,15 @@
         "value"
       ]
     },
+    "ControlMode": {
+      "type": "string",
+      "enum": [
+        "absolute",
+        "toggle",
+        "relative_twos_complement",
+        "relative_offset64"
+      ]
+    },
     "Creator": {
       "type": "object",
       "properties": {
@@ -4653,6 +4662,29 @@
         "machine_default"
       ]
     },
+    "ParameterBinding": {
+      "type": "object",
+      "properties": {
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/$defs/ControlMode",
+          "default": "absolute"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "controller"
+      ]
+    },
     "Pending": {
       "type": "object",
       "properties": {
@@ -6150,6 +6182,13 @@
         },
         "input": {
           "type": "string"
+        },
+        "parameter_bindings": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ParameterBinding"
+          }
         }
       },
       "additionalProperties": false,

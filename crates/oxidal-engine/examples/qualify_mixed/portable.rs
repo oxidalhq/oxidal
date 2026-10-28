@@ -607,7 +607,7 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
     assert!(peak > 0.001);
     assert_eq!(session.snapshot().scene.as_deref(), Some("clean"));
     assert!(!session.snapshot().scene_transitioning);
-    super::worker::qualify_scenes(&store.read(&revision)?, root)?;
+    super::worker::qualify_scenes(&store.read(&revision)?, root, world)?;
     // The same admitted scene controls can select input gates, preserving each
     // real NAM branch's own history as well as shared downstream effects.
     for side in ["l", "r"] {
@@ -666,7 +666,7 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
         root.join("scene-trails-preset-revision"),
         preserving_revision,
     )?;
-    super::worker::qualify_scenes(&preserving, root)?;
+    super::worker::qualify_scenes(&preserving, root, world)?;
     println!(
         "parallel scenes: independent native A2 branches, shared LV2, finite PCM, worker selection and isolated offline recall pass; physical deadlines remain unqualified"
     );

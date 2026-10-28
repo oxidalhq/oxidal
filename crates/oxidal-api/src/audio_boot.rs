@@ -254,6 +254,14 @@ mod tests {
         let mut mixed: StartRig=serde_json::from_value(json!({"revision":"b".repeat(64),"stream":stream,"recall":{"source_revision":"b".repeat(64),"values":[]}})).unwrap();
         mixed.midi = Some(oxidal_audio::midi::Settings {
             branch_bindings: vec![],
+            parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
+                target: oxidal_engine::protocol::Target::Native {
+                    node: "amp".into(),
+                    parameter: "toneBass".into(),
+                },
+                controller: 21,
+                mode: oxidal_audio::midi::ControlMode::RelativeTwosComplement,
+            }],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![oxidal_audio::midi::Binding {
@@ -317,6 +325,14 @@ mod tests {
         assert!(p.enabled(Role::Effects));
         mixed.midi = Some(oxidal_audio::midi::Settings {
             branch_bindings: vec![],
+            parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
+                target: oxidal_engine::protocol::Target::Native {
+                    node: "amp".into(),
+                    parameter: "toneBass".into(),
+                },
+                controller: 21,
+                mode: oxidal_audio::midi::ControlMode::RelativeTwosComplement,
+            }],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![oxidal_audio::midi::Binding {

@@ -2876,7 +2876,7 @@ for (const layout of ['serial', 'scenes'] as const) {
           },
         }),
       );
-      await rig.getByText('MIDI scenes', { exact: true }).click();
+      await rig.getByText('MIDI controls', { exact: true }).click();
       await rig
         .getByLabel('MIDI input', { exact: true })
         .selectOption('hw:Unavailable,0,0');
@@ -2894,6 +2894,21 @@ for (const layout of ['serial', 'scenes'] as const) {
         .selectOption('gate');
 
       await rig
+        .getByRole('button', { name: 'Add parameter mapping', exact: true })
+        .click();
+      const mappedControl = (await state()).control.controls.find(
+        (c: { target: { kind: string; node: string } }) =>
+          c.target.kind === 'bypass',
+      );
+      await rig
+        .getByLabel('MIDI parameter 1', { exact: true })
+        .selectOption(JSON.stringify(mappedControl.target));
+      await rig.getByLabel('Parameter CC 1', { exact: true }).fill('21');
+      await rig
+        .getByLabel('Parameter behavior 1', { exact: true })
+        .selectOption('toggle');
+
+      await rig
         .getByRole('button', { name: 'Apply MIDI', exact: true })
         .click();
       await expect
@@ -2908,6 +2923,11 @@ for (const layout of ['serial', 'scenes'] as const) {
         mode: 'gate',
       });
 
+      expect((await state()).configured.midi.parameter_bindings[0]).toEqual({
+        target: mappedControl.target,
+        controller: 21,
+        mode: 'toggle',
+      });
       await expect(rig.getByText(/Waiting for controller/)).toBeVisible();
       for (const viewport of [
         initialViewport,
@@ -2947,7 +2967,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         .getByRole('button', { name: 'Disable MIDI', exact: true })
         .click();
       await expect.poll(async () => (await state()).configured.midi).toBeNull();
-      await rig.getByText('MIDI scenes', { exact: true }).click();
+      await rig.getByText('MIDI controls', { exact: true }).click();
       for (const viewport of [
         initialViewport,
         { width: initialViewport.height, height: initialViewport.width },

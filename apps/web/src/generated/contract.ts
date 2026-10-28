@@ -1376,6 +1376,7 @@ export interface Settings2 {
    */
   channel: number;
   input: string;
+  parameter_bindings?: ParameterBinding[];
 }
 export interface Binding2 {
   controller?: number | null;
@@ -1389,6 +1390,11 @@ export interface BranchBinding {
   branch: string;
   controller: number;
   mode: BranchMode;
+}
+export interface ParameterBinding {
+  controller: number;
+  mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
+  target: Target;
 }
 export interface PreparedRecall {
   recall?: Recall | null;

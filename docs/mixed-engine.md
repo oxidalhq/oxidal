@@ -576,13 +576,13 @@ cargo run -p oxidal-engine --features native --example qualify_mixed -- --scenes
 
 The full `pnpm native:check` also includes these scene checks. Browser composition coverage exercises both layouts, actual-worker selection, Save/recall, accessibility and portrait/landscape sizing on the maintained target device projects. Neither ALSA-null transport nor browser emulation establishes physical timing acceptance.
 
-### Device MIDI scene control
+### Device MIDI control
 
-For a running scene rig, expand **MIDI scenes**, scan and choose a hardware input, select a channel (or All channels), and assign each scene a Program Change or CC press. Programs are displayed as 1–128 and stored as wire values 0–127. CC numbers remain 0–127; values 64–127 select the scene and releases are ignored. Duplicate triggers and unknown scene IDs are rejected before configuration changes. Repeated selection of the current target does not restart its ramp.
+For a running mixed rig, expand **MIDI controls**, scan and choose a hardware input, select a channel (or All channels), and assign each scene a Program Change or CC press. Programs are displayed as 1–128 and stored as wire values 0–127. CC numbers remain 0–127; values 64–127 select the scene and releases are ignored. Duplicate triggers and unknown scene IDs are rejected before configuration changes. Repeated selection of the current target does not restart its ramp.
 
 The mixed worker opens only explicitly selected ALSA raw MIDI hardware inputs. Discovery includes a strict hardware-hint fallback for input-only controllers. The decoder handles partial reads, running status, interleaved real-time bytes and canceled status across SysEx/system-common messages. One bounded non-blocking read runs outside PCM per owner tick. Missing/disconnected hardware reports a separate MIDI error and retries every two seconds while PCM continues. Disable MIDI and Stop release the port. A whole-resident switch disables the previous rig's mappings instead of silently applying them to different scene IDs.
 
-Device-local input/channel/bindings live in `StartRig.midi`, not the portable preset. They survive Restart, Resume, audio reconfiguration and explicit boot capture through the existing checkpoint policy. Starting a different library rig requires selecting its MIDI configuration; portable Save does not export hardware identifiers. Connection state, event count and last PC/CC arrive in confirmed worker readback. This path selects scenes and controls declared independent branches. Generic parameter/feedback routing remains separate work.
+Device-local input/channel/bindings live in `StartRig.midi`, not the portable preset. They survive Restart, Resume, audio reconfiguration and explicit boot capture through the existing checkpoint policy. Starting a different library rig requires selecting its MIDI configuration; portable Save does not export hardware identifiers. Connection state, event count and last PC/CC arrive in confirmed worker readback. This path selects scenes, controls declared independent branches and maps confirmed native/LV2/host scalar controls. Hardware feedback output remains separate work.
 
 The maintained byte/binding tests and actual worker unavailable-device test cover parsing, trigger admission, configuration rollback, continuing PCM and disabling. Browser scene coverage changes channel/PC/CC settings through the actual daemon/worker, deliberately presents an unavailable discovery entry and proves audio keeps running. Portrait/landscape screenshots cover the open panel. Real USB input, unplug/reconnect behavior, controller feedback and scheduling deadlines still require the physical Pi session; emulated discovery does not qualify hardware.
 
@@ -592,7 +592,7 @@ Scene documents may additionally declare `branches`: unique named, disjoint gain
 
 Touch **On/Off** on a scene branch to fade just that branch's selector gains. Other branch targets are unchanged, so several NAM branches can sound together or all can be muted. Internal selector nodes are omitted from the main chain controls. A named scene still replaces the whole selected mix; a custom combination has no falsely selected scene. Readback reports each branch's enabled/partial state from actual confirmed gains. Named Save and recovery retain custom combinations through the existing scalar path, including a fresh isolated worker reopen.
 
-Under MIDI scenes → Independent branches, map a CC and select **Toggle on press** or **Follow CC on/off**. Toggle accepts each high CC message and ignores releases. Gate maps values 64–127 to On and 0–63 to Off. Channel selection applies to both. Collisions with scene CCs or other branch CCs are rejected. The hardware reader and the maintained decoder-to-DSP test call the same engine dispatch method, which uses current owner state and the same branch/scene transactions as the UI.
+Under MIDI controls → Independent branches, map a CC and select **Toggle on press** or **Follow CC on/off**. Toggle accepts each high CC message and ignores releases. Gate maps values 64–127 to On and 0–63 to Off. Channel selection applies to both. Collisions with scene CCs or other branch CCs are rejected. The hardware reader and the maintained decoder-to-DSP test call the same engine dispatch method, which uses current owner state and the same branch/scene transactions as the UI.
 
 Mixing adds branch signals without automatic normalization or limiting; use the native output controls and always-visible resource/clipping strip. Muting keeps processors ready and does not free their CPU. Exact-sample DSP tests cover independent fades and unchanged peer gains. Real native/LV2 worker tests and browser Save/reopen retain multiple enabled branches. This establishes the software path, not physical controller or Pi timing acceptance.
 
@@ -642,3 +642,32 @@ updates preserve the graph control revision; an applied result advances it and
 absorbs the edited node's model assignments into its verified working checkpoint.
 Other nodes' controls remain intact. Measurement rejects conflicting sound edits;
 the existing rollback, isolated Save and recovery paths retain successful results.
+
+### Generic MIDI parameter mappings
+
+MIDI controls → Parameters maps a CC to an actual native parameter, LV2 symbol,
+processor bypass or host gain. Serial rigs do not need scene definitions to use
+these mappings. Numeric controls use their confirmed ranges, including logarithmic
+LV2 ranges and integer ports. Absolute switches use the midpoint threshold; toggle
+switches respond only to values 64–127. Relative encoders support two’s-complement
+(0 neutral) and offset-64 (64 neutral) conventions. Relative switch mappings,
+unknown controls, invalid input/channel and colliding CC assignments are rejected.
+
+Learn CC listens to fresh PC/CC telemetry from the already configured, connected
+input. Only a new CC on the selected channel is accepted; existing events, Program
+Changes and other channels cannot assign a mapping. Learning changes the local
+mapping draft once and requires Apply MIDI. Cancel, closing the panel or removing
+the mapping stops learning. Configure the input manually before learning; this
+slice does not open an unmapped controller just for discovery.
+
+The shared decoder routes mapped values through the existing session control owner,
+including gesture/model guards and live latency admission. Invalid latency-changing
+edits retain confirmed sound. The UI reads back the same actual controls; no second
+MIDI value cache impersonates the DSP. Device-local mappings remain outside portable
+presets and survive existing Restart/Resume/boot capture. Standalone native-worker
+hardware MIDI and controller output feedback are not implemented by this path.
+
+Maintained tests cover raw bytes to actual LV2/host controls, A2 native readback,
+missing-controller PCM progress, boot/recovery settings, learned-message freshness
+and cancellation, and the actual browser/daemon/worker mapping flow. These software
+checks do not establish physical USB input or real-time deadlines.

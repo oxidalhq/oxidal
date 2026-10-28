@@ -15,6 +15,67 @@ pub enum Message {
         value: u8,
     },
 }
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[schemars(rename = "Target")]
+pub enum ControlTarget {
+    Native { node: String, parameter: String },
+    Lv2 { node: String, symbol: String },
+    Bypass { node: String },
+    Merge { node: String, port: usize },
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlMode {
+    #[default]
+    Absolute,
+    Toggle,
+    RelativeTwosComplement,
+    RelativeOffset64,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ParameterBinding {
+    pub target: ControlTarget,
+    pub controller: u8,
+    #[serde(default)]
+    pub mode: ControlMode,
+}
+impl ControlTarget {
+    pub fn valid(&self) -> bool {
+        let node = match self {
+            Self::Native { node, .. }
+            | Self::Lv2 { node, .. }
+            | Self::Bypass { node }
+            | Self::Merge { node, .. } => node,
+        };
+        if node.is_empty()
+            || node.len() > 64
+            || !node.bytes().next().is_some_and(|b| b.is_ascii_alphabetic())
+            || !node
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        {
+            return false;
+        }
+        match self {
+            Self::Native { parameter, .. } => {
+                !parameter.is_empty()
+                    && parameter.len() <= 256
+                    && !parameter.chars().any(char::is_control)
+            }
+            Self::Lv2 { symbol, .. } => {
+                !symbol.is_empty()
+                    && symbol.len() <= 128
+                    && symbol
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            }
+            Self::Merge { port, .. } => *port < 64,
+            Self::Bypass { .. } => true,
+        }
+    }
+}
 /// Device-local configuration, deliberately absent from portable sound data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +86,8 @@ pub struct Settings {
     pub bindings: Vec<Binding>,
     #[serde(default)]
     pub branch_bindings: Vec<BranchBinding>,
+    #[serde(default)]
+    pub parameter_bindings: Vec<ParameterBinding>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -63,9 +126,12 @@ impl Settings {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
             || parts[1..].iter().any(|p| p.parse::<u16>().is_err())
             || self.channel > 16
-            || (self.bindings.is_empty() && self.branch_bindings.is_empty())
+            || (self.bindings.is_empty()
+                && self.branch_bindings.is_empty()
+                && self.parameter_bindings.is_empty())
             || self.bindings.len() > 256
             || self.branch_bindings.len() > 128
+            || self.parameter_bindings.len() > 128
         {
             return Err("Invalid MIDI input configuration".into());
         }
@@ -97,6 +163,24 @@ impl Settings {
                 return Err("Invalid or colliding MIDI branch binding".into());
             }
         }
+        for (index, binding) in self.parameter_bindings.iter().enumerate() {
+            if !binding.target.valid()
+                || binding.controller > 127
+                || self
+                    .bindings
+                    .iter()
+                    .any(|b| b.controller == Some(binding.controller))
+                || self
+                    .branch_bindings
+                    .iter()
+                    .any(|b| b.controller == binding.controller)
+                || self.parameter_bindings[..index]
+                    .iter()
+                    .any(|b| b.controller == binding.controller)
+            {
+                return Err("Invalid or colliding MIDI parameter binding".into());
+            }
+        }
         Ok(())
     }
     /// None means toggle the confirmed branch target; Some is an absolute gate.
@@ -124,6 +208,27 @@ impl Settings {
             BranchMode::Gate => Some((binding, Some(value >= 64))),
             _ => None,
         }
+    }
+    pub fn parameter(&self, message: Message) -> Option<(&ParameterBinding, u8)> {
+        let Message::Control {
+            channel,
+            controller,
+            value,
+        } = message
+        else {
+            return None;
+        };
+        if !(1..=16).contains(&channel)
+            || controller > 127
+            || value > 127
+            || (self.channel != 0 && self.channel != channel)
+        {
+            return None;
+        }
+        self.parameter_bindings
+            .iter()
+            .find(|b| b.controller == controller)
+            .map(|b| (b, value))
     }
     pub fn scene(&self, message: Message) -> Option<&str> {
         let (channel, program, controller) = match message {
@@ -359,6 +464,7 @@ mod tests {
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![],
+            parameter_bindings: vec![],
             branch_bindings: vec![BranchBinding {
                 branch: "lead".into(),
                 controller: 20,
@@ -411,6 +517,7 @@ mod tests {
     fn bindings_match_channel_pc_and_cc_press_but_not_release() {
         let settings = Settings {
             branch_bindings: vec![],
+            parameter_bindings: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![

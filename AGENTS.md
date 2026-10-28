@@ -128,3 +128,10 @@ matches survive Save/recovery and bounded undo. See docs/native-tone3000.md.
 These tools do not implement adaptive guitar profiles, a global LV2-only tuner or
 physical timing qualification. Image builds and emulator boots establish package/boot behavior, not completion
 of unfinished authoring or scene features.
+
+Mixed hardware MIDI now also maps actual native/LV2/host controls with absolute,
+toggle and two relative encoder modes. Device-local mappings share the web control
+owner and latency guards; fresh-event CC learning changes a draft before Apply.
+Maintained DSP/worker/browser/learning and recovery tests cover the software path.
+Standalone native-worker MIDI, hardware output feedback and physical deadlines
+remain open. See docs/mixed-engine.md.
