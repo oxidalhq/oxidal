@@ -184,6 +184,24 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
     let edited = engine.chain()?["chain"][0]["params"]["eq"].clone();
     assert_eq!(edited["bands"][1]["gainDb"], 6.0);
     assert_eq!(edited["enabled"], true);
+    let eq = engine.eq_snapshot()?;
+    let mut replayed = Engine::new(48000.0, 128)?;
+    replayed.restore(&baseline)?;
+    wait_loaded(&mut replayed)?;
+    let before_replay = replayed.eq_snapshot()?;
+    let mut token = 100;
+    let mut invalid = eq.clone();
+    invalid[0].block_id = "missing-block".into();
+    assert!(replayed.restore_eq(&invalid, &mut token).is_err());
+    assert_eq!(replayed.eq_snapshot()?, before_replay);
+    invalid = eq.clone();
+    invalid[0].eq.bands[1].freq_hz = 0.0;
+    assert!(replayed.restore_eq(&invalid, &mut token).is_err());
+    assert_eq!(replayed.eq_snapshot()?, before_replay);
+    assert_eq!(token, 100, "rejected replay must not consume a token");
+    replayed.restore_eq(&eq, &mut token)?;
+    assert_eq!(replayed.eq_snapshot()?, eq);
+    replayed.prepare_stream()?;
     let saved = engine.save_preset("Stage EQ qualification")?;
     let mut recalled = Engine::new(48000.0, 128)?;
     recalled.load_preset(&saved)?;
@@ -199,6 +217,9 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
         let mut right = left.clone();
         let mut restored_left = left.clone();
         let mut restored_right = left.clone();
+        let mut replay_left = left.clone();
+        let mut replay_right = right.clone();
+        replayed.process(&mut replay_left, &mut replay_right)?;
         engine.process(&mut left, &mut right)?;
         recalled.process(&mut restored_left, &mut restored_right)?;
         changed_audio.extend_from_slice(&left);
@@ -209,6 +230,13 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
             .map(|(a, b)| (a - b).abs())
             .fold(0.0_f32, f32::max);
         assert!(error < 1e-5, "stage EQ saved render differs: {error}");
+        let error = left
+            .iter()
+            .chain(&right)
+            .zip(replay_left.iter().chain(&replay_right))
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(error < 1e-5, "stage EQ replay render differs: {error}");
     }
     assert!(
         baseline_audio

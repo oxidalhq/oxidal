@@ -423,6 +423,111 @@ impl Engine {
             .map(Some)
             .map_err(|e| NativeError(e.to_string()))
     }
+    /// Owned EQ readback for reconstruction. Never a capture on the DSP callback.
+    pub fn eq_snapshot(&mut self) -> Result<Vec<crate::protocol::BlockEqState>> {
+        let chain = self.chain()?;
+        let mut result = Vec::new();
+        for lane in ["chain", "chainRight"] {
+            // Mono source presets omit the optional right lane.
+            if lane == "chainRight" && chain.get(lane).is_none() {
+                continue;
+            }
+            let blocks = chain[lane]
+                .as_array()
+                .ok_or_else(|| NativeError("Missing native chain".into()))?;
+            for block in blocks.iter().filter(|b| b["kind"] == "tone") {
+                let block_id = block["blockId"]
+                    .as_str()
+                    .ok_or_else(|| NativeError("Missing native block identity".into()))?;
+                let eq = serde_json::from_value(block["params"]["eq"].clone())
+                    .map_err(|e| NativeError(format!("Invalid native EQ readback: {e}")))?;
+                result.push(crate::protocol::BlockEqState {
+                    block_id: block_id.into(),
+                    eq,
+                });
+            }
+        }
+        Ok(result)
+    }
+    /// Replay into an isolated prepared/export engine, never a sounding instance.
+    /// Validate all targets and values before mutation; on failure discard this candidate.
+    /// The caller supplies a token sequence disjoint from its live gestures.
+    pub fn restore_eq(
+        &mut self,
+        states: &[crate::protocol::BlockEqState],
+        token: &mut u64,
+    ) -> Result<()> {
+        use crate::protocol::{BlockEdit, EditPhase, StageAction};
+        let current = self.eq_snapshot()?;
+        if states.len() != current.len()
+            || states.iter().enumerate().any(|(i, state)| {
+                current[i].block_id != state.block_id
+                    || states[..i].iter().any(|s| s.block_id == state.block_id)
+            })
+        {
+            return Err(NativeError(
+                "EQ snapshot does not match native blocks".into(),
+            ));
+        }
+        let mut actions = Vec::new();
+        for state in states {
+            for (index, band) in state.eq.bands.iter().enumerate() {
+                actions.push(StageAction::BlockEdit {
+                    edit: BlockEdit::EqBand {
+                        phase: EditPhase::Commit,
+                        block_id: state.block_id.clone(),
+                        index: index as u8,
+                        band: band.clone(),
+                    },
+                });
+            }
+            actions.push(StageAction::BlockEdit {
+                edit: BlockEdit::EqPre {
+                    phase: EditPhase::Commit,
+                    block_id: state.block_id.clone(),
+                    value: state.eq.pre,
+                },
+            });
+            actions.push(StageAction::BlockEdit {
+                edit: BlockEdit::EqEnabled {
+                    phase: EditPhase::Commit,
+                    block_id: state.block_id.clone(),
+                    value: state.eq.enabled,
+                },
+            });
+        }
+        token
+            .checked_add(actions.len() as u64)
+            .ok_or_else(|| NativeError("Stage token exhausted".into()))?;
+        for action in &actions {
+            let (_, payload) = action.encode().map_err(NativeError)?;
+            if payload.len() > 256 {
+                return Err(NativeError("EQ request exceeds envelope".into()));
+            }
+        }
+        for action in actions {
+            *token += 1;
+            self.stage_submit(*token, &action)?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            loop {
+                self.pump()?;
+                if let Some(reply) = self.stage_read(*token)? {
+                    if reply["state"] != "done" {
+                        return Err(NativeError(format!("EQ replay failed: {reply}")));
+                    }
+                    break;
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Err(NativeError("EQ replay timed out".into()));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+        if self.eq_snapshot()? != states {
+            return Err(NativeError("EQ replay readback differs".into()));
+        }
+        Ok(())
+    }
     pub fn catalog(&mut self) -> Result<serde_json::Value> {
         // SAFETY: json supplies a live handle and bounded writable buffer/length.
         self.json(|p, b, n, w| unsafe { oxidal_t3k_catalog(p, b, n, w) })

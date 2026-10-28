@@ -207,24 +207,7 @@ pub enum BlockEdit {
         band: EqBand,
     },
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct EqBand {
-    #[serde(rename = "type")]
-    pub kind: EqType,
-    pub freq_hz: f64,
-    pub gain_db: f64,
-    pub q: f64,
-}
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum EqType {
-    Lowcut,
-    Lowshelf,
-    Bell,
-    Highshelf,
-    Highcut,
-}
+pub use oxidal_audio::eq::{BlockEqState, EqBand, EqState, EqType};
 #[cfg(any(feature = "native", test))]
 impl StageAction {
     pub(crate) fn encode(&self) -> Result<(u32, Vec<u8>), String> {
@@ -254,20 +237,7 @@ impl StageAction {
                                 _ => false,
                             }
                     }
-                    BlockEdit::EqBand { index, band, .. } => {
-                        let role = match index {
-                            0 => matches!(band.kind, EqType::Lowcut | EqType::Lowshelf),
-                            1..=4 => matches!(band.kind, EqType::Bell),
-                            5 => matches!(band.kind, EqType::Highshelf | EqType::Highcut),
-                            _ => false,
-                        };
-                        role && band.freq_hz.is_finite()
-                            && (20.0..=20000.0).contains(&band.freq_hz)
-                            && band.gain_db.is_finite()
-                            && (-15.0..=15.0).contains(&band.gain_db)
-                            && band.q.is_finite()
-                            && (0.1..=10.0).contains(&band.q)
-                    }
+                    BlockEdit::EqBand { index, band, .. } => band.valid(usize::from(*index)),
                     _ => true,
                 };
                 let id = match edit {

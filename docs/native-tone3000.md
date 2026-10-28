@@ -239,3 +239,12 @@ EQ authoring. The typed transport also names reference pan/solo and measurement/
 alignment operations; those operations still need dedicated live qualification.
 Playback-worker ownership, confirmed edit replay through isolated Save/restart,
 API transactions and browser controls remain required before exposing stage edits.
+
+`eq_snapshot` returns exact block identities and six-band state. `restore_eq`
+replays that state into an isolated candidate/export processor, validates every
+identity/value before any mutation, then verifies exact readback. The caller owns
+a separate token sequence and must discard a failed candidate. It is deliberately
+not an operation on the audible engine: it pumps native messages and may wait.
+The qualifier compares replayed PCM with the edited engine and rejects malformed
+identities/ranges without changing the candidate or consuming a token. Mono presets
+may omit the right lane. These helpers do not yet wire EQ into playback recovery.
