@@ -149,6 +149,7 @@ pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
     let store = BundleStore::new(path.clone());
     let revision = store.save(bundle)?;
     let start = StartRig {
+        midi: None,
         prepared: Vec::new(),
         revision: revision.clone(),
         stream: stream(),
@@ -214,6 +215,7 @@ pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
     send(
         &mut recalled,
         &StartRig {
+            midi: None,
             prepared: Vec::new(),
             revision: saved,
             stream: stream(),
@@ -338,6 +340,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                midi: None,
                 prepared: Vec::new(),
                 revision: revision.clone(),
                 stream: stream(),
@@ -359,6 +362,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     drop(eq_recalled);
     drop(eq_only);
     let start = StartRig {
+        midi: None,
         prepared: Vec::new(),
         revision: revision.clone(),
         stream: stream(),
@@ -483,6 +487,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                midi: None,
                 prepared: Vec::new(),
                 revision: saved.clone(),
                 stream: stream(),
@@ -514,6 +519,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     send(
         &mut child,
         &StartRig {
+            midi: None,
             prepared: Vec::new(),
             revision: saved,
             stream: stream(),
@@ -583,6 +589,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                midi: None,
                 prepared: Vec::new(),
                 revision: shared_revision,
                 stream: stream(),
@@ -746,6 +753,7 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                midi: None,
                 revision: revision.clone(),
                 stream: stream(),
                 recall: None,
@@ -805,6 +813,7 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     )?;
     let received = replies(&mut child)?;
     let start = StartRig {
+        midi: None,
         revision: revision.clone(),
         stream: stream(),
         recall: None,
@@ -895,6 +904,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
     let store = BundleStore::new(path.clone());
     let revision = store.save(bundle)?;
     let start = StartRig {
+        midi: None,
         prepared: vec![],
         revision,
         stream: stream(),
@@ -906,6 +916,56 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
     let before = received.recv_timeout(Duration::from_secs(30))??;
     assert!(before.error.is_none());
     assert_eq!(before.control.scene.as_deref(), Some("clean"));
+    let missing = oxidal_audio::midi::Settings {
+        input: "hw:Unavailable,0,0".into(),
+        channel: 1,
+        bindings: vec![oxidal_audio::midi::Binding {
+            scene: "lead".into(),
+            program: Some(1),
+            controller: None,
+        }],
+    };
+    send(
+        &mut child,
+        &WorkerRequest::Midi {
+            settings: Some(missing.clone()),
+        },
+    )?;
+    let configured = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(configured.error.is_none());
+    let mut disconnected = false;
+    for _ in 0..100 {
+        send(&mut child, &WorkerRequest::Status)?;
+        let status = received.recv_timeout(Duration::from_secs(3))??;
+        if status.control.midi.error.is_some() && status.processed_frames > before.processed_frames
+        {
+            assert!(!status.control.midi.connected);
+            disconnected = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        disconnected,
+        "Missing MIDI device must report failure while PCM advances"
+    );
+    let mut invalid = missing;
+    invalid.bindings[0].scene = "unknown".into();
+    send(
+        &mut child,
+        &WorkerRequest::Midi {
+            settings: Some(invalid),
+        },
+    )?;
+    assert!(
+        received
+            .recv_timeout(Duration::from_secs(3))??
+            .error
+            .is_some()
+    );
+    send(&mut child, &WorkerRequest::Midi { settings: None })?;
+    let disabled = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(disabled.error.is_none() && disabled.control.midi.error.is_none());
     let command = SceneCommand {
         session: before.control.session.clone(),
         expected_revision: before.control.revision,

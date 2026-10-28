@@ -205,6 +205,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         SaveRequest {
             name: "Saved partition with effects".into(),
             settings: StartRig {
+                midi: None,
                 prepared: Vec::new(),
                 revision,
                 stream: stream(),
@@ -245,6 +246,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         SaveRequest {
             name: "Renamed partition".into(),
             settings: StartRig {
+                midi: None,
                 prepared: Vec::new(),
                 revision: saved.clone(),
                 stream: stream(),
@@ -443,6 +445,7 @@ fn qualify_models(world: &World, candidate: &Bundle, root: &Path) -> Result<()> 
         SaveRequest {
             name: "Model-edited stages".into(),
             settings: StartRig {
+                midi: None,
                 revision: source,
                 stream: stream(),
                 recall: None,

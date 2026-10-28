@@ -1,3 +1,4 @@
+import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
@@ -441,6 +442,11 @@ export function MixedRig({
           ))}
         </div>
       )}
+      <SceneMidi
+        state={state}
+        disabled={disabled || !!edit}
+        onCommand={command}
+      />
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
         <p role="alert" className="error">

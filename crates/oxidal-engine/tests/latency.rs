@@ -116,6 +116,7 @@ fn portable_lv2_latency_aligns_parallel_paths_bypass_and_offline_recall() {
             &world,
             SaveRequest {
                 settings: StartRig {
+                    midi: None,
                     prepared: Vec::new(),
                     revision,
                     stream: oxidal_audio::StreamConfig {
@@ -297,6 +298,7 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
     output.direction = oxidal_audio::Direction::Playback;
     let request = SaveRequest {
         settings: StartRig {
+            midi: None,
             prepared: Vec::new(),
             revision,
             stream: oxidal_audio::StreamConfig {
@@ -370,6 +372,7 @@ fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
     let mut output = input.clone();
     output.direction = oxidal_audio::Direction::Playback;
     let settings = StartRig {
+        midi: None,
         revision: a.clone(),
         recall: None,
         prepared: vec![PreparedRecall {

@@ -81,3 +81,11 @@ shared scalar LV2 effects. Existing Save/recovery gains retain selection. Mainta
 DSP, native worker and browser tests cover the defined envelope; physical MIDI,
 branch CPU suspension, whole-preset dynamic gapless and physical deadlines remain
 unqualified. See docs/mixed-engine.md.
+
+The mixed worker now has explicit device-local ALSA raw MIDI input configuration
+and PC/CC scene bindings. The web scene panel exposes discovery, channel, mapping
+and connection status. Missing controllers retry independently while PCM continues;
+Restart/Resume/boot retain configuration outside portable preset data. Byte/binding,
+actual-worker failure and web regressions cover the software path. Physical MIDI,
+independent branch-toggle mappings and scheduling remain unqualified. See
+docs/mixed-engine.md.

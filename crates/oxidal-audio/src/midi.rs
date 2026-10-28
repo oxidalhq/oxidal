@@ -1,0 +1,436 @@
+//! MIDI byte decoding and hardware-only ALSA input. No audio-thread I/O.
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Message {
+    Program {
+        channel: u8,
+        program: u8,
+    },
+    Control {
+        channel: u8,
+        controller: u8,
+        value: u8,
+    },
+}
+/// Device-local configuration, deliberately absent from portable sound data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Settings {
+    pub input: String,
+    /// 0 accepts all MIDI channels; otherwise 1–16.
+    pub channel: u8,
+    pub bindings: Vec<Binding>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Binding {
+    pub scene: String,
+    /// Exactly one trigger is required. Programs are wire values 0–127.
+    pub program: Option<u8>,
+    pub controller: Option<u8>,
+}
+impl Settings {
+    pub fn validate(&self) -> Result<(), String> {
+        let parts: Vec<_> = self
+            .input
+            .strip_prefix("hw:")
+            .unwrap_or("")
+            .split(',')
+            .collect();
+        if parts.len() != 3
+            || parts[0].is_empty()
+            || self.input.len() > 128
+            || !parts[0]
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            || parts[1..].iter().any(|p| p.parse::<u16>().is_err())
+            || self.channel > 16
+            || self.bindings.is_empty()
+            || self.bindings.len() > 256
+        {
+            return Err("Invalid MIDI input configuration".into());
+        }
+        for (index, binding) in self.bindings.iter().enumerate() {
+            if binding.scene.is_empty()
+                || binding.scene.len() > 64
+                || binding.program.is_some() == binding.controller.is_some()
+                || binding.program.is_some_and(|v| v > 127)
+                || binding.controller.is_some_and(|v| v > 127)
+                || self.bindings[..index].iter().any(|old| {
+                    old.program == binding.program && old.controller == binding.controller
+                })
+            {
+                return Err("Invalid or duplicate MIDI scene binding".into());
+            }
+        }
+        Ok(())
+    }
+    pub fn scene(&self, message: Message) -> Option<&str> {
+        let (channel, program, controller) = match message {
+            Message::Program { channel, program }
+                if (1..=16).contains(&channel) && program <= 127 =>
+            {
+                (channel, Some(program), None)
+            }
+            Message::Control {
+                channel,
+                controller,
+                value,
+            } if (1..=16).contains(&channel)
+                && controller <= 127
+                && (64..=127).contains(&value) =>
+            {
+                (channel, None, Some(controller))
+            }
+            _ => return None,
+        };
+        if self.channel != 0 && self.channel != channel {
+            return None;
+        }
+        self.bindings
+            .iter()
+            .find(|b| b.program == program && b.controller == controller)
+            .map(|b| b.scene.as_str())
+    }
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Status {
+    pub connected: bool,
+    pub events: u64,
+    pub last: Option<Message>,
+    pub error: Option<String>,
+}
+/// Keeps running status across read boundaries and real-time messages. SysEx and
+/// system-common cancel it; unsupported channel messages are consumed correctly.
+#[derive(Debug, Default)]
+pub struct Decoder {
+    status: u8,
+    first: Option<u8>,
+}
+impl Decoder {
+    pub fn push(&mut self, byte: u8) -> Option<Message> {
+        if byte >= 0xf8 {
+            return None;
+        }
+        if byte >= 0x80 {
+            self.status = if byte < 0xf0 { byte } else { 0 };
+            self.first = None;
+            return None;
+        }
+        let channel = (self.status & 15) + 1;
+        match self.status & 0xf0 {
+            0xc0 => Some(Message::Program {
+                channel,
+                program: byte,
+            }),
+            0xd0 | 0 => None,
+            kind => {
+                let Some(first) = self.first.take() else {
+                    self.first = Some(byte);
+                    return None;
+                };
+                if kind == 0xb0 {
+                    Some(Message::Control {
+                        channel,
+                        controller: first,
+                        value: byte,
+                    })
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Endpoint {
+    pub id: String,
+    pub name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Devices {
+    pub available: bool,
+    pub inputs: Vec<Endpoint>,
+    pub warnings: Vec<String>,
+}
+// Some input-only devices are omitted by the pinned rawmidi iterator, which
+// queries both stream directions. Admit only discovered hardware hints for the
+// current stable card ID as a fallback; never open arbitrary ALSA expressions.
+#[cfg(any(test, all(target_os = "linux", feature = "alsa")))]
+fn hardware_hint(card: &str, hint: &str) -> Option<String> {
+    let prefix = format!("hw:CARD={card},DEV=");
+    let value = hint.strip_prefix(&prefix)?;
+    let mut parts = value.split(",SUBDEV=");
+    let device = parts.next()?.parse::<u16>().ok()?;
+    let sub = parts.next().unwrap_or("0").parse::<u16>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(format!("hw:{card},{device},{sub}"))
+}
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+pub fn devices() -> Result<Devices, String> {
+    use alsa::{Ctl, Direction, card, rawmidi};
+    let mut result = Devices {
+        available: true,
+        inputs: vec![],
+        warnings: vec![],
+    };
+    for card in card::Iter::new().take(64) {
+        let card = card.map_err(|e| e.to_string())?;
+        let ctl = match Ctl::from_card(&card, true) {
+            Ok(ctl) => ctl,
+            Err(error) => {
+                result.warnings.push(error.to_string());
+                continue;
+            }
+        };
+        let info = ctl.card_info().map_err(|e| e.to_string())?;
+        let id = info.get_id().map_err(|e| e.to_string())?;
+        if id.is_empty()
+            || !id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        {
+            continue;
+        }
+        for input in rawmidi::Iter::new(&ctl).take(1024) {
+            match input {
+                Ok(input) if input.get_stream() == Direction::Capture => {
+                    result.inputs.push(Endpoint {
+                        id: format!("hw:{id},{},{}", input.get_device(), input.get_subdevice()),
+                        name: format!(
+                            "{} · {}",
+                            info.get_name().unwrap_or(id),
+                            input.get_subdevice_name().unwrap_or_default()
+                        ),
+                    })
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    result.warnings.push(error.to_string());
+                    break;
+                }
+            }
+        }
+        match alsa::device_name::HintIter::new_str(Some(&card), "rawmidi") {
+            Ok(hints) => {
+                for hint in hints.take(1024) {
+                    if hint.direction == Some(Direction::Playback) {
+                        continue;
+                    }
+                    let Some(endpoint) = hint
+                        .name
+                        .as_deref()
+                        .and_then(|hint| hardware_hint(id, hint))
+                    else {
+                        continue;
+                    };
+                    if result.inputs.iter().any(|input| input.id == endpoint) {
+                        continue;
+                    }
+                    result.inputs.push(Endpoint {
+                        id: endpoint,
+                        name: hint
+                            .desc
+                            .unwrap_or_else(|| info.get_name().unwrap_or(id).to_owned())
+                            .replace('\n', " · "),
+                    });
+                }
+            }
+            Err(error) => result.warnings.push(error.to_string()),
+        }
+    }
+    Ok(result)
+}
+#[cfg(not(all(target_os = "linux", feature = "alsa")))]
+pub fn devices() -> Result<Devices, String> {
+    Ok(Devices {
+        available: false,
+        inputs: vec![],
+        warnings: vec![],
+    })
+}
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+#[derive(Debug)]
+pub struct Input {
+    port: alsa::rawmidi::Rawmidi,
+    decoder: Decoder,
+}
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+impl Input {
+    pub fn open(endpoint: &str) -> Result<Self, String> {
+        if !devices()?.inputs.iter().any(|input| input.id == endpoint) {
+            return Err("MIDI input is unavailable; refresh devices".into());
+        }
+        let port = alsa::rawmidi::Rawmidi::new(endpoint, alsa::Direction::Capture, true)
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            port,
+            decoder: Decoder::default(),
+        })
+    }
+    /// One bounded, non-blocking read, called outside PCM. The caller owns error
+    /// reporting and reconnection; losing MIDI must never stop the audio stream.
+    pub fn read(&mut self, mut receive: impl FnMut(Message)) -> Result<usize, String> {
+        let mut bytes = [0; 64];
+        let count = match self.port.read(&mut bytes) {
+            Ok(count) => count,
+            Err(error) if error.errno() == 11 => return Ok(0), // EAGAIN on Linux
+            Err(error) => return Err(error.to_string()),
+        };
+        for byte in &bytes[..count] {
+            if let Some(message) = self.decoder.push(*byte) {
+                receive(message);
+            }
+        }
+        Ok(count)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn hardware_hints_normalize_only_the_discovered_card() {
+        assert_eq!(
+            hardware_hint("Controller", "hw:CARD=Controller,DEV=0"),
+            Some("hw:Controller,0,0".into())
+        );
+        assert_eq!(
+            hardware_hint("Controller", "hw:CARD=Controller,DEV=1,SUBDEV=2"),
+            Some("hw:Controller,1,2".into())
+        );
+        for hint in [
+            "default",
+            "virtual",
+            "hw:CARD=Other,DEV=0",
+            "hw:CARD=Controller,DEV=0,EXTRA=1",
+        ] {
+            assert!(hardware_hint("Controller", hint).is_none());
+        }
+    }
+    #[test]
+    fn bindings_match_channel_pc_and_cc_press_but_not_release() {
+        let settings = Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 2,
+            bindings: vec![
+                Binding {
+                    scene: "clean".into(),
+                    program: Some(0),
+                    controller: None,
+                },
+                Binding {
+                    scene: "lead".into(),
+                    program: None,
+                    controller: Some(20),
+                },
+            ],
+        };
+        settings.validate().unwrap();
+        assert_eq!(
+            settings.scene(Message::Program {
+                channel: 2,
+                program: 0
+            }),
+            Some("clean")
+        );
+        assert_eq!(
+            settings.scene(Message::Program {
+                channel: 1,
+                program: 0
+            }),
+            None
+        );
+        assert_eq!(
+            settings.scene(Message::Control {
+                channel: 2,
+                controller: 20,
+                value: 127
+            }),
+            Some("lead")
+        );
+        assert_eq!(
+            settings.scene(Message::Control {
+                channel: 2,
+                controller: 20,
+                value: 0
+            }),
+            None
+        );
+        let mut invalid = settings.clone();
+        invalid.bindings.push(invalid.bindings[0].clone());
+        assert!(invalid.validate().is_err());
+        invalid = settings;
+        invalid.input = "default".into();
+        assert!(invalid.validate().is_err());
+    }
+    #[test]
+    fn running_status_realtime_and_chunk_boundaries_preserve_pc_and_cc() {
+        let mut decoder = Decoder::default();
+        let messages: Vec<_> = [
+            0xc3, 7, 0xf8, 8, 0xb0, 20, 0xfe, 127, 20, 0, 0xd0, 22, 23, 0xc0, 2,
+        ]
+        .into_iter()
+        .filter_map(|byte| decoder.push(byte))
+        .collect();
+        assert_eq!(
+            messages,
+            vec![
+                Message::Program {
+                    channel: 4,
+                    program: 7
+                },
+                Message::Program {
+                    channel: 4,
+                    program: 8
+                },
+                Message::Control {
+                    channel: 1,
+                    controller: 20,
+                    value: 127
+                },
+                Message::Control {
+                    channel: 1,
+                    controller: 20,
+                    value: 0
+                },
+                Message::Program {
+                    channel: 1,
+                    program: 2
+                }
+            ]
+        );
+    }
+    #[test]
+    fn system_common_sysex_and_other_channel_messages_do_not_become_controls() {
+        let mut decoder = Decoder::default();
+        let messages: Vec<_> = [
+            12, 0xb0, 7, 0xf0, 1, 2, 0xf8, 3, 0xf7, 127, 0x90, 60, 100, 61, 0, 0xb5, 22, 63, 0xf2,
+            0, 0, 127, 0xc0, 0,
+        ]
+        .into_iter()
+        .filter_map(|byte| decoder.push(byte))
+        .collect();
+        assert_eq!(
+            messages,
+            vec![
+                Message::Control {
+                    channel: 6,
+                    controller: 22,
+                    value: 63
+                },
+                Message::Program {
+                    channel: 1,
+                    program: 0
+                }
+            ]
+        );
+    }
+}

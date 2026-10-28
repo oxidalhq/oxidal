@@ -638,6 +638,34 @@ impl Owner {
                     return Err(e);
                 }
             }
+            RigAudioAction::Midi { settings } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                if let Some(settings) = &settings {
+                    settings.validate()?;
+                }
+                let reply = match self
+                    .exchange(&WorkerRequest::Midi {
+                        settings: settings.clone(),
+                    })
+                    .await
+                {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
+                }
+                self.state.configured.as_mut().unwrap().midi = settings;
+                self.confirmed = self.state.configured.clone();
+                self.schedule_recovery();
+                self.changed();
+            }
             RigAudioAction::Scene { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
@@ -729,6 +757,7 @@ impl Owner {
                     recall: self.state.control.as_ref().map(|c| c.recall()),
                 };
                 settings.recall = None;
+                settings.midi = None;
                 self.state.configured = Some(settings);
                 self.state.control = None;
                 // An isolated export retains its source-session receipt even
@@ -959,6 +988,7 @@ mod tests {
         let mut output = probe.clone();
         output.direction = oxidal_audio::Direction::Playback;
         let settings = StartRig {
+            midi: None,
             prepared: Vec::new(),
             revision: "a".repeat(64),
             stream: oxidal_audio::StreamConfig {

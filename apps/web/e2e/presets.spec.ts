@@ -2708,6 +2708,71 @@ for (const layout of ['serial', 'scenes'] as const) {
       await expect
         .poll(async () => (await state()).control.scene_transitioning)
         .toBe(false);
+      await page.route('**/api/v1/midi/devices', (route) =>
+        route.fulfill({
+          json: {
+            available: true,
+            inputs: [
+              { id: 'hw:Unavailable,0,0', name: 'Unavailable test controller' },
+            ],
+            warnings: [],
+          },
+        }),
+      );
+      await rig.getByText('MIDI scenes', { exact: true }).click();
+      await rig
+        .getByLabel('MIDI input', { exact: true })
+        .selectOption('hw:Unavailable,0,0');
+      await rig.getByLabel('MIDI channel', { exact: true }).selectOption('2');
+      await rig
+        .getByLabel('MIDI trigger 2', { exact: true })
+        .selectOption('control');
+      await rig.getByLabel('MIDI number 2', { exact: true }).fill('20');
+      await rig
+        .getByRole('button', { name: 'Apply MIDI', exact: true })
+        .click();
+      await expect
+        .poll(async () => (await state()).configured.midi?.channel)
+        .toBe(2);
+      await expect
+        .poll(async () => (await state()).control.midi.error)
+        .toBeTruthy();
+      expect((await state()).phase).toBe('running');
+      await expect(rig.getByText(/Waiting for controller/)).toBeVisible();
+      for (const viewport of [
+        initialViewport,
+        { width: initialViewport.height, height: initialViewport.width },
+      ]) {
+        await page.setViewportSize(viewport);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await expect(
+          rig.getByLabel('MIDI channel', { exact: true }),
+        ).toHaveValue('2');
+        await expect(
+          rig.getByLabel('MIDI number 2', { exact: true }),
+        ).toHaveValue('20');
+        await page.screenshot({
+          path: info.outputPath(`scene-midi-${viewport.width}.png`),
+          fullPage: true,
+        });
+      }
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+
+      await rig
+        .getByRole('button', { name: 'Disable MIDI', exact: true })
+        .click();
+      await expect.poll(async () => (await state()).configured.midi).toBeNull();
+      await rig.getByText('MIDI scenes', { exact: true }).click();
       for (const viewport of [
         initialViewport,
         { width: initialViewport.height, height: initialViewport.width },

@@ -89,6 +89,7 @@ pub struct Contract {
     pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
     pub audio_command: oxidal_audio::lifecycle::AudioCommand,
     pub audio_devices: oxidal_audio::AudioDevices,
+    pub midi_devices: oxidal_audio::midi::Devices,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
@@ -267,6 +268,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/presets/rigs/{revision}", get(rig_library::read))
         .route("/audio/devices", get(audio::devices))
+        .route("/midi/devices", get(audio::midi_devices))
         .route("/audio/probe", post(audio::probe))
         .route(
             "/native",
@@ -346,6 +348,10 @@ async fn health(State(shared): State<Arc<Shared>>) -> Json<Capabilities> {
         native_editor: shared.native.lock().await.is_some(),
         midi_transport: if shared.config.simulator {
             "simulator"
+        } else if cfg!(all(target_os = "linux", feature = "alsa"))
+            && shared.config.rig_worker.is_some()
+        {
+            "alsa-raw-midi-scenes"
         } else {
             "disabled"
         }

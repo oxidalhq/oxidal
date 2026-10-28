@@ -321,6 +321,10 @@ export type RigAudioAction =
       kind: "scene";
     }
   | {
+      kind: "midi";
+      settings?: Settings2 | null;
+    }
+  | {
       command: ModelCommand;
       kind: "model";
     }
@@ -361,6 +365,18 @@ export type ModelOperation =
     }
   | {
       kind: "cancel";
+    };
+export type Message =
+  | {
+      channel: number;
+      kind: "program";
+      program: number;
+    }
+  | {
+      channel: number;
+      controller: number;
+      kind: "control";
+      value: number;
     };
 export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge";
 export type PortableTails = "cut" | "preserve";
@@ -433,6 +449,7 @@ export interface Contract {
   graph_presets: SavedGraph[];
   library: Library;
   lv2_catalog: PluginCatalog;
+  midi_devices: Devices;
   model_page: Page2;
   model_query: ModelQuery;
   monitoring: Monitoring;
@@ -926,6 +943,15 @@ export interface Port {
   symbol: string;
   toggled: boolean;
 }
+export interface Devices {
+  available: boolean;
+  inputs: Endpoint[];
+  warnings: string[];
+}
+export interface Endpoint {
+  id: string;
+  name: string;
+}
 export interface Page2 {
   data: Model[];
   page?: number;
@@ -1081,6 +1107,7 @@ export interface RigAudioCommand {
   session: string;
 }
 export interface StartRig {
+  midi?: Settings2 | null;
   /**
    * Resident alternatives are prepared before this transport opens PCM.
    */
@@ -1088,6 +1115,25 @@ export interface StartRig {
   recall?: Recall | null;
   revision: string;
   stream: StreamConfig;
+}
+/**
+ * Device-local configuration, deliberately absent from portable sound data.
+ */
+export interface Settings2 {
+  bindings: Binding2[];
+  /**
+   * 0 accepts all MIDI channels; otherwise 1–16.
+   */
+  channel: number;
+  input: string;
+}
+export interface Binding2 {
+  controller?: number | null;
+  /**
+   * Exactly one trigger is required. Programs are wire values 0–127.
+   */
+  program?: number | null;
+  scene: string;
 }
 export interface PreparedRecall {
   recall?: Recall | null;
@@ -1169,6 +1215,7 @@ export interface Snapshot3 {
    * Reported algorithmic and alignment delay; excludes audio devices/transport.
    */
   latency_frames: number;
+  midi?: Status;
   model_change?: NodeModelChange | null;
   models?: NodeModels[];
   /**
@@ -1194,6 +1241,12 @@ export interface Control {
   target: Target;
   toggle: boolean;
   value: number;
+}
+export interface Status {
+  connected: boolean;
+  error?: string | null;
+  events: number;
+  last?: Message | null;
 }
 export interface NodeModelChange {
   node: string;

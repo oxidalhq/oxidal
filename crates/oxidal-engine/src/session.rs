@@ -142,6 +142,7 @@ impl Session {
             scenes: bundle.manifest().scenes().map_err(|e| e.to_string())?,
             scene: None,
             scene_transitioning: false,
+            midi: Default::default(),
         };
         if serde_json::to_vec(&state).map_err(|e| e.to_string())?.len() + 65536 > REPLY_LIMIT {
             return Err("Rig controls exceed IPC byte budget".into());

@@ -251,12 +251,28 @@ mod tests {
         assert!(!p.enabled(Role::Mixed));
         p.clear(Role::Mixed).unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), legacy);
-        let mixed: StartRig=serde_json::from_value(json!({"revision":"b".repeat(64),"stream":stream,"recall":{"source_revision":"b".repeat(64),"values":[]}})).unwrap();
+        let mut mixed: StartRig=serde_json::from_value(json!({"revision":"b".repeat(64),"stream":stream,"recall":{"source_revision":"b".repeat(64),"values":[]}})).unwrap();
+        mixed.midi = Some(oxidal_audio::midi::Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 1,
+            bindings: vec![oxidal_audio::midi::Binding {
+                scene: "lead".into(),
+                program: Some(1),
+                controller: None,
+            }],
+        });
         p.set(Choice::Mixed {
             settings: mixed.clone(),
         })
         .unwrap();
         assert!(p.enabled(Role::Mixed));
+        let Some(Choice::Mixed { settings: restored }) =
+            Policy::new(path.clone()).snapshot().unwrap()
+        else {
+            panic!("Missing mixed boot choice")
+        };
+        assert_eq!(restored.midi, mixed.midi);
+
         assert!(!p.enabled(Role::Native));
         let original = std::fs::read(&path).unwrap();
         assert_eq!(
@@ -298,6 +314,15 @@ mod tests {
             .is_err()
         );
         assert!(p.enabled(Role::Effects));
+        mixed.midi = Some(oxidal_audio::midi::Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 1,
+            bindings: vec![oxidal_audio::midi::Binding {
+                scene: "lead".into(),
+                program: Some(1),
+                controller: None,
+            }],
+        });
         p.set(Choice::Mixed {
             settings: mixed.clone(),
         })

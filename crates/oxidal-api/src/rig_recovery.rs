@@ -92,7 +92,17 @@ mod tests {
         let input = json!({"endpoint":"hw:CARD=USB,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
         let mut output = input.clone();
         output["direction"] = json!("playback");
-        let settings: StartRig = serde_json::from_value(json!({"revision":"a".repeat(64),"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"recall":{"source_revision":"a".repeat(64),"values":[{"target":{"kind":"native","node":"amp","parameter":"toneBass"},"value":0.25}]}})).unwrap();
+        let mut settings: StartRig = serde_json::from_value(json!({"revision":"a".repeat(64),"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"recall":{"source_revision":"a".repeat(64),"values":[{"target":{"kind":"native","node":"amp","parameter":"toneBass"},"value":0.25}]}})).unwrap();
+        assert!(settings.midi.is_none()); // older checkpoints remain readable
+        settings.midi = Some(oxidal_audio::midi::Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 2,
+            bindings: vec![oxidal_audio::midi::Binding {
+                scene: "clean".into(),
+                program: Some(0),
+                controller: None,
+            }],
+        });
         let mut recovery = Recovery::new(settings.clone());
         recovery.write(&path).unwrap();
         let original = std::fs::read(&path).unwrap();

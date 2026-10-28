@@ -585,3 +585,15 @@ export async function rigNativeSources(signal?: AbortSignal) {
   if (!rigSourcesValidator(body)) throw new Error('Incompatible tone library');
   return body;
 }
+
+export type MidiDevices = Contract['midi_devices'];
+const midiDevicesValidator = ajv.compile<MidiDevices>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Devices',
+});
+export async function midiDevices(): Promise<MidiDevices> {
+  const body = await presetResponse(await fetch('/api/v1/midi/devices'));
+  if (!midiDevicesValidator(body))
+    throw new Error('Incompatible MIDI device list');
+  return body;
+}

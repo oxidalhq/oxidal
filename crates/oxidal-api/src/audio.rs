@@ -42,3 +42,23 @@ pub async fn probe(payload: Result<Json<AudioProbe>, JsonRejection>) -> Response
         Err(_) => failure(StatusCode::SERVICE_UNAVAILABLE, "Audio probe failed"),
     }
 }
+
+/// Hardware MIDI discovery is separate from audio probe/PCM ownership.
+pub async fn midi_devices() -> Response {
+    let Ok(permit) = PROBE.try_acquire() else {
+        return failure(
+            StatusCode::CONFLICT,
+            "Device inspection already in progress",
+        );
+    };
+    match tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        oxidal_audio::midi::devices()
+    })
+    .await
+    {
+        Ok(Ok(devices)) => Json(devices).into_response(),
+        Ok(Err(error)) => failure(StatusCode::SERVICE_UNAVAILABLE, &error),
+        Err(_) => failure(StatusCode::SERVICE_UNAVAILABLE, "MIDI discovery failed"),
+    }
+}

@@ -64,6 +64,9 @@
     "lv2_catalog": {
       "$ref": "#/$defs/PluginCatalog"
     },
+    "midi_devices": {
+      "$ref": "#/$defs/Devices"
+    },
     "model_page": {
       "$ref": "#/$defs/Page2"
     },
@@ -171,6 +174,7 @@
     "graph_audio_command",
     "audio_command",
     "audio_devices",
+    "midi_devices",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -1041,6 +1045,37 @@
         "uri"
       ]
     },
+    "Binding2": {
+      "type": "object",
+      "properties": {
+        "controller": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "program": {
+          "description": "Exactly one trigger is required. Programs are wire values 0–127.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "scene": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "scene"
+      ]
+    },
     "BlockControl": {
       "description": "Native block readback, with a server-issued edit target. Values are normalized 0–1.",
       "type": "object",
@@ -1574,6 +1609,32 @@
         "username"
       ]
     },
+    "Devices": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Endpoint"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "inputs",
+        "warnings"
+      ]
+    },
     "Direction": {
       "type": "string",
       "enum": [
@@ -2045,6 +2106,22 @@
         "live_audio",
         "can_undo",
         "can_redo"
+      ]
+    },
+    "Endpoint": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
       ]
     },
     "EqBand": {
@@ -2752,6 +2829,71 @@
       "required": [
         "version",
         "mappings"
+      ]
+    },
+    "Message": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "program"
+            },
+            "program": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel",
+            "program"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "control"
+            },
+            "value": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "channel",
+            "controller",
+            "value"
+          ]
+        }
       ]
     },
     "MidiCurve": {
@@ -4547,6 +4689,29 @@
         {
           "type": "object",
           "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi"
+            },
+            "settings": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Settings2"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "command": {
               "$ref": "#/$defs/ModelCommand"
             },
@@ -4995,6 +5160,34 @@
         "home_ssid"
       ]
     },
+    "Settings2": {
+      "description": "Device-local configuration, deliberately absent from portable sound data.",
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Binding2"
+          }
+        },
+        "channel": {
+          "description": "0 accepts all MIDI channels; otherwise 1–16.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "input": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "channel",
+        "bindings"
+      ]
+    },
     "SlotPosition": {
       "type": "object",
       "properties": {
@@ -5199,6 +5392,15 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "midi": {
+          "$ref": "#/$defs/Status",
+          "default": {
+            "connected": false,
+            "error": null,
+            "events": 0,
+            "last": null
+          }
         },
         "model_change": {
           "anyOf": [
@@ -5408,6 +5610,17 @@
     "StartRig": {
       "type": "object",
       "properties": {
+        "midi": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Settings2"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "prepared": {
           "description": "Resident alternatives are prepared before this transport opens PCM.",
           "type": "array",
@@ -5481,6 +5694,40 @@
         "identity",
         "directory",
         "message"
+      ]
+    },
+    "Status": {
+      "type": "object",
+      "properties": {
+        "connected": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "events": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "last": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Message"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "connected",
+        "events"
       ]
     },
     "StreamConfig": {

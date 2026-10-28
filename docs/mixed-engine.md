@@ -571,3 +571,13 @@ cargo run -p oxidal-engine --features native --example qualify_mixed -- --scenes
 ```
 
 The full `pnpm native:check` also includes these scene checks. Browser composition coverage exercises both layouts, actual-worker selection, Save/recall, accessibility and portrait/landscape sizing on the maintained target device projects. Neither ALSA-null transport nor browser emulation establishes physical timing acceptance.
+
+### Device MIDI scene control
+
+For a running scene rig, expand **MIDI scenes**, scan and choose a hardware input, select a channel (or All channels), and assign each scene a Program Change or CC press. Programs are displayed as 1–128 and stored as wire values 0–127. CC numbers remain 0–127; values 64–127 select the scene and releases are ignored. Duplicate triggers and unknown scene IDs are rejected before configuration changes. Repeated selection of the current target does not restart its ramp.
+
+The mixed worker opens only explicitly selected ALSA raw MIDI hardware inputs. Discovery includes a strict hardware-hint fallback for input-only controllers. The decoder handles partial reads, running status, interleaved real-time bytes and canceled status across SysEx/system-common messages. One bounded non-blocking read runs outside PCM per owner tick. Missing/disconnected hardware reports a separate MIDI error and retries every two seconds while PCM continues. Disable MIDI and Stop release the port. A whole-resident switch disables the previous rig's mappings instead of silently applying them to different scene IDs.
+
+Device-local input/channel/bindings live in `StartRig.midi`, not the portable preset. They survive Restart, Resume, audio reconfiguration and explicit boot capture through the existing checkpoint policy. Starting a different library rig requires selecting its MIDI configuration; portable Save does not export hardware identifiers. Connection state, event count and last PC/CC arrive in confirmed worker readback. This path currently selects scenes; independent branch-toggle mappings and generic parameter/feedback routing remain separate work.
+
+The maintained byte/binding tests and actual worker unavailable-device test cover parsing, trigger admission, configuration rollback, continuing PCM and disabling. Browser scene coverage changes channel/PC/CC settings through the actual daemon/worker, deliberately presents an unavailable discovery entry and proves audio keeps running. Portrait/landscape screenshots cover the open panel. Real USB input, unplug/reconnect behavior, controller feedback and scheduling deadlines still require the physical Pi session; emulated discovery does not qualify hardware.

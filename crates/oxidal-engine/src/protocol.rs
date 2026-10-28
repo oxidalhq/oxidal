@@ -113,6 +113,8 @@ pub struct Snapshot {
     pub scene: Option<String>,
     #[serde(default)]
     pub scene_transitioning: bool,
+    #[serde(default)]
+    pub midi: oxidal_audio::midi::Status,
 }
 impl Snapshot {
     pub fn valid_model_state(&self) -> bool {
@@ -213,10 +215,15 @@ pub struct StartRig {
     /// Resident alternatives are prepared before this transport opens PCM.
     #[serde(default)]
     pub prepared: Vec<PreparedRecall>,
+    #[serde(default)]
+    pub midi: Option<oxidal_audio::midi::Settings>,
 }
 impl StartRig {
     pub fn validate(&self) -> Result<(), String> {
         self.stream.validate()?;
+        if let Some(midi) = &self.midi {
+            midi.validate()?;
+        }
         let frames = self.stream.input.period_frames;
         if !valid_revision(&self.revision)
             || !oxidal_audio::lifecycle::catalog_fits(&self.prepared)
@@ -251,11 +258,24 @@ pub fn valid_revision(s: &str) -> bool {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
     Status,
-    Control { command: ControlCommand },
-    Eq { command: EqCommand },
-    Switch { command: SwitchCommand },
-    Scene { command: SceneCommand },
-    Model { command: ModelCommand },
+    Control {
+        command: ControlCommand,
+    },
+    Eq {
+        command: EqCommand,
+    },
+    Switch {
+        command: SwitchCommand,
+    },
+    Scene {
+        command: SceneCommand,
+    },
+    Midi {
+        settings: Option<oxidal_audio::midi::Settings>,
+    },
+    Model {
+        command: ModelCommand,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -323,17 +343,38 @@ pub struct RigAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RigAudioAction {
-    SetBoot { enabled: bool },
-    Start { settings: Box<StartRig> },
+    SetBoot {
+        enabled: bool,
+    },
+    Start {
+        settings: Box<StartRig>,
+    },
     Stop,
     Restart,
-    Reconfigure { stream: oxidal_audio::StreamConfig },
-    Control { command: ControlCommand },
-    Eq { command: EqCommand },
-    Switch { command: SwitchCommand },
-    Scene { command: SceneCommand },
-    Model { command: ModelCommand },
-    Save { name: String },
+    Reconfigure {
+        stream: oxidal_audio::StreamConfig,
+    },
+    Control {
+        command: ControlCommand,
+    },
+    Eq {
+        command: EqCommand,
+    },
+    Switch {
+        command: SwitchCommand,
+    },
+    Scene {
+        command: SceneCommand,
+    },
+    Midi {
+        settings: Option<oxidal_audio::midi::Settings>,
+    },
+    Model {
+        command: ModelCommand,
+    },
+    Save {
+        name: String,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
