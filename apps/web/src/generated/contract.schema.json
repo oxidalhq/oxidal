@@ -757,6 +757,23 @@
             "kind",
             "name"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/AuthoringAction"
+            },
+            "kind": {
+              "type": "string",
+              "const": "authoring"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "action"
+          ]
         }
       ]
     },
@@ -915,6 +932,17 @@
     "AudioState": {
       "type": "object",
       "properties": {
+        "authoring": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthoringStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "boot_error": {
           "description": "Shared boot policy failure; clearing it never requires a working audio device.",
           "type": [
@@ -1027,6 +1055,147 @@
         "start_on_boot",
         "controls",
         "modified"
+      ]
+    },
+    "AuthoringAction": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "inspect"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "parameter"
+            },
+            "parameter": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "parameter",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "edit": {
+              "$ref": "#/$defs/StructureEdit"
+            },
+            "kind": {
+              "type": "string",
+              "const": "edit"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "remove"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "undo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "redo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
+    },
+    "AuthoringStatus": {
+      "type": "object",
+      "properties": {
+        "can_redo": {
+          "type": "boolean"
+        },
+        "can_undo": {
+          "type": "boolean"
+        },
+        "layout": {
+          "$ref": "#/$defs/ChainLayout"
+        },
+        "setting_steps": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "float"
+          },
+          "default": {}
+        },
+        "settings": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/LiveControl"
+          }
+        },
+        "working": {
+          "description": "Immutable local working-state receipt; never a file path or portable preset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "layout",
+        "can_undo",
+        "can_redo"
       ]
     },
     "Binding": {
@@ -1296,6 +1465,10 @@
     "ChainLayout": {
       "type": "object",
       "properties": {
+        "input_mode": {
+          "$ref": "#/$defs/InputMode",
+          "default": "stereo"
+        },
         "left": {
           "type": "array",
           "items": {
@@ -2203,6 +2376,7 @@
         "layout": {
           "$ref": "#/$defs/ChainLayout",
           "default": {
+            "input_mode": "stereo",
             "left": [],
             "right": [],
             "stereo": false
@@ -2806,6 +2980,15 @@
         }
       },
       "additionalProperties": false
+    },
+    "InputMode": {
+      "type": "string",
+      "enum": [
+        "stereo",
+        "left",
+        "right",
+        "dual"
+      ]
     },
     "Inspection": {
       "description": "Structural inspection only. Original bytes, not this summary, remain authoritative.",
@@ -5748,6 +5931,13 @@
         },
         "stream": {
           "$ref": "#/$defs/StreamConfig"
+        },
+        "working": {
+          "description": "Verified local authoring checkpoint tied to this immutable preset.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -5964,6 +6154,23 @@
     },
     "StructureEdit": {
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "input"
+            },
+            "mode": {
+              "$ref": "#/$defs/InputMode"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "mode"
+          ]
+        },
         {
           "type": "object",
           "properties": {

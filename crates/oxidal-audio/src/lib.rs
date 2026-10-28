@@ -4,6 +4,7 @@ pub mod eq;
 pub mod lifecycle;
 pub mod meter;
 pub mod midi;
+pub mod structure;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

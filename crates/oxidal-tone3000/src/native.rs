@@ -163,18 +163,11 @@ fn string(value: &str) -> Result<CString> {
     CString::new(value).map_err(|_| NativeError("interior NUL".into()))
 }
 
-#[derive(Clone, Copy, Debug)]
-#[repr(i32)]
-pub enum InputMode {
-    Stereo = 0,
-    Left = 1,
-    Right = 2,
-    DualMono = 3,
-}
+pub use oxidal_audio::structure::InputMode;
 
-/// Opaque state captured by this backend, not arbitrary imported bytes.
+/// Opaque state captured by this backend or read from a verified local checkpoint.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct State(Vec<u8>);
+pub struct State(pub(crate) Vec<u8>);
 impl State {
     pub fn byte_len(&self) -> usize {
         self.0.len()
@@ -386,6 +379,8 @@ impl Engine {
         };
         Ok(ChainLayout {
             stereo: state["stereoEnabled"].as_bool().unwrap_or(false),
+            input_mode: serde_json::from_value(state["inputMode"].clone())
+                .map_err(|e| NativeError(e.to_string()))?,
             left: lane("chain")?,
             right: lane("chainRight")?,
         })
@@ -397,6 +392,15 @@ impl Engine {
             return Err(NativeError(
                 "Extracted stages do not support structural edits".into(),
             ));
+        }
+        if let StructureEdit::Input { mode } = edit {
+            self.set_input_mode(*mode)?;
+            if self.layout()?.input_mode != *mode {
+                return Err(NativeError(
+                    "Input mode is incompatible with the current branch".into(),
+                ));
+            }
+            return Ok(());
         }
         let layout = self.layout()?;
         let blocks = |lane| {
@@ -444,6 +448,7 @@ impl Engine {
                 }
             }
             StructureEdit::Stereo { .. } => (),
+            StructureEdit::Input { .. } => unreachable!("handled before lane validation"),
         }
         let bytes = serde_json::to_string(edit).map_err(|e| NativeError(e.to_string()))?;
         if bytes.len() > 262144 {
@@ -751,7 +756,24 @@ impl Engine {
             return Err(NativeError("Invalid live control value".into()));
         }
         if crate::protocol::live_writable(target) {
-            self.set_normalized(target, value)
+            // Linking belongs to the authoritative control owner, not one browser.
+            // Both pans change before the next PCM step; recovery replays exact values.
+            let linked = matches!(target, "chainPanLeft" | "chainPanRight")
+                && controls
+                    .iter()
+                    .any(|c| c.target == "chainPanLinked" && c.value == 1.0);
+            self.set_normalized(target, value)?;
+            if linked {
+                self.set_normalized(
+                    if target == "chainPanLeft" {
+                        "chainPanRight"
+                    } else {
+                        "chainPanLeft"
+                    },
+                    1.0 - value,
+                )?;
+            }
+            Ok(())
         } else {
             let block = self
                 .block_controls()?
@@ -1123,6 +1145,8 @@ fn display_title(name: &str) -> &str {
 pub(crate) fn parameter_label(id: &str) -> &str {
     match id {
         "inputLevel" => "Input level",
+        "calibrateInput" => "Calibrate input",
+        "targetLoudness" => "Target loudness",
         "outputLevel" => "Output level",
         "outputBalance" => "Stereo balance",
         "spreadEnabled" => "Spread",

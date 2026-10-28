@@ -60,6 +60,10 @@ export type AudioAction =
   | {
       kind: "save_copy";
       name: string;
+    }
+  | {
+      action: AuthoringAction;
+      kind: "authoring";
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -81,6 +85,57 @@ export type EqEdit =
       kind: "band";
     };
 export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
+export type AuthoringAction =
+  | {
+      kind: "inspect";
+    }
+  | {
+      kind: "parameter";
+      parameter: string;
+      value: number;
+    }
+  | {
+      edit: StructureEdit;
+      kind: "edit";
+    }
+  | {
+      block_id: string;
+      kind: "remove";
+    }
+  | {
+      kind: "undo";
+    }
+  | {
+      kind: "redo";
+    };
+export type StructureEdit =
+  | {
+      kind: "input";
+      mode: InputMode;
+    }
+  | {
+      block_ids: string[];
+      kind: "reorder";
+      lane: ChainLane;
+    }
+  | {
+      block_id: string;
+      index: number;
+      kind: "move";
+      lane: ChainLane;
+    }
+  | {
+      block_id: string;
+      index: number;
+      kind: "duplicate";
+      lane: ChainLane;
+    }
+  | {
+      enabled: boolean;
+      kind: "stereo";
+    };
+export type InputMode = "stereo" | "left" | "right" | "dual";
+export type ChainLane = "left" | "right";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
@@ -246,29 +301,6 @@ export type EditorAction =
   | {
       kind: "redo";
     };
-export type StructureEdit =
-  | {
-      block_ids: string[];
-      kind: "reorder";
-      lane: ChainLane;
-    }
-  | {
-      block_id: string;
-      index: number;
-      kind: "move";
-      lane: ChainLane;
-    }
-  | {
-      block_id: string;
-      index: number;
-      kind: "duplicate";
-      lane: ChainLane;
-    }
-  | {
-      enabled: boolean;
-      kind: "stereo";
-    };
-export type ChainLane = "left" | "right";
 export type Command3 =
   | {
       action: PowerAction;
@@ -577,6 +609,10 @@ export interface StartAudio {
    */
   preset_id: string;
   stream: StreamConfig;
+  /**
+   * Verified local authoring checkpoint tied to this immutable preset.
+   */
+  working?: string | null;
 }
 export interface EqBand {
   freqHz: number;
@@ -623,6 +659,7 @@ export interface AudioProbeResult {
   streaming_available: boolean;
 }
 export interface AudioState {
+  authoring?: AuthoringStatus | null;
   /**
    * Shared boot policy failure; clearing it never requires a working audio device.
    */
@@ -658,6 +695,32 @@ export interface AudioState {
    * Explicitly opt in to restoring the captured confirmed session after daemon startup.
    */
   start_on_boot: boolean;
+}
+export interface AuthoringStatus {
+  can_redo: boolean;
+  can_undo: boolean;
+  layout: ChainLayout;
+  setting_steps?: {
+    [k: string]: number;
+  };
+  settings?: LiveControl[];
+  /**
+   * Immutable local working-state receipt; never a file path or portable preset.
+   */
+  working?: string | null;
+}
+export interface ChainLayout {
+  input_mode?: "stereo" | "left" | "right" | "dual";
+  left: ChainBlock[];
+  right: ChainBlock[];
+  stereo: boolean;
+}
+/**
+ * Exact native lane order, including insertion tiles. No provider credentials or model paths.
+ */
+export interface ChainBlock {
+  id: string;
+  insert: boolean;
 }
 /**
  * Native playback controls use normalized values; display text comes from the DSP.
@@ -1036,7 +1099,7 @@ export interface EditorSnapshot {
   can_undo: boolean;
   dirty: boolean;
   edit?: Editing | null;
-  layout?: ChainLayout;
+  layout?: ChainLayout1;
   live_audio: boolean;
   loaded?: string | null;
   owned: OwnedPreset[];
@@ -1063,17 +1126,11 @@ export interface Editing {
   owner: string;
   target: string;
 }
-export interface ChainLayout {
+export interface ChainLayout1 {
+  input_mode?: "stereo" | "left" | "right" | "dual";
   left: ChainBlock[];
   right: ChainBlock[];
   stereo: boolean;
-}
-/**
- * Exact native lane order, including insertion tiles. No provider credentials or model paths.
- */
-export interface ChainBlock {
-  id: string;
-  insert: boolean;
 }
 export interface OwnedPreset {
   id: string;

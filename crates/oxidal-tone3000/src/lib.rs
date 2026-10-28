@@ -10,3 +10,6 @@ pub mod editor;
 #[cfg(feature = "native")]
 pub mod model_preparation;
 pub mod protocol;
+
+#[cfg(feature = "native")]
+pub mod working;

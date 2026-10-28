@@ -43,55 +43,7 @@ pub struct Editing {
     pub owner: String,
     pub target: String,
 }
-/// Exact native lane order, including insertion tiles. No provider credentials or model paths.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ChainBlock {
-    pub id: String,
-    pub insert: bool,
-}
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ChainLayout {
-    pub stereo: bool,
-    pub left: Vec<ChainBlock>,
-    pub right: Vec<ChainBlock>,
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ChainLane {
-    Left,
-    Right,
-}
-impl ChainLane {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Left => "left",
-            Self::Right => "right",
-        }
-    }
-}
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum StructureEdit {
-    Reorder {
-        lane: ChainLane,
-        block_ids: Vec<String>,
-    },
-    Move {
-        block_id: String,
-        lane: ChainLane,
-        index: usize,
-    },
-    Duplicate {
-        block_id: String,
-        lane: ChainLane,
-        index: usize,
-    },
-    Stereo {
-        enabled: bool,
-    },
-}
+pub use oxidal_audio::structure::{ChainBlock, ChainLane, ChainLayout, StructureEdit};
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EditorSnapshot {
@@ -229,6 +181,23 @@ pub fn live_writable(id: &str) -> bool {
             | "spreadCrossover"
             | "spreadCrossoverEnabled"
             | "spreadDiffuseEnabled"
+    ) || matches!(
+        id,
+        "alignEnabled"
+            | "alignOffset"
+            | "alignWobble"
+            | "alignWobbleEnabled"
+            | "alignCrossover"
+            | "alignCrossoverEnabled"
+            | "alignDiffuseEnabled"
+            | "chainPanLeft"
+            | "chainPanRight"
+            | "chainPanLinked"
+            | "chainInvertLeft"
+            | "chainInvertRight"
+            | "pitchSemitones"
+            | "pitchStep"
+            | "pitchTonality"
     )
 }
 
@@ -402,7 +371,7 @@ mod stage_tests {
 /// Only the complete additive stereo deck may be absent in pre-deck recovery records.
 /// Source-preset values remain authoritative for those newly exposed controls.
 pub fn legacy_image_gap(missing: &[&str]) -> bool {
-    const ADDED: [&str; 8] = [
+    const IMAGE: [&str; 8] = [
         "outputBalance",
         "spreadEnabled",
         "spreadOffset",
@@ -412,8 +381,36 @@ pub fn legacy_image_gap(missing: &[&str]) -> bool {
         "spreadCrossoverEnabled",
         "spreadDiffuseEnabled",
     ];
+    const AUTHORING: [&str; 15] = [
+        "alignEnabled",
+        "alignOffset",
+        "alignWobble",
+        "alignWobbleEnabled",
+        "alignCrossover",
+        "alignCrossoverEnabled",
+        "alignDiffuseEnabled",
+        "chainPanLeft",
+        "chainPanRight",
+        "chainPanLinked",
+        "chainInvertLeft",
+        "chainInvertRight",
+        "pitchSemitones",
+        "pitchStep",
+        "pitchTonality",
+    ];
+    const AMP: [&str; 3] = ["pitchSemitones", "pitchStep", "pitchTonality"];
+    let exact = |expected: &[&str]| {
+        missing.len() == expected.len() && expected.iter().all(|id| missing.contains(id))
+    };
     missing.is_empty()
-        || (missing.len() == ADDED.len() && ADDED.iter().all(|id| missing.contains(id)))
+        || exact(&IMAGE)
+        || exact(&AUTHORING)
+        || exact(&AMP)
+        || missing.len() == IMAGE.len() + AUTHORING.len()
+            && IMAGE
+                .iter()
+                .chain(&AUTHORING)
+                .all(|id| missing.contains(id))
 }
 
 #[cfg(test)]

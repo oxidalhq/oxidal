@@ -39,10 +39,20 @@ pub struct StartAudio {
     /// An immutable working base created locally, separate from imported/saved libraries.
     #[serde(default)]
     pub draft: bool,
+    /// Verified local authoring checkpoint tied to this immutable preset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub working: Option<String>,
 }
 impl StartAudio {
     pub fn validate(&self) -> Result<(), String> {
         self.stream.validate()?;
+        if self
+            .working
+            .as_deref()
+            .is_some_and(|id| !crate::structure::valid_receipt(id))
+        {
+            return Err("Invalid native working receipt".into());
+        }
         if self.draft && self.owned {
             return Err("Ambiguous preset source".into());
         }
@@ -91,6 +101,8 @@ pub struct AudioState {
     #[serde(default)]
     pub model_change: Option<ModelProgress>,
     #[serde(default)]
+    pub authoring: Option<crate::structure::AuthoringStatus>,
+    #[serde(default)]
     pub slots: Vec<NativeSlot>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -129,6 +141,9 @@ pub enum AudioAction {
     },
     SaveCopy {
         name: String,
+    },
+    Authoring {
+        action: crate::structure::AuthoringAction,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -175,6 +190,8 @@ pub struct LiveRequest {
 pub enum PlaybackEvent {
     Ready {
         preset_name: String,
+        #[serde(default)]
+        authoring: Option<crate::structure::AuthoringStatus>,
         controls: Vec<LiveControl>,
         slots: Vec<NativeSlot>,
         eq: Vec<BlockEqState>,
@@ -192,6 +209,14 @@ pub enum PlaybackEvent {
     Model {
         serial: u64,
         progress: Option<ModelProgress>,
+        controls: Vec<LiveControl>,
+        slots: Vec<NativeSlot>,
+        eq: Vec<BlockEqState>,
+        error: Option<String>,
+    },
+    Authored {
+        serial: u64,
+        authoring: crate::structure::AuthoringStatus,
         controls: Vec<LiveControl>,
         slots: Vec<NativeSlot>,
         eq: Vec<BlockEqState>,
@@ -346,6 +371,7 @@ pub struct ModelRequest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WorkerRequest {
+    Authoring(crate::structure::AuthoringRequest),
     Eq(EqRequest),
     Control(LiveRequest),
     Model(ModelRequest),

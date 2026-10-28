@@ -15,6 +15,7 @@ use oxidal_audio::lifecycle::{
     StartAudio, valid_controls, valid_models, valid_preset_name, valid_slots,
 };
 use oxidal_audio::lifecycle::{EqRequest, PLAYBACK_FRAME_BYTES};
+use oxidal_audio::structure::{AuthoringAction, AuthoringRequest};
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -71,6 +72,7 @@ impl Owner {
             self.state.modified = false;
             self.state.saved_copy = None;
             self.state.model_change = None;
+            self.state.authoring = None;
             self.meters.send_replace(None);
         }
         self.state.error = error.or_else(|| self.recovery_error.clone());
@@ -229,6 +231,7 @@ impl Owner {
                 serde_json::from_slice(&response).map_err(|_| "Invalid native startup reply")?;
             let PlaybackEvent::Ready {
                 preset_name,
+                authoring,
                 controls,
                 slots,
                 eq,
@@ -244,12 +247,20 @@ impl Owner {
             {
                 return Err("Invalid native controls".into());
             }
+            if authoring.as_ref().is_some_and(|s| !s.valid()) {
+                return Err("Invalid authoring readback".into());
+            }
+            self.state.authoring = authoring;
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
             self.state.slots = slots;
             self.state.eq = eq;
             self.resume_eq = Some(self.state.eq.clone());
-            self.state.modified = self.state.configured.as_ref().is_some_and(|s| s.draft)
+            self.state.modified = self
+                .state
+                .configured
+                .as_ref()
+                .is_some_and(|s| s.draft || s.working.is_some())
                 || self.resume_controls.is_some()
                 || !self.state.models.is_empty();
             Ok(())
@@ -293,7 +304,8 @@ impl Owner {
                     }
                     reply @ (PlaybackEvent::Control { .. }
                     | PlaybackEvent::Model { .. }
-                    | PlaybackEvent::Eq { .. }) => {
+                    | PlaybackEvent::Eq { .. }
+                    | PlaybackEvent::Authored { .. }) => {
                         if replies.try_send(reply).is_err() {
                             break;
                         }
@@ -303,6 +315,208 @@ impl Owner {
             }
         }));
         Ok(())
+    }
+    async fn prepare_parameter(&mut self, parameter: String, value: f32) -> Reply {
+        if self.state.phase != AudioPhase::Running
+            || self.model_pending()
+            || !self.state.authoring.as_ref().is_some_and(|s| {
+                s.settings
+                    .iter()
+                    .any(|p| p.target == parameter && p.accepts(value))
+            })
+        {
+            return Err("Start audio and select a valid prepared setting".into());
+        }
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("Missing native session")?;
+        let controls = self.state.controls.clone();
+        let eq = self.state.eq.clone();
+        let models = self.state.models.clone();
+        let request = oxidal_audio::structure::PrepareParameter {
+            playback: SavePlayback {
+                settings: previous.clone(),
+                controls: controls.clone(),
+                models: models.clone(),
+                eq: Some(eq.clone()),
+                name: "Working session".into(),
+            },
+            parameter: parameter.clone(),
+            value,
+        };
+        let bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
+        if bytes.len() >= PLAYBACK_FRAME_BYTES {
+            return Err("Native preparation exceeds byte budget".into());
+        }
+        let root = std::fs::canonicalize(&self.preset_dir).map_err(|e| e.to_string())?;
+        let mut child = tokio::process::Command::new(
+            self.executable
+                .as_ref()
+                .ok_or("Native worker unavailable")?,
+        )
+        .arg("--prepare-parameter")
+        .env("OXIDAL_PRESET_DIR", &root)
+        .env("OXIDAL_QUALIFICATION_DATA", root.join("audio-runtime"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+        let prepared = tokio::time::timeout(Duration::from_secs(25), async {
+            let mut input = child.stdin.take().ok_or("Preparation input unavailable")?;
+            input.write_all(&bytes).await.map_err(|e| e.to_string())?;
+            input.shutdown().await.map_err(|e| e.to_string())?;
+            drop(input);
+            let mut output = vec![];
+            child
+                .stdout
+                .take()
+                .ok_or("Preparation output unavailable")?
+                .take(66)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|e| e.to_string())?;
+            if !child.wait().await.map_err(|e| e.to_string())?.success() {
+                return Err("Native setting preparation failed; playing sound unchanged".to_owned());
+            }
+            let id = std::str::from_utf8(&output)
+                .map_err(|e| e.to_string())?
+                .trim();
+            if !oxidal_audio::structure::valid_receipt(id) {
+                return Err("Invalid prepared setting receipt".into());
+            }
+            Ok(id.to_owned())
+        })
+        .await
+        .map_err(|_| "Native setting preparation timed out; playing sound unchanged".to_owned())
+        .and_then(|r| r);
+        if prepared.is_err() {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+        }
+        let receipt = prepared?;
+        self.checkpoint();
+        self.publish(AudioPhase::Stopping, None);
+        self.release().await?;
+        let mut proposed = previous.clone();
+        proposed.working = Some(receipt);
+        match self.start(proposed, None, vec![], None).await {
+            Ok(()) => Ok(self.state.clone()),
+            Err(error) => {
+                let message = match self.start(previous, Some(controls), models, Some(eq)).await {
+                    Ok(()) => {
+                        let message =
+                            format!("Setting not applied: {error}. Previous session restored.");
+                        self.publish(AudioPhase::Running, Some(message.clone()));
+                        message
+                    }
+                    Err(rollback) => {
+                        let message =
+                            format!("Setting failed: {error}; rollback failed: {rollback}");
+                        self.publish(AudioPhase::Failed, Some(message.clone()));
+                        message
+                    }
+                };
+                Err(message)
+            }
+        }
+    }
+    async fn authoring_command(&mut self, action: AuthoringAction) -> Reply {
+        if self.state.phase != AudioPhase::Running || self.model_pending() {
+            return Err(
+                "Start audio and finish model preparation before authoring the chain".into(),
+            );
+        }
+        let mutating = !matches!(action, AuthoringAction::Inspect);
+        let serial = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Audio revision exhausted")?;
+        let mut bytes = serde_json::to_vec(&AuthoringRequest {
+            serial,
+            authoring: action,
+        })
+        .map_err(|e| e.to_string())?;
+        if bytes.len() >= 65536 {
+            return Err("Native authoring request exceeds byte budget".into());
+        }
+        bytes.push(b'\n');
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        let result = tokio::time::timeout(Duration::from_secs(25), async {
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let reply = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Authoring reply lost")?;
+            let PlaybackEvent::Authored {
+                serial: actual,
+                authoring,
+                controls,
+                slots,
+                eq,
+                error,
+            } = reply
+            else {
+                return Err("Unexpected authoring reply".to_owned());
+            };
+            if actual != serial
+                || !authoring.valid()
+                || !valid_controls(&controls)
+                || !valid_slots(&slots)
+                || !valid_snapshot(&eq)
+                || mutating && error.is_none() && authoring.working.is_none()
+            {
+                return Err("Invalid native authoring readback".into());
+            }
+            Ok((authoring, controls, slots, eq, error))
+        })
+        .await
+        .map_err(|_| "Native authoring timed out; outcome unknown".to_owned())
+        .and_then(|r| r);
+        let (authoring, controls, slots, eq, error) = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.release().await?;
+                self.publish(AudioPhase::Failed, Some(error.clone()));
+                return Err(error);
+            }
+        };
+        if let Some(error) = error {
+            return Err(error);
+        }
+        if mutating {
+            self.state
+                .configured
+                .as_mut()
+                .ok_or("Missing configured native session")?
+                .working = authoring.working.clone();
+            self.state.models.clear();
+            self.state.model_change = None;
+            self.state.modified = true;
+            self.state.saved_copy = None;
+            self.schedule_recovery();
+        }
+        self.state.authoring = Some(authoring);
+        self.state.slots = slots;
+        self.state.controls = controls.clone();
+        self.state.eq = eq.clone();
+        self.resume_controls = Some(controls);
+        self.resume_eq = Some(eq);
+        self.publish(AudioPhase::Running, None);
+        Ok(self.state.clone())
     }
     async fn set_control(&mut self, target: String, value: f32) -> Result<(), String> {
         let serial = self.state.revision + 1;
@@ -542,6 +756,10 @@ impl Owner {
             return Err("Model assignment reply differs".into());
         }
         if self.state.model_change != progress {
+            let refresh_authoring = self.state.authoring.is_some()
+                && progress
+                    .as_ref()
+                    .is_some_and(|p| p.phase == ModelPhase::Applied);
             if let Some(p) = &progress
                 && p.phase == ModelPhase::Applied
             {
@@ -557,6 +775,7 @@ impl Owner {
                     self.state.models.push(p.assignment.clone());
                 }
                 self.state.slots = slots;
+                self.state.authoring = None;
                 self.state.eq = eq.clone();
                 self.resume_eq = Some(eq);
                 self.state.controls = controls.clone();
@@ -567,7 +786,14 @@ impl Owner {
             }
             let error = progress.as_ref().and_then(|p| p.error.clone());
             self.state.model_change = progress;
-            self.publish(AudioPhase::Running, error);
+            if refresh_authoring {
+                // Publish model completion and its structural catalog together.
+                // A client must never see Applied with a cursor about to advance
+                // solely for the supervisor's internal metadata readback.
+                self.authoring_command(AuthoringAction::Inspect).await?;
+            } else {
+                self.publish(AudioPhase::Running, error);
+            }
         }
         Ok(self.state.clone())
     }
@@ -666,6 +892,7 @@ impl Owner {
                     preset_id: id,
                     owned: false,
                     draft: true,
+                    working: None,
                 },
                 None,
                 vec![],
@@ -841,6 +1068,10 @@ impl Owner {
         }
         let result = match command.action {
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
+            AudioAction::Authoring {
+                action: AuthoringAction::Parameter { parameter, value },
+            } => return self.prepare_parameter(parameter, value).await,
+            AudioAction::Authoring { action } => return self.authoring_command(action).await,
             // A failed export must not mark the independently running audio failed.
             AudioAction::ReplaceModel { mut assignment } => {
                 if self.state.phase != AudioPhase::Running
@@ -1063,6 +1294,7 @@ impl Playback {
                 .map(|r| r.models.clone())
                 .unwrap_or_default(),
             model_change: None,
+            authoring: None,
             slots: vec![],
             phase: if config.audio_worker.is_some() {
                 AudioPhase::Stopped

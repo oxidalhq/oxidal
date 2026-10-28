@@ -102,3 +102,12 @@ history. Source immutability, idempotent receipts, rejection/rollback, undo/redo
 independent Save/reopen and saved PCM are covered by the maintained native qualifier.
 These commands remain draft-only; sounding structural replacement/history and full
 TONE3000 authoring parity remain open. See docs/native-tone3000.md.
+
+Standalone native playback now supports transactional live structural authoring
+with verified source/profile-bound working checkpoints, bounded structural history,
+and complete Save/reconfigure/Resume/boot reconstruction. It exposes 34 hot globals
+and seven isolated prepared instance settings; preparing a setting preserves the
+old worker until admission, then restarts audio with rollback on failure. This is
+functional authoring, not real-time/gapless structural qualification. See
+docs/native-tone3000.md. Hybrid node authoring and complete reference parity remain
+open. Keep UI testing focused on functional wiring during the current design changes.

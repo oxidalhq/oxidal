@@ -2,9 +2,13 @@
 use oxidal_api::{Config, router_with_shutdown};
 use serde_json::{Value, json};
 
+// These integration scenarios exercise the same process-wide audio permit.
+static QUALIFICATION_DEVICE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 #[ignore = "run by Linux native qualification with the actual audio/editor workers and preset fixture"]
 async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring() {
+    let _device = QUALIFICATION_DEVICE.lock().await;
     let audio_worker = std::env::var_os("OXIDAL_TEST_AUDIO_WORKER").expect("audio worker");
     let native_worker = std::env::var_os("OXIDAL_TEST_NATIVE_WORKER").expect("editor worker");
     assert_eq!(std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").unwrap(), "1");
@@ -1194,4 +1198,261 @@ async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, 
         .read(id)
         .unwrap();
     assert_eq!(info.preset.name, "Frame 音 regression");
+}
+
+#[tokio::test]
+#[ignore = "run by Linux native qualification with actual audio worker and embedded A2 preset"]
+async fn live_structure_save_reconfigure_recovery_and_rollback() {
+    let _device = QUALIFICATION_DEVICE.lock().await;
+    let worker = std::env::var_os("OXIDAL_TEST_AUDIO_WORKER").expect("audio worker");
+    let bytes =
+        std::fs::read(std::env::var_os("OXIDAL_NATIVE_TEST_PRESET").expect("preset")).unwrap();
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-live-structure-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let presets = root.join("presets");
+    let imported = oxidal_presets::Store::new(presets.clone())
+        .import(&bytes)
+        .unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let config = Config {
+        audio_worker: Some(worker.into()),
+        native_worker: None,
+        graph_worker: None,
+        rig_worker: None,
+        debug_socket: None,
+        device_socket: None,
+        shutdown: Some(signal),
+        simulator: false,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: presets.clone(),
+        ui_dir: root.join("ui"),
+    };
+    let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
+    let mut output = input.clone();
+    output["direction"] = json!("playback");
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":imported.sha256,"owned":false,"draft":false});
+    let mut state = get(&client, &url, "audio").await;
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"start","settings":settings}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let layout = state["authoring"]["layout"].clone();
+    let block = layout["left"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["insert"] == false)
+        .unwrap()["id"]
+        .clone();
+    let duplicate = json!({"kind":"authoring","action":{"kind":"edit","edit":{"kind":"duplicate","block_id":block,"lane":"left","index":0}}});
+    let before_duplicate = state.clone();
+    let response = send(&client, &url, &state, duplicate.clone()).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["device_owned"], true);
+    assert_eq!(
+        state["authoring"]["layout"]["left"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|b| b["insert"] == false)
+            .count(),
+        2
+    );
+    assert!(state["configured"]["working"].as_str().unwrap().len() == 64);
+    assert_eq!(state["models"], json!([]));
+    assert_eq!(
+        send(&client, &url, &before_duplicate, duplicate.clone())
+            .await
+            .status(),
+        409,
+        "stale duplicate must not execute twice"
+    );
+    let duplicated = state["authoring"]["layout"].clone();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"undo"}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["layout"], layout);
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"redo"}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    let receipt = state["configured"]["working"].clone();
+    // A failed durable checkpoint cannot leave a successful audible edit behind.
+    let checkpoint_dir = presets.join("native-checkpoints");
+    let retained = root.join("retained-checkpoints");
+    std::fs::rename(&checkpoint_dir, &retained).unwrap();
+    std::fs::write(&checkpoint_dir, b"not a directory").unwrap();
+    assert_eq!(
+        send(&client, &url, &state, duplicate.clone())
+            .await
+            .status(),
+        409
+    );
+    std::fs::remove_file(&checkpoint_dir).unwrap();
+    std::fs::rename(&retained, &checkpoint_dir).unwrap();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"inspect"}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    assert_eq!(state["configured"]["working"], receipt);
+    assert_eq!(state["phase"], "running");
+    // Edits after a structural checkpoint must survive independent Save and reconfiguration.
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"outputLevel","value":0.31}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"save_copy","name":"Live structural copy"}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let saved = state["saved_copy"].as_str().unwrap().to_owned();
+    let (_, saved_bytes) = oxidal_presets::OwnedStore::new(presets.join("owned"))
+        .read(&saved)
+        .unwrap();
+    assert_eq!(
+        oxidal_presets::inspect(&saved_bytes).unwrap().name,
+        "Live structural copy"
+    );
+    // Latency/resource-changing settings are prepared while the old worker plays,
+    // then admitted with complete state and an independently reversible fallback.
+    for (parameter, value) in [
+        ("pitchEnabled", 1.0),
+        ("pitchWindow", 2.0 / 3.0),
+        ("osFactor", 0.5),
+        ("osEnabled", 1.0),
+        ("inputCalibrationLevel", 0.5),
+        ("calibrateInput", 1.0),
+        ("targetLoudness", 0.5),
+    ] {
+        let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"parameter","parameter":parameter,"value":value}})).await;
+        assert_eq!(
+            response.status(),
+            200,
+            "prepare {parameter}: {}",
+            response.text().await.unwrap_or_default()
+        );
+        state = get(&client, &url, "audio").await;
+        assert_eq!(state["phase"], "running");
+        assert_eq!(state["modified"], true);
+        assert_eq!(state["authoring"]["layout"], duplicated);
+        let actual = state["authoring"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == parameter)
+            .unwrap();
+        assert!(
+            (actual["value"].as_f64().unwrap() - value).abs() < 1e-5,
+            "prepared readback {parameter}"
+        );
+    }
+    let receipt = state["configured"]["working"].clone();
+    let mut stream = state["configured"]["stream"].clone();
+    stream["input"]["period_frames"] = json!(256);
+    stream["output"]["period_frames"] = json!(256);
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"reconfigure","stream":stream}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    assert_eq!(state["configured"]["working"], receipt);
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_boot","enabled":true}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let response = send(&client, &url, &state, json!({"kind":"stop"})).await;
+    assert_eq!(response.status(), 200);
+    shutdown.send(true).unwrap();
+    stopped.wait().await.unwrap();
+    server.abort();
+    // A fresh daemon restores the exact opted-in structural/scalar session at boot.
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let mut next_config = config;
+    next_config.shutdown = Some(signal);
+    let (app, stopped) = router_with_shutdown(next_config).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    state = wait_phase(&client, &url, "running").await;
+    assert_eq!(state["authoring"]["layout"], duplicated);
+    assert_eq!(state["configured"]["working"], receipt);
+    let value = state["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["target"] == "outputLevel")
+        .unwrap()["value"]
+        .as_f64()
+        .unwrap();
+    assert!((value - 0.31).abs() < 1e-5);
+    assert_eq!(
+        oxidal_presets::Store::new(presets)
+            .original(&imported.sha256)
+            .unwrap(),
+        bytes
+    );
+    shutdown.send(true).unwrap();
+    stopped.wait().await.unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
 }

@@ -21,6 +21,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some("--create-draft") {
         return create_draft();
     }
+    if std::env::args().nth(1).as_deref() == Some("--prepare-parameter") {
+        return prepare_parameter();
+    }
     if std::env::args().nth(1).as_deref() == Some("--save-copy") {
         return save_copy();
     }
@@ -43,8 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut input = std::io::stdin().lock();
         loop {
             let mut bytes = vec![];
-            let read = (&mut input).take(4097).read_until(b'\n', &mut bytes);
-            if read.is_err() || bytes.len() > 4096 || bytes.last() != Some(&b'\n') {
+            let read = (&mut input).take(65537).read_until(b'\n', &mut bytes);
+            if read.is_err() || bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
                 break;
             }
             let Ok(request) = serde_json::from_slice(&bytes) else {
@@ -75,6 +78,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     engine.load_preset(&preset)?;
     engine.wait_ready()?;
+    if let Some(id) = &settings.working {
+        engine.restore(&oxidal_tone3000::working::read(
+            &root,
+            id,
+            &oxidal_tone3000::working::origin(&settings),
+        )?)?;
+        engine.wait_ready()?;
+    }
     models::restore(
         &mut engine,
         &root,
@@ -82,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings.stream.input.period_frames as usize,
     )?;
     let mut models = models::Models::default();
+    let mut authoring = oxidal_tone3000::working::Authoring::new(&root, &settings);
     if let Some(controls) = startup.controls {
         engine.apply_live_snapshot(&controls)?;
         engine.wait_ready()?;
@@ -136,6 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if blocks == settings.stream.output.periods - 1 {
                     meter_send.try_send(PlaybackEvent::Ready {
                         preset_name: preset_name.clone(),
+                        authoring: Some(authoring.snapshot(&mut engine)?),
                         controls: engine.live_controls()?,
                         slots: engine.slots()?,
                         eq: engine.eq_snapshot()?,
@@ -166,6 +179,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
             let event = match request {
+                WorkerRequest::Authoring(request) => {
+                    let mutating = !matches!(
+                        request.authoring,
+                        oxidal_audio::structure::AuthoringAction::Inspect
+                    );
+                    let result = if models.pending() {
+                        Err("Finish model preparation before changing the chain".into())
+                    } else {
+                        authoring.command(&mut engine, request.authoring)
+                    };
+                    if authoring.failed() {
+                        return Err("Native authoring rollback failed; worker stopped".into());
+                    }
+                    let (status, error) = match result {
+                        Ok(status) => {
+                            if mutating {
+                                models = models::Models::default();
+                            }
+                            (status, None)
+                        }
+                        Err(error) => (authoring.snapshot(&mut engine)?, Some(error)),
+                    };
+                    PlaybackEvent::Authored {
+                        serial: request.serial,
+                        authoring: status,
+                        controls: engine.live_controls()?,
+                        slots: engine.slots()?,
+                        eq: engine.eq_snapshot()?,
+                        error,
+                    }
+                }
                 WorkerRequest::Eq(request) => {
                     let error = if models.pending() {
                         Some("Finish model preparation before adjusting EQ".into())
@@ -247,36 +291,19 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     }
     let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
     let owned = oxidal_presets::OwnedStore::new(root.join("owned"));
-    let (source, preset) = if request.settings.owned || request.settings.draft {
-        let store = oxidal_presets::OwnedStore::new(root.join(if request.settings.draft {
+    let source = if request.settings.owned || request.settings.draft {
+        oxidal_presets::OwnedStore::new(root.join(if request.settings.draft {
             "working-native"
         } else {
             "owned"
-        }));
-        let (info, bytes) = store.read(&request.settings.preset_id)?;
-        (info.source_sha256, bytes)
+        }))
+        .read(&request.settings.preset_id)?
+        .0
+        .source_sha256
     } else {
-        (
-            Some(request.settings.preset_id.clone()),
-            oxidal_presets::Store::new(root.clone()).original(&request.settings.preset_id)?,
-        )
+        Some(request.settings.preset_id.clone())
     };
-    let mut engine = oxidal_tone3000::Engine::new(
-        request.settings.stream.input.sample_rate.into(),
-        request.settings.stream.input.period_frames as usize,
-    )?;
-    engine.load_preset(&preset)?;
-    engine.wait_ready()?;
-    models::restore(
-        &mut engine,
-        &root,
-        &request.models,
-        request.settings.stream.input.period_frames as usize,
-    )?;
-    engine.apply_live_snapshot(&request.controls)?;
-    if let Some(eq) = &request.eq {
-        engine.restore_eq(eq, &mut 0)?;
-    }
+    let mut engine = oxidal_tone3000::working::reconstruct(&root, &request)?;
     let eq = engine.eq_snapshot()?;
     let model_identities = models::identities(&mut engine)?;
     let bytes = engine.save_preset(&request.name)?;
@@ -353,5 +380,27 @@ fn create_draft() -> Result<(), Box<dyn std::error::Error>> {
     let info = oxidal_presets::OwnedStore::new(root.join("working-native")).save_created(&bytes)?;
     println!("{}", info.id);
     std::io::stdout().flush()?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn prepare_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Read;
+    let mut bytes = vec![];
+    std::io::stdin()
+        .take((PLAYBACK_FRAME_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > PLAYBACK_FRAME_BYTES {
+        return Err("Native preparation request too large".into());
+    }
+    let request: oxidal_audio::structure::PrepareParameter = serde_json::from_slice(&bytes)?;
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_PRESET_DIR")?);
+    let mut engine = oxidal_tone3000::working::reconstruct(&root, &request.playback)?;
+    let mut authoring = oxidal_tone3000::working::Authoring::new(&root, &request.playback.settings);
+    let status = authoring.prepare_parameter(&mut engine, request.parameter, request.value)?;
+    println!(
+        "{}",
+        status.working.ok_or("Missing prepared native receipt")?
+    );
     Ok(())
 }

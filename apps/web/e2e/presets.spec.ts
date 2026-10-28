@@ -3338,3 +3338,124 @@ test('native editor loads draft structure commands and preserves history', async
     .toEqual(moved.layout);
   await expect(editor.getByRole('alert')).toHaveCount(0);
 });
+
+test('playback lifecycle applies live chain edits and prepared DSP settings before Save', async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    process.env.OXIDAL_AUDIO_QUALIFY_NULL !== '1',
+    'Actual native audio worker required',
+  );
+  test.setTimeout(60000);
+  const imported = await request.post('/api/v1/presets', {
+    data: readFileSync(process.env.OXIDAL_NATIVE_TEST_PRESET!),
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBe(true);
+  const preset = await imported.json();
+  let state = await (await request.get('/api/v1/audio')).json();
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const started = await request.post('/api/v1/audio', {
+    data: {
+      session: state.session,
+      expected_revision: state.revision,
+      action: {
+        kind: 'start',
+        settings: {
+          preset_id: preset.sha256,
+          owned: false,
+          stream: {
+            input,
+            output: { ...input, direction: 'playback' },
+            input_map: [0, 1],
+            output_map: [0, 1],
+          },
+        },
+      },
+    },
+  });
+  expect(started.ok(), await started.text()).toBe(true);
+  try {
+    await page.goto('/');
+    const sounding = page.getByRole('region', { name: 'Sounding rig' });
+    await expect(sounding).toBeVisible();
+    await sounding
+      .locator('summary')
+      .filter({ hasText: /^Chain actions$/ })
+      .click();
+    const actions = sounding.getByRole('group', { name: 'Live chain actions' });
+    await actions
+      .getByRole('button', { name: 'Duplicate block', exact: true })
+      .click();
+    const count = async () => {
+      const current = await (await request.get('/api/v1/audio')).json();
+      return current.authoring.layout.left.filter(
+        (b: { insert: boolean }) => !b.insert,
+      ).length;
+    };
+    await expect.poll(count).toBe(2);
+    await actions
+      .getByRole('button', { name: 'Undo structure', exact: true })
+      .click();
+    await expect.poll(count).toBe(1);
+    await actions
+      .getByRole('button', { name: 'Redo structure', exact: true })
+      .click();
+    await expect.poll(count).toBe(2);
+    await sounding
+      .locator('summary')
+      .filter({ hasText: /^DSP settings$/ })
+      .click();
+    const settings = sounding.getByRole('group', {
+      name: 'Prepared DSP settings',
+    });
+    state = await (await request.get('/api/v1/audio')).json();
+    const before = state.authoring.settings.find(
+      (p: { target: string }) => p.target === 'osEnabled',
+    ).value;
+    await settings.getByRole('button', { name: /^Oversampling ·/ }).click();
+    const dialog = sounding.getByRole('dialog', {
+      name: 'Oversampling',
+      exact: true,
+    });
+    await dialog
+      .getByRole('button', {
+        name: `${before === 0 ? 'Increase' : 'Decrease'} Prepared setting value`,
+        exact: true,
+      })
+      .click();
+    await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        const current = await (await request.get('/api/v1/audio')).json();
+        return current.authoring.settings.find(
+          (p: { target: string }) => p.target === 'osEnabled',
+        ).value;
+      })
+      .toBe(1 - before);
+    await expect.poll(count).toBe(2);
+    state = await (await request.get('/api/v1/audio')).json();
+    expect(state.phase).toBe('running');
+    expect(state.modified).toBe(true);
+    expect(state.configured.working).toHaveLength(64);
+  } finally {
+    state = await (await request.get('/api/v1/audio')).json();
+    await request.post('/api/v1/audio', {
+      data: {
+        session: state.session,
+        expected_revision: state.revision,
+        action: { kind: 'stop' },
+      },
+    });
+  }
+});

@@ -354,6 +354,9 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.as_slice() == ["--stereo-controls"] {
+        return qualify_image_authoring();
+    }
     if arguments.first().is_some_and(|a| a == "--structure") {
         if arguments.len() != 2 {
             return Err("Usage: qualify --structure <embedded-preset>".into());
@@ -363,6 +366,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     qualify_latency()?;
     qualify_spread()?;
+    qualify_image_authoring()?;
     let expected: Value =
         serde_json::from_str(include_str!("../../../native/tone3000/parameters.json"))?;
     let mut engine = Engine::new(48000.0, 128)?;
@@ -2441,6 +2445,113 @@ fn qualify_editor_structure(root: &std::path::Path, bytes: &[u8]) -> Result<(), 
     assert_eq!(store.original(&original.sha256)?, bytes);
     eprintln!(
         "qualify: native duplicate/reorder/stereo/lane move, rejection atomicity, undo/redo and independent Save/reopen passed"
+    );
+    Ok(())
+}
+
+fn qualify_image_authoring() -> Result<(), Box<dyn Error>> {
+    fn render(engine: &mut Engine) -> Result<Vec<[f32; 2]>, Box<dyn Error>> {
+        engine.prepare_stream()?;
+        settle(engine)?;
+        let mut result = vec![];
+        for chunk in 0..64 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| ((chunk * 128 + i) as f32 * 0.071).sin() * 0.03)
+                .collect();
+            let mut right: Vec<f32> = (0..128)
+                .map(|i| ((chunk * 128 + i) as f32 * 0.113).sin() * 0.02)
+                .collect();
+            engine.process(&mut left, &mut right)?;
+            result.extend(left.into_iter().zip(right).map(|(l, r)| [l, r]));
+        }
+        Ok(result)
+    }
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.set_input_mode(oxidal_tone3000::InputMode::Stereo)?;
+    engine.edit_structure(&oxidal_tone3000::protocol::StructureEdit::Stereo { enabled: true })?;
+    engine.wait_ready()?;
+    for id in [
+        "gateEnabled",
+        "toneEqEnabled",
+        "spreadEnabled",
+        "alignEnabled",
+        "alignWobbleEnabled",
+        "alignCrossoverEnabled",
+        "alignDiffuseEnabled",
+        "chainPanLinked",
+        "chainInvertLeft",
+        "chainInvertRight",
+    ] {
+        engine.set_normalized(id, 0.0)?;
+    }
+    engine.set_live_control("chainPanLeft", 0.0)?;
+    engine.set_live_control("chainPanRight", 1.0)?;
+    let baseline = render(&mut engine)?;
+    let latency = engine.latency_samples()?;
+    engine.set_live_control("chainPanLeft", 1.0)?;
+    engine.set_live_control("chainPanRight", 0.0)?;
+    let swapped = render(&mut engine)?;
+    let error = baseline
+        .iter()
+        .zip(&swapped)
+        .flat_map(|(a, b)| [(a[0] - b[1]).abs(), (a[1] - b[0]).abs()])
+        .fold(0.0_f32, f32::max);
+    assert!(error < 1e-5, "pan lane swap PCM error {error}");
+    engine.set_live_control("chainPanLeft", 0.0)?;
+    engine.set_live_control("chainPanRight", 1.0)?;
+    engine.set_live_control("chainInvertLeft", 1.0)?;
+    let inverted = render(&mut engine)?;
+    let error = baseline
+        .iter()
+        .zip(&inverted)
+        .flat_map(|(a, b)| [(a[0] + b[0]).abs(), (a[1] - b[1]).abs()])
+        .fold(0.0_f32, f32::max);
+    assert!(error < 1e-5, "polarity PCM error {error}");
+    engine.set_live_control("chainInvertLeft", 0.0)?;
+    engine.set_live_control("alignEnabled", 1.0)?;
+    engine.set_live_control("alignOffset", 0.8)?;
+    let aligned = render(&mut engine)?;
+    assert!(
+        baseline
+            .iter()
+            .zip(&aligned)
+            .map(|(a, b)| (a[0] - b[0]).abs() + (a[1] - b[1]).abs())
+            .sum::<f32>()
+            > 1.0,
+        "alignment must change actual PCM"
+    );
+    assert_eq!(engine.latency_samples()?, latency);
+    engine.set_live_control("chainPanLinked", 1.0)?;
+    engine.set_live_control("chainPanLeft", 0.2)?;
+    let controls = engine.live_controls()?;
+    assert!(
+        (controls
+            .iter()
+            .find(|c| c.target == "chainPanRight")
+            .unwrap()
+            .value
+            - 0.8)
+            .abs()
+            < 1e-5
+    );
+    let bytes = engine.save_preset("Live image authoring")?;
+    let mut restored = Engine::new(48000.0, 128)?;
+    restored.load_preset(&bytes)?;
+    restored.wait_ready()?;
+    for expected in controls
+        .iter()
+        .filter(|c| c.target.starts_with("align") || c.target.starts_with("chain"))
+    {
+        let actual = restored
+            .live_controls()?
+            .into_iter()
+            .find(|c| c.target == expected.target)
+            .unwrap();
+        assert_eq!(actual.value, expected.value);
+    }
+    assert_eq!(restored.latency_samples()?, latency);
+    eprintln!(
+        "qualify: live stereo pans/linking/polarity/alignment PCM, stable latency and saved recall passed"
     );
     Ok(())
 }

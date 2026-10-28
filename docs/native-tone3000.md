@@ -320,3 +320,52 @@ independent: a repeated large A2 fixture can reach it before an instance-count t
 These checks establish software recovery behavior, not Pi 5 model capacity or live
 processing headroom. Raspberry Pi 5 is the deployment target; loading time, DSP
 headroom, thermal behavior, xruns and physical transitions require later device tests.
+
+## Live working-state authoring
+
+The experimental standalone native playback worker now accepts revision-checked
+structural authoring directly from the sounding rig: duplicate, exact lane reorder,
+cross-lane move, remove, mono/stereo and input-source mode, with bounded structural
+Undo/Redo. This is a control-owner transaction between PCM steps; it can allocate,
+wait for native preparation or reset native histories. It is not a real-time or
+gapless structural transition. Preloaded mixed-rig scene switching keeps its
+separate sample-ramped path and shared-effect histories.
+
+A successful structural transaction publishes a complete native control/EQ/slot
+readback and an immutable working receipt. Checkpoints contain captured native
+state with embedded assets, a source identity and exact adapter profile, verified
+by their SHA-256 content identity before restoration. A failed checkpoint write
+rolls the native mutation back; invalid requests which did not alter state avoid
+a processor reset. Imported presets remain immutable. Checkpoints are private
+session data, not imported opaque states or user-visible library Saves. Undo/Redo
+retains at most eight states and 64 MiB, and resets when the worker restarts.
+
+Whole-native playback now exposes 34 latency-stable globals, including alignment,
+linked lane pan, polarity and pitch amount/step/tonality. Linked pan is applied by
+the authoritative native owner so both lanes change before the next PCM step.
+Complete historical control-deck gaps retain source-preset values during recovery;
+partial or unknown catalogs are still rejected. Native PCM qualification covers
+stereo lane exchange, polarity, alignment, constant reported latency and recall.
+
+Seven additional instance settings use isolated preparation: oversampling enable
+and factor, pitch enable and window, input calibration enable and level, and target
+loudness. Native descriptor steps and native quantized readback remain authoritative.
+The playing worker stays active while a separate child prepares the checkpoint;
+the supervisor then restarts audio against that complete state. Failed admission
+restores the prior configuration, models, controls and EQ. These changes apply
+without a user Save, but can interrupt sound during the audio restart. Calibration
+and other instance/device settings keep upstream preset scope; a named tone Save
+does not silently convert them into portable tone parameters.
+
+Working receipts and subsequent model/scalar/EQ edits survive explicit Resume,
+audio reconfiguration and opted-in boot recovery. Isolated named export uses the
+same reconstruction as prepared settings, then verifies independent model/control/EQ
+recall. Model completion and its structural readback publish together, avoiding a
+cursor race before the next edit. Maintained actual-worker API tests cover these
+paths, including failed-storage rollback and stale duplicate rejection. A single
+actual-worker browser workflow covers direct chain actions and prepared settings;
+visual/device matrices are deliberately deferred while the interface evolves.
+
+This does not close complete upstream operation parity: automatic measurement
+workflows, general live graph topology editing, physical DSP/MIDI deadlines and
+other documented reference gaps remain qualified separately.
