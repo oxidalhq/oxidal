@@ -66,12 +66,22 @@ class ApplianceTests(ProvisionTests):
         elf = bytearray(32)
         elf[:6] = b'\x7fELF\x02\x01'
         elf[18:20] = (183).to_bytes(2, 'little')
-        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
+        for name in ('bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-rig-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so', 'ui/index.html'):
             file = self.bundle / name
             file.parent.mkdir(exist_ok=True)
             file.write_bytes(bytes(elf) if name != 'ui/index.html' else b'<html>fixture</html>')
             files[name] = hashlib.sha256(file.read_bytes()).hexdigest()
         (self.bundle / 'manifest.json').write_text(json.dumps({'format': 2, 'engine_available': True, 'target': 'linux-arm64', 'files': files}))
+
+    def test_bundle_without_mixed_worker_is_rejected_before_install(self):
+        import json
+        path = self.bundle / 'manifest.json'
+        data = json.loads(path.read_text())
+        del data['files']['bin/oxidal-rig-worker']
+        path.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, 'Incomplete appliance bundle'):
+            provision.provision(self.root, True, self.bundle)
+        self.assertFalse((self.root / 'opt').exists())
 
     def test_native_bundle_integrity_install_and_idempotence(self):
         result = provision.provision(self.root, bundle=self.bundle)
@@ -85,6 +95,7 @@ class ApplianceTests(ProvisionTests):
         self.assertIn('RestrictAddressFamilies=AF_UNIX', helper)
         self.assertIn('NoNewPrivileges=yes', helper)
         self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
+        self.assertIn('Environment=OXIDAL_RIG_WORKER=/opt/oxidal/bin/oxidal-rig-worker', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         terminal = (self.root / 'etc/systemd/system/oxidal-terminal.service').read_text()
         self.assertIn('User=oxidal-debug', terminal)
         self.assertIn('NoNewPrivileges=yes', terminal)

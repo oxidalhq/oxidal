@@ -63,7 +63,7 @@ run(
           '--workspace',
           '--bins',
           '--features',
-          'oxidal-api/alsa,oxidal-tone3000/audio-worker,oxidal-lv2/worker',
+          'oxidal-api/alsa,oxidal-tone3000/audio-worker,oxidal-lv2/worker,oxidal-engine/worker',
         ]
       : [
           '--bin',
@@ -94,6 +94,7 @@ const binaries = appliance
       'oxidal-native-worker',
       'oxidal-audio-worker',
       'oxidal-graph-worker',
+      'oxidal-rig-worker',
     ]
   : ['oxidald'];
 mkdirSync(join(staging, 'bin'), { recursive: true });

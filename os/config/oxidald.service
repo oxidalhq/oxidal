@@ -20,6 +20,7 @@ Environment=OXIDAL_UI_DIR=/opt/oxidal/ui
 Environment=OXIDAL_NATIVE_WORKER=/opt/oxidal/bin/oxidal-native-worker
 Environment=OXIDAL_AUDIO_WORKER=/opt/oxidal/bin/oxidal-audio-worker
 Environment=OXIDAL_GRAPH_WORKER=/opt/oxidal/bin/oxidal-graph-worker
+Environment=OXIDAL_RIG_WORKER=/opt/oxidal/bin/oxidal-rig-worker
 Environment=LV2_PATH=/usr/lib/lv2:/usr/local/lib/lv2
 Restart=on-failure
 RestartSec=2

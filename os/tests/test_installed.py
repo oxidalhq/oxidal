@@ -33,7 +33,7 @@ class InstalledTests(unittest.TestCase):
             for relative, digest in entry['licenses'].items():
                 contents = (notices / (name + '-' + entry['version']) / relative).read_bytes()
                 self.assertEqual(hashlib.sha256(contents).hexdigest(), digest)
-        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
+        for binary in ['bin/oxidald', 'bin/oxidal-native-worker', 'bin/oxidal-audio-worker', 'bin/oxidal-graph-worker', 'bin/oxidal-rig-worker', 'bin/oxidal-device-service', 'bin/oxidal-debug-service', 'bin/oxidal-terminal-service', 'bin/oxidal-preset-seed', 'lib/liboxidal_tone3000.so']:
             output = subprocess.check_output(['ldd', str(home / binary)], text=True)
             self.assertNotIn('not found', output)
             self.assertNotIn('/tmp/oxidal-', output)
@@ -43,7 +43,8 @@ class InstalledTests(unittest.TestCase):
                    'OXIDAL_UI_DIR': str(home / 'ui'), 'LV2_PATH': '/usr/lib/lv2',
                    'OXIDAL_NATIVE_WORKER': str(home / 'bin/oxidal-native-worker'),
                    'OXIDAL_AUDIO_WORKER': str(home / 'bin/oxidal-audio-worker'),
-                   'OXIDAL_GRAPH_WORKER': str(home / 'bin/oxidal-graph-worker')}
+                   'OXIDAL_GRAPH_WORKER': str(home / 'bin/oxidal-graph-worker'),
+                   'OXIDAL_RIG_WORKER': str(home / 'bin/oxidal-rig-worker')}
             with open(temporary + '/daemon.log', 'w+') as log:
                 daemon = subprocess.Popen([str(home / 'bin/oxidald')], env=env, stdout=log, stderr=log)
                 try:
@@ -65,6 +66,7 @@ class InstalledTests(unittest.TestCase):
                     self.assertNotEqual(health['midi_transport'], 'simulator')
                     self.assertEqual(json.loads(get('/api/v1/audio'))['phase'], 'stopped')
                     self.assertEqual(json.loads(get('/api/v1/graph-audio'))['phase'], 'stopped')
+                    self.assertEqual(json.loads(get('/api/v1/rig-audio'))['phase'], 'stopped')
                     self.assertIn(b'<html', get('/'))
                     self.assertIn('session', json.loads(get('/api/v1/native')))
                     self.assertTrue(json.loads(get('/api/v1/audio/devices'))['backend_available'])

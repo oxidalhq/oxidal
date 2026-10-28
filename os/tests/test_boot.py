@@ -55,6 +55,7 @@ try:
     subprocess.run(['systemctl', 'is-active', '--quiet', 'ssh'], check=True)
     assert get('/api/v1/audio')['phase'] == 'stopped'
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
+    assert get('/api/v1/rig-audio')['phase'] == 'stopped'
     # The installed daemon must serve optional development originals unchanged.
     from pathlib import Path
     seed = Path('/usr/share/oxidal/development-presets.json')
