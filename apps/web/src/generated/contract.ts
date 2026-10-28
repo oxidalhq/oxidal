@@ -237,11 +237,38 @@ export type EditorAction =
       kind: "remove_block";
     }
   | {
+      edit: StructureEdit;
+      kind: "structure";
+    }
+  | {
       kind: "undo";
     }
   | {
       kind: "redo";
     };
+export type StructureEdit =
+  | {
+      block_ids: string[];
+      kind: "reorder";
+      lane: ChainLane;
+    }
+  | {
+      block_id: string;
+      index: number;
+      kind: "move";
+      lane: ChainLane;
+    }
+  | {
+      block_id: string;
+      index: number;
+      kind: "duplicate";
+      lane: ChainLane;
+    }
+  | {
+      enabled: boolean;
+      kind: "stereo";
+    };
+export type ChainLane = "left" | "right";
 export type Command3 =
   | {
       action: PowerAction;
@@ -1009,6 +1036,7 @@ export interface EditorSnapshot {
   can_undo: boolean;
   dirty: boolean;
   edit?: Editing | null;
+  layout?: ChainLayout;
   live_audio: boolean;
   loaded?: string | null;
   owned: OwnedPreset[];
@@ -1034,6 +1062,18 @@ export interface BlockControl {
 export interface Editing {
   owner: string;
   target: string;
+}
+export interface ChainLayout {
+  left: ChainBlock[];
+  right: ChainBlock[];
+  stereo: boolean;
+}
+/**
+ * Exact native lane order, including insertion tiles. No provider credentials or model paths.
+ */
+export interface ChainBlock {
+  id: string;
+  insert: boolean;
 }
 export interface OwnedPreset {
   id: string;

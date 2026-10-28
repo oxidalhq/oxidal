@@ -353,6 +353,14 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.first().is_some_and(|a| a == "--structure") {
+        if arguments.len() != 2 {
+            return Err("Usage: qualify --structure <embedded-preset>".into());
+        }
+        let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
+        return qualify_editor_structure(&root, &std::fs::read(&arguments[1])?);
+    }
     qualify_latency()?;
     qualify_spread()?;
     let expected: Value =
@@ -667,6 +675,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     eprintln!("qualify: owned editor workflow");
     qualify_editor(&root, &preset)?;
     qualify_editor_scalars(&root, &preset)?;
+    qualify_editor_structure(&root, &preset)?;
     qualify_factories()?;
     qualify_empty_creation(&root, &preset)?;
     qualify_model_preparation(&root, &preset)?;
@@ -2162,5 +2171,276 @@ fn qualify_split_rendered(
     }
     source.restore(&original)?;
     source.wait_ready()?;
+    Ok(())
+}
+
+// Functional structural authoring coverage stays in the maintained native qualifier.
+fn qualify_editor_structure(root: &std::path::Path, bytes: &[u8]) -> Result<(), Box<dyn Error>> {
+    use oxidal_tone3000::{
+        editor::Editor,
+        protocol::{
+            ChainLane as L, EditorAction as A, EditorCommand, EditorSnapshot, StructureEdit as S,
+        },
+    };
+    let directory = root.join("editor-structure");
+    let mut store = oxidal_presets::Store::new(directory.clone());
+    let original = store.import(bytes)?;
+    let mut editor = Editor::new(directory.clone())?;
+    let send = |editor: &mut Editor, action: A| -> Result<EditorSnapshot, Box<dyn Error>> {
+        let state = editor.snapshot()?;
+        Ok(editor.command(EditorCommand {
+            session: state.session,
+            expected_revision: state.revision,
+            request_id: format!("structure-{}", state.revision),
+            action,
+        })?)
+    };
+    let loaded = send(
+        &mut editor,
+        A::Load {
+            id: original.sha256.clone(),
+            owned: false,
+        },
+    )?;
+    let source = loaded
+        .layout
+        .left
+        .iter()
+        .find(|b| !b.insert)
+        .unwrap()
+        .id
+        .clone();
+    // Missing, duplicated, incomplete and wrong-lane orders cannot mutate state/history.
+    let mut repeated: Vec<_> = loaded.layout.left.iter().map(|b| b.id.clone()).collect();
+    repeated[1] = repeated[0].clone();
+    for edit in [
+        S::Reorder {
+            lane: L::Left,
+            block_ids: vec!["missing".into()],
+        },
+        S::Reorder {
+            lane: L::Left,
+            block_ids: repeated,
+        },
+        S::Move {
+            block_id: source.clone(),
+            lane: L::Right,
+            index: 0,
+        },
+        S::Duplicate {
+            block_id: "missing".into(),
+            lane: L::Left,
+            index: 0,
+        },
+        S::Duplicate {
+            block_id: source.clone(),
+            lane: L::Left,
+            index: usize::MAX,
+        },
+        S::Duplicate {
+            block_id: loaded
+                .layout
+                .left
+                .iter()
+                .find(|b| b.insert)
+                .unwrap()
+                .id
+                .clone(),
+            lane: L::Left,
+            index: 0,
+        },
+    ] {
+        assert!(send(&mut editor, A::Structure { edit }).is_err());
+        let unchanged = editor.snapshot()?;
+        assert_eq!(unchanged.layout, loaded.layout);
+        assert_eq!(unchanged.revision, loaded.revision);
+        assert_eq!(unchanged.state_captures, loaded.state_captures);
+        assert!(!unchanged.can_undo && !unchanged.dirty);
+    }
+    send(
+        &mut editor,
+        A::Begin {
+            owner: "structure-owner".into(),
+            token: "structure-busy".into(),
+            target: "toneBass".into(),
+        },
+    )?;
+    assert!(
+        send(
+            &mut editor,
+            A::Structure {
+                edit: S::Stereo { enabled: true }
+            }
+        )
+        .is_err()
+    );
+    send(
+        &mut editor,
+        A::Cancel {
+            owner: "structure-owner".into(),
+            token: "structure-busy".into(),
+        },
+    )?;
+    let before_duplicate = editor.snapshot()?;
+    let duplicate_command = EditorCommand {
+        session: before_duplicate.session,
+        expected_revision: before_duplicate.revision,
+        request_id: "duplicate-receipt".into(),
+        action: A::Structure {
+            edit: S::Duplicate {
+                block_id: source.clone(),
+                lane: L::Left,
+                index: 0,
+            },
+        },
+    };
+    let duplicated = editor.command(duplicate_command.clone())?;
+    let repeated_reply = editor.command(duplicate_command.clone())?;
+    assert_eq!(
+        repeated_reply.layout, duplicated.layout,
+        "lost reply must not duplicate twice"
+    );
+    assert_eq!(repeated_reply.revision, duplicated.revision);
+    assert_eq!(repeated_reply.state_captures, duplicated.state_captures);
+    let mut stale = duplicate_command;
+    stale.request_id = "stale-structure".into();
+    assert!(editor.command(stale).is_err());
+    assert_eq!(editor.snapshot()?.layout, duplicated.layout);
+    assert!(duplicated.dirty && duplicated.can_undo);
+    let clone = duplicated
+        .layout
+        .left
+        .iter()
+        .find(|b| !b.insert && b.id != source)
+        .unwrap()
+        .id
+        .clone();
+    for control in loaded
+        .block_controls
+        .iter()
+        .filter(|c| c.block_id == source)
+    {
+        let copy = duplicated
+            .block_controls
+            .iter()
+            .find(|c| c.block_id == clone && c.parameter == control.parameter)
+            .unwrap();
+        assert_eq!(
+            control.value, copy.value,
+            "duplicate preserves {}",
+            control.parameter
+        );
+    }
+    let order: Vec<_> = duplicated
+        .layout
+        .left
+        .iter()
+        .rev()
+        .map(|b| b.id.clone())
+        .collect();
+    let reordered = send(
+        &mut editor,
+        A::Structure {
+            edit: S::Reorder {
+                lane: L::Left,
+                block_ids: order.clone(),
+            },
+        },
+    )?;
+    assert_eq!(
+        reordered
+            .layout
+            .left
+            .iter()
+            .map(|b| b.id.clone())
+            .collect::<Vec<_>>(),
+        order
+    );
+    let stereo = send(
+        &mut editor,
+        A::Structure {
+            edit: S::Stereo { enabled: true },
+        },
+    )?;
+    assert!(stereo.layout.stereo && !stereo.layout.right.is_empty());
+    let moved = send(
+        &mut editor,
+        A::Structure {
+            edit: S::Move {
+                block_id: clone.clone(),
+                lane: L::Right,
+                index: 0,
+            },
+        },
+    )?;
+    assert!(!moved.layout.left.iter().any(|b| b.id == clone));
+    assert_eq!(moved.layout.right[0].id, clone);
+    assert_eq!(send(&mut editor, A::Undo)?.layout, stereo.layout);
+    assert_eq!(send(&mut editor, A::Redo)?.layout, moved.layout);
+    // Saved structural state must survive an independent owner without network/cache lookup.
+    let saved = send(
+        &mut editor,
+        A::Save {
+            name: "Structured native draft".into(),
+        },
+    )?;
+    drop(editor);
+    let saved_id = saved.loaded.clone().unwrap();
+    let (_, saved_bytes) =
+        oxidal_presets::OwnedStore::new(directory.join("owned")).read(&saved_id)?;
+    let mut editor = Editor::new(directory)?;
+    let reopened = send(
+        &mut editor,
+        A::Load {
+            id: saved.loaded.unwrap(),
+            owned: true,
+        },
+    )?;
+    assert_eq!(reopened.layout, moved.layout);
+    assert!(!reopened.dirty && !reopened.can_undo);
+    for control in &moved.block_controls {
+        let recalled = reopened
+            .block_controls
+            .iter()
+            .find(|c| c.block_id == control.block_id && c.parameter == control.parameter)
+            .unwrap();
+        assert_eq!(control.value, recalled.value);
+    }
+    // Recalled parallel lanes must contain both loaded models and produce deterministic PCM.
+    let mut renders = vec![];
+    for _ in 0..2 {
+        let mut engine = Engine::new(48000.0, 128)?;
+        engine.load_preset(&saved_bytes)?;
+        engine.wait_ready()?;
+        let identities = oxidal_tone3000::model_preparation::identities(&mut engine)?;
+        assert_eq!(identities.len(), 2);
+        assert_eq!(identities[0]["tone"], identities[1]["tone"]);
+        assert_eq!(identities[0]["model"], identities[1]["model"]);
+        engine.prepare_stream()?;
+        let mut samples = vec![];
+        for _ in 0..32 {
+            let mut left = [0.03; 128];
+            let mut right = [0.02; 128];
+            engine.process(&mut left, &mut right)?;
+            samples.extend(left.into_iter().zip(right));
+        }
+        assert!(samples.iter().all(|(l, r)| l.is_finite() && r.is_finite()));
+        assert!(
+            samples
+                .iter()
+                .any(|(l, r)| l.abs() > 1e-7 || r.abs() > 1e-7)
+        );
+        renders.push(samples);
+    }
+    let error = renders[0]
+        .iter()
+        .zip(&renders[1])
+        .flat_map(|((a, b), (c, d))| [(a - c).abs(), (b - d).abs()])
+        .fold(0.0_f32, f32::max);
+    assert!(error < 1e-5, "structural Save/reopen PCM error {error}");
+    assert_eq!(store.original(&original.sha256)?, bytes);
+    eprintln!(
+        "qualify: native duplicate/reorder/stereo/lane move, rejection atomicity, undo/redo and independent Save/reopen passed"
+    );
     Ok(())
 }

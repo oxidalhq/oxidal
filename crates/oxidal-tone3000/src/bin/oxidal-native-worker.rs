@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(_) => Err("Invalid native request".into()),
         };
         let reply = match result {
-            Ok(s) => WorkerReply::State(s),
+            Ok(s) => WorkerReply::State(Box::new(s)),
             Err(error) => WorkerReply::Error { error },
         };
         serde_json::to_writer(&mut output, &reply)?;

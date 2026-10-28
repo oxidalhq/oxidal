@@ -3251,3 +3251,90 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   }
   await command('rig-audio', { kind: 'stop' });
 });
+
+test('native editor loads draft structure commands and preserves history', async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    process.env.OXIDAL_NATIVE_EDITOR !== '1',
+    'Explicit native worker required',
+  );
+  test.setTimeout(60000);
+  const imported = await request.post('/api/v1/presets', {
+    data: readFileSync(process.env.OXIDAL_NATIVE_TEST_PRESET!),
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBeTruthy();
+  const preset = await imported.json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Library sections' })
+    .getByRole('button', { name: 'Author', exact: true })
+    .click();
+  const editor = page.getByRole('region', { name: 'Native preset editor' });
+  await expect(editor).toBeVisible();
+  if (!(await editor.getByLabel('Preset to load').isVisible()))
+    await editor.getByTestId('native-preset-loader').locator('summary').click();
+  await editor
+    .getByLabel('Preset to load')
+    .selectOption(`original:${preset.sha256}`);
+  await editor.getByRole('button', { name: 'Load draft' }).click();
+  await expect(editor.getByRole('status')).toHaveText('Native preset ready');
+  const initial = await (await request.get('/api/v1/native')).json();
+  const block = initial.block_controls.find(
+    (c: { parameter: string }) => c.parameter === 'mix',
+  );
+  await editor.getByTestId('native-control-browser').locator('summary').click();
+  await editor.getByLabel('Native control').selectOption(block.id);
+  await editor
+    .locator('summary')
+    .filter({ hasText: /^Draft structure$/ })
+    .click();
+  const structure = editor.getByRole('group', { name: 'Draft structure' });
+  await structure
+    .getByRole('button', { name: 'Duplicate block', exact: true })
+    .click();
+  await expect(editor.getByRole('status')).toContainText(
+    'Unsaved tone changes',
+  );
+  const duplicated = await (await request.get('/api/v1/native')).json();
+  expect(
+    duplicated.layout.left.filter((b: { insert: boolean }) => !b.insert),
+  ).toHaveLength(2);
+  await structure.getByRole('button', { name: 'Later', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await (await request.get('/api/v1/native')).json()).layout,
+    )
+    .not.toEqual(duplicated.layout);
+  await structure
+    .getByRole('button', { name: 'Use stereo chains', exact: true })
+    .click();
+  await expect(
+    structure.getByRole('button', { name: 'Use mono chain', exact: true }),
+  ).toBeVisible();
+  await structure
+    .getByRole('button', { name: 'Move to right chain', exact: true })
+    .click();
+  const moved = await (await request.get('/api/v1/native')).json();
+  expect(
+    moved.layout.right.some((b: { id: string }) => b.id === block.block_id),
+  ).toBe(true);
+  await editor.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await (await request.get('/api/v1/native')).json()).layout.left.some(
+        (b: { id: string }) => b.id === block.block_id,
+      ),
+    )
+    .toBe(true);
+  await editor.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await (await request.get('/api/v1/native')).json()).layout,
+    )
+    .toEqual(moved.layout);
+  await expect(editor.getByRole('alert')).toHaveCount(0);
+});

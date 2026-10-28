@@ -1269,6 +1269,56 @@
         "native_editor"
       ]
     },
+    "ChainBlock": {
+      "description": "Exact native lane order, including insertion tiles. No provider credentials or model paths.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "insert": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "insert"
+      ]
+    },
+    "ChainLane": {
+      "type": "string",
+      "enum": [
+        "left",
+        "right"
+      ]
+    },
+    "ChainLayout": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChainBlock"
+          }
+        },
+        "right": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChainBlock"
+          }
+        },
+        "stereo": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stereo",
+        "left",
+        "right"
+      ]
+    },
     "Channel": {
       "type": "object",
       "properties": {
@@ -2054,6 +2104,23 @@
         {
           "type": "object",
           "properties": {
+            "edit": {
+              "$ref": "#/$defs/StructureEdit"
+            },
+            "kind": {
+              "type": "string",
+              "const": "structure"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "undo"
@@ -2132,6 +2199,14 @@
               "type": "null"
             }
           ]
+        },
+        "layout": {
+          "$ref": "#/$defs/ChainLayout",
+          "default": {
+            "left": [],
+            "right": [],
+            "stereo": false
+          }
         },
         "live_audio": {
           "type": "boolean"
@@ -5885,6 +5960,105 @@
         "output",
         "input_map",
         "output_map"
+      ]
+    },
+    "StructureEdit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "block_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "reorder"
+            },
+            "lane": {
+              "$ref": "#/$defs/ChainLane"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "lane",
+            "block_ids"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "move"
+            },
+            "lane": {
+              "$ref": "#/$defs/ChainLane"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "lane",
+            "index"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "duplicate"
+            },
+            "lane": {
+              "$ref": "#/$defs/ChainLane"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "lane",
+            "index"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stereo"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
+        }
       ]
     },
     "SwitchCommand": {

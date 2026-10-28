@@ -53,6 +53,7 @@ unsafe extern "C" {
         capacity: usize,
         written: *mut usize,
     ) -> i32;
+    fn oxidal_t3k_structure(engine: *mut c_void, request: *const c_char) -> i32;
     fn oxidal_t3k_remove_block(engine: *mut c_void, id: *const c_char) -> i32;
     fn oxidal_t3k_input_mode(engine: *mut c_void, mode: i32) -> i32;
     fn oxidal_t3k_chain(
@@ -363,6 +364,94 @@ impl Engine {
         let id = string(id)?;
         // SAFETY: bounded identity and live exclusive owner; native rejects stale/insert IDs.
         checked(unsafe { oxidal_t3k_remove_block(self.ptr.as_ptr(), id.as_ptr()) })
+    }
+    pub fn layout(&mut self) -> Result<crate::protocol::ChainLayout> {
+        use crate::protocol::{ChainBlock, ChainLayout};
+        let state = self.chain()?;
+        let lane = |key: &str| -> Result<Vec<ChainBlock>> {
+            state[key].as_array().map_or(Ok(vec![]), |blocks| {
+                blocks
+                    .iter()
+                    .map(|b| {
+                        Ok(ChainBlock {
+                            id: b["blockId"]
+                                .as_str()
+                                .ok_or_else(|| NativeError("Missing block identity".into()))?
+                                .into(),
+                            insert: b["kind"] == "insert",
+                        })
+                    })
+                    .collect()
+            })
+        };
+        Ok(ChainLayout {
+            stereo: state["stereoEnabled"].as_bool().unwrap_or(false),
+            left: lane("chain")?,
+            right: lane("chainRight")?,
+        })
+    }
+    /// Draft-only structural mutation; the editor owns rollback, history and revision.
+    pub fn edit_structure(&mut self, edit: &crate::protocol::StructureEdit) -> Result<()> {
+        use crate::protocol::{ChainLane, StructureEdit};
+        if self.role != ProcessingRole::WholePreset {
+            return Err(NativeError(
+                "Extracted stages do not support structural edits".into(),
+            ));
+        }
+        let layout = self.layout()?;
+        let blocks = |lane| {
+            if lane == ChainLane::Left {
+                &layout.left
+            } else {
+                &layout.right
+            }
+        };
+        match edit {
+            StructureEdit::Reorder { lane, block_ids } => {
+                let current = blocks(*lane);
+                if current.is_empty()
+                    || block_ids.len() != current.len()
+                    || block_ids.iter().enumerate().any(|(i, id)| {
+                        !current.iter().any(|b| &b.id == id) || block_ids[..i].contains(id)
+                    })
+                {
+                    return Err(NativeError(
+                        "Order must contain every block in the selected lane exactly once".into(),
+                    ));
+                }
+            }
+            StructureEdit::Move {
+                block_id,
+                lane,
+                index,
+            }
+            | StructureEdit::Duplicate {
+                block_id,
+                lane,
+                index,
+            } => {
+                if (*lane == ChainLane::Right && !layout.stereo)
+                    || *index > blocks(*lane).len()
+                    || !layout
+                        .left
+                        .iter()
+                        .chain(&layout.right)
+                        .any(|b| b.id == *block_id && !b.insert)
+                    || matches!(edit, StructureEdit::Move { .. })
+                        && (!layout.stereo || blocks(*lane).iter().any(|b| b.id == *block_id))
+                {
+                    return Err(NativeError("Invalid or stale structural target".into()));
+                }
+            }
+            StructureEdit::Stereo { .. } => (),
+        }
+        let bytes = serde_json::to_string(edit).map_err(|e| NativeError(e.to_string()))?;
+        if bytes.len() > 262144 {
+            return Err(NativeError("Structural request exceeds byte budget".into()));
+        }
+        let request = string(&bytes)?;
+        // SAFETY: owned JSON string and exclusive native handle remain live. Both sides validate.
+        checked(unsafe { oxidal_t3k_structure(self.ptr.as_ptr(), request.as_ptr()) })
     }
     pub fn chain(&mut self) -> Result<serde_json::Value> {
         // SAFETY: live owner handle and bounded JSON output.

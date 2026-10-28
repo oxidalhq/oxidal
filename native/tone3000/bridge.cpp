@@ -420,6 +420,49 @@ EXPORT int oxidal_t3k_remove_block(void* ptr, const char* id) noexcept {
   });
 }
 
+// Owner-thread draft operations only. PCM use requires a separately prepared handoff.
+EXPORT int oxidal_t3k_structure(void* ptr, const char* request) noexcept {
+  return guard([&] {
+    if (!request || std::strlen(request) > 262144) throw std::runtime_error("Invalid structural request");
+    auto edit = juce::JSON::parse(juce::String::fromUTF8(request));
+    if (!edit.isObject()) throw std::runtime_error("Invalid structural edit");
+    auto& p = engine(ptr).processor;
+    const auto kind = edit["kind"].toString();
+    if (kind == "stereo") {
+      if (!edit["enabled"].isBool()) throw std::runtime_error("Invalid stereo mode");
+      p.setStereoMode(static_cast<bool>(edit["enabled"]));
+      return;
+    }
+    const auto side = edit["lane"].toString();
+    if (side != "left" && side != "right") throw std::runtime_error("Invalid lane");
+    if (kind == "reorder") {
+      const auto* ids = edit["block_ids"].getArray();
+      if (!ids || ids->isEmpty()) throw std::runtime_error("Invalid block order");
+      std::vector<std::string> order;
+      for (const auto& id : *ids) {
+        if (!id.isString() || id.toString().isEmpty() || id.toString().getNumBytesAsUTF8() > 128)
+          throw std::runtime_error("Invalid block identity");
+        order.push_back(id.toString().toStdString());
+      }
+      if (!p.reorderChainBlocks(order)) throw std::runtime_error("Order must contain every block in one lane exactly once");
+      return;
+    }
+    const auto id = edit["block_id"].toString();
+    const auto index = edit["index"];
+    if (!edit["block_id"].isString() || id.isEmpty() || id.getNumBytesAsUTF8() > 128
+        || (!index.isInt() && !index.isInt64()) || static_cast<juce::int64>(index) < 0
+        || static_cast<juce::int64>(index) > 2147483647)
+      throw std::runtime_error("Invalid structural target");
+    if (kind == "move") {
+      if (!p.moveBlockToChain(id.toStdString(), side, static_cast<int>(index)))
+        throw std::runtime_error("Block cannot move to this lane");
+    } else if (kind == "duplicate") {
+      if (p.duplicateChainBlock(id.toStdString(), side, static_cast<int>(index)).empty())
+        throw std::runtime_error("Block cannot be duplicated here");
+    } else throw std::runtime_error("Unknown structural edit");
+  });
+}
+
 EXPORT int oxidal_t3k_prepare_model(void* ptr, const char* target, const char* path, const char* metadata) noexcept {
   return guard([&] {
     auto& e = engine(ptr);

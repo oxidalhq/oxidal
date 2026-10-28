@@ -241,6 +241,21 @@ export function NativeEditor({
     );
   const parameter = state?.parameters.find((p) => p.id === target);
   const blockControl = state?.block_controls.find((p) => p.id === target);
+  const selectedLane = blockControl?.lane === 'right' ? 'right' : 'left';
+  const laneBlocks = state.layout?.[selectedLane] ?? [];
+  const blockIndex = laneBlocks.findIndex(
+    (b) => b.id === blockControl?.block_id,
+  );
+  function reorderBlock(direction: number) {
+    const next = blockIndex + direction;
+    if (blockIndex < 0 || next < 0 || next >= laneBlocks.length) return;
+    const ids = laneBlocks.map((b) => b.id);
+    [ids[blockIndex], ids[next]] = [ids[next]!, ids[blockIndex]!];
+    void send({
+      kind: 'structure',
+      edit: { kind: 'reorder', lane: selectedLane, block_ids: ids },
+    });
+  }
   const step =
     blockControl?.step ??
     (parameter?.toggle
@@ -573,6 +588,88 @@ export function NativeEditor({
           </Button>
         )}
       </div>
+
+      {state.loaded && state.layout && (
+        <details>
+          <summary>Draft structure</summary>
+          <div
+            className="editor-actions"
+            role="group"
+            aria-label="Draft structure"
+          >
+            <Button
+              variant="secondary"
+              disabled={blocked || !!state.edit}
+              onClick={() =>
+                void send({
+                  kind: 'structure',
+                  edit: { kind: 'stereo', enabled: !state.layout?.stereo },
+                })
+              }
+            >
+              {state.layout.stereo ? 'Use mono chain' : 'Use stereo chains'}
+            </Button>
+            {blockControl && blockIndex >= 0 && (
+              <>
+                <Button
+                  variant="secondary"
+                  disabled={blocked || !!state.edit || blockIndex === 0}
+                  onClick={() => reorderBlock(-1)}
+                >
+                  Earlier
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={
+                    blocked ||
+                    !!state.edit ||
+                    blockIndex === laneBlocks.length - 1
+                  }
+                  onClick={() => reorderBlock(1)}
+                >
+                  Later
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={blocked || !!state.edit}
+                  onClick={() =>
+                    void send({
+                      kind: 'structure',
+                      edit: {
+                        kind: 'duplicate',
+                        block_id: blockControl.block_id,
+                        lane: selectedLane,
+                        index: blockIndex + 1,
+                      },
+                    })
+                  }
+                >
+                  Duplicate block
+                </Button>
+                {state.layout.stereo && (
+                  <Button
+                    variant="secondary"
+                    disabled={blocked || !!state.edit}
+                    onClick={() =>
+                      void send({
+                        kind: 'structure',
+                        edit: {
+                          kind: 'move',
+                          block_id: blockControl.block_id,
+                          lane: selectedLane === 'left' ? 'right' : 'left',
+                          index: 0,
+                        },
+                      })
+                    }
+                  >
+                    Move to {selectedLane === 'left' ? 'right' : 'left'} chain
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </details>
+      )}
 
       {state?.edit && (
         <p>

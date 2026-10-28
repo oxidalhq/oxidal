@@ -95,3 +95,10 @@ simultaneous NAM branches and exact confirmed custom-mix Save/recovery. Device-l
 CC mappings support toggle and gate behavior. The hardware reader and maintained
 byte-to-DSP tests share the engine dispatcher; internal selectors stay out of the
 main chain UI. Physical MIDI, Pi capacity and deadlines remain unqualified.
+
+Native draft authoring now exposes exact lane layouts and validated duplicate,
+reorder, cross-lane move and mono/stereo operations through the existing owned
+history. Source immutability, idempotent receipts, rejection/rollback, undo/redo,
+independent Save/reopen and saved PCM are covered by the maintained native qualifier.
+These commands remain draft-only; sounding structural replacement/history and full
+TONE3000 authoring parity remain open. See docs/native-tone3000.md.

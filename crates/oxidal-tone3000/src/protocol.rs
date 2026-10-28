@@ -43,6 +43,55 @@ pub struct Editing {
     pub owner: String,
     pub target: String,
 }
+/// Exact native lane order, including insertion tiles. No provider credentials or model paths.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChainBlock {
+    pub id: String,
+    pub insert: bool,
+}
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ChainLayout {
+    pub stereo: bool,
+    pub left: Vec<ChainBlock>,
+    pub right: Vec<ChainBlock>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ChainLane {
+    Left,
+    Right,
+}
+impl ChainLane {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum StructureEdit {
+    Reorder {
+        lane: ChainLane,
+        block_ids: Vec<String>,
+    },
+    Move {
+        block_id: String,
+        lane: ChainLane,
+        index: usize,
+    },
+    Duplicate {
+        block_id: String,
+        lane: ChainLane,
+        index: usize,
+    },
+    Stereo {
+        enabled: bool,
+    },
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EditorSnapshot {
@@ -54,6 +103,8 @@ pub struct EditorSnapshot {
     pub edit: Option<Editing>,
     pub parameters: Vec<Parameter>,
     pub block_controls: Vec<BlockControl>,
+    #[serde(default)]
+    pub layout: ChainLayout,
     pub owned: Vec<oxidal_presets::OwnedPreset>,
     pub state_captures: u32,
     pub live_audio: bool,
@@ -94,6 +145,9 @@ pub enum EditorAction {
     RemoveBlock {
         block_id: String,
     },
+    Structure {
+        edit: StructureEdit,
+    },
     Undo,
     Redo,
 }
@@ -114,7 +168,7 @@ pub enum WorkerRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WorkerReply {
-    State(EditorSnapshot),
+    State(Box<EditorSnapshot>),
     Error { error: String },
 }
 /// This initial slice exposes only controls whose behavior is exercised by native tests.

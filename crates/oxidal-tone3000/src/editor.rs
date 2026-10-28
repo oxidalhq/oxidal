@@ -68,6 +68,7 @@ impl Editor {
                 edit: None,
                 parameters: vec![],
                 block_controls: vec![],
+                layout: ChainLayout::default(),
                 owned: vec![],
                 state_captures: 0,
                 live_audio: false,
@@ -198,6 +199,7 @@ impl Editor {
             parameter.staged = staged(&parameter.id);
         }
         self.state.block_controls = self.engine.block_controls().map_err(|e| e.to_string())?;
+        self.state.layout = self.engine.layout().map_err(|e| e.to_string())?;
         self.state.can_undo = !self.undo.is_empty();
         self.state.can_redo = !self.redo.is_empty();
         self.state.owned = self.owned.list().map_err(|e| e.to_string())?;
@@ -291,6 +293,28 @@ impl Editor {
             }
             EditorAction::Undo => self.restore_history(false)?,
             EditorAction::Redo => self.restore_history(true)?,
+            EditorAction::Structure { edit } => {
+                if self.gesture.is_some() {
+                    return Err("edit_busy".into());
+                }
+                if self.state.loaded.is_none() {
+                    return Err("Load a preset first".into());
+                }
+                if let Err(error) = self
+                    .engine
+                    .edit_structure(&edit)
+                    .and_then(|_| self.engine.wait_ready())
+                    .and_then(|_| self.engine.block_controls().map(|_| ()))
+                {
+                    self.rollback()?;
+                    return Err(error.to_string());
+                }
+                if let Err(error) = self.capture_change() {
+                    self.rollback()?;
+                    return Err(error);
+                }
+                self.state.dirty = true;
+            }
             EditorAction::RemoveBlock { block_id } => {
                 if self.gesture.is_some() {
                     return Err("edit_busy".into());
