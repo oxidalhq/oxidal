@@ -69,10 +69,11 @@ impl BlockEqState {
     }
 }
 pub fn valid_snapshot(states: &[BlockEqState]) -> bool {
-    states
-        .iter()
-        .enumerate()
-        .all(|(i, s)| s.valid() && states[..i].iter().all(|p| p.block_id != s.block_id))
+    crate::lifecycle::catalog_fits(states)
+        && states
+            .iter()
+            .enumerate()
+            .all(|(i, s)| s.valid() && states[..i].iter().all(|p| p.block_id != s.block_id))
 }
 
 /// One immediate, revision-owned edit; UI cancellation sends its original value.

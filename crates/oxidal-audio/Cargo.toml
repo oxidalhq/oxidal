@@ -12,6 +12,7 @@ qualification = ["alsa"]
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
 schemars.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

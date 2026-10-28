@@ -942,7 +942,8 @@ async fn qualify_created_rig(
         .iter()
         .filter(|s| s["position"]["lane"] == 0)
         .count();
-    for _ in 0..=initial_count {
+    // Cross both former fixed limits: 32 assignments and 256 scalar controls.
+    for _ in 0..50.max(initial_count + 1) {
         let slot = state["slots"]
             .as_array()
             .unwrap()
@@ -977,6 +978,8 @@ async fn qualify_created_rig(
             .any(|s| Some(&s["target"]) == targets.last()),
         "last insert was created after exhausting the immutable base slots"
     );
+    assert!(state["models"].as_array().unwrap().len() > 32);
+    assert!(state["controls"].as_array().unwrap().len() > 256);
     // Replacing the first model must not move its replay behind the dependent second insert.
     let result = send(
         client,

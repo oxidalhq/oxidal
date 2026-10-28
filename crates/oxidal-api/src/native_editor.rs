@@ -61,11 +61,14 @@ impl Worker {
             self.input.flush().await.map_err(|e| e.to_string())?;
             let mut reply = vec![];
             (&mut self.output)
-                .take(256 * 1024 + 1)
+                .take((oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES + 1) as u64)
                 .read_until(b'\n', &mut reply)
                 .await
                 .map_err(|e| e.to_string())?;
-            if reply.is_empty() || reply.len() > 256 * 1024 || reply.last() != Some(&b'\n') {
+            if reply.is_empty()
+                || reply.len() > oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES
+                || reply.last() != Some(&b'\n')
+            {
                 return Err("Invalid native response size".into());
             }
             serde_json::from_slice(&reply).map_err(|e| format!("Invalid native response: {e}"))

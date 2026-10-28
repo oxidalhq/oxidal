@@ -329,10 +329,9 @@ juce::var TONE3000Processor::getStageRuntime() {
     output->setProperty("revision",state["revision"]);output->setProperty("stereoEnabled",state["stereoEnabled"]);output->setProperty("audioActive",isAudioActive());
     output->setProperty("stereoInput",state["stereoInput"]);output->setProperty("stereoOutput",state["stereoOutput"]);
     output->setProperty("capabilities",juce::Array<juce::var>{"autoBalance","autoAlign","outputMeasure","linkedPan","exclusiveSolo","blockLiveEdit"});
-    bool truncated=false;
+    bool truncated=false;size_t runtimeBytes=2;
     for(const auto* name:{"chain","chainRight"})if(auto* lane=state[name].getArray())for(const auto& row:*lane) {
         if(row["kind"].toString()=="insert")continue;
-        if(blocks.size()>=32){truncated=true;continue;}
         auto block=object();block->setProperty("lane",juce::String(name)=="chain"?"left":"right");
         for(const auto* key:{"blockId","loaded","modelLoading","loadFailed","inputLevelDbu","outputLevelDbu"})
             if(row.getDynamicObject()->hasProperty(key))block->setProperty(key,row[key]);
@@ -349,7 +348,10 @@ juce::var TONE3000Processor::getStageRuntime() {
                 block->setProperty("slimSizeCount",knownCount?juce::var(breaks.size()+1):juce::var());
             }
         }
-        blocks.add(juce::var(block.get()));
+        // Match the host catalog byte budget without an instance-count cap.
+        const auto bytes=static_cast<size_t>(juce::JSON::toString(juce::var(block.get())).getNumBytesAsUTF8())+1;
+        if(bytes>512*1024-runtimeBytes){truncated=true;continue;}
+        runtimeBytes+=bytes;blocks.add(juce::var(block.get()));
     }
     output->setProperty("blocks",blocks);output->setProperty("truncated",truncated);return juce::var(output.get());
 }

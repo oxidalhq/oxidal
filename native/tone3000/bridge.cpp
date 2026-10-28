@@ -187,13 +187,12 @@ EXPORT int oxidal_t3k_block_controls(void* ptr, char* out, size_t capacity, size
     const auto state = processor.getChainState(-1);
     const auto runtime = processor.getStageRuntime();
     juce::Array<juce::var> controls;
-    int count = 0;
     for (const auto& lane : {"chain", "chainRight"}) {
       const auto rows = state.getProperty(lane, {});
       if (const auto* blocks = rows.getArray()) for (const auto& block : *blocks) {
         if (block.getProperty("kind", {}).toString() != "tone") continue;
         const auto id = block.getProperty("blockId", {}).toString();
-        if (++count > 32 || id.isEmpty() || id.length() > 128)
+        if (id.isEmpty() || id.length() > 128)
           throw std::runtime_error("block catalog bounds");
         const auto params = block.getProperty("params", {});
         const auto title = block.getProperty("tone", {}).getProperty("title", "Tone").toString().substring(0, 128);

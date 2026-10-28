@@ -9,6 +9,25 @@ use serde::{Deserialize, Serialize};
 /// Shared startup/readback/export/recovery frame budget, including its newline.
 /// This bounds serialized control state, not DSP memory or model count.
 pub const PLAYBACK_FRAME_BYTES: usize = 4 * 1024 * 1024;
+/// Each catalog reserves a bounded share of the common transport/recovery budget.
+pub const CATALOG_BYTES: usize = PLAYBACK_FRAME_BYTES / 8;
+pub fn catalog_fits<T: Serialize + ?Sized>(value: &T) -> bool {
+    struct Budget(usize);
+    impl std::io::Write for Budget {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 = self
+                .0
+                .checked_add(bytes.len())
+                .filter(|n| *n <= CATALOG_BYTES)
+                .ok_or_else(|| std::io::Error::other("Catalog byte budget exceeded"))?;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    serde_json::to_writer(Budget(0), value).is_ok()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -184,12 +203,14 @@ pub enum PlaybackEvent {
 }
 pub fn valid_controls(controls: &[LiveControl]) -> bool {
     !controls.is_empty()
-        && controls.len() <= 256
+        && catalog_fits(controls)
         && controls.iter().all(LiveControl::valid)
         && controls
             .iter()
-            .enumerate()
-            .all(|(i, c)| controls[..i].iter().all(|p| p.target != c.target))
+            .map(|c| &c.target)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+            == controls.len()
 }
 
 /// Supervisor-owned startup envelope. Restore confirmed scalar edits before PCM
@@ -229,7 +250,7 @@ pub struct SlotPosition {
 }
 impl SlotPosition {
     pub fn valid(&self) -> bool {
-        self.lane < 2 && self.index < 128
+        self.lane < 2 && self.index <= i32::MAX as u32
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -239,7 +260,7 @@ pub struct NativeSlot {
     pub position: SlotPosition,
 }
 pub fn valid_slots(slots: &[NativeSlot]) -> bool {
-    slots.len() <= 256
+    catalog_fits(slots)
         && slots.iter().enumerate().all(|(i, s)| {
             !s.target.is_empty()
                 && s.target.len() <= 128
@@ -274,7 +295,7 @@ impl ModelAssignment {
     }
 }
 pub fn valid_models(models: &[ModelAssignment]) -> bool {
-    models.len() <= 32
+    catalog_fits(models)
         && models
             .iter()
             .enumerate()
@@ -336,4 +357,49 @@ pub struct EqRequest {
     pub serial: u64,
     pub block_id: String,
     pub eq: EqEdit,
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+    #[test]
+    fn catalogs_use_bytes_instead_of_fixed_instance_counts() {
+        let mut models: Vec<_> = (0..100)
+            .map(|i| ModelAssignment {
+                target: format!("model-{i}"),
+                asset: "a".repeat(64),
+                insertion: None,
+            })
+            .collect();
+        assert!(valid_models(&models));
+        models.push(models[0].clone());
+        assert!(!valid_models(&models));
+        let controls: Vec<_> = (0..300)
+            .map(|i| LiveControl {
+                target: format!("control-{i}"),
+                label: "Gain".into(),
+                display: "0 dB".into(),
+                value: 0.5,
+                toggle: false,
+            })
+            .collect();
+        assert!(valid_controls(&controls));
+        let slots: Vec<_> = (0..300)
+            .map(|i| NativeSlot {
+                target: format!("slot-{i}"),
+                position: SlotPosition { lane: 0, index: i },
+            })
+            .collect();
+        assert!(valid_slots(&slots));
+        assert!(!catalog_fits(&"x".repeat(CATALOG_BYTES)));
+        assert!(!catalog_fits(&"\n".repeat(CATALOG_BYTES / 2)));
+        let oversized: Vec<_> = (0..5000)
+            .map(|i| ModelAssignment {
+                target: format!("model-{i}"),
+                asset: "a".repeat(64),
+                insertion: None,
+            })
+            .collect();
+        assert!(!valid_models(&oversized));
+    }
 }

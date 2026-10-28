@@ -482,6 +482,20 @@ impl Owner {
         .map_err(|_| "Model worker reply timed out".to_owned())?
     }
     async fn model_command(&mut self, operation: ModelOperation) -> Reply {
+        if let ModelOperation::Prepare { assignment } = &operation {
+            let mut prospective = self.state.models.clone();
+            if let Some(previous) = prospective
+                .iter_mut()
+                .find(|m| m.target == assignment.target)
+            {
+                *previous = assignment.clone();
+            } else {
+                prospective.push(assignment.clone());
+            }
+            if !valid_models(&prospective) {
+                return Err("Model assignments exceed the control-state byte budget".into());
+            }
+        }
         let expected_request = match &operation {
             ModelOperation::Prepare { .. } => Some(self.state.revision + 1),
             _ => self.state.model_change.as_ref().map(|p| p.request),

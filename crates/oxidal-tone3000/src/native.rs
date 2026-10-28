@@ -220,13 +220,23 @@ pub enum ProcessingRole {
 /// Single-owner offline processor. !Send/!Sync keeps JUCE calls and destruction on its owner thread.
 /// Multiple handles may coexist on that process owner. Construction and transfer on
 /// another thread are rejected. This is not a real-time-safe or live ALSA interface.
-#[derive(Debug)]
 pub struct Engine {
     ptr: NonNull<c_void>,
     frames: usize,
     rate: f64,
     role: ProcessingRole,
     owner: PhantomData<Rc<()>>,
+    json_buffer: Vec<u8>,
+}
+impl std::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Engine")
+            .field("ptr", &self.ptr)
+            .field("frames", &self.frames)
+            .field("rate", &self.rate)
+            .field("role", &self.role)
+            .finish_non_exhaustive()
+    }
 }
 impl Engine {
     pub fn configuration(&self) -> (f64, usize) {
@@ -259,13 +269,17 @@ impl Engine {
             rate,
             role,
             owner: PhantomData,
+            json_buffer: Vec::new(),
         })
     }
     fn json(
         &mut self,
         call: impl FnOnce(*mut c_void, *mut c_char, usize, *mut usize) -> i32,
     ) -> Result<serde_json::Value> {
-        let mut buffer = vec![0u8; 256 * 1024];
+        // Reuse one bounded scratch allocation; these calls run outside PCM.
+        self.json_buffer
+            .resize(oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES, 0);
+        let buffer = &mut self.json_buffer;
         let mut written = 0;
         checked(call(
             self.ptr.as_ptr(),
@@ -899,6 +913,36 @@ impl Engine {
             .map_err(|_| NativeError("Invalid model metadata".into()))?;
         if metadata.len() > 32768 {
             return Err(NativeError("Model metadata exceeds limit".into()));
+        }
+        // Admission precedes candidate preparation/commit. Reserve worst-case
+        // control labels and native JSON expansion for this additional block.
+        let mut controls = self.live_controls()?;
+        for i in 0..5 {
+            controls.push(oxidal_audio::lifecycle::LiveControl {
+                target: format!("admission:{i}:{}", "x".repeat(160)),
+                label: "x".repeat(256),
+                display: "x".repeat(128),
+                value: 0.5,
+                toggle: false,
+            });
+        }
+        let chain = serde_json::to_vec(&self.chain()?).map_err(|e| NativeError(e.to_string()))?;
+        let eq = self.eq_snapshot()?;
+        let eq_bytes = serde_json::to_vec(&eq)
+            .map_err(|e| NativeError(e.to_string()))?
+            .len();
+        if !oxidal_audio::lifecycle::catalog_fits(&controls)
+            || eq_bytes + 8192 > oxidal_audio::lifecycle::CATALOG_BYTES
+            || chain
+                .len()
+                .saturating_add(metadata.len().saturating_mul(8))
+                .saturating_add(65536)
+                > oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES
+        {
+            return Err(NativeError(
+                "Model exceeds the available control-state byte budget; previous sound retained"
+                    .into(),
+            ));
         }
         let target = string(target)?;
         let path = string(
