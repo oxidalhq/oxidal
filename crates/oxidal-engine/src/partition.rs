@@ -73,36 +73,80 @@ pub(crate) fn prepare(
     Ok(processors)
 }
 fn apply(engine: &mut Engine, recipe: &NativePartition) -> Result<(), String> {
-    if recipe.controls.is_empty() {
-        return Ok(());
-    }
-    let mut controls = engine.live_controls().map_err(|e| e.to_string())?;
-    if controls.len() != recipe.controls.len() {
-        return Err("Incomplete partition control catalog".into());
-    }
-    for c in &mut controls {
-        let value = *recipe
-            .controls
-            .get(&c.target)
-            .ok_or("Unknown partition control")?;
-        if c.toggle && value != 0.0 && value != 1.0 {
-            return Err("Invalid partition toggle".into());
+    if !recipe.controls.is_empty() {
+        let mut controls = engine.live_controls().map_err(|e| e.to_string())?;
+        if controls.len() != recipe.controls.len() {
+            return Err("Incomplete partition control catalog".into());
         }
-        let value = value as f32;
-        if !c.accepts(value) {
-            return Err("Invalid partition control value".into());
+        for c in &mut controls {
+            let value = *recipe
+                .controls
+                .get(&c.target)
+                .ok_or("Unknown partition control")?;
+            if c.toggle && value != 0.0 && value != 1.0 {
+                return Err("Invalid partition toggle".into());
+            }
+            let value = value as f32;
+            if !c.accepts(value) {
+                return Err("Invalid partition control value".into());
+            }
+            c.value = value;
         }
-        c.value = value;
+        engine
+            .apply_live_snapshot(&controls)
+            .map_err(|e| e.to_string())?;
     }
-    engine
-        .apply_live_snapshot(&controls)
-        .map_err(|e| e.to_string())
+    if let Some(eq) = &recipe.eq {
+        // This candidate is isolated. Use immediate owner edits rather than
+        // consuming stage tokens that its later Session replay also owns.
+        let current = engine.eq_snapshot().map_err(|e| e.to_string())?;
+        if current.len() != eq.len()
+            || current
+                .iter()
+                .zip(eq)
+                .any(|(a, b)| a.block_id != b.block_id)
+        {
+            return Err("Partition EQ targets differ".into());
+        }
+        for block in eq {
+            use oxidal_audio::eq::EqEdit;
+            for (index, band) in block.eq.bands.iter().enumerate() {
+                engine
+                    .set_eq(
+                        &block.block_id,
+                        &EqEdit::Band {
+                            index: index as u8,
+                            band: band.clone(),
+                        },
+                    )
+                    .map_err(|e| e.to_string())?;
+            }
+            for edit in [
+                EqEdit::Pre {
+                    value: block.eq.pre,
+                },
+                EqEdit::Enabled {
+                    value: block.eq.enabled,
+                },
+            ] {
+                engine
+                    .set_eq(&block.block_id, &edit)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        if engine.eq_snapshot().map_err(|e| e.to_string())? != *eq {
+            return Err("Partition EQ did not survive derivation".into());
+        }
+    }
+    Ok(())
 }
 pub(crate) fn capture(instance: &mut NativeInstance, engine: &mut Engine) -> Result<(), String> {
     let recipe = instance
         .partition
         .as_mut()
         .ok_or("Missing partition recipe")?;
+    recipe.eq = Some(engine.eq_snapshot().map_err(|e| e.to_string())?);
+    recipe.version = 2;
     recipe.controls = engine
         .live_controls()
         .map_err(|e| e.to_string())?

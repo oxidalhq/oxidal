@@ -407,7 +407,7 @@ BOOX layouts. Physical boot/audio acceptance and opaque plugin state remain open
 
 ## Persistent paired amp/cab derivation
 
-An extracted native instance can carry the version-1 `partition` recipe in the
+An extracted native instance can carry the versioned `partition` recipe in the
 [preset format](presets/format.md#native-processing-roles). Two declared roles share
 one exact source preset; restoration reruns the guarded native partition rather
 than decoding imported opaque instance bytes. The amp omits the final DC blocker,
@@ -450,10 +450,17 @@ alias with an unaffected existing session, isolated Save and fresh rendered reca
 These tests establish offline persistence, not gapless transitions or physical
 real-time performance.
 
-## Whole-native EQ authoring
+## Native EQ authoring
 
-Whole-native graph nodes expose stable inner-block six-band EQ through the shared touch panel. Edits reach the sounding worker immediately with both actor and DSP session/revision checks. Invalid bands, missing targets and stale revisions leave the confirmed session unchanged; ambiguous native readback fails the worker closed. Cancel restores the opening value through the same queue.
+Native graph nodes expose stable inner-block six-band EQ through the shared touch panel. Edits reach the sounding worker immediately with both actor and DSP session/revision checks. Invalid bands, missing targets and stale revisions leave the confirmed session unchanged; ambiguous native readback fails the worker closed. Cancel restores the opening value through the same queue.
 
 Confirmed EQ is part of mixed recovery and explicit boot capture. Legacy records without EQ retain their source preset values. Reconfiguration and isolated export replay EQ only on prepared, non-sounding candidates. Save detects EQ-only changes, verifies fresh native recall, and keeps unchanged native resources byte-identical. The maintained mixed worker/HTTP/browser suites exercise these paths.
 
-Guarded extracted amp/cab recipes still do not expose EQ: their role-specific recipe must retain it before live editing is admitted. This does not add live structural replacement, automatic alignment, gapless switching or physical real-time acceptance.
+Guarded extracted amp/cab stages expose their own EQ through the same panel.
+Save captures a version-2 derivation recipe with exact EQ and scalar state, keeps
+the source preset unchanged, and verifies fresh derivation and audio equivalence.
+Version-1 recipes remain readable. The exact older recovery catalog omitting all
+stage EQ retains the derived defaults; partial omissions are rejected. Repeated
+recovery after a version-2 recall is covered to prevent native stage-token reuse.
+This does not add live structural replacement, automatic alignment, gapless
+switching or physical real-time acceptance.

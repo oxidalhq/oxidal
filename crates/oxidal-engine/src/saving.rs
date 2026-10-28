@@ -200,7 +200,8 @@ pub fn save_revision(
         .any(|n| n.partition.is_some())
     {
         let reopened = Session::new(bundle.clone(), world, rate, frames, BUFFER_BUDGET)?.snapshot();
-        if reopened.controls.len() != confirmed.controls.len()
+        if reopened.eq != confirmed.eq
+            || reopened.controls.len() != confirmed.controls.len()
             || confirmed.controls.iter().any(|c| {
                 !reopened.controls.iter().any(|actual| {
                     actual.target == c.target && (actual.value - c.value).abs() < 1e-5

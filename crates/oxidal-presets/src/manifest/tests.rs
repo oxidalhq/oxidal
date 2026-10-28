@@ -247,6 +247,29 @@ fn partition_peers_bind_source_roles_recipe_and_complete_graph_ownership() {
         *invalid.pointer_mut(path).unwrap() = replacement;
         assert!(parse(&invalid).is_err(), "Accepted {path}");
     }
+    let bands: Vec<_> = (0..6).map(|i| json!({"type": match i {0 => "lowcut", 5 => "highcut", _ => "bell"}, "freqHz":1000.0,"gainDb":0.1,"q":0.7})).collect();
+    let recipe = &mut value["tone3000"]["instances"][0]["partition"];
+    recipe["version"] = json!(2);
+    recipe["eq"] =
+        json!([{"block_id":"sourceAmp","eq":{"enabled":true,"pre":false,"bands":bands}}]);
+    parse(&value).unwrap();
+    for (path, replacement) in [
+        ("/tone3000/instances/0/partition/version", json!(1)),
+        ("/tone3000/instances/0/partition/eq", json!([])),
+        ("/tone3000/instances/0/partition/eq", json!(null)),
+        (
+            "/tone3000/instances/0/partition/eq/0/block_id",
+            json!("sourceCab"),
+        ),
+        (
+            "/tone3000/instances/0/partition/eq/0/eq/bands/1/freqHz",
+            json!(99999),
+        ),
+    ] {
+        let mut invalid = value.clone();
+        *invalid.pointer_mut(path).unwrap() = replacement;
+        assert!(parse(&invalid).is_err(), "Accepted partition EQ {path}");
+    }
     let encoded = parse(&value).unwrap().encode().unwrap();
     assert_eq!(parse(&value).unwrap(), Manifest::parse(&encoded).unwrap());
 }

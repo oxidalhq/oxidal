@@ -33,12 +33,10 @@ impl Session {
         for node in &host.graph.nodes {
             match graph.processor_mut(&node.id) {
                 Some(Processor::Native(p)) => {
-                    if p.processing_role() == oxidal_tone3000::ProcessingRole::WholePreset {
-                        eq.push(NodeEq {
-                            node: node.id.clone(),
-                            blocks: p.eq_snapshot().map_err(|e| e.to_string())?,
-                        });
-                    }
+                    eq.push(NodeEq {
+                        node: node.id.clone(),
+                        blocks: p.eq_snapshot().map_err(|e| e.to_string())?,
+                    });
                     controls.extend(
                         p.live_controls()
                             .map_err(|e| e.to_string())?
@@ -386,9 +384,53 @@ impl Session {
         {
             return Err("Recall catalog differs".into());
         }
-        if let Some(eq) = &recall.eq
-            && (eq.len() != self.state.eq.len()
-                || eq.iter().zip(&self.state.eq).any(|(a, b)| {
+        let mut eq = recall.eq.clone();
+        if let Some(rows) = &mut eq {
+            let whole: Vec<_> = self
+                .state
+                .eq
+                .iter()
+                .filter(|row| {
+                    self.bundle
+                        .manifest()
+                        .oxidal
+                        .as_ref()
+                        .unwrap()
+                        .graph
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == row.node)
+                        .and_then(|node| node.instance.as_ref())
+                        .and_then(|id| {
+                            self.bundle
+                                .manifest()
+                                .tone3000
+                                .instances
+                                .iter()
+                                .find(|i| &i.id == id)
+                        })
+                        .is_some_and(|i| i.partition.is_none())
+                })
+                .collect();
+            // Only the exact previous whole-node catalog may omit all stage EQ.
+            if rows.len() != self.state.eq.len()
+                && rows.len() == whole.len()
+                && rows.iter().zip(&whole).all(|(a, b)| a.node == b.node)
+            {
+                *rows = self
+                    .state
+                    .eq
+                    .iter()
+                    .map(|current| {
+                        rows.iter()
+                            .find(|r| r.node == current.node)
+                            .unwrap_or(current)
+                            .clone()
+                    })
+                    .collect();
+            }
+            if rows.len() != self.state.eq.len()
+                || rows.iter().zip(&self.state.eq).any(|(a, b)| {
                     a.node != b.node
                         || !oxidal_audio::eq::valid_snapshot(&a.blocks)
                         || a.blocks.len() != b.blocks.len()
@@ -396,9 +438,10 @@ impl Session {
                             .iter()
                             .zip(&b.blocks)
                             .any(|(a, b)| a.block_id != b.block_id)
-                }))
-        {
-            return Err("Recall EQ catalog differs".into());
+                })
+            {
+                return Err("Recall EQ catalog differs".into());
+            }
         }
         for value in &recall.values {
             let command = ControlCommand {
@@ -409,7 +452,7 @@ impl Session {
             };
             self.apply(command)?;
         }
-        if let Some(eq) = &recall.eq {
+        if let Some(eq) = &eq {
             for row in eq {
                 let Some(Processor::Native(p)) = self.graph.processor_mut(&row.node) else {
                     return Err("Missing EQ processor".into());

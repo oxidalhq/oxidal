@@ -91,7 +91,12 @@ imported JUCE state: `{version: 1, pair, amp, cab, input, controls}`. `pair` ide
 exactly one amp instance and one cab instance, with the same source preset, profile,
 source block IDs and `left`/`right` input selection. A role without this recipe
 remains an unsupported declaration at runtime. Whole-role instances cannot carry it.
-Version 1 keeps native pitch in the amp; it does not claim external pitch support.
+Both recipe versions keep native pitch in the amp; neither claims external pitch support.
+Version 1 has no EQ override. Version 2 requires `eq`, containing exactly one
+validated six-band block snapshot matching the role's source block ID. An edited
+stage is saved as version 2 with its complete scalar and EQ catalog; its peer may
+remain version 1. Unknown versions, missing EQ, wrong targets and invalid bands
+fail before admission. Older readers reject version 2 rather than discard EQ.
 
 The loader reopens the exact verified source `.t3kpreset` and reruns the existing
 classification, embedded-asset, mono-routing and processing guards on every recall.

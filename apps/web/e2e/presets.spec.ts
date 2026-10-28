@@ -2122,12 +2122,10 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   expect(
     await eq.evaluate((element) => element.scrollWidth <= element.clientWidth),
   ).toBe(true);
-  await test
-    .info()
-    .attach('mixed-eq-controls', {
-      body: await eq.screenshot(),
-      contentType: 'image/png',
-    });
+  await test.info().attach('mixed-eq-controls', {
+    body: await eq.screenshot(),
+    contentType: 'image/png',
+  });
   // Settings must follow this sounding owner, preserving edits before named Save.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
@@ -2715,7 +2713,25 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     await expect.poll(value).toBeGreaterThan(selected.value);
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     changes.push({ node, parameter, value: await value() });
+    await rig
+      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
+      .click();
+    dialog = page.getByRole('dialog');
+    const beforeEq = (await state()).control.eq.find(
+      (e: { node: string }) => e.node === node,
+    );
+    await dialog.getByRole('slider').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect
+      .poll(async () =>
+        (await state()).control.eq.find(
+          (e: { node: string }) => e.node === node,
+        ),
+      )
+      .not.toEqual(beforeEq);
+    await dialog.getByRole('button', { name: 'Done', exact: true }).click();
   }
+  const savedEq = (await state()).control.eq;
   const saved = await saveMixedRig(page, request, rig);
   const savedDoc = await (
     await request.get(`/api/v1/presets/rigs/${saved}`)
@@ -2735,6 +2751,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   await playSavedRig(page, name);
   await expect.poll(async () => (await state()).phase).toBe('running');
   expect((await state()).configured.revision).toBe(saved);
+  expect((await state()).control.eq).toEqual(savedEq);
   for (const change of changes)
     expect(
       (await state()).control.controls.find(

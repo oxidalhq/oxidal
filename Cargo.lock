@@ -932,6 +932,7 @@ dependencies = [
 name = "oxidal-presets"
 version = "0.1.0"
 dependencies = [
+ "oxidal-audio",
  "oxidal-graph",
  "oxidal-lv2",
  "schemars",

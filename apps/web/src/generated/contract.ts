@@ -1229,6 +1229,7 @@ export interface PortableNativePartition {
   controls: {
     [k: string]: number;
   };
+  eq?: BlockEqState[] | null;
   input: PortablePartitionInput;
   pair: string;
   version: number;

@@ -96,8 +96,19 @@ impl Manifest {
                     text(value, limit) && value.bytes().all(|b| b.is_ascii_graphic())
                 };
                 require(
-                    partition.version == 1
-                        && id(&partition.pair)
+                    match (partition.version, &partition.eq) {
+                        (1, None) => true,
+                        (2, Some(eq)) => {
+                            eq.len() == 1
+                                && eq[0].valid()
+                                && match native.role() {
+                                    ProcessingRole::Amp => eq[0].block_id == partition.amp,
+                                    ProcessingRole::Cab => eq[0].block_id == partition.cab,
+                                    ProcessingRole::Whole => false,
+                                }
+                        }
+                        _ => false,
+                    } && id(&partition.pair)
                         && target(&partition.amp, 128)
                         && target(&partition.cab, 128)
                         && partition.controls.iter().all(|(key, value)| {

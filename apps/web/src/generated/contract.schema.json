@@ -3877,6 +3877,15 @@
             "format": "double"
           }
         },
+        "eq": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/BlockEqState"
+          }
+        },
         "input": {
           "$ref": "#/$defs/PortablePartitionInput"
         },

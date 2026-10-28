@@ -152,6 +152,27 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
     assert!(change(&mut graph, "amp", "outputLevel", 0.7).is_err());
     assert!(change(&mut graph, "cab", "inputLevel", 0.7).is_err());
     assert!(graph.healthy());
+    for (node, reference) in [("amp", &mut reference_amp), ("cab", &mut reference_cab)] {
+        let state = graph.snapshot();
+        let block = &state.eq.iter().find(|e| e.node == node).unwrap().blocks[0];
+        let block_id = block.block_id.clone();
+        let mut band = block.eq.bands[1].clone();
+        band.gain_db = if node == "amp" { 2.3 } else { -1.7 };
+        for edit in [
+            oxidal_audio::eq::EqEdit::Enabled { value: true },
+            oxidal_audio::eq::EqEdit::Band { index: 1, band },
+        ] {
+            let state = graph.snapshot();
+            graph.apply_eq(EqCommand {
+                session: state.session,
+                expected_revision: state.revision,
+                node: node.into(),
+                block_id: block_id.clone(),
+                edit: edit.clone(),
+            })?;
+            reference.set_eq(&block_id, &edit)?;
+        }
+    }
     let store = BundleStore::new(root.join("partition-rigs"));
     let revision = store.save(&candidate)?;
     let expected = graph.snapshot();
@@ -172,6 +193,28 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
     assert_eq!(restored.resource("source").unwrap(), bytes);
     assert_eq!(restored.manifest().resources.len(), 1);
     let mut reopened = Session::new(restored.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
+    assert_eq!(reopened.snapshot().eq, expected.eq);
+    // A second edited recovery starts from a v2 recipe and must not reuse tokens.
+    let baseline = reopened.snapshot().recall();
+    let mut changed = baseline.clone();
+    changed.eq.as_mut().unwrap()[0].blocks[0].eq.pre =
+        !changed.eq.as_ref().unwrap()[0].blocks[0].eq.pre;
+    reopened.restore(&changed)?;
+    assert_eq!(reopened.snapshot().eq, *changed.eq.as_ref().unwrap());
+    reopened.restore(&baseline)?;
+    assert_eq!(reopened.snapshot().eq, expected.eq);
+    let mut legacy = reopened.snapshot().recall();
+    legacy.eq = Some(vec![]);
+    reopened.restore(&legacy)?;
+    assert_eq!(reopened.snapshot().eq, expected.eq);
+    let mut partial = baseline;
+    partial.eq.as_mut().unwrap().pop();
+    assert!(reopened.restore(&partial).is_err());
+    for instance in &restored.manifest().tone3000.instances {
+        let recipe = instance.partition.as_ref().unwrap();
+        assert_eq!(recipe.version, 2);
+        assert_eq!(recipe.eq.as_ref().unwrap().len(), 1);
+    }
     let renamed = save_revision(
         &store,
         world,

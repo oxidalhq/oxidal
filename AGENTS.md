@@ -55,6 +55,6 @@ Native playback now exposes per-block EQ with confirmed immediate edits, isolate
 Save verification and exact state retained through settings/restart/recovery/boot.
 Its compact web panel uses the existing touch adjustment queue. See
 docs/native-tone3000.md for owner, float-readback and physical timing boundaries;
-extracted-role EQ authoring and full native parity remain open.
+full native parity remains open.
 
-Mixed whole-native nodes now share the confirmed live EQ panel, recovery/boot capture and isolated verified export. EQ-only edits trigger native resource replacement; untouched resources remain exact. Extracted-role EQ remains withheld pending recipe support. See docs/mixed-engine.md.
+Mixed whole-native nodes now share the confirmed live EQ panel, recovery/boot capture and isolated verified export. EQ-only edits trigger native resource replacement; untouched resources remain exact. Extracted amp/cab EQ is retained by version-2 derivation recipes with exact source bytes and fresh-recall verification. See docs/mixed-engine.md.

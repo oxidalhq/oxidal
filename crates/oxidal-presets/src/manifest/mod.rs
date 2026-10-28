@@ -152,6 +152,12 @@ pub struct NativePartition {
     pub cab: String,
     pub input: PartitionInput,
     pub controls: BTreeMap<String, f64>,
+    #[serde(
+        default,
+        deserialize_with = "optional",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub eq: Option<Vec<oxidal_audio::eq::BlockEqState>>,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

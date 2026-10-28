@@ -121,3 +121,41 @@ test('Rust and JSON Schema share manifest conformance vectors', () => {
     );
   }
 });
+
+test('partition EQ is versioned and bounds every band', () => {
+  const fixture = mixed();
+  const partition = {
+    version: 2,
+    pair: 'pair',
+    amp: 'amp',
+    cab: 'cab',
+    input: 'left',
+    controls: {},
+    eq: [
+      {
+        block_id: 'amp',
+        eq: {
+          enabled: true,
+          pre: false,
+          bands: Array.from({ length: 6 }, (_, i) => ({
+            type: i === 0 ? 'lowcut' : i === 5 ? 'highcut' : 'bell',
+            freqHz: 1000,
+            gainDb: 0.1,
+            q: 0.7,
+          })),
+        },
+      },
+    ],
+  };
+  fixture.tone3000.instances[0].partition = partition;
+  assert.equal(validate(fixture), true, JSON.stringify(validate.errors));
+  partition.version = 1;
+  assert.equal(validate(fixture), false);
+  partition.version = 2;
+  partition.eq[0].eq.bands[1].freqHz = 99999;
+  assert.equal(validate(fixture), false);
+  delete partition.eq;
+  assert.equal(validate(fixture), false);
+  partition.version = 1;
+  assert.equal(validate(fixture), true);
+});
