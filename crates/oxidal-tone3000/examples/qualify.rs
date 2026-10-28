@@ -281,8 +281,80 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+// Use deterministic deck settings to distinguish actual stereo DSP from descriptor readback.
+fn qualify_spread() -> Result<(), Box<dyn Error>> {
+    fn render(engine: &mut Engine) -> Result<Vec<[f32; 2]>, Box<dyn Error>> {
+        engine.prepare_stream()?;
+        settle(engine)?;
+        let mut result = Vec::new();
+        for chunk in 0..100 {
+            let mut left: Vec<f32> = (0..128)
+                .map(|i| {
+                    let t = (chunk * 128 + i) as f32;
+                    (t * 0.071).sin() * 0.05 + (t * 0.193).sin() * 0.02
+                })
+                .collect();
+            let mut right = left.clone();
+            engine.process(&mut left, &mut right)?;
+            result.extend(left.into_iter().zip(right).map(|(l, r)| [l, r]));
+        }
+        Ok(result)
+    }
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.set_live_control("gateEnabled", 0.0)?;
+    engine.set_live_control("toneEqEnabled", 0.0)?;
+    engine.set_live_control("spreadEnabled", 0.0)?;
+    let dry = render(&mut engine)?;
+    assert!(dry.iter().all(|s| (s[0] - s[1]).abs() < 1e-6));
+    engine.set_live_control("spreadWobbleEnabled", 0.0)?;
+    engine.set_live_control("spreadOffset", 0.75)?;
+    engine.set_live_control("spreadEnabled", 1.0)?;
+    let wet = render(&mut engine)?;
+    let difference: f32 = wet.iter().map(|s| (s[0] - s[1]).abs()).sum();
+    assert!(difference > 1.0, "Spread must change actual stereo PCM");
+    let delay = engine.latency_samples()?;
+    let preset = engine.save_preset("Stereo image qualification")?;
+    let expected = engine.live_controls()?;
+    let mut restored = Engine::new(48000.0, 128)?;
+    restored.load_preset(&preset)?;
+    restored.wait_ready()?;
+    for c in expected
+        .iter()
+        .filter(|c| c.target.starts_with("spread") || c.target == "outputBalance")
+    {
+        let actual = restored
+            .live_controls()?
+            .into_iter()
+            .find(|a| a.target == c.target)
+            .unwrap();
+        assert_eq!(c.value, actual.value);
+        assert_eq!(c.display, actual.display);
+    }
+    let recalled = render(&mut restored)?;
+    let error = wet
+        .iter()
+        .zip(&recalled)
+        .flat_map(|(a, b)| [(a[0] - b[0]).abs(), (a[1] - b[1]).abs()])
+        .fold(0.0_f32, f32::max);
+    assert!(error < 1e-5, "Spread saved PCM differs: {error}");
+    assert_eq!(restored.latency_samples()?, delay);
+    restored.set_live_control("outputBalance", 0.75)?;
+    let balanced = render(&mut restored)?;
+    let energy = |frames: &[[f32; 2]], channel: usize| {
+        frames.iter().map(|s| s[channel] * s[channel]).sum::<f32>()
+    };
+    assert!(energy(&balanced, 0) < energy(&recalled, 0));
+    assert!(energy(&balanced, 1) > energy(&recalled, 1));
+    assert_eq!(restored.latency_samples()?, delay);
+    eprintln!(
+        "qualify: stereo spread PCM, balance direction, native units and saved recall passed"
+    );
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     qualify_latency()?;
+    qualify_spread()?;
     let expected: Value =
         serde_json::from_str(include_str!("../../../native/tone3000/parameters.json"))?;
     let mut engine = Engine::new(48000.0, 128)?;
@@ -468,6 +540,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     engine.set_live_control("outputLevel", 0.27)?;
     let saved_controls = engine.live_controls()?;
     let changed_state = engine.capture()?;
+    let legacy: Vec<_> = saved_controls
+        .iter()
+        .filter(|c| !c.target.starts_with("spread") && c.target != "outputBalance")
+        .cloned()
+        .collect();
+    engine.apply_live_snapshot(&legacy)?;
+    assert_eq!(
+        engine.capture()?,
+        changed_state,
+        "legacy recovery retains source image state"
+    );
+    let mut partial_deck = saved_controls.clone();
+    partial_deck.retain(|c| c.target != "spreadEnabled");
+    assert!(engine.apply_live_snapshot(&partial_deck).is_err());
+    assert_eq!(engine.capture()?, changed_state);
     let mut incomplete = saved_controls.clone();
     incomplete.pop();
     assert!(engine.apply_live_snapshot(&incomplete).is_err());
@@ -1289,7 +1376,7 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
             .ends_with(" ms")
     );
     let editable: Vec<_> = initial.parameters.iter().filter(|p| p.writable).collect();
-    assert_eq!(editable.len(), 14);
+    assert_eq!(editable.len(), 22);
     assert_eq!(
         initial.parameters.len(),
         43,
@@ -1534,7 +1621,7 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
     assert!(!reloaded.can_undo && !reloaded.can_redo);
     assert!(!reloaded.block_controls.is_empty());
     assert_eq!(store.original(&original.sha256)?, bytes);
-    eprintln!("qualify: 14 descriptor-driven globals preview/cancel/commit/save/reopen passed");
+    eprintln!("qualify: 22 descriptor-driven globals preview/cancel/commit/save/reopen passed");
     Ok(())
 }
 

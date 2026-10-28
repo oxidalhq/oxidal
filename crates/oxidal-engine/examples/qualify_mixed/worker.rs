@@ -235,6 +235,24 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     };
     let mut session = Session::new(bundle.clone(), world, 48000.0, 128, BUFFER_BUDGET)?;
     assert!(!session.snapshot().modified);
+    let current = session.snapshot();
+    let mut legacy = current.recall();
+    legacy.values.retain(|v| {
+        !matches!(&v.target, Target::Native { parameter, .. }
+        if parameter.starts_with("spread") || parameter == "outputBalance")
+    });
+    assert!(legacy.values.len() < current.controls.len());
+    session.restore(&legacy)?;
+    compare(&current, &session.snapshot());
+    let mut incomplete = current.recall();
+    incomplete.values.retain(|v| {
+        !matches!(&v.target, Target::Native { parameter, .. }
+        if parameter == "spreadEnabled")
+    });
+    let before = session.snapshot();
+    assert!(session.restore(&incomplete).is_err());
+    assert_eq!(session.snapshot().revision, before.revision);
+    compare(&before, &session.snapshot());
     change(&mut session, bypass.clone(), 1.0)?;
     assert!(session.snapshot().modified);
     change(&mut session, bypass.clone(), 0.0)?;

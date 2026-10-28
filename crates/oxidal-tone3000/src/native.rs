@@ -780,8 +780,13 @@ impl Engine {
         controls: &[oxidal_audio::lifecycle::LiveControl],
     ) -> Result<()> {
         let actual = self.live_controls()?;
+        let missing: Vec<_> = actual
+            .iter()
+            .filter(|a| !controls.iter().any(|c| c.target == a.target))
+            .map(|a| a.target.as_str())
+            .collect();
         if !oxidal_audio::lifecycle::valid_controls(controls)
-            || actual.len() != controls.len()
+            || !crate::protocol::legacy_image_gap(&missing)
             || controls.iter().any(|c| {
                 !actual
                     .iter()
@@ -950,6 +955,14 @@ pub(crate) fn parameter_label(id: &str) -> &str {
     match id {
         "inputLevel" => "Input level",
         "outputLevel" => "Output level",
+        "outputBalance" => "Stereo balance",
+        "spreadEnabled" => "Spread",
+        "spreadOffset" => "Spread offset",
+        "spreadWobble" => "Wobble depth",
+        "spreadWobbleEnabled" => "Wobble",
+        "spreadCrossover" => "Crossover frequency",
+        "spreadCrossoverEnabled" => "Low-band protection",
+        "spreadDiffuseEnabled" => "Diffusion",
         "toneBass" => "Bass",
         "toneMid" => "Middle",
         "toneTreble" => "Treble",
@@ -975,6 +988,17 @@ pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
     }
     match p.id.as_str() {
         "inputLevel" | "outputLevel" => format!("{:.1} dB", (p.normalized - 0.5) * 48.0),
+        "outputBalance" => format!("{:.1} dB", (p.normalized - 0.5) * 24.0),
+        "spreadOffset" => {
+            let ms = (p.normalized - 0.5) * 48.0;
+            if ms.abs() < 0.05 {
+                "0 ms".into()
+            } else {
+                format!("{:.1} ms {}", ms.abs(), if ms < 0.0 { "L" } else { "R" })
+            }
+        }
+        "spreadWobble" => format!("{:.0}%", p.normalized * 100.0),
+        "spreadCrossover" => format!("{:.0} Hz", 32.5 * 16.0_f64.powf(p.normalized)),
         "gateThreshold" | "gateRange" => format!("{:.1} dB", p.value),
         "gateRelease" | "gateHold" => format!("{:.1} ms", p.value),
         "toneBass" | "toneMid" | "toneTreble" => format!("{:.1}", p.value),

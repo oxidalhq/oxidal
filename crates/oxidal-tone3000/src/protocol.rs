@@ -141,6 +141,14 @@ pub fn live_writable(id: &str) -> bool {
             | "gateRelease"
             | "gateHold"
             | "gateRange"
+            | "outputBalance"
+            | "spreadEnabled"
+            | "spreadOffset"
+            | "spreadWobble"
+            | "spreadWobbleEnabled"
+            | "spreadCrossover"
+            | "spreadCrossoverEnabled"
+            | "spreadDiffuseEnabled"
     )
 }
 
@@ -308,5 +316,46 @@ mod stage_tests {
         let edit: BlockEdit = serde_json::from_value(invalid).unwrap();
         assert!(StageAction::BlockEdit { edit }.encode().is_err());
         assert_eq!(StageAction::Cancel.encode().unwrap(), (4, vec![]));
+    }
+}
+
+/// Only the complete additive stereo deck may be absent in pre-deck recovery records.
+/// Source-preset values remain authoritative for those newly exposed controls.
+pub fn legacy_image_gap(missing: &[&str]) -> bool {
+    const ADDED: [&str; 8] = [
+        "outputBalance",
+        "spreadEnabled",
+        "spreadOffset",
+        "spreadWobble",
+        "spreadWobbleEnabled",
+        "spreadCrossover",
+        "spreadCrossoverEnabled",
+        "spreadDiffuseEnabled",
+    ];
+    missing.is_empty()
+        || (missing.len() == ADDED.len() && ADDED.iter().all(|id| missing.contains(id)))
+}
+
+#[cfg(test)]
+mod image_catalog_tests {
+    #[test]
+    fn only_a_complete_legacy_deck_gap_is_accepted() {
+        use super::legacy_image_gap;
+        let all = [
+            "outputBalance",
+            "spreadEnabled",
+            "spreadOffset",
+            "spreadWobble",
+            "spreadWobbleEnabled",
+            "spreadCrossover",
+            "spreadCrossoverEnabled",
+            "spreadDiffuseEnabled",
+        ];
+        assert!(legacy_image_gap(&[]));
+        assert!(legacy_image_gap(&all));
+        assert!(!legacy_image_gap(&all[..7]));
+        let mut unknown = all;
+        unknown[0] = "outputLevel";
+        assert!(!legacy_image_gap(&unknown));
     }
 }

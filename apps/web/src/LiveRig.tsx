@@ -37,6 +37,7 @@ export function LiveRig({
     format?: 'nam' | 'ir';
   } | null>(null);
   const [target, setTarget] = useState('outputLevel');
+  const [imageControls, setImageControls] = useState(false);
   const [draft, setDraft] = useState<{
     target: string;
     value: number;
@@ -463,16 +464,50 @@ export function LiveRig({
       )}
       <div className="section-heading">
         <h3>Controls</h3>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setTarget('outputLevel');
-            setDraft(null);
-          }}
-        >
-          Global
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant={
+              !selectedTarget.startsWith('block:') && !imageControls
+                ? 'secondary'
+                : 'ghost'
+            }
+            aria-pressed={
+              !selectedTarget.startsWith('block:') && !imageControls
+            }
+            onClick={() => {
+              setTarget('outputLevel');
+              setImageControls(false);
+              setDraft(null);
+            }}
+          >
+            Global
+          </Button>
+          {state.controls.some((c) => c.target === 'spreadEnabled') && (
+            <Button
+              variant={
+                !selectedTarget.startsWith('block:') && imageControls
+                  ? 'secondary'
+                  : 'ghost'
+              }
+              aria-pressed={
+                !selectedTarget.startsWith('block:') && imageControls
+              }
+              onClick={() => {
+                setTarget('spreadEnabled');
+                setImageControls(true);
+                setDraft(null);
+              }}
+            >
+              Stereo
+            </Button>
+          )}
+        </div>
       </div>
+      {imageControls && !selectedTarget.startsWith('block:') && (
+        <p className="text-sm text-muted-foreground">
+          Spread widens a mono chain into stereo.
+        </p>
+      )}
       <div className="live-parameter-grid" aria-label="Sounding controls">
         {state.controls
           .filter(
@@ -485,7 +520,10 @@ export function LiveRig({
                       selectedTarget.lastIndexOf(':') + 1,
                     ),
                   )
-                : !item.target.startsWith('block:')),
+                : !item.target.startsWith('block:') &&
+                  imageControls ===
+                    (item.target.startsWith('spread') ||
+                      item.target === 'outputBalance')),
           )
           .map((item) => (
             <button

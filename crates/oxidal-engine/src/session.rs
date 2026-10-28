@@ -290,10 +290,7 @@ impl Session {
     }
     /// Startup/export only. Prevalidate the entire catalog before mutation.
     pub fn restore(&mut self, recall: &Recall) -> Result<(), String> {
-        if self.failed
-            || recall.source_revision != self.state.source_revision
-            || recall.values.len() != self.state.controls.len()
-        {
+        if self.failed || recall.source_revision != self.state.source_revision {
             return Err("Recall revision or catalog differs".into());
         }
         let mut seen = BTreeSet::new();
@@ -307,6 +304,23 @@ impl Session {
             {
                 return Err("Invalid recall control".into());
             }
+        }
+        // Additive deck migration: each native node must have either the full
+        // current catalog or exactly the eight newly exposed image controls absent.
+        let mut missing = std::collections::BTreeMap::<&str, Vec<&str>>::new();
+        for control in &self.state.controls {
+            if !seen.contains(&control.target) {
+                let Target::Native { node, parameter } = &control.target else {
+                    return Err("Recall catalog differs".into());
+                };
+                missing.entry(node).or_default().push(parameter);
+            }
+        }
+        if missing
+            .values()
+            .any(|ids| !oxidal_tone3000::protocol::legacy_image_gap(ids))
+        {
+            return Err("Recall catalog differs".into());
         }
         for value in &recall.values {
             let command = ControlCommand {

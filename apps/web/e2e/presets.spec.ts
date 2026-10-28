@@ -1078,6 +1078,32 @@ test('playback lifecycle keeps native authoring available after stop and restart
         exact: true,
       }),
     ).toBeEnabled();
+    // Stereo deck is contextual, but edits still reach the sounding worker.
+    await sounding.getByRole('button', { name: 'Stereo', exact: true }).click();
+    const spread = sounding.getByRole('button', {
+      name: 'Adjust sounding Spread',
+      exact: true,
+    });
+    await expect(spread).toHaveAttribute('aria-pressed', 'false');
+    await spread.click();
+    await expect(spread).toHaveAttribute('aria-pressed', 'true');
+    const crossover = sounding.getByRole('button', {
+      name: 'Adjust sounding Crossover frequency',
+      exact: true,
+    });
+    await expect(crossover).toContainText('130 Hz');
+    await crossover.click();
+    await page
+      .getByRole('slider', { name: 'Adjust sounding value', exact: true })
+      .press('ArrowRight');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(crossover).not.toContainText('130 Hz');
+    await test.info().attach('live-stereo-controls', {
+      body: await sounding.screenshot(),
+      contentType: 'image/png',
+    });
+    await sounding.getByRole('button', { name: 'Global', exact: true }).click();
+    await expect(spread).toHaveCount(0);
     // Only provider transport is a fixture. Selection, verified local asset, native
     // worker preparation, live readback and Save use the real daemon/processes.
     const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
