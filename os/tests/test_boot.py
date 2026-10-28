@@ -31,6 +31,11 @@ try:
     else:
         raise AssertionError('Daemon/native editor not ready after real systemd boot')
     assert health['native_editor'] and 'session' in native
+    assert health['midi_transport'] == 'alsa-raw-midi-scenes'
+    midi = get('/api/v1/midi/devices')
+    assert midi['available'] and isinstance(midi['inputs'], list)
+    assert all(isinstance(port['id'], str) and isinstance(port['name'], str) for port in midi['inputs'])
+
     for service in ('oxidald', 'nginx', 'NetworkManager', 'avahi-daemon', 'oxidal-device', 'oxidal-debug', 'oxidal-terminal', 'oxidal-admin-terminal'):
         subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
     pid = subprocess.check_output(['systemctl', 'show', '-p', 'MainPID', '--value', 'oxidald'], text=True).strip()
