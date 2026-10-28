@@ -1,5 +1,11 @@
 import { setDisplayMode } from './display';
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import {
+  test,
+  expect,
+  type Locator,
+  type Page,
+  type APIRequestContext,
+} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +36,40 @@ async function playSavedRig(page: Page, name: string) {
       .toBeGreaterThan(before);
   }
   await play.click();
+}
+
+/** Save completion belongs to this working session and acknowledged request. */
+async function saveMixedRig(
+  page: Page,
+  request: APIRequestContext,
+  rig: Locator,
+) {
+  const current = await (await request.get('/api/v1/rig-audio')).json();
+  const acknowledged = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/rig-audio') &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON()?.action?.kind === 'save',
+  );
+  await rig.getByRole('button', { name: 'Save', exact: true }).click();
+  const response = await acknowledged;
+  expect(response.ok()).toBe(true);
+  const accepted = (await response.json()).save;
+  expect(accepted.source_session).toBe(current.control.session);
+  let revision = '';
+  await expect
+    .poll(async () => {
+      const state = await (await request.get('/api/v1/rig-audio')).json();
+      const save = state.save;
+      revision =
+        save?.source_session === current.control.session &&
+        save?.source_control_revision === accepted.source_control_revision
+          ? (save.saved_revision ?? '')
+          : '';
+      return revision;
+    })
+    .not.toBe('');
+  return revision;
 }
 
 test('rig controls follow the actual session without example effects', async ({
@@ -2298,11 +2338,7 @@ test('mixed rig authoring composes native and LV2 effects without saving an audi
   await expect(
     rig.getByRole('button', { name: `1 · ${tone.name}`, exact: true }),
   ).toBeVisible();
-  await rig.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect
-    .poll(async () => (await state()).save?.saved_revision)
-    .toBeTruthy();
-  const saved = (await state()).save.saved_revision;
+  const saved = await saveMixedRig(page, request, rig);
   const savedDoc = await (
     await request.get(`/api/v1/presets/rigs/${saved}`)
   ).json();
@@ -2561,11 +2597,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     changes.push({ node, parameter, value: await value() });
   }
-  await rig.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect
-    .poll(async () => (await state()).save?.saved_revision)
-    .toBeTruthy();
-  const saved = (await state()).save.saved_revision;
+  const saved = await saveMixedRig(page, request, rig);
   const savedDoc = await (
     await request.get(`/api/v1/presets/rigs/${saved}`)
   ).json();
