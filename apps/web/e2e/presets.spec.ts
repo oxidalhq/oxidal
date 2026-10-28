@@ -2786,6 +2786,7 @@ for (const layout of ['serial', 'scenes'] as const) {
           rig.getByLabel('Branch Clean behavior', { exact: true }),
         ).toHaveValue('gate');
 
+        await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({
           path: info.outputPath(`scene-midi-${viewport.width}.png`),
           fullPage: true,
@@ -2814,6 +2815,7 @@ for (const layout of ['serial', 'scenes'] as const) {
             () => document.documentElement.scrollWidth <= innerWidth,
           ),
         ).toBe(true);
+        await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({
           path: info.outputPath(`scenes-${viewport.width}.png`),
           fullPage: true,

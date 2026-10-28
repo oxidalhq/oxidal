@@ -55,7 +55,7 @@ export function SceneMidi({
   const status = state.control?.midi;
   return (
     <details
-      className="rounded-md border border-border p-3"
+      className="w-full max-w-3xl rounded-md border border-border p-3"
       onToggle={(event) => {
         if (event.currentTarget.open) open();
       }}
@@ -282,8 +282,8 @@ export function SceneMidi({
                             })
                           }
                         >
-                          <option value="toggle">Toggle on press</option>
-                          <option value="gate">Follow CC on/off</option>
+                          <option value="toggle">Toggle</option>
+                          <option value="gate">CC on/off</option>
                         </select>
                       </label>
                     </div>
