@@ -73,3 +73,11 @@ replacement; Save rebakes an isolated guarded source pair and retains exact orig
 provenance plus local scalar/EQ recipes. Isolated replay resets histories before
 PCM. The maintained suites exercise this path; physical no-dropout timing and full
 authoring remain open. See docs/mixed-engine.md.
+
+Mixed rigs now support required portable scene definitions and atomic sample-ramped
+selection of preloaded branch mixes, retaining shared downstream effect histories.
+The simple composer generates a stereo selector for whole saved native tones plus
+shared scalar LV2 effects. Existing Save/recovery gains retain selection. Maintained
+DSP, native worker and browser tests cover the defined envelope; physical MIDI,
+branch CPU suspension, whole-preset dynamic gapless and physical deadlines remain
+unqualified. See docs/mixed-engine.md.

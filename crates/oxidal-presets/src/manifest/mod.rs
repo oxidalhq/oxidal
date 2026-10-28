@@ -1,6 +1,8 @@
 //! Portable document declarations. Parsing does not authorize a backend, execute a
 //! plugin, resolve resource files, or change the playing rig.
 //! @see docs/presets/format.md
+mod scenes;
+pub use scenes::{SCENES_EXTENSION, Scene, SceneGain, Scenes};
 mod strict;
 #[cfg(test)]
 mod tests;
@@ -81,7 +83,9 @@ impl Manifest {
     /// Recheck edited declarations before serialization. No backend is admitted.
     pub fn validate(&self) -> Result<()> {
         self.shape()?;
-        self.semantics()
+        self.semantics()?;
+        self.scenes()?;
+        Ok(())
     }
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
@@ -92,10 +96,14 @@ impl Manifest {
         }
         Ok(bytes)
     }
-    /// Format 1 currently implements no required extension. Unknown optional
-    /// metadata is preserved, never treated as a sonic capability.
+    /// Only explicitly implemented required extensions are admitted. Unknown
+    /// optional metadata is preserved, never treated as a sonic capability.
     pub fn check_required_extensions(&self) -> Result<()> {
-        if !self.required_extensions.is_empty() {
+        if self
+            .required_extensions
+            .iter()
+            .any(|key| key != SCENES_EXTENSION)
+        {
             return Err(Error::Invalid("Unsupported required preset extension"));
         }
         Ok(())

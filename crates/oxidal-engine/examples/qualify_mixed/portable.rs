@@ -206,6 +206,7 @@ pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dy
         graph.buffer_bytes()
     );
     super::worker::qualify(world, &bundle, root)?;
+    qualify_scenes(world, &current, root)?;
     Ok(())
 }
 
@@ -496,6 +497,104 @@ fn qualify_latency_at(world: &World, original: &[u8], rate: f64) -> Result<(), B
     assert_eq!(r, [0.0; 128]);
     println!(
         "mixed latency: unequal native/LV2 path alignment, live bypass delay, budget rejection and changed-latency fail-closed passed; latency={latency}; max_error={worst}"
+    );
+    Ok(())
+}
+
+pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), Box<dyn Error>> {
+    use oxidal_engine::{
+        Session,
+        protocol::{ControlCommand, SceneCommand, Target},
+    };
+    let mut value = declaration(current)?;
+    value["name"] = json!("Parallel NAM scenes");
+    let mut second = value["tone3000"]["instances"][0].clone();
+    second["id"] = json!("native2");
+    value["tone3000"]["instances"]
+        .as_array_mut()
+        .unwrap()
+        .push(second);
+    let mut second = node("tone2", "tone3000", 2, 2);
+    second["instance"] = json!("native2");
+    second["bypassed"] = json!(false);
+    value["oxidal"]["graph"]["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .push(second);
+    let edges = value["oxidal"]["graph"]["edges"].as_array_mut().unwrap();
+    edges.retain(|e| e["from"]["node"] != "in");
+    for e in edges.iter_mut() {
+        if e["from"]["node"] == "tone" {
+            e["from"] =
+                json!({"node":if e["from"]["port"] == 0 {"scene_l"} else {"scene_r"},"port":0});
+        }
+    }
+    for (port, side) in [(0, "l"), (1, "r")] {
+        let split = format!("input_{side}");
+        let merge = format!("scene_{side}");
+        let nodes = value["oxidal"]["graph"]["nodes"].as_array_mut().unwrap();
+        nodes.push(node(&split, "split", 1, 2));
+        let mut n = node(&merge, "merge", 2, 1);
+        n["inputGains"] = json!([1.0, 0.0]);
+        nodes.push(n);
+        value["oxidal"]["graph"]["edges"]
+            .as_array_mut()
+            .unwrap()
+            .extend([
+                edge("in", port, &split, 0),
+                edge(&split, 0, "tone", port),
+                edge(&split, 1, "tone2", port),
+                edge("tone", port, &merge, 0),
+                edge("tone2", port, &merge, 1),
+            ]);
+    }
+    value["requiredExtensions"] = json!(["urn:oxidal:scenes:1"]);
+    value["extensions"]["urn:oxidal:scenes:1"] = json!({"fade_ms":10,"scenes": [
+        {"id":"clean","name":"Clean","gains":[{"node":"scene_l","port":0,"value":1},{"node":"scene_l","port":1,"value":0},{"node":"scene_r","port":0,"value":1},{"node":"scene_r","port":1,"value":0}]},
+        {"id":"lead","name":"Lead","gains":[{"node":"scene_l","port":0,"value":0},{"node":"scene_l","port":1,"value":1},{"node":"scene_r","port":0,"value":0},{"node":"scene_r","port":1,"value":1}]}]});
+    let bundle = Bundle::from_parts(
+        serde_json::to_vec(&value)?,
+        BTreeMap::from([("current".into(), current.to_vec())]),
+    )?;
+    let store = BundleStore::new(root.join("worker-rigs"));
+    let revision = store.save(&bundle)?;
+    std::fs::write(root.join("scene-preset-revision"), &revision)?;
+    let mut session = Session::new(bundle, world, 48000.0, 128, 1024 * 1024)?;
+    let before = session.snapshot();
+    session.apply(ControlCommand {
+        session: before.session,
+        expected_revision: before.revision,
+        target: Target::Native {
+            node: "tone2".into(),
+            parameter: "inputLevel".into(),
+        },
+        value: 0.56,
+    })?;
+    let mut peak = 0.0f32;
+    for block in 0..350 {
+        if block == 150 || block == 250 {
+            let cursor = session.snapshot();
+            session.select_scene(SceneCommand {
+                session: cursor.session,
+                expected_revision: cursor.revision,
+                scene: if block == 150 { "lead" } else { "clean" }.into(),
+            })?;
+        }
+        let input: Vec<_> = (0..128)
+            .map(|i| ((block * 128 + i) as f32 * 0.025).sin() * 0.05)
+            .collect();
+        let (mut l, mut r) = ([0.0; 128], [0.0; 128]);
+        session.pump()?;
+        session.process(&[&input, &input], &mut [&mut l, &mut r])?;
+        peak = peak.max(l.iter().chain(&r).map(|v| v.abs()).fold(0.0, f32::max));
+        assert!(l.iter().chain(&r).all(|v| v.is_finite()));
+    }
+    assert!(peak > 0.001);
+    assert_eq!(session.snapshot().scene.as_deref(), Some("clean"));
+    assert!(!session.snapshot().scene_transitioning);
+    super::worker::qualify_scenes(&store.read(&revision)?, root)?;
+    println!(
+        "parallel scenes: independent native A2 branches, shared LV2, finite PCM, worker selection and isolated offline recall pass; physical deadlines remain unqualified"
     );
     Ok(())
 }

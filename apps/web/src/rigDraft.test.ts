@@ -4,6 +4,7 @@ import schema from '../../../docs/presets/manifest.schema.json';
 import {
   lv2Effect,
   serialRig,
+  sceneRig,
   splitNative,
   removeEffect,
   canMoveEffect,
@@ -200,4 +201,46 @@ it('message-based effects cannot silently become scalar-only drafts', () => {
       ],
     }),
   ).toThrow('Message and file controls');
+});
+
+it('builds parallel scene branches with shared post effects and exact stereo selectors', () => {
+  const second = { ...native, id: 'second-tone', name: 'Lead' };
+  const published = sceneRig(
+    '68448a6d-0168-4fc8-b337-c12959165271',
+    'Scenes',
+    [native, second, lv2Effect(mono)],
+    'tone3000-plugin:' + 'a'.repeat(40),
+  );
+  const manifest = JSON.parse(published.manifest_json);
+  expect(validator(manifest)).toBe(true);
+  expect(manifest.tone3000.instances).toHaveLength(2);
+  expect(manifest.resources).toHaveLength(1); // shared bytes, independent DSP
+  const host = manifest.oxidal;
+  expect(
+    host.graph.edges
+      .filter(
+        (e: { to: { node: string } }) =>
+          e.to.node === native.id || e.to.node === second.id,
+      )
+      .every((e: { from: { node: string } }) =>
+        e.from.node.startsWith('scene-input-'),
+      ),
+  ).toBe(true);
+  expect(
+    host.graph.edges.filter(
+      (e: { from: { node: string } }) =>
+        e.from.node === 'scene-left' || e.from.node === 'scene-right',
+    ),
+  ).toHaveLength(2);
+  const scenes = manifest.extensions['urn:oxidal:scenes:1'].scenes;
+  expect(scenes).toHaveLength(2);
+  expect(scenes[0].gains.map((g: { value: number }) => g.value)).toEqual([
+    1, 0, 1, 0,
+  ]);
+  expect(scenes[1].gains.map((g: { value: number }) => g.value)).toEqual([
+    0, 1, 0, 1,
+  ]);
+  expect(() => sceneRig('id', 'Scenes', [native], 'profile')).toThrow(
+    'Choose 2',
+  );
 });

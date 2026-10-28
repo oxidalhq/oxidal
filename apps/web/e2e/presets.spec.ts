@@ -2541,155 +2541,229 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await command({ kind: 'stop' });
 });
 
-test('mixed rig authoring composes native and LV2 effects without saving an audition', async ({
-  page,
-  request,
-}, info) => {
-  test.skip(
-    process.env.OXIDAL_RIG_QUALIFY_NULL !== '1' ||
-      process.env.OXIDAL_GRAPH_QUALIFY_NULL !== '1' ||
-      !process.env.OXIDAL_MIXED_TEST_ROOT,
-    'Maintained Linux native gate provides real mixed and graph workers',
-  );
-  test.setTimeout(120000);
-  page.setDefaultTimeout(20000);
-  const state = async (path = 'rig-audio') =>
-    (await request.get(`/api/v1/${path}`)).json();
-  const command = async (path: string, action: unknown) => {
-    const s = await state(path);
-    const response = await request.post(`/api/v1/${path}`, {
-      data: { session: s.session, expected_revision: s.revision, action },
+for (const layout of ['serial', 'scenes'] as const) {
+  test(`mixed rig authoring composes ${layout} with native and LV2 effects and offline recall`, async ({
+    page,
+    request,
+  }, info) => {
+    test.skip(
+      process.env.OXIDAL_RIG_QUALIFY_NULL !== '1' ||
+        process.env.OXIDAL_GRAPH_QUALIFY_NULL !== '1' ||
+        !process.env.OXIDAL_MIXED_TEST_ROOT,
+      'Maintained Linux native gate provides real mixed and graph workers',
+    );
+    test.setTimeout(120000);
+    page.setDefaultTimeout(20000);
+    const state = async (path = 'rig-audio') =>
+      (await request.get(`/api/v1/${path}`)).json();
+    const command = async (path: string, action: unknown) => {
+      const s = await state(path);
+      const response = await request.post(`/api/v1/${path}`, {
+        data: { session: s.session, expected_revision: s.revision, action },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+      return response.json();
+    };
+    await command('rig-audio', { kind: 'stop' });
+    await command('graph-audio', { kind: 'stop' });
+    const input = {
+      endpoint: 'hw:CARD=Qualification,DEV=0',
+      direction: 'capture',
+      sample_rate: 48000,
+      channels: 2,
+      format: 's16',
+      period_frames: 128,
+      periods: 3,
+    };
+    await command('graph-audio', {
+      kind: 'configure',
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
     });
-    expect(response.ok(), await response.text()).toBe(true);
-    return response.json();
-  };
-  await command('rig-audio', { kind: 'stop' });
-  await command('graph-audio', { kind: 'stop' });
-  const input = {
-    endpoint: 'hw:CARD=Qualification,DEV=0',
-    direction: 'capture',
-    sample_rate: 48000,
-    channels: 2,
-    format: 's16',
-    period_frames: 128,
-    periods: 3,
-  };
-  await command('graph-audio', {
-    kind: 'configure',
-    stream: {
-      input,
-      output: { ...input, direction: 'playback' },
-      input_map: [0, 1],
-      output_map: [0, 1],
-    },
-  });
-  const imported = await request.post('/api/v1/presets', {
-    data: readFileSync(
-      join(process.env.OXIDAL_MIXED_TEST_ROOT!, 'a2-preset.t3kpreset'),
-    ),
-    headers: { 'Content-Type': 'application/octet-stream' },
-  });
-  expect(imported.ok()).toBe(true);
-  const tone = await imported.json();
-  await page.goto('/');
-  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'New preset', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Add saved tone', exact: true })
-    .click();
-  let dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: tone.name, exact: true }).click();
-  const composer = page.getByRole('region', { name: 'Compose rig' });
-  const name = `Composed ${info.project.name}`;
-  await composer.getByLabel('Preset name', { exact: true }).fill(name);
-  await composer
-    .getByRole('button', { name: 'Add effect', exact: true })
-    .click();
-  dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Search', { exact: true }).fill('Simple amplifier');
-  await dialog
-    .getByRole('button', { name: 'Simple amplifier', exact: true })
-    .click();
-  await composer.getByLabel('Mono input').selectOption('right');
-  await composer
-    .getByRole('button', { name: 'Move Simple amplifier earlier' })
-    .click();
-  await expect(composer.locator('[data-effect]').first()).toContainText(
-    'Simple amplifier',
-  );
-  await composer
-    .getByRole('button', { name: 'Move Simple amplifier later' })
-    .click();
-  const initialViewport = page.viewportSize()!;
-  for (const viewport of [
-    initialViewport,
-    { width: initialViewport.height, height: initialViewport.width },
-  ]) {
-    await page.setViewportSize(viewport);
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
+    const imported = await request.post('/api/v1/presets', {
+      data: readFileSync(
+        join(process.env.OXIDAL_MIXED_TEST_ROOT!, 'a2-preset.t3kpreset'),
       ),
-    ).toBe(true);
-    await page.screenshot({
-      path: info.outputPath(`composer-${viewport.width}.png`),
-      fullPage: true,
+      headers: { 'Content-Type': 'application/octet-stream' },
     });
-  }
-  expect(
-    (
-      await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-        .analyze()
-    ).violations,
-  ).toEqual([]);
-  await composer
-    .getByRole('button', { name: 'Play draft', exact: true })
-    .click();
-  await expect.poll(async () => (await state()).phase).toBe('running');
-  const running = await state();
-  const document = await (
-    await request.get(`/api/v1/presets/rigs/${running.configured.revision}`)
-  ).json();
-  expect(document.manifest.tone3000.instances).toHaveLength(1);
-  expect(document.manifest.oxidal.lv2).toHaveLength(1);
-  expect(
-    document.manifest.oxidal.graph.nodes.find(
-      (n: { kind: string }) => n.kind === 'merge',
-    ).inputGains,
-  ).toEqual([0, 1]);
-  expect(
-    (await (await request.get('/api/v1/presets/rigs')).json()).presets.some(
-      (p: { revision: string }) => p.revision === document.revision,
-    ),
-  ).toBe(false);
-  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
-  await expect(
-    rig.getByRole('button', { name: `1 · ${tone.name}`, exact: true }),
-  ).toBeVisible();
-  const saved = await saveMixedRig(page, request, rig);
-  const savedDoc = await (
-    await request.get(`/api/v1/presets/rigs/${saved}`)
-  ).json();
-  expect(
-    savedDoc.manifest.extensions['urn:oxidal:authoring'].draft,
-  ).toBeUndefined();
-  expect(savedDoc.manifest.extensions['urn:oxidal:authoring'].labels).toEqual(
-    document.manifest.extensions['urn:oxidal:authoring'].labels,
-  );
-  await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
-  await expect.poll(async () => (await state()).phase).toBe('stopped');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await playSavedRig(page, name);
-  await expect
-    .poll(async () => {
-      const s = await state();
-      return { phase: s.phase, revision: s.configured?.revision };
-    })
-    .toEqual({ phase: 'running', revision: saved });
-  await command('rig-audio', { kind: 'stop' });
-});
+    expect(imported.ok()).toBe(true);
+    const tone = await imported.json();
+    await page.goto('/');
+    if (info.project.name === 'boox-air3c')
+      await setDisplayMode(page, 'epaper');
+    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await page.getByRole('button', { name: 'New preset', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Add saved tone', exact: true })
+      .click();
+    let dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: tone.name, exact: true }).click();
+    const composer = page.getByRole('region', { name: 'Compose rig' });
+    if (layout === 'scenes') {
+      await composer
+        .getByRole('button', { name: 'Scenes', exact: true })
+        .click();
+      await composer
+        .getByRole('button', { name: 'Add saved tone', exact: true })
+        .click();
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: tone.name, exact: true })
+        .click();
+      await composer.getByLabel('Scene 1 name', { exact: true }).fill('Clean');
+      await composer.getByLabel('Scene 2 name', { exact: true }).fill('Lead');
+    }
+    const name = `Composed ${layout} ${info.project.name}`;
+    await composer.getByLabel('Preset name', { exact: true }).fill(name);
+    await composer
+      .getByRole('button', { name: 'Add effect', exact: true })
+      .click();
+    dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Search', { exact: true }).fill('Simple amplifier');
+    await dialog
+      .getByRole('button', { name: 'Simple amplifier', exact: true })
+      .click();
+    await composer.getByLabel('Mono input').selectOption('right');
+    if (layout === 'serial') {
+      await composer
+        .getByRole('button', { name: 'Move Simple amplifier earlier' })
+        .click();
+      await expect(composer.locator('[data-effect]').first()).toContainText(
+        'Simple amplifier',
+      );
+      await composer
+        .getByRole('button', { name: 'Move Simple amplifier later' })
+        .click();
+    } else {
+      await expect(
+        composer.getByRole('button', { name: 'Move Simple amplifier earlier' }),
+      ).toBeDisabled();
+    }
+    const initialViewport = page.viewportSize()!;
+    for (const viewport of [
+      initialViewport,
+      { width: initialViewport.height, height: initialViewport.width },
+    ]) {
+      await page.setViewportSize(viewport);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: info.outputPath(`composer-${viewport.width}.png`),
+        fullPage: true,
+      });
+    }
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await composer
+      .getByRole('button', { name: 'Play draft', exact: true })
+      .click();
+    await expect.poll(async () => (await state()).phase).toBe('running');
+    const running = await state();
+    const document = await (
+      await request.get(`/api/v1/presets/rigs/${running.configured.revision}`)
+    ).json();
+    expect(document.manifest.tone3000.instances).toHaveLength(
+      layout === 'scenes' ? 2 : 1,
+    );
+    expect(document.manifest.oxidal.lv2).toHaveLength(1);
+    expect(
+      document.manifest.oxidal.graph.nodes.find(
+        (n: { kind: string }) => n.kind === 'merge',
+      ).inputGains,
+    ).toEqual([0, 1]);
+    expect(
+      (await (await request.get('/api/v1/presets/rigs')).json()).presets.some(
+        (p: { revision: string }) => p.revision === document.revision,
+      ),
+    ).toBe(false);
+    const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+    await expect(
+      rig.getByRole('button', {
+        name: `1 · ${layout === 'scenes' ? 'Clean' : tone.name}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    if (layout === 'scenes') {
+      const scenes = rig.getByRole('group', { name: 'Rig scenes' });
+      await expect(
+        scenes.getByRole('button', { name: 'Clean', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await scenes.getByRole('button', { name: 'Lead', exact: true }).click();
+      await expect.poll(async () => (await state()).control.scene).toBeTruthy();
+      await expect(
+        scenes.getByRole('button', { name: 'Lead', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect
+        .poll(async () => (await state()).control.scene_transitioning)
+        .toBe(false);
+      for (const viewport of [
+        initialViewport,
+        { width: initialViewport.height, height: initialViewport.width },
+      ]) {
+        await page.setViewportSize(viewport);
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        ).toBe(true);
+        await page.screenshot({
+          path: info.outputPath(`scenes-${viewport.width}.png`),
+          fullPage: true,
+        });
+      }
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+    }
+    const saved = await saveMixedRig(page, request, rig);
+    const savedDoc = await (
+      await request.get(`/api/v1/presets/rigs/${saved}`)
+    ).json();
+    expect(
+      savedDoc.manifest.extensions['urn:oxidal:authoring'].draft,
+    ).toBeUndefined();
+    expect(savedDoc.manifest.extensions['urn:oxidal:authoring'].labels).toEqual(
+      document.manifest.extensions['urn:oxidal:authoring'].labels,
+    );
+    await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
+    await expect.poll(async () => (await state()).phase).toBe('stopped');
+    await page.getByRole('button', { name: 'Library', exact: true }).click();
+    await playSavedRig(page, name);
+    await expect
+      .poll(async () => {
+        const s = await state();
+        return { phase: s.phase, revision: s.configured?.revision };
+      })
+      .toEqual({ phase: 'running', revision: saved });
+    if (layout === 'scenes') {
+      await expect(
+        rig
+          .getByRole('group', { name: 'Rig scenes' })
+          .getByRole('button', { name: 'Lead', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      expect(
+        savedDoc.manifest.extensions['urn:oxidal:scenes:1'].scenes,
+      ).toHaveLength(2);
+    }
+    await command('rig-audio', { kind: 'stop' });
+  });
+}
 
 test('mixed rig authoring separates guarded amp/cab stages and saves their live settings', async ({
   page,

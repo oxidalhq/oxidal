@@ -7,6 +7,7 @@ import { NativeSplitDialog } from './NativeSplitDialog';
 import {
   lv2Effect,
   serialRig,
+  sceneRig,
   canMoveEffect,
   removeEffect,
   type NativeDraft,
@@ -43,6 +44,7 @@ export function RigComposer({
 }) {
   const [id] = useState(() => crypto.randomUUID());
   const [effects, setEffects] = useState(initial);
+  const [layout, setLayout] = useState<'serial' | 'scenes'>('serial');
   const [name, setName] = useState(initialName);
   const [picker, setPicker] = useState<'tones' | 'effects' | null>('tones');
   const [tones, setTones] = useState<
@@ -102,7 +104,11 @@ export function RigComposer({
   }, [picker]);
   function move(index: number, step: -1 | 1) {
     setEffects((old) => {
-      if (!canMoveEffect(old, index, step)) return old;
+      if (
+        !canMoveEffect(old, index, step) ||
+        (layout === 'scenes' && old[index]?.kind !== old[index + step]?.kind)
+      )
+        return old;
       const next = [...old];
       [next[index], next[index + step]] = [next[index + step]!, next[index]!];
       return next;
@@ -138,7 +144,12 @@ export function RigComposer({
           'Separate amp/cab stages need 48 kHz. Choose it in Settings → Audio.',
         );
       const document = await publishRig(
-        serialRig(id, name, effects, library.native_profile),
+        (layout === 'scenes' ? sceneRig : serialRig)(
+          id,
+          name,
+          effects,
+          library.native_profile,
+        ),
       );
       let next = await rigAudioCommand(rig, {
         kind: 'start',
@@ -215,6 +226,38 @@ export function RigComposer({
         </label>
         <span className="caption">Draft</span>
       </div>
+      <div className="action-row" role="group" aria-label="Rig layout">
+        <Button
+          variant={layout === 'serial' ? 'secondary' : 'ghost'}
+          aria-pressed={layout === 'serial'}
+          disabled={busy}
+          onClick={() => setLayout('serial')}
+        >
+          Serial chain
+        </Button>
+        <Button
+          variant={layout === 'scenes' ? 'secondary' : 'ghost'}
+          aria-pressed={layout === 'scenes'}
+          disabled={
+            busy || effects.some((e) => e.kind === 'native' && !!e.stage)
+          }
+          onClick={() => {
+            setLayout('scenes');
+            setEffects((old) => [
+              ...old.filter((e) => e.kind === 'native'),
+              ...old.filter((e) => e.kind === 'lv2'),
+            ]);
+          }}
+        >
+          Scenes
+        </Button>
+      </div>
+      {layout === 'scenes' && (
+        <p className="caption">
+          Saved tones run in parallel. Effects stay after the scene mix for
+          shared tails.
+        </p>
+      )}
       <div className="action-row">
         <Button
           variant="outline"
@@ -273,7 +316,12 @@ export function RigComposer({
                   variant="outline"
                   className="h-11 w-11 p-0"
                   aria-label={`Move ${effect.name} earlier`}
-                  disabled={busy || !canMoveEffect(effects, index, -1)}
+                  disabled={
+                    busy ||
+                    !canMoveEffect(effects, index, -1) ||
+                    (layout === 'scenes' &&
+                      effect.kind !== effects[index - 1]?.kind)
+                  }
                   onClick={() => move(index, -1)}
                 >
                   <ArrowUp size={18} />
@@ -282,7 +330,12 @@ export function RigComposer({
                   variant="outline"
                   className="h-11 w-11 p-0"
                   aria-label={`Move ${effect.name} later`}
-                  disabled={busy || !canMoveEffect(effects, index, 1)}
+                  disabled={
+                    busy ||
+                    !canMoveEffect(effects, index, 1) ||
+                    (layout === 'scenes' &&
+                      effect.kind !== effects[index + 1]?.kind)
+                  }
                   onClick={() => move(index, 1)}
                 >
                   <ArrowDown size={18} />
@@ -304,15 +357,42 @@ export function RigComposer({
                 </Button>
               </div>
             </div>
-            {effect.kind === 'native' && !effect.stage && (
-              <Button
-                variant="outline"
-                disabled={busy || !connected}
-                onClick={() => setSplit(effect)}
-              >
-                Separate amp & cab
-              </Button>
+            {layout === 'scenes' && effect.kind === 'native' && (
+              <label className="field">
+                <span className="sr-only">
+                  Scene{' '}
+                  {effects
+                    .filter((e) => e.kind === 'native')
+                    .findIndex((e) => e.id === effect.id) + 1}{' '}
+                  name
+                </span>
+                <input
+                  value={effect.name}
+                  maxLength={80}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setEffects((old) =>
+                      old.map((item) =>
+                        item.id === effect.id
+                          ? { ...item, name: event.target.value }
+                          : item,
+                      ),
+                    )
+                  }
+                />
+              </label>
             )}
+            {layout === 'serial' &&
+              effect.kind === 'native' &&
+              !effect.stage && (
+                <Button
+                  variant="outline"
+                  disabled={busy || !connected}
+                  onClick={() => setSplit(effect)}
+                >
+                  Separate amp & cab
+                </Button>
+              )}
             {effect.kind === 'native' && effect.stage && (
               <p className="caption">
                 {effect.stage.role === 'amp'

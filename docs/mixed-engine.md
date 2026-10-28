@@ -553,3 +553,21 @@ is for startup/export candidates; it is never applied to the sounding session.
 Live model replacement still uses the native wet-mute splice; it is not the
 resident crossfade path or a physical gapless guarantee. Non-48-kHz stage processing,
 unsaved whole-node split conversion and full authoring remain open.
+
+## Preloaded scenes and shared effects
+
+The simple composer offers Serial chain or Scenes. Scenes takes 2–64 whole saved native tones for its current one-level stereo selector layout, prepares each independently and places qualified scalar LV2 effects after the selector. Shared source bytes do not share DSP state. This composer port-layout bound is not a NAM inference limit; lower-level graphs can use more nodes within manifest, IPC and buffer budgets. All ready branches continue processing, including muted ones, so capacity must be measured on the deployment device.
+
+`urn:oxidal:scenes:1` is a required sonic extension. Its `fade_ms` (1–1000) and named `scenes` specify complete merge input gains. IDs are unique; every scene must address the same full set of selected merge inputs. Missing, partial, duplicate, foreign and invalid targets fail validation. Original graph gains determine initial selection. Saving and restoring confirmed scalar gains retains the selected scene without serializing device/session identifiers into the portable document.
+
+`RigAudioAction::Scene` carries the running control session, expected control revision and scene ID. The worker validates the complete selection before mutation. It ramps all selected gains over the same sample count from their current audible values, including rapid retargeting. Readback exposes the target scene and whether its ramp is still running; command acknowledgment alone is not proof that a PCM period has elapsed. Linear gain ramps avoid the correlated-signal boost of an equal-power crossfade. No processors are loaded, reconstructed or discarded during selection. Prepared graph delay alignment remains in force.
+
+Shared downstream effect instances keep their histories while the scene mix changes. This preserves those histories, rather than promising tails from effects inside a muted branch. There is no branch CPU suspension, arbitrary scene structure mutation or whole-preset dynamic gapless claim. Physical MIDI and Pi deadlines/capacity require their own qualification.
+
+The maintained `latency` integration suite renders opposite constant signals and verifies every ramp sample, rapid retargeting, retained shared delay history and stale/invalid commands. The mixed qualifier additionally runs independent native A2 branches, the real child worker and isolated Save/fresh reopen. Its focused invocation reuses the normal native fixture environment:
+
+```sh
+cargo run -p oxidal-engine --features native --example qualify_mixed -- --scenes
+```
+
+The full `pnpm native:check` also includes these scene checks. Browser composition coverage exercises both layouts, actual-worker selection, Save/recall, accessibility and portrait/landscape sizing on the maintained target device projects. Neither ALSA-null transport nor browser emulation establishes physical timing acceptance.

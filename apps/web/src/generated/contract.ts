@@ -317,6 +317,10 @@ export type RigAudioAction =
       kind: "switch";
     }
   | {
+      command: SceneCommand;
+      kind: "scene";
+    }
+  | {
       command: ModelCommand;
       kind: "model";
     }
@@ -1129,6 +1133,11 @@ export interface SwitchCommand {
   revision: string;
   session: string;
 }
+export interface SceneCommand {
+  expected_revision: number;
+  scene: string;
+  session: string;
+}
 export interface ModelCommand {
   expected_revision: number;
   node: string;
@@ -1168,6 +1177,9 @@ export interface Snapshot3 {
   modified: boolean;
   prepared?: PreparedStatus[];
   revision: number;
+  scene?: string | null;
+  scene_transitioning?: boolean;
+  scenes?: Scenes | null;
   session: string;
   slots?: NodeSlots[];
   source_revision: string;
@@ -1192,6 +1204,20 @@ export interface PreparedStatus {
   modified: boolean;
   name: string;
   revision: string;
+}
+export interface Scenes {
+  fade_ms: number;
+  scenes: Scene[];
+}
+export interface Scene {
+  gains: SceneGain[];
+  id: string;
+  name: string;
+}
+export interface SceneGain {
+  node: string;
+  port: number;
+  value: number;
 }
 export interface NodeSlots {
   node: string;

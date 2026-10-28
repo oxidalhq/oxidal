@@ -198,6 +198,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let error = match request {
                 WorkerRequest::Status => None,
                 WorkerRequest::Control { command } => session.active_mut().apply(command).err(),
+                WorkerRequest::Scene { command } => {
+                    session.active_mut().select_scene(command).err()
+                }
                 WorkerRequest::Eq { command } => session.active_mut().apply_eq(command).err(),
                 WorkerRequest::Model { command } => match model_root.as_deref() {
                     Some(root) => session.active_mut().model_command(command, root).err(),

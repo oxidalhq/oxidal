@@ -385,6 +385,40 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {!!state.control?.scenes?.scenes.length && (
+        <div
+          className="flex flex-wrap gap-2"
+          role="group"
+          aria-label="Rig scenes"
+          aria-busy={state.control.scene_transitioning}
+        >
+          {state.control.scenes.scenes.map((scene) => (
+            <Button
+              key={scene.id}
+              className="h-auto min-h-12 max-w-full min-w-20 whitespace-normal"
+              variant={
+                state.control?.scene === scene.id ? 'default' : 'outline'
+              }
+              aria-pressed={state.control?.scene === scene.id}
+              disabled={disabled || !!edit}
+              onClick={() => {
+                const control = current.current?.control;
+                if (control)
+                  void command({
+                    kind: 'scene',
+                    command: {
+                      session: control.session,
+                      expected_revision: control.revision,
+                      scene: scene.id,
+                    },
+                  });
+              }}
+            >
+              {scene.name}
+            </Button>
+          ))}
+        </div>
+      )}
       {!!state.control?.prepared?.length && (
         <div
           className="flex flex-wrap items-center gap-2"

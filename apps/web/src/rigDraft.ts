@@ -258,6 +258,89 @@ export function serialRig(
   return { manifest_json: JSON.stringify(manifest), resources: sources };
 }
 
+/** Simple scenes: each saved native tone runs in parallel; scalar LV2 effects
+ * are shared downstream. This builds explicit routing without a branch editor. */
+export function sceneRig(
+  id: string,
+  name: string,
+  effects: DraftEffect[],
+  profile: string,
+): RigPublish {
+  const tones = effects.filter((e): e is NativeDraft => e.kind === 'native');
+  if (tones.some((e) => e.stage))
+    throw new Error('Use whole saved tones for scene branches.');
+  if (tones.length < 2 || tones.length > 64)
+    throw new Error('Choose 2–64 saved tones for this scene layout.');
+  const post = effects.filter((e) => e.kind === 'lv2');
+  const result = serialRig(id, name, [...tones, ...post], profile);
+  const manifest: RigDocument['manifest'] = JSON.parse(result.manifest_json);
+  const host = manifest.oxidal!;
+  const ids = new Set(tones.map((t) => t.id));
+  const last = tones.at(-1)!.id;
+  host.graph.edges = host.graph.edges
+    .filter(
+      (e) =>
+        !ids.has(e.to.node) && (!ids.has(e.from.node) || e.from.node === last),
+    )
+    .map((e) =>
+      e.from.node === last
+        ? {
+            ...e,
+            from: {
+              node: e.from.port === 0 ? 'scene-left' : 'scene-right',
+              port: 0,
+            },
+          }
+        : e,
+    );
+  const labels = manifest.extensions['urn:oxidal:authoring']!.labels as Record<
+    string,
+    string
+  >;
+  for (const [port, side] of ['left', 'right'].entries()) {
+    const split = `scene-input-${side}`;
+    const merge = `scene-${side}`;
+    host.graph.nodes.push(
+      { id: split, kind: 'split', audioInputs: 1, audioOutputs: tones.length },
+      {
+        id: merge,
+        kind: 'merge',
+        audioInputs: tones.length,
+        audioOutputs: 1,
+        inputGains: tones.map((_, i) => (i === 0 ? 1 : 0)),
+      },
+    );
+    labels[merge] = `Scenes · ${side === 'left' ? 'L' : 'R'}`;
+    labels[split] = `Parallel · ${side === 'left' ? 'L' : 'R'}`;
+    host.graph.edges.push({
+      from: { node: 'in', port },
+      to: { node: split, port: 0 },
+    });
+    tones.forEach((tone, index) =>
+      host.graph.edges.push(
+        { from: { node: split, port: index }, to: { node: tone.id, port } },
+        { from: { node: tone.id, port }, to: { node: merge, port: index } },
+      ),
+    );
+  }
+  manifest.requiredExtensions.push('urn:oxidal:scenes:1');
+  manifest.extensions['urn:oxidal:scenes:1'] = {
+    fade_ms: 10,
+    scenes: tones.map((tone, index) => ({
+      id: tone.id,
+      name: tone.name,
+      gains: ['scene-left', 'scene-right'].flatMap((node) =>
+        tones.map((_, port) => ({
+          node,
+          port,
+          value: port === index ? 1 : 0,
+        })),
+      ),
+    })),
+  };
+  return { ...result, manifest_json: JSON.stringify(manifest) };
+}
+
 export function rigNodeLabel(
   document: RigDocument | null,
   id: string,

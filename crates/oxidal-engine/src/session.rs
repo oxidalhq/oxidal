@@ -17,6 +17,7 @@ pub struct Session {
     model_task: oxidal_tone3000::model_preparation::Models,
     model_root: Option<std::path::PathBuf>,
     model_node: Option<String>,
+    rate: f64,
 }
 impl Session {
     pub fn new(
@@ -138,6 +139,9 @@ impl Session {
             models: Vec::new(),
             slots,
             model_change: None,
+            scenes: bundle.manifest().scenes().map_err(|e| e.to_string())?,
+            scene: None,
+            scene_transitioning: false,
         };
         if serde_json::to_vec(&state).map_err(|e| e.to_string())?.len() + 65536 > REPLY_LIMIT {
             return Err("Rig controls exceed IPC byte budget".into());
@@ -153,11 +157,34 @@ impl Session {
             model_task: Default::default(),
             model_root: None,
             model_node: None,
+            rate,
         })
     }
     pub fn snapshot(&self) -> Snapshot {
         let mut state = self.state.clone();
         state.modified = self.is_modified();
+        state.scene_transitioning = self.graph.scene_transitioning();
+        if let Some(scenes) = &state.scenes {
+            let matches = |scene: &&oxidal_presets::manifest::Scene| {
+                scene.gains.iter().all(|gain| {
+                    state.controls.iter().any(|c| {
+                        c.target
+                            == (Target::Merge {
+                                node: gain.node.clone(),
+                                port: usize::from(gain.port),
+                            })
+                            && c.value == f64::from(gain.value as f32)
+                    })
+                })
+            };
+            let selected = scenes
+                .scenes
+                .iter()
+                .find(|s| Some(&s.id) == state.scene.as_ref())
+                .filter(matches)
+                .or_else(|| scenes.scenes.iter().find(matches));
+            state.scene = selected.map(|s| s.id.clone());
+        }
         state
     }
     pub(crate) fn is_modified(&self) -> bool {
@@ -250,6 +277,48 @@ impl Session {
             }
             return Err(reason.to_string());
         }
+        self.state.revision = revision;
+        Ok(())
+    }
+    /// Select only a validated mix of already running branches. All merge
+    /// targets are admitted before the first gain changes; shared FX keep state.
+    pub fn select_scene(&mut self, command: SceneCommand) -> Result<(), String> {
+        if self.failed || self.model_pending() {
+            return Err("Rig is not ready for scene selection".into());
+        }
+        if !self.matches_cursor(&command.session, command.expected_revision) {
+            return Err("rig_control_conflict; refresh status".into());
+        }
+        let scenes = self.state.scenes.as_ref().ok_or("Rig has no scenes")?;
+        let scene = scenes
+            .scenes
+            .iter()
+            .find(|s| s.id == command.scene)
+            .ok_or("Unknown rig scene")?;
+        let revision = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Rig revision exhausted")?;
+        let frames = (self.rate * f64::from(scenes.fade_ms) / 1000.0)
+            .round()
+            .max(1.0) as u32;
+        self.graph.scene_gains(&scene.gains, frames)?;
+        for gain in &scene.gains {
+            let target = Target::Merge {
+                node: gain.node.clone(),
+                port: usize::from(gain.port),
+            };
+            let control = self
+                .state
+                .controls
+                .iter_mut()
+                .find(|c| c.target == target)
+                .unwrap();
+            control.value = f64::from(gain.value as f32);
+            control.display = format!("{:.3}", control.value);
+        }
+        self.state.scene = Some(command.scene);
         self.state.revision = revision;
         Ok(())
     }

@@ -19,7 +19,49 @@ struct PortNode {
     dry: Vec<Delay>,
     processor: Option<Processor>,
     bypassed: bool,
-    gains: Vec<f32>,
+    gains: Vec<Gain>,
+}
+// Ramp state belongs to each already prepared merge input. No processing-time
+// allocation or processor reconstruction is needed when selecting a scene.
+#[derive(Debug)]
+struct Gain {
+    current: f32,
+    target: f32,
+    step: f32,
+    remaining: u32,
+}
+impl Gain {
+    fn new(value: f32) -> Self {
+        Self {
+            current: value,
+            target: value,
+            step: 0.0,
+            remaining: 0,
+        }
+    }
+    fn set(&mut self, value: f32, frames: u32) {
+        self.target = value;
+        self.remaining = frames;
+        self.step = if frames == 0 {
+            0.0
+        } else {
+            (value - self.current) / frames as f32
+        };
+        if frames == 0 {
+            self.current = value;
+        }
+    }
+    fn next(&mut self) -> f32 {
+        if self.remaining != 0 {
+            self.remaining -= 1;
+            self.current = if self.remaining == 0 {
+                self.target
+            } else {
+                self.current + self.step
+            };
+        }
+        self.current
+    }
 }
 #[derive(Debug, Default)]
 pub(crate) struct Delay {
@@ -214,10 +256,9 @@ impl PreparedPorts {
                 dry: vec![],
                 processor,
                 bypassed: declaration.bypassed.unwrap_or(false),
-                gains: declaration
-                    .input_gains
-                    .as_ref()
-                    .map_or_else(Vec::new, |g| g.iter().map(|v| *v as f32).collect()),
+                gains: declaration.input_gains.as_ref().map_or_else(Vec::new, |g| {
+                    g.iter().map(|v| Gain::new(*v as f32)).collect()
+                }),
             });
         }
         if !processors.is_empty() {
@@ -259,6 +300,15 @@ impl PreparedPorts {
         let mut buffer_bytes = sample_count
             .checked_mul(size_of::<f32>())
             .ok_or("Port buffer size overflow")?;
+        for node in &nodes {
+            buffer_bytes = node
+                .gains
+                .len()
+                .checked_mul(size_of::<Gain>())
+                .and_then(|bytes| buffer_bytes.checked_add(bytes))
+                .filter(|bytes| *bytes <= buffer_budget)
+                .ok_or("Merge ramp state exceeds host buffer budget")?;
+        }
         let mut latency = vec![0u32; nodes.len()];
         for &index in &order {
             let n = &mut nodes[index];
@@ -396,11 +446,47 @@ impl PreparedPorts {
                 if !value.is_finite() || !(0.0..=4.0).contains(&value) {
                     return Err("Invalid merge gain".into());
                 }
-                *gain = value as f32;
+                gain.set(value as f32, 0);
             }
             _ => return Err("Not a host control".into()),
         }
         Ok(())
+    }
+    /// Validate every target before touching DSP, then start all gain ramps at
+    /// the same stream position. Retargeting starts at the current audible gain.
+    pub(crate) fn scene_gains(
+        &mut self,
+        values: &[oxidal_presets::manifest::SceneGain],
+        frames: u32,
+    ) -> Result<(), String> {
+        if self.failed || frames == 0 {
+            return Err("Invalid scene transition".into());
+        }
+        for (i, value) in values.iter().enumerate() {
+            if !value.value.is_finite()
+                || !(0.0..=4.0).contains(&value.value)
+                || values[..i]
+                    .iter()
+                    .any(|v| v.node == value.node && v.port == value.port)
+                || !self.nodes.iter().any(|n| {
+                    n.id == value.node
+                        && n.kind == NodeKind::Merge
+                        && usize::from(value.port) < n.gains.len()
+                })
+            {
+                return Err("Invalid scene gain target".into());
+            }
+        }
+        for value in values {
+            let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
+            node.gains[usize::from(value.port)].set(value.value as f32, frames);
+        }
+        Ok(())
+    }
+    pub(crate) fn scene_transitioning(&self) -> bool {
+        self.nodes
+            .iter()
+            .any(|n| n.gains.iter().any(|g| g.remaining != 0))
     }
     pub fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) -> Result<(), String> {
         if self.failed
@@ -483,9 +569,9 @@ impl PreparedPorts {
                     for frame in 0..self.frames {
                         let value = node
                             .gains
-                            .iter()
+                            .iter_mut()
                             .enumerate()
-                            .map(|(port, gain)| data[port * self.frames + frame] * gain)
+                            .map(|(port, gain)| data[port * self.frames + frame] * gain.next())
                             .sum();
                         data[frame] = value;
                     }

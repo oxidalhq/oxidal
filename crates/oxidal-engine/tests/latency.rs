@@ -542,3 +542,148 @@ fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
     assert_eq!(residents.snapshot().source_revision, a);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+// Two preloaded branches feed a selector, with one shared delayed processor
+// downstream. Opposite DC signals make every transition sample observable.
+fn scene_bundle() -> Bundle {
+    let mut value: serde_json::Value = serde_json::from_slice(
+        bundle(137, 0, false)
+            .manifest()
+            .encode()
+            .unwrap()
+            .as_slice(),
+    )
+    .unwrap();
+    let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+    let merge = value["oxidal"]["graph"]["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|n| n["id"] == "merge")
+        .unwrap();
+    merge["inputGains"] = json!([1.0, 0.0]);
+    value["oxidal"]["graph"]["edges"] = json!([
+        edge("in", 0, "merge", 0),
+        edge("in", 1, "split", 0),
+        edge("split", 0, "merge", 1),
+        edge("merge", 0, "fx", 0),
+        edge("fx", 0, "out", 0),
+        edge("split", 1, "out", 1)
+    ]);
+    value["requiredExtensions"] = json!(["urn:oxidal:scenes:1"]);
+    value["extensions"]["urn:oxidal:scenes:1"] = json!({"fade_ms":3,"scenes":[
+        {"id":"clean","name":"Clean","gains":[{"node":"merge","port":0,"value":1.0},{"node":"merge","port":1,"value":0.0}]},
+        {"id":"lead","name":"Lead","gains":[{"node":"merge","port":0,"value":0.0},{"node":"merge","port":1,"value":1.0}]}]});
+    Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
+}
+#[test]
+fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands() {
+    use oxidal_engine::protocol::SceneCommand;
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session = Session::new(scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    assert_eq!(session.snapshot().scene.as_deref(), Some("clean"));
+    let input = [[1.0; 64], [-1.0; 64]];
+    let render = |session: &mut Session| {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        session
+            .process(&[&input[0], &input[1]], &mut [&mut l, &mut r])
+            .unwrap();
+        l
+    };
+    for _ in 0..4 {
+        render(&mut session);
+    }
+    let before = session.snapshot();
+    let command = SceneCommand {
+        session: before.session,
+        expected_revision: before.revision,
+        scene: "lead".into(),
+    };
+    session.select_scene(command.clone()).unwrap();
+    assert!(session.select_scene(command).is_err());
+    let selected = session.snapshot();
+    assert!(selected.scene_transitioning);
+    assert_eq!(selected.scene.as_deref(), Some("lead"));
+    let mut samples = Vec::new();
+    for _ in 0..6 {
+        samples.extend(render(&mut session));
+    }
+    // The shared delay retains its entire pre-switch history, rather than
+    // resetting, cutting it or replacing it with another effect instance.
+    assert!(samples[..137].iter().all(|v| *v == 1.0));
+    for frame in 0..144 {
+        let expected = 1.0 - 2.0 * (frame + 1) as f32 / 144.0;
+        assert!((samples[137 + frame] - expected).abs() < 0.00001);
+    }
+    assert!(samples[137 + 144..].iter().all(|v| *v == -1.0));
+    assert!(!session.snapshot().scene_transitioning);
+    let before = session.snapshot();
+    let mut command = SceneCommand {
+        session: before.session,
+        expected_revision: before.revision,
+        scene: "missing".into(),
+    };
+    assert!(session.select_scene(command.clone()).is_err());
+    assert_eq!(session.snapshot().revision, before.revision);
+    command.scene = "clean".into();
+    session.select_scene(command).unwrap();
+    render(&mut session);
+    let before = session.snapshot();
+    session
+        .select_scene(SceneCommand {
+            session: before.session,
+            expected_revision: before.revision,
+            scene: "lead".into(),
+        })
+        .unwrap();
+    let mut samples = Vec::new();
+    for _ in 0..7 {
+        samples.extend(render(&mut session));
+    }
+    // Retarget from the audible gain, with no hard jump at the next block.
+    assert!(
+        samples
+            .windows(2)
+            .all(|w| (w[1] - w[0]).abs() <= 2.0 / 144.0 + 0.00001)
+    );
+    assert_eq!(samples.last(), Some(&-1.0));
+}
+#[test]
+fn scene_definitions_reject_partial_duplicate_or_foreign_targets() {
+    let source = scene_bundle();
+    let value: serde_json::Value =
+        serde_json::from_slice(source.manifest().encode().unwrap().as_slice()).unwrap();
+    for (path, replacement) in [
+        ("/requiredExtensions", json!([])),
+        ("/extensions/urn:oxidal:scenes:1/fade_ms", json!(0)),
+        (
+            "/extensions/urn:oxidal:scenes:1/scenes/1/id",
+            json!("clean"),
+        ),
+        (
+            "/extensions/urn:oxidal:scenes:1/scenes/1/gains/0/node",
+            json!("fx"),
+        ),
+        (
+            "/extensions/urn:oxidal:scenes:1/scenes/1/gains/1/port",
+            json!(0),
+        ),
+        (
+            "/extensions/urn:oxidal:scenes:1/scenes/1/gains/1/value",
+            json!(-1),
+        ),
+    ] {
+        let mut changed = value.clone();
+        *changed.pointer_mut(path).unwrap() = replacement;
+        assert!(
+            Bundle::from_parts(serde_json::to_vec(&changed).unwrap(), BTreeMap::new()).is_err(),
+            "Accepted {path}"
+        );
+    }
+    let mut partial = value;
+    partial["extensions"]["urn:oxidal:scenes:1"]["scenes"][1]["gains"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    assert!(Bundle::from_parts(serde_json::to_vec(&partial).unwrap(), BTreeMap::new()).is_err());
+}

@@ -65,6 +65,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let bundles =
         std::env::var("OXIDAL_LV2_EXTERNAL_DIR").unwrap_or_else(|_| "/usr/lib/lv2".into());
     let world = World::bundle(&Path::new(&bundles).join("amp-swh.lv2"))?;
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["--scenes"] {
+        return portable::qualify_scenes(&world, &bytes, Path::new(&root));
+    }
+    if !args.is_empty() {
+        return Err("Unknown mixed qualification selection".into());
+    }
     qualify_admission_and_failure(&world)?;
     partition::qualify(&world, Path::new(&root))?;
     portable::qualify(&world, &bytes, Path::new(&root))?;

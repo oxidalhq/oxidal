@@ -107,6 +107,12 @@ pub struct Snapshot {
     pub slots: Vec<NodeSlots>,
     #[serde(default)]
     pub model_change: Option<NodeModelChange>,
+    #[serde(default)]
+    pub scenes: Option<oxidal_presets::manifest::Scenes>,
+    #[serde(default)]
+    pub scene: Option<String>,
+    #[serde(default)]
+    pub scene_transitioning: bool,
 }
 impl Snapshot {
     pub fn valid_model_state(&self) -> bool {
@@ -168,6 +174,13 @@ pub struct ControlCommand {
     pub expected_revision: u64,
     pub target: Target,
     pub value: f64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SceneCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub scene: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -241,6 +254,7 @@ pub enum WorkerRequest {
     Control { command: ControlCommand },
     Eq { command: EqCommand },
     Switch { command: SwitchCommand },
+    Scene { command: SceneCommand },
     Model { command: ModelCommand },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -317,6 +331,7 @@ pub enum RigAudioAction {
     Control { command: ControlCommand },
     Eq { command: EqCommand },
     Switch { command: SwitchCommand },
+    Scene { command: SceneCommand },
     Model { command: ModelCommand },
     Save { name: String },
 }

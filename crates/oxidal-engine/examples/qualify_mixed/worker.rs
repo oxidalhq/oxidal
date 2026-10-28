@@ -889,3 +889,95 @@ fn qualify_models(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     );
     Ok(())
 }
+
+pub fn qualify_scenes(bundle: &Bundle, root: &Path) -> Result<()> {
+    let path = root.join("worker-rigs");
+    let store = BundleStore::new(path.clone());
+    let revision = store.save(bundle)?;
+    let start = StartRig {
+        prepared: vec![],
+        revision,
+        stream: stream(),
+        recall: None,
+    };
+    let mut child = spawn(&path, &root.join("scene-child"), false)?;
+    let received = replies(&mut child)?;
+    send(&mut child, &start)?;
+    let before = received.recv_timeout(Duration::from_secs(30))??;
+    assert!(before.error.is_none());
+    assert_eq!(before.control.scene.as_deref(), Some("clean"));
+    let command = SceneCommand {
+        session: before.control.session.clone(),
+        expected_revision: before.control.revision,
+        scene: "lead".into(),
+    };
+    send(
+        &mut child,
+        &WorkerRequest::Scene {
+            command: command.clone(),
+        },
+    )?;
+    let selected = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(selected.error.is_none());
+    assert_eq!(selected.control.scene.as_deref(), Some("lead"));
+    assert!(selected.processed_frames >= before.processed_frames);
+    send(&mut child, &WorkerRequest::Scene { command })?;
+    let stale = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(stale.error.is_some());
+    compare(&selected.control, &stale.control);
+    let mut advanced = false;
+    for _ in 0..100 {
+        send(&mut child, &WorkerRequest::Status)?;
+        let status = received.recv_timeout(Duration::from_secs(3))??;
+        if status.processed_frames > before.processed_frames && !status.control.scene_transitioning
+        {
+            assert_eq!(status.control.scene.as_deref(), Some("lead"));
+            advanced = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(advanced, "PCM did not finish the scene ramp");
+    let mut saver = spawn(&path, &root.join("scene-export"), true)?;
+    send(
+        &mut saver,
+        &SaveRequest {
+            settings: start.clone(),
+            recall: selected.control.recall(),
+            name: "Offline scenes".into(),
+        },
+    )?;
+    saver.0.stdin.take();
+    wait(&mut saver, 60)?;
+    let mut bytes = Vec::new();
+    saver
+        .0
+        .stdout
+        .take()
+        .unwrap()
+        .take(1024)
+        .read_to_end(&mut bytes)?;
+    let saved: String = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        store.read(&saved)?.manifest().scenes()?,
+        bundle.manifest().scenes()?
+    );
+    child.0.stdin.take();
+    wait(&mut child, 10)?;
+    let mut restored = spawn(&path, &root.join("scene-restore"), false)?;
+    let received = replies(&mut restored)?;
+    send(
+        &mut restored,
+        &StartRig {
+            revision: saved,
+            ..start
+        },
+    )?;
+    let recalled = received.recv_timeout(Duration::from_secs(30))??;
+    assert!(recalled.error.is_none());
+    assert_eq!(recalled.control.scene.as_deref(), Some("lead"));
+    compare(&selected.control, &recalled.control);
+    restored.0.stdin.take();
+    wait(&mut restored, 10)?;
+    Ok(())
+}

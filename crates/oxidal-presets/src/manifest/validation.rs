@@ -11,7 +11,7 @@ fn require(valid: bool, reason: &'static str) -> Result<()> {
 fn text(s: &str, max: usize) -> bool {
     !s.is_empty() && s.chars().count() <= max
 }
-fn id(s: &str) -> bool {
+pub(super) fn id(s: &str) -> bool {
     text(s, 64)
         && s.as_bytes()[0].is_ascii_alphabetic()
         && s.bytes()

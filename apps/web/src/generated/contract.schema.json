@@ -4531,6 +4531,23 @@
           "type": "object",
           "properties": {
             "command": {
+              "$ref": "#/$defs/SceneCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "scene"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
               "$ref": "#/$defs/ModelCommand"
             },
             "kind": {
@@ -4868,6 +4885,96 @@
         "managed"
       ]
     },
+    "Scene": {
+      "type": "object",
+      "properties": {
+        "gains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneGain"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "gains"
+      ]
+    },
+    "SceneCommand": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "scene": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "scene"
+      ]
+    },
+    "SceneGain": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "port",
+        "value"
+      ]
+    },
+    "Scenes": {
+      "type": "object",
+      "properties": {
+        "fade_ms": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "scenes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Scene"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "fade_ms",
+        "scenes"
+      ]
+    },
     "Settings": {
       "type": "object",
       "properties": {
@@ -5126,6 +5233,28 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "scene": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "scene_transitioning": {
+          "type": "boolean",
+          "default": false
+        },
+        "scenes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scenes"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "session": {
           "type": "string"
