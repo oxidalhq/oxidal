@@ -45,6 +45,7 @@ export function RigComposer({
   const [id] = useState(() => crypto.randomUUID());
   const [effects, setEffects] = useState(initial);
   const [layout, setLayout] = useState<'serial' | 'scenes'>('serial');
+  const [sceneTails, setSceneTails] = useState<'cut' | 'preserve'>('preserve');
   const [name, setName] = useState(initialName);
   const [picker, setPicker] = useState<'tones' | 'effects' | null>('tones');
   const [tones, setTones] = useState<
@@ -144,12 +145,9 @@ export function RigComposer({
           'Separate amp/cab stages need 48 kHz. Choose it in Settings → Audio.',
         );
       const document = await publishRig(
-        (layout === 'scenes' ? sceneRig : serialRig)(
-          id,
-          name,
-          effects,
-          library.native_profile,
-        ),
+        layout === 'scenes'
+          ? sceneRig(id, name, effects, library.native_profile, sceneTails)
+          : serialRig(id, name, effects, library.native_profile),
       );
       let next = await rigAudioCommand(rig, {
         kind: 'start',
@@ -253,10 +251,25 @@ export function RigComposer({
         </Button>
       </div>
       {layout === 'scenes' && (
-        <p className="caption">
-          Saved tones run in parallel. Effects stay after the scene mix for
-          shared tails.
-        </p>
+        <div className="control-stack">
+          <label htmlFor="scene-tail-mode">Scene tails</label>
+          <select
+            id="scene-tail-mode"
+            value={sceneTails}
+            disabled={busy}
+            onChange={(e) =>
+              setSceneTails(e.target.value as 'cut' | 'preserve')
+            }
+          >
+            <option value="preserve">Keep branch trails</option>
+            <option value="cut">Cut branch tails</option>
+          </select>
+          <p className="caption">
+            All branches stay ready. Shared effects keep ringing. Keeping branch
+            trails stops new input to an outgoing branch while its existing
+            sound drains.
+          </p>
+        </div>
       )}
       <div className="action-row">
         <Button

@@ -5076,7 +5076,8 @@
         "tone3000",
         "lv2",
         "split",
-        "merge"
+        "merge",
+        "gain"
       ]
     },
     "PortableOrigin": {

@@ -389,6 +389,41 @@
                       "inputGains"
                     ],
                     "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/$defs/localId"
+                      },
+                      "audioInputs": {
+                        "const": 1
+                      },
+                      "audioOutputs": {
+                        "const": 1
+                      },
+                      "kind": {
+                        "const": "gain"
+                      },
+                      "inputGains": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "minItems": 1,
+                        "maxItems": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "audioInputs",
+                      "audioOutputs",
+                      "kind",
+                      "inputGains"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               },

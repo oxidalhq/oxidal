@@ -359,11 +359,19 @@ export function MixedRig({
       scene.gains.map((gain) => gain.node),
     ) ?? [],
   );
+  const internalNodes =
+    matching?.manifest.extensions['urn:oxidal:authoring']?.internal_nodes;
+  const hiddenNodes = new Set(
+    Array.isArray(internalNodes)
+      ? internalNodes.filter((id): id is string => typeof id === 'string')
+      : [],
+  );
   const nodes =
     matching?.manifest.oxidal?.graph.nodes.filter(
       (n) =>
         !['input', 'output', 'split'].includes(n.kind) &&
-        !selectorNodes.has(n.id),
+        !selectorNodes.has(n.id) &&
+        !(n.kind === 'merge' && hiddenNodes.has(n.id)),
     ) ?? [];
   const selected =
     nodes.find(

@@ -66,7 +66,9 @@ impl Manifest {
                     .graph
                     .nodes
                     .iter()
-                    .find(|n| n.id == gain.node && n.kind == NodeKind::Merge)
+                    .find(|n| {
+                        n.id == gain.node && matches!(n.kind, NodeKind::Merge | NodeKind::Gain)
+                    })
                     .ok_or_else(bad)?;
                 if !gain.value.is_finite()
                     || !(0.0..=4.0).contains(&gain.value)

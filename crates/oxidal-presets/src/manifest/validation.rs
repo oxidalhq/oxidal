@@ -166,10 +166,15 @@ impl Manifest {
                     id(&node.id)
                         && node.audio_inputs <= 64
                         && node.audio_outputs <= 64
+                        && (node.kind != NodeKind::Gain
+                            || node.audio_inputs == 1
+                                && node.audio_outputs == 1
+                                && node.input_gains.as_ref().is_some_and(|g| g.len() == 1))
                         && node.instance.is_some() == processing
                         && node.bypassed.is_some() == processing
                         && node.instance.as_ref().is_none_or(|s| id(s))
-                        && node.input_gains.is_some() == (node.kind == NodeKind::Merge)
+                        && node.input_gains.is_some()
+                            == (matches!(node.kind, NodeKind::Merge | NodeKind::Gain))
                         && node.input_gains.as_ref().is_none_or(|gains| {
                             !gains.is_empty()
                                 && gains.len() <= 64
@@ -277,6 +282,17 @@ impl Manifest {
             }
         }
         if let Some(host) = &self.oxidal {
+            if host.graph.nodes.iter().any(|n| n.kind == NodeKind::Gain) {
+                require(
+                    self.required_extensions.iter().any(|k| k == GAIN_EXTENSION)
+                        && self
+                            .extensions
+                            .get(GAIN_EXTENSION)
+                            .is_some_and(|m| m.is_empty()),
+                    "Routing gain requires explicit supported extension",
+                )?;
+            }
+
             let plugins = unique(
                 host.lv2.iter().map(|p| (p.id.as_str(), p)),
                 "Duplicate LV2 instance",
@@ -398,6 +414,12 @@ impl Graph {
                     )?;
                     require(ins > 0 && outs > 0, "Disconnected LV2 processor")?;
                 }
+                NodeKind::Gain => require(
+                    ins == 1
+                        && outs == 1
+                        && node.input_gains.as_ref().is_some_and(|g| g.len() == 1),
+                    "Invalid routing gain channels",
+                )?,
                 NodeKind::Split => require(ins == 1 && outs >= 2, "Invalid split channels")?,
                 NodeKind::Merge => require(
                     ins >= 2

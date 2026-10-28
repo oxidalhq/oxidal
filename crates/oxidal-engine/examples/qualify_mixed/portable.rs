@@ -608,6 +608,65 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
     assert_eq!(session.snapshot().scene.as_deref(), Some("clean"));
     assert!(!session.snapshot().scene_transitioning);
     super::worker::qualify_scenes(&store.read(&revision)?, root)?;
+    // The same admitted scene controls can select input gates, preserving each
+    // real NAM branch's own history as well as shared downstream effects.
+    for side in ["l", "r"] {
+        value["oxidal"]["graph"]["nodes"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|n| n["id"] == format!("scene_{side}"))
+            .unwrap()["inputGains"] = json!([1, 1]);
+        for (index, tone) in ["tone", "tone2"].into_iter().enumerate() {
+            let gate = format!("feed_{side}_{index}");
+            let mut n = node(&gate, "gain", 1, 1);
+            n["inputGains"] = json!([if index == 0 { 1 } else { 0 }]);
+            value["oxidal"]["graph"]["nodes"]
+                .as_array_mut()
+                .unwrap()
+                .push(n);
+            let input = value["oxidal"]["graph"]["edges"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|e| e["from"]["node"] == format!("input_{side}") && e["to"]["node"] == tone)
+                .unwrap();
+            let port = input["to"]["port"].as_u64().unwrap() as u8;
+            input["to"] = json!({"node":gate,"port":0});
+            value["oxidal"]["graph"]["edges"]
+                .as_array_mut()
+                .unwrap()
+                .push(edge(&gate, 0, tone, port));
+        }
+    }
+    for catalog in ["scenes", "branches"] {
+        for scene in value["extensions"]["urn:oxidal:scenes:1"][catalog]
+            .as_array_mut()
+            .unwrap()
+        {
+            for gain in scene["gains"].as_array_mut().unwrap() {
+                let side = if gain["node"] == "scene_l" { "l" } else { "r" };
+                let index = gain["port"].as_u64().unwrap();
+                gain["node"] = json!(format!("feed_{side}_{index}"));
+                gain["port"] = json!(0);
+            }
+        }
+    }
+    value["requiredExtensions"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("urn:oxidal:gain:1"));
+    value["extensions"]["urn:oxidal:gain:1"] = json!({});
+    let preserving = Bundle::from_parts(
+        serde_json::to_vec(&value)?,
+        BTreeMap::from([("current".into(), current.to_vec())]),
+    )?;
+    let preserving_revision = store.save(&preserving)?;
+    std::fs::write(
+        root.join("scene-trails-preset-revision"),
+        preserving_revision,
+    )?;
+    super::worker::qualify_scenes(&preserving, root)?;
     println!(
         "parallel scenes: independent native A2 branches, shared LV2, finite PCM, worker selection and isolated offline recall pass; physical deadlines remain unqualified"
     );

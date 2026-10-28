@@ -2735,6 +2735,9 @@ for (const layout of ['serial', 'scenes'] as const) {
       await composer
         .getByRole('button', { name: 'Scenes', exact: true })
         .click();
+      await expect(
+        composer.getByLabel('Scene tails', { exact: true }),
+      ).toHaveValue('preserve');
       await composer
         .getByRole('button', { name: 'Add saved tone', exact: true })
         .click();
@@ -2985,6 +2988,17 @@ for (const layout of ['serial', 'scenes'] as const) {
         rig.getByRole('button', { name: 'Toggle branch Lead', exact: true }),
       ).toHaveAttribute('aria-pressed', 'true');
       expect((await state()).control.scene).toBeNull();
+      expect(savedDoc.manifest.requiredExtensions).toContain(
+        'urn:oxidal:gain:1',
+      );
+      expect(
+        savedDoc.manifest.extensions['urn:oxidal:authoring'].scene_tails,
+      ).toBe('preserve');
+      expect(
+        savedDoc.manifest.oxidal.graph.nodes.filter(
+          (n: { kind: string }) => n.kind === 'gain',
+        ),
+      ).toHaveLength(4);
       expect(
         savedDoc.manifest.extensions['urn:oxidal:scenes:1'].scenes,
       ).toHaveLength(2);

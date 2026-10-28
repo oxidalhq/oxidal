@@ -825,3 +825,104 @@ fn decoded_midi_selects_scenes_and_toggles_or_gates_the_actual_branch_mix() {
     feed(&mut session, &settings, &[0xb0, 64, 127]);
     assert_eq!(session.snapshot().scene.as_deref(), Some("lead"));
 }
+
+fn input_gate_scene_bundle() -> Bundle {
+    let mut value = serde_json::to_value(bundle(337, 0, false).manifest()).unwrap();
+    let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+    let nodes = value["oxidal"]["graph"]["nodes"].as_array_mut().unwrap();
+    nodes.iter_mut().find(|n| n["id"] == "merge").unwrap()["inputGains"] = json!([1, 1]);
+    nodes.push(
+        json!({"id":"feed_a","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[1]}),
+    );
+    nodes.push(
+        json!({"id":"feed_b","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[0]}),
+    );
+    value["oxidal"]["graph"]["edges"] = json!([
+        edge("in", 0, "split", 0),
+        edge("split", 0, "feed_a", 0),
+        edge("split", 1, "feed_b", 0),
+        edge("feed_a", 0, "fx", 0),
+        edge("fx", 0, "merge", 0),
+        edge("feed_b", 0, "merge", 1),
+        edge("merge", 0, "out", 0),
+        edge("in", 1, "out", 1)
+    ]);
+    value["extensions"]["urn:oxidal:gain:1"] = json!({});
+    value["requiredExtensions"] = json!(["urn:oxidal:scenes:1", "urn:oxidal:gain:1"]);
+    value["extensions"]["urn:oxidal:scenes:1"] = json!({"fade_ms":3,"scenes":[{"id":"clean","name":"Clean","gains":[{"node":"feed_a","port":0,"value":1},{"node":"feed_b","port":0,"value":0}]},{"id":"lead","name":"Lead","gains":[{"node":"feed_a","port":0,"value":0},{"node":"feed_b","port":0,"value":1}]}],"branches":[{"id":"clean","name":"Clean","gains":[{"node":"feed_a","port":0,"value":1}]},{"id":"lead","name":"Lead","gains":[{"node":"feed_b","port":0,"value":1}]}]});
+    Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
+}
+#[test]
+fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades() {
+    use oxidal_engine::protocol::{BranchCommand, SceneCommand};
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session =
+        Session::new(input_gate_scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    assert_eq!(session.snapshot().latency_frames, 337);
+    let render = |s: &mut Session, input: &[f32; 64]| {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        s.process(&[input, &[0.0; 64]], &mut [&mut l, &mut r])
+            .unwrap();
+        l
+    };
+    let mut input = [0.0; 64];
+    input[63] = 0.75;
+    let mut samples = render(&mut session, &input).to_vec();
+    let cursor = session.snapshot();
+    session
+        .select_scene(SceneCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            scene: "lead".into(),
+        })
+        .unwrap();
+    for _ in 0..10 {
+        samples.extend(render(&mut session, &[0.0; 64]));
+    }
+    // The old branch's queued impulse emerges after its input ramp has finished.
+    assert_eq!(samples.iter().filter(|x| **x != 0.0).count(), 1);
+    assert_eq!(samples[337 + 63], 0.75);
+    assert!(!session.snapshot().scene_transitioning);
+    let mut continuous =
+        Session::new(input_gate_scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    for _ in 0..8 {
+        render(&mut continuous, &[1.0; 64]);
+    }
+    let cursor = continuous.snapshot();
+    continuous
+        .select_scene(SceneCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            scene: "lead".into(),
+        })
+        .unwrap();
+    for _ in 0..12 {
+        assert!(
+            render(&mut continuous, &[1.0; 64])
+                .iter()
+                .all(|v| (*v - 1.0).abs() < 1e-5)
+        );
+    }
+    // Removing the newly selected input drains the already prepared delay path;
+    // no branch output gate cuts that history and no processor is reconstructed.
+    let cursor = continuous.snapshot();
+    continuous
+        .set_branch(BranchCommand {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            branch: "lead".into(),
+            enabled: false,
+        })
+        .unwrap();
+    let mut tail = Vec::new();
+    for _ in 0..12 {
+        tail.extend(render(&mut continuous, &[1.0; 64]));
+    }
+    assert!(tail[..337].iter().all(|v| *v == 1.0));
+    assert!(tail[337 + 144..].iter().all(|v| *v == 0.0));
+    let recall = continuous.snapshot().recall();
+    let mut fresh =
+        Session::new(input_gate_scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    fresh.restore(&recall).unwrap();
+    assert!(fresh.snapshot().branches.iter().all(|b| !b.enabled));
+}

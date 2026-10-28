@@ -100,11 +100,9 @@ impl Manifest {
     /// Only explicitly implemented required extensions are admitted. Unknown
     /// optional metadata is preserved, never treated as a sonic capability.
     pub fn check_required_extensions(&self) -> Result<()> {
-        if self
-            .required_extensions
-            .iter()
-            .any(|key| key != SCENES_EXTENSION && key != NATIVE_SETTINGS_EXTENSION)
-        {
+        if self.required_extensions.iter().any(|key| {
+            key != SCENES_EXTENSION && key != NATIVE_SETTINGS_EXTENSION && key != GAIN_EXTENSION
+        }) {
             return Err(Error::Invalid("Unsupported required preset extension"));
         }
         Ok(())
@@ -299,6 +297,7 @@ pub enum NodeKind {
     Lv2,
     Split,
     Merge,
+    Gain,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -382,3 +381,6 @@ impl Manifest {
         Ok(Some(settings))
     }
 }
+
+/// Required support for explicit mono routing gains, including scene input gates.
+pub const GAIN_EXTENSION: &str = "urn:oxidal:gain:1";

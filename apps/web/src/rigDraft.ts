@@ -265,6 +265,7 @@ export function sceneRig(
   name: string,
   effects: DraftEffect[],
   profile: string,
+  tails: 'cut' | 'preserve' = 'cut',
 ): RigPublish {
   const tones = effects.filter((e): e is NativeDraft => e.kind === 'native');
   if (tones.some((e) => e.stage))
@@ -323,25 +324,62 @@ export function sceneRig(
       ),
     );
   }
+  if (tails === 'preserve') {
+    manifest.requiredExtensions.push('urn:oxidal:gain:1');
+    manifest.extensions['urn:oxidal:gain:1'] = {};
+    // Gate each branch's input rather than its output. Every prepared branch
+    // keeps running and drains into the unity output sum after deselection.
+    for (const side of ['left', 'right']) {
+      host.graph.nodes.find((n) => n.id === `scene-${side}`)!.inputGains =
+        tones.map(() => 1);
+      tones.forEach((tone, index) => {
+        const gate = `scene-feed-${side}-${index}`;
+        host.graph.nodes.push({
+          id: gate,
+          kind: 'gain',
+          audioInputs: 1,
+          audioOutputs: 1,
+          inputGains: [index === 0 ? 1 : 0],
+        });
+        const incoming = host.graph.edges.find(
+          (e) => e.from.node === `scene-input-${side}` && e.to.node === tone.id,
+        )!;
+        const port = incoming.to.port;
+        incoming.to = { node: gate, port: 0 };
+        host.graph.edges.push({
+          from: { node: gate, port: 0 },
+          to: { node: tone.id, port },
+        });
+      });
+    }
+  }
+  manifest.extensions['urn:oxidal:authoring']!.scene_tails = tails;
+  manifest.extensions['urn:oxidal:authoring']!.internal_nodes = [
+    ...host.graph.nodes
+      .filter((n) => n.id.startsWith('scene-'))
+      .map((n) => n.id),
+  ];
+  const selection = (side: string, port: number) =>
+    tails === 'preserve'
+      ? { node: `scene-feed-${side}-${port}`, port: 0 }
+      : { node: `scene-${side}`, port };
   manifest.requiredExtensions.push('urn:oxidal:scenes:1');
   manifest.extensions['urn:oxidal:scenes:1'] = {
     fade_ms: 10,
     branches: tones.map((tone, port) => ({
       id: tone.id,
       name: tone.name,
-      gains: ['scene-left', 'scene-right'].map((node) => ({
-        node,
-        port,
+      gains: ['left', 'right'].map((side) => ({
+        ...selection(side, port),
         value: 1,
       })),
     })),
     scenes: tones.map((tone, index) => ({
       id: tone.id,
       name: tone.name,
-      gains: ['scene-left', 'scene-right'].flatMap((node) =>
+      gains: ['left', 'right'].flatMap((side) =>
         tones.map((_, port) => ({
-          node,
-          port,
+          ...selection(side, port),
           value: port === index ? 1 : 0,
         })),
       ),

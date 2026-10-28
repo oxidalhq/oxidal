@@ -235,7 +235,7 @@ impl PreparedPorts {
                 }
                 NodeKind::Input => input = index,
                 NodeKind::Output => output = index,
-                NodeKind::Split | NodeKind::Merge => {}
+                NodeKind::Split | NodeKind::Merge | NodeKind::Gain => {}
             }
             if let Some(p) = &mut processor {
                 if p.configuration() != (rate, frames) {
@@ -440,7 +440,7 @@ impl PreparedPorts {
                 let n = self
                     .nodes
                     .iter_mut()
-                    .find(|n| &n.id == node && n.kind == NodeKind::Merge)
+                    .find(|n| &n.id == node && matches!(n.kind, NodeKind::Merge | NodeKind::Gain))
                     .ok_or("Unknown merge")?;
                 let gain = n.gains.get_mut(*port).ok_or("Unknown merge port")?;
                 if !value.is_finite() || !(0.0..=4.0).contains(&value) {
@@ -470,7 +470,7 @@ impl PreparedPorts {
                     .any(|v| v.node == value.node && v.port == value.port)
                 || !self.nodes.iter().any(|n| {
                     n.id == value.node
-                        && n.kind == NodeKind::Merge
+                        && matches!(n.kind, NodeKind::Merge | NodeKind::Gain)
                         && usize::from(value.port) < n.gains.len()
                 })
             {
@@ -565,7 +565,7 @@ impl PreparedPorts {
                         data.copy_within(0..self.frames, port * self.frames);
                     }
                 }
-                NodeKind::Merge => {
+                NodeKind::Merge | NodeKind::Gain => {
                     for frame in 0..self.frames {
                         let value = node
                             .gains

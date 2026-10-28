@@ -250,3 +250,42 @@ it('builds parallel scene branches with shared post effects and exact stereo sel
     'Choose 2',
   );
 });
+
+it('keeps outgoing branch histories by selecting input gates and unity-summing outputs', () => {
+  const result = sceneRig(
+    '68448a6d-0168-4fc8-b337-c12959165271',
+    'Trails',
+    [native, { ...native, id: 'second-tone', name: 'Lead' }, lv2Effect(mono)],
+    'tone3000-plugin:' + 'a'.repeat(40),
+    'preserve',
+  );
+  const manifest = JSON.parse(result.manifest_json);
+  expect(validator(manifest)).toBe(true);
+  const nodes = manifest.oxidal.graph.nodes as {
+    id: string;
+    inputGains?: number[];
+  }[];
+  expect(nodes.find((n) => n.id === 'scene-left')!.inputGains).toEqual([1, 1]);
+  expect(nodes.find((n) => n.id === 'scene-right')!.inputGains).toEqual([1, 1]);
+  const extension = manifest.extensions['urn:oxidal:scenes:1'];
+  expect(extension.scenes[0].gains).toEqual([
+    { node: 'scene-feed-left-0', port: 0, value: 1 },
+    { node: 'scene-feed-left-1', port: 0, value: 0 },
+    { node: 'scene-feed-right-0', port: 0, value: 1 },
+    { node: 'scene-feed-right-1', port: 0, value: 0 },
+  ]);
+  expect(extension.branches[1].gains).toEqual([
+    { node: 'scene-feed-left-1', port: 0, value: 1 },
+    { node: 'scene-feed-right-1', port: 0, value: 1 },
+  ]);
+  expect(
+    manifest.oxidal.graph.edges
+      .filter((e: { to: { node: string } }) => e.to.node === native.id)
+      .every((e: { from: { node: string } }) =>
+        e.from.node.startsWith('scene-feed-'),
+      ),
+  ).toBe(true);
+  expect(manifest.extensions['urn:oxidal:authoring'].scene_tails).toBe(
+    'preserve',
+  );
+});

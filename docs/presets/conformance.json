@@ -895,5 +895,237 @@
     ],
     "shape": false,
     "valid": false
+  },
+  {
+    "name": "explicit mono routing gain",
+    "base": "lv2-only",
+    "shape": true,
+    "valid": true,
+    "changes": [
+      {
+        "op": "replace",
+        "path": "/oxidal/graph",
+        "value": {
+          "nodes": [
+            {
+              "id": "in",
+              "kind": "input",
+              "audioInputs": 0,
+              "audioOutputs": 1
+            },
+            {
+              "id": "level",
+              "kind": "gain",
+              "audioInputs": 1,
+              "audioOutputs": 1,
+              "inputGains": [0.5]
+            },
+            {
+              "id": "out",
+              "kind": "output",
+              "audioInputs": 1,
+              "audioOutputs": 0
+            }
+          ],
+          "edges": [
+            {
+              "from": {
+                "node": "in",
+                "port": 0
+              },
+              "to": {
+                "node": "level",
+                "port": 0
+              }
+            },
+            {
+              "from": {
+                "node": "level",
+                "port": 0
+              },
+              "to": {
+                "node": "out",
+                "port": 0
+              }
+            }
+          ]
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/oxidal/lv2",
+        "value": []
+      },
+      {
+        "op": "replace",
+        "path": "/extensions",
+        "value": {
+          "urn:oxidal:gain:1": {}
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/requiredExtensions",
+        "value": ["urn:oxidal:gain:1"]
+      }
+    ]
+  },
+  {
+    "name": "routing gain requires support marker",
+    "base": "lv2-only",
+    "shape": true,
+    "valid": false,
+    "changes": [
+      {
+        "op": "replace",
+        "path": "/oxidal/graph",
+        "value": {
+          "nodes": [
+            {
+              "id": "in",
+              "kind": "input",
+              "audioInputs": 0,
+              "audioOutputs": 1
+            },
+            {
+              "id": "level",
+              "kind": "gain",
+              "audioInputs": 1,
+              "audioOutputs": 1,
+              "inputGains": [0.5]
+            },
+            {
+              "id": "out",
+              "kind": "output",
+              "audioInputs": 1,
+              "audioOutputs": 0
+            }
+          ],
+          "edges": [
+            {
+              "from": {
+                "node": "in",
+                "port": 0
+              },
+              "to": {
+                "node": "level",
+                "port": 0
+              }
+            },
+            {
+              "from": {
+                "node": "level",
+                "port": 0
+              },
+              "to": {
+                "node": "out",
+                "port": 0
+              }
+            }
+          ]
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/oxidal/lv2",
+        "value": []
+      },
+      {
+        "op": "replace",
+        "path": "/extensions",
+        "value": {
+          "urn:oxidal:gain:1": {}
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/requiredExtensions",
+        "value": ["urn:oxidal:gain:1"]
+      },
+      {
+        "op": "replace",
+        "path": "/requiredExtensions",
+        "value": []
+      }
+    ]
+  },
+  {
+    "name": "routing gain is mono",
+    "base": "lv2-only",
+    "shape": false,
+    "valid": false,
+    "changes": [
+      {
+        "op": "replace",
+        "path": "/oxidal/graph",
+        "value": {
+          "nodes": [
+            {
+              "id": "in",
+              "kind": "input",
+              "audioInputs": 0,
+              "audioOutputs": 1
+            },
+            {
+              "id": "level",
+              "kind": "gain",
+              "audioInputs": 1,
+              "audioOutputs": 1,
+              "inputGains": [0.5]
+            },
+            {
+              "id": "out",
+              "kind": "output",
+              "audioInputs": 1,
+              "audioOutputs": 0
+            }
+          ],
+          "edges": [
+            {
+              "from": {
+                "node": "in",
+                "port": 0
+              },
+              "to": {
+                "node": "level",
+                "port": 0
+              }
+            },
+            {
+              "from": {
+                "node": "level",
+                "port": 0
+              },
+              "to": {
+                "node": "out",
+                "port": 0
+              }
+            }
+          ]
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/oxidal/lv2",
+        "value": []
+      },
+      {
+        "op": "replace",
+        "path": "/extensions",
+        "value": {
+          "urn:oxidal:gain:1": {}
+        }
+      },
+      {
+        "op": "replace",
+        "path": "/requiredExtensions",
+        "value": ["urn:oxidal:gain:1"]
+      },
+      {
+        "op": "replace",
+        "path": "/oxidal/graph/nodes/1/audioInputs",
+        "value": 2
+      }
+    ]
   }
 ]

@@ -513,7 +513,7 @@ export type Message =
       kind: "control";
       value: number;
     };
-export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge";
+export type PortableNodeKind = "input" | "output" | "tone3000" | "lv2" | "split" | "merge" | "gain";
 export type PortableTails = "cut" | "preserve";
 export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
 export type PortablePartitionInput = "left" | "right";
