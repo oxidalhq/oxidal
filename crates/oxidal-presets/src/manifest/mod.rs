@@ -325,18 +325,18 @@ pub struct NativeSettings {
     pub parameters: BTreeMap<String, f32>,
 }
 impl NativeSettings {
+    pub const IDS: [&str; 7] = [
+        "osEnabled",
+        "osFactor",
+        "pitchEnabled",
+        "pitchWindow",
+        "inputCalibrationLevel",
+        "calibrateInput",
+        "targetLoudness",
+    ];
     pub fn valid(&self) -> bool {
-        const IDS: [&str; 7] = [
-            "osEnabled",
-            "osFactor",
-            "pitchEnabled",
-            "pitchWindow",
-            "inputCalibrationLevel",
-            "calibrateInput",
-            "targetLoudness",
-        ];
-        self.parameters.len() == IDS.len()
-            && IDS.iter().all(|id| {
+        self.parameters.len() == Self::IDS.len()
+            && Self::IDS.iter().all(|id| {
                 self.parameters.get(*id).is_some_and(|v| {
                     v.is_finite()
                         && (0.0..=1.0).contains(v)

@@ -210,7 +210,7 @@ impl Authoring {
         let parameters: Vec<crate::protocol::Parameter> =
             serde_json::from_value(engine.catalog().map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
-        let setting_steps = parameters
+        let mut setting_steps: std::collections::BTreeMap<String, f32> = parameters
             .iter()
             .filter(|p| prepared_setting(&p.id))
             .map(|p| {
@@ -224,7 +224,7 @@ impl Authoring {
                 (p.id.clone(), step)
             })
             .collect();
-        let settings = parameters
+        let mut settings: Vec<oxidal_audio::lifecycle::LiveControl> = parameters
             .into_iter()
             .filter(|p| prepared_setting(&p.id))
             .map(|p| oxidal_audio::lifecycle::LiveControl {
@@ -235,6 +235,31 @@ impl Authoring {
                 toggle: p.toggle,
             })
             .collect();
+        for control in engine
+            .block_controls()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .filter(|p| p.staged && p.parameter == "slimSize")
+        {
+            setting_steps.insert(control.id.clone(), control.step as f32);
+            settings.push(oxidal_audio::lifecycle::LiveControl {
+                target: control.id,
+                label: format!(
+                    "NAM size · {} · {}",
+                    control.lane,
+                    control.name.chars().take(32).collect::<String>()
+                ),
+                display: if control.value == 0.0 {
+                    "Lite".into()
+                } else if control.value == 1.0 {
+                    "Full".into()
+                } else {
+                    format!("{:.1}%", control.value * 100.0)
+                },
+                value: control.value as f32,
+                toggle: false,
+            });
+        }
         let state = AuthoringStatus {
             settings,
             setting_steps,
@@ -319,9 +344,20 @@ impl Authoring {
                         .into_iter()
                         .find(|p| p.target == *parameter && p.accepts(*value))
                         .ok_or("Invalid or non-staged native setting")?;
-                    engine
-                        .set_normalized(&allowed.target, *value)
-                        .map_err(|e| e.to_string())?;
+                    if let Some(block) = engine
+                        .block_controls()
+                        .map_err(|e| e.to_string())?
+                        .into_iter()
+                        .find(|p| p.id == allowed.target && p.staged && p.parameter == "slimSize")
+                    {
+                        engine
+                            .set_block(&block.block_id, &block.parameter, *value)
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        engine
+                            .set_normalized(&allowed.target, *value)
+                            .map_err(|e| e.to_string())?;
+                    }
                 }
                 AuthoringAction::Remove { block_id } => {
                     let layout = engine.layout().map_err(|e| e.to_string())?;

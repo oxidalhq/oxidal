@@ -2237,6 +2237,35 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
+  await rig.getByText('DSP settings', { exact: true }).click();
+  const modelSize = (await get()).control.authoring[0].status.settings.find(
+    (setting: { target: string }) => setting.target.endsWith(':slimSize'),
+  );
+  expect(modelSize).toBeTruthy();
+  await rig.getByRole('button', { name: /NAM size/ }).click();
+  const sizeDialog = page.getByRole('dialog');
+  await sizeDialog
+    .getByRole('slider', { name: 'Prepared setting value' })
+    .press(modelSize.value < 0.5 ? 'ArrowRight' : 'ArrowLeft');
+  const sizeApplied = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/rig-audio') &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON()?.action?.kind === 'authoring',
+  );
+  await sizeDialog.getByRole('button', { name: 'Apply', exact: true }).click();
+  const sizeReply = await sizeApplied;
+  expect(sizeReply.ok(), await sizeReply.text()).toBe(true);
+  expect((await sizeReply.json()).phase).toBe('starting');
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  await expect
+    .poll(
+      async () =>
+        (await get()).control.authoring[0].status.settings.find(
+          (setting: { target: string }) => setting.target === modelSize.target,
+        ).value,
+    )
+    .not.toBe(modelSize.value);
   const eq = rig.getByRole('region', { name: 'Block EQ' });
   await expect(eq).toBeVisible();
   const eqBefore = (await get()).control.eq;

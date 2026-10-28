@@ -1433,6 +1433,36 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
             "prepared readback {parameter}"
         );
     }
+    let size = state["authoring"]["settings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["target"].as_str().unwrap().ends_with(":slimSize"))
+        .expect("real A2 fixture size capability")["target"]
+        .clone();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"parameter","parameter":size,"value":0.75}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200, "{}", response.text().await.unwrap());
+    state = response.json().await.unwrap();
+    assert!(
+        (state["authoring"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == size)
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - 0.75)
+            .abs()
+            < 1e-5
+    );
+
     let receipt = state["configured"]["working"].clone();
     let mut stream = state["configured"]["stream"].clone();
     stream["input"]["period_frames"] = json!(256);
@@ -1475,6 +1505,21 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["authoring"]["layout"], duplicated);
     assert_eq!(state["configured"]["working"], receipt);
+    assert!(
+        (state["authoring"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == size)
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - 0.75)
+            .abs()
+            < 1e-5,
+        "model size survives fresh daemon boot"
+    );
+
     let value = state["controls"]
         .as_array()
         .unwrap()

@@ -326,6 +326,34 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         assert!((control(&s, &native) - 0.6).abs() < 1e-5);
         assert_eq!(s["control"]["authoring"][0]["status"]["layout"], expanded);
     }
+    let size = s["control"]["authoring"][0]["status"]["settings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["target"].as_str().unwrap().ends_with(":slimSize"))
+        .expect("A2 size capability")["target"]
+        .clone();
+    s = apply(
+        &c,
+        &url,
+        author(&s, json!({"kind":"parameter","parameter":size,"value":0.6})),
+    )
+    .await;
+    assert_eq!(s["phase"], "starting");
+    s = phase(&c, &url, "running").await;
+    assert!(
+        (s["control"]["authoring"][0]["status"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == size)
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - 0.6)
+            .abs()
+            < 1e-5
+    );
     // Daemon-owned polling must finish alignment with no browser utility polls.
     let mono = s["control"]["authoring"][0]["status"]["layout"].clone();
     s = apply(
@@ -405,11 +433,42 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     // Asynchronous export completion must not invalidate the last audio readback.
     assert_eq!(get(&c, &url, "rig-audio").await["revision"], s["revision"]);
     assert_ne!(saved, revision);
+    let saved_settings = store
+        .read(&saved)
+        .unwrap()
+        .manifest()
+        .native_settings()
+        .unwrap()
+        .unwrap();
+    assert!(
+        saved_settings
+            .instances
+            .values()
+            .all(|s| s.parameters.len() == 7
+                && s.parameters.keys().all(|id| !id.starts_with("block:"))),
+        "tone-local model size must not pollute instance settings"
+    );
+
     assert_eq!(control(&get(&c, &url, "rig-audio").await, &gain), -9.0);
     let before_frames = s["processed_frames"].as_u64().unwrap();
     let s = apply(&c, &url, json!({"kind":"restart"})).await;
     assert_eq!(control(&s, &gain), -9.0);
     assert_eq!(s["control"]["eq"], confirmed_eq);
+    assert!(
+        (s["control"]["authoring"][0]["status"]["settings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["target"] == size)
+            .unwrap()["value"]
+            .as_f64()
+            .unwrap()
+            - 0.6)
+            .abs()
+            < 1e-5,
+        "hybrid model size survives restart"
+    );
+
     assert!((control(&s, &native) - 0.6).abs() < 1e-5);
     // Rate/buffer changes reconstruct the confirmed unsaved controls.
     let mut updated_stream = stream();

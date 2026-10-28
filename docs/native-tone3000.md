@@ -420,3 +420,17 @@ non-invalidating tuner polls; the mixed test finishes alignment without browser
 utility polls. One focused shared browser flow covers tuner visibility and
 measurement cancellation. Hardware input, accuracy under stage noise and physical
 deadlines remain separate Pi qualification.
+
+Sounding whole-native **DSP settings** also exposes a selected block's requested
+NAM size when the loaded native engine advertises slimmable-model support. This
+uses the existing isolated preparation/restart path, not a hot weight swap.
+The field is absent for unsupported models; the native setter rechecks capability.
+The endpoints are labelled Lite and Full; intermediate values are normalized
+requests, not promised percentages of CPU or effective neuron count.
+
+Native and hybrid actual-worker tests apply requested sizes and retain them through
+working-state restart/boot and subsequent Save/recovery workflows. Hybrid export
+keeps the size in the embedded tone, separately from its seven typed native
+instance settings. One focused browser workflow applies model size and waits for
+the preparation acknowledgement and new readback before continuing. Extracted
+stage size editing and persistent native-default preferences remain separate gaps.

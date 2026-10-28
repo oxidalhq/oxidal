@@ -223,23 +223,29 @@ export function NativeAuthoring({
             role="group"
             aria-label="Prepared DSP settings"
           >
-            {status.settings.map((setting) => (
-              <Button
-                key={setting.target}
-                variant="outline"
-                disabled={editingDisabled}
-                onClick={() =>
-                  setSettingDraft({
-                    control: setting,
-                    value: setting.value,
-                    session: session,
-                    revision: revision,
-                  })
-                }
-              >
-                {setting.label} · {setting.display}
-              </Button>
-            ))}
+            {status.settings
+              .filter(
+                (setting) =>
+                  !setting.target.startsWith('block:') ||
+                  setting.target === `block:${selectedBlock}:slimSize`,
+              )
+              .map((setting) => (
+                <Button
+                  key={setting.target}
+                  variant="outline"
+                  disabled={editingDisabled}
+                  onClick={() =>
+                    setSettingDraft({
+                      control: setting,
+                      value: setting.value,
+                      session: session,
+                      revision: revision,
+                    })
+                  }
+                >
+                  {setting.label} · {setting.display}
+                </Button>
+              ))}
           </div>
         </details>
       )}
@@ -265,11 +271,16 @@ export function NativeAuthoring({
               setSettingDraft((old) => (old ? { ...old, value } : old))
             }
             format={(value) =>
-              settingDraft.control.toggle
-                ? value === 1
-                  ? 'On'
-                  : 'Off'
-                : `${(value * 100).toFixed(1)}%`
+              settingDraft.control.target.endsWith(':slimSize') &&
+              (value === 0 || value === 1)
+                ? value === 0
+                  ? 'Lite'
+                  : 'Full'
+                : settingDraft.control.toggle
+                  ? value === 1
+                    ? 'On'
+                    : 'Off'
+                  : `${(value * 100).toFixed(1)}%`
             }
             commitHint="Audio restarts when applied."
           />

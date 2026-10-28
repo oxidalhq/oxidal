@@ -211,6 +211,9 @@ fn save_with_assets(
             parameters: status
                 .settings
                 .iter()
+                .filter(|p| {
+                    oxidal_presets::manifest::NativeSettings::IDS.contains(&p.target.as_str())
+                })
                 .map(|p| (p.target.clone(), p.value))
                 .collect(),
         };
