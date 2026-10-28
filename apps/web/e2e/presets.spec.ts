@@ -393,6 +393,24 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     exact: true,
   });
   await expect(directBass).toBeVisible();
+  const groups = editor.getByRole('group', { name: 'Draft control groups' });
+  await groups.getByRole('button', { name: 'Pitch', exact: true }).click();
+  await expect(
+    editor.getByRole('button', {
+      name: 'Adjust draft Pitch shift amount',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(directBass).toHaveCount(0);
+  await groups.getByRole('button', { name: 'Stereo', exact: true }).click();
+  await expect(
+    editor.getByRole('button', {
+      name: 'Adjust draft Alignment offset',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await groups.getByRole('button', { name: 'Tone', exact: true }).click();
+
   await directBass.click();
   await expect(editor.getByRole('dialog')).toBeVisible();
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -472,7 +490,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   const writable = catalog.parameters.filter(
     (p: { writable: boolean }) => p.writable,
   );
-  expect(writable).toHaveLength(22);
+  expect(writable).toHaveLength(39);
   expect(writable.map((p: { id: string }) => p.id)).toEqual(
     expect.arrayContaining([
       'outputBalance',
@@ -483,12 +501,31 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
       'spreadCrossover',
       'spreadCrossoverEnabled',
       'spreadDiffuseEnabled',
+      'alignEnabled',
+      'alignOffset',
+      'alignWobble',
+      'alignWobbleEnabled',
+      'alignCrossover',
+      'alignCrossoverEnabled',
+      'alignDiffuseEnabled',
+      'chainPanLeft',
+      'chainPanRight',
+      'chainPanLinked',
+      'chainInvertLeft',
+      'chainInvertRight',
+      'pitchEnabled',
+      'pitchSemitones',
+      'pitchStep',
+      'pitchTonality',
+      'pitchWindow',
     ]),
   );
   for (const [id, label] of [
     ['toneMid', 'Middle'],
     ['toneTreble', 'Treble'],
     ['gateThreshold', 'Gate threshold'],
+    ['alignOffset', 'Alignment offset'],
+    ['pitchSemitones', 'Pitch shift amount'],
   ]) {
     await editor.getByLabel('Native control').selectOption(id!);
     await expect(

@@ -1043,6 +1043,23 @@ pub(crate) fn parameter_label(id: &str) -> &str {
         "spreadCrossover" => "Crossover frequency",
         "spreadCrossoverEnabled" => "Low-band protection",
         "spreadDiffuseEnabled" => "Diffusion",
+        "alignEnabled" => "Alignment",
+        "alignOffset" => "Alignment offset",
+        "alignWobble" => "Alignment wobble depth",
+        "alignWobbleEnabled" => "Alignment wobble",
+        "alignCrossover" => "Alignment crossover",
+        "alignCrossoverEnabled" => "Alignment low-band protection",
+        "alignDiffuseEnabled" => "Alignment diffusion",
+        "chainPanLeft" => "Left chain pan",
+        "chainPanRight" => "Right chain pan",
+        "chainPanLinked" => "Link chain pans",
+        "chainInvertLeft" => "Left polarity inversion",
+        "chainInvertRight" => "Right polarity inversion",
+        "pitchEnabled" => "Pitch shift",
+        "pitchSemitones" => "Pitch shift amount",
+        "pitchStep" => "Whole semitones",
+        "pitchTonality" => "Pitch tonality",
+        "pitchWindow" => "Pitch window",
         "toneBass" => "Bass",
         "toneMid" => "Middle",
         "toneTreble" => "Treble",
@@ -1069,7 +1086,7 @@ pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
     match p.id.as_str() {
         "inputLevel" | "outputLevel" => format!("{:.1} dB", (p.normalized - 0.5) * 48.0),
         "outputBalance" => format!("{:.1} dB", (p.normalized - 0.5) * 24.0),
-        "spreadOffset" => {
+        "spreadOffset" | "alignOffset" => {
             let ms = (p.normalized - 0.5) * 48.0;
             if ms.abs() < 0.05 {
                 "0 ms".into()
@@ -1077,8 +1094,30 @@ pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
                 format!("{:.1} ms {}", ms.abs(), if ms < 0.0 { "L" } else { "R" })
             }
         }
-        "spreadWobble" => format!("{:.0}%", p.normalized * 100.0),
-        "spreadCrossover" => format!("{:.0} Hz", 32.5 * 16.0_f64.powf(p.normalized)),
+        "spreadWobble" | "alignWobble" => format!("{:.0}%", p.normalized * 100.0),
+        "spreadCrossover" | "alignCrossover" => {
+            format!("{:.0} Hz", 32.5 * 16.0_f64.powf(p.normalized))
+        }
+        "chainPanLeft" | "chainPanRight" => {
+            let position = p.normalized - 0.5;
+            if position.abs() < 0.0001 {
+                "Center".into()
+            } else {
+                format!(
+                    "{:.0}% {}",
+                    position.abs() * 200.0,
+                    if position < 0.0 { "L" } else { "R" }
+                )
+            }
+        }
+        "pitchSemitones" => format!("{:+.1} st", p.value),
+        "pitchTonality" => {
+            if p.value >= 19999.0 {
+                "Off".into()
+            } else {
+                format!("{:.0} Hz", p.value)
+            }
+        }
         "gateThreshold" | "gateRange" => format!("{:.1} dB", p.value),
         "gateRelease" | "gateHold" => format!("{:.1} ms", p.value),
         "toneBass" | "toneMid" | "toneTreble" => format!("{:.1}", p.value),

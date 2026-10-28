@@ -1376,7 +1376,7 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
             .ends_with(" ms")
     );
     let editable: Vec<_> = initial.parameters.iter().filter(|p| p.writable).collect();
-    assert_eq!(editable.len(), 22);
+    assert_eq!(editable.len(), 39);
     assert_eq!(
         initial.parameters.len(),
         43,
@@ -1621,7 +1621,7 @@ fn qualify_editor_scalars(root: &std::path::Path, bytes: &[u8]) -> Result<(), Bo
     assert!(!reloaded.can_undo && !reloaded.can_redo);
     assert!(!reloaded.block_controls.is_empty());
     assert_eq!(store.original(&original.sha256)?, bytes);
-    eprintln!("qualify: 22 descriptor-driven globals preview/cancel/commit/save/reopen passed");
+    eprintln!("qualify: 39 descriptor-driven globals preview/cancel/commit/save/reopen passed");
     Ok(())
 }
 

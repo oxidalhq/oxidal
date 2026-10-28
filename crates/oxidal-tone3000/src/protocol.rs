@@ -119,10 +119,36 @@ pub enum WorkerReply {
 }
 /// This initial slice exposes only controls whose behavior is exercised by native tests.
 pub fn writable(id: &str) -> bool {
-    live_writable(id) || matches!(id, "inputCalibrationLevel" | "osEnabled" | "osFactor")
+    live_writable(id)
+        || matches!(
+            id,
+            "inputCalibrationLevel"
+                | "osEnabled"
+                | "osFactor"
+                | "alignEnabled"
+                | "alignOffset"
+                | "alignWobble"
+                | "alignWobbleEnabled"
+                | "alignCrossover"
+                | "alignCrossoverEnabled"
+                | "alignDiffuseEnabled"
+                | "chainPanLeft"
+                | "chainPanRight"
+                | "chainPanLinked"
+                | "chainInvertLeft"
+                | "chainInvertRight"
+                | "pitchEnabled"
+                | "pitchSemitones"
+                | "pitchStep"
+                | "pitchTonality"
+                | "pitchWindow"
+        )
 }
 pub fn staged(id: &str) -> bool {
-    matches!(id, "osEnabled" | "osFactor")
+    matches!(
+        id,
+        "osEnabled" | "osFactor" | "pitchEnabled" | "pitchWindow"
+    )
 }
 
 /// Scalar controls without routing, model, calibration or latency changes.

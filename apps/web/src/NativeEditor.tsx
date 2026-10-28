@@ -43,6 +43,7 @@ export function NativeEditor({
   const [error, setError] = useState('');
   const [selection, setSelection] = useState('');
   const [requestedTarget, setTarget] = useState('toneBass');
+  const [controlGroup, setControlGroup] = useState('Tone');
   const editableParameters = state?.parameters.filter((p) => p.writable) ?? [];
   const target =
     state?.block_controls.some((p) => p.id === requestedTarget) ||
@@ -325,12 +326,43 @@ export function NativeEditor({
       </p>
       {state?.loaded && (
         <div
+          className="action-row"
+          role="group"
+          aria-label="Draft control groups"
+        >
+          {['Tone', 'Gate', 'Stereo', 'Pitch'].map((group) => (
+            <Button
+              key={group}
+              variant={controlGroup === group ? 'secondary' : 'ghost'}
+              aria-pressed={controlGroup === group}
+              disabled={blocked || !!state.edit}
+              onClick={() => setControlGroup(group)}
+            >
+              {group}
+            </Button>
+          ))}
+        </div>
+      )}
+      {state?.loaded && (
+        <div
           className="native-parameter-grid"
           role="group"
           aria-label="Draft tone controls"
         >
           {editableParameters
-            .filter((p) => p.tone)
+            .filter((p) => {
+              if (!p.tone) return false;
+              if (p.id.startsWith('gate')) return controlGroup === 'Gate';
+              if (p.id.startsWith('pitch')) return controlGroup === 'Pitch';
+              if (
+                p.id.startsWith('spread') ||
+                p.id.startsWith('align') ||
+                p.id.startsWith('chain') ||
+                p.id === 'outputBalance'
+              )
+                return controlGroup === 'Stereo';
+              return controlGroup === 'Tone';
+            })
             .map((p) => (
               <button
                 key={p.id}
