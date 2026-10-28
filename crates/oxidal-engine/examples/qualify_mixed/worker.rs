@@ -986,7 +986,20 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
     let store = BundleStore::new(path.clone());
     let revision = store.save(bundle)?;
     let start = StartRig {
-        midi: None,
+        midi: Some(oxidal_audio::midi::Settings {
+            input: "hw:Unavailable,0,0".into(),
+            channel: 1,
+            bindings: vec![],
+            branch_bindings: vec![],
+            parameter_bindings: vec![ParameterBinding {
+                target: Target::Native {
+                    node: "removed-node".into(),
+                    parameter: "deleted-control".into(),
+                },
+                controller: 23,
+                mode: ControlMode::Absolute,
+            }],
+        }),
         prepared: vec![],
         revision,
         stream: stream(),

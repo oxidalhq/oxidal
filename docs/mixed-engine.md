@@ -684,3 +684,13 @@ preparation before scalar/model replay. A rejected checkpoint restores the previ
 sound and reports a terminal model failure. Guarded extracted-stage replacement
 and physical timing limits are unchanged. `qualify_mixed --models` selects the same
 maintained model gate already exercised by full native qualification.
+
+### Unavailable MIDI controls after authoring
+
+A saved scalar mapping whose exact target disappeared remains visible as an
+unavailable mapping and stays inert during reconstruction. It cannot prevent audio
+from starting or silently bind to another control. Applying a new mapping still
+requires a currently available target; remove stale rows before applying a revised
+map. Hardware dispatch reports an unavailable target as a MIDI error while keeping
+the audio owner healthy. Channel/input/CC validation remains strict. Native actual
+worker restart and mixed actual-worker saved recall cover this recovery boundary.

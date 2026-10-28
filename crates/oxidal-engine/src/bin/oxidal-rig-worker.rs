@@ -149,7 +149,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(())
     }
-    validate_midi(&settings.midi, &session)?;
+    if let Some(settings) = &settings.midi {
+        session.snapshot().validate_restored_midi(settings)?;
+    }
     let mut midi = oxidal_audio::midi::Connection::new(settings.midi.clone());
     fn snapshot(session: &ResidentSet, midi: &oxidal_audio::midi::Status) -> Snapshot {
         let mut state = session.snapshot();

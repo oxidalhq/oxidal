@@ -543,6 +543,19 @@ pub struct PrepareNativeSetting {
 
 impl Snapshot {
     pub fn validate_midi(&self, settings: &oxidal_audio::midi::Settings) -> Result<(), String> {
+        self.validate_midi_inner(settings, false)
+    }
+    pub fn validate_restored_midi(
+        &self,
+        settings: &oxidal_audio::midi::Settings,
+    ) -> Result<(), String> {
+        self.validate_midi_inner(settings, true)
+    }
+    fn validate_midi_inner(
+        &self,
+        settings: &oxidal_audio::midi::Settings,
+        allow_unavailable: bool,
+    ) -> Result<(), String> {
         settings.validate()?;
         if settings.bindings.iter().any(|b| {
             !self
@@ -560,11 +573,12 @@ impl Snapshot {
             return Err("MIDI binding refers to an unavailable branch".into());
         }
         for binding in &settings.parameter_bindings {
-            let control = self
-                .controls
-                .iter()
-                .find(|c| c.target == binding.target)
-                .ok_or("MIDI binding refers to an unavailable control")?;
+            let Some(control) = self.controls.iter().find(|c| c.target == binding.target) else {
+                if allow_unavailable {
+                    continue;
+                }
+                return Err("MIDI binding refers to an unavailable control".into());
+            };
             control.midi_value(binding.mode, 127)?;
         }
         Ok(())

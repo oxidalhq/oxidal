@@ -93,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings.stream.input.period_frames as usize,
     )?;
     if let Some(midi) = &settings.midi {
-        midi.validate_native(&engine.live_controls()?)?;
+        midi.validate_native_restore(&engine.live_controls()?)?;
     }
     let mut midi = oxidal_audio::midi::Connection::new(settings.midi.clone());
     let mut midi_readback_events = 0;

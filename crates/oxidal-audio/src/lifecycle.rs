@@ -480,6 +480,17 @@ impl LiveControl {
 }
 impl crate::midi::Settings {
     pub fn validate_native(&self, controls: &[LiveControl]) -> Result<(), String> {
+        self.validate_native_inner(controls, false)
+    }
+    /// Preserve a saved unavailable target as inert configuration after deletion.
+    pub fn validate_native_restore(&self, controls: &[LiveControl]) -> Result<(), String> {
+        self.validate_native_inner(controls, true)
+    }
+    fn validate_native_inner(
+        &self,
+        controls: &[LiveControl],
+        allow_unavailable: bool,
+    ) -> Result<(), String> {
         self.validate()?;
         if !self.bindings.is_empty() || !self.branch_bindings.is_empty() {
             return Err("Standalone native MIDI supports parameter mappings".into());
@@ -491,10 +502,12 @@ impl crate::midi::Settings {
             if node != "native" {
                 return Err("Unknown standalone native MIDI node".into());
             }
-            let control = controls
-                .iter()
-                .find(|c| c.target == *parameter)
-                .ok_or("MIDI parameter is unavailable")?;
+            let Some(control) = controls.iter().find(|c| c.target == *parameter) else {
+                if allow_unavailable {
+                    continue;
+                }
+                return Err("MIDI parameter is unavailable".into());
+            };
             control.midi_descriptor().midi_value(binding.mode, 127)?;
         }
         Ok(())

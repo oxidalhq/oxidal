@@ -1022,6 +1022,7 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
         symbol: "gain".into(),
     };
     assert!(session.snapshot().validate_midi(&settings).is_err());
+    assert!(session.snapshot().validate_restored_midi(&settings).is_ok());
     assert!(feed(&mut session, &settings, &[0xb1, 20, 127]).is_err());
     assert!(session.healthy());
     settings

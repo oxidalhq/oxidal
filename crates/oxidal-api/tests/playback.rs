@@ -137,6 +137,27 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["phase"], "running");
     assert_eq!(state["configured"]["midi"], midi);
     assert!(state["midi"]["error"].is_string());
+    // A saved block control can disappear after authoring. It must not brick audio recovery.
+    let mut saved_settings = state["configured"].clone();
+    saved_settings["midi"]["parameter_bindings"][0]["target"]["parameter"] =
+        json!("deleted-block-control");
+    let response = send(&client, &url, &state, json!({"kind":"stop"})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"start","settings":saved_settings}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["phase"], "running");
+    assert_eq!(
+        state["configured"]["midi"]["parameter_bindings"][0]["target"]["parameter"],
+        "deleted-block-control"
+    );
     let response = send(
         &client,
         &url,
