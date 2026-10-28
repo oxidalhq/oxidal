@@ -464,3 +464,40 @@ stage EQ retains the derived defaults; partial omissions are rejected. Repeated
 recovery after a version-2 recall is covered to prevent native stage-token reuse.
 This does not add live structural replacement, automatic alignment, gapless
 switching or physical real-time acceptance.
+
+## Resident prepared preset switching
+
+Saved portable rigs can be selected with **Library → Rigs → Prepare set** before
+starting audio. The worker prepares every selected native/LV2 session before
+opening one PCM stream. The live chain then offers direct buttons for the prepared
+alternatives; selecting a prepared rig in the library uses the same switch path.
+Each resident retains its confirmed unsaved scalar/EQ controls. Restart, recovery
+and explicit boot settings retain the set and the per-resident recall records.
+An independent Save receipt remains bound to its source resident during switches.
+
+`StartRig.prepared` carries immutable revision/optional recall pairs. `switch`
+commands require both actor and active DSP authority, an admitted resident and a
+bounded fade length. The sounding revision changes only after the worker confirms
+the completed transition. The worker PID, PCM device and processed-frame counter
+continue across the switch. Invalid/stale targets retain the sounding session;
+reported candidate DSP/pump failures make that alternative unavailable while the
+active path continues. Native/plugin process crashes still fail the worker closed.
+
+Output paths share the greatest reported graph delay in the set. Candidate input
+is primed for that delay plus one block, then a sample-counted linear crossfade
+moves between the aligned outputs. Live priming plus fading is bounded to one
+second before admission, leaving the control response deadline headroom. The web
+uses a ten-millisecond fade. All resident graphs process (inactive inputs receive
+silence), so the measured processing cost and RAM include the entire set. Host
+routing/scratch/delay allocations share the existing byte budget; plugin/native
+internal allocations remain separate. No plugin is instantiated, transferred or
+destroyed inside the process closure.
+
+The maintained latency suite checks unequal-delay PCM continuity, repeated
+switches, retained controls, candidate failure and buffer rejection. Actual
+HTTP/worker tests check stable PID, continued frames, stale rejection, independent
+edits, Save receipts and reconstruction. Browser tests exercise the library and
+live controls on XR, Fold and BOOX. This is resident switching with **Cut** tails;
+background creation of new residents during playback, Preserve/Fade tails, physical
+MIDI selection, native standalone-worker unification and physical deadline/xrun
+acceptance remain open. Ordinary Start/Restart/reconfigure still interrupt audio.

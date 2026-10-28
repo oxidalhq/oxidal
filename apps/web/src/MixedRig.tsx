@@ -155,6 +155,22 @@ export function MixedRig({
       if (alive.current) setBusy(false);
     }
   }
+  async function switchPrepared(revision: string) {
+    const cursor = current.current;
+    if (!cursor?.control || !cursor.configured) return;
+    await command({
+      kind: 'switch',
+      command: {
+        session: cursor.control.session,
+        expected_revision: cursor.control.revision,
+        revision,
+        fade_frames: Math.max(
+          2,
+          Math.round(cursor.configured.stream.input.sample_rate / 100),
+        ),
+      },
+    });
+  }
   function open(control: RigControl) {
     if (!current.current?.control || queue.current || sending.current) return;
     let cursor = current.current;
@@ -300,7 +316,7 @@ export function MixedRig({
         {state.device_owned ? (
           <Button
             variant="outline"
-            disabled={!connected || busy || !!edit}
+            disabled={!connected || busy || eqBusy || !!edit}
             onClick={() => void command({ kind: 'stop' })}
           >
             {state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'}
@@ -314,6 +330,28 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {!!state.control?.prepared?.length && (
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Prepared presets"
+        >
+          {state.control.prepared.map((p) => (
+            <Button
+              key={p.revision}
+              className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
+              variant="outline"
+              disabled={disabled || !!edit || !!p.error}
+              onClick={() => void switchPrepared(p.revision)}
+            >
+              <span className="min-w-0 break-words">
+                {p.name}
+                {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
+              </span>
+            </Button>
+          ))}
+        </div>
+      )}
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
         <p role="alert" className="error">

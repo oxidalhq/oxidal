@@ -21,6 +21,29 @@ export function SavedRigs({
   const [next, setNext] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [prepared, setPrepared] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(
+        localStorage.getItem('oxidal.prepared-rigs') ?? '[]',
+      );
+      return Array.isArray(saved)
+        ? saved.filter(
+            (v): v is string =>
+              typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => {
+    try {
+      localStorage.setItem('oxidal.prepared-rigs', JSON.stringify(prepared));
+    } catch {
+      /* browser storage unavailable */
+    }
+  }, [prepared]);
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
@@ -47,6 +70,31 @@ export function SavedRigs({
         playbackState(),
         graphAudioState(),
       ]);
+      if (rig.phase === 'running' && rig.control && rig.configured) {
+        if (rig.configured.revision === revision) {
+          onOpenRig();
+          return;
+        }
+        const ready = rig.control.prepared?.find(
+          (p) => p.revision === revision && !p.error,
+        );
+        if (ready) {
+          await rigAudioCommand(rig, {
+            kind: 'switch',
+            command: {
+              session: rig.control.session,
+              expected_revision: rig.control.revision,
+              revision,
+              fade_frames: Math.max(
+                2,
+                Math.round(rig.configured.stream.input.sample_rate / 100),
+              ),
+            },
+          });
+          if (alive.current) onOpenRig();
+          return;
+        }
+      }
       if ([rig, native, graph].some((s) => s.device_owned))
         throw new Error('Stop the current audio before opening another rig.');
       const stream =
@@ -59,9 +107,30 @@ export function SavedRigs({
         );
       await rigAudioCommand(rig, {
         kind: 'start',
-        settings: { revision, stream, recall: null },
+        settings: {
+          revision,
+          stream,
+          recall: null,
+          prepared: [...new Set(prepared)]
+            .filter((id) => id !== revision)
+            .map((id) => ({ revision: id, recall: null })),
+        },
       });
-      if (alive.current) onOpenRig();
+      if (alive.current) {
+        if (prepared.length) {
+          const complete = [...new Set([...prepared, revision])];
+          setPrepared(complete);
+          try {
+            localStorage.setItem(
+              'oxidal.prepared-rigs',
+              JSON.stringify(complete),
+            );
+          } catch {
+            /* storage unavailable */
+          }
+        }
+        onOpenRig();
+      }
     } catch (cause) {
       if (alive.current) setError(String(cause));
     } finally {
@@ -92,7 +161,22 @@ export function SavedRigs({
   if (!items.length && !error) return null;
   return (
     <section className="space-y-3" aria-label="Saved rigs">
-      <h2>Rigs</h2>
+      <div className="section-heading">
+        <h2>Rigs</h2>
+        <Button
+          variant={choosing ? 'secondary' : 'outline'}
+          aria-pressed={choosing}
+          disabled={busy}
+          onClick={() => setChoosing((v) => !v)}
+        >
+          Prepare set{prepared.length ? ` · ${prepared.length}` : ''}
+        </Button>
+      </div>
+      {choosing && (
+        <p className="caption">
+          Ready rigs use extra DSP and memory while audio runs.
+        </p>
+      )}
       {error && <p role="alert">{error}</p>}
       {items.map((p) => (
         <div
@@ -105,14 +189,35 @@ export function SavedRigs({
               {p.native_instances} native · {p.lv2_instances} LV2
             </p>
           </div>
-          <Button
-            variant="outline"
-            disabled={!connected || busy}
-            aria-label={`Play ${p.name}`}
-            onClick={() => void play(p.revision)}
-          >
-            Play
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {choosing && (
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 px-2">
+                <input
+                  type="checkbox"
+                  className="size-5 accent-primary"
+                  aria-label={`Keep ${p.name} ready`}
+                  checked={prepared.includes(p.revision)}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setPrepared((old) =>
+                      event.target.checked
+                        ? [...new Set([...old, p.revision])]
+                        : old.filter((id) => id !== p.revision),
+                    )
+                  }
+                />
+                Ready
+              </label>
+            )}
+            <Button
+              variant="outline"
+              disabled={!connected || busy}
+              aria-label={`Play ${p.name}`}
+              onClick={() => void play(p.revision)}
+            >
+              Play
+            </Button>
+          </div>
         </div>
       ))}
       {next && (

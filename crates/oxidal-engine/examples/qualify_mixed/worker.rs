@@ -138,6 +138,7 @@ pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
     let store = BundleStore::new(path.clone());
     let revision = store.save(bundle)?;
     let start = StartRig {
+        prepared: Vec::new(),
         revision: revision.clone(),
         stream: stream(),
         recall: None,
@@ -202,6 +203,7 @@ pub fn qualify_partition(bundle: &Bundle, root: &Path) -> Result<()> {
     send(
         &mut recalled,
         &StartRig {
+            prepared: Vec::new(),
             revision: saved,
             stream: stream(),
             recall: None,
@@ -325,6 +327,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                prepared: Vec::new(),
                 revision: revision.clone(),
                 stream: stream(),
                 recall: None,
@@ -345,6 +348,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     drop(eq_recalled);
     drop(eq_only);
     let start = StartRig {
+        prepared: Vec::new(),
         revision: revision.clone(),
         stream: stream(),
         recall: None,
@@ -468,6 +472,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                prepared: Vec::new(),
                 revision: saved.clone(),
                 stream: stream(),
                 recall: None,
@@ -498,6 +503,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
     send(
         &mut child,
         &StartRig {
+            prepared: Vec::new(),
             revision: saved,
             stream: stream(),
             recall: None,
@@ -566,6 +572,7 @@ pub fn qualify(world: &World, bundle: &Bundle, root: &Path) -> Result<()> {
         world,
         SaveRequest {
             settings: StartRig {
+                prepared: Vec::new(),
                 revision: shared_revision,
                 stream: stream(),
                 recall: None,

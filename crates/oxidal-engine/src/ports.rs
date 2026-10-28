@@ -22,12 +22,12 @@ struct PortNode {
     gains: Vec<f32>,
 }
 #[derive(Debug, Default)]
-struct Delay {
+pub(crate) struct Delay {
     samples: Vec<f32>,
     cursor: usize,
 }
 impl Delay {
-    fn new(frames: usize, used: &mut usize, budget: usize) -> Result<Self, String> {
+    pub(crate) fn new(frames: usize, used: &mut usize, budget: usize) -> Result<Self, String> {
         *used = frames
             .checked_mul(size_of::<f32>())
             .and_then(|bytes| used.checked_add(bytes))
@@ -40,7 +40,7 @@ impl Delay {
         samples.resize(frames, 0.0);
         Ok(Self { samples, cursor: 0 })
     }
-    fn next(&mut self, input: f32) -> f32 {
+    pub(crate) fn next(&mut self, input: f32) -> f32 {
         if self.samples.is_empty() {
             return input;
         }

@@ -182,6 +182,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         SaveRequest {
             name: "Saved partition with effects".into(),
             settings: StartRig {
+                prepared: Vec::new(),
                 revision,
                 stream: stream(),
                 recall: None,
@@ -221,6 +222,7 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         SaveRequest {
             name: "Renamed partition".into(),
             settings: StartRig {
+                prepared: Vec::new(),
                 revision: saved.clone(),
                 stream: stream(),
                 recall: None,

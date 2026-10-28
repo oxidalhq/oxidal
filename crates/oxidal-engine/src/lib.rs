@@ -23,6 +23,10 @@ mod session;
 #[cfg(feature = "native")]
 pub use session::Session;
 #[cfg(feature = "native")]
+mod resident;
+#[cfg(feature = "native")]
+pub use resident::ResidentSet;
+#[cfg(feature = "native")]
 mod saving;
 #[cfg(feature = "native")]
 pub use saving::save_revision;

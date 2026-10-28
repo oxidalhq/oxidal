@@ -4069,6 +4069,54 @@
         "shutdown"
       ]
     },
+    "PreparedRecall": {
+      "type": "object",
+      "properties": {
+        "recall": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Recall"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision"
+      ]
+    },
+    "PreparedStatus": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "modified": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "name",
+        "modified"
+      ]
+    },
     "Radio": {
       "type": "object",
       "properties": {
@@ -4307,6 +4355,23 @@
             "kind": {
               "type": "string",
               "const": "eq"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/SwitchCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "switch"
             }
           },
           "additionalProperties": false,
@@ -4868,6 +4933,13 @@
           "description": "Actual scalar values differ from the immutable source bundle.",
           "type": "boolean"
         },
+        "prepared": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PreparedStatus"
+          }
+        },
         "revision": {
           "type": "integer",
           "format": "uint64",
@@ -5018,6 +5090,14 @@
     "StartRig": {
       "type": "object",
       "properties": {
+        "prepared": {
+          "description": "Resident alternatives are prepared before this transport opens PCM.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PreparedRecall"
+          }
+        },
         "recall": {
           "anyOf": [
             {
@@ -5123,6 +5203,34 @@
         "output",
         "input_map",
         "output_map"
+      ]
+    },
+    "SwitchCommand": {
+      "type": "object",
+      "properties": {
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "fade_frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "expected_revision",
+        "revision",
+        "fade_frames"
       ]
     },
     "Target": {

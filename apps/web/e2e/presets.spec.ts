@@ -2214,12 +2214,67 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await rig.getByRole('button', { name: 'Stop audio', exact: true }).click();
   await expect.poll(async () => (await get()).phase).toBe('stopped');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  const savedLibrary = page.getByRole('region', {
+    name: 'Saved rigs',
+    exact: true,
+  });
+  await savedLibrary
+    .getByRole('button', { name: 'Prepare set', exact: true })
+    .click();
+  const ready = savedLibrary.getByRole('checkbox', {
+    name: `Keep ${manifest.name} ready`,
+    exact: true,
+  });
+  while (!(await ready.count())) {
+    const more = savedLibrary.getByRole('button', {
+      name: 'Load more',
+      exact: true,
+    });
+    await expect(more).toBeVisible();
+    await more.click();
+  }
+  await ready.check();
   await playSavedRig(page, name);
   await expect(rig).toBeVisible();
   await expect.poll(async () => (await get()).phase).toBe('running');
   await expect.poll(async () => (await get()).control.eq).toEqual(eqSaved);
   await expect.poll(value).toBe(changed);
   await expect.poll(async () => (await get()).control.modified).toBe(false);
+  const resident = await get();
+  expect(
+    await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('oxidal.prepared-rigs') ?? '[]'),
+    ),
+  ).toEqual(
+    expect.arrayContaining([document.revision, resident.configured.revision]),
+  );
+  expect(
+    resident.control.prepared.some(
+      (p: { revision: string }) => p.revision === document.revision,
+    ),
+  ).toBe(true);
+  const preparedControls = rig.getByRole('group', { name: 'Prepared presets' });
+  await preparedControls
+    .getByRole('button', { name: manifest.name, exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).configured.revision)
+    .toBe(document.revision);
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  expect((await get()).processed_frames).toBeGreaterThan(
+    resident.processed_frames,
+  );
+  await preparedControls.getByRole('button', { name, exact: true }).click();
+  await expect
+    .poll(async () => (await get()).configured.revision)
+    .toBe(resident.configured.revision);
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqSaved);
+  await expect.poll(value).toBe(changed);
+  await expect(preparedControls.getByRole('button').first()).toBeEnabled();
+  await info.attach('prepared-preset-controls', {
+    body: await preparedControls.screenshot(),
+    contentType: 'image/png',
+  });
   await page.reload();
   await expect(page.getByTestId('active-preset')).toHaveText(name);
   await rig.locator('[data-node="fx_l"]').getByRole('button').first().click();

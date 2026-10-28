@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(target_os = "linux")]
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::stream::{Duplex, Step};
-    use oxidal_engine::{Session, protocol::*};
+    use oxidal_engine::{ResidentSet, protocol::*};
     use oxidal_lv2::World;
     use oxidal_presets::BundleStore;
     use std::{
@@ -106,21 +106,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let world = World::discover()?;
-    let mut session = Session::new(
-        store.read(&settings.revision)?,
-        &world,
-        f64::from(settings.stream.input.sample_rate),
-        settings.stream.input.period_frames as usize,
-        BUFFER_BUDGET,
-    )?;
-    // ALSA transport currently maps two logical ports. Reject mono endpoints
-    // instead of silently duplicating/folding an explicit portable declaration.
-    if session.channels() != (2, 2) {
-        return Err("Rig transport requires two logical input/output ports".into());
-    }
-    if let Some(recall) = settings.recall {
-        session.restore(&recall)?;
-    }
+    let mut session = ResidentSet::new(&store, &world, &settings, BUFFER_BUDGET)?;
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }
@@ -142,6 +128,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut right = left.clone();
     let mut frames = 0u64;
     let mut ready = false;
+    let mut switch_reply = false;
     let mut progress = Instant::now();
     let mut pump = Instant::now();
     while !stop.load(Ordering::Acquire) {
@@ -182,11 +169,31 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             session.pump()?;
             pump = Instant::now();
         }
-        if ready && let Ok(request) = received.try_recv() {
+        if switch_reply && !session.switching() {
+            let error = session.take_switch_error();
+            responses.try_send(WorkerReply {
+                control: session.snapshot(),
+                telemetry: stream.telemetry(),
+                processed_frames: frames,
+                error,
+            })?;
+            switch_reply = false;
+        }
+        if ready
+            && !switch_reply
+            && let Ok(request) = received.try_recv()
+        {
             let error = match request {
                 WorkerRequest::Status => None,
-                WorkerRequest::Control { command } => session.apply(command).err(),
-                WorkerRequest::Eq { command } => session.apply_eq(command).err(),
+                WorkerRequest::Control { command } => session.active_mut().apply(command).err(),
+                WorkerRequest::Eq { command } => session.active_mut().apply_eq(command).err(),
+                WorkerRequest::Switch { command } => match session.switch(command) {
+                    Ok(()) => {
+                        switch_reply = true;
+                        continue;
+                    }
+                    Err(error) => Some(error),
+                },
             };
             if !session.healthy() {
                 return Err(error.unwrap_or_else(|| "Rig failed".into()).into());

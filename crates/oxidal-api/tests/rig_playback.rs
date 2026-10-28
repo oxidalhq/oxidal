@@ -669,6 +669,68 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     assert_eq!(state["phase"], "stopped");
     assert_eq!(state["start_on_boot"], false);
     assert!(pids(&executable).is_empty());
+    // Prepare both sessions before opening one continuous PCM owner. Switching
+    // changes neither the worker PID nor transport progress, and each bank keeps edits.
+    let first = apply(
+        &c,
+        &url,
+        json!({"kind":"start","settings":{"revision":revision,"stream":stream(),"recall":null,
+        "prepared":[{"revision":saved,"recall":null}]}}),
+    )
+    .await;
+    assert_eq!(first["control"]["prepared"].as_array().unwrap().len(), 1);
+    let resident_pid = pids(&executable);
+    let first = apply(&c, &url, set(&first, native.clone(), 0.39)).await;
+    let first_session = first["control"]["session"].clone();
+    let first = apply(
+        &c,
+        &url,
+        json!({"kind":"save","name":"Resident source copy"}),
+    )
+    .await;
+    let switch = |s: &Value, target: &str| {
+        json!({"kind":"switch","command":{"session":s["control"]["session"],
+        "expected_revision":s["control"]["revision"],"revision":target,"fade_frames":480}})
+    };
+    let second = apply(&c, &url, switch(&first, &saved)).await;
+    assert_eq!(second["phase"], "running");
+    assert_eq!(second["configured"]["revision"], saved);
+    assert_ne!(second["control"]["session"], first_session);
+    assert!(
+        second["processed_frames"].as_u64().unwrap() > first["processed_frames"].as_u64().unwrap()
+    );
+    assert!(pids(&executable).contains(&resident_pid[0]));
+    for _ in 0..200 {
+        if get(&c, &url, "rig-audio").await["save"]["running"] == false {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    let receipt = get(&c, &url, "rig-audio").await;
+    assert_eq!(receipt["save"]["source_session"], first_session);
+    assert_eq!(receipt["save"]["running"], false);
+    assert!(receipt["save"]["saved_revision"].as_str().is_some());
+    assert!(receipt["save"]["error"].is_null());
+    assert_eq!(pids(&executable), resident_pid);
+    let second = apply(&c, &url, set(&second, gain.clone(), -9.0)).await;
+    let returned = apply(&c, &url, switch(&second, &revision)).await;
+    assert_eq!(returned["control"]["session"], first_session);
+    assert!((control(&returned, &native) - 0.39).abs() < 1e-5);
+    assert_eq!(pids(&executable), resident_pid);
+    let mut stale = switch(&returned, &saved);
+    stale["command"]["expected_revision"] =
+        json!(returned["control"]["revision"].as_u64().unwrap() + 1);
+    assert_eq!(post(&c, &url, &returned, stale).await.status(), 409);
+    let unchanged = get(&c, &url, "rig-audio").await;
+    assert_eq!(unchanged["control"]["session"], first_session);
+    assert_eq!(unchanged["phase"], "running");
+    assert_eq!(pids(&executable), resident_pid);
+    let restored = apply(&c, &url, json!({"kind":"restart"})).await;
+    assert!((control(&restored, &native) - 0.39).abs() < 1e-5);
+    let second = apply(&c, &url, switch(&restored, &saved)).await;
+    assert_eq!(control(&second, &gain), -9.0);
+    assert_eq!(second["configured"]["prepared"][0]["revision"], revision);
+    assert_eq!(pids(&executable).len(), 1);
     shutdown.send_replace(true);
     stopped.wait().await.unwrap();
     server.abort();

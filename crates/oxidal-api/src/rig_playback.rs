@@ -629,6 +629,57 @@ impl Owner {
                     return Err(e);
                 }
             }
+            RigAudioAction::Switch { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let target = command.revision.clone();
+                let old = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .ok_or("No mixed configuration")?
+                    .clone();
+                let index = old
+                    .prepared
+                    .iter()
+                    .position(|p| p.revision == target)
+                    .ok_or("Select a prepared alternative")?;
+                let reply = match self.exchange(&WorkerRequest::Switch { command }).await {
+                    Ok(reply) => reply,
+                    Err(e) => return Err(self.fault(e).await),
+                };
+                if let Some(error) = reply.error.clone() {
+                    if let Err(e) = self.readback(reply) {
+                        return Err(self.fault(e).await);
+                    }
+                    return Err(error);
+                }
+                if reply.control.source_revision != target
+                    || self
+                        .state
+                        .control
+                        .as_ref()
+                        .is_none_or(|c| c.session == reply.control.session)
+                    || reply.processed_frames <= self.state.processed_frames
+                {
+                    return Err(self.fault("Unconfirmed resident switch".into()).await);
+                }
+                let mut settings = old.clone();
+                settings.revision = target;
+                settings.prepared[index] = oxidal_engine::protocol::PreparedRecall {
+                    revision: old.revision,
+                    recall: self.state.control.as_ref().map(|c| c.recall()),
+                };
+                settings.recall = None;
+                self.state.configured = Some(settings);
+                self.state.control = None;
+                // An isolated export retains its source-session receipt even
+                // while another resident is sounding.
+                if let Err(e) = self.readback(reply) {
+                    return Err(self.fault(e).await);
+                }
+            }
             RigAudioAction::Save { name } => self.save(name).await?,
             RigAudioAction::SetBoot { enabled } => {
                 if enabled {
@@ -848,6 +899,7 @@ mod tests {
         let mut output = probe.clone();
         output.direction = oxidal_audio::Direction::Playback;
         let settings = StartRig {
+            prepared: Vec::new(),
             revision: "a".repeat(64),
             stream: oxidal_audio::StreamConfig {
                 input: probe,

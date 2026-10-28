@@ -116,6 +116,7 @@ fn portable_lv2_latency_aligns_parallel_paths_bypass_and_offline_recall() {
             &world,
             SaveRequest {
                 settings: StartRig {
+                    prepared: Vec::new(),
                     revision,
                     stream: oxidal_audio::StreamConfig {
                         input,
@@ -296,6 +297,7 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
     output.direction = oxidal_audio::Direction::Playback;
     let request = SaveRequest {
         settings: StartRig {
+            prepared: Vec::new(),
             revision,
             stream: oxidal_audio::StreamConfig {
                 input,
@@ -343,4 +345,200 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
     std::fs::remove_dir_all(root).unwrap(); // Playback owns materialized bundle assets.
     let mut restored = Session::new(saved, &world, 48000.0, 64, 1024 * 1024).unwrap();
     render(&mut restored);
+}
+
+#[test]
+fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
+    use oxidal_engine::{
+        ResidentSet,
+        protocol::{PreparedRecall, SwitchCommand},
+    };
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-resident-{}", std::process::id()));
+    let store = BundleStore::new(root.clone());
+    let a = store.save(&bundle(137, 0, false)).unwrap();
+    let b = store.save(&bundle(29, 0, false)).unwrap();
+    let input = oxidal_audio::AudioProbe {
+        endpoint: "hw:CARD=Qualification,DEV=0".into(),
+        direction: oxidal_audio::Direction::Capture,
+        sample_rate: 48000,
+        channels: 2,
+        format: oxidal_audio::SampleFormat::S16,
+        period_frames: 64,
+        periods: 3,
+    };
+    let mut output = input.clone();
+    output.direction = oxidal_audio::Direction::Playback;
+    let settings = StartRig {
+        revision: a.clone(),
+        recall: None,
+        prepared: vec![PreparedRecall {
+            revision: b.clone(),
+            recall: None,
+        }],
+        stream: oxidal_audio::StreamConfig {
+            input,
+            output,
+            input_map: [0, 1],
+            output_map: [0, 1],
+        },
+    };
+    let mut residents = ResidentSet::new(&store, &world, &settings, 1024 * 1024).unwrap();
+    let needed = residents.snapshot().buffer_bytes;
+    assert!(ResidentSet::new(&store, &world, &settings, needed - 1).is_err());
+    let state = residents.snapshot();
+    residents
+        .active_mut()
+        .apply(ControlCommand {
+            session: state.session,
+            expected_revision: state.revision,
+            target: Target::Bypass { node: "fx".into() },
+            value: 1.0,
+        })
+        .unwrap();
+    let original = residents.snapshot();
+    let command = |state: &oxidal_engine::protocol::Snapshot, revision: &str| SwitchCommand {
+        session: state.session.clone(),
+        expected_revision: state.revision,
+        revision: revision.into(),
+        fade_frames: 97,
+    };
+    let mut stale = command(&original, &b);
+    stale.expected_revision += 1;
+    assert!(residents.switch(stale).is_err());
+    assert!(
+        residents
+            .switch(command(&original, &"0".repeat(64)))
+            .is_err()
+    );
+    let signal = |sample: usize| 0.25 + 0.05 * (sample as f32 * 0.031).sin();
+    for block in 0..100 {
+        if block == 10 {
+            residents
+                .switch(command(&residents.snapshot(), &b))
+                .unwrap();
+            assert!(
+                residents
+                    .switch(command(&residents.snapshot(), &b))
+                    .is_err()
+            );
+        }
+        if block == 40 {
+            residents
+                .switch(command(&residents.snapshot(), &a))
+                .unwrap();
+        }
+        let left: Vec<_> = (block * 64..(block + 1) * 64).map(signal).collect();
+        let right: Vec<_> = left.iter().map(|s| -0.3 * s).collect();
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        residents
+            .process(&[&left, &right], &mut [&mut l, &mut r])
+            .unwrap();
+        for i in 0..64 {
+            let sample = block * 64 + i;
+            let expected = if sample >= 137 {
+                signal(sample - 137)
+            } else {
+                0.0
+            };
+            assert!(
+                (l[i] - expected).abs() < 1e-6,
+                "left discontinuity at {sample}: {} / {expected}",
+                l[i]
+            );
+            assert!(
+                (r[i] + 0.3 * expected).abs() < 1e-6,
+                "right discontinuity at {sample}"
+            );
+        }
+        if block == 20 {
+            assert_eq!(residents.snapshot().source_revision, b);
+            assert!(residents.snapshot().prepared[0].modified);
+        }
+    }
+    assert!(!residents.switching());
+    let after = residents.snapshot();
+    assert_eq!(after.source_revision, a);
+    assert_eq!(after.session, original.session);
+    assert_eq!(after.revision, original.revision);
+    assert_eq!(
+        serde_json::to_value(after.controls).unwrap(),
+        serde_json::to_value(original.controls).unwrap()
+    );
+    assert!(residents.take_switch_error().is_none());
+    // A candidate which changes its latency when processing starts cannot take
+    // down the existing stream or become the confirmed active revision.
+    let failed = store.save(&bundle(13, 5, false)).unwrap();
+    let mut failing = settings.clone();
+    failing.prepared = vec![PreparedRecall {
+        revision: failed.clone(),
+        recall: None,
+    }];
+    let mut residents = ResidentSet::new(&store, &world, &failing, 1024 * 1024).unwrap();
+    residents
+        .switch(command(&residents.snapshot(), &failed))
+        .unwrap();
+    let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+    residents
+        .process(&[&[0.25; 64], &[0.25; 64]], &mut [&mut l, &mut r])
+        .unwrap();
+    assert!(residents.healthy());
+    assert!(!residents.switching());
+    assert!(residents.take_switch_error().is_some());
+    assert_eq!(residents.snapshot().source_revision, a);
+    assert!(residents.snapshot().prepared[0].error.is_some());
+    assert!(
+        residents
+            .switch(command(&residents.snapshot(), &failed))
+            .is_err()
+    );
+    // Large reported delay must fail admission before a switch can outlive
+    // the control deadline and accidentally stop the current healthy owner.
+    let mut long: serde_json::Value =
+        serde_json::from_slice(bundle(512, 0, false).manifest_bytes()).unwrap();
+    let fx = long["oxidal"]["graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"] == "fx")
+        .unwrap()
+        .clone();
+    let plugin = long["oxidal"]["lv2"][0].clone();
+    long["oxidal"]["graph"]["edges"][2]["from"]["node"] = json!("fx19");
+    let mut previous = "fx".to_owned();
+    for i in 1..20 {
+        let id = format!("fx{i}");
+        let mut node = fx.clone();
+        node["id"] = json!(id);
+        node["instance"] = json!(id);
+        long["oxidal"]["graph"]["nodes"]
+            .as_array_mut()
+            .unwrap()
+            .push(node);
+        let mut effect = plugin.clone();
+        effect["id"] = json!(id);
+        long["oxidal"]["lv2"].as_array_mut().unwrap().push(effect);
+        long["oxidal"]["graph"]["edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"from":{"node":previous,"port":0},"to":{"node":id,"port":0}}));
+        previous = id;
+    }
+    let long = Bundle::from_parts(serde_json::to_vec(&long).unwrap(), BTreeMap::new()).unwrap();
+    let long = store.save(&long).unwrap();
+    let mut slow = settings.clone();
+    slow.stream.input.sample_rate = 8000;
+    slow.stream.output.sample_rate = 8000;
+    slow.prepared = vec![PreparedRecall {
+        revision: long,
+        recall: None,
+    }];
+    assert!(
+        ResidentSet::new(&store, &world, &slow, 1024 * 1024)
+            .unwrap_err()
+            .contains("live switch window")
+    );
+    assert!(residents.healthy());
+    assert_eq!(residents.snapshot().source_revision, a);
+    std::fs::remove_dir_all(root).unwrap();
 }

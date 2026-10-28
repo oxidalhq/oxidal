@@ -73,6 +73,8 @@ pub struct Snapshot {
     pub buffer_bytes: usize,
     /// Reported algorithmic and alignment delay; excludes audio devices/transport.
     pub latency_frames: u32,
+    #[serde(default)]
+    pub prepared: Vec<PreparedStatus>,
 }
 impl Snapshot {
     pub fn recall(&self) -> Recall {
@@ -108,16 +110,52 @@ pub struct ControlCommand {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct PreparedRecall {
+    pub revision: String,
+    pub recall: Option<Recall>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreparedStatus {
+    pub revision: String,
+    pub name: String,
+    pub modified: bool,
+    pub error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SwitchCommand {
+    pub session: String,
+    pub expected_revision: u64,
+    pub revision: String,
+    pub fade_frames: u32,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct StartRig {
     pub revision: String,
     pub stream: StreamConfig,
     pub recall: Option<Recall>,
+    /// Resident alternatives are prepared before this transport opens PCM.
+    #[serde(default)]
+    pub prepared: Vec<PreparedRecall>,
 }
 impl StartRig {
     pub fn validate(&self) -> Result<(), String> {
         self.stream.validate()?;
         let frames = self.stream.input.period_frames;
         if !valid_revision(&self.revision)
+            || !oxidal_audio::lifecycle::catalog_fits(&self.prepared)
+            || self.prepared.iter().enumerate().any(|(i, p)| {
+                !valid_revision(&p.revision)
+                    || p.revision == self.revision
+                    || self.prepared[..i]
+                        .iter()
+                        .any(|old| old.revision == p.revision)
+                    || p.recall
+                        .as_ref()
+                        .is_some_and(|r| r.source_revision != p.revision)
+            })
             || frames > 2048
             || !frames.is_power_of_two()
             || self
@@ -141,6 +179,7 @@ pub enum WorkerRequest {
     Status,
     Control { command: ControlCommand },
     Eq { command: EqCommand },
+    Switch { command: SwitchCommand },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -215,6 +254,7 @@ pub enum RigAudioAction {
     Reconfigure { stream: oxidal_audio::StreamConfig },
     Control { command: ControlCommand },
     Eq { command: EqCommand },
+    Switch { command: SwitchCommand },
     Save { name: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

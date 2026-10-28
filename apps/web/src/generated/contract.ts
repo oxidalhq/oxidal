@@ -313,6 +313,10 @@ export type RigAudioAction =
       kind: "eq";
     }
   | {
+      command: SwitchCommand;
+      kind: "switch";
+    }
+  | {
       kind: "save";
       name: string;
     };
@@ -1055,9 +1059,17 @@ export interface RigAudioCommand {
   session: string;
 }
 export interface StartRig {
+  /**
+   * Resident alternatives are prepared before this transport opens PCM.
+   */
+  prepared?: PreparedRecall[];
   recall?: Recall | null;
   revision: string;
   stream: StreamConfig;
+}
+export interface PreparedRecall {
+  recall?: Recall | null;
+  revision: string;
 }
 export interface Recall {
   eq?: NodeEq[] | null;
@@ -1086,6 +1098,12 @@ export interface EqCommand {
   edit: EqEdit;
   expected_revision: number;
   node: string;
+  session: string;
+}
+export interface SwitchCommand {
+  expected_revision: number;
+  fade_frames: number;
+  revision: string;
   session: string;
 }
 export interface RigAudioState {
@@ -1117,6 +1135,7 @@ export interface Snapshot3 {
    * Actual scalar values differ from the immutable source bundle.
    */
   modified: boolean;
+  prepared?: PreparedStatus[];
   revision: number;
   session: string;
   source_revision: string;
@@ -1131,6 +1150,12 @@ export interface Control {
   target: Target;
   toggle: boolean;
   value: number;
+}
+export interface PreparedStatus {
+  error?: string | null;
+  modified: boolean;
+  name: string;
+  revision: string;
 }
 export interface SaveState {
   error?: string | null;

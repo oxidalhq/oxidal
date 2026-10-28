@@ -58,3 +58,10 @@ docs/native-tone3000.md for owner, float-readback and physical timing boundaries
 full native parity remains open.
 
 Mixed whole-native nodes now share the confirmed live EQ panel, recovery/boot capture and isolated verified export. EQ-only edits trigger native resource replacement; untouched resources remain exact. Extracted amp/cab EQ is retained by version-2 derivation recipes with exact source bytes and fresh-recall verification. See docs/mixed-engine.md.
+
+Portable mixed rigs now support a preselected resident set with one continuous PCM
+owner, fixed reported-delay alignment and sample-counted preset crossfades.
+Independent resident edits and Save receipts survive switching/reconstruction.
+Library/live controls and maintained DSP/worker/browser tests cover this path; see
+docs/mixed-engine.md. Runtime resident creation, Preserve/Fade tails, standalone
+native-worker unification, physical MIDI and physical deadlines remain open.
