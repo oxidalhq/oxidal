@@ -119,6 +119,35 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         );
     }
     state = qualify_models(&client, &url, state, &root).await;
+    // Immediate EQ editing belongs to the audible session and survives independent export.
+    let eq_block = state["eq"][0]["block_id"].as_str().unwrap().to_owned();
+    let mut band = state["eq"][0]["eq"]["bands"][1].clone();
+    band["freqHz"] = json!(1200.0);
+    band["gainDb"] = json!(0.1);
+    for edit in [
+        json!({"kind":"enabled","value":true}),
+        json!({"kind":"pre","value":true}),
+        json!({"kind":"band","index":1,"band":band}),
+    ] {
+        let reply = send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"set_eq","block_id":eq_block,"edit":edit}),
+        )
+        .await;
+        assert_eq!(
+            reply.status(),
+            200,
+            "{}",
+            reply.text().await.unwrap_or_default()
+        );
+        state = get(&client, &url, "audio").await;
+    }
+    let eq_before_save = state["eq"].clone();
+    let before_invalid = state.clone();
+    assert_eq!(send(&client,&url,&state,json!({"kind":"set_eq","block_id":eq_block,"edit":{"kind":"band","index":9,"band":band}})).await.status(),409);
+    assert_eq!(get(&client, &url, "audio").await, before_invalid);
     // Apply keeps the immutable tone identity and unsaved controls. Invalid
     // candidates are rejected before releasing the currently running stream.
     let before_apply = state.clone();
@@ -156,6 +185,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         before_apply["configured"]["preset_id"]
     );
     assert_eq!(state["controls"], before_apply["controls"]);
+    assert_eq!(state["eq"], eq_before_save);
     assert_eq!(state["modified"], true);
     // Restore the fixture settings through the same real process path.
     let restored = send(
@@ -197,6 +227,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(resumed.status(), 200);
     state = resumed.json().await.unwrap();
     assert_eq!(state["controls"], before_apply["controls"]);
+    assert_eq!(state["eq"], eq_before_save);
     let mut measured = false;
     for _ in 0..30 {
         let m = get(&client, &url, "monitor").await;
@@ -245,6 +276,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "running");
     assert_eq!(state["controls"], controls_before_save);
+    assert_eq!(state["eq"], eq_before_save);
     let saved_id = state["saved_copy"].as_str().unwrap().to_owned();
     let saved_info = oxidal_presets::OwnedStore::new(root.join("presets/owned"))
         .read(&saved_id)
@@ -308,6 +340,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         state["controls"], controls_before_save,
         "restart must keep unsaved live controls"
     );
+    assert_eq!(state["eq"], eq_before_save, "restart must retain EQ");
     assert_eq!(state["modified"], true);
     assert_eq!(
         send(&client, &url, &state, json!({"kind":"resume"}))
@@ -378,6 +411,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(reopened.status(), 200);
     state = reopened.json().await.unwrap();
     assert_eq!(state["controls"], controls_before_save);
+    assert_eq!(state["eq"], eq_before_save);
     assert_eq!(state["preset_name"], "Sounding copy");
     assert!(
         state["controls"]
@@ -451,6 +485,17 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     .await;
     assert_eq!(edited.status(), 200);
     state = edited.json().await.unwrap();
+    let block = state["eq"][0]["block_id"].clone();
+    let edited = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_eq","block_id":block,"edit":{"kind":"enabled","value":true}}),
+    )
+    .await;
+    assert_eq!(edited.status(), 200);
+    state = edited.json().await.unwrap();
+    let boot_eq = state["eq"].clone();
     let boot_controls = state["controls"].clone();
 
     assert!(
@@ -503,6 +548,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["start_on_boot"], true);
     assert_eq!(state["configured"], settings);
     assert_eq!(state["controls"], boot_controls);
+    assert_eq!(state["eq"], boot_eq);
     assert!(
         send(
             &client,
@@ -528,6 +574,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = changed.json().await.unwrap();
     state = qualify_models(&client, &url, state, &root).await;
     let recovery_models = state["models"].clone();
+    let recovery_eq = state["eq"].clone();
     let recovery_controls = state["controls"].clone();
     // A disk failure is a recovery warning, never a reason to stop the audio worker.
     let recovery_path = root.join("presets/last-audio-session.json");
@@ -593,6 +640,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     );
     assert_eq!(state["modified"], true);
     assert_eq!(state["models"], recovery_models);
+    assert_eq!(state["eq"], recovery_eq);
     assert_eq!(
         send(
             &client,
@@ -623,6 +671,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["start_on_boot"], true);
     assert_eq!(state["controls"], recovery_controls);
     assert_eq!(state["models"], recovery_models);
+    assert_eq!(state["eq"], recovery_eq);
     assert_eq!(
         send(
             &client,

@@ -661,6 +661,27 @@
         {
           "type": "object",
           "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "edit": {
+              "$ref": "#/$defs/EqEdit"
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_eq"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "set_control"
@@ -918,6 +939,13 @@
           "description": "Remains true until the worker is reaped, including failed shutdowns.",
           "type": "boolean"
         },
+        "eq": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BlockEqState"
+          }
+        },
         "error": {
           "type": [
             "string",
@@ -1054,6 +1082,23 @@
         "value",
         "step",
         "staged"
+      ]
+    },
+    "BlockEqState": {
+      "description": "Exact per-block EQ readback, retained independently of scalar controls.",
+      "type": "object",
+      "properties": {
+        "block_id": {
+          "type": "string"
+        },
+        "eq": {
+          "$ref": "#/$defs/EqState"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "eq"
       ]
     },
     "BlockKind": {
@@ -2000,6 +2045,131 @@
         "live_audio",
         "can_undo",
         "can_redo"
+      ]
+    },
+    "EqBand": {
+      "type": "object",
+      "properties": {
+        "freqHz": {
+          "type": "number",
+          "format": "double"
+        },
+        "gainDb": {
+          "type": "number",
+          "format": "double"
+        },
+        "q": {
+          "type": "number",
+          "format": "double"
+        },
+        "type": {
+          "$ref": "#/$defs/EqType"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "freqHz",
+        "gainDb",
+        "q"
+      ]
+    },
+    "EqEdit": {
+      "description": "One immediate, revision-owned edit; UI cancellation sends its original value.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "enabled"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pre"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "band": {
+              "$ref": "#/$defs/EqBand"
+            },
+            "index": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "band"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "index",
+            "band"
+          ]
+        }
+      ]
+    },
+    "EqState": {
+      "type": "object",
+      "properties": {
+        "bands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EqBand"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "pre": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "pre",
+        "bands"
+      ]
+    },
+    "EqType": {
+      "type": "string",
+      "enum": [
+        "lowcut",
+        "lowshelf",
+        "bell",
+        "highshelf",
+        "highcut"
       ]
     },
     "Framing": {

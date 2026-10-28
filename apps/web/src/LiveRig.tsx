@@ -1,4 +1,5 @@
 import { Power } from '@phosphor-icons/react';
+import { LiveEq } from './LiveEq';
 import { ArtworkDeck } from './AssetArtwork';
 import { ModelPicker } from './ModelPicker';
 import { useEffect, useRef, useState } from 'react';
@@ -25,6 +26,7 @@ export function LiveRig({
   const [state, setState] = useState<AudioState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [eqEditing, setEqEditing] = useState(false);
   const [copyName, setCopyName] = useState('');
   const [adjusting, setAdjusting] = useState(false);
   const [picker, setPicker] = useState<{
@@ -277,7 +279,7 @@ export function LiveRig({
     ['verifying', 'preparing', 'ready', 'applying'].includes(
       state.model_change.phase,
     );
-  const disabled = !connected || busy || !!error || modelPending;
+  const disabled = !connected || busy || eqEditing || !!error || modelPending;
   const groups = state.controls.filter(
     (c) => c.target.startsWith('block:') && c.target.endsWith(':enabled'),
   );
@@ -507,6 +509,25 @@ export function LiveRig({
             </button>
           ))}
       </div>
+      {state.eq
+        ?.filter((row) => selectedTarget.startsWith(`block:${row.block_id}:`))
+        .map((row) => (
+          <LiveEq
+            key={`${state.session}:${row.block_id}`}
+            state={state}
+            blockId={row.block_id}
+            disabled={!connected || busy || !!draft || modelPending}
+            onEditing={setEqEditing}
+            onChange={(next) => {
+              generation.current += 1;
+              setState((old) =>
+                old?.session === next.session && old.revision > next.revision
+                  ? old
+                  : next,
+              );
+            }}
+          />
+        ))}
       <output className="sr-only" data-testid="live-readback">
         Confirmed: {control?.display ?? '—'}
       </output>

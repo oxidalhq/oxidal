@@ -1,5 +1,8 @@
 //! Playback control contract. Authoring has a separate lifetime and process.
-use crate::StreamConfig;
+use crate::{
+    StreamConfig,
+    eq::{BlockEqState, EqEdit},
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -53,6 +56,8 @@ pub struct AudioState {
     pub start_on_boot: bool,
     /// Confirmed controls of the sounding worker; cleared whenever it stops.
     pub controls: Vec<LiveControl>,
+    #[serde(default)]
+    pub eq: Vec<BlockEqState>,
     /// Session edits are not written back to the immutable starting preset.
     pub modified: bool,
     pub preset_name: Option<String>,
@@ -84,6 +89,10 @@ pub enum AudioAction {
     },
     SetBoot {
         enabled: bool,
+    },
+    SetEq {
+        block_id: String,
+        edit: EqEdit,
     },
     SetControl {
         target: String,
@@ -145,6 +154,12 @@ pub enum PlaybackEvent {
         preset_name: String,
         controls: Vec<LiveControl>,
         slots: Vec<NativeSlot>,
+        eq: Vec<BlockEqState>,
+    },
+    Eq {
+        serial: u64,
+        eq: Vec<BlockEqState>,
+        error: Option<String>,
     },
     Control {
         serial: u64,
@@ -156,6 +171,7 @@ pub enum PlaybackEvent {
         progress: Option<ModelProgress>,
         controls: Vec<LiveControl>,
         slots: Vec<NativeSlot>,
+        eq: Vec<BlockEqState>,
         error: Option<String>,
     },
     Meter {
@@ -181,6 +197,8 @@ pub struct PlaybackStart {
     #[serde(default)]
     pub models: Vec<ModelAssignment>,
     pub controls: Option<Vec<LiveControl>>,
+    #[serde(default)]
+    pub eq: Option<Vec<BlockEqState>>,
 }
 
 /// Immutable reconstruction request for a separate, non-PCM export worker.
@@ -191,6 +209,8 @@ pub struct SavePlayback {
     #[serde(default)]
     pub models: Vec<ModelAssignment>,
     pub controls: Vec<LiveControl>,
+    #[serde(default)]
+    pub eq: Option<Vec<BlockEqState>>,
     pub name: String,
 }
 pub fn valid_preset_name(name: &str) -> bool {
@@ -301,6 +321,15 @@ pub struct ModelRequest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WorkerRequest {
+    Eq(EqRequest),
     Control(LiveRequest),
     Model(ModelRequest),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EqRequest {
+    pub serial: u64,
+    pub block_id: String,
+    pub eq: EqEdit,
 }

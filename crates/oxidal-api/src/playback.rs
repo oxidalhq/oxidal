@@ -8,6 +8,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use oxidal_audio::eq::{BlockEqState, EqEdit, valid_snapshot};
+use oxidal_audio::lifecycle::EqRequest;
 use oxidal_audio::lifecycle::{
     AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, ModelAssignment,
     ModelOperation, ModelPhase, ModelRequest, PlaybackEvent, PlaybackStart, SavePlayback,
@@ -52,6 +54,7 @@ struct Owner {
     preset_dir: PathBuf,
     state: AudioState,
     resume_controls: Option<Vec<LiveControl>>,
+    resume_eq: Option<Vec<BlockEqState>>,
     recovery_due: Option<std::time::Instant>,
     recovery_error: Option<String>,
     updates: watch::Sender<AudioState>,
@@ -63,6 +66,7 @@ impl Owner {
         self.state.phase = phase;
         if phase != AudioPhase::Running {
             self.state.controls.clear();
+            self.state.eq.clear();
             self.state.slots.clear();
             self.state.modified = false;
             self.state.saved_copy = None;
@@ -89,6 +93,7 @@ impl Owner {
             settings,
             self.resume_controls.clone(),
             self.state.models.clone(),
+            self.resume_eq.clone(),
         )
         .write(&self.preset_dir.join("last-audio-session.json"));
         match result {
@@ -138,8 +143,9 @@ impl Owner {
         settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
         models: Vec<ModelAssignment>,
+        eq: Option<Vec<BlockEqState>>,
     ) -> Result<(), String> {
-        if !valid_models(&models) {
+        if !valid_models(&models) || eq.as_ref().is_some_and(|e| !valid_snapshot(e)) {
             return Err("Invalid model assignments".into());
         }
         settings.validate()?;
@@ -178,6 +184,7 @@ impl Owner {
         });
         let previous_settings = self.state.configured.replace(settings.clone());
         let previous_controls = std::mem::replace(&mut self.resume_controls, controls.clone());
+        let previous_eq = std::mem::replace(&mut self.resume_eq, eq.clone());
         let previous_models = std::mem::replace(&mut self.state.models, models.clone());
         self.publish(AudioPhase::Starting, None);
         let startup = tokio::time::timeout(Duration::from_secs(25), async {
@@ -185,6 +192,7 @@ impl Owner {
                 settings,
                 controls,
                 models,
+                eq,
             })
             .map_err(|e| e.to_string())?;
             if bytes.len() > 65535 {
@@ -223,6 +231,7 @@ impl Owner {
                 preset_name,
                 controls,
                 slots,
+                eq,
             } = event
             else {
                 return Err("Expected native readiness".into());
@@ -231,12 +240,15 @@ impl Owner {
                 || preset_name.len() > 1024
                 || !valid_controls(&controls)
                 || !valid_slots(&slots)
+                || !valid_snapshot(&eq)
             {
                 return Err("Invalid native controls".into());
             }
             self.state.preset_name = Some(preset_name);
             self.state.controls = controls;
             self.state.slots = slots;
+            self.state.eq = eq;
+            self.resume_eq = Some(self.state.eq.clone());
             self.state.modified = self.state.configured.as_ref().is_some_and(|s| s.draft)
                 || self.resume_controls.is_some()
                 || !self.state.models.is_empty();
@@ -248,6 +260,7 @@ impl Owner {
         if let Err(error) = startup {
             self.state.configured = previous_settings;
             self.resume_controls = previous_controls;
+            self.resume_eq = previous_eq;
             self.state.models = previous_models;
             self.release().await?;
             return Err(error);
@@ -275,7 +288,9 @@ impl Owner {
                     PlaybackEvent::Meter { snapshot } if snapshot.valid() => {
                         meters.send_replace(Some((snapshot, std::time::Instant::now())));
                     }
-                    reply @ (PlaybackEvent::Control { .. } | PlaybackEvent::Model { .. }) => {
+                    reply @ (PlaybackEvent::Control { .. }
+                    | PlaybackEvent::Model { .. }
+                    | PlaybackEvent::Eq { .. }) => {
                         if replies.try_send(reply).is_err() {
                             break;
                         }
@@ -346,6 +361,69 @@ impl Owner {
             }
         }
     }
+    async fn set_eq(&mut self, block_id: String, edit: EqEdit) -> Result<(), String> {
+        let mut expected = self.state.eq.clone();
+        let row = expected
+            .iter_mut()
+            .find(|s| s.block_id == block_id)
+            .ok_or("Unknown EQ target")?;
+        edit.apply(&mut row.eq)?;
+        if expected == self.state.eq {
+            return Ok(());
+        }
+        let serial = self.state.revision + 1;
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut bytes = serde_json::to_vec(&EqRequest {
+                serial,
+                block_id,
+                eq: edit,
+            })
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let event = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Audio reply lost")?;
+            match event {
+                PlaybackEvent::Eq {
+                    serial: actual,
+                    eq,
+                    error: None,
+                } if actual == serial && valid_snapshot(&eq) && eq == expected => Ok(eq),
+                _ => Err("EQ edit could not be confirmed".to_owned()),
+            }
+        })
+        .await
+        .map_err(|_| "EQ edit timed out".to_owned())
+        .and_then(|r| r);
+        match result {
+            Ok(eq) => {
+                self.state.eq = eq.clone();
+                self.resume_eq = Some(eq);
+                self.resume_controls = Some(self.state.controls.clone());
+                self.state.modified = true;
+                self.state.saved_copy = None;
+                self.schedule_recovery();
+                self.publish(AudioPhase::Running, None);
+                Ok(())
+            }
+            Err(error) => {
+                self.release().await?;
+                Err(error)
+            }
+        }
+    }
     fn model_pending(&self) -> bool {
         self.state
             .model_change
@@ -382,10 +460,12 @@ impl Owner {
                     controls,
                     progress,
                     slots,
+                    eq,
                     ..
                 } if *actual == serial
                     && valid_controls(controls)
                     && valid_slots(slots)
+                    && valid_snapshot(eq)
                     && progress.as_ref().is_none_or(|p| {
                         p.assignment.valid() && p.error.as_ref().is_none_or(|s| s.len() <= 1024)
                     }) =>
@@ -423,6 +503,7 @@ impl Owner {
             progress,
             controls,
             slots,
+            eq,
             error,
             ..
         } = event
@@ -459,6 +540,8 @@ impl Owner {
                     self.state.models.push(p.assignment.clone());
                 }
                 self.state.slots = slots;
+                self.state.eq = eq.clone();
+                self.resume_eq = Some(eq);
                 self.state.controls = controls.clone();
                 self.resume_controls = Some(controls);
                 self.state.modified = true;
@@ -569,6 +652,7 @@ impl Owner {
                 },
                 None,
                 vec![],
+                None,
             )
             .await;
         if let Err(error) = started {
@@ -594,6 +678,7 @@ impl Owner {
                 .ok_or("No sounding configuration")?,
             controls: self.state.controls.clone(),
             models: self.state.models.clone(),
+            eq: Some(self.state.eq.clone()),
             name,
         };
         let mut bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
@@ -684,7 +769,12 @@ impl Owner {
             return Err(error);
         }
         match self
-            .start(proposed, controls.clone(), self.state.models.clone())
+            .start(
+                proposed,
+                controls.clone(),
+                self.state.models.clone(),
+                self.resume_eq.clone(),
+            )
             .await
         {
             Ok(()) => Ok(self.state.clone()),
@@ -693,7 +783,12 @@ impl Owner {
                 // only a previously running stream; a stopped session stays stopped.
                 let message = if was_running {
                     match self
-                        .start(previous, controls, self.state.models.clone())
+                        .start(
+                            previous,
+                            controls,
+                            self.state.models.clone(),
+                            self.resume_eq.clone(),
+                        )
                         .await
                     {
                         Ok(()) => {
@@ -776,6 +871,24 @@ impl Owner {
             }
             AudioAction::SaveCopy { name } => return self.save_copy(name).await,
             AudioAction::Reconfigure { stream } => return self.reconfigure(stream).await,
+            AudioAction::SetEq { block_id, edit } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Start audio before adjusting EQ".into());
+                }
+                let mut candidate = self
+                    .state
+                    .eq
+                    .iter()
+                    .find(|s| s.block_id == block_id)
+                    .ok_or("Unknown EQ target")?
+                    .eq
+                    .clone();
+                edit.apply(&mut candidate)?;
+                if self.model_pending() {
+                    return Err("Finish model audition before adjusting EQ".into());
+                }
+                self.set_eq(block_id, edit).await
+            }
             AudioAction::SetControl { target, value } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Start audio before changing live controls".into());
@@ -801,7 +914,7 @@ impl Owner {
                         "Audio already owns the device; stop before applying changes".into(),
                     );
                 }
-                self.start(settings, None, vec![]).await
+                self.start(settings, None, vec![], None).await
             }
             AudioAction::Resume => {
                 let settings = self
@@ -816,6 +929,7 @@ impl Owner {
                     settings,
                     self.resume_controls.clone(),
                     self.state.models.clone(),
+                    self.resume_eq.clone(),
                 )
                 .await
             }
@@ -843,6 +957,7 @@ impl Owner {
                             .ok_or("No audio configuration")?,
                         controls: self.resume_controls.clone(),
                         models: self.state.models.clone(),
+                        eq: self.resume_eq.clone(),
                     })?;
                 } else {
                     self.boot.clear(Role::Native)?;
@@ -864,6 +979,7 @@ impl Owner {
                             settings,
                             self.resume_controls.clone(),
                             self.state.models.clone(),
+                            self.resume_eq.clone(),
                         )
                         .await
                     }
@@ -921,6 +1037,7 @@ impl Playback {
             ),
             revision: 0,
             controls: vec![],
+            eq: vec![],
             modified: false,
             preset_name: None,
             saved_copy: None,
@@ -950,6 +1067,7 @@ impl Playback {
             executable: config.audio_worker.clone(),
             preset_dir: config.preset_dir.clone(),
             state: initial,
+            resume_eq: recovery.as_ref().and_then(|r| r.eq.clone()),
             resume_controls: recovery.and_then(|r| r.controls),
             recovery_due: None,
             recovery_error,
@@ -964,8 +1082,9 @@ impl Playback {
                     settings,
                     controls,
                     models,
+                    eq,
                 })) if owner.executable.is_some() => {
-                    if let Err(error) = owner.start(settings, controls, models).await {
+                    if let Err(error) = owner.start(settings, controls, models, eq).await {
                         owner.publish(AudioPhase::Failed, Some(error));
                     }
                 }

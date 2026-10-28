@@ -175,7 +175,7 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
         &StageAction::BlockEdit {
             edit: BlockEdit::EqEnabled {
                 phase: EditPhase::Commit,
-                block_id: id,
+                block_id: id.clone(),
                 value: true,
             },
         },
@@ -184,7 +184,35 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
     let edited = engine.chain()?["chain"][0]["params"]["eq"].clone();
     assert_eq!(edited["bands"][1]["gainDb"], 6.0);
     assert_eq!(edited["enabled"], true);
+    // The playback worker calls the immediate setter, not a dispatcher wait.
+    engine.set_eq(
+        &id,
+        &oxidal_audio::eq::EqEdit::Pre {
+            value: !before["pre"].as_bool().unwrap(),
+        },
+    )?;
+    let mut band = engine.eq_snapshot()?[0].eq.bands[1].clone();
+    band.freq_hz = 700.0;
+    band.gain_db = 0.1;
+    engine.set_eq(
+        &id,
+        &oxidal_audio::eq::EqEdit::Band {
+            index: 1,
+            band: band.clone(),
+        },
+    )?;
     let eq = engine.eq_snapshot()?;
+    assert_eq!(eq[0].eq.bands[1], band);
+    assert!(
+        engine
+            .set_eq(
+                "missing",
+                &oxidal_audio::eq::EqEdit::Enabled { value: true }
+            )
+            .is_err()
+    );
+    assert_eq!(engine.eq_snapshot()?, eq);
+    let edited = engine.chain()?["chain"][0]["params"]["eq"].clone();
     let mut replayed = Engine::new(48000.0, 128)?;
     replayed.restore(&baseline)?;
     wait_loaded(&mut replayed)?;

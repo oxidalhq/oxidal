@@ -920,6 +920,65 @@ test('playback lifecycle keeps native authoring available after stop and restart
         ),
       ).toBe(true);
     }
+    await sounding
+      .locator('.live-effect')
+      .first()
+      .getByRole('button')
+      .first()
+      .click();
+    const eq = sounding.getByRole('region', { name: 'Block EQ' });
+    await expect(eq).toBeVisible();
+    const eqBefore = (await (await request.get('/api/v1/audio')).json()).eq[0];
+    await eq
+      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
+      .click();
+    const eqDialog = eq.getByRole('dialog');
+    await eqDialog
+      .getByRole('slider', { name: 'Adjust EQ Gain' })
+      .press('ArrowRight');
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).eq[0].eq.bands[1]
+            .gainDb,
+      )
+      .not.toBe(eqBefore.eq.bands[1].gainDb);
+    await eqDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).eq[0].eq,
+      )
+      .toEqual(eqBefore.eq);
+    await eq
+      .getByRole('button', { name: 'Adjust EQ Gain', exact: true })
+      .click();
+    await eq
+      .getByRole('slider', { name: 'Adjust EQ Gain' })
+      .press('ArrowRight');
+    await eq.getByRole('button', { name: 'Done', exact: true }).click();
+    const eqEdited = (await (await request.get('/api/v1/audio')).json()).eq;
+    expect(eqEdited[0].eq.bands[1].gainDb).not.toBe(
+      eqBefore.eq.bands[1].gainDb,
+    );
+    for (const viewport of [
+      portrait,
+      { width: portrait.height, height: portrait.width },
+    ]) {
+      await page.setViewportSize(viewport);
+      await eq.scrollIntoViewIfNeeded();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await test.info().attach(`live-eq-${viewport.width}x${viewport.height}`, {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+    }
+    await page.setViewportSize(portrait);
+    await sounding.getByRole('button', { name: 'Global', exact: true }).click();
     const outputControl = liveControls.controls.find(
       (c: { target: string }) => c.target === 'outputLevel',
     );

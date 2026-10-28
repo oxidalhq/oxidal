@@ -83,6 +83,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         engine.apply_live_snapshot(&controls)?;
         engine.wait_ready()?;
     }
+    if let Some(eq) = startup.eq {
+        engine.restore_eq(&eq, &mut 0)?;
+    }
     if stop.load(Ordering::Acquire) {
         return Ok(());
     }
@@ -132,6 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         preset_name: preset_name.clone(),
                         controls: engine.live_controls()?,
                         slots: engine.slots()?,
+                        eq: engine.eq_snapshot()?,
                     })?;
                 }
             }
@@ -159,6 +163,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
             let event = match request {
+                WorkerRequest::Eq(request) => {
+                    let error = if models.pending() {
+                        Some("Finish model preparation before adjusting EQ".into())
+                    } else {
+                        engine
+                            .set_eq(&request.block_id, &request.eq)
+                            .err()
+                            .map(|e| e.to_string())
+                    };
+                    PlaybackEvent::Eq {
+                        serial: request.serial,
+                        eq: engine.eq_snapshot()?,
+                        error,
+                    }
+                }
+
                 WorkerRequest::Control(request) => {
                     let error = if models.pending() {
                         Some(
@@ -188,6 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         progress,
                         controls: engine.live_controls()?,
                         slots: engine.slots()?,
+                        eq: engine.eq_snapshot()?,
                         error,
                     }
                 }
@@ -250,6 +271,10 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
         request.settings.stream.input.period_frames as usize,
     )?;
     engine.apply_live_snapshot(&request.controls)?;
+    if let Some(eq) = &request.eq {
+        engine.restore_eq(eq, &mut 0)?;
+    }
+    let eq = engine.eq_snapshot()?;
     let model_identities = models::identities(&mut engine)?;
     let bytes = engine.save_preset(&request.name)?;
     // A fresh engine prevents retained device/session values hiding a lossy export.
@@ -262,6 +287,9 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     engine.wait_ready()?;
     if models::identities(&mut engine)? != model_identities {
         return Err("Saved model identity differs".into());
+    }
+    if engine.eq_snapshot()? != eq {
+        return Err("Saved EQ readback differs".into());
     }
     let restored = engine.live_controls()?;
     if restored.len() != request.controls.len()

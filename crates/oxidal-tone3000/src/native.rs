@@ -16,6 +16,15 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_eq(
+        engine: *mut c_void,
+        id: *const c_char,
+        kind: i32,
+        index: i32,
+        value: i32,
+        band: *const c_char,
+    ) -> i32;
+
     fn oxidal_t3k_stage_submit(
         engine: *mut c_void,
         token: u64,
@@ -422,6 +431,37 @@ impl Engine {
         serde_json::from_slice(&output[..written - 1])
             .map(Some)
             .map_err(|e| NativeError(e.to_string()))
+    }
+    /// Immediate owner edit, outside the processing callback. No message-loop wait.
+    pub fn set_eq(&mut self, block_id: &str, edit: &oxidal_audio::eq::EqEdit) -> Result<()> {
+        use oxidal_audio::eq::EqEdit;
+        if block_id.is_empty() || block_id.len() > 128 || block_id.chars().any(char::is_control) {
+            return Err(NativeError("Invalid EQ target".into()));
+        }
+        let (kind, index, value, band) = match edit {
+            EqEdit::Enabled { value } => (0, 0, i32::from(*value), String::new()),
+            EqEdit::Pre { value } => (1, 0, i32::from(*value), String::new()),
+            EqEdit::Band { index, band } if band.valid(usize::from(*index)) => (
+                2,
+                i32::from(*index),
+                0,
+                serde_json::to_string(band).map_err(|e| NativeError(e.to_string()))?,
+            ),
+            _ => return Err(NativeError("Invalid EQ edit".into())),
+        };
+        let id = CString::new(block_id).map_err(|e| NativeError(e.to_string()))?;
+        let band = CString::new(band).map_err(|e| NativeError(e.to_string()))?;
+        // SAFETY: owner handle and validated strings live through this synchronous call.
+        checked(unsafe {
+            oxidal_t3k_eq(
+                self.ptr.as_ptr(),
+                id.as_ptr(),
+                kind,
+                index,
+                value,
+                band.as_ptr(),
+            )
+        })
     }
     /// Owned EQ readback for reconstruction. Never a capture on the DSP callback.
     pub fn eq_snapshot(&mut self) -> Result<Vec<crate::protocol::BlockEqState>> {

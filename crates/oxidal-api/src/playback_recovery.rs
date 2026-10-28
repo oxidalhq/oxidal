@@ -1,4 +1,5 @@
 //! Last confirmed scalar session; separate from the explicit saved-preset boot policy.
+use oxidal_audio::eq::{BlockEqState, valid_snapshot};
 use oxidal_audio::lifecycle::{
     LiveControl, ModelAssignment, StartAudio, valid_controls, valid_models,
 };
@@ -18,23 +19,28 @@ pub(super) struct Recovery {
     pub controls: Option<Vec<LiveControl>>,
     #[serde(default)]
     pub models: Vec<ModelAssignment>,
+    #[serde(default)]
+    pub eq: Option<Vec<BlockEqState>>,
 }
 impl Recovery {
     pub fn new(
         settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
         models: Vec<ModelAssignment>,
+        eq: Option<Vec<BlockEqState>>,
     ) -> Self {
         Self {
             schema: 1,
             settings,
             controls,
             models,
+            eq,
         }
     }
     pub(super) fn validate(&self) -> Result<(), String> {
         if self.schema != 1
             || !valid_models(&self.models)
+            || self.eq.as_ref().is_some_and(|e| !valid_snapshot(e))
             || self.controls.as_ref().is_some_and(|c| !valid_controls(c))
         {
             return Err("Invalid audio recovery state".into());
@@ -107,7 +113,7 @@ mod tests {
             display: "2.5".into(),
             toggle: false,
         };
-        let mut state = Recovery::new(settings, Some(vec![control.clone()]), vec![]);
+        let mut state = Recovery::new(settings, Some(vec![control.clone()]), vec![], None);
         state.models = vec![ModelAssignment {
             insertion: None,
             target: "block-one".into(),

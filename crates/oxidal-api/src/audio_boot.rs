@@ -1,5 +1,6 @@
 //! One durable boot choice for all audio owners; confirmed recovery is separate.
 use crate::{playback_recovery, rig_recovery};
+use oxidal_audio::eq::BlockEqState;
 use oxidal_audio::lifecycle::{LiveControl, ModelAssignment, StartAudio};
 use oxidal_engine::protocol::{REQUEST_LIMIT, StartRig};
 use oxidal_lv2::protocol::StartGraph;
@@ -23,6 +24,8 @@ pub(super) enum Choice {
         settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
         models: Vec<ModelAssignment>,
+        #[serde(default)]
+        eq: Option<Vec<BlockEqState>>,
     },
     Mixed {
         settings: StartRig,
@@ -45,12 +48,18 @@ impl Choice {
                 settings,
                 controls,
                 models,
+                eq,
             } => {
                 if settings.draft {
                     return Err("Save and recall the new rig before enabling boot playback".into());
                 }
-                playback_recovery::Recovery::new(settings.clone(), controls.clone(), models.clone())
-                    .validate()
+                playback_recovery::Recovery::new(
+                    settings.clone(),
+                    controls.clone(),
+                    models.clone(),
+                    eq.clone(),
+                )
+                .validate()
             }
             Self::Mixed { settings } => rig_recovery::Recovery::new(settings.clone()).validate(),
             Self::Effects { settings } => {
@@ -98,6 +107,7 @@ fn read(path: &Path) -> Result<Option<Choice>, String> {
             Choice::Native {
                 settings: legacy.settings,
                 controls: None,
+                eq: None,
                 models: vec![],
             }
         }
@@ -296,6 +306,7 @@ mod tests {
         let native = Choice::Native {
             settings: settings.clone(),
             controls: None,
+            eq: None,
             models: vec![],
         };
         std::fs::create_dir(path.with_extension("tmp")).unwrap();
@@ -312,6 +323,7 @@ mod tests {
             p.set(Choice::Native {
                 settings: draft,
                 controls: None,
+                eq: None,
                 models: vec![]
             })
             .is_err()

@@ -37,7 +37,7 @@ To review the editor locally after building the native library:
 OXIDAL_NATIVE_EDITOR=1 pnpm preview
 ```
 
-Open Library, import a `.t3kpreset`, select it under Native preset editor and load it. The 14 qualified global controls are input/output level, bass/mid/treble, tone-EQ enable, gate enable/threshold/release/hold/range, input calibration, oversampling enable and factor. The server annotates all 43 native descriptors with separate `writable` and `staged` capabilities; native automation support alone never authorizes an edit. The UI derives its control list, names, tone/device grouping and toggle behavior from these descriptors. Unsupported descriptors remain available for inspection but are not offered as editable controls. Each native tone block also exposes enable, normalise, input gain, output gain and mix, identified by block and left/right lane. Global and block toggles accept exactly 0 or 1; gain and mix use normalized 0–1 values. Loaded engines that explicitly report slimmable-model support also expose requested NAM size as a commit-only control. No size control is inferred from a filename or title, and the bridge independently rechecks support before mutation. The native engine reports the requested value; effective model size/CPU savings are not asserted. Block EQ, model selection and other settings remain unqualified. A staged control accepts a final commit only; previews cannot trigger repeated reloads. The UI shows authoritative native values and an explicit normalized 0–1 edit value. Editing is silent and does not change a separate playback session. Save a copy and start that saved preset to hear changes when experimental Linux playback is enabled.
+Open Library, import a `.t3kpreset`, select it under Native preset editor and load it. The 14 qualified global controls are input/output level, bass/mid/treble, tone-EQ enable, gate enable/threshold/release/hold/range, input calibration, oversampling enable and factor. The server annotates all 43 native descriptors with separate `writable` and `staged` capabilities; native automation support alone never authorizes an edit. The UI derives its control list, names, tone/device grouping and toggle behavior from these descriptors. Unsupported descriptors remain available for inspection but are not offered as editable controls. Each native tone block also exposes enable, normalise, input gain, output gain and mix, identified by block and left/right lane. Global and block toggles accept exactly 0 or 1; gain and mix use normalized 0–1 values. Loaded engines that explicitly report slimmable-model support also expose requested NAM size as a commit-only control. No size control is inferred from a filename or title, and the bridge independently rechecks support before mutation. The native engine reports the requested value; effective model size/CPU savings are not asserted. This offline editor does not expose block EQ; live playback EQ and model audition are qualified separately below. Other settings remain unqualified. A staged control accepts a final commit only; previews cannot trigger repeated reloads. The UI shows authoritative native values and an explicit normalized 0–1 edit value. Editing is silent and does not change a separate playback session. Save a copy and start that saved preset to hear changes when experimental Linux playback is enabled.
 
 The draft supports removing a selected native tone block and undo/redo for committed scalar, staged and removal edits. Commands retain the same session/revision checks and reject structural/history changes while a gesture is active. Removal invalidates the old block's control targets; Undo restores its native identity and controls. Restore/prepare failures roll back to the committed draft. History retains at most eight checkpoints and 64 MiB combined, independently of active model capacity. Successful load or save starts a new history; history is not persisted across worker restarts. This is offline authoring only, not live structural switching or a complete native operation surface.
 
@@ -248,3 +248,31 @@ not an operation on the audible engine: it pumps native messages and may wait.
 The qualifier compares replayed PCM with the edited engine and rejects malformed
 identities/ranges without changing the candidate or consuming a token. Mono presets
 may omit the right lane. These helpers do not yet wire EQ into playback recovery.
+
+## Live block EQ and recovery
+
+Saved-preset playback exposes each tone block's confirmed six-band EQ. The
+revision-owned `set_eq` command changes one band, enable flag or before/after
+position on the sounding worker before Save. Band roles and ranges follow the
+preserved native implementation. Expected readback uses the native float storage
+representation, not an arbitrary comparison tolerance. Model preparation and EQ
+writes are mutually exclusive. Invalid targets/values are rejected before a
+worker write; lost or inconsistent worker confirmation fails closed.
+
+The playback owner uses the immediate native setters between processing calls,
+without a message-loop wait or whole-preset capture. Native control/history work
+can allocate; this is not a physical audio deadline guarantee. The library stage
+preview/commit path remains separately available for its reference operations.
+
+Confirmed EQ follows model identities through Stop/Resume/Restart, audio settings
+Apply/rollback, explicit boot capture and daemon recovery. Older recovery records
+without EQ retain source-preset defaults. Isolated Save restores controls/models/EQ
+and verifies exact EQ after fresh embedded-preset recall. No network asset cache
+is needed to recall that saved copy.
+
+In the web chain, selecting a tone block reveals its EQ panel. Six band selectors,
+cut/shelf type where applicable, enable and position controls use the shared theme.
+Values open the existing relative touch adjustment: previews sound immediately,
+Done keeps the current value and Cancel sends the opening value only through the
+same revision-owned cursor. A conflicting client cannot silently overwrite a newer
+session. This slice applies to native playback; mixed-rig EQ authoring remains open.

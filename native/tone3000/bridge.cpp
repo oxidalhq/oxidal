@@ -384,6 +384,20 @@ EXPORT int oxidal_t3k_split_state(void* ptr, int stage, unsigned char* out, size
   });
 }
 
+// Immediate owner-thread EQ setter. No dispatcher wait on the audio owner.
+EXPORT int oxidal_t3k_eq(void* ptr, const char* id, int kind, int index, int value, const char* band) noexcept {
+  return guard([&] {
+    auto& p = engine(ptr).processor;
+    if (!id || !*id || std::strlen(id)>128) throw std::runtime_error("Invalid EQ target");
+    bool applied = false;
+    if (kind==0 && (value==0 || value==1)) applied=p.setBlockEqEnabled(id,value!=0);
+    else if (kind==1 && (value==0 || value==1)) applied=p.setBlockEqPre(id,value!=0);
+    else if (kind==2 && index>=0 && index<6 && band && std::strlen(band)<=256)
+      applied=p.setBlockEqBand(id,index,juce::JSON::parse(juce::String::fromUTF8(band)));
+    if (!applied) throw std::runtime_error("Missing target or rejected EQ edit");
+  });
+}
+
 EXPORT int oxidal_t3k_input_mode(void* ptr, int mode) noexcept {
   return guard([&] {
     if (mode < 0 || mode > 3) throw std::runtime_error("Invalid input mode");

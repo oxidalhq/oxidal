@@ -40,6 +40,11 @@ export type AudioAction =
       kind: "set_boot";
     }
   | {
+      block_id: string;
+      edit: EqEdit;
+      kind: "set_eq";
+    }
+  | {
       kind: "set_control";
       target: string;
       value: number;
@@ -58,6 +63,24 @@ export type AudioAction =
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
+/**
+ * One immediate, revision-owned edit; UI cancellation sends its original value.
+ */
+export type EqEdit =
+  | {
+      kind: "enabled";
+      value: boolean;
+    }
+  | {
+      kind: "pre";
+      value: boolean;
+    }
+  | {
+      band: EqBand;
+      index: number;
+      kind: "band";
+    };
+export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
@@ -476,6 +499,12 @@ export interface StartAudio {
   preset_id: string;
   stream: StreamConfig;
 }
+export interface EqBand {
+  freqHz: number;
+  gainDb: number;
+  q: number;
+  type: EqType;
+}
 /**
  * Immutable verified asset assigned to a native block. Insert position is issued
  * by the playback owner, preserving replay order from the immutable working base.
@@ -528,6 +557,7 @@ export interface AudioState {
    * Remains true until the worker is reaped, including failed shutdowns.
    */
   device_owned: boolean;
+  eq?: BlockEqState[];
   error?: string | null;
   experimental: boolean;
   model_change?: ModelProgress | null;
@@ -559,6 +589,22 @@ export interface LiveControl {
   target: string;
   toggle: boolean;
   value: number;
+}
+/**
+ * Exact per-block EQ readback, retained independently of scalar controls.
+ */
+export interface BlockEqState {
+  block_id: string;
+  eq: EqState;
+}
+export interface EqState {
+  /**
+   * @minItems 6
+   * @maxItems 6
+   */
+  bands: [EqBand, EqBand, EqBand, EqBand, EqBand, EqBand];
+  enabled: boolean;
+  pre: boolean;
 }
 export interface ModelProgress {
   assignment: ModelAssignment;
