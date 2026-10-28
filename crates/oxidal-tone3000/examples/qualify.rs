@@ -354,6 +354,9 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.as_slice() == ["--local-files"] {
+        return qualify_local_files();
+    }
     if arguments.as_slice() == ["--gestures"] {
         return qualify_live_gestures();
     }
@@ -373,6 +376,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
         return qualify_editor_structure(&root, &std::fs::read(&arguments[1])?);
     }
+    qualify_local_files()?;
     qualify_live_gestures()?;
     qualify_device_defaults()?;
     qualify_latency()?;
@@ -3194,6 +3198,79 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     );
     println!(
         "native gestures: audible previews, one-entry undo/redo, ownership/sequence rejection, coupled-control cancel, late terminal safety and storage rollback passed"
+    );
+    Ok(())
+}
+
+fn qualify_local_files() -> Result<(), Box<dyn Error>> {
+    use oxidal_audio::lifecycle::ModelAssignment;
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?).join(format!(
+        "local-files-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root)?;
+    let store = oxidal_presets::ModelStore::new(root.join("audition-models"));
+    let nam = std::fs::read(std::env::var("OXIDAL_TONE3000_TEST_MODEL")?)?;
+    for (name, bytes) in [
+        ("My offline amp.nam", nam),
+        ("My offline cab.wav", impulse_wav()),
+    ] {
+        let (id, asset) = store.stage_local(name, &bytes)?;
+        assert_eq!(asset.tone_id, 0);
+        assert_eq!(asset.tone["local"], true);
+        let mut engine = Engine::new(48000.0, 128)?;
+        engine.reset_empty()?;
+        let slot = engine
+            .slots()?
+            .into_iter()
+            .find(|s| s.position.lane == 0)
+            .ok_or("No initial slot")?;
+        oxidal_tone3000::model_preparation::restore(
+            &mut engine,
+            &root,
+            &[ModelAssignment {
+                target: slot.target,
+                asset: id,
+                insertion: Some(slot.position),
+            }],
+            128,
+        )?;
+        engine.wait_ready()?;
+        engine.set_normalized("gateEnabled", 0.0)?;
+        engine.set_normalized("inputLevel", 0.5)?;
+        engine.set_normalized("outputLevel", 0.5)?;
+        assert!(engine.chain()?.to_string().contains("\"local\":true"));
+        let saved = engine.save_preset("Local file offline recall")?;
+        std::fs::rename(root.join("audition-models"), root.join("inert-cache"))?;
+        let mut recalled = Engine::new(48000.0, 128)?;
+        recalled.load_preset(&saved)?;
+        recalled.wait_ready()?;
+        engine.prepare_stream()?;
+        recalled.prepare_stream()?;
+        let mut peak = 0.0f32;
+        let mut worst = 0.0f32;
+        for block in 0..24 {
+            let input: Vec<_> = (0..128)
+                .map(|i| ((block * 128 + i) as f32 * 0.09).sin() * 0.05)
+                .collect();
+            let (mut l, mut r) = (input.clone(), input.clone());
+            let (mut a, mut b) = (input.clone(), input);
+            engine.process(&mut l, &mut r)?;
+            recalled.process(&mut a, &mut b)?;
+            for (x, y) in l.iter().chain(&r).zip(a.iter().chain(&b)) {
+                assert!(x.is_finite() && y.is_finite());
+                peak = peak.max(x.abs());
+                worst = worst.max((x - y).abs());
+            }
+        }
+        assert!(peak > 1e-6);
+        assert!(worst < 1e-5, "local offline replay {name}: {worst}");
+        std::fs::rename(root.join("inert-cache"), root.join("audition-models"))?;
+    }
+    println!(
+        "local files: real A2 NAM and WAV IR insert, native local tone identity, no-account preparation, standalone Save and cache-independent matching PCM passed"
     );
     Ok(())
 }

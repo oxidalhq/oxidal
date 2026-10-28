@@ -482,3 +482,23 @@ independent Save/reopen retains it. Failed gesture checkpointing restores the
 opening EQ or fails closed. Guarded extracted-stage EQ retains the existing direct
 control path, including the new reset operation, without whole-native history
 authoring. No physical deadline/gapless EQ-undo claim is made.
+
+The model picker now offers **Local files** alongside TONE3000. Upload individual
+`.nam` or WAV IR files from the browser, or choose a previously uploaded local
+asset without provider sign-in. `/api/v1/models/local` accepts raw file bytes
+(up to 32 MiB) with a bounded filename query; it never accepts a device filesystem
+path. Its GET returns cursor-paginated local metadata (64 entries/page), with
+payload integrity verified when selected. Upload/cache publication alone does not
+change audio. Native preparation remains the authority for supported model/IR
+formats; rejected preparation retains the previous sound.
+
+Local assets use the reference's `local: true`, tone ID zero and a positive
+content-derived model ID. They do not impersonate a provider tone or require an
+access token. The existing target/revision-bound prepare/commit, insertion,
+Save/recovery and embedded-model export paths carry their exact bytes. Actual A2
+NAM and WAV IR insertion, standalone named Save, cache-independent matching PCM
+and a provider-offline hybrid browser upload/audition/Save/recall flow are covered
+by the maintained suites. The ordinary provider workflow remains qualified.
+Folder imports and collections of multiple selectable local models within a
+single native tone remain open; this does not broaden the native profile to all
+NAM architectures or every WAV encoding.

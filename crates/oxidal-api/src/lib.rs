@@ -4,6 +4,7 @@ mod audio_boot;
 mod debug;
 mod device;
 mod graph_playback;
+mod local_models;
 mod monitor;
 mod native_defaults;
 mod native_editor;
@@ -57,6 +58,8 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub local_model: local_models::LocalModel,
+    pub local_model_page: local_models::LocalModelPage,
     pub native_defaults: oxidal_tone3000::preferences::Snapshot,
     pub native_defaults_update: oxidal_tone3000::preferences::Update,
     pub rig_document: rig_library::RigDocument,
@@ -237,6 +240,12 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route(
             "/account/tone3000",
             get(provider::state).post(provider::command),
+        )
+        .route(
+            "/models/local",
+            get(local_models::list)
+                .post(local_models::upload)
+                .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
         )
         .route("/tone3000/stage", post(provider::download::stage))
         .route("/tone3000/tones", get(provider::catalog::tones))

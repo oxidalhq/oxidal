@@ -23,8 +23,13 @@ pub struct ModelAsset {
 }
 impl ModelAsset {
     fn validate(&self) -> Result<()> {
+        let local = self.tone["local"].as_bool() == Some(true);
         if self.schema != 1
-            || self.tone_id == 0
+            || if local {
+                self.tone_id != 0
+            } else {
+                self.tone_id == 0
+            }
             || self.model_id == 0
             || !matches!(self.format.as_str(), "nam" | "ir")
             || !hash(&self.sha256)
@@ -41,6 +46,14 @@ impl ModelAsset {
             || self.tone["id"].as_u64() != Some(self.tone_id)
         {
             return Err(Error::Invalid("Invalid model metadata"));
+        }
+        if local
+            && (self.tone["format"].as_str() != Some(self.format.as_str())
+                || self.tone["models"]
+                    .as_array()
+                    .is_none_or(|m| m.len() != 1 || m[0]["id"].as_u64() != Some(self.model_id)))
+        {
+            return Err(Error::Invalid("Invalid local model identity"));
         }
         Ok(())
     }
@@ -81,6 +94,8 @@ fn directory(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+/// A bounded page of local metadata plus its next immutable identity cursor.
+pub type LocalAssetPage = (Vec<(String, ModelAsset)>, Option<String>);
 #[derive(Debug)]
 pub struct ModelStore {
     root: PathBuf,
@@ -88,6 +103,111 @@ pub struct ModelStore {
 impl ModelStore {
     pub fn new(root: PathBuf) -> Self {
         Self { root }
+    }
+    /// Browser uploads are inert content-addressed assets, not provider identities.
+    /// Native preparation remains the authority for model/IR compatibility.
+    pub fn stage_local(&self, name: &str, bytes: &[u8]) -> Result<(String, ModelAsset)> {
+        if name.is_empty()
+            || name.len() > 200
+            || name.contains(['/', '\\'])
+            || name.chars().any(char::is_control)
+        {
+            return Err(Error::Invalid("Choose a file name without a path"));
+        }
+        let path = Path::new(name);
+        let extension = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let format = match extension.as_str() {
+            "nam" => "nam",
+            "wav" => "ir",
+            _ => return Err(Error::Invalid("Choose a .nam or .wav file")),
+        };
+        if bytes.is_empty() || bytes.len() > MAX_FILE_BYTES {
+            return Err(Error::Invalid("Model file must contain 1 byte to 32 MiB"));
+        }
+        if format == "nam" {
+            let model: serde_json::Value = serde_json::from_slice(bytes)
+                .map_err(|_| Error::Invalid("NAM file is not valid JSON"))?;
+            if !model.is_object() || !model["architecture"].is_string() {
+                return Err(Error::Invalid("NAM file has no architecture"));
+            }
+        } else if bytes.len() < 12
+            || !matches!(&bytes[..4], b"RIFF" | b"RF64")
+            || &bytes[8..12] != b"WAVE"
+        {
+            return Err(Error::Invalid("IR file is not a WAV file"));
+        }
+        let sha256 = digest(bytes);
+        // Like the reference local loader, a positive content-stable model key
+        // is scoped to its block. Tone id zero + local=true is never a catalog id.
+        let model_id = u64::from(
+            u32::from_str_radix(&sha256[..8], 16)
+                .map_err(|_| Error::Invalid("Invalid content hash"))?
+                % 0x7ffffffe
+                + 1,
+        );
+        let title = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(name)
+            .to_owned();
+        let tone = serde_json::json!({"id":0,"local":true,"title":title,"format":format,"models":[{"id":model_id,"name":title,"model_url":format!("oxidal-model://{sha256}/{}",if format=="nam"{"model.nam"}else{"model.wav"})}]});
+        let asset = ModelAsset {
+            schema: 1,
+            tone_id: 0,
+            model_id,
+            title,
+            name: name.into(),
+            format: format.into(),
+            sha256,
+            tone,
+        };
+        let id = self.stage(&asset, bytes)?;
+        Ok((id, asset))
+    }
+    /// Metadata listing is bounded per page; payload bytes are verified on use.
+    pub fn local_page(&self, after: Option<&str>) -> Result<LocalAssetPage> {
+        if after.is_some_and(|s| !hash(s)) {
+            return Err(Error::Invalid("Invalid local model cursor"));
+        }
+        let entries = match fs::read_dir(&self.root) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((vec![], None)),
+            Err(e) => return Err(e.into()),
+        };
+        let mut ids = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            let id = entry.file_name().to_string_lossy().into_owned();
+            if hash(&id) && after.is_none_or(|a| id.as_str() > a) {
+                ids.push(id);
+            }
+        }
+        ids.sort();
+        let mut rows = Vec::new();
+        let mut next = None;
+        for id in ids {
+            directory(&self.root.join(&id))?;
+            let bytes = read(&self.root.join(&id).join("metadata.json"), 32768)?;
+            if digest(&bytes) != id {
+                return Err(Error::Invalid("Model metadata integrity failed"));
+            }
+            let asset: ModelAsset = serde_json::from_slice(&bytes)
+                .map_err(|_| Error::Invalid("Invalid model metadata"))?;
+            asset.validate()?;
+            if asset.tone_id != 0 {
+                continue;
+            }
+            if rows.len() == 64 {
+                next = rows.last().map(|(id, _): &(String, ModelAsset)| id.clone());
+                break;
+            }
+            rows.push((id, asset));
+        }
+        Ok((rows, next))
     }
     pub fn read(&self, id: &str) -> Result<(ModelAsset, PathBuf)> {
         if !hash(id) {
@@ -171,6 +291,51 @@ impl ModelStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn local_files_keep_native_local_identity_and_page_without_provider_data() {
+        let root = std::env::temp_dir().join(format!(
+            "oxidal-local-files-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = ModelStore::new(root.clone());
+        let bytes = br#"{"architecture":"Linear","weights":[1]}"#;
+        let (first, asset) = store.stage_local("Stage lead.NAM", bytes).unwrap();
+        assert_eq!(asset.tone_id, 0);
+        assert_eq!(asset.tone["local"], true);
+        assert!(asset.model_id > 0 && asset.model_id <= i32::MAX as u64);
+        assert_eq!(store.stage_local("Stage lead.NAM", bytes).unwrap().0, first);
+        assert_eq!(std::fs::read(store.read(&first).unwrap().1).unwrap(), bytes);
+        for name in ["../unsafe.nam", "unsafe\\path.nam", "empty.nam", "no.txt"] {
+            assert!(
+                store
+                    .stage_local(name, if name == "empty.nam" { &[] } else { bytes })
+                    .is_err()
+            );
+        }
+        assert!(store.stage_local("invalid.nam", b"broken").is_err());
+        assert!(store.stage_local("invalid.wav", bytes).is_err());
+        for i in 0..70 {
+            store.stage_local(&format!("Local {i}.nam"), bytes).unwrap();
+        }
+        let (page, next) = store.local_page(None).unwrap();
+        assert_eq!(page.len(), 64);
+        assert!(page.iter().all(|(_, a)| a.tone_id == 0));
+        let (last, done) = store.local_page(next.as_deref()).unwrap();
+        assert_eq!(last.len(), 7);
+        assert!(done.is_none());
+        assert!(
+            page.iter()
+                .all(|(id, _)| last.iter().all(|(other, _)| id != other))
+        );
+        assert!(store.local_page(Some("../bad")).is_err());
+        std::fs::write(root.join(&page[0].0).join("metadata.json"), b"{}").unwrap();
+        assert!(store.local_page(None).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn staged_model_survives_restart_and_rejects_tampering_and_traversal() {
         let root = std::env::temp_dir().join(format!("oxidal-model-test-{}", std::process::id()));

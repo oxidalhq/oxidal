@@ -591,6 +591,8 @@ export interface Contract {
   graph_audio_state: GraphAudioState;
   graph_presets: SavedGraph[];
   library: Library;
+  local_model: LocalModel;
+  local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
   midi_devices: Devices;
   model_page: Page2;
@@ -1117,6 +1119,17 @@ export interface Inspection {
   sha256: string;
   size_bytes: number;
   source_id?: string | null;
+}
+export interface LocalModel {
+  format: string;
+  id: string;
+  name: string;
+  sha256: string;
+  title: string;
+}
+export interface LocalModelPage {
+  data: LocalModel[];
+  next?: string | null;
 }
 /**
  * Fresh installed metadata, checked against the same admission rules as the host.

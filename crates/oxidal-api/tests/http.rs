@@ -1284,3 +1284,103 @@ async fn native_device_defaults_are_durable_validated_and_revision_checked() {
     task.abort();
     let _ = std::fs::remove_dir_all(root);
 }
+
+#[tokio::test]
+async fn local_file_upload_needs_no_provider_account_and_does_not_change_audio() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/models/local");
+    let audio: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let bytes = br#"{"architecture":"Linear","weights":[1]}"#;
+    let response = client
+        .post(&endpoint)
+        .query(&[("name", "My local amp.nam")])
+        .header("Content-Type", "application/octet-stream")
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 201);
+    let uploaded: Value = response.json().await.unwrap();
+    let page: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(page["data"][0], uploaded);
+    assert_eq!(uploaded["format"], "nam");
+    assert!(uploaded.get("tone_id").is_none());
+    let larger = serde_json::to_vec(
+        &json!({"architecture":"Linear","weights":[1],"metadata":{"padding":"x".repeat(128*1024)}}),
+    )
+    .unwrap();
+    assert_eq!(
+        client
+            .post(&endpoint)
+            .query(&[("name", "Large local.nam")])
+            .body(larger)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        201,
+        "binary model upload uses its 32 MiB route budget, not the 64 KiB command budget"
+    );
+    for (name, data) in [
+        ("../escape.nam", bytes.as_slice()),
+        ("wrong.txt", bytes.as_slice()),
+        ("broken.nam", b"bad".as_slice()),
+        ("empty.wav", b"".as_slice()),
+    ] {
+        assert_eq!(
+            client
+                .post(&endpoint)
+                .query(&[("name", name)])
+                .body(data.to_vec())
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            422
+        );
+    }
+    assert_eq!(
+        client
+            .get(&endpoint)
+            .query(&[("after", "../escape")])
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    assert_eq!(
+        client
+            .get(format!("{url}/audio"))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        audio
+    );
+    let root = path.with_extension("presets");
+    let model_store = oxidal_presets::ModelStore::new(root.join("audition-models"));
+    let (asset, file) = model_store.read(uploaded["id"].as_str().unwrap()).unwrap();
+    assert_eq!(asset.tone_id, 0);
+    assert_eq!(asset.tone["local"], true);
+    assert_eq!(std::fs::read(file).unwrap(), bytes);
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

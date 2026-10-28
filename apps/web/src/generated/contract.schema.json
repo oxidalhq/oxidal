@@ -61,6 +61,12 @@
     "library": {
       "$ref": "#/$defs/Library"
     },
+    "local_model": {
+      "$ref": "#/$defs/LocalModel"
+    },
+    "local_model_page": {
+      "$ref": "#/$defs/LocalModelPage"
+    },
     "lv2_catalog": {
       "$ref": "#/$defs/PluginCatalog"
     },
@@ -147,6 +153,8 @@
     }
   },
   "required": [
+    "local_model",
+    "local_model_page",
     "native_defaults",
     "native_defaults_update",
     "rig_document",
@@ -3512,6 +3520,55 @@
             "token"
           ]
         }
+      ]
+    },
+    "LocalModel": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "name",
+        "format",
+        "sha256"
+      ]
+    },
+    "LocalModelPage": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalModel"
+          }
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "data"
       ]
     },
     "MappingFile": {

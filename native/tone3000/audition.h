@@ -30,10 +30,11 @@ public:
     const auto format = tone["format"].toString();
     const auto* models = tone["models"].getArray();
     const auto toneId = static_cast<juce::int64>(tone["id"]);
+    const bool local=static_cast<bool>(tone["local"]);
     if (target.empty() || target.size() > 128 || !source.existsAsFile() ||
         source.getSize() <= 0 || source.getSize() > 32 * 1024 * 1024 ||
         (format != "nam" && format != "ir") || !models || models->size() != 1 ||
-        toneId < 1 || toneId > std::numeric_limits<int>::max())
+        (local ? toneId != 0 : toneId < 1) || toneId > std::numeric_limits<int>::max())
       throw std::runtime_error("invalid model preparation request");
     const auto modelId = static_cast<juce::int64>((*models)[0]["id"]);
     if (modelId < 1 || modelId > std::numeric_limits<int>::max())

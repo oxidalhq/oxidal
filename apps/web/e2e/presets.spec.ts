@@ -3613,3 +3613,179 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
     });
   }
 });
+
+test('local NAM and IR files audition without provider login and save offline in a hybrid rig', async ({
+  page,
+  request,
+}) => {
+  test.skip(
+    process.env.OXIDAL_RIG_QUALIFY_NULL !== '1' ||
+      !process.env.OXIDAL_MIXED_TEST_ROOT,
+    'Maintained native gate supplies actual mixed worker fixtures',
+  );
+  test.setTimeout(120000);
+  const root = process.env.OXIDAL_MIXED_TEST_ROOT!;
+  const revision = readFileSync(
+    join(root, 'mixed-preset-revision'),
+    'utf8',
+  ).trim();
+  const folder = join(root, 'worker-rigs', revision);
+  const manifest = JSON.parse(
+    readFileSync(join(folder, 'manifest.json'), 'utf8'),
+  );
+  manifest.name = 'Local file authoring';
+  const resources: Record<string, unknown> = {};
+  for (const resource of manifest.resources) {
+    const imported = await request.post('/api/v1/presets', {
+      data: readFileSync(join(folder, resource.path)),
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+    expect(imported.ok()).toBe(true);
+    resources[resource.id] = {
+      kind: 'original',
+      preset: (await imported.json()).sha256,
+    };
+  }
+  const published = await request.post('/api/v1/presets/rigs', {
+    data: { manifest_json: JSON.stringify(manifest), resources },
+  });
+  expect(published.ok()).toBe(true);
+  const document = await published.json();
+  const get = async () => (await request.get('/api/v1/rig-audio')).json();
+  const command = async (action: unknown) => {
+    const current = await get();
+    const response = await request.post('/api/v1/rig-audio', {
+      data: {
+        session: current.session,
+        expected_revision: current.revision,
+        action,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return response.json();
+  };
+  await command({ kind: 'stop' });
+  const input = {
+    endpoint: 'hw:CARD=Qualification,DEV=0',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  await command({
+    kind: 'start',
+    settings: {
+      revision: document.revision,
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
+      recall: null,
+    },
+  });
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  // Provider transport is unavailable; all local uploads, preparation and Save are real.
+  await page.route('**/api/v1/tone3000/**', (route) =>
+    route.fulfill({ status: 401, json: { error: 'Provider offline' } }),
+  );
+  await page.goto('/');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await expect(rig).toBeVisible();
+  await rig.locator('[data-node="tone"]').getByRole('button').first().click();
+  await rig
+    .getByRole('button', { name: 'Select model 1', exact: true })
+    .click();
+  await rig.getByRole('button', { name: 'Change model', exact: true }).click();
+  let picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker
+    .getByRole('button', { name: 'Local files', exact: true })
+    .click();
+  const before = (await get()).control;
+  await picker.getByLabel('NAM / IR file', { exact: true }).setInputFiles({
+    name: 'broken.nam',
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from('broken'),
+  });
+  await picker
+    .getByRole('button', { name: 'Audition file', exact: true })
+    .click();
+  await expect(picker.getByRole('alert')).toContainText('not valid JSON');
+  expect((await get()).control.revision).toBe(before.revision);
+  expect((await get()).phase).toBe('running');
+  const modelRoot = process.env.OXIDAL_NATIVE_TEST_MODELS!;
+  const id = readdirSync(modelRoot).find(
+    (id) =>
+      /^[0-9a-f]{64}$/.test(id) &&
+      JSON.parse(readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'))
+        .format === 'nam',
+  )!;
+  await picker.getByLabel('NAM / IR file', { exact: true }).setInputFiles({
+    name: 'My local amp.nam',
+    mimeType: 'application/octet-stream',
+    buffer: readFileSync(join(modelRoot, id, 'model.nam')),
+  });
+  await picker
+    .getByRole('button', { name: 'Audition file', exact: true })
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(async () => (await get()).control.model_change?.progress.phase)
+    .toBe('applied');
+  await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
+  picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker
+    .getByRole('button', { name: 'Local files', exact: true })
+    .click();
+  await expect(
+    picker.getByLabel('Local model files').getByRole('button', {
+      name: 'My local amp · NAM Audition',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await picker.getByLabel('NAM / IR file', { exact: true }).setInputFiles({
+    name: 'My local cab.wav',
+    mimeType: 'audio/wav',
+    buffer: readFileSync(join(root, 'split-impulse.wav')),
+  });
+  await picker
+    .getByRole('button', { name: 'Audition file', exact: true })
+    .click();
+  await expect(picker).toHaveCount(0);
+  await expect
+    .poll(async () => (await get()).control.model_change?.progress.phase)
+    .toBe('applied');
+  const edited = (await get()).control;
+  await rig
+    .getByLabel('Preset name', { exact: true })
+    .fill('Offline local NAM and IR');
+  await rig.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).save?.saved_revision)
+    .toBeTruthy();
+  const saved = (await get()).save.saved_revision;
+  await command({ kind: 'stop' });
+  await command({
+    kind: 'start',
+    settings: { ...(await get()).configured, revision: saved, recall: null },
+  });
+  await expect.poll(async () => (await get()).phase).toBe('running');
+  expect(
+    (await get()).control.controls.map(
+      (c: { target: unknown; value: number }) => ({
+        target: c.target,
+        value: c.value,
+      }),
+    ),
+  ).toEqual(
+    edited.controls.map((c: { target: unknown; value: number }) => ({
+      target: c.target,
+      value: c.value,
+    })),
+  );
+  expect((await get()).control.eq).toEqual(edited.eq);
+  await command({ kind: 'stop' });
+});

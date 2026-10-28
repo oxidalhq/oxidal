@@ -8,7 +8,7 @@ pub use bundle::{Bundle, BundleStore};
 pub use graph::{GraphPreset, GraphStore, SavedGraph};
 mod model;
 mod native;
-pub use model::{ModelAsset, ModelStore};
+pub use model::{LocalAssetPage, ModelAsset, ModelStore};
 mod owned;
 pub use owned::{OwnedPreset, OwnedStore};
 mod store;

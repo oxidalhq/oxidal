@@ -622,3 +622,47 @@ export async function nativeDefaults(
     throw new Error('Incompatible native defaults');
   return body;
 }
+
+export type LocalModel = Contract['local_model'];
+export type LocalModelPage = Contract['local_model_page'];
+const localModelValidator = ajv.compile<LocalModel>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/LocalModel',
+});
+const localModelsValidator = ajv.compile<LocalModelPage>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/LocalModelPage',
+});
+export async function localModels(
+  after: string | null,
+  signal: AbortSignal,
+): Promise<LocalModelPage> {
+  const query = after ? `?${new URLSearchParams({ after })}` : '';
+  const body = await presetResponse(
+    await fetch(`/api/v1/models/local${query}`, { signal, cache: 'no-store' }),
+  );
+  if (!localModelsValidator(body))
+    throw new Error('Incompatible local model library');
+  return body;
+}
+export async function uploadLocalModel(
+  file: File,
+  signal: AbortSignal,
+): Promise<LocalModel> {
+  if (file.size === 0 || file.size > 32 * 1024 * 1024)
+    throw new Error('Choose a file up to 32 MiB.');
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/models/local?${new URLSearchParams({ name: file.name })}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file,
+        signal,
+      },
+    ),
+  );
+  if (!localModelValidator(body))
+    throw new Error('Incompatible local model receipt');
+  return body;
+}
