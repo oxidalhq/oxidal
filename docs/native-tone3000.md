@@ -222,3 +222,20 @@ phase counters; simply re-running native preparation left repeated 44.1 kHz
 comparisons timing-dependent. Recreating that boundary before preparation gives
 both graphs a common phase origin. Original reference sources remain unchanged;
 the builder accepts only recorded original/current/previous-overlay hashes.
+
+## Typed stage bridge
+
+The native library exposes `StageAction` through owner-only `stage_submit` and
+`stage_read`, using the preserved stage-session implementation. Payloads validate
+block IDs, normalized scalar values, six-band EQ roles/ranges and bounded envelopes.
+Nonzero caller tokens identify a gesture; another token cannot take over an active
+preview, and completed tokens cannot be reused. `pump` advances native work; these
+methods allocate and must stay outside the DSP callback.
+
+The maintained native qualifier exercises EQ preview/cancel/commit, busy/stale
+ownership, changed rendered audio and exact EQ metadata plus rendered recall from
+an embedded preset in a fresh engine. This is library qualification, not live web
+EQ authoring. The typed transport also names reference pan/solo and measurement/
+alignment operations; those operations still need dedicated live qualification.
+Playback-worker ownership, confirmed edit replay through isolated Save/restart,
+API transactions and browser controls remain required before exposing stage edits.

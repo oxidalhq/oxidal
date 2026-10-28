@@ -16,6 +16,21 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_stage_submit(
+        engine: *mut c_void,
+        token: u64,
+        command: u32,
+        request: *const c_char,
+        length: u32,
+    ) -> i32;
+    fn oxidal_t3k_stage_read(
+        engine: *mut c_void,
+        token: u64,
+        output: *mut c_char,
+        capacity: u32,
+        written: *mut u32,
+    ) -> i32;
+
     fn oxidal_t3k_prepare_model(
         engine: *mut c_void,
         target: *const c_char,
@@ -361,6 +376,52 @@ impl Engine {
         // SAFETY: live owner handle and writable, correctly sized output.
         checked(unsafe { oxidal_t3k_latency_samples(self.ptr.as_ptr(), &mut samples) })?;
         Ok(samples)
+    }
+    /// Submit the reference stage gesture on the native owner. Pump and read
+    /// until completion; audio may continue while the operation is pending.
+    pub fn stage_submit(
+        &mut self,
+        token: u64,
+        action: &crate::protocol::StageAction,
+    ) -> Result<()> {
+        let (command, payload) = action.encode().map_err(NativeError)?;
+        if token == 0 || payload.len() > 256 {
+            return Err(NativeError("Invalid stage request envelope".into()));
+        }
+        // SAFETY: owner handle and bounded UTF-8 payload outlive submit, which copies it.
+        checked(unsafe {
+            oxidal_t3k_stage_submit(
+                self.ptr.as_ptr(),
+                token,
+                command,
+                payload.as_ptr().cast(),
+                payload.len() as u32,
+            )
+        })
+    }
+    pub fn stage_read(&mut self, token: u64) -> Result<Option<serde_json::Value>> {
+        let mut output = vec![0_u8; 32768];
+        let mut written = 0;
+        // SAFETY: live owner handle and buffer; native reports bytes including the terminal NUL.
+        checked(unsafe {
+            oxidal_t3k_stage_read(
+                self.ptr.as_ptr(),
+                token,
+                output.as_mut_ptr().cast(),
+                output.len() as u32,
+                &mut written,
+            )
+        })?;
+        if written == 0 {
+            return Ok(None);
+        }
+        let written = written as usize;
+        if written > output.len() || output[written - 1] != 0 {
+            return Err(NativeError("Invalid stage response envelope".into()));
+        }
+        serde_json::from_slice(&output[..written - 1])
+            .map(Some)
+            .map_err(|e| NativeError(e.to_string()))
     }
     pub fn catalog(&mut self) -> Result<serde_json::Value> {
         // SAFETY: json supplies a live handle and bounded writable buffer/length.

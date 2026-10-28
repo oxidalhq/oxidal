@@ -273,6 +273,24 @@ EXPORT int oxidal_t3k_restore(void* ptr, const unsigned char* bytes, size_t leng
     e.processor.setStateInformation(bytes, static_cast<int>(length));
   });
 }
+// Existing reference stage-session protocol, kept on the processor owner.
+EXPORT int oxidal_t3k_stage_submit(void* ptr, uint64_t token, uint32_t command,
+                                    const char* request, uint32_t length) noexcept {
+  return guard([&] {
+    const auto status = engine(ptr).processor.submitStageRequest(token, command, request, length);
+    if (status < 0) throw std::runtime_error("stage submission rejected: " + std::to_string(status));
+  });
+}
+EXPORT int oxidal_t3k_stage_read(void* ptr, uint64_t token, char* output,
+                                uint32_t capacity, uint32_t* written) noexcept {
+  return guard([&] {
+    if (!output || !written) throw std::runtime_error("invalid stage output");
+    *written = 0;
+    const auto status = engine(ptr).processor.readStageResult(token, output, capacity);
+    if (status < 0) throw std::runtime_error("stage read rejected: " + std::to_string(status));
+    *written = static_cast<uint32_t>(status);
+  });
+}
 EXPORT int oxidal_t3k_pump(void* ptr) noexcept {
   return guard([&] { engine(ptr); juce::MessageManager::getInstance()->runDispatchLoopUntil(1); });
 }

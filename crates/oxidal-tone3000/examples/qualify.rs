@@ -90,6 +90,141 @@ fn qualify_latency() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+fn stage_result(engine: &mut Engine, token: u64) -> Result<Value, Box<dyn Error>> {
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        engine.pump()?;
+        if let Some(result) = engine.stage_read(token)? {
+            return Ok(result);
+        }
+        if Instant::now() > deadline {
+            return Err("stage response timeout".into());
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
+    use oxidal_tone3000::protocol::{BlockEdit, EditPhase, EqBand, EqType, StageAction};
+    let baseline = engine.capture()?;
+    engine.prepare_stream()?;
+    let mut baseline_audio = Vec::new();
+    for block in 0..24 {
+        let mut left: Vec<f32> = (0..128)
+            .map(|i| ((block * 128 + i) as f32 * 0.13).sin() * 0.1)
+            .collect();
+        let mut right = left.clone();
+        engine.process(&mut left, &mut right)?;
+        baseline_audio.extend(left);
+    }
+    let chain = engine.chain()?;
+    let block = chain["chain"]
+        .as_array()
+        .ok_or("missing chain")?
+        .iter()
+        .find(|b| b["kind"] == "tone")
+        .ok_or("missing tone")?;
+    let id = block["blockId"]
+        .as_str()
+        .ok_or("missing block id")?
+        .to_owned();
+    let before = block["params"]["eq"].clone();
+    let enabled = before["enabled"].as_bool().ok_or("missing EQ enable")?;
+    assert!(engine.stage_submit(0, &StageAction::Runtime).is_err());
+    engine.stage_submit(1, &StageAction::Runtime)?;
+    assert_eq!(stage_result(engine, 1)?["state"], "done");
+    assert!(engine.stage_submit(1, &StageAction::Runtime).is_err());
+    engine.stage_submit(
+        2,
+        &StageAction::BlockEdit {
+            edit: BlockEdit::EqEnabled {
+                phase: EditPhase::Preview,
+                block_id: id.clone(),
+                value: !enabled,
+            },
+        },
+    )?;
+    assert_eq!(stage_result(engine, 2)?["state"], "listening");
+    assert_eq!(
+        engine.chain()?["chain"][0]["params"]["eq"]["enabled"],
+        !enabled
+    );
+    assert!(engine.stage_submit(3, &StageAction::Runtime).is_err());
+    assert!(engine.stage_read(3).is_err());
+    engine.stage_submit(2, &StageAction::Cancel)?;
+    assert_eq!(stage_result(engine, 2)?["state"], "cancelled");
+    assert_eq!(engine.chain()?["chain"][0]["params"]["eq"], before);
+    engine.stage_submit(
+        4,
+        &StageAction::BlockEdit {
+            edit: BlockEdit::EqBand {
+                phase: EditPhase::Commit,
+                block_id: id.clone(),
+                index: 1,
+                band: EqBand {
+                    kind: EqType::Bell,
+                    freq_hz: 1000.0,
+                    gain_db: 6.0,
+                    q: 0.7,
+                },
+            },
+        },
+    )?;
+    assert_eq!(stage_result(engine, 4)?["state"], "done");
+    engine.stage_submit(
+        5,
+        &StageAction::BlockEdit {
+            edit: BlockEdit::EqEnabled {
+                phase: EditPhase::Commit,
+                block_id: id,
+                value: true,
+            },
+        },
+    )?;
+    assert_eq!(stage_result(engine, 5)?["state"], "done");
+    let edited = engine.chain()?["chain"][0]["params"]["eq"].clone();
+    assert_eq!(edited["bands"][1]["gainDb"], 6.0);
+    assert_eq!(edited["enabled"], true);
+    let saved = engine.save_preset("Stage EQ qualification")?;
+    let mut recalled = Engine::new(48000.0, 128)?;
+    recalled.load_preset(&saved)?;
+    wait_loaded(&mut recalled)?;
+    assert_eq!(recalled.chain()?["chain"][0]["params"]["eq"], edited);
+    engine.prepare_stream()?;
+    recalled.prepare_stream()?;
+    let mut changed_audio = Vec::new();
+    for block in 0..24 {
+        let mut left: Vec<f32> = (0..128)
+            .map(|i| ((block * 128 + i) as f32 * 0.13).sin() * 0.1)
+            .collect();
+        let mut right = left.clone();
+        let mut restored_left = left.clone();
+        let mut restored_right = left.clone();
+        engine.process(&mut left, &mut right)?;
+        recalled.process(&mut restored_left, &mut restored_right)?;
+        changed_audio.extend_from_slice(&left);
+        let error = left
+            .iter()
+            .chain(&right)
+            .zip(restored_left.iter().chain(&restored_right))
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(error < 1e-5, "stage EQ saved render differs: {error}");
+    }
+    assert!(
+        baseline_audio
+            .iter()
+            .zip(&changed_audio)
+            .any(|(a, b)| (a - b).abs() > 1e-4),
+        "EQ edit did not affect rendered audio"
+    );
+    engine.restore(&baseline)?;
+    wait_loaded(engine)?;
+    settle(engine)?;
+    println!(
+        "native stage: stale/busy ownership, EQ preview/cancel/commit, embedded Save and fresh rendered recall passed"
+    );
+    Ok(())
+}
 fn main() -> Result<(), Box<dyn Error>> {
     qualify_latency()?;
     let expected: Value =
@@ -188,6 +323,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     wait_loaded(&mut engine)?;
     settle(&mut engine)?;
+    qualify_stage(&mut engine)?;
     let model_state = engine.capture()?;
     let mut original = Vec::new();
     for block in 0..12 {
