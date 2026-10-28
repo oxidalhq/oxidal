@@ -10,7 +10,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").unwrap(), "1");
     let bytes =
         std::fs::read(std::env::var_os("OXIDAL_NATIVE_TEST_PRESET").expect("preset")).unwrap();
-    let root = std::env::temp_dir().join(format!("oxidal-playback-test-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("oxidal-playback-test-{}-音", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let preset = oxidal_presets::Store::new(root.join("presets"))
         .import(&bytes)
@@ -415,9 +415,15 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["eq"], eq_before_save);
     assert_eq!(state["preset_name"], "Sounding copy");
     assert!(
+        state["controls"].to_string().contains(&"音".repeat(32)),
+        "block labels: {:?}",
         state["controls"]
-            .to_string()
-            .contains("Live audition fixture")
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["target"].as_str().unwrap().starts_with("block:"))
+            .map(|c| c["label"].as_str().unwrap())
+            .collect::<Vec<_>>()
     );
     std::fs::rename(
         root.join("offline-cache"),
@@ -777,11 +783,11 @@ async fn qualify_models(
         schema: 1,
         tone_id: 701,
         model_id: 901,
-        title: "Live audition fixture".into(),
+        title: "音".repeat(100),
         name: "A2 fixture".into(),
         format: "nam".into(),
         sha256: format!("{:x}", Sha256::digest(&bytes)),
-        tone: json!({"id":701,"title":"Live audition fixture","format":"nam","gear":"amp", "models":[{"id":901,"name":"A2 fixture","model_url":"oxidal-model://fixture/model.nam"}]}),
+        tone: json!({"id":701,"title":"音".repeat(100),"format":"nam","gear":"amp", "models":[{"id":901,"name":"A2 fixture","model_url":"oxidal-model://fixture/model.nam"}]}),
     };
     let good = store.stage(&asset, &bytes).unwrap();
     asset.sha256 = format!("{:x}", Sha256::digest(b"invalid model"));
@@ -858,9 +864,15 @@ async fn qualify_models(
         json!([{"target":target,"asset":good,"insertion":null}])
     );
     assert!(
+        state["controls"].to_string().contains(&"音".repeat(32)),
+        "block labels: {:?}",
         state["controls"]
-            .to_string()
-            .contains("Live audition fixture")
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["target"].as_str().unwrap().starts_with("block:"))
+            .map(|c| c["label"].as_str().unwrap())
+            .collect::<Vec<_>>()
     );
     assert_eq!(state["saved_copy"], Value::Null, "audition precedes save");
     assert_eq!(state["modified"], true);
@@ -1144,7 +1156,7 @@ async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, 
         .kill_on_drop(true)
         .spawn()
         .unwrap();
-    let mut bytes = serde_json::to_vec(&json!({"settings":settings,"models":[],"controls":ready["controls"],"eq":ready["eq"],"name":"Frame regression"})).unwrap();
+    let mut bytes = serde_json::to_vec(&json!({"settings":settings,"models":[],"controls":ready["controls"],"eq":ready["eq"],"name":"Frame 音 regression"})).unwrap();
     bytes.extend(std::iter::repeat_n(b' ', 80 * 1024));
     bytes.push(b'\n');
     child.stdin.take().unwrap().write_all(&bytes).await.unwrap();
@@ -1158,5 +1170,5 @@ async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, 
     let (info, _) = oxidal_presets::OwnedStore::new(root.join("presets/owned"))
         .read(id)
         .unwrap();
-    assert_eq!(info.preset.name, "Frame regression");
+    assert_eq!(info.preset.name, "Frame 音 regression");
 }

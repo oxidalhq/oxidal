@@ -1,9 +1,9 @@
 //! Model verification runs away from PCM; only the owner touches the native engine.
+use crate::Engine;
 use oxidal_audio::lifecycle::{
     ModelAssignment, ModelOperation, ModelPhase, ModelProgress, valid_models,
 };
 use oxidal_presets::{ModelAsset, ModelStore};
-use oxidal_tone3000::Engine;
 use std::{
     path::{Path, PathBuf},
     sync::mpsc,
@@ -12,7 +12,7 @@ use std::{
 };
 
 type Verified = Result<(ModelAsset, PathBuf), String>;
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Models {
     progress: Option<ModelProgress>,
     verification: Option<(JoinHandle<()>, mpsc::Receiver<Verified>)>,

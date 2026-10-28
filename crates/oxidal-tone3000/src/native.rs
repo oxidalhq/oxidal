@@ -622,7 +622,7 @@ impl Engine {
                 .filter(|p| !p.staged)
                 .map(|p| LiveControl {
                     target: p.id,
-                    label: format!("{} · {} · {}", p.name, p.lane, p.parameter),
+                    label: format!("{} · {} · {}", display_title(&p.name), p.lane, p.parameter),
                     value: p.value as f32,
                     toggle: p.step == 1.0,
                     display: if p.step == 1.0 {
@@ -991,6 +991,16 @@ impl Drop for Engine {
             std::process::abort();
         }
     }
+}
+
+// Keep the control label within its byte contract while retaining full model
+// metadata in the native preset. UTF-8 titles must not fail after model commit.
+fn display_title(name: &str) -> &str {
+    let mut end = name.len().min(128);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    &name[..end]
 }
 
 // Physical presentation follows the pinned processor and native KnobScale.h;

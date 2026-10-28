@@ -294,7 +294,7 @@ EXPORT int oxidal_t3k_pump(void* ptr) noexcept {
   return guard([&] { engine(ptr); juce::MessageManager::getInstance()->runDispatchLoopUntil(1); });
 }
 EXPORT int oxidal_t3k_load_model(void* ptr, const char* path, char* out, size_t capacity, size_t* written) noexcept {
-  return guard([&] { auto& e = engine(ptr); if (!path) throw std::runtime_error("missing model path"); json(e.processor.loadLocalTonePath(juce::File(path)), out, capacity, written); });
+  return guard([&] { auto& e = engine(ptr); if (!path) throw std::runtime_error("missing model path"); json(e.processor.loadLocalTonePath(juce::File(juce::String::fromUTF8(path))), out, capacity, written); });
 }
 EXPORT int oxidal_t3k_runtime(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] { json(engine(ptr).processor.getStageRuntime(), out, capacity, written); });
@@ -339,7 +339,7 @@ EXPORT int oxidal_t3k_save_preset(void* ptr, const char* name, unsigned char* ou
       const auto root = base.getChildFile(juce::Uuid().toString());
       if (!root.createDirectory()) throw std::runtime_error("export staging directory");
       e.processor.setPresetStoreForTesting(root);
-      const auto result = e.processor.savePreset(name);
+      const auto result = e.processor.savePreset(juce::String::fromUTF8(name));
       if (result.isVoid()) throw std::runtime_error("native preset save failed");
       const auto files = root.findChildFiles(juce::File::findFiles, false, "*.t3kpreset");
       if (files.size() != 1) throw std::runtime_error("native preset save ambiguous");
@@ -421,7 +421,7 @@ EXPORT int oxidal_t3k_prepare_model(void* ptr, const char* target, const char* p
     if (!target || !path || !metadata || std::strlen(metadata) > 32768) throw std::runtime_error("invalid preparation input");
     if (e.preparation && !e.preparation->finishedPreparing()) throw std::runtime_error("previous model still preparing");
     e.preparation.reset();
-    e.preparation = std::make_unique<OxidalModelPreparation>(e.processor, target, juce::File(path), juce::JSON::parse(metadata));
+    e.preparation = std::make_unique<OxidalModelPreparation>(e.processor, target, juce::File(juce::String::fromUTF8(path)), juce::JSON::parse(juce::String::fromUTF8(metadata)));
   });
 }
 EXPORT int oxidal_t3k_preparation(void* ptr, int action, char* out, size_t capacity, size_t* written) noexcept {

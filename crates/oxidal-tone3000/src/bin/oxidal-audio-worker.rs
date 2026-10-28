@@ -2,8 +2,7 @@
 #[cfg(target_os = "linux")]
 use oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES;
 #[cfg(target_os = "linux")]
-#[path = "../playback_models.rs"]
-mod models;
+use oxidal_tone3000::model_preparation as models;
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::{
