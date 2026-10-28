@@ -946,17 +946,48 @@ export function MixedRig({
               setEqBusy(editing);
             }}
             onChange={accept}
+            gesture={
+              wholeNative
+                ? async (current, edit) => {
+                    const next = await rigAudioCommand(current, {
+                      kind: 'authoring',
+                      command: {
+                        session: current.control!.session,
+                        expected_revision: current.control!.revision,
+                        node: selected.id,
+                        action: { kind: 'gesture', edit },
+                      },
+                    });
+                    return {
+                      ...next,
+                      eq:
+                        next.control?.eq?.find((e) => e.node === selected.id)
+                          ?.blocks ?? [],
+                    };
+                  }
+                : undefined
+            }
             send={async (current, edit) => {
-              const next = await rigAudioCommand(current, {
-                kind: 'eq',
-                command: {
-                  session: current.control!.session,
-                  expected_revision: current.control!.revision,
-                  node: selected.id,
-                  block_id: eqBlock.block_id,
-                  edit,
-                },
-              });
+              const next = wholeNative
+                ? await rigAudioCommand(current, {
+                    kind: 'authoring',
+                    command: {
+                      session: current.control!.session,
+                      expected_revision: current.control!.revision,
+                      node: selected.id,
+                      action: { kind: 'eq', block_id: eqBlock.block_id, edit },
+                    },
+                  })
+                : await rigAudioCommand(current, {
+                    kind: 'eq',
+                    command: {
+                      session: current.control!.session,
+                      expected_revision: current.control!.revision,
+                      node: selected.id,
+                      block_id: eqBlock.block_id,
+                      edit,
+                    },
+                  });
               return {
                 ...next,
                 eq:

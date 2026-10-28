@@ -5,6 +5,10 @@ import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
 import { Button } from './components/ui/button';
 
+type Gesture = Extract<
+  Extract<AudioAction, { kind: 'authoring' }>['action'],
+  { kind: 'gesture' }
+>['edit'];
 type Edit = Extract<AudioAction, { kind: 'set_eq' }>['edit'];
 type Band = NonNullable<AudioState['eq']>[number]['eq']['bands'][number];
 type Field = 'freqHz' | 'gainDb' | 'q';
@@ -25,6 +29,7 @@ export function LiveEq<S extends EqSession>({
   onChange,
   onEditing,
   send,
+  gesture,
 }: {
   state: S;
   blockId: string;
@@ -32,6 +37,7 @@ export function LiveEq<S extends EqSession>({
   onChange: (state: S) => void;
   onEditing: (editing: boolean) => void;
   send: (state: S, edit: Edit) => Promise<S>;
+  gesture?: (state: S, edit: Gesture) => Promise<S>;
 }) {
   const [index, setIndex] = useState(1);
   const [error, setError] = useState('');
@@ -106,10 +112,22 @@ export function LiveEq<S extends EqSession>({
     });
     setError('');
     onEditing(true);
+    const token = crypto.randomUUID();
+    const ready = gesture
+      ? gesture(cursor.current, {
+          phase: 'begin',
+          owner: 'eq',
+          token,
+          target: `eq:${blockId}:${index}:${field}`,
+        }).then(accept)
+      : Promise.resolve();
+    void ready.catch((cause) => {
+      if (mounted.current) setError(String(cause));
+    });
     queue.current = new EditQueue<S>(
-      'live',
-      crypto.randomUUID(),
-      Promise.resolve(),
+      'eq',
+      token,
+      ready,
       async (edit) => {
         const value = edit.phase === 'cancel' ? opening : edit.value;
         const current = cursor.current.eq?.find(
@@ -117,12 +135,15 @@ export function LiveEq<S extends EqSession>({
         )?.eq.bands[index];
         if (!current)
           throw new Error('EQ target changed. Reopen this control.');
-        if (current[field] === value) return cursor.current;
-        const next = await send(cursor.current, {
-          kind: 'band',
-          index,
-          band: { ...original, [field]: value },
-        });
+        if ((!gesture || edit.phase === 'preview') && current[field] === value)
+          return cursor.current;
+        const next = gesture
+          ? await gesture(cursor.current, edit)
+          : await send(cursor.current, {
+              kind: 'band',
+              index,
+              band: { ...original, [field]: value },
+            });
         cursor.current = next;
         return next;
       },
@@ -172,6 +193,13 @@ export function LiveEq<S extends EqSession>({
           onClick={() => void apply({ kind: 'pre', value: !row.eq.pre })}
         >
           {row.eq.pre ? 'Before model' : 'After model'}
+        </Button>
+        <Button
+          variant="outline"
+          disabled={locked || !!draft}
+          onClick={() => void apply({ kind: 'reset' })}
+        >
+          Reset EQ
         </Button>
       </div>
       <div className="grid grid-cols-6 gap-1" aria-label="EQ bands">

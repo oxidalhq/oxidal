@@ -605,6 +605,7 @@ impl Engine {
             return Err(NativeError("Invalid EQ target".into()));
         }
         let (kind, index, value, band) = match edit {
+            EqEdit::Reset => (3, 0, 0, String::new()),
             EqEdit::Enabled { value } => (0, 0, i32::from(*value), String::new()),
             EqEdit::Pre { value } => (1, 0, i32::from(*value), String::new()),
             EqEdit::Band { index, band } if band.valid(usize::from(*index)) => (

@@ -2312,6 +2312,18 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button', { name: 'Done', exact: true })
     .click();
   await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
+  const eqEdited = (await get()).control.eq;
+  await rig.getByText('Chain actions', { exact: true }).click();
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqBefore);
+  await rig.getByRole('button', { name: 'Redo change', exact: true }).click();
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqEdited);
+  await eq.getByRole('button', { name: 'Reset EQ', exact: true }).click();
+  await expect
+    .poll(async () => (await get()).control.eq[0].blocks[0].eq.bands[1].gainDb)
+    .toBe(0);
+  await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
+  await expect.poll(async () => (await get()).control.eq).toEqual(eqEdited);
   // Only provider transport is mocked; verified assets, actual live worker,
   // immediate readback, settings recovery and independent export remain real.
   const modelFixtures = await routeProviderModels(

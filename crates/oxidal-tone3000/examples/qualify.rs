@@ -3065,6 +3065,133 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     );
     assert!(!bad.failed() && !bad.gesture_pending());
     assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
+    engine.load_local_model(std::path::Path::new(&std::env::var(
+        "OXIDAL_TONE3000_TEST_MODEL",
+    )?))?;
+    engine.wait_ready()?;
+    let row = engine
+        .eq_snapshot()?
+        .into_iter()
+        .next()
+        .ok_or("Missing model EQ")?;
+    assert_eq!(
+        row.eq,
+        oxidal_audio::eq::EqState::default(),
+        "Rust/native reset defaults agree"
+    );
+    let mut eq_owner = Authoring::for_source(&root, "eq-gesture-qualification".into(), None);
+    let target = format!("eq:{}:1:gainDb", row.block_id);
+    send(
+        &mut eq_owner,
+        &mut engine,
+        G::Begin {
+            owner: "eq".into(),
+            token: "gain".into(),
+            target: target.clone(),
+        },
+    )?;
+    for sequence in 1..=20 {
+        send(
+            &mut eq_owner,
+            &mut engine,
+            G::Preview {
+                owner: "eq".into(),
+                token: "gain".into(),
+                sequence,
+                value: sequence as f32 * 0.1,
+            },
+        )?;
+    }
+    send(
+        &mut eq_owner,
+        &mut engine,
+        G::Commit {
+            owner: "eq".into(),
+            token: "gain".into(),
+            sequence: 21,
+            value: 3.0,
+        },
+    )?;
+    assert_eq!(engine.eq_snapshot()?[0].eq.bands[1].gain_db as f32, 3.0);
+    eq_owner.command(&mut engine, A::Undo)?;
+    assert_eq!(engine.eq_snapshot()?[0].eq, row.eq);
+    assert!(!eq_owner.snapshot(&mut engine)?.can_undo);
+    eq_owner.command(&mut engine, A::Redo)?;
+    let edited = engine.eq_snapshot()?;
+    send(
+        &mut eq_owner,
+        &mut engine,
+        G::Begin {
+            owner: "eq".into(),
+            token: "cancel-q".into(),
+            target: format!("eq:{}:1:q", row.block_id),
+        },
+    )?;
+    send(
+        &mut eq_owner,
+        &mut engine,
+        G::Preview {
+            owner: "eq".into(),
+            token: "cancel-q".into(),
+            sequence: 1,
+            value: 2.5,
+        },
+    )?;
+    send(
+        &mut eq_owner,
+        &mut engine,
+        G::Cancel {
+            owner: "eq".into(),
+            token: "cancel-q".into(),
+        },
+    )?;
+    assert_eq!(engine.eq_snapshot()?, edited);
+    eq_owner.command(
+        &mut engine,
+        A::Eq {
+            block_id: row.block_id.clone(),
+            edit: oxidal_audio::eq::EqEdit::Reset,
+        },
+    )?;
+    assert_eq!(
+        engine.eq_snapshot()?[0].eq,
+        oxidal_audio::eq::EqState::default()
+    );
+    eq_owner.command(&mut engine, A::Undo)?;
+    assert_eq!(engine.eq_snapshot()?, edited);
+    let bytes = engine.save_preset("EQ history Save")?;
+    let mut fresh = Engine::new(48000.0, 128)?;
+    fresh.load_preset(&bytes)?;
+    fresh.wait_ready()?;
+    assert_eq!(fresh.eq_snapshot()?[0].eq, edited[0].eq);
+    let mut failed_eq = Authoring::for_source(&bad_root, "failed-eq-gesture".into(), None);
+    send(
+        &mut failed_eq,
+        &mut engine,
+        G::Begin {
+            owner: "eq".into(),
+            token: "disk-failure".into(),
+            target,
+        },
+    )?;
+    assert!(
+        send(
+            &mut failed_eq,
+            &mut engine,
+            G::Commit {
+                owner: "eq".into(),
+                token: "disk-failure".into(),
+                sequence: 1,
+                value: 8.0
+            }
+        )
+        .is_err()
+    );
+    assert!(!failed_eq.failed() && !failed_eq.gesture_pending());
+    assert_eq!(engine.eq_snapshot()?, edited);
+    println!(
+        "native EQ gestures: actual A2 EQ previews, grouped undo/redo, cancel, native reset defaults, reset undo, standalone Save/reopen and failed-storage rollback passed"
+    );
     println!(
         "native gestures: audible previews, one-entry undo/redo, ownership/sequence rejection, coupled-control cancel, late terminal safety and storage rollback passed"
     );

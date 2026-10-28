@@ -641,9 +641,14 @@ export function LiveRig({
             blockId={row.block_id}
             send={(current, edit) =>
               playbackCommand(current, {
-                kind: 'set_eq',
-                block_id: row.block_id,
-                edit,
+                kind: 'authoring',
+                action: { kind: 'eq', block_id: row.block_id, edit },
+              })
+            }
+            gesture={(current, edit) =>
+              playbackCommand(current, {
+                kind: 'authoring',
+                action: { kind: 'gesture', edit },
               })
             }
             disabled={!connected || busy || !!draft || modelPending}

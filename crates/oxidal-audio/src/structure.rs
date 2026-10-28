@@ -116,13 +116,30 @@ pub enum LiveGesture {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthoringAction {
-    Gesture { edit: LiveGesture },
-    Utility { command: crate::tools::Command },
-    Copy { block_id: String },
+    Eq {
+        block_id: String,
+        edit: crate::eq::EqEdit,
+    },
+    Gesture {
+        edit: LiveGesture,
+    },
+    Utility {
+        command: crate::tools::Command,
+    },
+    Copy {
+        block_id: String,
+    },
     Inspect,
-    Parameter { parameter: String, value: f32 },
-    Edit { edit: StructureEdit },
-    Remove { block_id: String },
+    Parameter {
+        parameter: String,
+        value: f32,
+    },
+    Edit {
+        edit: StructureEdit,
+    },
+    Remove {
+        block_id: String,
+    },
     Undo,
     Redo,
 }

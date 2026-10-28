@@ -2,10 +2,96 @@
 use super::*;
 use oxidal_audio::structure::{GestureOwner, LiveGesture};
 #[derive(Debug)]
+enum Target {
+    Scalar,
+    Eq {
+        block: String,
+        index: usize,
+        field: String,
+    },
+}
+impl Target {
+    fn resolve(engine: &mut Engine, target: &str) -> Result<Self, String> {
+        if engine
+            .live_controls()
+            .map_err(|e| e.to_string())?
+            .iter()
+            .any(|p| p.target == target)
+        {
+            return Ok(Self::Scalar);
+        }
+        let Some(encoded) = target.strip_prefix("eq:") else {
+            return Err("Unknown live adjustment target".into());
+        };
+        let mut parts = encoded.rsplitn(3, ':');
+        let field = parts.next().ok_or("Missing EQ field")?;
+        let index: usize = parts
+            .next()
+            .ok_or("Missing EQ band")?
+            .parse()
+            .map_err(|_| "Invalid EQ band")?;
+        let block = parts.next().ok_or("Missing EQ block")?;
+        if index >= 6
+            || !matches!(field, "freqHz" | "gainDb" | "q")
+            || !engine
+                .eq_snapshot()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .any(|r| r.block_id == block)
+        {
+            return Err("Unknown EQ adjustment target".into());
+        }
+        Ok(Self::Eq {
+            block: block.into(),
+            index,
+            field: field.into(),
+        })
+    }
+    fn set(&self, engine: &mut Engine, target: &str, value: f32) -> Result<(), String> {
+        match self {
+            Self::Scalar => engine
+                .set_live_control(target, value)
+                .map_err(|e| e.to_string()),
+            Self::Eq {
+                block,
+                index,
+                field,
+            } => {
+                let mut band = engine
+                    .eq_snapshot()
+                    .map_err(|e| e.to_string())?
+                    .into_iter()
+                    .find(|r| &r.block_id == block)
+                    .ok_or("EQ block changed")?
+                    .eq
+                    .bands[*index]
+                    .clone();
+                match field.as_str() {
+                    "freqHz" => band.freq_hz = value.into(),
+                    "gainDb" => band.gain_db = value.into(),
+                    "q" => band.q = value.into(),
+                    _ => unreachable!(),
+                }
+                engine
+                    .set_eq(
+                        block,
+                        &oxidal_audio::eq::EqEdit::Band {
+                            index: *index as u8,
+                            band,
+                        },
+                    )
+                    .map_err(|e| e.to_string())
+            }
+        }
+    }
+}
+#[derive(Debug)]
 pub(super) struct Pending {
     pub owner: GestureOwner,
     before: State,
     controls: Vec<oxidal_audio::lifecycle::LiveControl>,
+    target: Target,
+    eq: Vec<oxidal_audio::eq::BlockEqState>,
     sequence: u32,
     pub updated: std::time::Instant,
 }
@@ -26,7 +112,36 @@ impl Authoring {
     }
     fn cancel_gesture(&mut self, engine: &mut Engine) -> Result<(), String> {
         let pending = self.gesture.take().ok_or("No active native adjustment")?;
-        if let Err(e) = engine.apply_live_snapshot(&pending.controls) {
+        let rollback = match pending.target {
+            Target::Scalar => engine
+                .apply_live_snapshot(&pending.controls)
+                .map_err(|e| e.to_string()),
+            Target::Eq { .. } => (|| -> Result<(), String> {
+                let current = engine.eq_snapshot().map_err(|e| e.to_string())?;
+                for row in &pending.eq {
+                    let actual = &current
+                        .iter()
+                        .find(|r| r.block_id == row.block_id)
+                        .ok_or("EQ block changed")?
+                        .eq;
+                    for (index, band) in row.eq.bands.iter().enumerate() {
+                        if actual.bands[index] != *band {
+                            engine
+                                .set_eq(
+                                    &row.block_id,
+                                    &oxidal_audio::eq::EqEdit::Band {
+                                        index: index as u8,
+                                        band: band.clone(),
+                                    },
+                                )
+                                .map_err(|e| e.to_string())?;
+                        }
+                    }
+                }
+                Ok(())
+            })(),
+        };
+        if let Err(e) = rollback {
             self.failed = true;
             return Err(format!("Adjustment rollback failed: {e}"));
         }
@@ -95,13 +210,14 @@ impl Authoring {
                 return Err("Adjustment already finished".into());
             }
             let controls = engine.live_controls().map_err(|e| e.to_string())?;
-            if !controls.iter().any(|p| p.target == owner.target) {
-                return Err("Unknown live adjustment target".into());
-            }
+            let target = Target::resolve(engine, &owner.target)?;
+            let eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
             self.gesture = Some(Pending {
                 owner,
                 before: engine.capture().map_err(|e| e.to_string())?,
                 controls,
+                target,
+                eq,
                 sequence: 0,
                 updated: std::time::Instant::now(),
             });
@@ -142,9 +258,7 @@ impl Authoring {
                 if sequence <= pending.sequence {
                     return Err("Adjustment sequence is stale".into());
                 }
-                engine
-                    .set_live_control(&pending.owner.target, value)
-                    .map_err(|e| e.to_string())?;
+                pending.target.set(engine, &pending.owner.target, value)?;
                 pending.sequence = sequence;
                 pending.updated = std::time::Instant::now();
                 if matches!(edit, LiveGesture::Commit { .. }) {

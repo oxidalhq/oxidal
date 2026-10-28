@@ -72,6 +72,9 @@ export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
  */
 export type EqEdit =
   | {
+      kind: "reset";
+    }
+  | {
       kind: "enabled";
       value: boolean;
     }
@@ -86,6 +89,11 @@ export type EqEdit =
     };
 export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type AuthoringAction =
+  | {
+      block_id: string;
+      edit: EqEdit;
+      kind: "eq";
+    }
   | {
       edit: LiveGesture;
       kind: "gesture";

@@ -408,6 +408,7 @@ EXPORT int oxidal_t3k_eq(void* ptr, const char* id, int kind, int index, int val
     else if (kind==1 && (value==0 || value==1)) applied=p.setBlockEqPre(id,value!=0);
     else if (kind==2 && index>=0 && index<6 && band && std::strlen(band)<=256)
       applied=p.setBlockEqBand(id,index,juce::JSON::parse(juce::String::fromUTF8(band)));
+    else if (kind==3) applied=p.resetBlockEq(id);
     if (!applied) throw std::runtime_error("Missing target or rejected EQ edit");
   });
 }

@@ -44,6 +44,28 @@ pub struct EqState {
     pub pre: bool,
     pub bands: [EqBand; 6],
 }
+impl Default for EqState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pre: false,
+            bands: [
+                (EqType::Lowshelf, 100.0, 0.71),
+                (EqType::Bell, 250.0, 1.0),
+                (EqType::Bell, 650.0, 1.0),
+                (EqType::Bell, 1600.0, 1.0),
+                (EqType::Bell, 3500.0, 1.4),
+                (EqType::Highshelf, 8000.0, 0.71),
+            ]
+            .map(|(kind, freq_hz, q)| EqBand {
+                kind,
+                freq_hz,
+                gain_db: 0.0,
+                q: f64::from(q as f32),
+            }),
+        }
+    }
+}
 impl EqBand {
     pub fn valid(&self, index: usize) -> bool {
         let role = match index {
@@ -80,6 +102,7 @@ pub fn valid_snapshot(states: &[BlockEqState]) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EqEdit {
+    Reset,
     Enabled { value: bool },
     Pre { value: bool },
     Band { index: u8, band: EqBand },
@@ -87,6 +110,7 @@ pub enum EqEdit {
 impl EqEdit {
     pub fn apply(&self, state: &mut EqState) -> Result<(), String> {
         match self {
+            Self::Reset => *state = EqState::default(),
             Self::Enabled { value } => state.enabled = *value,
             Self::Pre { value } => state.pre = *value,
             Self::Band { index, band } if band.valid(usize::from(*index)) => {

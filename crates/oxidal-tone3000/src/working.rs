@@ -363,6 +363,9 @@ impl Authoring {
         let latency = engine.latency_samples().map_err(|e| e.to_string())?;
         let result = (|| -> Result<(State, String), String> {
             match &action {
+                AuthoringAction::Eq { block_id, edit } => {
+                    engine.set_eq(block_id, edit).map_err(|e| e.to_string())?
+                }
                 AuthoringAction::Edit { edit } => {
                     if matches!(edit, oxidal_audio::structure::StructureEdit::Paste { .. }) {
                         clipboard::load_into(engine, &self.root)?;
@@ -414,7 +417,11 @@ impl Authoring {
                 | AuthoringAction::Utility { .. }
                 | AuthoringAction::Gesture { .. } => unreachable!(),
             }
-            engine.wait_ready().map_err(|e| e.to_string())?;
+            // Hot EQ edits do not load models; do not inject a silent PCM block
+            // into the live processor merely to wait for an already-ready model.
+            if !matches!(action, AuthoringAction::Eq { .. }) {
+                engine.wait_ready().map_err(|e| e.to_string())?;
+            }
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {
                 return Err("Edit changes audio latency; fresh audio preparation required".into());
             }

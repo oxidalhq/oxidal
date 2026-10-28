@@ -1070,6 +1070,27 @@
         {
           "type": "object",
           "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "edit": {
+              "$ref": "#/$defs/EqEdit"
+            },
+            "kind": {
+              "type": "string",
+              "const": "eq"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "edit"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "edit": {
               "$ref": "#/$defs/LiveGesture"
             },
@@ -2712,6 +2733,19 @@
     "EqEdit": {
       "description": "One immediate, revision-owned edit; UI cancellation sends its original value.",
       "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "reset"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
         {
           "type": "object",
           "properties": {

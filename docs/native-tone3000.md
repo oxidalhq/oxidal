@@ -468,6 +468,17 @@ operations outside the PCM closure, not hard-real-time guarantees.
 
 Committed scalar values use existing working/Save/recovery paths. Undo/redo stacks
 are currently bounded to eight entries/64 MiB within each worker lifetime;
-persisting those stacks through worker replacement and grouping the separate EQ
-editor remain open. MIDI automation and raw scalar API calls retain their existing
+persisting those stacks through worker replacement remains open. MIDI automation and raw scalar API calls retain their existing
 confirmed-control path rather than creating one history entry per event.
+
+Whole-native standalone/mixed EQ now uses the same explicit owned gesture
+boundaries for frequency, gain and Q. One completed adjustment produces one undo
+entry; cancel restores its opening band. EQ power, pre/post, band type and Reset EQ
+are discrete owned transactions. Hot EQ commits do not inject extra silent PCM
+blocks while waiting for models that are already loaded. Native Reset EQ restores
+the pinned six flat bands, enabled and post-model; Rust expected readback is
+qualified against the actual native defaults. Undo restores the preceding EQ, and
+independent Save/reopen retains it. Failed gesture checkpointing restores the
+opening EQ or fails closed. Guarded extracted-stage EQ retains the existing direct
+control path, including the new reset operation, without whole-native history
+authoring. No physical deadline/gapless EQ-undo claim is made.

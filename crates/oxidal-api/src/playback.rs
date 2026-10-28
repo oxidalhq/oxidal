@@ -534,8 +534,9 @@ impl Owner {
             self.state.saved_copy = None;
             self.schedule_recovery();
         }
-        let scalar_changed =
-            serde_json::to_vec(&self.state.controls).ok() != serde_json::to_vec(&controls).ok();
+        let scalar_changed = serde_json::to_vec(&self.state.controls).ok()
+            != serde_json::to_vec(&controls).ok()
+            || self.state.eq != eq;
         if scalar_changed {
             self.state.modified = true;
             self.state.saved_copy = None;

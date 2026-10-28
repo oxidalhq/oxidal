@@ -1331,6 +1331,36 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         .find(|b| b["insert"] == false)
         .unwrap()["id"]
         .clone();
+    let eq_original = state["eq"].clone();
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"gesture","edit":{"phase":"begin","owner":"api-eq","token":"gain","target":format!("eq:{}:1:gainDb",block.as_str().unwrap())}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"gesture","edit":{"phase":"commit","owner":"api-eq","token":"gain","sequence":1,"value":3.0}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], 3.0);
+    let response = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"authoring","action":{"kind":"eq","block_id":block,"edit":{"kind":"reset"}}}),
+    )
+    .await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    assert_eq!(state["eq"][0]["eq"]["bands"][1]["gainDb"], 0.0);
+    for _ in 0..2 {
+        let response = send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"authoring","action":{"kind":"undo"}}),
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+    }
+    assert_eq!(state["eq"], eq_original);
     let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":true}}})).await;
     assert_eq!(response.status(), 200);
     state = response.json().await.unwrap();
