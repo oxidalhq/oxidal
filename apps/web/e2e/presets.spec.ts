@@ -469,9 +469,22 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   // Qualified controls come from native descriptors, including controls that
   // were previously absent from the hard-coded authoring list.
   const catalog = await (await request.get('/api/v1/native')).json();
-  expect(
-    catalog.parameters.filter((p: { writable: boolean }) => p.writable),
-  ).toHaveLength(14);
+  const writable = catalog.parameters.filter(
+    (p: { writable: boolean }) => p.writable,
+  );
+  expect(writable).toHaveLength(22);
+  expect(writable.map((p: { id: string }) => p.id)).toEqual(
+    expect.arrayContaining([
+      'outputBalance',
+      'spreadEnabled',
+      'spreadOffset',
+      'spreadWobble',
+      'spreadWobbleEnabled',
+      'spreadCrossover',
+      'spreadCrossoverEnabled',
+      'spreadDiffuseEnabled',
+    ]),
+  );
   for (const [id, label] of [
     ['toneMid', 'Middle'],
     ['toneTreble', 'Treble'],
