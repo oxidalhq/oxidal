@@ -1,5 +1,7 @@
 //! Experimental playback process. EOF stops PCM; the editor lives in a different process.
 #[cfg(target_os = "linux")]
+use oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES;
+#[cfg(target_os = "linux")]
 #[path = "../playback_models.rs"]
 mod models;
 #[cfg(target_os = "linux")]
@@ -25,8 +27,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mut bytes = vec![];
     let mut input = std::io::stdin().lock();
-    (&mut input).take(65537).read_until(b'\n', &mut bytes)?;
-    if bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
+    (&mut input)
+        .take((PLAYBACK_FRAME_BYTES + 1) as u64)
+        .read_until(b'\n', &mut bytes)?;
+    if bytes.len() > PLAYBACK_FRAME_BYTES || bytes.last() != Some(&b'\n') {
         return Err("invalid startup frame".into());
     }
     let startup: PlaybackStart = serde_json::from_slice(&bytes)?;
@@ -232,9 +236,9 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     let mut bytes = vec![];
     std::io::stdin()
         .lock()
-        .take(65537)
+        .take((PLAYBACK_FRAME_BYTES + 1) as u64)
         .read_until(b'\n', &mut bytes)?;
-    if bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
+    if bytes.len() > PLAYBACK_FRAME_BYTES || bytes.last() != Some(&b'\n') {
         return Err("Invalid save request".into());
     }
     let request: SavePlayback = serde_json::from_slice(&bytes)?;

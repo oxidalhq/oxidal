@@ -247,7 +247,7 @@ a separate token sequence and must discard a failed candidate. It is deliberatel
 not an operation on the audible engine: it pumps native messages and may wait.
 The qualifier compares replayed PCM with the edited engine and rejects malformed
 identities/ranges without changing the candidate or consuming a token. Mono presets
-may omit the right lane. These helpers do not yet wire EQ into playback recovery.
+may omit the right lane. The playback integration below uses these helpers for isolated recovery.
 
 ## Live block EQ and recovery
 
@@ -275,7 +275,8 @@ cut/shelf type where applicable, enable and position controls use the shared the
 Values open the existing relative touch adjustment: previews sound immediately,
 Done keeps the current value and Cancel sends the opening value only through the
 same revision-owned cursor. A conflicting client cannot silently overwrite a newer
-session. This slice applies to native playback; mixed-rig EQ authoring remains open.
+session. Mixed whole-native and extracted amp/cab nodes use the same panel; see
+[Mixed engine](mixed-engine.md) for their versioned Save/recovery behavior.
 
 ## Stereo spread controls
 
@@ -284,3 +285,10 @@ The sounding whole-preset owner exposes stereo balance and Spread enable, offset
 Spread widens a mono chain into stereo; it does not replace stereo-chain Align or create parallel routing. Native mode/output rules still apply. The isolated amp/cab roles do not advertise these whole-image controls. Existing native qualification checks immediate readback, descriptor-owned Cancel/Save/reopen, deterministic stereo PCM, saved fresh-engine recall and unchanged reported latency. Physical deadline performance and automatic alignment remain unqualified.
 
 Older recovery records may omit exactly the complete eight-control stereo deck; their source-preset image values are retained. Partial deck omissions, unknown targets and missing existing controls are rejected before mutation, including in mixed-rig recovery. This is an explicit additive migration, not permissive partial recall.
+
+Native playback startup, replies and isolated export share a 4 MiB frame budget.
+Recovery is bounded to half that budget, leaving room for transport/boot metadata.
+The actual-worker qualification exercises startup and export beyond the former
+64 KiB limit, while unit tests retain a dense valid catalog through recovery.
+These are serialization bounds; they do not establish DSP RAM/CPU admission or
+remove the remaining native model/control count limits.

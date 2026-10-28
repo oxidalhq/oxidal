@@ -1065,7 +1065,7 @@ export interface Recall {
   values: Value[];
 }
 /**
- * EQ belongs to a whole-native graph node and its stable inner block identities.
+ * EQ belongs to a native graph node and its stable inner block identities.
  */
 export interface NodeEq {
   blocks: BlockEqState[];

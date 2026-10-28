@@ -42,6 +42,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     let mut output = input.clone();
     output["direction"] = json!("playback");
     let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false,"draft":false});
+    qualify_large_frames(config.audio_worker.as_ref().unwrap(), &root, &settings).await;
     let mut state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
     // Missing immutable asset fails before PCM ownership and leaves the HTTP/native sessions intact.
@@ -1080,4 +1081,79 @@ async fn qualify_created_rig(
             .status(),
         200
     );
+}
+
+// Exercise actual startup and separate export framing above the former 64 KiB
+// limit. Padding is valid JSON whitespace; dense state semantics are unit tested.
+async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, settings: &Value) {
+    use std::{process::Stdio, time::Duration};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let original = oxidal_presets::Store::new(root.join("presets"))
+        .original(settings["preset_id"].as_str().unwrap())
+        .unwrap();
+    let isolated = root.join("large-frame-test");
+    let root = isolated.as_path();
+    oxidal_presets::Store::new(root.join("presets"))
+        .import(&original)
+        .unwrap();
+    std::fs::create_dir_all(root.join("frame-runtime")).unwrap();
+    std::fs::create_dir_all(root.join("frame-export-runtime")).unwrap();
+    let mut child = tokio::process::Command::new(worker)
+        .env("OXIDAL_PRESET_DIR", root.join("presets"))
+        .env("OXIDAL_QUALIFICATION_DATA", root.join("frame-runtime"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    let mut bytes =
+        serde_json::to_vec(&json!({"settings": settings, "models":[],"controls":null,"eq":null}))
+            .unwrap();
+    bytes.extend(std::iter::repeat_n(b' ', 80 * 1024));
+    bytes.push(b'\n');
+    input.write_all(&bytes).await.unwrap();
+    let mut output = BufReader::new(child.stdout.take().unwrap());
+    let mut reply = String::new();
+    tokio::time::timeout(Duration::from_secs(25), output.read_line(&mut reply))
+        .await
+        .unwrap()
+        .unwrap();
+    let ready: Value = serde_json::from_str(&reply).unwrap();
+    assert_eq!(ready["kind"], "ready");
+    drop(input);
+    assert!(
+        tokio::time::timeout(Duration::from_secs(10), child.wait())
+            .await
+            .unwrap()
+            .unwrap()
+            .success()
+    );
+    let mut child = tokio::process::Command::new(worker)
+        .arg("--save-copy")
+        .env("OXIDAL_PRESET_DIR", root.join("presets"))
+        .env(
+            "OXIDAL_QUALIFICATION_DATA",
+            root.join("frame-export-runtime"),
+        )
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut bytes = serde_json::to_vec(&json!({"settings":settings,"models":[],"controls":ready["controls"],"eq":ready["eq"],"name":"Frame regression"})).unwrap();
+    bytes.extend(std::iter::repeat_n(b' ', 80 * 1024));
+    bytes.push(b'\n');
+    child.stdin.take().unwrap().write_all(&bytes).await.unwrap();
+    let saved = tokio::time::timeout(Duration::from_secs(25), child.wait_with_output())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(saved.status.success());
+    let id = std::str::from_utf8(&saved.stdout).unwrap().trim();
+    assert_eq!(id.len(), 64);
+    let (info, _) = oxidal_presets::OwnedStore::new(root.join("presets/owned"))
+        .read(id)
+        .unwrap();
+    assert_eq!(info.preset.name, "Frame regression");
 }

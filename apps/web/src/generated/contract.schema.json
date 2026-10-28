@@ -3244,7 +3244,7 @@
       ]
     },
     "NodeEq": {
-      "description": "EQ belongs to a whole-native graph node and its stable inner block identities.",
+      "description": "EQ belongs to a native graph node and its stable inner block identities.",
       "type": "object",
       "properties": {
         "blocks": {

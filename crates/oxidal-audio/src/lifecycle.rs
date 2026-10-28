@@ -6,6 +6,10 @@ use crate::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Shared startup/readback/export/recovery frame budget, including its newline.
+/// This bounds serialized control state, not DSP memory or model count.
+pub const PLAYBACK_FRAME_BYTES: usize = 4 * 1024 * 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartAudio {

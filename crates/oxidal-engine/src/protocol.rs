@@ -43,7 +43,7 @@ impl Control {
             && (!self.toggle || v == self.minimum || v == self.maximum)
     }
 }
-/// EQ belongs to a whole-native graph node and its stable inner block identities.
+/// EQ belongs to a native graph node and its stable inner block identities.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NodeEq {

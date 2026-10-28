@@ -1,7 +1,7 @@
 //! Last confirmed scalar session; separate from the explicit saved-preset boot policy.
 use oxidal_audio::eq::{BlockEqState, valid_snapshot};
 use oxidal_audio::lifecycle::{
-    LiveControl, ModelAssignment, StartAudio, valid_controls, valid_models,
+    LiveControl, ModelAssignment, PLAYBACK_FRAME_BYTES, StartAudio, valid_controls, valid_models,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -9,7 +9,8 @@ use std::{
     path::Path,
 };
 
-const MAX_BYTES: u64 = 128 * 1024;
+// Leave room for the enclosing boot/start/export metadata within the IPC frame.
+const MAX_BYTES: u64 = (PLAYBACK_FRAME_BYTES / 2) as u64;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -134,6 +135,37 @@ mod tests {
         state.controls.as_mut().unwrap().push(control);
         assert!(state.write(&path).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), original);
+        // A valid dense catalog used to fit recovery but fail the 64 KiB IPC.
+        state.controls = Some(
+            (0..220)
+                .map(|i| LiveControl {
+                    target: format!("block-{i}"),
+                    label: "L".repeat(256),
+                    display: "D".repeat(128),
+                    value: 0.5,
+                    toggle: false,
+                })
+                .collect(),
+        );
+        state.write(&path).unwrap();
+        let dense = std::fs::read(&path).unwrap();
+        assert!(dense.len() > 65536);
+        let restored = Recovery::read(&path).unwrap().unwrap();
+        let startup = oxidal_audio::lifecycle::PlaybackStart {
+            settings: restored.settings.clone(),
+            controls: restored.controls.clone(),
+            models: restored.models.clone(),
+            eq: restored.eq.clone(),
+        };
+        let export = oxidal_audio::lifecycle::SavePlayback {
+            settings: restored.settings,
+            controls: restored.controls.unwrap(),
+            models: restored.models,
+            eq: restored.eq,
+            name: "Dense saved tone".into(),
+        };
+        assert!(serde_json::to_vec(&startup).unwrap().len() + 1 < PLAYBACK_FRAME_BYTES);
+        assert!(serde_json::to_vec(&export).unwrap().len() + 1 < PLAYBACK_FRAME_BYTES);
         std::fs::write(&path, vec![b' '; MAX_BYTES as usize + 1]).unwrap();
         assert!(Recovery::read(&path).unwrap_err().contains("size limit"));
         std::fs::write(&path, b"invalid").unwrap();

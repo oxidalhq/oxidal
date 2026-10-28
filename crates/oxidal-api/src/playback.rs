@@ -9,12 +9,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oxidal_audio::eq::{BlockEqState, EqEdit, valid_snapshot};
-use oxidal_audio::lifecycle::EqRequest;
 use oxidal_audio::lifecycle::{
     AudioAction, AudioCommand, AudioPhase, AudioState, LiveControl, LiveRequest, ModelAssignment,
     ModelOperation, ModelPhase, ModelRequest, PlaybackEvent, PlaybackStart, SavePlayback,
     StartAudio, valid_controls, valid_models, valid_preset_name, valid_slots,
 };
+use oxidal_audio::lifecycle::{EqRequest, PLAYBACK_FRAME_BYTES};
 use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -195,7 +195,7 @@ impl Owner {
                 eq,
             })
             .map_err(|e| e.to_string())?;
-            if bytes.len() > 65535 {
+            if bytes.len() >= PLAYBACK_FRAME_BYTES {
                 return Err("Audio settings too large".into());
             }
             bytes.push(b'\n');
@@ -215,11 +215,11 @@ impl Owner {
                 .output
                 .as_mut()
                 .unwrap()
-                .take(65537)
+                .take((PLAYBACK_FRAME_BYTES + 1) as u64)
                 .read_until(b'\n', &mut response)
                 .await
                 .map_err(|e| e.to_string())?;
-            if response.len() > 65536 || response.last() != Some(&b'\n') {
+            if response.len() > PLAYBACK_FRAME_BYTES || response.last() != Some(&b'\n') {
                 return Err(
                     "Audio worker could not start; check device/settings/preset and service log"
                         .into(),
@@ -275,10 +275,13 @@ impl Owner {
             loop {
                 let mut bytes = Vec::new();
                 let read = (&mut output)
-                    .take(65537)
+                    .take((PLAYBACK_FRAME_BYTES + 1) as u64)
                     .read_until(b'\n', &mut bytes)
                     .await;
-                if read.is_err() || bytes.len() > 65536 || bytes.last() != Some(&b'\n') {
+                if read.is_err()
+                    || bytes.len() > PLAYBACK_FRAME_BYTES
+                    || bytes.last() != Some(&b'\n')
+                {
                     break;
                 }
                 let Ok(event) = serde_json::from_slice::<PlaybackEvent>(&bytes) else {
@@ -682,7 +685,7 @@ impl Owner {
             name,
         };
         let mut bytes = serde_json::to_vec(&request).map_err(|e| e.to_string())?;
-        if bytes.len() >= 65536 {
+        if bytes.len() >= PLAYBACK_FRAME_BYTES {
             return Err("Save catalog too large".into());
         }
         bytes.push(b'\n');
