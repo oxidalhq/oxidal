@@ -100,8 +100,8 @@ Native draft authoring now exposes exact lane layouts and validated duplicate,
 reorder, cross-lane move and mono/stereo operations through the existing owned
 history. Source immutability, idempotent receipts, rejection/rollback, undo/redo,
 independent Save/reopen and saved PCM are covered by the maintained native qualifier.
-These commands remain draft-only; sounding structural replacement/history and full
-TONE3000 authoring parity remain open. See docs/native-tone3000.md.
+The draft API remains separate from the sounding control owner described below;
+complete TONE3000 action parity remains open. See docs/native-tone3000.md.
 
 Standalone native playback now supports transactional live structural authoring
 with verified source/profile-bound working checkpoints, bounded structural history,
@@ -109,7 +109,7 @@ and complete Save/reconfigure/Resume/boot reconstruction. It exposes 34 hot glob
 and seven isolated prepared instance settings; preparing a setting preserves the
 old worker until admission, then restarts audio with rollback on failure. This is
 functional authoring, not real-time/gapless structural qualification. See
-docs/native-tone3000.md. Hybrid node authoring and complete reference parity remain
+docs/native-tone3000.md. Hybrid node authoring is implemented below; complete reference parity remains
 open. Keep UI testing focused on functional wiring during the current design changes.
 
 Whole-native hybrid nodes now expose shared structural/history/input-mode controls
@@ -120,3 +120,11 @@ See docs/mixed-engine.md. Host topology authoring, automatic measurement workflo
 full upstream action parity and physical timing remain unqualified. Keep the
 current functionality-first browser checks focused rather than repeating device
 screenshot matrices.
+
+Whole-native native/mixed owners now expose the pinned tuner and automatic
+level/alignment tools, with daemon-owned polling, conflict guards, verified result
+checkpoints and rollback. Progress/pitch do not invalidate edit cursors; native
+matches survive Save/recovery and bounded undo. See docs/native-tone3000.md.
+These tools do not implement adaptive guitar profiles, a global LV2-only tuner or
+physical timing qualification. Image builds and emulator boots establish package/boot behavior, not completion
+of unfinished authoring or scene features.

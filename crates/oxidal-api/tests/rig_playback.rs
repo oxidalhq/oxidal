@@ -217,6 +217,31 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         .unwrap()["id"]
         .clone();
     let author = |s: &Value, action: Value| json!({"kind":"authoring","command":{"session":s["control"]["session"],"expected_revision":s["control"]["revision"],"node":"tone","action":action}});
+    s = apply(
+        &c,
+        &url,
+        author(
+            &s,
+            json!({"kind":"utility","command":{"kind":"tuner","enabled":true}}),
+        ),
+    )
+    .await;
+    let tuner_revision = s["revision"].clone();
+    let tuner_control = s["control"]["revision"].clone();
+    tokio::time::sleep(Duration::from_millis(450)).await;
+    let polled = get(&c, &url, "rig-audio").await;
+    assert_eq!(polled["revision"], tuner_revision);
+    assert_eq!(polled["control"]["revision"], tuner_control);
+    assert!(polled["control"]["authoring"][0]["status"]["tools"]["tuner"].is_object());
+    s = apply(
+        &c,
+        &url,
+        author(
+            &s,
+            json!({"kind":"utility","command":{"kind":"tuner","enabled":false}}),
+        ),
+    )
+    .await;
     let before_copy = s["control"]["working"].clone();
     s = apply(
         &c,
@@ -301,6 +326,49 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         assert!((control(&s, &native) - 0.6).abs() < 1e-5);
         assert_eq!(s["control"]["authoring"][0]["status"]["layout"], expanded);
     }
+    // Daemon-owned polling must finish alignment with no browser utility polls.
+    let mono = s["control"]["authoring"][0]["status"]["layout"].clone();
+    s = apply(
+        &c,
+        &url,
+        author(
+            &s,
+            json!({"kind":"edit","edit":{"kind":"stereo","enabled":true}}),
+        ),
+    )
+    .await;
+    s = apply(
+        &c,
+        &url,
+        author(&s, json!({"kind":"utility","command":{"kind":"align"}})),
+    )
+    .await;
+    let frames = s["processed_frames"].as_u64().unwrap();
+    let mut measured = false;
+    for _ in 0..100 {
+        s = get(&c, &url, "rig-audio").await;
+        let phase = s["control"]["authoring"][0]["status"]["tools"]["alignment"]["state"]
+            .as_str()
+            .unwrap();
+        if phase == "done" || phase == "timeout" {
+            measured = phase == "done";
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        matches!(
+            s["control"]["authoring"][0]["status"]["tools"]["alignment"]["state"].as_str(),
+            Some("done" | "timeout")
+        ),
+        "{s}"
+    );
+    assert!(s["processed_frames"].as_u64().unwrap() > frames);
+    if measured {
+        s = apply(&c, &url, author(&s, json!({"kind":"undo"}))).await;
+    }
+    s = apply(&c, &url, author(&s, json!({"kind":"undo"}))).await;
+    assert_eq!(s["control"]["authoring"][0]["status"]["layout"], mono);
     let row = s["control"]["eq"][0].clone();
     let eq_action = json!({"kind":"eq", "command": {
         "session":s["control"]["session"], "expected_revision":s["control"]["revision"],

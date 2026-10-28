@@ -1062,6 +1062,23 @@
         {
           "type": "object",
           "properties": {
+            "command": {
+              "$ref": "#/$defs/Command4"
+            },
+            "kind": {
+              "type": "string",
+              "const": "utility"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "block_id": {
               "type": "string"
             },
@@ -1228,6 +1245,32 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/LiveControl"
+          }
+        },
+        "tools": {
+          "$ref": "#/$defs/State2",
+          "default": {
+            "alignment": {
+              "confidence": null,
+              "matchedDb": null,
+              "matchedMs": null,
+              "peakSharpness": null,
+              "polarityFlipped": null,
+              "progress": 0,
+              "state": "idle"
+            },
+            "balance": {
+              "confidence": null,
+              "matchedDb": null,
+              "matchedMs": null,
+              "peakSharpness": null,
+              "polarityFlipped": null,
+              "progress": 0,
+              "state": "idle"
+            },
+            "error": null,
+            "tuner": null,
+            "tuner_enabled": false
           }
         },
         "working": {
@@ -1864,6 +1907,79 @@
           "required": [
             "type",
             "uuid"
+          ]
+        }
+      ]
+    },
+    "Command4": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "tuner"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "balance"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "align"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cancel"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "poll"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
           ]
         }
       ]
@@ -3216,6 +3332,62 @@
         "mappings"
       ]
     },
+    "Measurement": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "matchedDb": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "matchedMs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "peakSharpness": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "polarityFlipped": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        },
+        "progress": {
+          "type": "number",
+          "format": "double",
+          "default": 0
+        },
+        "state": {
+          "$ref": "#/$defs/Phase"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ]
+    },
     "Message": {
       "oneOf": [
         {
@@ -4182,6 +4354,15 @@
         "transaction",
         "seconds_remaining",
         "phase"
+      ]
+    },
+    "Phase": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "listening",
+        "done",
+        "timeout"
       ]
     },
     "PluginCatalog": {
@@ -6193,6 +6374,42 @@
         "message"
       ]
     },
+    "State2": {
+      "type": "object",
+      "properties": {
+        "alignment": {
+          "$ref": "#/$defs/Measurement"
+        },
+        "balance": {
+          "$ref": "#/$defs/Measurement"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tuner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TunerReading"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tuner_enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tuner_enabled",
+        "balance",
+        "alignment"
+      ]
+    },
     "Status": {
       "type": "object",
       "properties": {
@@ -6862,6 +7079,29 @@
         }
       },
       "additionalProperties": false
+    },
+    "TunerReading": {
+      "type": "object",
+      "properties": {
+        "confidence": {
+          "type": "number",
+          "format": "double"
+        },
+        "frequency": {
+          "type": "number",
+          "format": "double"
+        },
+        "level": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "frequency",
+        "confidence",
+        "level"
+      ]
     },
     "Validation": {
       "type": "object",

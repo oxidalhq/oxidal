@@ -319,6 +319,9 @@ impl Session {
         self.advance_model()
     }
     pub fn apply(&mut self, command: ControlCommand) -> Result<(), String> {
+        if self.measurement_pending() {
+            return Err("Cancel measurement before editing".into());
+        }
         if self.model_pending() {
             return Err("Finish model preparation before adjusting controls".into());
         }
@@ -475,6 +478,9 @@ impl Session {
         Ok(())
     }
     pub fn apply_eq(&mut self, command: EqCommand) -> Result<(), String> {
+        if self.measurement_pending() {
+            return Err("Cancel measurement before editing EQ".into());
+        }
         if self.model_pending() {
             return Err("Finish model preparation before adjusting EQ".into());
         }

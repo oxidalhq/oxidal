@@ -387,3 +387,36 @@ sound. Clipboard contents are not exported or persisted across worker replacemen
 Maintained DSP/HTTP tests cover those boundaries and independent Save/reopen;
 one shared browser workflow covers Copy/Paste/Undo. This does not claim complete
 upstream history, global clipboard or measurement-tool parity.
+
+### Tuner and automatic matching
+
+Sounding whole-native instances expose **Tuner & matching** in the shared native
+and hybrid control panel. The tuner uses the pinned native detector on raw input
+before gain/gating; note/cents/Hz require a reliable pitch, and silence does not
+show a false centered tuning marker. Closing the tuner panel or leaving its
+component requests tuner shutdown. Tuner readings and progress updates do not
+advance the live edit cursor or dirty a preset.
+
+**Match levels** listens to the two stereo chains and applies the measured native
+output balance. Silence times out without applying a made-up correction.
+**Align chains · brief mute** runs the native probe/lag/polarity workflow and
+briefly mutes that native instance. Both require stereo chains. Other sound edits
+are rejected during measurement; Cancel and Stop remain available.
+
+The daemon, rather than the browser, polls an active measurement to completion.
+A lost page cannot leave alignment waiting forever for its UI poll to unmute.
+Successful changes become verified working checkpoints, authoritative controls and
+bounded undo entries; existing Save/recovery paths retain them. Failed checkpoint
+storage cancels the measurement and restores its baseline, or fails closed if
+native rollback fails. Utility activity and pitch readings are not exported as
+tone settings. This is native chain matching, not adaptive guitar profiles or a
+global tuner for graphs containing only extracted stages/LV2 plugins.
+
+The maintained native qualifier checks actual PCM at 44.1/48/96 kHz: pitch detection
+with input trim down, level-match direction, alignment, cancel, silence timeout,
+undo, independent Save/reopen and storage rollback. Real paired A2 models exercise
+alignment and constant reported latency. Actual standalone/mixed API tests check
+non-invalidating tuner polls; the mixed test finishes alignment without browser
+utility polls. One focused shared browser flow covers tuner visibility and
+measurement cancellation. Hardware input, accuracy under stage noise and physical
+deadlines remain separate Pi qualification.

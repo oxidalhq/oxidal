@@ -5,6 +5,11 @@ pub(crate) fn origin(revision: &str, node: &str) -> String {
     format!("mixed:{revision}:{node}")
 }
 impl Session {
+    pub(crate) fn measurement_pending(&self) -> bool {
+        self.authoring_histories
+            .values()
+            .any(|owner| owner.measurement_pending())
+    }
     pub fn authoring_command(
         &mut self,
         command: AuthoringCommand,
@@ -24,6 +29,7 @@ impl Session {
             .iter()
             .find(|r| r.node == command.node)
             .map(|r| r.receipt.clone());
+        let before_working = receipt.clone();
         let Some(Processor::Native(engine)) = self.graph.processor_mut(&command.node) else {
             return Err("Native authoring requires a native node".into());
         };
@@ -37,11 +43,18 @@ impl Session {
                 oxidal_tone3000::working::Authoring::for_source(root, source, receipt)
             });
         let mutating = command.action.changes_tone();
+        let utility_poll = matches!(
+            command.action,
+            oxidal_audio::structure::AuthoringAction::Utility {
+                command: oxidal_audio::tools::Command::Poll
+            }
+        );
         let result = owner.command(engine, command.action);
         if owner.failed() {
             self.failed = true;
         }
         let status = result?;
+        let mutating = mutating || status.working != before_working;
         if mutating {
             let receipt = status
                 .working
@@ -75,11 +88,13 @@ impl Session {
         {
             row.status = status;
         }
-        self.state.revision = self
-            .state
-            .revision
-            .checked_add(1)
-            .ok_or("Rig revision exhausted")?;
+        if !utility_poll || mutating {
+            self.state.revision = self
+                .state
+                .revision
+                .checked_add(1)
+                .ok_or("Rig revision exhausted")?;
+        }
         if serde_json::to_vec(&self.snapshot())
             .map_err(|e| e.to_string())?
             .len()

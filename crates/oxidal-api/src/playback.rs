@@ -319,6 +319,11 @@ impl Owner {
     async fn prepare_parameter(&mut self, parameter: String, value: f32) -> Reply {
         if self.state.phase != AudioPhase::Running
             || self.model_pending()
+            || self
+                .state
+                .authoring
+                .as_ref()
+                .is_some_and(|s| s.tools.measuring())
             || !self.state.authoring.as_ref().is_some_and(|s| {
                 s.settings
                     .iter()
@@ -431,6 +436,12 @@ impl Owner {
             );
         }
         let mutating = action.changes_tone();
+        let utility_poll = matches!(
+            action,
+            AuthoringAction::Utility {
+                command: oxidal_audio::tools::Command::Poll
+            }
+        );
         let serial = self
             .state
             .revision
@@ -497,6 +508,13 @@ impl Owner {
         if let Some(error) = error {
             return Err(error);
         }
+        let mutating = mutating
+            || authoring.working
+                != self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(|s| s.working.clone());
         if mutating {
             self.state
                 .configured
@@ -515,8 +533,35 @@ impl Owner {
         self.state.eq = eq.clone();
         self.resume_controls = Some(controls);
         self.resume_eq = Some(eq);
-        self.publish(AudioPhase::Running, None);
+        if utility_poll && !mutating {
+            self.updates.send_replace(self.state.clone());
+        } else {
+            self.publish(AudioPhase::Running, None);
+        }
         Ok(self.state.clone())
+    }
+    async fn poll_tools(&mut self) {
+        if self.state.phase != AudioPhase::Running
+            || self.model_pending()
+            || !self
+                .state
+                .authoring
+                .as_ref()
+                .is_some_and(|s| s.tools.active())
+        {
+            return;
+        }
+        if let Err(error) = self
+            .authoring_command(AuthoringAction::Utility {
+                command: oxidal_audio::tools::Command::Poll,
+            })
+            .await
+            && self.state.phase == AudioPhase::Running
+        {
+            let _ = self.authoring_command(AuthoringAction::Inspect).await;
+            self.state.error = Some(error);
+            self.updates.send_replace(self.state.clone());
+        }
     }
     async fn set_control(&mut self, target: String, value: f32) -> Result<(), String> {
         let serial = self.state.revision + 1;
@@ -1066,6 +1111,21 @@ impl Owner {
         {
             return Err("Experimental audio worker unavailable".into());
         }
+        if self
+            .state
+            .authoring
+            .as_ref()
+            .is_some_and(|s| s.tools.measuring())
+            && !matches!(
+                &command.action,
+                AudioAction::Stop
+                    | AudioAction::Authoring {
+                        action: AuthoringAction::Utility { .. }
+                    }
+            )
+        {
+            return Err("Wait for measurement or cancel it before changing sound".into());
+        }
         let result = match command.action {
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
             AudioAction::Authoring {
@@ -1352,6 +1412,7 @@ impl Playback {
                     _ = interval.tick() => {
                         owner.check_exit();
                         owner.advance_model().await;
+                        owner.poll_tools().await;
                         if owner.recovery_due.is_some_and(|due| due <= std::time::Instant::now()) {
                             owner.checkpoint();
                         }

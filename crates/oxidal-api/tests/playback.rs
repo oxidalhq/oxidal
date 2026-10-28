@@ -1275,6 +1275,20 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         .find(|b| b["insert"] == false)
         .unwrap()["id"]
         .clone();
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":true}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
+    let tuner_revision = state["revision"].clone();
+    tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+    let polling = get(&client, &url, "audio").await;
+    assert_eq!(
+        polling["revision"], tuner_revision,
+        "Tuner polling must not invalidate live edit authority"
+    );
+    assert!(polling["authoring"]["tools"]["tuner"].is_object());
+    let response=send(&client,&url,&state,json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":false}}})).await;
+    assert_eq!(response.status(), 200);
+    state = response.json().await.unwrap();
     let response = send(
         &client,
         &url,

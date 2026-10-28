@@ -87,6 +87,10 @@ export type EqEdit =
 export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type AuthoringAction =
   | {
+      command: Command4;
+      kind: "utility";
+    }
+  | {
       block_id: string;
       kind: "copy";
     }
@@ -111,6 +115,23 @@ export type AuthoringAction =
     }
   | {
       kind: "redo";
+    };
+export type Command4 =
+  | {
+      enabled: boolean;
+      kind: "tuner";
+    }
+  | {
+      kind: "balance";
+    }
+  | {
+      kind: "align";
+    }
+  | {
+      kind: "cancel";
+    }
+  | {
+      kind: "poll";
     };
 export type StructureEdit =
   | {
@@ -151,6 +172,7 @@ export type StructureEdit =
     };
 export type ChainLane = "left" | "right";
 export type InputMode = "stereo" | "left" | "right" | "dual";
+export type Phase = "idle" | "listening" | "done" | "timeout";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 /**
@@ -724,6 +746,7 @@ export interface AuthoringStatus {
     [k: string]: number;
   };
   settings?: LiveControl[];
+  tools?: State2;
   /**
    * Immutable local working-state receipt; never a file path or portable preset.
    */
@@ -751,6 +774,27 @@ export interface LiveControl {
   target: string;
   toggle: boolean;
   value: number;
+}
+export interface State2 {
+  alignment: Measurement;
+  balance: Measurement;
+  error?: string | null;
+  tuner?: TunerReading | null;
+  tuner_enabled: boolean;
+}
+export interface Measurement {
+  confidence?: number | null;
+  matchedDb?: number | null;
+  matchedMs?: number | null;
+  peakSharpness?: number | null;
+  polarityFlipped?: boolean | null;
+  progress?: number;
+  state: Phase;
+}
+export interface TunerReading {
+  confidence: number;
+  frequency: number;
+  level: number;
 }
 /**
  * Exact per-block EQ readback, retained independently of scalar controls.

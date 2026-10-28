@@ -2206,6 +2206,37 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
+  await rig.getByText('Tuner & matching', { exact: true }).click();
+  await rig.getByRole('button', { name: 'Tuner', exact: true }).click();
+  await expect(rig.getByLabel('Tuner reading')).toBeVisible();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.tools.tuner)
+    .not.toBeNull();
+  await rig.getByRole('button', { name: 'Close tuner', exact: true }).click();
+  await expect(rig.getByLabel('Tuner reading')).toHaveCount(0);
+  await rig
+    .getByRole('button', { name: 'Use stereo chains', exact: true })
+    .click();
+  await rig.getByRole('button', { name: 'Match levels', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await get()).control.authoring[0].status.tools.balance.state,
+    )
+    .toBe('listening');
+  await rig
+    .getByRole('button', { name: 'Cancel measurement', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () => (await get()).control.authoring[0].status.tools.balance.state,
+    )
+    .toBe('idle');
+  await rig
+    .getByRole('button', { name: 'Undo structure', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).control.authoring[0].status.layout)
+    .toEqual(layoutBefore);
   const eq = rig.getByRole('region', { name: 'Block EQ' });
   await expect(eq).toBeVisible();
   const eqBefore = (await get()).control.eq;

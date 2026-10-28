@@ -631,3 +631,10 @@ peer LV2 controls, cache-independent Save/reopen and deterministic rendered PCM.
 The actual HTTP/worker suite exercises all seven prepared settings and subsequent
 Save, configuration changes and recovery. A focused desktop browser workflow covers
 the shared control wiring; this is not a new physical-device UI qualification.
+
+Whole-native nodes also share the [native tuner and matching tools](native-tone3000.md#tuner-and-automatic-matching).
+The mixed daemon polls active tools independently of the web client. Progress/pitch
+updates preserve the graph control revision; an applied result advances it and
+absorbs the edited node's model assignments into its verified working checkpoint.
+Other nodes' controls remain intact. Measurement rejects conflicting sound edits;
+the existing rollback, isolated Save and recovery paths retain successful results.

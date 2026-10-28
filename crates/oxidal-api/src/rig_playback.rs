@@ -684,6 +684,24 @@ impl Owner {
         {
             return Err("Mixed worker unavailable".into());
         }
+        if self
+            .state
+            .control
+            .as_ref()
+            .is_some_and(|s| s.authoring.iter().any(|r| r.status.tools.measuring()))
+            && !matches!(
+                &command.action,
+                RigAudioAction::Stop
+                    | RigAudioAction::Authoring {
+                        command: AuthoringCommand {
+                            action: oxidal_audio::structure::AuthoringAction::Utility { .. },
+                            ..
+                        }
+                    }
+            )
+        {
+            return Err("Wait for measurement or cancel it before changing sound".into());
+        }
         match command.action {
             RigAudioAction::Start { settings } => {
                 self.start(*settings).await?;
@@ -954,6 +972,48 @@ impl Owner {
                 };
                 if let Err(e) = result {
                     self.fault(e).await;
+                }
+            }
+        }
+        if self.state.phase == AudioPhase::Running {
+            let nodes: Vec<_> = self
+                .state
+                .control
+                .as_ref()
+                .map(|s| {
+                    s.authoring
+                        .iter()
+                        .filter(|r| r.status.tools.active())
+                        .map(|r| r.node.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for node in nodes {
+                let cursor = self.state.control.as_ref().unwrap();
+                let command = AuthoringCommand {
+                    session: cursor.session.clone(),
+                    expected_revision: cursor.revision,
+                    node,
+                    action: oxidal_audio::structure::AuthoringAction::Utility {
+                        command: oxidal_audio::tools::Command::Poll,
+                    },
+                };
+                match self.exchange(&WorkerRequest::Authoring { command }).await {
+                    Ok(reply) => {
+                        let error = reply.error.clone();
+                        if let Err(error) = self.readback(reply) {
+                            self.fault(error).await;
+                            break;
+                        }
+                        if let Some(error) = error {
+                            self.state.error = Some(error);
+                            self.publish();
+                        }
+                    }
+                    Err(error) => {
+                        self.fault(error).await;
+                        break;
+                    }
                 }
             }
         }

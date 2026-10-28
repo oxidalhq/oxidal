@@ -59,10 +59,16 @@ export function LiveRig({
   useEffect(() => {
     alive.current = true;
     let timer: ReturnType<typeof setTimeout>;
+    let toolActive = false;
     async function refresh() {
       const requested = generation.current;
       try {
         const next = await playbackState();
+        toolActive =
+          !!next.authoring?.tools &&
+          (next.authoring.tools.tuner_enabled ||
+            next.authoring.tools.balance.state === 'listening' ||
+            next.authoring.tools.alignment.state === 'listening');
         if (
           alive.current &&
           !sending.current &&
@@ -83,7 +89,8 @@ export function LiveRig({
       } catch (cause) {
         if (alive.current) setError(String(cause));
       } finally {
-        if (alive.current) timer = setTimeout(() => void refresh(), 1000);
+        if (alive.current)
+          timer = setTimeout(() => void refresh(), toolActive ? 150 : 1000);
       }
     }
     void refresh();
@@ -314,7 +321,12 @@ export function LiveRig({
     ['verifying', 'preparing', 'ready', 'applying'].includes(
       state.model_change.phase,
     );
-  const disabled = !connected || busy || eqEditing || !!error || modelPending;
+  const unavailable =
+    !connected || busy || eqEditing || !!error || modelPending;
+  const disabled =
+    unavailable ||
+    state.authoring?.tools?.balance.state === 'listening' ||
+    state.authoring?.tools?.alignment.state === 'listening';
   const groups = state.controls.filter(
     (c) => c.target.startsWith('block:') && c.target.endsWith(':enabled'),
   );
@@ -411,7 +423,7 @@ export function LiveRig({
         <NativeAuthoring
           status={state.authoring}
           selectedBlock={selectedBlock}
-          disabled={disabled || !!draft}
+          disabled={unavailable || !!draft}
           busy={busy}
           session={state.session}
           revision={state.revision}

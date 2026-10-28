@@ -181,6 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let event = match request {
                 WorkerRequest::Authoring(request) => {
                     let mutating = request.authoring.changes_tone();
+                    let before_working = authoring.working_receipt().map(str::to_owned);
                     let result = if models.pending() {
                         Err("Finish model preparation before changing the chain".into())
                     } else {
@@ -191,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     let (status, error) = match result {
                         Ok(status) => {
-                            if mutating {
+                            if mutating || status.working != before_working {
                                 models = models::Models::default();
                             }
                             (status, None)
@@ -208,7 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 WorkerRequest::Eq(request) => {
-                    let error = if models.pending() {
+                    let error = if models.pending() || authoring.measurement_pending() {
                         Some("Finish model preparation before adjusting EQ".into())
                     } else {
                         engine
@@ -224,7 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 WorkerRequest::Control(request) => {
-                    let error = if models.pending() {
+                    let error = if models.pending() || authoring.measurement_pending() {
                         Some(
                             "Model preparation is pending; cancel before adjusting controls".into(),
                         )
@@ -241,8 +242,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 WorkerRequest::Model(request) => {
-                    let result =
-                        models.operation(&mut engine, &root, request.model, request.serial);
+                    let result = if authoring.measurement_pending() {
+                        Err("Cancel measurement before loading models".into())
+                    } else {
+                        models.operation(&mut engine, &root, request.model, request.serial)
+                    };
                     let (progress, error) = match result {
                         Ok(p) => (p, None),
                         Err(e) => (None, Some(e)),

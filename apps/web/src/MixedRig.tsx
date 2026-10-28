@@ -111,7 +111,19 @@ export function MixedRig({
       } catch (cause) {
         if (alive.current) setReadError(String(cause));
       } finally {
-        if (alive.current) timer = setTimeout(() => void tick(), 750);
+        if (alive.current)
+          timer = setTimeout(
+            () => void tick(),
+            current.current?.control?.authoring?.some(
+              (row) =>
+                row.status.tools &&
+                (row.status.tools.tuner_enabled ||
+                  row.status.tools.balance.state === 'listening' ||
+                  row.status.tools.alignment.state === 'listening'),
+            )
+              ? 150
+              : 750,
+          );
       }
     };
     void tick();
@@ -310,8 +322,14 @@ export function MixedRig({
     ['verifying', 'preparing', 'ready', 'applying'].includes(
       modelChange.progress.phase,
     );
-  const disabled =
+  const unavailable =
     !connected || busy || eqBusy || !running || !!readError || modelPending;
+  const measuring = state.control?.authoring?.some(
+    (row) =>
+      row.status.tools?.balance.state === 'listening' ||
+      row.status.tools?.alignment.state === 'listening',
+  );
+  const disabled = unavailable || !!measuring;
   const nativeModels = state.control?.slots?.find(
     (s) => s.node === selected?.id,
   );
@@ -792,7 +810,7 @@ export function MixedRig({
                 .status
             }
             selectedBlock={nativeTarget === 'global' ? undefined : nativeTarget}
-            disabled={disabled || !!edit}
+            disabled={unavailable || !!edit}
             busy={busy}
             session={state.control.session}
             revision={state.control.revision}
@@ -818,7 +836,12 @@ export function MixedRig({
             state={{ ...state, eq: eqBlocks }}
             blockId={eqBlock.block_id}
             disabled={
-              !connected || busy || !!edit || !!readError || modelPending
+              !connected ||
+              busy ||
+              !!edit ||
+              !!readError ||
+              modelPending ||
+              !!measuring
             }
             onEditing={(editing) => {
               generation.current++;

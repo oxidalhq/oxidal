@@ -1,0 +1,143 @@
+//! Utility measurements run on the same native control owner, outside PCM.
+use super::*;
+use oxidal_audio::tools::{Command, Measurement, Phase};
+#[derive(Debug)]
+pub(super) struct Baseline {
+    state: State,
+    latency: u32,
+    alignment: bool,
+}
+impl Authoring {
+    pub fn measurement_pending(&self) -> bool {
+        self.measurement.is_some()
+    }
+    fn cancel_tools(&mut self, engine: &mut Engine) -> Result<(), String> {
+        engine
+            .utility(5)
+            .and_then(|_| engine.utility(8))
+            .map_err(|e| e.to_string())?;
+        self.tools.balance = Default::default();
+        self.tools.alignment = Default::default();
+        self.measurement = None;
+        Ok(())
+    }
+    pub(super) fn utility_command(
+        &mut self,
+        engine: &mut Engine,
+        command: Command,
+    ) -> Result<AuthoringStatus, String> {
+        self.tools.error = None;
+        match command {
+            Command::Tuner { enabled } => {
+                engine
+                    .utility(if enabled { 1 } else { 2 })
+                    .map_err(|e| e.to_string())?;
+                self.tools.tuner_enabled = enabled;
+                if !enabled {
+                    self.tools.tuner = None;
+                }
+            }
+            Command::Cancel => self.cancel_tools(engine)?,
+            Command::Balance | Command::Align => {
+                if self.measurement_pending() {
+                    return Err("Cancel the active measurement first".into());
+                }
+                if !engine.layout().map_err(|e| e.to_string())?.stereo {
+                    return Err("Two stereo chains are required for automatic matching".into());
+                }
+                let baseline = Baseline {
+                    state: engine.capture().map_err(|e| e.to_string())?,
+                    latency: engine.latency_samples().map_err(|e| e.to_string())?,
+                    alignment: matches!(command, Command::Align),
+                };
+                engine
+                    .utility(if baseline.alignment { 6 } else { 3 })
+                    .map_err(|e| e.to_string())?;
+                let measuring = Measurement {
+                    state: Phase::Listening,
+                    ..Default::default()
+                };
+                if baseline.alignment {
+                    self.tools.alignment = measuring;
+                } else {
+                    self.tools.balance = measuring;
+                }
+                self.measurement = Some(baseline);
+            }
+            Command::Poll => {
+                if self.tools.tuner_enabled {
+                    self.tools.tuner = Some(
+                        serde_json::from_value(engine.utility(0).map_err(|e| e.to_string())?)
+                            .map_err(|e| e.to_string())?,
+                    );
+                }
+                if let Some(baseline) = &self.measurement {
+                    let alignment = baseline.alignment;
+                    let measured: Measurement = serde_json::from_value(
+                        engine
+                            .utility(if alignment { 7 } else { 4 })
+                            .map_err(|e| e.to_string())?,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    let done = measured.state == Phase::Done;
+                    let finished = measured.state != Phase::Listening;
+                    if alignment {
+                        self.tools.alignment = measured;
+                    } else {
+                        self.tools.balance = measured;
+                    }
+                    if finished {
+                        let baseline = self.measurement.take().unwrap();
+                        if done {
+                            let result = (|| -> Result<(State, String), String> {
+                                if engine.latency_samples().map_err(|e| e.to_string())?
+                                    != baseline.latency
+                                {
+                                    return Err("Measurement changed reported latency".into());
+                                }
+                                engine.live_controls().map_err(|e| e.to_string())?;
+                                if !self.tools.valid() {
+                                    return Err("Invalid native utility readback".into());
+                                }
+                                let after = engine.capture().map_err(|e| e.to_string())?;
+                                let receipt = write(&self.root, &self.source, &after)?;
+                                Ok((after, receipt))
+                            })();
+                            match result {
+                                Ok((after, receipt)) => {
+                                    if after != baseline.state {
+                                        self.undo.push_back(baseline.state);
+                                        self.redo.clear();
+                                        self.trim_history();
+                                    }
+                                    self.working = Some(receipt);
+                                }
+                                Err(error) => {
+                                    self.cancel_tools(engine)?;
+                                    if let Err(rollback) = engine
+                                        .restore(&baseline.state)
+                                        .and_then(|_| engine.wait_ready())
+                                    {
+                                        self.failed = true;
+                                        return Err(format!(
+                                            "Measurement rollback failed: {rollback}; {error}"
+                                        ));
+                                    }
+                                    self.tools.error = Some(
+                                        error
+                                            .chars()
+                                            .filter(|c| !c.is_control())
+                                            .take(256)
+                                            .collect(),
+                                    );
+                                    return Err(error);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        self.snapshot(engine)
+    }
+}

@@ -354,6 +354,9 @@ fn qualify_spread() -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = std::env::args().skip(1).collect();
+    if arguments.as_slice() == ["--utilities"] {
+        return qualify_utilities();
+    }
     if arguments.as_slice() == ["--stereo-controls"] {
         return qualify_image_authoring();
     }
@@ -367,6 +370,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_latency()?;
     qualify_spread()?;
     qualify_image_authoring()?;
+    qualify_utilities()?;
     let expected: Value =
         serde_json::from_str(include_str!("../../../native/tone3000/parameters.json"))?;
     let mut engine = Engine::new(48000.0, 128)?;
@@ -2552,6 +2556,238 @@ fn qualify_image_authoring() -> Result<(), Box<dyn Error>> {
     assert_eq!(restored.latency_samples()?, latency);
     eprintln!(
         "qualify: live stereo pans/linking/polarity/alignment PCM, stable latency and saved recall passed"
+    );
+    Ok(())
+}
+
+// Source-led utility behavior: actual native PCM, not simulated meter/tuner values.
+fn qualify_utilities() -> Result<(), Box<dyn Error>> {
+    use oxidal_audio::{
+        structure::{AuthoringAction as A, StructureEdit as E},
+        tools::{Command as C, Phase},
+    };
+    use oxidal_tone3000::working::Authoring;
+    let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?).join(format!(
+        "utility-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root)?;
+    let read = |engine: &mut Engine, id: &str| -> Result<f64, Box<dyn Error>> {
+        Ok(engine
+            .catalog()?
+            .as_array()
+            .ok_or("Missing descriptors")?
+            .iter()
+            .find(|r| r["id"] == id)
+            .ok_or("Missing descriptor")?["normalized"]
+            .as_f64()
+            .ok_or("Invalid scalar")?)
+    };
+    for rate in [44100.0, 48000.0, 96000.0] {
+        let mut engine = Engine::new(rate, 128)?;
+        engine.reset_empty()?;
+        engine.set_normalized("gateEnabled", 0.0)?;
+        let source = format!("utilities:{rate}");
+        let mut owner = Authoring::for_source(&root, source.clone(), None);
+        let send = |owner: &mut Authoring, engine: &mut Engine, command: C| {
+            owner.command(engine, A::Utility { command })
+        };
+        assert!(!owner.snapshot(&mut engine)?.tools.active());
+        send(&mut owner, &mut engine, C::Tuner { enabled: true })?;
+        // Detector reads pre-gain/pre-gate input even with input trim fully down.
+        engine.set_normalized("inputLevel", 0.0)?;
+        for chunk in 0..160 {
+            let mut l = [0.0; 128];
+            for (i, x) in l.iter_mut().enumerate() {
+                *x = (std::f64::consts::TAU * 220.0 * (chunk * 128 + i) as f64 / rate).sin() as f32
+                    * 0.1;
+            }
+            let mut r = l;
+            engine.process(&mut l, &mut r)?;
+        }
+        let tuned = send(&mut owner, &mut engine, C::Poll)?;
+        let reading = tuned.tools.tuner.unwrap();
+        assert!(
+            (reading.frequency - 220.0).abs() < 1.5 && reading.confidence > 0.7,
+            "tuner at {rate}: {reading:?}"
+        );
+        assert!(
+            tuned.working.is_none() && !tuned.can_undo,
+            "Tuner must not dirty or capture a tone"
+        );
+        send(&mut owner, &mut engine, C::Tuner { enabled: false })?;
+        assert!(owner.snapshot(&mut engine)?.tools.tuner.is_none());
+        engine.set_normalized("inputLevel", 0.5)?;
+        owner.command(
+            &mut engine,
+            A::Edit {
+                edit: E::Stereo { enabled: true },
+            },
+        )?;
+        engine.set_normalized("outputBalance", 0.5)?;
+        send(&mut owner, &mut engine, C::Balance)?;
+        assert!(
+            owner
+                .command(&mut engine, A::Edit { edit: E::Reset })
+                .is_err()
+        );
+        let blocks = (rate * 2.2 / 128.0).ceil() as usize;
+        for chunk in 0..blocks {
+            let mut l = [0.0; 128];
+            let mut r = l;
+            for i in 0..128 {
+                l[i] = (std::f64::consts::TAU * 220.0 * (chunk * 128 + i) as f64 / rate).sin()
+                    as f32
+                    * 0.1;
+                r[i] = l[i] * 0.5;
+            }
+            engine.process(&mut l, &mut r)?;
+        }
+        let matched = send(&mut owner, &mut engine, C::Poll)?;
+        assert_eq!(matched.tools.balance.state, Phase::Done);
+        assert!(
+            (matched.tools.balance.matched_db.unwrap().abs() - 6.0206).abs() < 0.08,
+            "{matched:?}"
+        );
+        let balance = read(&mut engine, "outputBalance")?;
+        assert!((balance - (0.5 + 6.0206 / 48.0)).abs() < 0.002);
+        let receipt = matched.working.unwrap();
+        let captured = oxidal_tone3000::working::read(&root, &receipt, &source)?;
+        let mut recalled = Engine::new(rate, 128)?;
+        recalled.restore(&captured)?;
+        recalled.wait_ready()?;
+        assert!((read(&mut recalled, "outputBalance")? - balance).abs() < 1e-6);
+        let exported = engine.save_preset("Matched levels")?;
+        let mut fresh = Engine::new(rate, 128)?;
+        fresh.load_preset(&exported)?;
+        fresh.wait_ready()?;
+        assert!((read(&mut fresh, "outputBalance")? - balance).abs() < 1e-6);
+        owner.command(&mut engine, A::Undo)?;
+        assert!((read(&mut engine, "outputBalance")? - 0.5).abs() < 1e-6);
+        assert_eq!(
+            owner.snapshot(&mut engine)?.tools.balance.state,
+            Phase::Idle
+        );
+        let working = owner.working_receipt().map(str::to_owned);
+        send(&mut owner, &mut engine, C::Balance)?;
+        send(&mut owner, &mut engine, C::Cancel)?;
+        assert!(!owner.measurement_pending());
+        assert_eq!(owner.working_receipt(), working.as_deref());
+        send(&mut owner, &mut engine, C::Align)?;
+        for _ in 0..(rate * 1.0 / 128.0).ceil() as usize {
+            engine.process(&mut [0.0; 128], &mut [0.0; 128])?;
+        }
+        let aligned = send(&mut owner, &mut engine, C::Poll)?;
+        assert_eq!(
+            aligned.tools.alignment.state,
+            Phase::Done,
+            "alignment at {rate}: {aligned:?}"
+        );
+        assert!(
+            aligned.tools.alignment.matched_ms.unwrap().abs() < 0.08,
+            "{aligned:?}"
+        );
+        send(&mut owner, &mut engine, C::Align)?;
+        send(&mut owner, &mut engine, C::Cancel)?;
+        assert!(!owner.measurement_pending());
+        send(&mut owner, &mut engine, C::Balance)?;
+        for _ in 0..(rate * 15.2 / 128.0).ceil() as usize {
+            engine.process(&mut [0.0; 128], &mut [0.0; 128])?;
+        }
+        assert_eq!(
+            send(&mut owner, &mut engine, C::Poll)?.tools.balance.state,
+            Phase::Timeout
+        );
+        eprintln!(
+            "native utilities: {rate} Hz actual tuner, energy match, alignment, cancel/timeout, undo, working recall and independent preset Save passed"
+        );
+    }
+    // The same alignment path must work with real nonlinear NAM processors, not only dry lanes.
+    let preset = std::fs::read(
+        std::path::Path::new(&std::env::var("OXIDAL_QUALIFICATION_DATA")?)
+            .join("a2-preset.t3kpreset"),
+    )?;
+    let mut modelled = Engine::new(48000.0, 128)?;
+    modelled.load_preset(&preset)?;
+    modelled.wait_ready()?;
+    modelled.set_normalized("gateEnabled", 0.0)?;
+    let block = modelled
+        .layout()?
+        .left
+        .iter()
+        .find(|b| !b.insert)
+        .unwrap()
+        .id
+        .clone();
+    let mut paired = Authoring::for_source(&root, "a2-alignment".into(), None);
+    paired.command(
+        &mut modelled,
+        A::Edit {
+            edit: E::Stereo { enabled: true },
+        },
+    )?;
+    paired.command(
+        &mut modelled,
+        A::Edit {
+            edit: E::Duplicate {
+                block_id: block,
+                lane: oxidal_audio::structure::ChainLane::Right,
+                index: 0,
+            },
+        },
+    )?;
+    let delay = modelled.latency_samples()?;
+    paired.command(&mut modelled, A::Utility { command: C::Align })?;
+    for _ in 0..1000 {
+        modelled.process(&mut [0.0; 128], &mut [0.0; 128])?;
+    }
+    let aligned = paired.command(&mut modelled, A::Utility { command: C::Poll })?;
+    assert_eq!(aligned.tools.alignment.state, Phase::Done, "{aligned:?}");
+    assert!(
+        aligned.tools.alignment.matched_ms.unwrap().abs() < 0.08,
+        "{aligned:?}"
+    );
+    assert_eq!(modelled.latency_samples()?, delay);
+    eprintln!(
+        "native utilities: real paired A2 NAM alignment and constant reported latency passed"
+    );
+    // Failed durable capture must roll back an automatically applied scalar result.
+    let bad = root.join("storage-failure");
+    std::fs::create_dir_all(&bad)?;
+    std::fs::write(bad.join("native-checkpoints"), b"blocked")?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.reset_empty()?;
+    engine.set_normalized("gateEnabled", 0.0)?;
+    engine.edit_structure(&E::Stereo { enabled: true })?;
+    engine.wait_ready()?;
+    let mut owner = Authoring::for_source(&bad, "failure".into(), None);
+    owner.command(
+        &mut engine,
+        A::Utility {
+            command: C::Balance,
+        },
+    )?;
+    for chunk in 0..900 {
+        let mut l = [0.0; 128];
+        let mut r = l;
+        for i in 0..128 {
+            l[i] = ((chunk * 128 + i) as f32 * 0.071).sin() * 0.1;
+            r[i] = l[i] * 0.5;
+        }
+        engine.process(&mut l, &mut r)?;
+    }
+    assert!(
+        owner
+            .command(&mut engine, A::Utility { command: C::Poll })
+            .is_err()
+    );
+    assert!((read(&mut engine, "outputBalance")? - 0.5).abs() < 1e-6);
+    assert!(!owner.failed() && !owner.measurement_pending() && owner.working_receipt().is_none());
+    assert!(owner.snapshot(&mut engine)?.tools.error.is_some());
+    eprintln!(
+        "native utilities: automatic result storage failure rolls back while native owner remains healthy"
     );
     Ok(())
 }

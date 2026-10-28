@@ -16,6 +16,13 @@ impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
 
 unsafe extern "C" {
+    fn oxidal_t3k_utility(
+        engine: *mut c_void,
+        action: u32,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
     fn oxidal_t3k_eq(
         engine: *mut c_void,
         id: *const c_char,
@@ -707,6 +714,13 @@ impl Engine {
             return Err(NativeError("EQ replay readback differs".into()));
         }
         Ok(())
+    }
+    pub(crate) fn utility(&mut self, action: u32) -> Result<serde_json::Value> {
+        if self.role != ProcessingRole::WholePreset {
+            return Err(NativeError("Whole-native utility required".into()));
+        }
+        // SAFETY: bounded JSON output and exclusive owner handle; action is validated in FFI.
+        self.json(|p, b, n, w| unsafe { oxidal_t3k_utility(p, action, b, n, w) })
     }
     pub fn catalog(&mut self) -> Result<serde_json::Value> {
         // SAFETY: json supplies a live handle and bounded writable buffer/length.

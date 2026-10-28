@@ -12,6 +12,8 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+mod tools;
+
 const MAX_STATE: usize = 32 * 1024 * 1024;
 const HISTORY_BYTES: usize = 64 * 1024 * 1024;
 const HISTORY_ENTRIES: usize = 8;
@@ -179,6 +181,8 @@ pub struct Authoring {
     undo: VecDeque<State>,
     redo: VecDeque<State>,
     failed: bool,
+    tools: oxidal_audio::tools::State,
+    measurement: Option<tools::Baseline>,
 }
 impl Authoring {
     pub fn new(root: &Path, settings: &StartAudio) -> Self {
@@ -192,7 +196,12 @@ impl Authoring {
             undo: VecDeque::new(),
             redo: VecDeque::new(),
             failed: false,
+            tools: Default::default(),
+            measurement: None,
         }
+    }
+    pub fn working_receipt(&self) -> Option<&str> {
+        self.working.as_deref()
     }
     pub fn failed(&self) -> bool {
         self.failed
@@ -229,6 +238,7 @@ impl Authoring {
         let state = AuthoringStatus {
             settings,
             setting_steps,
+            tools: self.tools.clone(),
             layout: engine.layout().map_err(|e| e.to_string())?,
             can_paste: engine.chain().map_err(|e| e.to_string())?["canPasteBlock"]
                 .as_bool()
@@ -276,6 +286,12 @@ impl Authoring {
         }
         if self.failed {
             return Err("Native authoring failed; restart required".into());
+        }
+        if let AuthoringAction::Utility { command } = action {
+            return self.utility_command(engine, command);
+        }
+        if self.measurement_pending() && !matches!(action, AuthoringAction::Inspect) {
+            return Err("Cancel measurement before editing".into());
         }
         if let AuthoringAction::Copy { block_id } = &action {
             engine.copy_block(block_id).map_err(|e| e.to_string())?;
@@ -325,7 +341,9 @@ impl Authoring {
                 AuthoringAction::Redo => engine
                     .restore(self.redo.back().ok_or("No redo available")?)
                     .map_err(|e| e.to_string())?,
-                AuthoringAction::Inspect | AuthoringAction::Copy { .. } => unreachable!(),
+                AuthoringAction::Inspect
+                | AuthoringAction::Copy { .. }
+                | AuthoringAction::Utility { .. } => unreachable!(),
             }
             engine.wait_ready().map_err(|e| e.to_string())?;
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {
@@ -371,7 +389,13 @@ impl Authoring {
             }
             _ => (),
         }
+        self.tools.balance = Default::default();
+        self.tools.alignment = Default::default();
         self.working = Some(receipt);
+        self.trim_history();
+        self.snapshot(engine)
+    }
+    fn trim_history(&mut self) {
         while self.undo.len() + self.redo.len() > HISTORY_ENTRIES
             || self
                 .undo
@@ -387,7 +411,6 @@ impl Authoring {
                 self.undo.pop_front();
             }
         }
-        self.snapshot(engine)
     }
 }
 

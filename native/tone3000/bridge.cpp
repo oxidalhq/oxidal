@@ -500,3 +500,21 @@ EXPORT int oxidal_t3k_restore_slot(void* ptr, const char* target, int lane, int 
     OxidalModelPreparation::restoreSlot(e.processor, target, lane, index);
   });
 }
+
+EXPORT int oxidal_t3k_utility(void* ptr, unsigned action, char* out, size_t capacity, size_t* written) noexcept {
+ return guard([&]{auto& p=engine(ptr).processor;
+  switch(action) {
+   case 0: json(p.getTunerReading(),out,capacity,written);return;
+   case 1:p.setTunerEnabled(true);break;
+   case 2:p.setTunerEnabled(false);break;
+   case 3:p.startAutoBalance();break;
+   case 4:json(p.pollAutoBalance(),out,capacity,written);return;
+   case 5:p.cancelAutoBalance();break;
+   case 6:p.startAutoOffset();break;
+   case 7:json(p.pollAutoOffset(),out,capacity,written);return;
+   case 8:p.cancelAutoOffset();break;
+   default:throw std::runtime_error("Unknown native utility");
+  }
+  json(juce::var(new juce::DynamicObject()),out,capacity,written);
+ });
+}

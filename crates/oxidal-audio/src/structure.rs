@@ -77,6 +77,7 @@ pub enum StructureEdit {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthoringAction {
+    Utility { command: crate::tools::Command },
     Copy { block_id: String },
     Inspect,
     Parameter { parameter: String, value: f32 },
@@ -89,6 +90,8 @@ pub enum AuthoringAction {
 #[serde(deny_unknown_fields)]
 pub struct AuthoringStatus {
     pub layout: ChainLayout,
+    #[serde(default)]
+    pub tools: crate::tools::State,
     #[serde(default)]
     pub settings: Vec<crate::lifecycle::LiveControl>,
     #[serde(default)]
@@ -103,7 +106,8 @@ pub struct AuthoringStatus {
 impl AuthoringStatus {
     pub fn valid(&self) -> bool {
         let blocks: Vec<_> = self.layout.left.iter().chain(&self.layout.right).collect();
-        crate::lifecycle::catalog_fits(self)
+        self.tools.valid()
+            && crate::lifecycle::catalog_fits(self)
             && (self.settings.is_empty() || crate::lifecycle::valid_controls(&self.settings))
             && self.setting_steps.len() == self.settings.len()
             && self.settings.iter().all(|p| {
@@ -145,6 +149,9 @@ pub struct PrepareParameter {
 
 impl AuthoringAction {
     pub fn changes_tone(&self) -> bool {
-        !matches!(self, Self::Inspect | Self::Copy { .. })
+        !matches!(
+            self,
+            Self::Inspect | Self::Copy { .. } | Self::Utility { .. }
+        )
     }
 }

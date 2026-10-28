@@ -5,6 +5,7 @@ pub mod lifecycle;
 pub mod meter;
 pub mod midi;
 pub mod structure;
+pub mod tools;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

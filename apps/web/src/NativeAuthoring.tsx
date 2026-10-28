@@ -1,3 +1,4 @@
+import { NativeTools } from './NativeTools';
 import { useState } from 'react';
 import type { AudioState, AudioAction } from './api';
 import { Button } from './components/ui/button';
@@ -29,6 +30,10 @@ export function NativeAuthoring({
     revision: number;
   } | null>(null);
   const layout = status.layout;
+  const editingDisabled =
+    disabled ||
+    status.tools?.balance.state === 'listening' ||
+    status.tools?.alignment.state === 'listening';
   const lane = layout?.right.some((b) => b.id === selectedBlock)
     ? 'right'
     : 'left';
@@ -48,6 +53,7 @@ export function NativeAuthoring({
   }
   return (
     <>
+      <NativeTools status={status} disabled={disabled} author={author} />
       {layout && (
         <details>
           <summary>Chain actions</summary>
@@ -58,21 +64,21 @@ export function NativeAuthoring({
           >
             <Button
               variant="outline"
-              disabled={disabled || !status?.can_undo}
+              disabled={editingDisabled || !status?.can_undo}
               onClick={() => void author({ kind: 'undo' })}
             >
               Undo structure
             </Button>
             <Button
               variant="outline"
-              disabled={disabled || !status?.can_redo}
+              disabled={editingDisabled || !status?.can_redo}
               onClick={() => void author({ kind: 'redo' })}
             >
               Redo structure
             </Button>
             <Button
               variant="outline"
-              disabled={disabled}
+              disabled={editingDisabled}
               onClick={() =>
                 void author({
                   kind: 'edit',
@@ -84,7 +90,7 @@ export function NativeAuthoring({
             </Button>
             <Button
               variant="outline"
-              disabled={disabled || !layout.stereo}
+              disabled={editingDisabled || !layout.stereo}
               onClick={() =>
                 void author({ kind: 'edit', edit: { kind: 'swap' } })
               }
@@ -93,7 +99,7 @@ export function NativeAuthoring({
             </Button>
             <Button
               variant="outline"
-              disabled={disabled}
+              disabled={editingDisabled}
               onClick={() =>
                 void author({ kind: 'edit', edit: { kind: 'reset' } })
               }
@@ -102,7 +108,7 @@ export function NativeAuthoring({
             </Button>
             <Button
               variant="outline"
-              disabled={disabled || !status.can_paste}
+              disabled={editingDisabled || !status.can_paste}
               onClick={() =>
                 void author({
                   kind: 'edit',
@@ -120,7 +126,7 @@ export function NativeAuthoring({
               <Button
                 key={mode}
                 variant="outline"
-                disabled={disabled}
+                disabled={editingDisabled}
                 aria-pressed={(layout.input_mode ?? 'stereo') === mode}
                 onClick={() =>
                   void author({ kind: 'edit', edit: { kind: 'input', mode } })
@@ -135,7 +141,7 @@ export function NativeAuthoring({
               <>
                 <Button
                   variant="outline"
-                  disabled={disabled}
+                  disabled={editingDisabled}
                   onClick={() =>
                     void author({ kind: 'copy', block_id: selectedBlock })
                   }
@@ -145,21 +151,23 @@ export function NativeAuthoring({
 
                 <Button
                   variant="outline"
-                  disabled={disabled || position === 0}
+                  disabled={editingDisabled || position === 0}
                   onClick={() => reorder(-1)}
                 >
                   Earlier
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={disabled || position === laneBlocks.length - 1}
+                  disabled={
+                    editingDisabled || position === laneBlocks.length - 1
+                  }
                   onClick={() => reorder(1)}
                 >
                   Later
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={disabled}
+                  disabled={editingDisabled}
                   onClick={() =>
                     void author({
                       kind: 'edit',
@@ -177,7 +185,7 @@ export function NativeAuthoring({
                 {layout.stereo && (
                   <Button
                     variant="outline"
-                    disabled={disabled}
+                    disabled={editingDisabled}
                     onClick={() =>
                       void author({
                         kind: 'edit',
@@ -195,7 +203,7 @@ export function NativeAuthoring({
                 )}
                 <Button
                   variant="outline"
-                  disabled={disabled}
+                  disabled={editingDisabled}
                   onClick={() =>
                     void author({ kind: 'remove', block_id: selectedBlock })
                   }
@@ -219,7 +227,7 @@ export function NativeAuthoring({
               <Button
                 key={setting.target}
                 variant="outline"
-                disabled={disabled}
+                disabled={editingDisabled}
                 onClick={() =>
                   setSettingDraft({
                     control: setting,
