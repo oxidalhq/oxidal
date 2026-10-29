@@ -1,4 +1,6 @@
 import { GearIcon } from './GearIcon';
+import { useWorkspaceState } from './workspaceMemory';
+import { ButtonGroup } from './components/ui/button-group';
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
@@ -15,6 +17,9 @@ import {
   ArrowClockwise,
   ArrowLeft,
   FloppyDisk,
+  ImageSquare,
+  List,
+  X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -107,9 +112,30 @@ export function LiveRig({
     format: 'nam' | 'ir';
   } | null>(null);
   const [performance, setPerformance] = useState(false);
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [target, setTarget] = useState('outputLevel');
-  const [group, setGroup] = useState<ControlGroup>('tone');
+  const [selection, setSelection] = useWorkspaceState('native-selection', {
+    session: '',
+    target: 'outputLevel',
+  });
+  // Session identity prevents remembered block IDs from selecting a different rig.
+  const target =
+    selection.session === state?.session ? selection.target : 'outputLevel';
+  function setTarget(next: string) {
+    setSelection({ session: state?.session ?? '', target: next });
+  }
+  const [group, setGroup] = useWorkspaceState<ControlGroup>(
+    'native-control-group',
+    'tone',
+  );
+  const inspector = useRef<HTMLDivElement>(null);
+  function revealInspector() {
+    requestAnimationFrame(() => {
+      inspector.current?.scrollIntoView?.({
+        block: 'nearest',
+        behavior: 'instant',
+      });
+      inspector.current?.focus({ preventScroll: true });
+    });
+  }
   const [draft, setDraft] = useState<{
     target: string;
     value: number;
@@ -562,77 +588,90 @@ export function LiveRig({
           disabled={disabled || !!draft || !!picker}
           onSelect={(id, owned) => void recall(id, owned)}
         />
-        <div className="rig-preset-actions" aria-label="Preset actions">
-          <span
-            role="status"
-            data-testid="live-status"
-            className={
-              busy || state.modified
-                ? 'text-xs text-muted-foreground'
-                : 'sr-only'
-            }
-            data-edited={state.modified}
-          >
-            {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
-          </span>
-          <Button
-            variant="ghost"
-            aria-label="Rig actions"
-            title="Save a copy or open preset pads"
-            onClick={() => setOptionsOpen(true)}
-          >
-            <span className="text-xs">More</span>
+        <Button
+          className="preset-save"
+          aria-label="Save copy"
+          title="Save a copy for offline use"
+          variant={state.modified ? 'default' : 'outline'}
+          disabled={disabled || !!draft || !!picker}
+          onClick={() => {
+            setCopyName(state.preset_name ?? 'My preset');
+            setSaveOpening(state);
+          }}
+        >
+          <FloppyDisk aria-hidden="true" />
+          <span className="max-[420px]:sr-only">Save copy</span>
+        </Button>
+      </div>
+      <span
+        role="status"
+        data-testid="live-status"
+        className="sr-only"
+        data-edited={state.modified}
+      >
+        {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
+      </span>
+      {error && !adjusting && (
+        <div className="error rig-recovery" role="alert">
+          <p>{error}</p>
+          <Button variant="outline" onClick={() => setError('')}>
+            Acknowledge and refresh
           </Button>
         </div>
-      </div>
-      {optionsOpen && (
-        <AdjustmentDialog
-          title="Rig actions"
-          onCancel={() => setOptionsOpen(false)}
-        >
-          <div className="control-stack">
-            <label className="field">
-              Chain appearance
-              <select
-                value={chainView}
-                onChange={(event) => {
-                  const view =
-                    event.target.value === 'artwork' ? 'artwork' : 'compact';
-                  setChainView(view);
-                  try {
-                    localStorage.setItem('oxidal-chain-view', view);
-                  } catch {
-                    /* Optional preference. */
-                  }
-                }}
+      )}
+      <div className="rig-workspace" data-inspecting={!!selectedBlock}>
+        <div className="rig-chain-column">
+          <div className="chain-toolbar">
+            <ButtonGroup aria-label="Chain appearance">
+              {(
+                [
+                  ['compact', 'Connected icons', List],
+                  ['artwork', 'Model artwork', ImageSquare],
+                ] as const
+              ).map(([view, label, Icon]) => (
+                <Button
+                  key={view}
+                  size="icon"
+                  variant={chainView === view ? 'secondary' : 'ghost'}
+                  aria-label={label}
+                  aria-pressed={chainView === view}
+                  onClick={() => {
+                    setChainView(view);
+                    try {
+                      localStorage.setItem('oxidal-chain-view', view);
+                    } catch {
+                      /* Optional preference. */
+                    }
+                  }}
+                >
+                  <Icon aria-hidden="true" />
+                </Button>
+              ))}
+            </ButtonGroup>
+            <ButtonGroup aria-label="Tone history">
+              <Button
+                variant="ghost"
+                aria-label="Undo change"
+                title="Undo change"
+                disabled={disabled || !!draft || !state.authoring?.can_undo}
+                onClick={() => void author({ kind: 'undo' })}
               >
-                <option value="compact">Connected icons</option>
-                <option value="artwork">Model artwork</option>
-              </select>
-            </label>
+                <ArrowCounterClockwise aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                aria-label="Redo change"
+                title="Redo change"
+                disabled={disabled || !!draft || !state.authoring?.can_redo}
+                onClick={() => void author({ kind: 'redo' })}
+              >
+                <ArrowClockwise aria-hidden="true" />
+              </Button>
+            </ButtonGroup>
             <Button
-              variant={state.modified ? 'default' : 'outline'}
-              disabled={disabled || !!draft || !!picker}
-              onClick={() => {
-                setOptionsOpen(false);
-                setCopyName(state.preset_name ?? 'My preset');
-                setSaveOpening(state);
-              }}
-            >
-              <FloppyDisk aria-hidden="true" /> Save copy
-            </Button>
-            <Button
-              variant="outline"
-              disabled={disabled || !!draft || !!picker}
-              onClick={() => {
-                setOptionsOpen(false);
-                setPerformance(true);
-              }}
-            >
-              <SquaresFour aria-hidden="true" /> Preset pads
-            </Button>
-            <Button
-              variant="outline"
+              variant="ghost"
+              aria-label="Reload saved"
+              title="Revert to saved preset"
               disabled={
                 disabled ||
                 !!draft ||
@@ -640,573 +679,609 @@ export function LiveRig({
                 !state.configured ||
                 state.configured.draft
               }
-              onClick={() => {
-                setOptionsOpen(false);
-                setRestoreOpening(state);
-              }}
+              onClick={() => setRestoreOpening(state)}
             >
-              Reload saved
+              Revert
             </Button>
-          </div>
-        </AdjustmentDialog>
-      )}
-      <div className="chain-toolbar">
-        <h2 className="m-0 text-sm font-semibold">Signal chain</h2>
-        <div className="action-row" role="group" aria-label="Tone history">
-          <Button
-            variant="ghost"
-            aria-label="Undo change"
-            title="Undo change"
-            disabled={disabled || !!draft || !state.authoring?.can_undo}
-            onClick={() => void author({ kind: 'undo' })}
-          >
-            <ArrowCounterClockwise aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            aria-label="Redo change"
-            title="Redo change"
-            disabled={disabled || !!draft || !state.authoring?.can_redo}
-            onClick={() => void author({ kind: 'redo' })}
-          >
-            <ArrowClockwise aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-      {restoreOpening && (
-        <AdjustmentDialog
-          title="Reload saved preset?"
-          onCancel={() => setRestoreOpening(null)}
-        >
-          <p>
-            This discards the live edits and reloads the saved version of{' '}
-            {restoreOpening.preset_name}. Audio will briefly restart.
-          </p>
-          <div className="action-row">
             <Button
-              disabled={
-                disabled ||
-                state.session !== restoreOpening.session ||
-                state.revision !== restoreOpening.revision
-              }
-              onClick={() => {
-                void reloadSaved(restoreOpening);
-              }}
+              variant="ghost"
+              disabled={disabled || !!draft || !!picker}
+              onClick={() => setPerformance(true)}
             >
-              Discard edits and reload
-            </Button>
-            <Button variant="ghost" onClick={() => setRestoreOpening(null)}>
-              Keep editing
+              <SquaresFour aria-hidden="true" /> Perform
             </Button>
           </div>
-          {(state.session !== restoreOpening.session ||
-            state.revision !== restoreOpening.revision) && (
-            <p role="status">The rig changed. Close and reopen Reload saved.</p>
-          )}
-        </AdjustmentDialog>
-      )}
-      <div
-        className="signal-rack"
-        data-chain-view={chainView}
-        aria-label="Sounding tone blocks"
-      >
-        {(['left', 'right'] as const).map((lane) => {
-          const layout = state.authoring?.layout;
-          const laneGroups = layout
-            ? layout[lane].flatMap((b) =>
-                groups.filter((c) => c.target === `block:${b.id}:enabled`),
-              )
-            : lane === 'left'
-              ? groups
-              : [];
-          if (lane === 'right' && !laneGroups.length && !layout?.stereo)
-            return null;
-          return (
-            <div
-              className="signal-lane"
-              key={lane}
-              aria-label={`${lane} signal chain`}
+          {restoreOpening && (
+            <AdjustmentDialog
+              title="Reload saved preset?"
+              onCancel={() => setRestoreOpening(null)}
             >
-              <span className="signal-port">
-                {layout?.stereo ? (lane === 'left' ? 'IN L' : 'IN R') : 'IN'}
-              </span>
-              <div
-                className="signal-blocks"
-                role="region"
-                aria-label={`${lane} chain blocks`}
-                tabIndex={0}
-              >
-                {laneGroups.map((c, index) => (
+              <p>
+                This discards the live edits and reloads the saved version of{' '}
+                {restoreOpening.preset_name}. Audio will briefly restart.
+              </p>
+              <div className="action-row">
+                <Button
+                  disabled={
+                    disabled ||
+                    state.session !== restoreOpening.session ||
+                    state.revision !== restoreOpening.revision
+                  }
+                  onClick={() => {
+                    void reloadSaved(restoreOpening);
+                  }}
+                >
+                  Discard edits and reload
+                </Button>
+                <Button variant="ghost" onClick={() => setRestoreOpening(null)}>
+                  Keep editing
+                </Button>
+              </div>
+              {(state.session !== restoreOpening.session ||
+                state.revision !== restoreOpening.revision) && (
+                <p role="status">
+                  The rig changed. Close and reopen Reload saved.
+                </p>
+              )}
+            </AdjustmentDialog>
+          )}
+          <div
+            className="signal-rack"
+            data-chain-view={chainView}
+            aria-label="Sounding tone blocks"
+          >
+            {(['left', 'right'] as const).map((lane) => {
+              const layout = state.authoring?.layout;
+              const laneGroups = layout
+                ? layout[lane].flatMap((b) =>
+                    groups.filter((c) => c.target === `block:${b.id}:enabled`),
+                  )
+                : lane === 'left'
+                  ? groups
+                  : [];
+              if (lane === 'right' && !laneGroups.length && !layout?.stereo)
+                return null;
+              return (
+                <div
+                  className="signal-lane"
+                  key={lane}
+                  aria-label={`${lane} signal chain`}
+                >
+                  <span className="signal-port">
+                    {layout?.stereo
+                      ? lane === 'left'
+                        ? 'IN L'
+                        : 'IN R'
+                      : 'IN'}
+                  </span>
                   <div
-                    key={c.target}
-                    className="live-effect signal-block"
-                    data-selected={selectedBlock === c.target.split(':')[1]}
-                    data-bypassed={c.value !== 1}
+                    className="signal-blocks"
+                    role="region"
+                    aria-label={`${lane} chain blocks`}
+                    tabIndex={0}
                   >
-                    <span className="signal-block-index">
-                      {String(index + 1).padStart(2, '0')}{' '}
-                      <ArrowRight aria-hidden="true" />
-                    </span>
-                    <Button
-                      variant="ghost"
-                      className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
-                      aria-label={c.label.replace(
-                        /(?: · (?:left|right))? · enabled$/,
-                        '',
-                      )}
-                      title={c.label.replace(
-                        /(?: · (?:left|right))? · enabled$/,
-                        '',
-                      )}
-                      aria-pressed={selectedBlock === c.target.split(':')[1]}
-                      disabled={disabled || !!draft}
-                      onClick={() => {
-                        const prefix = c.target.slice(0, -7);
-                        setTarget(
-                          state.controls.find(
-                            (item) =>
-                              item.target.startsWith(prefix) && !item.toggle,
-                          )?.target ?? c.target,
-                        );
-                        setDraft(null);
-                      }}
-                    >
-                      {chainView === 'compact' ||
-                      !state.configured ||
-                      state.configured.draft ? (
-                        <GearIcon
-                          className="signal-model-icon"
-                          gear={
-                            state.models?.some(
-                              (model) => model.target === c.target.slice(6, -8),
-                            )
-                              ? ''
-                              : ((artwork &&
-                                artwork.id === artworkId &&
-                                artwork.owned === artworkOwned
-                                  ? artwork.items
-                                  : []
-                                ).find(
-                                  (item) =>
-                                    item.block_id === c.target.slice(6, -8),
-                                )?.gear ?? '')
-                          }
-                        />
-                      ) : null}
-                      {chainView === 'artwork' &&
-                        state.models?.find(
-                          (m) => m.target === c.target.slice(6, -8),
-                        ) && (
-                          <ArtworkDeck
-                            tile
-                            model
-                            id={
-                              state.models.find(
-                                (m) => m.target === c.target.slice(6, -8),
-                              )!.asset
-                            }
-                          />
-                        )}
-                      {chainView === 'artwork' &&
-                        state.configured &&
-                        !state.configured.draft &&
-                        !state.models?.some(
-                          (m) => m.target === c.target.slice(6, -8),
-                        ) && (
-                          <ArtworkDeck
-                            tile
-                            id={state.configured.preset_id}
-                            owned={state.configured.owned}
-                            blockId={c.target.slice(6, -8)}
-                          />
-                        )}
-                      <span className="signal-block-label">
-                        <span className="line-clamp-2">
-                          {c.label.replace(
+                    {laneGroups.map((c, index) => (
+                      <div
+                        key={c.target}
+                        className="live-effect signal-block"
+                        data-selected={selectedBlock === c.target.split(':')[1]}
+                        data-bypassed={c.value !== 1}
+                      >
+                        <span className="signal-block-index">
+                          {String(index + 1).padStart(2, '0')}{' '}
+                          <ArrowRight aria-hidden="true" />
+                        </span>
+                        <Button
+                          variant="ghost"
+                          className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
+                          aria-label={c.label.replace(
                             /(?: · (?:left|right))? · enabled$/,
                             '',
                           )}
-                        </span>
-                      </span>
-                    </Button>
-                    <div className="live-effect-actions">
-                      <Button
-                        className="effect-power h-11 w-11 shrink-0 p-0"
-                        aria-label={`Enable ${c.label.replace(/(?: · (?:left|right))? · enabled$/, '')}`}
-                        title={
-                          c.value === 1
-                            ? 'On — tap to bypass'
-                            : 'Bypassed — tap to enable'
-                        }
-                        variant={c.value === 1 ? 'secondary' : 'ghost'}
-                        aria-pressed={c.value === 1}
-                        disabled={disabled}
-                        onClick={() =>
-                          void apply(c.target, c.value === 1 ? 0 : 1)
-                        }
-                      >
-                        <Power className="size-5" aria-hidden="true" />
-                      </Button>
-                    </div>
+                          title={c.label.replace(
+                            /(?: · (?:left|right))? · enabled$/,
+                            '',
+                          )}
+                          aria-pressed={
+                            selectedBlock === c.target.split(':')[1]
+                          }
+                          disabled={disabled || !!draft}
+                          onClick={() => {
+                            const prefix = c.target.slice(0, -7);
+                            setTarget(
+                              state.controls.find(
+                                (item) =>
+                                  item.target.startsWith(prefix) &&
+                                  !item.toggle,
+                              )?.target ?? c.target,
+                            );
+                            setDraft(null);
+                            revealInspector();
+                          }}
+                        >
+                          {chainView === 'compact' ||
+                          !state.configured ||
+                          state.configured.draft ? (
+                            <GearIcon
+                              className="signal-model-icon"
+                              gear={
+                                state.models?.some(
+                                  (model) =>
+                                    model.target === c.target.slice(6, -8),
+                                )
+                                  ? ''
+                                  : ((artwork &&
+                                    artwork.id === artworkId &&
+                                    artwork.owned === artworkOwned
+                                      ? artwork.items
+                                      : []
+                                    ).find(
+                                      (item) =>
+                                        item.block_id === c.target.slice(6, -8),
+                                    )?.gear ?? '')
+                              }
+                            />
+                          ) : null}
+                          {chainView === 'artwork' &&
+                            state.models?.find(
+                              (m) => m.target === c.target.slice(6, -8),
+                            ) && (
+                              <ArtworkDeck
+                                tile
+                                model
+                                id={
+                                  state.models.find(
+                                    (m) => m.target === c.target.slice(6, -8),
+                                  )!.asset
+                                }
+                              />
+                            )}
+                          {chainView === 'artwork' &&
+                            state.configured &&
+                            !state.configured.draft &&
+                            !state.models?.some(
+                              (m) => m.target === c.target.slice(6, -8),
+                            ) && (
+                              <ArtworkDeck
+                                tile
+                                id={state.configured.preset_id}
+                                owned={state.configured.owned}
+                                blockId={c.target.slice(6, -8)}
+                              />
+                            )}
+                          <span className="signal-block-label">
+                            <span className="line-clamp-2">
+                              {c.label.replace(
+                                /(?: · (?:left|right))? · enabled$/,
+                                '',
+                              )}
+                            </span>
+                          </span>
+                        </Button>
+                        <div className="live-effect-actions">
+                          <Button
+                            className="effect-power h-11 w-11 shrink-0 p-0"
+                            aria-label={`Enable ${c.label.replace(/(?: · (?:left|right))? · enabled$/, '')}`}
+                            title={
+                              c.value === 1
+                                ? 'On — tap to bypass'
+                                : 'Bypassed — tap to enable'
+                            }
+                            variant={c.value === 1 ? 'secondary' : 'ghost'}
+                            aria-pressed={c.value === 1}
+                            disabled={disabled}
+                            onClick={() =>
+                              void apply(c.target, c.value === 1 ? 0 : 1)
+                            }
+                          >
+                            <Power className="size-5" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {!laneGroups.length && (
+                      <span className="signal-empty">Direct signal</span>
+                    )}
                   </div>
-                ))}
-                {!laneGroups.length && (
-                  <span className="signal-empty">Direct signal</span>
-                )}
-              </div>
-              <span className="signal-port">
-                OUT <ArrowRight aria-hidden="true" />
-              </span>
+                  <span className="signal-port">
+                    OUT <ArrowRight aria-hidden="true" />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {!!state.slots?.length && (
+            <div className="action-row">
+              {(['nam', 'ir'] as const).map((format) => (
+                <Button
+                  key={format}
+                  variant="outline"
+                  disabled={disabled || !!draft}
+                  onClick={() => setInsertion({ opening: state, format })}
+                >
+                  <Plus aria-hidden="true" />
+                  {format === 'nam' ? 'Add NAM' : 'Add IR'}
+                </Button>
+              ))}
             </div>
-          );
-        })}
-      </div>
-      {!!state.slots?.length && (
-        <div className="action-row">
-          {(['nam', 'ir'] as const).map((format) => (
-            <Button
-              key={format}
-              variant="outline"
-              disabled={disabled || !!draft}
-              onClick={() => setInsertion({ opening: state, format })}
+          )}
+          {insertion && (
+            <AdjustmentDialog
+              title={`Add ${insertion.format.toUpperCase()} · position`}
+              onCancel={() => setInsertion(null)}
             >
-              <Plus aria-hidden="true" />
-              {format === 'nam' ? 'Add NAM' : 'Add IR'}
-            </Button>
-          ))}
-        </div>
-      )}
-      {insertion && (
-        <AdjustmentDialog
-          title={`Add ${insertion.format.toUpperCase()} · position`}
-          onCancel={() => setInsertion(null)}
-        >
-          <p className="caption">
-            Choose an available position in the signal chain.
-          </p>
-          <div
-            className="grid gap-2"
-            aria-label="Available insertion positions"
-          >
-            {insertion.opening.slots?.map((slot) => (
-              <Button
-                key={slot.target}
-                variant="outline"
-                disabled={
-                  disabled ||
-                  state.session !== insertion.opening.session ||
-                  state.revision !== insertion.opening.revision
-                }
-                onClick={() => {
-                  setPicker({
-                    target: slot.target,
-                    name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
-                    opening: insertion.opening,
-                    insert: true,
-                    format: insertion.format,
+              <p className="caption">
+                Choose an available position in the signal chain.
+              </p>
+              <div
+                className="grid gap-2"
+                aria-label="Available insertion positions"
+              >
+                {insertion.opening.slots?.map((slot) => (
+                  <Button
+                    key={slot.target}
+                    variant="outline"
+                    disabled={
+                      disabled ||
+                      state.session !== insertion.opening.session ||
+                      state.revision !== insertion.opening.revision
+                    }
+                    onClick={() => {
+                      setPicker({
+                        target: slot.target,
+                        name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
+                        opening: insertion.opening,
+                        insert: true,
+                        format: insertion.format,
+                      });
+                      setInsertion(null);
+                    }}
+                  >
+                    {slot.position.lane === 0 ? 'Left' : 'Right'} chain ·
+                    position {slot.position.index + 1}
+                  </Button>
+                ))}
+              </div>
+              {(state.session !== insertion.opening.session ||
+                state.revision !== insertion.opening.revision) && (
+                <p role="status">
+                  The chain changed. Close and choose the position again.
+                </p>
+              )}
+            </AdjustmentDialog>
+          )}
+          {picker && (
+            <ModelPicker
+              name={picker.name}
+              initialFormat={picker.format}
+              intent={picker.insert ? 'add' : 'replace'}
+              comparison={
+                picker.insert
+                  ? undefined
+                  : {
+                      pending: modelPending,
+                      appliedAsset:
+                        state.model_change?.request === picker.request &&
+                        state.model_change?.phase === 'applied'
+                          ? state.model_change.assignment.asset
+                          : undefined,
+                      error:
+                        state.model_change?.request === picker.request
+                          ? state.model_change?.error
+                          : undefined,
+                      blocked: state.session !== picker.opening.session,
+                    }
+              }
+              onClose={() => setPicker(null)}
+              onAudition={async (asset) => {
+                generation.current += 1;
+                sending.current = true;
+                setBusy(true);
+                try {
+                  const current = await playbackState();
+                  assertAuditionOwner(
+                    picker.opening,
+                    current,
+                    picker.request,
+                    current.model_change,
+                  );
+                  const next = await playbackCommand(current, {
+                    kind: 'replace_model',
+                    assignment: { target: picker.target, asset },
                   });
-                  setInsertion(null);
+                  if (alive.current) {
+                    setState(next);
+                    setPicker({
+                      ...picker,
+                      request: next.model_change?.request,
+                    });
+                    setError('');
+                  }
+                } finally {
+                  sending.current = false;
+                  if (alive.current) setBusy(false);
+                }
+              }}
+            />
+          )}
+          {modelPending && (
+            <div className="flex flex-wrap items-center gap-2" role="status">
+              <span>
+                {state.model_change?.phase === 'applying'
+                  ? 'Applying model…'
+                  : 'Preparing model…'}
+              </span>
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={async () => {
+                  generation.current += 1;
+                  sending.current = true;
+                  setBusy(true);
+                  try {
+                    const current = await playbackState();
+                    if (
+                      current.session !== state.session ||
+                      current.model_change?.request !==
+                        state.model_change?.request
+                    )
+                      throw new Error(
+                        'Model selection changed. Review it before cancelling.',
+                      );
+                    const next = await playbackCommand(current, {
+                      kind: 'cancel_model',
+                      request: state.model_change!.request,
+                    });
+                    if (alive.current) setState(next);
+                  } catch (cause) {
+                    if (alive.current) setError(String(cause));
+                  } finally {
+                    sending.current = false;
+                    if (alive.current) setBusy(false);
+                  }
                 }}
               >
-                {slot.position.lane === 0 ? 'Left' : 'Right'} chain · position{' '}
-                {slot.position.index + 1}
+                Cancel model
               </Button>
-            ))}
-          </div>
-          {(state.session !== insertion.opening.session ||
-            state.revision !== insertion.opening.revision) && (
-            <p role="status">
-              The chain changed. Close and choose the position again.
-            </p>
+            </div>
           )}
-        </AdjustmentDialog>
-      )}
-      {picker && (
-        <ModelPicker
-          name={picker.name}
-          initialFormat={picker.format}
-          intent={picker.insert ? 'add' : 'replace'}
-          comparison={
-            picker.insert
-              ? undefined
-              : {
-                  pending: modelPending,
-                  appliedAsset:
-                    state.model_change?.request === picker.request &&
-                    state.model_change?.phase === 'applied'
-                      ? state.model_change.assignment.asset
-                      : undefined,
-                  error:
-                    state.model_change?.request === picker.request
-                      ? state.model_change?.error
-                      : undefined,
-                  blocked: state.session !== picker.opening.session,
-                }
-          }
-          onClose={() => setPicker(null)}
-          onAudition={async (asset) => {
-            generation.current += 1;
-            sending.current = true;
-            setBusy(true);
-            try {
-              const current = await playbackState();
-              assertAuditionOwner(
-                picker.opening,
-                current,
-                picker.request,
-                current.model_change,
-              );
-              const next = await playbackCommand(current, {
-                kind: 'replace_model',
-                assignment: { target: picker.target, asset },
-              });
-              if (alive.current) {
-                setState(next);
-                setPicker({ ...picker, request: next.model_change?.request });
-                setError('');
-              }
-            } finally {
-              sending.current = false;
-              if (alive.current) setBusy(false);
-            }
-          }}
-        />
-      )}
-      {modelPending && (
-        <div className="flex flex-wrap items-center gap-2" role="status">
-          <span>
-            {state.model_change?.phase === 'applying'
-              ? 'Applying model…'
-              : 'Preparing model…'}
-          </span>
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={async () => {
-              generation.current += 1;
-              sending.current = true;
-              setBusy(true);
-              try {
-                const current = await playbackState();
-                if (
-                  current.session !== state.session ||
-                  current.model_change?.request !== state.model_change?.request
-                )
-                  throw new Error(
-                    'Model selection changed. Review it before cancelling.',
-                  );
-                const next = await playbackCommand(current, {
-                  kind: 'cancel_model',
-                  request: state.model_change!.request,
-                });
-                if (alive.current) setState(next);
-              } catch (cause) {
-                if (alive.current) setError(String(cause));
-              } finally {
-                sending.current = false;
-                if (alive.current) setBusy(false);
-              }
-            }}
-          >
-            Cancel model
-          </Button>
+          {state.model_change?.error && (
+            <p role="alert">{state.model_change.error}</p>
+          )}
         </div>
-      )}
-      {state.model_change?.error && (
-        <p role="alert">{state.model_change.error}</p>
-      )}
-      <div className="control-navigation" aria-label="Control groups">
-        {(
-          [
-            ['tone', 'Tone', SlidersHorizontal],
-            ['gate', 'Gate', Waveform],
-            ['pitch', 'Pitch', MusicNotes],
-            ['stereo', 'Stereo', ArrowsSplit],
-          ] as const
-        )
-          .filter(([id]) =>
-            state.controls.some(
-              (c) =>
-                !c.target.startsWith('block:') && controlGroup(c.target) === id,
-            ),
-          )
-          .map(([id, label, Icon]) => (
-            <Button
-              key={id}
-              variant={!selectedBlock && group === id ? 'secondary' : 'ghost'}
-              aria-pressed={!selectedBlock && group === id}
-              disabled={disabled || !!draft}
-              onClick={() => {
-                setGroup(id);
-                setTarget(
-                  state.controls.find(
+        <div
+          className="rig-inspector-column"
+          ref={inspector}
+          tabIndex={-1}
+          aria-label="Sound controls"
+        >
+          {!selectedBlock && (
+            <div className="control-navigation" aria-label="Control groups">
+              {(
+                [
+                  ['tone', 'Tone', SlidersHorizontal],
+                  ['gate', 'Gate', Waveform],
+                  ['pitch', 'Pitch', MusicNotes],
+                  ['stereo', 'Stereo', ArrowsSplit],
+                ] as const
+              )
+                .filter(([id]) =>
+                  state.controls.some(
                     (c) =>
                       !c.target.startsWith('block:') &&
                       controlGroup(c.target) === id,
-                  )!.target,
-                );
-                setDraft(null);
-              }}
-            >
-              <Icon aria-hidden="true" />
-              {label}
-            </Button>
-          ))}
-      </div>
-      {selectedBlock && (
-        <div className="effect-inspector" aria-label="Selected effect">
-          <div className="effect-inspector-heading">
-            <div className="min-w-0">
-              <span className="eyebrow">Selected block</span>
-              <h3 className="selected-effect-heading">
-                {groups
-                  .find((c) => c.target === `block:${selectedBlock}:enabled`)
-                  ?.label.replace(/(?: · (?:left|right))? · enabled$/, '')}
-              </h3>
-            </div>
-            <Button
-              variant="outline"
-              disabled={disabled || !!draft}
-              onClick={() =>
-                setPicker({
-                  target: selectedBlock,
-                  name:
-                    groups.find(
-                      (c) => c.target === `block:${selectedBlock}:enabled`,
-                    )?.label ?? 'Selected block',
-                  opening: state,
-                })
-              }
-            >
-              <Swap aria-hidden="true" /> Change model
-            </Button>
-          </div>
-          {orderedBlocks.length > 1 && (
-            <div
-              className="action-row"
-              role="group"
-              aria-label="Block position"
-            >
-              {([-1, 1] as const).map((direction) => {
-                const order = movedBlockOrder(
-                  orderedBlocks,
-                  selectedBlock,
-                  direction,
-                );
-                return (
+                  ),
+                )
+                .map(([id, label, Icon]) => (
                   <Button
-                    key={direction}
-                    variant="ghost"
-                    disabled={disabled || !!draft || !order}
+                    key={id}
+                    variant={
+                      !selectedBlock && group === id ? 'secondary' : 'ghost'
+                    }
+                    aria-pressed={!selectedBlock && group === id}
+                    disabled={disabled || !!draft}
                     onClick={() => {
-                      if (order)
-                        void author({
-                          kind: 'edit',
-                          edit: {
-                            kind: 'reorder',
-                            lane: selectedLane,
-                            block_ids: order,
-                          },
-                        });
+                      setGroup(id);
+                      setTarget(
+                        state.controls.find(
+                          (c) =>
+                            !c.target.startsWith('block:') &&
+                            controlGroup(c.target) === id,
+                        )!.target,
+                      );
+                      setDraft(null);
                     }}
                   >
-                    {direction === -1 ? (
-                      <ArrowLeft aria-hidden="true" />
-                    ) : (
-                      <ArrowRight aria-hidden="true" />
-                    )}
-                    {direction === -1 ? 'Move earlier' : 'Move later'}
+                    <Icon aria-hidden="true" />
+                    {label}
                   </Button>
-                );
-              })}
+                ))}
             </div>
           )}
-          {state.models?.find((m) => m.target === selectedBlock) && (
-            <ArtworkDeck
-              model
-              id={state.models.find((m) => m.target === selectedBlock)!.asset}
-            />
+          {selectedBlock && (
+            <div className="effect-inspector" aria-label="Selected effect">
+              <div className="effect-inspector-heading">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Show rig controls"
+                  onClick={() => {
+                    setTarget('outputLevel');
+                    setGroup('tone');
+                  }}
+                >
+                  <X aria-hidden="true" />
+                </Button>
+                <div className="min-w-0">
+                  <span className="eyebrow">
+                    {selectedLane} · selected effect
+                  </span>
+                  <h3 className="selected-effect-heading">
+                    {groups
+                      .find(
+                        (c) => c.target === `block:${selectedBlock}:enabled`,
+                      )
+                      ?.label.replace(/(?: · (?:left|right))? · enabled$/, '')}
+                  </h3>
+                </div>
+                <Button
+                  aria-label="Change model"
+                  title="Choose another model"
+                  variant="outline"
+                  disabled={disabled || !!draft}
+                  onClick={() =>
+                    setPicker({
+                      target: selectedBlock,
+                      name:
+                        groups.find(
+                          (c) => c.target === `block:${selectedBlock}:enabled`,
+                        )?.label ?? 'Selected block',
+                      opening: state,
+                    })
+                  }
+                >
+                  <Swap aria-hidden="true" />{' '}
+                  <span className="max-[420px]:sr-only">Change model</span>
+                </Button>
+              </div>
+              {orderedBlocks.length > 1 && (
+                <div
+                  className="action-row"
+                  role="group"
+                  aria-label="Block position"
+                >
+                  {([-1, 1] as const).map((direction) => {
+                    const order = movedBlockOrder(
+                      orderedBlocks,
+                      selectedBlock,
+                      direction,
+                    );
+                    return (
+                      <Button
+                        key={direction}
+                        variant="ghost"
+                        disabled={disabled || !!draft || !order}
+                        onClick={() => {
+                          if (order)
+                            void author({
+                              kind: 'edit',
+                              edit: {
+                                kind: 'reorder',
+                                lane: selectedLane,
+                                block_ids: order,
+                              },
+                            });
+                        }}
+                      >
+                        {direction === -1 ? (
+                          <ArrowLeft aria-hidden="true" />
+                        ) : (
+                          <ArrowRight aria-hidden="true" />
+                        )}
+                        {direction === -1 ? 'Move earlier' : 'Move later'}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
-          {state.configured &&
-            !state.configured.draft &&
-            !state.models?.some((m) => m.target === selectedBlock) && (
-              <ArtworkDeck
-                key={`${state.configured.preset_id}:${selectedBlock}`}
-                id={state.configured.preset_id}
-                owned={state.configured.owned}
-                blockId={selectedBlock}
+          <div className="live-parameter-grid" aria-label="Sounding controls">
+            {state.controls
+              .filter(
+                (item) =>
+                  !item.target.endsWith(':enabled') &&
+                  (selectedTarget.startsWith('block:')
+                    ? item.target.startsWith(
+                        selectedTarget.slice(
+                          0,
+                          selectedTarget.lastIndexOf(':') + 1,
+                        ),
+                      )
+                    : !item.target.startsWith('block:') &&
+                      controlGroup(item.target) === group),
+              )
+              .map((item) => (
+                <button
+                  type="button"
+                  className="live-value-trigger"
+                  key={item.target}
+                  disabled={disabled}
+                  aria-haspopup={item.toggle ? undefined : 'dialog'}
+                  aria-pressed={item.toggle ? item.value === 1 : undefined}
+                  aria-label={`Adjust sounding ${item.label}`}
+                  onClick={() => {
+                    setTarget(item.target);
+                    setDraft(null);
+                    if (item.toggle)
+                      void apply(item.target, item.value === 1 ? 0 : 1);
+                    else openAdjustment(item);
+                  }}
+                >
+                  <span>{shortControlLabel(item.label)}</span>
+                  <strong>{item.display}</strong>
+                </button>
+              ))}
+          </div>
+          {state.eq
+            ?.filter((row) =>
+              selectedTarget.startsWith(`block:${row.block_id}:`),
+            )
+            .map((row) => (
+              <LiveEq
+                key={`${state.session}:${row.block_id}`}
+                state={state}
+                blockId={row.block_id}
+                send={(current, edit) =>
+                  playbackCommand(current, {
+                    kind: 'authoring',
+                    action: { kind: 'eq', block_id: row.block_id, edit },
+                  })
+                }
+                gesture={(current, edit) =>
+                  playbackCommand(current, {
+                    kind: 'authoring',
+                    action: { kind: 'gesture', edit },
+                  })
+                }
+                disabled={!connected || busy || !!draft || modelPending}
+                onEditing={setEqEditing}
+                onChange={(next) => {
+                  generation.current += 1;
+                  setState((old) =>
+                    old?.session === next.session &&
+                    old.revision > next.revision
+                      ? old
+                      : next,
+                  );
+                }}
               />
+            ))}
+          {selectedBlock &&
+            (state.models?.some((m) => m.target === selectedBlock) ||
+              (state.configured && !state.configured.draft)) && (
+              <details className="disclosure">
+                <summary>Model information &amp; offline images</summary>
+                {state.models?.find((m) => m.target === selectedBlock) ? (
+                  <ArtworkDeck
+                    model
+                    id={
+                      state.models.find((m) => m.target === selectedBlock)!
+                        .asset
+                    }
+                  />
+                ) : state.configured && !state.configured.draft ? (
+                  <ArtworkDeck
+                    key={`${state.configured.preset_id}:${selectedBlock}`}
+                    id={state.configured.preset_id}
+                    owned={state.configured.owned}
+                    blockId={selectedBlock}
+                  />
+                ) : null}
+              </details>
             )}
         </div>
-      )}
-      <div className="live-parameter-grid" aria-label="Sounding controls">
-        {state.controls
-          .filter(
-            (item) =>
-              !item.target.endsWith(':enabled') &&
-              (selectedTarget.startsWith('block:')
-                ? item.target.startsWith(
-                    selectedTarget.slice(
-                      0,
-                      selectedTarget.lastIndexOf(':') + 1,
-                    ),
-                  )
-                : !item.target.startsWith('block:') &&
-                  controlGroup(item.target) === group),
-          )
-          .map((item) => (
-            <button
-              type="button"
-              className="live-value-trigger"
-              key={item.target}
-              disabled={disabled}
-              aria-haspopup={item.toggle ? undefined : 'dialog'}
-              aria-pressed={item.toggle ? item.value === 1 : undefined}
-              aria-label={`Adjust sounding ${item.label}`}
-              onClick={() => {
-                setTarget(item.target);
-                setDraft(null);
-                if (item.toggle)
-                  void apply(item.target, item.value === 1 ? 0 : 1);
-                else openAdjustment(item);
-              }}
-            >
-              <span>{shortControlLabel(item.label)}</span>
-              <strong>{item.display}</strong>
-            </button>
-          ))}
       </div>
-      {state.eq
-        ?.filter((row) => selectedTarget.startsWith(`block:${row.block_id}:`))
-        .map((row) => (
-          <LiveEq
-            key={`${state.session}:${row.block_id}`}
-            state={state}
-            blockId={row.block_id}
-            send={(current, edit) =>
-              playbackCommand(current, {
-                kind: 'authoring',
-                action: { kind: 'eq', block_id: row.block_id, edit },
-              })
-            }
-            gesture={(current, edit) =>
-              playbackCommand(current, {
-                kind: 'authoring',
-                action: { kind: 'gesture', edit },
-              })
-            }
-            disabled={!connected || busy || !!draft || modelPending}
-            onEditing={setEqEditing}
-            onChange={(next) => {
-              generation.current += 1;
-              setState((old) =>
-                old?.session === next.session && old.revision > next.revision
-                  ? old
-                  : next,
-              );
-            }}
-          />
-        ))}
       <output className="sr-only" data-testid="live-readback">
         Confirmed: {control?.display ?? '—'}
       </output>
@@ -1351,14 +1426,6 @@ export function LiveRig({
           The sounding session changed. Discard this adjustment before editing
           again.
         </p>
-      )}
-      {error && !adjusting && (
-        <div role="alert">
-          <p>{error}</p>
-          <Button variant="outline" onClick={() => setError('')}>
-            Acknowledge and refresh
-          </Button>
-        </div>
       )}
     </section>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useWorkspaceState } from './workspaceMemory';
 import {
   importPreset,
   presetLibrary,
@@ -37,7 +38,7 @@ export function Library({
 }) {
   const [refresh, setRefresh] = useState(0);
   const [manage, setManage] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useWorkspaceState('library-query', '');
   const [showArtwork, setShowArtwork] = useState(() => {
     try {
       return localStorage.getItem('oxidal-library-artwork') === 'true';
@@ -47,7 +48,10 @@ export function Library({
   });
   const matches = (name: string) =>
     name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
+  const [page, setPage] = useWorkspaceState<'browse' | 'author' | 'new'>(
+    'library-page',
+    'browse',
+  );
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);

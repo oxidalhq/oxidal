@@ -2234,6 +2234,7 @@ textarea {
   gap: 0.25rem;
 }
 .rig-preset-field select {
+  height: 44px;
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -2295,10 +2296,9 @@ textarea {
   padding-top: 0.75rem;
 }
 .effect-inspector-heading {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.5rem;
 }
 .effect-inspector-heading .eyebrow {
@@ -2908,32 +2908,79 @@ textarea {
 }
 
 .rig-performance-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 0.75rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   min-width: 0;
 }
-.rig-preset-actions {
+.rig-performance-header .rig-preset-selector {
+  flex: 1;
+  min-width: 0;
+}
+.rig-preset-field {
+  position: relative;
+}
+.rig-preset-field[data-modified='true'] select {
+  padding-left: 1.35rem;
+}
+.preset-modified {
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--primary);
+  font-size: 1.25rem;
+  pointer-events: none;
+}
+.rig-workspace {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+.rig-chain-column,
+.rig-inspector-column {
+  min-width: 0;
+}
+.rig-chain-column > * + *,
+.rig-inspector-column > * + * {
+  margin-top: 0.75rem;
+}
+.rig-inspector-column {
+  scroll-margin-top: 0.5rem;
+}
+.rig-inspector-column:focus {
+  outline: none;
+}
+.rig-inspector-column:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.rig-workspace[data-inspecting='true'] .rig-inspector-column {
+  grid-row: 1;
+}
+.rig-recovery {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
-.rig-preset-actions > button {
-  width: 44px;
-  padding: 0;
+.rig-recovery p {
+  flex: 1;
+  min-width: 12rem;
+  margin: 0;
 }
-.rig-preset-actions [data-edited='true'] {
-  color: var(--control-accent);
-  font-weight: 650;
-}
-@media (orientation: landscape) and (max-height: 500px) and (min-width: 680px) {
-  .rig-performance-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+@media (min-width: 760px) {
+  .rig-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
   }
-  .rig-performance-header [aria-label='Preset actions'] {
-    justify-content: flex-end;
+  .rig-chain-column {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .rig-inspector-column {
+    grid-column: 2;
+    grid-row: 1;
+    border-left: 1px solid var(--border);
+    padding-left: 1rem;
   }
 }

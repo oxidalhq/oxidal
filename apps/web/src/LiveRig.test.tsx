@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { LiveRig } from './LiveRig';
+import { WorkspaceMemory } from './workspaceMemory';
 import {
   presetArtwork,
   playbackCommand,
@@ -101,7 +102,7 @@ function show() {
 }
 it('keeps chain power direct, opens a single model inspector and retains display preference', async () => {
   show();
-  await screen.findByRole('button', { name: 'Rig actions' });
+  await screen.findByRole('button', { name: 'Save copy' });
   expect(
     screen.queryByRole('button', { name: 'Compact' }),
   ).not.toBeInTheDocument();
@@ -113,10 +114,7 @@ it('keeps chain power direct, opens a single model inspector and retains display
     1,
   );
   expect(screen.getByRole('button', { name: 'Enable Amp' })).toBeEnabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Rig actions' }));
-  fireEvent.change(screen.getByLabelText('Chain appearance'), {
-    target: { value: 'artwork' },
-  });
+  fireEvent.click(screen.getByRole('button', { name: 'Model artwork' }));
   expect(localStorage.getItem('oxidal-chain-view')).toBe('artwork');
   expect(playbackCommand).not.toHaveBeenCalled();
 });
@@ -126,7 +124,6 @@ it('requires explicit discard and starts saved bytes using the stop reply cursor
     .mockResolvedValueOnce(stopped)
     .mockResolvedValueOnce({ ...opening, modified: false, revision: 12 });
   show();
-  fireEvent.click(await screen.findByRole('button', { name: 'Rig actions' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Reload saved' }));
   expect(playbackCommand).not.toHaveBeenCalled();
   fireEvent.click(
@@ -142,11 +139,57 @@ it('requires explicit discard and starts saved bytes using the stop reply cursor
 it('never starts or retries after a failed stop', async () => {
   vi.mocked(playbackCommand).mockRejectedValue(new Error('Session changed'));
   show();
-  fireEvent.click(await screen.findByRole('button', { name: 'Rig actions' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Reload saved' }));
   fireEvent.click(
     screen.getByRole('button', { name: 'Discard edits and reload' }),
   );
   await screen.findByText('Error: Session changed');
   expect(playbackCommand).toHaveBeenCalledTimes(1);
+});
+
+it('restores valid block context across navigation but never carries it into a different sounding session', async () => {
+  const memory = new Map<string, unknown>();
+  const props = {
+    connected: true,
+    onPlaying: vi.fn(),
+    onLibrary: vi.fn(),
+    onAudioSetup: vi.fn(),
+  };
+  const view = render(
+    <WorkspaceMemory.Provider value={memory}>
+      <LiveRig {...props} />
+    </WorkspaceMemory.Provider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Amp' }));
+  expect(screen.getByRole('button', { name: 'Change model' })).toBeVisible();
+  view.rerender(
+    <WorkspaceMemory.Provider value={memory}>
+      <p>Settings</p>
+    </WorkspaceMemory.Provider>,
+  );
+  view.rerender(
+    <WorkspaceMemory.Provider value={memory}>
+      <LiveRig {...props} />
+    </WorkspaceMemory.Provider>,
+  );
+  await screen.findByRole('button', { name: 'Change model' });
+  view.rerender(
+    <WorkspaceMemory.Provider value={memory}>
+      <p>Settings</p>
+    </WorkspaceMemory.Provider>,
+  );
+  vi.mocked(playbackState).mockResolvedValue({
+    ...opening,
+    session: 'another-sound',
+  });
+  view.rerender(
+    <WorkspaceMemory.Provider value={memory}>
+      <LiveRig {...props} />
+    </WorkspaceMemory.Provider>,
+  );
+  await screen.findByRole('button', { name: 'Amp' });
+  expect(
+    screen.queryByRole('button', { name: 'Change model' }),
+  ).not.toBeInTheDocument();
+  expect(playbackCommand).not.toHaveBeenCalled();
 });

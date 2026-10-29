@@ -1,3 +1,4 @@
+import { WorkspaceMemory, useWorkspaceNavigation } from './workspaceMemory';
 import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
@@ -60,7 +61,7 @@ import {
 /** Quiet rig control over a single authoritative Rust state model.
  * @see docs/architecture.md
  */
-export default function App() {
+function InstrumentApp() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
   const [graphName, setGraphName] = useState<string | null>(null);
@@ -77,9 +78,7 @@ export default function App() {
     simulator &&
     new URLSearchParams(window.location.search).get('development') ===
       'simulator';
-  const [view, setView] = useState<'rig' | 'settings' | 'library' | 'monitor'>(
-    'rig',
-  );
+  const [view, setView] = useWorkspaceNavigation();
   const [tunerOpen, setTunerOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
     'audio' | 'connections' | 'midi' | 'display' | 'device' | 'maintenance'
@@ -216,7 +215,6 @@ export default function App() {
       setPickup(mapping.pickup);
       setFeedback(mapping.feedback);
     }
-    setSettingsSection('audio');
     setView('settings');
   }
 
@@ -479,7 +477,10 @@ export default function App() {
                 connected={connected}
                 onPlaying={setPlayingName}
                 onLibrary={() => setView('library')}
-                onAudioSetup={showSettings}
+                onAudioSetup={() => {
+                  setSettingsSection('audio');
+                  showSettings();
+                }}
                 hideInactive={
                   developmentSimulator || graphName !== null || mixedPresent
                 }
@@ -992,5 +993,15 @@ export default function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+/** Workspace memory contains display context only, never authoritative audio state. */
+export default function App() {
+  const [memory] = useState(() => new Map<string, unknown>());
+  return (
+    <WorkspaceMemory.Provider value={memory}>
+      <InstrumentApp />
+    </WorkspaceMemory.Provider>
   );
 }

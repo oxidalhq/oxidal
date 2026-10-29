@@ -8,6 +8,10 @@ const variants = cva(
   'oxidal-button inline-flex min-h-[var(--touch-target)] shrink-0 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40',
   {
     variants: {
+      size: {
+        default: '',
+        icon: 'size-[var(--touch-target)] p-0',
+      },
       variant: {
         default:
           'border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
@@ -21,7 +25,7 @@ const variants = cva(
           'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90',
       },
     },
-    defaultVariants: { variant: 'default' },
+    defaultVariants: { variant: 'default', size: 'default' },
   },
 );
 
@@ -31,6 +35,7 @@ const variants = cva(
 export function Button({
   className,
   variant,
+  size,
   asChild = false,
   ...props
 }: React.ComponentProps<'button'> &
@@ -39,7 +44,7 @@ export function Button({
   return (
     <Component
       data-variant={variant ?? 'default'}
-      className={twMerge(clsx(variants({ variant }), className))}
+      className={twMerge(clsx(variants({ variant, size }), className))}
       {...props}
     />
   );

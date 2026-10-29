@@ -199,6 +199,12 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(
     page.getByRole('heading', { name: 'Preset library', exact: true }),
   ).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search presets' }).fill('Bogner');
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await page.goBack();
+  await expect(
+    page.getByRole('searchbox', { name: 'Search presets' }),
+  ).toHaveValue('Bogner');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   audio = {
     ...audio,
@@ -240,50 +246,74 @@ test('rig controls follow the actual session without example effects', async ({
     }),
   ).toBeVisible();
   await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
+  const selectedControl = rig.getByRole('button', {
+    name: 'Adjust sounding My amp level',
+    exact: true,
+  });
+  await expect(selectedControl).toBeInViewport();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Display', exact: true }).click();
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await expect(selectedControl).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Display', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await page.screenshot({
     path: info.outputPath('rig-selected-block.png'),
     fullPage: true,
   });
+  const initialViewport = page.viewportSize()!;
+  await page.setViewportSize({
+    width: initialViewport.height,
+    height: initialViewport.width,
+  });
+  await selectedControl.scrollIntoViewIfNeeded();
+  await expect(selectedControl).toBeInViewport();
+  if (initialViewport.height >= 760) {
+    const chainBounds = (await rig.locator('.rig-chain-column').boundingBox())!;
+    const inspectorBounds = (await rig
+      .locator('.rig-inspector-column')
+      .boundingBox())!;
+    expect(inspectorBounds.x).toBeGreaterThan(
+      chainBounds.x + chainBounds.width,
+    );
+  }
+  await page.screenshot({
+    path: info.outputPath('rig-selected-landscape.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize(initialViewport);
   const picker = rig.getByRole('combobox', { name: 'Playing preset' });
   const retry = rig.getByRole('button', { name: 'Retry presets' });
   await expect(retry).toBeVisible();
   const pickerBox = (await picker.boundingBox())!;
   const retryBox = (await retry.boundingBox())!;
   expect(retryBox.y).toBeGreaterThanOrEqual(pickerBox.y + pickerBox.height);
-  expect(pickerBox.width).toBeGreaterThan(150);
+  expect(pickerBox.width).toBeGreaterThan(95);
   await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
     0,
   );
-  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
-  const appearance = page
-    .getByRole('dialog', { name: 'Rig actions' })
-    .getByLabel('Chain appearance');
-  await appearance.selectOption('artwork');
+  await rig.getByRole('button', { name: 'Model artwork', exact: true }).click();
   await expect(rig.locator('.signal-rack')).toHaveAttribute(
     'data-chain-view',
     'artwork',
   );
   await expect(rig.locator('.signal-block-state')).toHaveCount(0);
   await expect(rig.locator('.signal-block .effect-power')).toHaveCount(1);
-  await page
-    .getByRole('dialog', { name: 'Rig actions' })
-    .getByRole('button', { name: 'Close dialog' })
-    .click();
   await page.screenshot({
     path: info.outputPath('rig-artwork-mobile.png'),
     fullPage: true,
   });
-  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
-  await appearance.selectOption('compact');
+  await rig
+    .getByRole('button', { name: 'Connected icons', exact: true })
+    .click();
   await expect(rig.locator('.signal-rack')).toHaveAttribute(
     'data-chain-view',
     'compact',
   );
-
-  await page
-    .getByRole('dialog', { name: 'Rig actions' })
-    .getByRole('button', { name: 'Save copy', exact: true })
-    .click();
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
   const saveDialog = page.getByRole('dialog', { name: 'Save copy' });
   await expect(saveDialog.getByLabel('Name for sounding copy')).toHaveValue(
     'Amp only',
@@ -307,11 +337,7 @@ test('rig controls follow the actual session without example effects', async ({
   expect(saves).toBe(0);
   await saveDialog.getByRole('button', { name: 'Close dialog' }).click();
   await page.setViewportSize(portrait);
-  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: 'Rig actions' })
-    .getByRole('button', { name: 'Save copy', exact: true })
-    .click();
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
   await saveDialog.getByLabel('Name for sounding copy').fill('My live sound');
   await saveDialog.getByRole('button', { name: 'Save sounding copy' }).click();
   await expect(saveDialog).toHaveCount(0);
@@ -1482,10 +1508,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
       sounding.getByRole('button', { name: 'Done', exact: true }),
     ).toHaveCount(0);
     await sounding
-      .getByRole('button', { name: 'Rig actions', exact: true })
-      .click();
-    await page
-      .getByRole('dialog', { name: 'Rig actions' })
       .getByRole('button', { name: 'Save copy', exact: true })
       .click();
     await sounding
@@ -1816,10 +1838,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     }
     await page.setViewportSize(portrait);
     await sounding
-      .getByRole('button', { name: 'Rig actions', exact: true })
-      .click();
-    await page
-      .getByRole('dialog', { name: 'Rig actions' })
       .getByRole('button', { name: 'Save copy', exact: true })
       .click();
     await sounding

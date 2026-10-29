@@ -170,7 +170,16 @@ export function RigPresetSelector({
       >
         <CaretLeft aria-hidden="true" />
       </Button>
-      <label className="rig-preset-field">
+      <label className="rig-preset-field" data-modified={state.modified}>
+        {state.modified && (
+          <span
+            className="preset-modified"
+            aria-label="Modified preset"
+            title="This playing sound has unsaved edits"
+          >
+            •
+          </span>
+        )}
         <select
           aria-label="Playing preset"
           value={index < 0 ? '' : selected}
