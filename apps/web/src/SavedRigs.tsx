@@ -14,8 +14,10 @@ export function SavedRigs({
   connected,
   onOpenRig,
   refresh = 0,
+  query = '',
 }: {
   refresh?: number;
+  query?: string;
   connected: boolean;
   onOpenRig: () => void;
 }) {
@@ -160,6 +162,9 @@ export function SavedRigs({
       if (alive.current) setBusy(false);
     }
   }
+  const shown = items.filter((item) =>
+    item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  );
   if (!items.length && !error) return null;
   return (
     <section className="space-y-3" aria-label="Saved rigs">
@@ -180,7 +185,7 @@ export function SavedRigs({
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      {items.map((p) => (
+      {shown.map((p) => (
         <div
           key={p.revision}
           className="section-heading border-b border-border pb-2"
@@ -222,6 +227,13 @@ export function SavedRigs({
           </div>
         </div>
       ))}
+      {query.trim() && !shown.length && (
+        <p role="status" className="caption">
+          {next
+            ? 'No matches in loaded rigs. Load more to search the next page.'
+            : 'No hybrid rigs match this name.'}
+        </p>
+      )}
       {next && (
         <Button variant="outline" disabled={busy} onClick={() => void more()}>
           Load more

@@ -13,6 +13,8 @@ import {
   SpeakerHigh,
   CircleNotch,
   DownloadSimple,
+  MagnifyingGlass,
+  X,
 } from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
@@ -33,6 +35,9 @@ export function Library({
 }) {
   const [refresh, setRefresh] = useState(0);
   const [manage, setManage] = useState(false);
+  const [query, setQuery] = useState('');
+  const matches = (name: string) =>
+    name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -185,6 +190,33 @@ export function Library({
         <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
       ) : page === 'browse' ? (
         <>
+          <div className="my-3 flex min-w-0 items-center gap-2">
+            <label className="relative min-w-0 flex-1">
+              <span className="sr-only">Search presets</span>
+              <MagnifyingGlass
+                aria-hidden="true"
+                size={18}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                type="search"
+                className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
+                placeholder="Find a preset…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            {query && (
+              <Button
+                variant="ghost"
+                className="w-11 px-0"
+                aria-label="Clear preset search"
+                onClick={() => setQuery('')}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            )}
+          </div>
           <Button
             variant={manage ? 'secondary' : 'outline'}
             aria-expanded={manage}
@@ -202,6 +234,7 @@ export function Library({
             connected={connected}
             onOpenRig={onOpenRig}
             refresh={refresh}
+            query={query}
           />
           <h2 className="sr-only">Native preset library</h2>
           <details className="library-import">
@@ -243,43 +276,55 @@ export function Library({
             Tap a rig to play. Your current audio setup is reused; edits are
             kept when you return.
           </p>
+          {query.trim() &&
+            !busy &&
+            !owned.some((p) => matches(p.name)) &&
+            !presets.some((p) => matches(p.name)) && (
+              <p role="status" className="caption">
+                No native presets match this name.
+              </p>
+            )}
           <ul className="preset-library">
-            {owned.map((p) => (
-              <li key={`owned-${p.id}`}>
-                {loadButton(p.id, p.name, true)}
-                <ArtworkDeck id={p.id} owned />
-                <a
-                  href={`/api/v1/presets/owned/${p.id}/download`}
-                  download
-                  aria-label={`Download saved copy ${p.name}`}
-                >
-                  <DownloadSimple aria-hidden="true" /> Download saved copy
-                </a>
-              </li>
-            ))}
-            {presets.map((preset) => (
-              <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
-                {loadButton(preset.sha256, preset.name)}
-                <ArtworkDeck id={preset.sha256} />
-                <details>
-                  <summary>File details</summary>
-                  <p>
-                    {preset.framing === 'legacy'
-                      ? 'Legacy format'
-                      : 'Current format'}{' '}
-                    · {preset.parameter_count} parameters · {preset.block_count}{' '}
-                    chain entries
-                  </p>
-                </details>
-                <a
-                  href={`/api/v1/presets/${preset.sha256}/original`}
-                  download
-                  aria-label={`Download original ${preset.name}`}
-                >
-                  <DownloadSimple aria-hidden="true" /> Download original
-                </a>
-              </li>
-            ))}
+            {owned
+              .filter((p) => matches(p.name))
+              .map((p) => (
+                <li key={`owned-${p.id}`}>
+                  {loadButton(p.id, p.name, true)}
+                  <ArtworkDeck id={p.id} owned />
+                  <a
+                    href={`/api/v1/presets/owned/${p.id}/download`}
+                    download
+                    aria-label={`Download saved copy ${p.name}`}
+                  >
+                    <DownloadSimple aria-hidden="true" /> Download saved copy
+                  </a>
+                </li>
+              ))}
+            {presets
+              .filter((p) => matches(p.name))
+              .map((preset) => (
+                <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
+                  {loadButton(preset.sha256, preset.name)}
+                  <ArtworkDeck id={preset.sha256} />
+                  <details>
+                    <summary>File details</summary>
+                    <p>
+                      {preset.framing === 'legacy'
+                        ? 'Legacy format'
+                        : 'Current format'}{' '}
+                      · {preset.parameter_count} parameters ·{' '}
+                      {preset.block_count} chain entries
+                    </p>
+                  </details>
+                  <a
+                    href={`/api/v1/presets/${preset.sha256}/original`}
+                    download
+                    aria-label={`Download original ${preset.name}`}
+                  >
+                    <DownloadSimple aria-hidden="true" /> Download original
+                  </a>
+                </li>
+              ))}
           </ul>
         </>
       ) : (

@@ -384,6 +384,15 @@ test('native preset upload, durable library, exact download and rejected replace
   ).toBeEnabled();
   await expect(rows).toHaveCount(2);
   const current = rows.filter({ hasText: 'Current format' });
+  await page
+    .getByRole('searchbox', { name: 'Search presets' })
+    .fill('no-matching-rig-unique');
+  await expect(rows).toHaveCount(0);
+  await expect(
+    page.getByText('No native presets match this name.'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Clear preset search' }).click();
+  await expect(rows).toHaveCount(2);
   const downloadEvent = page.waitForEvent('download');
   await current.getByRole('link', { name: /Download original/ }).click();
   const download = await downloadEvent;
