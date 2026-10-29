@@ -19,11 +19,14 @@ export function RigPresetSelector({
   state,
   disabled,
   onSelect,
+  pads = false,
 }: {
+  pads?: boolean;
   state: AudioState;
   disabled: boolean;
   onSelect: (id: string, owned: boolean) => void;
 }) {
+  const [bank, setBank] = useState(0);
   const [items, setItems] = useState<Choice[]>([]);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -65,6 +68,90 @@ export function RigPresetSelector({
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item.id, item.owned);
   }
+  if (pads)
+    return (
+      <div className="space-y-3" aria-label="Preset pads">
+        <div className="performance-now">
+          <span className="eyebrow">Playing</span>
+          <h2>{state.preset_name ?? 'Current rig'}</h2>
+          <span>
+            {disabled
+              ? 'Please wait…'
+              : state.modified
+                ? 'Unsaved edits'
+                : 'Saved'}
+          </span>
+        </div>
+        <div className="preset-pad-grid">
+          {items.slice(bank * 8, bank * 8 + 8).map((item, index) => (
+            <Button
+              key={key(item)}
+              variant={key(item) === selected ? 'secondary' : 'outline'}
+              aria-pressed={key(item) === selected}
+              disabled={
+                disabled || loading || !!error || key(item) === selected
+              }
+              onClick={() => choose(item)}
+            >
+              <span className="preset-pad-number">
+                {String(bank * 8 + index + 1).padStart(2, '0')}
+              </span>
+              <strong>{item.name}</strong>
+              <span className="preset-pad-origin">
+                {key(item) === selected
+                  ? 'Playing'
+                  : item.owned
+                    ? 'Saved copy'
+                    : 'Original'}
+              </span>
+            </Button>
+          ))}
+        </div>
+        <div className="action-row">
+          <Button
+            variant="ghost"
+            disabled={bank === 0 || disabled}
+            onClick={() => setBank(bank - 1)}
+          >
+            <CaretLeft aria-hidden="true" />
+            Previous bank
+          </Button>
+          <span className="caption">
+            {bank + 1} / {Math.max(1, Math.ceil(items.length / 8))}
+          </span>
+          <Button
+            variant="ghost"
+            disabled={(bank + 1) * 8 >= items.length || disabled}
+            onClick={() => setBank(bank + 1)}
+          >
+            Next bank
+            <CaretRight aria-hidden="true" />
+          </Button>
+        </div>
+        {loading && <p role="status">Loading presets…</p>}
+        {error && (
+          <div role="status">
+            {error}
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setLoading(true);
+                setRefresh((v) => v + 1);
+              }}
+            >
+              Retry presets
+            </Button>
+          </div>
+        )}
+        {!loading && !error && !items.length && (
+          <p>No saved presets. Add one from Library.</p>
+        )}
+        <p className="caption">
+          Tap to play. Whole-preset recall briefly interrupts audio; this is not
+          scene switching.
+        </p>
+      </div>
+    );
   return (
     <div className="rig-preset-selector" aria-label="Preset navigation">
       <Button

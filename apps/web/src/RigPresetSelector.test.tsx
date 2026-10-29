@@ -100,3 +100,18 @@ it('reorders actual chain models without dropping or moving insertion slots', ()
   expect(movedBlockOrder(blocks, 'missing', 1)).toBeNull();
   expect(movedBlockOrder(blocks, 'slot', 1)).toBeNull();
 });
+
+it('uses the same authoritative recall from performance pads and preserves owned identity', async () => {
+  library();
+  const select = vi.fn();
+  render(
+    <RigPresetSelector state={state} disabled={false} onSelect={select} pads />,
+  );
+  const playing = await screen.findByRole('button', { name: /Amp A.*Playing/ });
+  expect(playing).toBeDisabled();
+  expect(playing).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: /My A.*Saved copy/ }));
+  expect(select).toHaveBeenCalledWith('a', true);
+  expect(playing).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Next bank' })).toBeDisabled();
+});

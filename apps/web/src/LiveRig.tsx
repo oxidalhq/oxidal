@@ -99,6 +99,7 @@ export function LiveRig({
     insert?: boolean;
     format?: 'nam' | 'ir';
   } | null>(null);
+  const [performance, setPerformance] = useState(false);
   const [target, setTarget] = useState('outputLevel');
   const [group, setGroup] = useState<ControlGroup>('tone');
   const [draft, setDraft] = useState<{
@@ -512,6 +513,25 @@ export function LiveRig({
     ? 'right'
     : 'left';
   const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
+  if (performance)
+    return (
+      <section className="panel live-rig space-y-3" aria-label="Gig view">
+        <div className="chain-heading">
+          <h2>Gig view</h2>
+          <Button variant="ghost" onClick={() => setPerformance(false)}>
+            <SquaresFour aria-hidden="true" />
+            Chain view
+          </Button>
+        </div>
+        <RigPresetSelector
+          state={state}
+          disabled={disabled || !!draft || !!picker}
+          pads
+          onSelect={(id, owned) => void recall(id, owned)}
+        />
+        {error && <p role="alert">{error}</p>}
+      </section>
+    );
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
       <RigPresetSelector
@@ -521,6 +541,13 @@ export function LiveRig({
       />
       <div className="chain-heading">
         <h2>Signal chain</h2>
+        <Button
+          variant="ghost"
+          disabled={disabled || !!draft || !!picker}
+          onClick={() => setPerformance(true)}
+        >
+          Gig view
+        </Button>
         <span
           role="status"
           data-testid="live-status"
