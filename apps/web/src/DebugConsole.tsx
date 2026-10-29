@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react';
+import {
+  Copy,
+  DownloadSimple,
+  Pause,
+  TerminalWindow,
+} from '@phosphor-icons/react';
 import { debugCommand, type DebugState, type DebugCommand } from './api';
 import { Button } from './components/ui/button';
 /** Commands are intentionally sent only to the isolated, unprivileged debug executor. */
@@ -11,6 +17,38 @@ export function DebugConsole() {
   const [logText, setLogText] = useState('');
   const [logMessage, setLogMessage] = useState('');
   const [copying, setCopying] = useState(false);
+  const [following, setFollowing] = useState(false);
+  useEffect(() => {
+    if (!open || !following) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const abort = new AbortController();
+    async function read() {
+      try {
+        if (document.hidden) return;
+        const response = await fetch('/api/v1/debug/logs', {
+          cache: 'no-store',
+          signal: abort.signal,
+        });
+        if (!response.ok) throw new Error('Logs temporarily unavailable');
+        const text = await response.text();
+        if (active) {
+          setLogText(text);
+          setLogMessage('Following native logs · 5s refresh');
+        }
+      } catch {
+        if (active) setLogMessage('Log connection interrupted; retrying.');
+      } finally {
+        if (active) timer = setTimeout(() => void read(), 5000);
+      }
+    }
+    void read();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [open, following]);
   async function copyLogs() {
     setCopying(true);
     setLogMessage('');
@@ -75,13 +113,27 @@ export function DebugConsole() {
             disabled={copying}
             onClick={() => void copyLogs()}
           >
+            <Copy aria-hidden="true" />
             {copying ? 'Collecting logs…' : 'Copy logs'}
+          </Button>
+          <Button
+            variant={following ? 'secondary' : 'outline'}
+            aria-pressed={following}
+            onClick={() => setFollowing((v) => !v)}
+          >
+            {following ? (
+              <Pause aria-hidden="true" />
+            ) : (
+              <TerminalWindow aria-hidden="true" />
+            )}
+            {following ? 'Freeze logs' : 'Follow logs'}
           </Button>
           <a
             className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm"
             href="/api/v1/debug/logs"
             download="oxidal-logs.txt"
           >
+            <DownloadSimple className="mr-2 size-4" aria-hidden="true" />
             Download logs
           </a>
         </div>
@@ -90,6 +142,7 @@ export function DebugConsole() {
           <textarea
             aria-label="Collected native logs"
             readOnly
+            spellCheck={false}
             value={logText}
             rows={8}
             className="mt-2 w-full font-mono text-xs"

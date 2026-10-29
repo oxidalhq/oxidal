@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Pause,
+  Play,
+  ArrowCounterClockwise,
+  Leaf,
+} from '@phosphor-icons/react';
+import {
   Area,
   AreaChart,
   CartesianGrid,
@@ -19,6 +25,9 @@ type Point = {
   right: number | null;
   deadline: number | null;
   cpu: number | null;
+  memory: number | null;
+  temperature: number | null;
+  xruns: number | null;
 };
 const colour = {
   left: { label: 'Left', color: 'var(--control-accent)' },
@@ -110,6 +119,10 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
     let timer: ReturnType<typeof setTimeout>;
     const abort = new AbortController();
     async function poll() {
+      if (document.hidden) {
+        timer = setTimeout(() => void poll(), 5000);
+        return;
+      }
       try {
         const next = await monitoring(abort.signal);
         if (!active) return;
@@ -142,6 +155,12 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
                   ? (100 * next.audio!.process_us_p95) / next.audio!.deadline_us
                   : null,
               cpu: next.host.cpu_percent ?? null,
+              memory:
+                next.host.memory_used_bytes != null
+                  ? next.host.memory_used_bytes / 1048576
+                  : null,
+              temperature: next.host.temperature_c ?? null,
+              xruns: valid ? (next.xruns ?? null) : null,
             },
           ]);
         }
@@ -193,6 +212,11 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
             aria-pressed={frozen}
             onClick={() => setFrozen((v) => !v)}
           >
+            {frozen ? (
+              <Play aria-hidden="true" />
+            ) : (
+              <Pause aria-hidden="true" />
+            )}
             {frozen ? 'Resume' : 'Freeze'}
           </Button>
           <Button
@@ -203,6 +227,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
               setHistory([]);
             }}
           >
+            <ArrowCounterClockwise aria-hidden="true" />
             Reset
           </Button>
           <Button
@@ -211,6 +236,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
             disabled={displayMode === 'epaper'}
             onClick={() => setSlow((v) => !v)}
           >
+            <Leaf aria-hidden="true" />
             Slow refresh
           </Button>
         </div>
@@ -304,6 +330,81 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </AreaChart>
         </ChartContainer>
       </div>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+        <ChartContainer
+          label="Memory & temperature"
+          config={{
+            memory: { label: 'RAM · MiB', color: 'var(--control-accent)' },
+            temperature: {
+              label: 'CPU · °C',
+              color: 'var(--chart-secondary)',
+              dashed: true,
+            },
+          }}
+        >
+          <LineChart accessibilityLayer data={history}>
+            <CartesianGrid vertical={false} stroke="var(--border)" />
+            <XAxis dataKey="time" hide />
+            <YAxis
+              yAxisId="memory"
+              width={42}
+              domain={[0, 'auto']}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+            />
+            <YAxis
+              yAxisId="temperature"
+              orientation="right"
+              width={30}
+              domain={[0, 100]}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+            />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line
+              yAxisId="memory"
+              name="RAM MiB"
+              dataKey="memory"
+              stroke="var(--color-memory)"
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              yAxisId="temperature"
+              name="CPU °C"
+              dataKey="temperature"
+              stroke="var(--color-temperature)"
+              strokeDasharray="6 4"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartContainer>
+        <ChartContainer
+          label="Audio recovery · xruns"
+          config={{
+            xruns: { label: 'Worker total', color: 'var(--destructive)' },
+          }}
+        >
+          <LineChart accessibilityLayer data={history}>
+            <CartesianGrid vertical={false} stroke="var(--border)" />
+            <XAxis dataKey="time" hide />
+            <YAxis
+              width={38}
+              domain={[0, 'auto']}
+              allowDecimals={false}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+            />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line
+              name="Recovered xruns"
+              type="stepAfter"
+              dataKey="xruns"
+              stroke="var(--color-xruns)"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartContainer>
+      </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
         <div>
           <dt className="text-muted-foreground">Process p50 / p95 / max</dt>
@@ -366,8 +467,11 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           samples; Reset view clears only this browser’s history and clip hold.
           ALSA accepts these settings exactly or refuses to start. Processing
           statistics cover the latest 128 blocks and exclude device I/O. Buffer
-          sizes are not a round-trip latency measurement. Xrun counters and
-          throttling flags are not available yet.
+          sizes are not a round-trip latency measurement. Recovered xruns are
+          cumulative for the current worker and reset when it restarts.
+          Throttling flags remain unavailable. Charts retain at most 120 samples
+          in this browser; sampling slows on e-paper and pauses while the page
+          is hidden.
         </p>
       </details>
     </section>
