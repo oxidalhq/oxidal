@@ -55,6 +55,8 @@ pub struct Measurement {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct State {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spectrum: Option<Spectrum>,
     #[serde(default)]
     pub solo: Solo,
     pub tuner_enabled: bool,
@@ -63,30 +65,51 @@ pub struct State {
     pub alignment: Measurement,
     pub error: Option<String>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Spectrum {
+    pub block_id: String,
+    pub bins: Vec<f64>,
+}
+impl Spectrum {
+    pub fn valid(&self) -> bool {
+        !self.block_id.is_empty()
+            && self.block_id.len() <= 128
+            && !self.block_id.chars().any(char::is_control)
+            && self.bins.len() == 64
+            && self
+                .bins
+                .iter()
+                .all(|b| b.is_finite() && (-100.0..=0.0).contains(b))
+    }
+}
 impl State {
     pub fn measuring(&self) -> bool {
         self.balance.state == Phase::Listening || self.alignment.state == Phase::Listening
     }
     pub fn active(&self) -> bool {
-        self.tuner_enabled || self.measuring()
+        self.tuner_enabled || self.measuring() || self.spectrum.is_some()
     }
     pub fn valid(&self) -> bool {
-        self.tuner.as_ref().is_none_or(|r| {
-            r.frequency.is_finite()
-                && (0.0..=24000.0).contains(&r.frequency)
-                && r.confidence.is_finite()
-                && (0.0..=1.0).contains(&r.confidence)
-                && r.level.is_finite()
-        }) && [&self.balance, &self.alignment].iter().all(|m| {
-            m.progress.is_finite()
-                && (0.0..=1.0).contains(&m.progress)
-                && [m.matched_db, m.matched_ms, m.confidence, m.peak_sharpness]
-                    .into_iter()
-                    .flatten()
-                    .all(f64::is_finite)
-        }) && self
-            .error
-            .as_ref()
-            .is_none_or(|e| e.len() <= 1024 && !e.chars().any(char::is_control))
+        self.spectrum.as_ref().is_none_or(Spectrum::valid)
+            && self.tuner.as_ref().is_none_or(|r| {
+                r.frequency.is_finite()
+                    && (0.0..=24000.0).contains(&r.frequency)
+                    && r.confidence.is_finite()
+                    && (0.0..=1.0).contains(&r.confidence)
+                    && r.level.is_finite()
+            })
+            && [&self.balance, &self.alignment].iter().all(|m| {
+                m.progress.is_finite()
+                    && (0.0..=1.0).contains(&m.progress)
+                    && [m.matched_db, m.matched_ms, m.confidence, m.peak_sharpness]
+                        .into_iter()
+                        .flatten()
+                        .all(f64::is_finite)
+            })
+            && self
+                .error
+                .as_ref()
+                .is_none_or(|e| e.len() <= 1024 && !e.chars().any(char::is_control))
     }
 }

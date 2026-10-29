@@ -399,6 +399,20 @@ export async function tone3000Tones(
   if (!tonesValidator(body)) throw new Error('Incompatible tone catalog');
   return body;
 }
+export async function tone3000Tone(
+  id: number,
+  signal: AbortSignal,
+): Promise<TonePage['data'][number]> {
+  const body = await presetResponse(
+    await fetch(`/api/v1/tone3000/tones/${id}`, { signal, cache: 'no-store' }),
+  );
+  const validate = ajv.compile<TonePage['data'][number]>({
+    $defs: schema.$defs,
+    $ref: '#/$defs/Tone',
+  });
+  if (!validate(body)) throw new Error('Incompatible TONE3000 tone details');
+  return body;
+}
 export async function tone3000Models(
   tone: number,
   page: number,
@@ -664,6 +678,23 @@ export async function uploadLocalModel(
   );
   if (!localModelValidator(body))
     throw new Error('Incompatible local model receipt');
+  return body;
+}
+
+export async function stageLocalCollection(
+  assets: string[],
+  signal: AbortSignal,
+): Promise<LocalModel> {
+  const body = await presetResponse(
+    await fetch('/api/v1/models/local/collection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets }),
+      signal,
+    }),
+  );
+  if (!localModelValidator(body))
+    throw new Error('Incompatible local collection receipt');
   return body;
 }
 

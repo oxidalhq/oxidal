@@ -61,6 +61,26 @@ unsafe extern "C" {
         capacity: usize,
         written: *mut usize,
     ) -> i32;
+    fn oxidal_t3k_prepare_collection(
+        engine: *mut c_void,
+        target: *const c_char,
+        metadata: *const c_char,
+        files: *const c_char,
+    ) -> i32;
+    fn oxidal_t3k_select_local(engine: *mut c_void, target: *const c_char, model: i32) -> i32;
+    fn oxidal_t3k_spectrum(
+        engine: *mut c_void,
+        id: *const c_char,
+        mode: i32,
+        out: *mut c_char,
+        capacity: usize,
+        written: *mut usize,
+    ) -> i32;
+    fn oxidal_t3k_refresh_metadata(
+        engine: *mut c_void,
+        target: *const c_char,
+        metadata: *const c_char,
+    ) -> i32;
     fn oxidal_t3k_structure(engine: *mut c_void, request: *const c_char) -> i32;
     fn oxidal_t3k_copy_block(engine: *mut c_void, id: *const c_char) -> i32;
     fn oxidal_t3k_remove_block(engine: *mut c_void, id: *const c_char) -> i32;
@@ -415,6 +435,18 @@ impl Engine {
                                 .ok_or_else(|| NativeError("Missing block identity".into()))?
                                 .into(),
                             insert: b["kind"] == "insert",
+                            tone_id: b["tone"]["id"]
+                                .as_u64()
+                                .filter(|id| *id > 0 && b["tone"]["local"] != true),
+                            variants: serde_json::from_value(
+                                b.get("variants")
+                                    .cloned()
+                                    .unwrap_or_else(|| serde_json::json!([])),
+                            )
+                            .map_err(|e| NativeError(e.to_string()))?,
+                            active_model: b["active_model"]
+                                .as_u64()
+                                .and_then(|n| u32::try_from(n).ok()),
                         })
                     })
                     .collect()
@@ -1132,6 +1164,24 @@ impl Engine {
         if metadata.len() > 32768 {
             return Err(NativeError("Model metadata exceeds limit".into()));
         }
+        self.admit_model_metadata(&metadata)?;
+        let target = string(target)?;
+        let path = string(
+            path.to_str()
+                .ok_or_else(|| NativeError("Non-UTF8 path".into()))?,
+        )?;
+        let metadata = string(&metadata)?;
+        // SAFETY: owner-thread handle and live NUL-terminated strings; native copies before returning.
+        checked(unsafe {
+            oxidal_t3k_prepare_model(
+                self.ptr.as_ptr(),
+                target.as_ptr(),
+                path.as_ptr(),
+                metadata.as_ptr(),
+            )
+        })
+    }
+    fn admit_model_metadata(&mut self, metadata: &str) -> Result<()> {
         // Admission precedes candidate preparation/commit. Reserve worst-case
         // control labels and native JSON expansion for this additional block.
         let mut controls = self.live_controls()?;
@@ -1162,21 +1212,138 @@ impl Engine {
                     .into(),
             ));
         }
-        let target = string(target)?;
-        let path = string(
-            path.to_str()
-                .ok_or_else(|| NativeError("Non-UTF8 path".into()))?,
-        )?;
-        let metadata = string(&metadata)?;
-        // SAFETY: owner-thread handle and live NUL-terminated strings; native copies before returning.
+        Ok(())
+    }
+    pub fn prepare_collection(
+        &mut self,
+        target: &str,
+        files: &[(u64, std::path::PathBuf)],
+        tone: &serde_json::Value,
+    ) -> Result<()> {
+        if files.len() == 1 {
+            return self.prepare_model(target, &files[0].1, tone);
+        }
+        if files.is_empty() || target.is_empty() || target.len() > 128 {
+            return Err(NativeError("Invalid collection".into()));
+        }
+        // Reuse metadata/control admission before replacing the pending candidate.
+        // Full payload verification happens off-owner in ModelStore::preparation.
+        let metadata = serde_json::to_string(tone).map_err(|e| NativeError(e.to_string()))?;
+        if metadata.len() > 32768 {
+            return Err(NativeError("Collection metadata exceeds limit".into()));
+        }
+        self.admit_model_metadata(&metadata)?;
+        let paths = files
+            .iter()
+            .map(|(id, path)| {
+                if *id == 0 || *id > i32::MAX as u64 || !path.is_absolute() || !path.is_file() {
+                    return Err(NativeError("Invalid verified collection path".into()));
+                }
+                Ok(serde_json::json!({"id":id,"path":path}))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let paths = serde_json::to_string(&paths).map_err(|e| NativeError(e.to_string()))?;
+        if paths.len() > 262144 {
+            return Err(NativeError("Collection paths exceed limit".into()));
+        }
+        let (target, metadata, paths) = (string(target)?, string(&metadata)?, string(&paths)?);
+        // SAFETY: exclusive owner, live bounded C strings, native copies inputs.
         checked(unsafe {
-            oxidal_t3k_prepare_model(
+            oxidal_t3k_prepare_collection(
                 self.ptr.as_ptr(),
                 target.as_ptr(),
-                path.as_ptr(),
                 metadata.as_ptr(),
+                paths.as_ptr(),
             )
         })
+    }
+    /// Switch an embedded local variant using the existing preparation transaction.
+    /// Called by the authoring owner with capture/rollback/history, outside PCM.
+    pub fn refresh_metadata(&mut self, target: &str, tone: &serde_json::Value) -> Result<()> {
+        if target.is_empty()
+            || target.len() > 128
+            || tone["id"]
+                .as_u64()
+                .is_none_or(|n| n == 0 || n > i32::MAX as u64)
+            || !matches!(tone["format"].as_str(), Some("nam" | "ir"))
+            || tone["title"]
+                .as_str()
+                .is_none_or(|s| s.is_empty() || s.len() > 512 || s.chars().any(char::is_control))
+        {
+            return Err(NativeError("Invalid tone metadata".into()));
+        }
+        let mut metadata = tone.clone();
+        metadata
+            .as_object_mut()
+            .ok_or_else(|| NativeError("Invalid tone metadata".into()))?
+            .remove("models");
+        let metadata = serde_json::to_string(&metadata).map_err(|e| NativeError(e.to_string()))?;
+        if metadata.len() > 32768 {
+            return Err(NativeError("Tone metadata exceeds limit".into()));
+        }
+        self.admit_model_metadata(&metadata)?;
+        let (target, metadata) = (string(target)?, string(&metadata)?);
+        // SAFETY: live exclusive owner and bounded metadata C strings. This export
+        // cannot load model URLs, mutate models or run arbitrary native methods.
+        checked(unsafe {
+            oxidal_t3k_refresh_metadata(self.ptr.as_ptr(), target.as_ptr(), metadata.as_ptr())
+        })
+    }
+    pub fn spectrum(&mut self, id: &str, enabled: Option<bool>) -> Result<Vec<f64>> {
+        if id.is_empty() || id.len() > 128 {
+            return Err(NativeError("Invalid spectrum target".into()));
+        }
+        let id = string(id)?;
+        let mode = enabled.map_or(-1, i32::from);
+        // SAFETY: owner-exclusive handle and live bounded target/output buffers.
+        let value =
+            self.json(|p, b, n, w| unsafe { oxidal_t3k_spectrum(p, id.as_ptr(), mode, b, n, w) })?;
+        let bins: Vec<f64> =
+            serde_json::from_value(value).map_err(|e| NativeError(e.to_string()))?;
+        if bins.len() != 64
+            || bins
+                .iter()
+                .any(|b| !b.is_finite() || !(-100.0..=0.0).contains(b))
+        {
+            return Err(NativeError("Invalid native spectrum".into()));
+        }
+        Ok(bins)
+    }
+    pub fn select_local_model(&mut self, target: &str, model: u32) -> Result<()> {
+        let model =
+            i32::try_from(model).map_err(|_| NativeError("Invalid local model identity".into()))?;
+        if model < 1 {
+            return Err(NativeError("Invalid local model identity".into()));
+        }
+        let target = string(target)?;
+        // SAFETY: live exclusive owner and bounded native target validation.
+        checked(unsafe { oxidal_t3k_select_local(self.ptr.as_ptr(), target.as_ptr(), model) })?;
+        let started = std::time::Instant::now();
+        loop {
+            let state = self.model_preparation(0)?;
+            match state["phase"].as_str() {
+                Some("ready") => {
+                    self.model_preparation(1)?;
+                }
+                Some("applied") => return Ok(()),
+                Some("failed" | "cancelled") => {
+                    return Err(NativeError(
+                        "Variant preparation failed; previous sound retained".into(),
+                    ));
+                }
+                _ => (),
+            }
+            if started.elapsed() > std::time::Duration::from_secs(20) {
+                self.model_preparation(2)?;
+                return Err(NativeError("Variant preparation timed out".into()));
+            }
+            if state["phase"] == "applying" {
+                self.process(&mut vec![0.0; self.frames], &mut vec![0.0; self.frames])?;
+            } else {
+                self.pump()?;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+        }
     }
     /// Poll, commit (1), or cancel (2) the pending preparation. Commit uses a native
     /// wet-mute splice; this is not a prepared gapless engine crossfade.

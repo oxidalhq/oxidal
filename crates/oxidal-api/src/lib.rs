@@ -249,6 +249,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 .post(local_models::upload)
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
         )
+        .route("/models/local/collection", post(local_models::collection))
         .route("/tone3000/stage", post(provider::download::stage))
         .route("/tone3000/tones", get(provider::catalog::tones))
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))

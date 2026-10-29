@@ -420,7 +420,7 @@ EXPORT int oxidal_t3k_input_mode(void* ptr, int mode) noexcept {
   });
 }
 EXPORT int oxidal_t3k_chain(void* ptr, char* out, size_t capacity, size_t* written) noexcept {
-  return guard([&] { json(engine(ptr).processor.getChainState(-1), out, capacity, written); });
+  return guard([&] { json(OxidalModelPreparation::chain(engine(ptr).processor), out, capacity, written); });
 }
 
 EXPORT int oxidal_t3k_copy_block(void* ptr, const char* id) noexcept {
@@ -494,6 +494,26 @@ EXPORT int oxidal_t3k_prepare_model(void* ptr, const char* target, const char* p
     e.preparation = std::make_unique<OxidalModelPreparation>(e.processor, target, juce::File(juce::String::fromUTF8(path)), juce::JSON::parse(juce::String::fromUTF8(metadata)));
   });
 }
+EXPORT int oxidal_t3k_prepare_collection(void* ptr, const char* target, const char* metadata, const char* files) noexcept {
+  return guard([&] {
+    auto& e=engine(ptr);
+    if(!target || !metadata || !files || std::strlen(metadata)>32768 || std::strlen(files)>262144)
+      throw std::runtime_error("invalid collection preparation");
+    if(e.preparation && !e.preparation->finishedPreparing())throw std::runtime_error("previous model still preparing");
+    e.preparation.reset();
+    e.preparation=std::make_unique<OxidalModelPreparation>(e.processor,target,juce::File(),
+      juce::JSON::parse(juce::String::fromUTF8(metadata)),juce::JSON::parse(juce::String::fromUTF8(files)));
+  });
+}
+EXPORT int oxidal_t3k_select_local(void* ptr,const char* target,int model) noexcept {
+  return guard([&] {
+    auto& e=engine(ptr);
+    if(!target || std::strlen(target)>128)throw std::runtime_error("invalid local model target");
+    if(e.preparation && !e.preparation->finishedPreparing())throw std::runtime_error("previous model still preparing");
+    e.preparation.reset();
+    e.preparation=OxidalModelPreparation::selected(e.processor,target,model);
+  });
+}
 EXPORT int oxidal_t3k_preparation(void* ptr, int action, char* out, size_t capacity, size_t* written) noexcept {
   return guard([&] {
     auto& e = engine(ptr);
@@ -512,6 +532,38 @@ EXPORT int oxidal_t3k_restore_slot(void* ptr, const char* target, int lane, int 
   });
 }
 
+EXPORT int oxidal_t3k_refresh_metadata(void* ptr,const char* target,const char* metadata) noexcept {
+ return guard([&] {
+  auto& p=engine(ptr).processor;
+  if(!target || !metadata || std::strlen(target)>128 || std::strlen(metadata)>32768)
+    throw std::runtime_error("Invalid metadata refresh");
+  const auto fresh=juce::JSON::parse(juce::String::fromUTF8(metadata));
+  const auto state=p.getChainState(-1);bool found=false;
+  for(const auto* lane:{"chain","chainRight"})if(const auto* blocks=state[lane].getArray())for(const auto& block:*blocks)
+    if(block["blockId"].toString()==target && block["kind"].toString()=="tone") {
+      const auto tone=block["tone"];
+      if(static_cast<bool>(tone["local"]) || static_cast<int>(tone["id"])!=static_cast<int>(fresh["id"]) || tone["format"].toString()!=fresh["format"].toString())
+        throw std::runtime_error("Tone metadata identity or format changed");
+      found=true;
+    }
+  if(!found)throw std::runtime_error("Metadata target is missing");
+  // Upstream retains each block's stored model list/cache and only refreshes metadata.
+  p.refreshToneMetadata(juce::JSON::toString(fresh));
+ });
+}
+EXPORT int oxidal_t3k_spectrum(void* ptr,const char* id,int mode,char* out,size_t capacity,size_t* written) noexcept {
+ return guard([&] {
+  auto& p=engine(ptr).processor;
+  if(!id || !*id || std::strlen(id)>128 || mode < -1 || mode > 1)throw std::runtime_error("Invalid spectrum request");
+  if(mode>=0) {
+    if(!p.setBlockSpectrumEnabled(id,mode==1))throw std::runtime_error("Spectrum target is missing");
+    if(mode==1) {p.disableAllBlockSpectrums();p.setBlockSpectrumEnabled(id,true);}
+  }
+  const auto bins=p.getBlockSpectrum(id);
+  if(!bins.isArray() || bins.getArray()->size()!=64)throw std::runtime_error("Spectrum target is missing");
+  json(bins,out,capacity,written);
+ });
+}
 EXPORT int oxidal_t3k_utility(void* ptr, unsigned action, char* out, size_t capacity, size_t* written) noexcept {
  return guard([&]{auto& p=engine(ptr).processor;
   switch(action) {

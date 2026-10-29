@@ -13,12 +13,24 @@ pub enum InputMode {
     #[serde(rename = "dual")]
     DualMono = 3,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModelVariant {
+    pub id: u32,
+    pub name: String,
+}
 /// Exact native lane order, including insertion tiles. No provider credentials or model paths.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChainBlock {
     pub id: String,
     pub insert: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tone_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variants: Vec<ModelVariant>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_model: Option<u32>,
 }
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -116,6 +128,18 @@ pub enum LiveGesture {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AuthoringAction {
+    RefreshMetadata {
+        block_id: String,
+        tone: serde_json::Value,
+    },
+    Spectrum {
+        block_id: String,
+        enabled: bool,
+    },
+    SelectModel {
+        block_id: String,
+        model_id: u32,
+    },
     Eq {
         block_id: String,
         edit: crate::eq::EqEdit,
@@ -186,6 +210,20 @@ impl AuthoringStatus {
                     && b.id.len() <= 128
                     && !b.id.chars().any(char::is_control)
                     && blocks[..i].iter().all(|a| a.id != b.id)
+                    && b.variants.iter().enumerate().all(|(i, m)| {
+                        m.id > 0
+                            && m.id <= i32::MAX as u32
+                            && !m.name.is_empty()
+                            && m.name.len() <= 1024
+                            && !m.name.chars().any(char::is_control)
+                            && b.variants[..i].iter().all(|p| p.id != m.id)
+                    })
+                    && (if b.variants.is_empty() {
+                        b.active_model.is_none()
+                    } else {
+                        b.active_model
+                            .is_some_and(|id| b.variants.iter().any(|m| m.id == id))
+                    })
             })
     }
 }
@@ -216,7 +254,11 @@ impl AuthoringAction {
     pub fn changes_tone(&self) -> bool {
         !matches!(
             self,
-            Self::Inspect | Self::Copy { .. } | Self::Utility { .. } | Self::Gesture { .. }
+            Self::Inspect
+                | Self::Copy { .. }
+                | Self::Utility { .. }
+                | Self::Gesture { .. }
+                | Self::Spectrum { .. }
         )
     }
 }

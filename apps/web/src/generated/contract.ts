@@ -116,6 +116,21 @@ export type EqType = "lowcut" | "lowshelf" | "bell" | "highshelf" | "highcut";
 export type AuthoringAction =
   | {
       block_id: string;
+      kind: "refresh_metadata";
+      tone: any;
+    }
+  | {
+      block_id: string;
+      enabled: boolean;
+      kind: "spectrum";
+    }
+  | {
+      block_id: string;
+      kind: "select_model";
+      model_id: number;
+    }
+  | {
+      block_id: string;
       edit: EqEdit;
       kind: "eq";
     }
@@ -869,8 +884,15 @@ export interface ChainLayout {
  * Exact native lane order, including insertion tiles. No provider credentials or model paths.
  */
 export interface ChainBlock {
+  active_model?: number | null;
   id: string;
   insert: boolean;
+  tone_id?: number | null;
+  variants?: ModelVariant[];
+}
+export interface ModelVariant {
+  id: number;
+  name: string;
 }
 /**
  * Native playback controls use normalized values; display text comes from the DSP.
@@ -887,6 +909,7 @@ export interface State2 {
   balance: Measurement;
   error?: string | null;
   solo?: "none" | "left" | "right";
+  spectrum?: Spectrum | null;
   tuner?: TunerReading | null;
   tuner_enabled: boolean;
 }
@@ -898,6 +921,10 @@ export interface Measurement {
   polarityFlipped?: boolean | null;
   progress?: number;
   state: Phase;
+}
+export interface Spectrum {
+  bins: number[];
+  block_id: string;
 }
 export interface TunerReading {
   confidence: number;

@@ -74,6 +74,12 @@ impl Authoring {
                 self.measurement = Some(baseline);
             }
             Command::Poll => {
+                if let Some(spectrum) = &mut self.tools.spectrum {
+                    match engine.spectrum(&spectrum.block_id, None) {
+                        Ok(bins) => spectrum.bins = bins,
+                        Err(_) => self.tools.spectrum = None,
+                    }
+                }
                 if self.tools.tuner_enabled {
                     self.tools.tuner = Some(
                         serde_json::from_value(engine.utility(0).map_err(|e| e.to_string())?)

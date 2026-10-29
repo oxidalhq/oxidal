@@ -1121,6 +1121,69 @@
             "block_id": {
               "type": "string"
             },
+            "kind": {
+              "type": "string",
+              "const": "refresh_metadata"
+            },
+            "tone": true
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "tone"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "spectrum"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "select_model"
+            },
+            "model_id": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "block_id",
+            "model_id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
             "edit": {
               "$ref": "#/$defs/EqEdit"
             },
@@ -1645,11 +1708,33 @@
       "description": "Exact native lane order, including insertion tiles. No provider credentials or model paths.",
       "type": "object",
       "properties": {
+        "active_model": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "id": {
           "type": "string"
         },
         "insert": {
           "type": "boolean"
+        },
+        "tone_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelVariant"
+          }
         }
       },
       "additionalProperties": false,
@@ -4293,6 +4378,24 @@
         "tone_id"
       ]
     },
+    "ModelVariant": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ]
+    },
     "Monitoring": {
       "type": "object",
       "properties": {
@@ -6721,6 +6824,26 @@
         "right"
       ]
     },
+    "Spectrum": {
+      "type": "object",
+      "properties": {
+        "bins": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "block_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "block_id",
+        "bins"
+      ]
+    },
     "StageModel": {
       "type": "object",
       "properties": {
@@ -6969,6 +7092,16 @@
         "solo": {
           "$ref": "#/$defs/Solo",
           "default": "none"
+        },
+        "spectrum": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Spectrum"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tuner": {
           "anyOf": [

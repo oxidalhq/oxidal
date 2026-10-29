@@ -91,6 +91,35 @@ pub(super) async fn upload(
         ),
     }
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Collection {
+    pub assets: Vec<String>,
+}
+pub(super) async fn collection(
+    State(shared): State<Arc<Shared>>,
+    request: Result<Json<Collection>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let Ok(Json(request)) = request else {
+        return failure(StatusCode::BAD_REQUEST, "Choose local collection assets");
+    };
+    let root = shared.config.preset_dir.join("audition-models");
+    match tokio::task::spawn_blocking(move || ModelStore::new(root).collection(&request.assets))
+        .await
+    {
+        Ok(Ok((id, asset))) => (
+            StatusCode::CREATED,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(LocalModel::new(id, asset)),
+        )
+            .into_response(),
+        Ok(Err(e)) => error(e),
+        Err(_) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Local collection staging stopped",
+        ),
+    }
+}
 pub(super) async fn list(
     State(shared): State<Arc<Shared>>,
     query: Result<Query<List>, QueryRejection>,

@@ -11,7 +11,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-type Verified = Result<(ModelAsset, PathBuf), String>;
+type Verified = Result<(ModelAsset, Vec<(u64, PathBuf)>), String>;
 #[derive(Debug, Default)]
 pub struct Models {
     progress: Option<ModelProgress>,
@@ -61,7 +61,7 @@ impl Models {
                 let id = assignment.asset.clone();
                 let (send, receive) = mpsc::sync_channel(1);
                 let task = std::thread::spawn(move || {
-                    let _ = send.send(store.read(&id).map_err(|e| e.to_string()));
+                    let _ = send.send(store.preparation(&id).map_err(|e| e.to_string()));
                 });
                 self.verification = Some((task, receive));
                 self.progress = Some(ModelProgress {
@@ -168,7 +168,7 @@ impl Models {
             match receive.try_recv() {
                 Ok(Ok((asset, path))) => {
                     let target = &self.progress.as_ref().unwrap().assignment.target;
-                    match engine.prepare_model(target, &path, &asset.tone) {
+                    match engine.prepare_collection(target, &path, &asset.tone) {
                         Ok(()) => self.progress.as_mut().unwrap().phase = ModelPhase::Preparing,
                         Err(e) => self.fail(e.to_string()),
                     }
@@ -206,11 +206,11 @@ pub fn restore(
     let mut right = left.clone();
     let store = ModelStore::new(root.join("audition-models"));
     for assignment in assignments {
-        let (asset, path) = store.read(&assignment.asset)?;
+        let (asset, paths) = store.preparation(&assignment.asset)?;
         if let Some(position) = &assignment.insertion {
             engine.restore_slot(&assignment.target, position)?;
         }
-        engine.prepare_model(&assignment.target, &path, &asset.tone)?;
+        engine.prepare_collection(&assignment.target, &paths, &asset.tone)?;
         let started = Instant::now();
         loop {
             let state = engine.model_preparation(0)?;

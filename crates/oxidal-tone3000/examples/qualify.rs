@@ -369,6 +369,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     if arguments.as_slice() == ["--stereo-controls"] {
         return qualify_image_authoring();
     }
+    if arguments.first().is_some_and(|a| a == "--models") {
+        if arguments.len() != 2 {
+            return Err("Usage: qualify --models <embedded-preset>".into());
+        }
+        let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
+        return qualify_model_preparation(&root, &std::fs::read(&arguments[1])?);
+    }
     if arguments.first().is_some_and(|a| a == "--structure") {
         if arguments.len() != 2 {
             return Err("Usage: qualify --structure <embedded-preset>".into());
@@ -1771,6 +1778,53 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
         engine.runtime()?["blocks"].as_array().unwrap().len(),
         count + 1
     );
+    let controls_before = engine.live_controls()?;
+    let models_before = engine.runtime()?["blocks"].clone();
+    let mut metadata_owner =
+        oxidal_tone3000::working::Authoring::for_source(root, "metadata-refresh".into(), None);
+    let fresh = serde_json::json!({"id":7,"title":"Refreshed author details","format":"nam","gear":"amp","favorites_count":42,
+        "models":[{"id":9876,"name":"Must not replace loaded model","model_url":"https://invalid.example/not-downloaded.nam"}]});
+    metadata_owner.command(
+        &mut engine,
+        oxidal_audio::structure::AuthoringAction::RefreshMetadata {
+            block_id: target.clone(),
+            tone: fresh.clone(),
+        },
+    )?;
+    assert_eq!(
+        engine.chain()?["chain"][0]["tone"]["title"],
+        "Refreshed author details"
+    );
+    assert_eq!(
+        engine.runtime()?["blocks"],
+        models_before,
+        "Metadata must preserve loaded model/engine/readiness"
+    );
+    let after_controls = engine.live_controls()?;
+    assert_eq!(
+        after_controls
+            .iter()
+            .map(|c| (&c.target, c.value))
+            .collect::<Vec<_>>(),
+        controls_before
+            .iter()
+            .map(|c| (&c.target, c.value))
+            .collect::<Vec<_>>()
+    );
+    metadata_owner.command(&mut engine, oxidal_audio::structure::AuthoringAction::Undo)?;
+    assert_ne!(
+        engine.chain()?["chain"][0]["tone"]["title"],
+        "Refreshed author details"
+    );
+    metadata_owner.command(&mut engine, oxidal_audio::structure::AuthoringAction::Redo)?;
+    let before = engine.capture()?;
+    let mut wrong = fresh;
+    wrong["id"] = 8.into();
+    assert!(engine.refresh_metadata(&target, &wrong).is_err());
+    assert_eq!(engine.capture()?, before);
+    println!(
+        "tone metadata: matching catalog refresh, loaded-model/control preservation, Undo/Redo and wrong-identity rejection passed"
+    );
     let saved = engine.save_preset("Prepared offline recall")?;
     drop(engine);
     std::fs::remove_file(path)?;
@@ -1786,7 +1840,7 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
             .iter()
             .any(|b| b["blockId"] == insert && b["loaded"] == true)
     );
-    assert!(serde_json::to_string(&content(engine.chain()?))?.contains("Audition fixture"));
+    assert!(serde_json::to_string(&content(engine.chain()?))?.contains("Refreshed author details"));
     eprintln!(
         "qualify: model prepare/failure/cancel/stale target/commit/offline embedded recall passed"
     );
@@ -2830,12 +2884,11 @@ fn qualify_utilities() -> Result<(), Box<dyn Error>> {
         );
     }
     // The same alignment path must work with real nonlinear NAM processors, not only dry lanes.
-    let preset = std::fs::read(
-        std::path::Path::new(&std::env::var("OXIDAL_QUALIFICATION_DATA")?)
-            .join("a2-preset.t3kpreset"),
-    )?;
     let mut modelled = Engine::new(48000.0, 128)?;
-    modelled.load_preset(&preset)?;
+    modelled.reset_empty()?;
+    modelled.load_local_model(std::path::Path::new(&std::env::var(
+        "OXIDAL_TONE3000_TEST_MODEL",
+    )?))?;
     modelled.wait_ready()?;
     modelled.set_normalized("gateEnabled", 0.0)?;
     let block = modelled
@@ -3565,6 +3618,177 @@ fn qualify_local_files() -> Result<(), Box<dyn Error>> {
         assert!(worst < 1e-5, "local offline replay {name}: {worst}");
         std::fs::rename(root.join("inert-cache"), root.join("audition-models"))?;
     }
+    let mut ids = Vec::new();
+    for (name, weight) in [("Gain 10.nam", 1.0), ("Gain 2.nam", 0.5)] {
+        let bytes = serde_json::to_vec(
+            &serde_json::json!({"version":"0.5.4","architecture":"Linear","config":{"receptive_field":1,"bias":false},"sample_rate":48000,"weights":[weight]}),
+        )?;
+        ids.push(store.stage_local(name, &bytes)?.0);
+    }
+    let (collection, _) = store.collection(&ids)?;
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.reset_empty()?;
+    let slot = engine
+        .slots()?
+        .into_iter()
+        .find(|s| s.position.lane == 0)
+        .ok_or("missing collection slot")?;
+    oxidal_tone3000::model_preparation::restore(
+        &mut engine,
+        &root,
+        &[ModelAssignment {
+            target: slot.target.clone(),
+            asset: collection,
+            insertion: Some(slot.position),
+        }],
+        128,
+    )?;
+    engine.wait_ready()?;
+    engine.set_normalized("gateEnabled", 0.0)?;
+    engine.set_normalized("inputLevel", 0.5)?;
+    engine.set_normalized("outputLevel", 0.5)?;
+    engine.set_block(&slot.target, "normalize", 0.0)?;
+    let layout = engine.layout()?;
+    let variants = &layout.left[0].variants;
+    assert_eq!(variants.len(), 2);
+    assert_eq!(variants[0].name, "Gain 2");
+    assert_eq!(variants[1].name, "Gain 10");
+    fn energy(engine: &mut Engine) -> Result<f32, Box<dyn Error>> {
+        engine.prepare_stream()?;
+        let mut sum = 0.0;
+        for n in 0..32 {
+            let mut l: Vec<_> = (0..128)
+                .map(|i| ((n * 128 + i) as f32 * 0.09).sin() * 0.05)
+                .collect();
+            let mut r = l.clone();
+            engine.process(&mut l, &mut r)?;
+            sum += l.iter().map(|v| v * v).sum::<f32>();
+        }
+        Ok(sum)
+    }
+    let quiet = energy(&mut engine)?;
+    let mut analysis =
+        oxidal_tone3000::working::Authoring::for_source(&root, "collection-spectrum".into(), None);
+    use oxidal_audio::structure::AuthoringAction as SpectrumAction;
+    let before_analysis = engine.capture()?;
+    analysis.command(
+        &mut engine,
+        SpectrumAction::Spectrum {
+            block_id: slot.target.clone(),
+            enabled: true,
+        },
+    )?;
+    energy(&mut engine)?;
+    std::thread::sleep(std::time::Duration::from_millis(35));
+    let snapshot = analysis.command(
+        &mut engine,
+        SpectrumAction::Utility {
+            command: oxidal_audio::tools::Command::Poll,
+        },
+    )?;
+    let spectrum = snapshot
+        .tools
+        .spectrum
+        .ok_or("Missing selected block spectrum")?;
+    assert_eq!(spectrum.bins.len(), 64);
+    assert!(spectrum.valid());
+    let peak = spectrum
+        .bins
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .unwrap();
+    assert!(
+        (30..=35).contains(&peak.0) && *peak.1 > -60.0,
+        "Actual 687 Hz signal must appear in the block FFT: {peak:?}"
+    );
+    let stopped = analysis.command(
+        &mut engine,
+        SpectrumAction::Spectrum {
+            block_id: slot.target.clone(),
+            enabled: false,
+        },
+    )?;
+    assert!(stopped.tools.spectrum.is_none());
+    assert!(!stopped.can_undo);
+    assert_eq!(
+        engine.capture()?,
+        before_analysis,
+        "FFT is temporary analysis, not a saved tone edit"
+    );
+    assert!(
+        engine
+            .spectrum("missing-spectrum-target", Some(true))
+            .is_err()
+    );
+    println!(
+        "block spectrum: actual tone peak/frequency bounds, 64 finite bins, disable/missing target and no tone/history mutation passed"
+    );
+    let mut owner = oxidal_tone3000::working::Authoring::for_source(
+        &root,
+        "collection-qualification".into(),
+        None,
+    );
+    use oxidal_audio::structure::AuthoringAction as Action;
+    owner.command(
+        &mut engine,
+        Action::SelectModel {
+            block_id: slot.target.clone(),
+            model_id: variants[1].id,
+        },
+    )?;
+    let loud = energy(&mut engine)?;
+    assert!(
+        loud > quiet * 3.9 && loud < quiet * 4.1,
+        "Variant must change actual rendered gain: {quiet} -> {loud}"
+    );
+    owner.command(&mut engine, Action::Undo)?;
+    assert_eq!(engine.layout()?.left[0].active_model, Some(variants[0].id));
+    owner.command(&mut engine, Action::Redo)?;
+    assert_eq!(engine.layout()?.left[0].active_model, Some(variants[1].id));
+    let before = engine.capture()?;
+    assert!(
+        owner
+            .command(
+                &mut engine,
+                Action::SelectModel {
+                    block_id: slot.target.clone(),
+                    model_id: 0
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(
+        engine.capture()?,
+        before,
+        "Rejected selection retains exact sound state"
+    );
+    let saved = engine.save_preset("Embedded collection")?;
+    std::fs::rename(
+        root.join("audition-models"),
+        root.join("collection-cache-unavailable"),
+    )?;
+    let mut recalled = Engine::new(48000.0, 128)?;
+    recalled.load_preset(&saved)?;
+    recalled.wait_ready()?;
+    assert_eq!(recalled.layout()?.left[0].variants, *variants);
+    assert_eq!(
+        recalled.layout()?.left[0].active_model,
+        Some(variants[1].id)
+    );
+    assert!((energy(&mut recalled)? - loud).abs() < 1e-5);
+    recalled.select_local_model(&slot.target, variants[0].id)?;
+    assert!(
+        (energy(&mut recalled)? - quiet).abs() < 1e-5,
+        "Every variant must survive cache-free native recall"
+    );
+    std::fs::rename(
+        root.join("collection-cache-unavailable"),
+        root.join("audition-models"),
+    )?;
+    println!(
+        "collections: natural order, distinct rendered variants, owned Undo/Redo, invalid selection rollback, all embedded variants and cache-free switching passed"
+    );
     println!(
         "local files: real A2 NAM and WAV IR insert, native local tone identity, no-account preparation, standalone Save and cache-independent matching PCM passed"
     );

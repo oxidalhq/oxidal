@@ -610,3 +610,54 @@ solo or CPU suspension.
 The maintained native utility qualifier checks exclusive stereo PCM, readback,
 measurement guards and Save exclusion. Existing HTTP and browser authoring flows
 check unchanged working receipts, explicit clearing and worker reconstruction.
+
+## Local collections, model variants and metadata
+
+The local picker accepts multiple NAM files or multiple IR WAV files for one
+native block. Verified individual assets are naturally ordered, identical bytes
+are deduplicated, and a collection is published only after all members pass
+integrity/format/aggregate-size checks. Mixed NAM/IR selections are rejected
+explicitly; add separate blocks for those roles. The existing 32 MiB native
+capture/file budget still applies to a collection, independently of NAM instance
+count. No provider account is needed.
+
+The selected block's **Model variant** control switches among embedded local
+members through the owned native authoring transaction. User gain/mix settings
+survive replacement. Failed preparation retains the previous sound; successful
+selection participates in Undo/Redo, working recovery and independent Save.
+Native captures may retain unrelated historical model-cache entries; candidate
+preparation selects only the current tone's referenced members. Saved presets
+embed every retained collection member, allowing variant changes after the
+original files and audition cache are unavailable. This is prepared native
+replacement, not a gapless scene/model-switch guarantee.
+
+For a catalog-backed block, **Refresh tone details** requests current provider
+metadata and applies it only to the unchanged session/block/tone identity and
+format. The native operation retains existing model descriptors, bytes, selected
+model, controls and readiness. It does not download or replace a model. Refresh
+is an owned unsaved tone edit with history and independent Save; failed fetching
+or stale identity leaves the sound intact. Local collections cannot be overwritten
+by a same-numbered catalog tone.
+
+These paths extend the existing store, HTTP, rendered-native and actual-worker
+browser suites. The native qualifier has `--local-files` and
+`--models <embedded-preset>` selections for focused reruns; `pnpm native:check`
+remains the complete maintained entry point. The automatic-matching qualifier
+now creates its own A2 fixture rather than depending on a previous run's file.
+
+## Optional block spectrum
+
+Whole-native standalone and mixed nodes expose the pinned post-EQ analysis tap
+for the selected block. **Analyze selected block** enables one tap per native
+instance; existing utility polling reads 64 finite log-spaced bins from 20 Hz to
+20 kHz, bounded to -100–0 dB. The native audio path only fills its existing ring;
+FFT/smoothing runs on the control owner. Stop analysis, closing the panel or
+changing the selected block disables the tap. Missing/removed targets clear the
+analysis state. The BOOX view uses the existing bounded state refresh without
+animation.
+
+Spectrum state is temporary monitoring: it does not dirty the tone, create Undo
+entries, alter native controls or become portable preset data. Known-frequency
+rendered tests check the actual tap, range, missing-target rejection and unchanged
+captured tone state. These diagnostics do not establish Pi timing or thermal
+headroom.

@@ -5,6 +5,7 @@ import {
   stageTone3000,
   localModels,
   uploadLocalModel,
+  stageLocalCollection,
   type LocalModelPage,
   tone3000Models,
   tone3000Tones,
@@ -30,7 +31,7 @@ export function ModelPicker({
   onAudition: (asset: string) => Promise<void>;
 }) {
   const [source, setSource] = useState<'tone3000' | 'local'>('tone3000');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [local, setLocal] = useState<LocalModelPage | null>(null);
   const [localAfter, setLocalAfter] = useState<string | null>(null);
   const [query, setQuery] = useState<ToneQuery>({
@@ -109,22 +110,38 @@ export function ModelPicker({
     }
   }
   async function auditionLocal(asset?: string) {
-    if (busy || (!asset && !file)) return;
+    if (busy || (!asset && files.length === 0)) return;
     const controller = new AbortController();
     download.current = controller;
     setBusy(asset ? 'assign' : 'download');
     setError('');
     try {
       if (!asset) {
-        const extension = file!.name.split('.').at(-1)?.toLowerCase();
-        const fileFormat =
-          extension === 'nam' ? 'nam' : extension === 'wav' ? 'ir' : null;
-        if (!fileFormat) throw new Error('Choose a .nam or .wav file.');
+        const formats = files.map((file) =>
+          file.name.split('.').at(-1)?.toLowerCase(),
+        );
+        if (formats.some((f) => f !== 'nam' && f !== 'wav'))
+          throw new Error('Choose .nam or .wav files.');
+        if (new Set(formats).size !== 1)
+          throw new Error(
+            'Choose only NAM files or only IR files for one collection.',
+          );
+        const fileFormat = formats[0] === 'nam' ? 'nam' : 'ir';
         if (allowedFormat && fileFormat !== allowedFormat)
           throw new Error(
-            `Choose ${allowedFormat === 'ir' ? 'an IR WAV' : 'a NAM'} file for this stage.`,
+            `Choose ${allowedFormat === 'ir' ? 'IR WAV' : 'NAM'} files for this stage.`,
           );
-        asset = (await uploadLocalModel(file!, controller.signal)).id;
+        if (files.reduce((sum, file) => sum + file.size, 0) > 32 * 1024 * 1024)
+          throw new Error('Collection must fit within 32 MiB.');
+        const ids: string[] = [];
+        for (const file of files) {
+          if (controller.signal.aborted || !alive.current) return;
+          ids.push((await uploadLocalModel(file, controller.signal)).id);
+        }
+        asset =
+          ids.length === 1
+            ? ids[0]!
+            : (await stageLocalCollection(ids, controller.signal)).id;
       }
       if (controller.signal.aborted || !alive.current) return;
       setBusy('assign');
@@ -175,6 +192,7 @@ export function ModelPicker({
               id="local-model-file"
               className="w-full min-w-0"
               type="file"
+              multiple
               accept={
                 allowedFormat === 'nam'
                   ? '.nam'
@@ -183,13 +201,15 @@ export function ModelPicker({
                     : '.nam,.wav'
               }
               disabled={!!busy}
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
             <Button
-              disabled={!file || !!busy}
+              disabled={files.length === 0 || !!busy}
               onClick={() => void auditionLocal()}
             >
-              Audition file
+              {files.length > 1
+                ? `Audition ${files.length} files`
+                : 'Audition file'}
             </Button>
             <p className="caption">
               No sign-in needed. Save the sounding rig to keep its model and IR

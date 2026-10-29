@@ -1440,6 +1440,45 @@ async fn local_file_upload_needs_no_provider_account_and_does_not_change_audio()
     );
     let root = path.with_extension("presets");
     let model_store = oxidal_presets::ModelStore::new(root.join("audition-models"));
+    let second = model_store
+        .stage_local(
+            "Gain 2.nam",
+            br#"{"architecture":"Linear","weights":[0.5]}"#,
+        )
+        .unwrap();
+    let result = client
+        .post(format!("{endpoint}/collection"))
+        .json(&json!({"assets":[uploaded["id"],second.0]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(result.status(), 201);
+    let collection: Value = result.json().await.unwrap();
+    let (_, files) = model_store
+        .preparation(collection["id"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!(
+        client
+            .post(format!("{endpoint}/collection"))
+            .json(&json!({"assets":["../bad"]}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    assert_eq!(
+        client
+            .get(format!("{url}/audio"))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        audio
+    );
     let (asset, file) = model_store.read(uploaded["id"].as_str().unwrap()).unwrap();
     assert_eq!(asset.tone_id, 0);
     assert_eq!(asset.tone["local"], true);

@@ -49,9 +49,9 @@ impl ModelAsset {
         }
         if local
             && (self.tone["format"].as_str() != Some(self.format.as_str())
-                || self.tone["models"]
-                    .as_array()
-                    .is_none_or(|m| m.len() != 1 || m[0]["id"].as_u64() != Some(self.model_id)))
+                || self.tone["models"].as_array().is_none_or(|m| {
+                    m.is_empty() || !m.iter().any(|m| m["id"].as_u64() == Some(self.model_id))
+                }))
         {
             return Err(Error::Invalid("Invalid local model identity"));
         }
@@ -87,6 +87,41 @@ fn read(path: &Path, max: usize) -> Result<Vec<u8>> {
         return Err(Error::Invalid("Model cache file exceeds limit"));
     }
     Ok(bytes)
+}
+fn natural_name(a: &str, b: &str) -> std::cmp::Ordering {
+    let (a, b) = (a.to_lowercase(), b.to_lowercase());
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
+            let (start_i, start_j) = (i, j);
+            while i < a.len() && a[i].is_ascii_digit() {
+                i += 1;
+            }
+            while j < b.len() && b[j].is_ascii_digit() {
+                j += 1;
+            }
+            let (mut x, mut y) = (start_i, start_j);
+            while x < i && a[x] == b'0' {
+                x += 1;
+            }
+            while y < j && b[y] == b'0' {
+                y += 1;
+            }
+            let order = (i - x).cmp(&(j - y)).then_with(|| a[x..i].cmp(&b[y..j]));
+            if !order.is_eq() {
+                return order;
+            }
+        } else {
+            let order = a[i].cmp(&b[j]);
+            if !order.is_eq() {
+                return order;
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    a.len().cmp(&b.len())
 }
 fn directory(path: &Path) -> Result<()> {
     if !fs::symlink_metadata(path)?.file_type().is_dir() {
@@ -167,6 +202,107 @@ impl ModelStore {
         };
         let id = self.stage(&asset, bytes)?;
         Ok((id, asset))
+    }
+    /// One local block with naturally ordered variants. All bytes are verified
+    /// before publication; member ids address immutable individual assets only.
+    pub fn collection(&self, ids: &[String]) -> Result<(String, ModelAsset)> {
+        if ids.is_empty() || ids.len() > 1024 {
+            return Err(Error::Invalid("Choose local model files"));
+        }
+        let mut members = Vec::new();
+        let mut total = 0usize;
+        for id in ids {
+            let (asset, path) = self.read(id)?;
+            if asset.tone_id != 0 || asset.tone["oxidal_collection"].is_array() {
+                return Err(Error::Invalid("Collections require individual local files"));
+            }
+            if members
+                .iter()
+                .any(|(_, a, _): &(String, ModelAsset, PathBuf)| a.sha256 == asset.sha256)
+            {
+                continue;
+            }
+            if members.iter().any(|(_, a, _)| a.model_id == asset.model_id) {
+                return Err(Error::Invalid(
+                    "Local model identities collide; choose another collection",
+                ));
+            }
+            total = total
+                .checked_add(fs::metadata(&path)?.len() as usize)
+                .ok_or(Error::Invalid("Collection size overflow"))?;
+            if total > MAX_FILE_BYTES {
+                return Err(Error::Invalid(
+                    "Collection exceeds the 32 MiB embedded-state budget",
+                ));
+            }
+            members.push((id.clone(), asset, path));
+        }
+        members.sort_by(|a, b| natural_name(&a.1.name, &b.1.name).then_with(|| a.0.cmp(&b.0)));
+        let (_, first, path) = &members[0];
+        if members.iter().any(|(_, a, _)| a.format != first.format) {
+            return Err(Error::Invalid(
+                "Choose only NAM files or only IR files for one collection",
+            ));
+        }
+        let mut asset = first.clone();
+        let mut models = Vec::new();
+        for (_, member, _) in &members {
+            models.push(member.tone["models"][0].clone());
+        }
+        asset.title = if members.len() == 1 {
+            first.title.clone()
+        } else {
+            format!("{} files", members.len())
+        };
+        asset.tone["title"] = asset.title.clone().into();
+        asset.tone["models"] = models.into();
+        asset.tone["oxidal_collection"] = members
+            .iter()
+            .map(|(id, _, _)| id.clone())
+            .collect::<Vec<_>>()
+            .into();
+        let bytes = read(path, MAX_FILE_BYTES)?;
+        let id = self.stage(&asset, &bytes)?;
+        Ok((id, asset))
+    }
+    /// Verify every collection member off the PCM owner. No caller-supplied paths.
+    pub fn preparation(&self, id: &str) -> Result<(ModelAsset, Vec<(u64, PathBuf)>)> {
+        let (asset, path) = self.read(id)?;
+        let Some(ids) = asset.tone["oxidal_collection"].as_array() else {
+            return Ok((asset.clone(), vec![(asset.model_id, path)]));
+        };
+        let models = asset.tone["models"]
+            .as_array()
+            .ok_or(Error::Invalid("Missing collection models"))?;
+        if ids.is_empty() || ids.len() > 1024 || ids.len() != models.len() {
+            return Err(Error::Invalid("Invalid collection members"));
+        }
+        let mut files = Vec::new();
+        let mut total = 0u64;
+        for (id, model) in ids.iter().zip(models) {
+            let (member, path) = self.read(
+                id.as_str()
+                    .ok_or(Error::Invalid("Invalid collection identity"))?,
+            )?;
+            if member.tone_id != 0
+                || member.format != asset.format
+                || member.tone["oxidal_collection"].is_array()
+                || model != &member.tone["models"][0]
+                || files.iter().any(|(id, _)| *id == member.model_id)
+            {
+                return Err(Error::Invalid(
+                    "Collection member differs from verified metadata",
+                ));
+            }
+            total = total
+                .checked_add(fs::metadata(&path)?.len())
+                .ok_or(Error::Invalid("Collection size overflow"))?;
+            if total > MAX_FILE_BYTES as u64 {
+                return Err(Error::Invalid("Collection exceeds embedded-state budget"));
+            }
+            files.push((member.model_id, path));
+        }
+        Ok((asset, files))
     }
     /// Metadata listing is bounded per page; payload bytes are verified on use.
     pub fn local_page(&self, after: Option<&str>) -> Result<LocalAssetPage> {
@@ -291,6 +427,44 @@ impl ModelStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn collections_sort_deduplicate_verify_members_and_reject_mixed_formats() {
+        let root = std::env::temp_dir().join(format!("oxidal-collection-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = ModelStore::new(root.clone());
+        let a = store
+            .stage_local("Gain 10.nam", br#"{"architecture":"Linear","weights":[1]}"#)
+            .unwrap();
+        let b = store
+            .stage_local(
+                "Gain 2.nam",
+                br#"{"architecture":"Linear","weights":[0.5]}"#,
+            )
+            .unwrap();
+        let (id, collection) = store
+            .collection(&[a.0.clone(), b.0.clone(), a.0.clone()])
+            .unwrap();
+        assert_eq!(collection.model_id, b.1.model_id);
+        assert_eq!(collection.tone["models"].as_array().unwrap().len(), 2);
+        assert_eq!(collection.tone["models"][0]["name"], "Gain 2");
+        let (_, files) = store.preparation(&id).unwrap();
+        assert_eq!(
+            files.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            vec![b.1.model_id, a.1.model_id]
+        );
+        assert!(
+            store.collection(std::slice::from_ref(&id)).is_err(),
+            "No recursively nested asset references"
+        );
+        let wav = store.stage_local("Cab.wav", b"RIFF0000WAVE").unwrap();
+        assert!(store.collection(&[a.0.clone(), wav.0]).is_err());
+        fs::write(store.read(&a.0).unwrap().1, b"tampered").unwrap();
+        assert!(
+            store.preparation(&id).is_err(),
+            "Every member is checked, including unheard variants"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn local_files_keep_native_local_identity_and_page_without_provider_data() {
         let root = std::env::temp_dir().join(format!(

@@ -3764,7 +3764,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
   }
 });
 
-test('local NAM and IR files audition without provider login and save offline in a hybrid rig', async ({
+test('mixed rig authoring: local NAM and IR collections audition without provider login and save offline', async ({
   page,
   request,
 }) => {
@@ -3873,13 +3873,28 @@ test('local NAM and IR files audition without provider login and save offline in
       JSON.parse(readFileSync(join(modelRoot, id, 'metadata.json'), 'utf8'))
         .format === 'nam',
   )!;
-  await picker.getByLabel('NAM / IR file', { exact: true }).setInputFiles({
-    name: 'My local amp.nam',
-    mimeType: 'application/octet-stream',
-    buffer: readFileSync(join(modelRoot, id, 'model.nam')),
-  });
+  await picker.getByLabel('NAM / IR file', { exact: true }).setInputFiles([
+    {
+      name: 'My local amp.nam',
+      mimeType: 'application/octet-stream',
+      buffer: readFileSync(join(modelRoot, id, 'model.nam')),
+    },
+    {
+      name: 'My variant 2.nam',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(
+        JSON.stringify({
+          version: '0.5.4',
+          architecture: 'Linear',
+          config: { receptive_field: 1, bias: false },
+          sample_rate: 48000,
+          weights: [0.5],
+        }),
+      ),
+    },
+  ]);
   await picker
-    .getByRole('button', { name: 'Audition file', exact: true })
+    .getByRole('button', { name: 'Audition 2 files', exact: true })
     .click();
   await expect(picker).toHaveCount(0);
   await expect
@@ -3901,6 +3916,43 @@ test('local NAM and IR files audition without provider login and save offline in
     .poll(async () => (await get()).control.controls)
     .toEqual(appliedNam.controls);
   await rig.getByText('Chain actions', { exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'Select model 1', exact: true })
+    .click();
+  const variant = rig.getByRole('combobox', {
+    name: 'Model variant',
+    exact: true,
+  });
+  await expect(variant.getByRole('option')).toHaveCount(2);
+  await variant.selectOption({ label: 'My variant 2' });
+  await expect(variant).toHaveValue(
+    (await variant
+      .getByRole('option', { name: 'My variant 2', exact: true })
+      .getAttribute('value')) ?? '',
+  );
+  await command({ kind: 'restart' });
+  await page.reload();
+  await expect(rig).toBeVisible();
+  await rig.locator('[data-node="tone"]').getByRole('button').first().click();
+  await rig
+    .getByRole('button', { name: 'Select model 1', exact: true })
+    .click();
+  await expect(variant.getByRole('option')).toHaveCount(2);
+  await expect(variant.locator('option:checked')).toHaveText('My variant 2');
+  const beforeAnalysis = (await get()).control.controls;
+  await rig.getByText('Block spectrum', { exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'Analyze selected block', exact: true })
+    .click();
+  await expect(
+    rig.getByRole('img', {
+      name: 'Post-EQ spectrum, 20 Hz to 20 kHz, minus 100 to zero dB',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await rig.getByRole('button', { name: 'Stop analysis', exact: true }).click();
+  expect((await get()).control.controls).toEqual(beforeAnalysis);
+  await rig.getByText('Block spectrum', { exact: true }).click();
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
   picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker

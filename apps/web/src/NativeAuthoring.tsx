@@ -1,6 +1,6 @@
 import { NativeTools } from './NativeTools';
-import { useState } from 'react';
-import type { AudioState, AudioAction } from './api';
+import { useEffect, useRef, useState } from 'react';
+import { tone3000Tone, type AudioState, type AudioAction } from './api';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
@@ -29,6 +29,38 @@ export function NativeAuthoring({
     session: string;
     revision: number;
   } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [metadataError, setMetadataError] = useState('');
+  const metadataRequest = useRef<AbortController | null>(null);
+  const metadataCursor = useRef({ session, revision, selectedBlock });
+  useEffect(() => {
+    metadataCursor.current = { session, revision, selectedBlock };
+  }, [session, revision, selectedBlock]);
+  useEffect(
+    () => () => {
+      metadataRequest.current?.abort();
+    },
+    [session, selectedBlock],
+  );
+  const spectrumOwner = useRef({
+    author,
+    block: status.tools?.spectrum?.block_id,
+  });
+  useEffect(() => {
+    spectrumOwner.current = { author, block: status.tools?.spectrum?.block_id };
+  }, [author, status.tools?.spectrum?.block_id]);
+  useEffect(
+    () => () => {
+      const owner = spectrumOwner.current;
+      if (selectedBlock && owner.block === selectedBlock)
+        void owner.author({
+          kind: 'spectrum',
+          block_id: selectedBlock,
+          enabled: false,
+        });
+    },
+    [selectedBlock],
+  );
   const layout = status.layout;
   const editingDisabled =
     disabled ||
@@ -54,6 +86,132 @@ export function NativeAuthoring({
   return (
     <>
       <NativeTools status={status} disabled={disabled} author={author} />
+      {selectedBlock && position >= 0 && laneBlocks[position]?.tone_id && (
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            disabled={editingDisabled || refreshing}
+            onClick={async () => {
+              const opening = metadataCursor.current;
+              const abort = new AbortController();
+              metadataRequest.current = abort;
+              setRefreshing(true);
+              setMetadataError('');
+              try {
+                const tone = await tone3000Tone(
+                  laneBlocks[position]!.tone_id!,
+                  abort.signal,
+                );
+                const now = metadataCursor.current;
+                if (abort.signal.aborted) return;
+                if (
+                  now.session !== opening.session ||
+                  now.revision !== opening.revision ||
+                  now.selectedBlock !== opening.selectedBlock
+                )
+                  throw new Error(
+                    'Tone changed while fetching details. Refresh again.',
+                  );
+                await author({
+                  kind: 'refresh_metadata',
+                  block_id: selectedBlock,
+                  tone,
+                });
+              } catch (error) {
+                if (!abort.signal.aborted) setMetadataError(String(error));
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+          >
+            {refreshing ? 'Refreshing details…' : 'Refresh tone details'}
+          </Button>
+          {metadataError && <p role="alert">{metadataError}</p>}
+        </div>
+      )}
+      {selectedBlock && position >= 0 && (
+        <details
+          onToggle={(event) => {
+            if (
+              !event.currentTarget.open &&
+              status.tools?.spectrum?.block_id === selectedBlock
+            )
+              void author({
+                kind: 'spectrum',
+                block_id: selectedBlock,
+                enabled: false,
+              });
+          }}
+        >
+          <summary>Block spectrum</summary>
+          <Button
+            variant="outline"
+            disabled={editingDisabled}
+            aria-pressed={status.tools?.spectrum?.block_id === selectedBlock}
+            onClick={() =>
+              void author({
+                kind: 'spectrum',
+                block_id: selectedBlock,
+                enabled: status.tools?.spectrum?.block_id !== selectedBlock,
+              })
+            }
+          >
+            {status.tools?.spectrum?.block_id === selectedBlock
+              ? 'Stop analysis'
+              : 'Analyze selected block'}
+          </Button>
+          {status.tools?.spectrum?.block_id === selectedBlock && (
+            <div className="space-y-1 py-2">
+              <svg
+                role="img"
+                aria-label="Post-EQ spectrum, 20 Hz to 20 kHz, minus 100 to zero dB"
+                viewBox="0 0 256 100"
+                className="h-24 w-full text-primary"
+                preserveAspectRatio="none"
+              >
+                {status.tools?.spectrum.bins.map((db, i) => (
+                  <rect
+                    key={i}
+                    x={i * 4}
+                    y={-db}
+                    width={3}
+                    height={100 + db}
+                    fill="currentColor"
+                  />
+                ))}
+              </svg>
+              <div className="flex justify-between font-mono text-xs">
+                <span>20 Hz</span>
+                <span>Post-EQ · dBFS</span>
+                <span>20 kHz</span>
+              </div>
+            </div>
+          )}
+        </details>
+      )}
+      {position >= 0 && (laneBlocks[position]?.variants?.length ?? 0) > 1 && (
+        <label className="space-y-2">
+          <span>Model variant</span>
+          <select
+            aria-label="Model variant"
+            disabled={editingDisabled}
+            value={laneBlocks[position]?.active_model ?? ''}
+            onChange={(event) =>
+              void author({
+                kind: 'select_model',
+                block_id: selectedBlock!,
+                model_id: Number(event.target.value),
+              })
+            }
+          >
+            {laneBlocks[position]!.variants!.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {layout && (
         <details>
           <summary>Chain actions</summary>

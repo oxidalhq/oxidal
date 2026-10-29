@@ -144,3 +144,12 @@ Undo with a warning without invalidating a sound current capture; invalid curren
 captures still fail admission. Oversampling/global pitch topology settings remain
 outside tone Undo. Actual native/mixed reconstruction, worker fault/restart and
 browser restart/reload/Save cover this path; physical deadlines remain unqualified.
+
+Whole-native authoring also supports verified local multi-file NAM/IR collections,
+embedded variant selection with owned history and cache-free native recall,
+identity-checked catalog metadata refresh, and optional bounded post-EQ spectra.
+The existing local-file/HTTP/native/mixed-browser suites cover these workflows;
+see docs/native-tone3000.md. Native replacement retains its explicit preparation
+boundary and is not gapless scene recall. Standalone host monitoring/test-tone and
+other residual host-equivalent operations require separate dispositions before
+claiming complete TONE3000 application parity.

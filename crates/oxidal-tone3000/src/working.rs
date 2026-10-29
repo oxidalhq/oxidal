@@ -486,6 +486,26 @@ impl Authoring {
         {
             self.finish_gesture(engine)?;
         }
+        if let AuthoringAction::Spectrum { block_id, enabled } = &action {
+            if *enabled {
+                let bins = engine
+                    .spectrum(block_id, Some(true))
+                    .map_err(|e| e.to_string())?;
+                self.tools.spectrum = Some(oxidal_audio::tools::Spectrum {
+                    block_id: block_id.clone(),
+                    bins,
+                });
+            } else if self
+                .tools
+                .spectrum
+                .as_ref()
+                .is_some_and(|s| s.block_id == *block_id)
+            {
+                let _ = engine.spectrum(block_id, Some(false));
+                self.tools.spectrum = None;
+            }
+            return self.snapshot(engine);
+        }
         if let AuthoringAction::Gesture { edit } = action {
             return self.gesture_command(engine, edit);
         }
@@ -537,6 +557,16 @@ impl Authoring {
         let latency = engine.latency_samples().map_err(|e| e.to_string())?;
         let result = (|| -> Result<(State, String), String> {
             match &action {
+                AuthoringAction::RefreshMetadata { block_id, tone } => {
+                    engine
+                        .refresh_metadata(block_id, tone)
+                        .map_err(|e| e.to_string())?;
+                }
+                AuthoringAction::SelectModel { block_id, model_id } => {
+                    engine
+                        .select_local_model(block_id, *model_id)
+                        .map_err(|e| e.to_string())?;
+                }
                 AuthoringAction::Eq { block_id, edit } => {
                     engine.set_eq(block_id, edit).map_err(|e| e.to_string())?
                 }
@@ -589,7 +619,8 @@ impl Authoring {
                 AuthoringAction::Inspect
                 | AuthoringAction::Copy { .. }
                 | AuthoringAction::Utility { .. }
-                | AuthoringAction::Gesture { .. } => unreachable!(),
+                | AuthoringAction::Gesture { .. }
+                | AuthoringAction::Spectrum { .. } => unreachable!(),
             }
             for setting in &processing {
                 engine
@@ -612,7 +643,10 @@ impl Authoring {
             }
             // Hot EQ edits do not load models; do not inject a silent PCM block
             // into the live processor merely to wait for an already-ready model.
-            if !matches!(action, AuthoringAction::Eq { .. }) {
+            if !matches!(
+                action,
+                AuthoringAction::Eq { .. } | AuthoringAction::RefreshMetadata { .. }
+            ) {
                 engine.wait_ready().map_err(|e| e.to_string())?;
             }
             if !reprepare && engine.latency_samples().map_err(|e| e.to_string())? != latency {
