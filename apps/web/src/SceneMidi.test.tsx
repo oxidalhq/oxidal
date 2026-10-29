@@ -191,3 +191,20 @@ it('cancels learning and never learns from an unavailable controller', async () 
   );
   expect(screen.getByRole('button', { name: 'Learn CC 1' })).toBeDisabled();
 });
+
+it('resets unsubmitted mappings and cancels learning without changing the controller', async () => {
+  const current = state();
+  const command = vi.fn(async () => {});
+  render(<SceneMidi state={current} disabled={false} onCommand={command} />);
+  await open();
+  fireEvent.change(screen.getByLabelText('Parameter CC 1'), {
+    target: { value: '43' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Learn CC 1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reset edits' }));
+  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(20);
+  expect(
+    screen.queryByRole('button', { name: 'Cancel learn' }),
+  ).not.toBeInTheDocument();
+  expect(command).not.toHaveBeenCalled();
+});

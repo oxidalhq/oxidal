@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import {
   midiDevices,
@@ -57,6 +58,7 @@ export function MidiControls({
   const message = status?.last;
   if (
     learning &&
+    !disabled &&
     draft &&
     status?.connected &&
     savedInput === draft.input &&
@@ -86,7 +88,8 @@ export function MidiControls({
       setLoading(false);
     }
   }
-  function open() {
+  function resetDraft() {
+    setLearning(null);
     setDraft(
       configured ?? {
         input: '',
@@ -100,6 +103,9 @@ export function MidiControls({
         })),
       },
     );
+  }
+  function open() {
+    resetDraft();
     void scan();
   }
   const controls = control?.controls ?? [];
@@ -113,7 +119,17 @@ export function MidiControls({
       }}
     >
       <summary className="min-h-11 cursor-pointer content-center font-semibold">
-        MIDI controls
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <PlugsConnected size={18} aria-hidden="true" />
+          <span>MIDI controls</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {configured
+              ? status?.connected
+                ? 'Connected'
+                : 'Waiting'
+              : 'Not configured'}
+          </span>
+        </span>
       </summary>
       <div className="space-y-3 pt-3">
         {configured && (
@@ -561,6 +577,10 @@ export function MidiControls({
             onClick={() => void onApply(draft)}
           >
             Apply MIDI
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={resetDraft}>
+            <ArrowCounterClockwise size={18} aria-hidden="true" />
+            Reset edits
           </Button>
           <Button
             variant="outline"

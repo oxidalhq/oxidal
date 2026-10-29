@@ -52,7 +52,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         <MidiControls
           key={`native:${native.session}`}
           configured={native.configured?.midi ?? null}
-          disabled={!connected || busy}
+          disabled={!connected || busy || !!error}
           control={{
             midi: native.midi,
             scenes: null,
@@ -92,7 +92,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
           key={`mixed:${mixed.session}`}
           configured={mixed.configured?.midi ?? null}
           control={mixed.control ?? null}
-          disabled={!connected || busy}
+          disabled={!connected || busy || !!error}
           onApply={async (settings) => {
             if (sending.current) return;
             sending.current = true;
