@@ -1,0 +1,123 @@
+/* Single preset picker: the playing name is the control. Values come from theme.css. */
+.preset-picker {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+}
+.preset-picker-name {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.5rem;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0 0.25rem 0.125rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--foreground);
+  border-radius: 0;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+.preset-picker-name > svg {
+  justify-self: end;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.preset-picker-name:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.preset-picker-name:disabled {
+  opacity: 0.55;
+}
+.preset-picker-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.preset-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  min-width: 0;
+  font-size: 1.1875rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.preset-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preset-modified {
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.preset-picker-meta {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preset-picker-edited {
+  color: var(--brand);
+}
+.preset-picker-search {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0 0.75rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 1rem;
+}
+.preset-picker-group {
+  display: grid;
+  border-top: 1px solid var(--foreground);
+}
+.preset-picker-group h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.preset-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: var(--touch-target);
+  padding: 0 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+.preset-picker-row[aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+.preset-picker-playing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+.preset-picker-playing::before {
+  content: '';
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: var(--brand);
+}

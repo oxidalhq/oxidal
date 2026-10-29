@@ -15,6 +15,13 @@ import {
   movedBlockOrder,
 } from './rigControls';
 vi.mock('./api', () => ({ nativeState: vi.fn(), presetLibrary: vi.fn() }));
+// jsdom has no modal dialog; the picker list opens in one.
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.open = false;
+};
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -38,16 +45,34 @@ it('selects original and owned identities without optimistically changing the so
   const view = render(
     <RigPresetSelector state={state} disabled={false} onSelect={select} />,
   );
-  const picker = screen.getByRole('combobox', { name: 'Playing preset' });
+  const picker = screen.getByRole('button', {
+    name: 'Playing preset: Amp A',
+  });
   await waitFor(() => expect(picker).toBeEnabled());
-  fireEvent.change(picker, { target: { value: 'copy:a' } });
+  expect(
+    screen.queryByRole('button', { name: 'Next preset' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(picker);
+  expect(
+    screen.getByRole('button', { name: /^Amp A\s*Playing$/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  expect(
+    screen.getByText(/Unsaved edits stay with each preset/),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'My A' }));
   expect(select).toHaveBeenCalledWith('a', true);
-  expect(picker).toHaveValue('original:a');
-  fireEvent.click(screen.getByRole('button', { name: 'Next preset' }));
+  expect(picker).toHaveAccessibleName('Playing preset: Amp A');
+  fireEvent.click(picker);
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Find a preset' }), {
+    target: { value: 'b' },
+  });
+  expect(
+    screen.queryByRole('button', { name: 'My A' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
   expect(select).toHaveBeenLastCalledWith('b', false);
   view.rerender(<RigPresetSelector state={state} disabled onSelect={select} />);
   expect(picker).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Next preset' })).toBeDisabled();
 });
 it('keeps the current rig visible when the library fails, and permits retry', async () => {
   vi.mocked(presetLibrary).mockRejectedValue(new Error('offline'));
@@ -67,11 +92,14 @@ it('keeps the current rig visible when the library fails, and permits retry', as
     <RigPresetSelector state={state} disabled={false} onSelect={() => {}} />,
   );
   await screen.findByText('Original presets unavailable');
-  expect(screen.getByRole('combobox')).toBeDisabled();
-  expect(screen.getByRole('option', { name: 'Amp A' })).toBeInTheDocument();
+  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
   library();
   fireEvent.click(screen.getByRole('button', { name: 'Retry presets' }));
-  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled());
+  await waitFor(() =>
+    expect(screen.queryByText('Original presets unavailable')).toBeNull(),
+  );
+  fireEvent.click(picker);
+  expect(screen.getByRole('button', { name: 'Amp B' })).toBeEnabled();
 });
 it('groups imaging separately and never substitutes normalized percentages for physical readback', () => {
   for (const id of [
@@ -136,7 +164,9 @@ it('opens gig pads on the playing bank and keeps playing identity during initial
   const view = render(
     <RigPresetSelector state={playing} disabled={false} onSelect={() => {}} />,
   );
-  expect(screen.getByRole('option', { name: 'Tone 10' })).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: 'Playing preset: Tone 10' }),
+  ).toBeInTheDocument();
   view.rerender(
     <RigPresetSelector
       state={playing}
@@ -195,10 +225,10 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
     <RigPresetSelector state={state} disabled={false} onSelect={select} />,
   );
   await screen.findByText('Saved copies unavailable');
-  expect(
-    screen.getByRole('combobox', { name: 'Playing preset' }),
-  ).toBeEnabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Next preset' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
   expect(select).toHaveBeenCalledWith('b', false);
 });
 it('keeps saved copies selectable when originals cannot be read', async () => {
@@ -209,8 +239,9 @@ it('keeps saved copies selectable when originals cannot be read', async () => {
     <RigPresetSelector state={state} disabled={false} onSelect={select} />,
   );
   await screen.findByText('Original presets unavailable');
-  fireEvent.change(screen.getByRole('combobox'), {
-    target: { value: 'copy:a' },
-  });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'My A' }));
   expect(select).toHaveBeenCalledWith('a', true);
 });

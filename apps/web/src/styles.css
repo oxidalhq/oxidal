@@ -2029,13 +2029,6 @@ textarea {
   min-height: 44px;
 }
 
-/* Rig workspace: navigation stays separate from signal and parameter controls. */
-.rig-preset-selector {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  align-items: end;
-  gap: 0.5rem;
-}
 .rig-preset-error {
   grid-column: 1 / -1;
   display: flex;
@@ -2048,25 +2041,6 @@ textarea {
 }
 .rig-preset-error .oxidal-button {
   flex-shrink: 0;
-}
-.rig-preset-selector > button {
-  width: 44px;
-  padding-inline: 0;
-}
-.rig-preset-field {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 0.25rem;
-}
-.rig-preset-field select {
-  height: 44px;
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  font-weight: 650;
-  background: var(--card);
-  border-color: var(--input);
 }
 .control-navigation {
   display: flex;
@@ -2550,28 +2524,13 @@ textarea {
 
 .rig-performance-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
   min-width: 0;
 }
-.rig-performance-header .rig-preset-selector {
+.rig-performance-header .preset-picker {
   flex: 1;
   min-width: 0;
-}
-.rig-preset-field {
-  position: relative;
-}
-.rig-preset-field[data-modified='true'] select {
-  padding-left: 1.35rem;
-}
-.preset-modified {
-  position: absolute;
-  left: 0.5rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--primary);
-  font-size: 1.25rem;
-  pointer-events: none;
 }
 .rig-workspace {
   display: grid;

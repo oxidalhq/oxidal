@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { CaretLeft, CaretRight, ArrowsClockwise } from '@phosphor-icons/react';
+import {
+  CaretDown,
+  CaretLeft,
+  CaretRight,
+  ArrowsClockwise,
+} from '@phosphor-icons/react';
+import { AdjustmentDialog } from './AdjustmentDialog';
+import './PresetPicker.css';
 import { nativeState, presetLibrary, type AudioState } from './api';
 import { Button } from './components/ui/button';
 
@@ -7,7 +14,9 @@ type Choice = { id: string; name: string; owned: boolean };
 const key = (item: { id: string; owned: boolean }) =>
   `${item.owned ? 'copy' : 'original'}:${item.id}`;
 
-/** Immediate native recall uses the same authoritative owner as Library.
+/** One preset picker: the playing name opens a searchable list; a row recalls it.
+ * Edits stay with each preset (verified B4), so recall needs no guard prompt.
+ * Immediate native recall uses the same authoritative owner as Library.
  * @see docs/audio.md
  */
 export function RigPresetSelector({
@@ -26,6 +35,8 @@ export function RigPresetSelector({
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   useEffect(() => {
     let active = true;
     void Promise.allSettled([presetLibrary(), nativeState()])
@@ -160,59 +171,49 @@ export function RigPresetSelector({
         </p>
       </div>
     );
+  const current = items[index];
+  const name =
+    state.preset_name ?? (loading ? 'Loading presets…' : 'Current rig');
+  const found = query.trim().toLowerCase();
   return (
-    <div className="rig-preset-selector" aria-label="Preset navigation">
-      <Button
-        variant="outline"
-        aria-label="Previous preset"
-        disabled={disabled || loading || index <= 0}
-        onClick={() => choose(items[index - 1])}
+    <div className="preset-picker" aria-label="Preset navigation">
+      <button
+        type="button"
+        className="preset-picker-name"
+        aria-label={`Playing preset: ${name}`}
+        aria-haspopup="dialog"
+        title={name}
+        disabled={disabled || (loading && !items.length)}
+        onClick={() => {
+          setQuery('');
+          setOpen(true);
+        }}
       >
-        <CaretLeft aria-hidden="true" />
-      </Button>
-      <label className="rig-preset-field" data-modified={state.modified}>
-        {state.modified && (
-          <span
-            className="preset-modified"
-            aria-label="Modified preset"
-            title="This playing sound has unsaved edits"
-          >
-            •
+        <span className="preset-picker-text">
+          <span className="preset-picker-title">
+            <span className="preset-picker-label">{name}</span>
+            {state.modified && (
+              <span
+                className="preset-modified"
+                role="img"
+                aria-label="Modified preset"
+                title="This playing sound has unsaved edits"
+              />
+            )}
           </span>
-        )}
-        <select
-          aria-label="Playing preset"
-          value={index < 0 ? '' : selected}
-          disabled={disabled || loading || !items.length}
-          onChange={(e) => choose(items.find((p) => key(p) === e.target.value))}
-        >
-          {index < 0 && (
-            <option value="">
-              {state.preset_name ??
-                (loading ? 'Loading presets…' : 'Current rig')}
-            </option>
-          )}
-          {['Saved copies', 'Originals'].map((label, group) => (
-            <optgroup key={label} label={label}>
-              {items
-                .filter((p) => p.owned === (group === 0))
-                .map((p) => (
-                  <option key={key(p)} value={key(p)}>
-                    {p.name}
-                  </option>
-                ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
-      <Button
-        variant="outline"
-        aria-label="Next preset"
-        disabled={disabled || loading || index < 0 || index >= items.length - 1}
-        onClick={() => choose(items[index + 1])}
-      >
-        <CaretRight aria-hidden="true" />
-      </Button>
+          <span className="preset-picker-meta">
+            {current ? (current.owned ? 'My copy' : 'Original') : 'Current rig'}
+            {' · '}
+            {state.modified ? (
+              <span className="preset-picker-edited">edited, not saved</span>
+            ) : (
+              'saved'
+            )}
+            {index >= 0 && ` · ${index + 1} of ${items.length}`}
+          </span>
+        </span>
+        <CaretDown aria-hidden="true" />
+      </button>
       {error && (
         <div className="rig-preset-error" role="status">
           <span>{error}</span>
@@ -226,6 +227,66 @@ export function RigPresetSelector({
             <ArrowsClockwise aria-hidden="true" /> Retry presets
           </Button>
         </div>
+      )}
+      {open && (
+        <AdjustmentDialog
+          title="Switch preset"
+          className="preset-picker-dialog"
+          onCancel={() => setOpen(false)}
+        >
+          <input
+            type="search"
+            className="preset-picker-search"
+            aria-label="Find a preset"
+            placeholder="Find a preset"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <p className="caption">
+            Unsaved edits stay with each preset. Reload saved discards them.
+          </p>
+          {['Saved copies', 'Originals'].map((label, group) => {
+            const rows = items.filter(
+              (p) =>
+                p.owned === (group === 0) &&
+                p.name.toLowerCase().includes(found),
+            );
+            return (
+              rows.length > 0 && (
+                <section
+                  key={label}
+                  className="preset-picker-group"
+                  aria-label={label}
+                >
+                  <h3>{label}</h3>
+                  {rows.map((p) => (
+                    <button
+                      key={key(p)}
+                      type="button"
+                      className="preset-picker-row"
+                      data-preset={key(p)}
+                      aria-pressed={key(p) === selected}
+                      disabled={disabled || loading}
+                      onClick={() => {
+                        setOpen(false);
+                        if (key(p) !== selected) choose(p);
+                      }}
+                    >
+                      <span>{p.name}</span>
+                      {key(p) === selected && (
+                        <span className="preset-picker-playing">Playing</span>
+                      )}
+                    </button>
+                  ))}
+                </section>
+              )
+            );
+          })}
+          {!loading &&
+            !items.some((p) => p.name.toLowerCase().includes(found)) && (
+              <p role="status">No presets match.</p>
+            )}
+        </AdjustmentDialog>
       )}
     </div>
   );

@@ -285,7 +285,7 @@ test('rig controls follow the actual session without example effects', async ({
     fullPage: true,
   });
   await page.setViewportSize(initialViewport);
-  const picker = rig.getByRole('combobox', { name: 'Playing preset' });
+  const picker = rig.getByRole('button', { name: /^Playing preset/ });
   const retry = rig.getByRole('button', { name: 'Retry presets' });
   await expect(retry).toBeVisible();
   const pickerBox = (await picker.boundingBox())!;
@@ -1156,9 +1156,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
       )
       .toBe(running.saved_copy);
     // Recall directly from Rig without returning to Library or audio settings.
+    await page.getByRole('button', { name: /^Playing preset/ }).click();
     await page
-      .getByRole('combobox', { name: 'Playing preset' })
-      .selectOption(`original:${preset.sha256}`);
+      .locator(`.preset-picker-row[data-preset="original:${preset.sha256}"]`)
+      .click();
     await expect(
       page.getByRole('region', { name: 'Sounding rig' }),
     ).toBeVisible();

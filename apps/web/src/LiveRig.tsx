@@ -17,7 +17,6 @@ import {
   ArrowCounterClockwise,
   ArrowClockwise,
   ArrowLeft,
-  FloppyDisk,
   ImageSquare,
   List,
   X,
@@ -603,8 +602,7 @@ export function LiveRig({
             setSaveOpening(state);
           }}
         >
-          <FloppyDisk aria-hidden="true" />
-          <span className="max-[420px]:sr-only">Save copy</span>
+          Save
         </Button>
       </div>
       <span
