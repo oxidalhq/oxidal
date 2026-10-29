@@ -1286,6 +1286,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const irFixture = fixtures.find((f) => f.metadata.format === 'ir')!;
     expect(irFixture).toBeTruthy();
     const beforeModel = await (await request.get('/api/v1/audio')).json();
+    await sounding.locator('.signal-block-select').first().click();
     await sounding
       .getByRole('button', { name: 'Change model', exact: true })
       .first()

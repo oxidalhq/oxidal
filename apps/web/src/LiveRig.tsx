@@ -10,6 +10,11 @@ import {
   ArrowsSplit,
   Plus,
   Swap,
+  ImageSquare,
+  SquaresFour,
+  SpeakerHigh,
+  ArrowCounterClockwise,
+  ArrowClockwise,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -48,6 +53,17 @@ export function LiveRig({
   hideInactive?: boolean;
 }) {
   const [state, setState] = useState<AudioState | null>(null);
+  const [chainView, setChainView] = useState<'compact' | 'artwork'>(() => {
+    try {
+      return localStorage.getItem('oxidal-chain-view') === 'artwork'
+        ? 'artwork'
+        : 'compact';
+    } catch {
+      return 'compact';
+    }
+  });
+  const [restoreOpening, setRestoreOpening] = useState<AudioState | null>(null);
+
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [eqEditing, setEqEditing] = useState(false);
@@ -190,6 +206,46 @@ export function LiveRig({
         onPlaying(next.preset_name ?? 'Saved preset');
       }
     } catch (cause) {
+      if (alive.current) {
+        setError(String(cause));
+        const next = await playbackState().catch(() => null);
+        if (next) setState(next);
+      }
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function reloadSaved(opening: AudioState) {
+    if (
+      !opening.configured ||
+      opening.configured.draft ||
+      sending.current ||
+      adjustment.current ||
+      eqEditing
+    )
+      return;
+    sending.current = true;
+    generation.current += 1;
+    setBusy(true);
+    setError('');
+    setRestoreOpening(null);
+    try {
+      // Ordinary recall intentionally retains a working session. Explicit discard
+      // instead starts the immutable saved file without its working receipt/models.
+      const stopped = await playbackCommand(opening, { kind: 'stop' });
+      const next = await playbackCommand(stopped, {
+        kind: 'start',
+        settings: { ...opening.configured, working: null },
+      });
+      if (alive.current) {
+        setState(next);
+        setTarget('outputLevel');
+        setGroup('tone');
+        onPlaying(next.preset_name ?? 'Saved preset');
+      }
+    } catch (cause) {
+      // A lost response may already have applied: refresh, never repeat Stop/Start.
       if (alive.current) {
         setError(String(cause));
         const next = await playbackState().catch(() => null);
@@ -440,13 +496,109 @@ export function LiveRig({
           Signal chain
         </h2>
         <Button variant="outline" onClick={onLibrary}>
-          <Stack aria-hidden="true" /> Switch rig
+          <Stack aria-hidden="true" /> Library
         </Button>
         <span role="status" data-testid="live-status">
           {busy ? 'Applying…' : state.modified ? 'Edited' : 'Saved'}
         </span>
       </div>
-      <div className="signal-rack" aria-label="Sounding tone blocks">
+      <div className="chain-toolbar">
+        <div className="action-row" role="group" aria-label="Chain view">
+          {(['compact', 'artwork'] as const).map((view) => (
+            <Button
+              key={view}
+              variant={chainView === view ? 'secondary' : 'ghost'}
+              aria-pressed={chainView === view}
+              onClick={() => {
+                setChainView(view);
+                try {
+                  localStorage.setItem('oxidal-chain-view', view);
+                } catch {
+                  /* Optional preference. */
+                }
+              }}
+            >
+              {view === 'compact' ? (
+                <SquaresFour aria-hidden="true" />
+              ) : (
+                <ImageSquare aria-hidden="true" />
+              )}
+              {view === 'compact' ? 'Compact' : 'Artwork'}
+            </Button>
+          ))}
+        </div>
+        <div className="action-row" role="group" aria-label="Tone history">
+          <Button
+            variant="ghost"
+            disabled={disabled || !!draft || !state.authoring?.can_undo}
+            onClick={() => void author({ kind: 'undo' })}
+          >
+            <ArrowCounterClockwise aria-hidden="true" /> Undo change
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={disabled || !!draft || !state.authoring?.can_redo}
+            onClick={() => void author({ kind: 'redo' })}
+          >
+            <ArrowClockwise aria-hidden="true" /> Redo change
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={
+              disabled ||
+              !!draft ||
+              !state.modified ||
+              !state.configured ||
+              state.configured.draft
+            }
+            onClick={() => setRestoreOpening(state)}
+          >
+            Reload saved
+          </Button>
+        </div>
+      </div>
+      {restoreOpening && (
+        <AdjustmentDialog
+          title="Reload saved preset?"
+          onCancel={() => setRestoreOpening(null)}
+        >
+          <p>
+            This discards the live edits and reloads the saved version of{' '}
+            {restoreOpening.preset_name}. Audio will briefly restart.
+          </p>
+          <div className="action-row">
+            <Button
+              disabled={
+                disabled ||
+                state.session !== restoreOpening.session ||
+                state.revision !== restoreOpening.revision
+              }
+              onClick={() => {
+                void reloadSaved(restoreOpening);
+              }}
+            >
+              Discard edits and reload
+            </Button>
+            <Button variant="ghost" onClick={() => setRestoreOpening(null)}>
+              Keep editing
+            </Button>
+          </div>
+          {(state.session !== restoreOpening.session ||
+            state.revision !== restoreOpening.revision) && (
+            <p role="status">The rig changed. Close and reopen Reload saved.</p>
+          )}
+        </AdjustmentDialog>
+      )}
+      {state.modified && (
+        <p className="caption">
+          Live edits · saved preset unchanged. Save a copy to keep this sound.
+        </p>
+      )}
+      <div
+        className="signal-rack"
+        data-chain-view={chainView}
+        aria-label="Sounding tone blocks"
+      >
         {(['left', 'right'] as const).map((lane) => {
           const layout = state.authoring?.layout;
           const laneGroups = layout
@@ -495,39 +647,31 @@ export function LiveRig({
                         setDraft(null);
                       }}
                     >
+                      <SpeakerHigh
+                        className="signal-model-icon"
+                        aria-hidden="true"
+                      />
                       <span className="line-clamp-2">
                         {c.label.replace(/ · (left|right) · enabled$/, '')}
                       </span>
                     </Button>
-                    {state.configured &&
+                    {chainView === 'artwork' &&
+                      state.configured &&
                       !state.configured.draft &&
                       !state.models?.some(
                         (m) => m.target === c.target.slice(6, -8),
                       ) && (
                         <ArtworkDeck
                           compact
-                          key={state.configured.preset_id}
                           id={state.configured.preset_id}
                           owned={state.configured.owned}
                           blockId={c.target.slice(6, -8)}
                         />
                       )}
                     <div className="live-effect-actions">
-                      <Button
-                        variant="outline"
-                        aria-label="Change model"
-                        className="min-w-0 flex-1"
-                        disabled={disabled || !!draft}
-                        onClick={() =>
-                          setPicker({
-                            target: c.target.slice(6, -8),
-                            name: c.label.replace(/ · enabled$/, ''),
-                            opening: state,
-                          })
-                        }
-                      >
-                        <Swap aria-hidden="true" /> Model
-                      </Button>
+                      <span className="signal-block-state">
+                        {c.value === 1 ? 'On' : 'Bypassed'}
+                      </span>
                       <Button
                         className="effect-power h-11 w-11 shrink-0 p-0"
                         aria-label={`Enable ${c.label.replace(/ · (left|right) · enabled$/, '')}`}
@@ -691,11 +835,44 @@ export function LiveRig({
           ))}
       </div>
       {selectedBlock && (
-        <h3 className="selected-effect-heading">
-          {groups
-            .find((c) => c.target === `block:${selectedBlock}:enabled`)
-            ?.label.replace(/ · (left|right) · enabled$/, '')}
-        </h3>
+        <div className="effect-inspector" aria-label="Selected effect">
+          <div className="effect-inspector-heading">
+            <div className="min-w-0">
+              <span className="eyebrow">Selected block</span>
+              <h3 className="selected-effect-heading">
+                {groups
+                  .find((c) => c.target === `block:${selectedBlock}:enabled`)
+                  ?.label.replace(/ · (left|right) · enabled$/, '')}
+              </h3>
+            </div>
+            <Button
+              variant="outline"
+              disabled={disabled || !!draft}
+              onClick={() =>
+                setPicker({
+                  target: selectedBlock,
+                  name:
+                    groups.find(
+                      (c) => c.target === `block:${selectedBlock}:enabled`,
+                    )?.label ?? 'Selected block',
+                  opening: state,
+                })
+              }
+            >
+              <Swap aria-hidden="true" /> Change model
+            </Button>
+          </div>
+          {state.configured &&
+            !state.configured.draft &&
+            !state.models?.some((m) => m.target === selectedBlock) && (
+              <ArtworkDeck
+                key={`${state.configured.preset_id}:${selectedBlock}`}
+                id={state.configured.preset_id}
+                owned={state.configured.owned}
+                blockId={selectedBlock}
+              />
+            )}
+        </div>
       )}
       <div className="live-parameter-grid" aria-label="Sounding controls">
         {state.controls
@@ -843,6 +1020,7 @@ export function LiveRig({
       />
       {state.authoring && (
         <NativeAuthoring
+          historyControls={false}
           status={state.authoring}
           selectedBlock={selectedBlock}
           disabled={unavailable || !!draft}

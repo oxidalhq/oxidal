@@ -6,6 +6,7 @@ import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
 export function NativeAuthoring({
   status,
+  historyControls = true,
   selectedBlock,
   disabled,
   busy,
@@ -13,6 +14,7 @@ export function NativeAuthoring({
   revision,
   author,
 }: {
+  historyControls?: boolean;
   status: NonNullable<AudioState['authoring']>;
   selectedBlock?: string;
   disabled: boolean;
@@ -225,20 +227,24 @@ export function NativeAuthoring({
             role="group"
             aria-label="Live chain actions"
           >
-            <Button
-              variant="outline"
-              disabled={editingDisabled || !status?.can_undo}
-              onClick={() => void author({ kind: 'undo' })}
-            >
-              Undo change
-            </Button>
-            <Button
-              variant="outline"
-              disabled={editingDisabled || !status?.can_redo}
-              onClick={() => void author({ kind: 'redo' })}
-            >
-              Redo change
-            </Button>
+            {historyControls && (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={editingDisabled || !status?.can_undo}
+                  onClick={() => void author({ kind: 'undo' })}
+                >
+                  Undo change
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={editingDisabled || !status?.can_redo}
+                  onClick={() => void author({ kind: 'redo' })}
+                >
+                  Redo change
+                </Button>
+              </>
+            )}
             <Button
               variant="outline"
               disabled={editingDisabled}

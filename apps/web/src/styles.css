@@ -2075,7 +2075,7 @@ textarea {
 }
 .signal-block {
   position: relative;
-  flex: 0 0 11rem;
+  flex: 0 0 9rem;
   background: var(--card);
   border: 1px solid var(--input);
   border-top: 4px solid var(--control-accent);
@@ -2116,7 +2116,7 @@ textarea {
     padding: 0.5rem;
   }
   .signal-block {
-    flex-basis: 10rem;
+    flex-basis: 8.5rem;
   }
 }
 
@@ -2209,4 +2209,64 @@ textarea {
   .live-rig {
     padding: 0.75rem;
   }
+}
+
+/* A compact signal strip opens one shared inspector; power stays one tap away. */
+.signal-block-state {
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+  align-self: center;
+}
+.signal-block .live-effect-actions {
+  justify-content: space-between;
+}
+.effect-inspector {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.effect-inspector-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.effect-inspector-heading .eyebrow {
+  font-size: 0.65rem;
+  color: var(--muted-foreground);
+}
+.effect-inspector-heading h3 {
+  margin: 0.15rem 0;
+}
+.effect-inspector .artwork-entry {
+  max-width: 26rem;
+}
+
+.chain-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+}
+.chain-toolbar .action-row {
+  gap: 0.25rem;
+}
+.chain-toolbar .oxidal-button {
+  font-size: 0.75rem;
+  padding-inline: 0.5rem;
+}
+.signal-model-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: var(--control-accent);
+}
+[data-chain-view='compact'] .signal-block-select {
+  height: auto;
+  min-height: 3rem;
+  font-size: 0.8rem;
+}
+[data-chain-view='artwork'] .signal-block {
+  flex-basis: 11rem;
 }
