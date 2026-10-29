@@ -550,42 +550,44 @@ export function LiveRig({
     );
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
-      <RigPresetSelector
-        state={state}
-        disabled={disabled || !!draft || !!picker}
-        onSelect={(id, owned) => void recall(id, owned)}
-      />
-      <div
-        className="flex flex-wrap items-center justify-between gap-2"
-        aria-label="Preset actions"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <span
-            role="status"
-            data-testid="live-status"
-            className="text-xs text-muted-foreground"
-            data-edited={state.modified}
-          >
-            {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
-          </span>
+      <div className="rig-performance-header">
+        <RigPresetSelector
+          state={state}
+          disabled={disabled || !!draft || !!picker}
+          onSelect={(id, owned) => void recall(id, owned)}
+        />
+        <div
+          className="flex flex-wrap items-center justify-between gap-2"
+          aria-label="Preset actions"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              role="status"
+              data-testid="live-status"
+              className="text-xs text-muted-foreground"
+              data-edited={state.modified}
+            >
+              {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
+            </span>
+            <Button
+              variant={state.modified ? 'default' : 'outline'}
+              disabled={disabled || !!draft || !!picker}
+              onClick={() => {
+                setCopyName(state.preset_name ?? 'My preset');
+                setSaveOpening(state);
+              }}
+            >
+              <FloppyDisk aria-hidden="true" /> Save copy
+            </Button>
+          </div>
           <Button
-            variant={state.modified ? 'default' : 'outline'}
+            variant="ghost"
             disabled={disabled || !!draft || !!picker}
-            onClick={() => {
-              setCopyName(state.preset_name ?? 'My preset');
-              setSaveOpening(state);
-            }}
+            onClick={() => setPerformance(true)}
           >
-            <FloppyDisk aria-hidden="true" /> Save copy
+            Gig view
           </Button>
         </div>
-        <Button
-          variant="ghost"
-          disabled={disabled || !!draft || !!picker}
-          onClick={() => setPerformance(true)}
-        >
-          Gig view
-        </Button>
       </div>
       <div className="chain-toolbar">
         <h2 className="m-0 text-sm font-semibold">Signal chain</h2>

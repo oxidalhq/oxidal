@@ -2816,3 +2816,18 @@ textarea {
 .audio-routing-fields > .field {
   margin-block: 0;
 }
+
+.rig-performance-header {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 680px) {
+  .rig-performance-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+  .rig-performance-header [aria-label='Preset actions'] {
+    justify-content: flex-end;
+  }
+}
