@@ -4627,3 +4627,63 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
     )
     .toBe(true);
 });
+
+test('native preset library keeps originals accessible when saved copies cannot be read', async ({
+  page,
+}) => {
+  let fail = true;
+  await page.route('**/api/v1/presets', (route) =>
+    route.fulfill({
+      json: {
+        presets: [
+          {
+            sha256: 'a'.repeat(64),
+            name: 'Available original',
+            source_id: 'fixture',
+            framing: 'legacy',
+            size_bytes: 600,
+            embedded_bytes: 0,
+            playback_available: false,
+            parameter_count: 0,
+            block_count: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/v1/native', async (route) => {
+    if (fail && route.request().method() === 'GET')
+      return route.fulfill({
+        status: 503,
+        json: { error: 'Unavailable fixture' },
+      });
+    return route.fulfill({
+      json: {
+        session: 'fixture',
+        revision: 0,
+        dirty: false,
+        parameters: [],
+        block_controls: [],
+        owned: [],
+        state_captures: 0,
+        live_audio: false,
+        can_undo: false,
+        can_redo: false,
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await expect(page.getByText('Saved copies could not be read.')).toBeVisible();
+  await expect(
+    page.getByRole('searchbox', { name: 'Search presets' }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Load Available original' }),
+  ).toBeEnabled();
+  fail = false;
+  await page.getByRole('button', { name: 'Retry saved copies' }).click();
+  await expect(page.getByText('Saved copies could not be read.')).toHaveCount(
+    0,
+  );
+});

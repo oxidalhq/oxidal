@@ -53,6 +53,7 @@ export function Library({
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState('Loading library…');
   const [error, setError] = useState('');
+  const [copiesError, setCopiesError] = useState('');
   const generation = useRef(0);
   const loading = useRef(false);
   const [playing, setPlaying] = useState<AudioState | null>(null);
@@ -67,10 +68,14 @@ export function Library({
       .catch(() => {});
     void nativeState()
       .then((s) => {
-        if (active)
+        if (active) {
           setOwned(s.owned.map((p) => ({ id: p.id, name: p.preset.name })));
+          setCopiesError('');
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setCopiesError('Saved copies could not be read.');
+      });
     return () => {
       active = false;
     };
@@ -312,6 +317,17 @@ export function Library({
             <p role="alert" className="error">
               {error}
             </p>
+          )}
+          {copiesError && (
+            <div className="space-y-2">
+              <p role="alert">{copiesError}</p>
+              <Button
+                variant="outline"
+                onClick={() => setRefresh((value) => value + 1)}
+              >
+                Retry saved copies
+              </Button>
+            </div>
           )}
           <p role="status">{message}</p>
           {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
