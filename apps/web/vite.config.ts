@@ -7,7 +7,12 @@ export default defineConfig({
   server: {
     strictPort: true,
     port: 5173,
-    proxy: { '/api': { target: 'http://127.0.0.1:3210', changeOrigin: true } },
+    proxy: {
+      '/api': {
+        target: process.env.OXIDAL_DEV_API_ORIGIN ?? 'http://127.0.0.1:3210',
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     environment: 'jsdom',

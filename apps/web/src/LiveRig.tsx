@@ -701,7 +701,10 @@ export function LiveRig({
                     <Button
                       variant="ghost"
                       className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
-                      title={c.label.replace(/ · (left|right) · enabled$/, '')}
+                      title={c.label.replace(
+                        /(?: · (?:left|right))? · enabled$/,
+                        '',
+                      )}
                       aria-pressed={selectedBlock === c.target.split(':')[1]}
                       disabled={disabled || !!draft}
                       onClick={() => {
@@ -734,7 +737,10 @@ export function LiveRig({
                         }
                       />
                       <span className="line-clamp-2">
-                        {c.label.replace(/ · (left|right) · enabled$/, '')}
+                        {c.label.replace(
+                          /(?: · (?:left|right))? · enabled$/,
+                          '',
+                        )}
                       </span>
                     </Button>
                     {chainView === 'artwork' &&
@@ -756,7 +762,7 @@ export function LiveRig({
                       </span>
                       <Button
                         className="effect-power h-11 w-11 shrink-0 p-0"
-                        aria-label={`Enable ${c.label.replace(/ · (left|right) · enabled$/, '')}`}
+                        aria-label={`Enable ${c.label.replace(/(?: · (?:left|right))? · enabled$/, '')}`}
                         title={
                           c.value === 1
                             ? 'On — tap to bypass'
@@ -924,7 +930,7 @@ export function LiveRig({
               <h3 className="selected-effect-heading">
                 {groups
                   .find((c) => c.target === `block:${selectedBlock}:enabled`)
-                  ?.label.replace(/ · (left|right) · enabled$/, '')}
+                  ?.label.replace(/(?: · (?:left|right))? · enabled$/, '')}
               </h3>
             </div>
             <Button

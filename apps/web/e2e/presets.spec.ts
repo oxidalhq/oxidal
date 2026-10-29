@@ -273,8 +273,11 @@ test('native preset upload, durable library, exact download and rejected replace
 }) => {
   const before: unknown = await (await request.get('/api/v1/state')).json();
   await page.goto('/');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByText('Import preset', { exact: true }).click();
   for (const name of [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
@@ -317,6 +320,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(second.getByRole('listitem')).toHaveCount(2);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByText('Import preset', { exact: true }).click();
   await expect(rows).toHaveCount(2);
   await page.getByLabel('TONE3000 preset file').setInputFiles({
     name: 'bad.t3kpreset',
@@ -1449,7 +1453,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByRole('button', { name: 'Stop audio', exact: true })
       .click();
     await expect(audio.getByRole('status')).toHaveText('Audio: stopped');
-    await expect(page.getByText('Device connected')).toBeVisible();
+    await expect(
+      page.getByRole('complementary', { name: 'DSP and system resources' }),
+    ).toHaveAttribute('data-connected', 'true');
     await page.getByRole('button', { name: 'Library', exact: true }).click();
     await page
       .getByRole('navigation', { name: 'Library sections' })
@@ -1785,14 +1791,16 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
     .toBe(1);
   await expect(
-    page.getByText('space · No image supplied', { exact: true }),
+    page.locator('figcaption').filter({ hasText: 'No image supplied' }),
   ).not.toBeVisible();
   await page.getByText('1 asset without artwork', { exact: true }).click();
   await expect(
-    page.getByText('space · No image supplied', { exact: true }),
+    page.locator('figcaption').filter({ hasText: 'No image supplied' }),
   ).toBeVisible();
   const status = await page
-    .getByText('amp · Saved offline', { exact: true })
+    .locator('figcaption > span')
+    .filter({ hasText: 'Saved offline' })
+    .first()
     .boundingBox();
   expect(status!.height).toBeLessThan(30);
   await page

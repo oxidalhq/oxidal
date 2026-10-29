@@ -76,7 +76,12 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(strip).toContainText('17%');
   await expect(strip).toContainText('23%');
   await expect(strip).toContainText('0.5/4.0 GiB');
-  await expect(strip).toContainText('N/A');
+  await expect(
+    strip
+      .locator('dl > div')
+      .filter({ has: page.getByText('Xruns', { exact: true }) })
+      .getByRole('definition'),
+  ).toHaveText('—');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(strip).toBeVisible();
   await strip.getByRole('button', { name: 'Open resource details' }).click();

@@ -157,7 +157,9 @@ test.beforeEach(async ({ page, request }, testInfo) => {
     state = await response.json();
   }
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
 });
 
 test('device portrait and landscape keep controls accessible and preserve a rotating edit', async ({

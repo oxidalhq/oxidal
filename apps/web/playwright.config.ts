@@ -1,5 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Dedicated ports keep qualification isolated from a running authoring preview.
+function port(name: string, fallback: number) {
+  const value = process.env[name] ?? String(fallback);
+  if (!/^\d+$/.test(value) || Number(value) < 1024 || Number(value) > 65535)
+    throw new Error(`${name} must be a port from 1024 to 65535`);
+  return Number(value);
+}
+const apiPort = port('OXIDAL_E2E_API_PORT', 3210);
+const webPort = port('OXIDAL_E2E_WEB_PORT', 5173);
+if (apiPort === webPort) throw new Error('E2E API and web ports must differ');
+const apiOrigin = `http://127.0.0.1:${apiPort}`;
+const webOrigin = `http://127.0.0.1:${webPort}`;
+
 // Reuse the native load/edit/save scenario on each device when explicitly enabled.
 const deviceCoverage = {
   testMatch: /(device-layout|presets|monitor|debug|account)\.spec\.ts/,
@@ -14,7 +27,7 @@ export default defineConfig({
   timeout: 30000,
   expect: { timeout: 7000 },
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: { baseURL: 'http://127.0.0.1:5173', trace: 'retain-on-failure' },
+  use: { baseURL: webOrigin, trace: 'retain-on-failure' },
   projects: [
     {
       name: 'chromium',
@@ -54,14 +67,16 @@ export default defineConfig({
   webServer: [
     {
       command: 'node ../../scripts/tooling.mjs e2e-server',
-      url: 'http://127.0.0.1:3210/api/v1/health',
+      url: `${apiOrigin}/api/v1/health`,
+      env: { OXIDAL_ADDR: `127.0.0.1:${apiPort}` },
       reuseExistingServer: false,
       timeout: 120000,
     },
     {
-      command: 'pnpm dev',
-      url: 'http://127.0.0.1:5173',
-      reuseExistingServer: !process.env.CI,
+      command: `pnpm dev --port ${webPort}`,
+      url: webOrigin,
+      env: { OXIDAL_DEV_API_ORIGIN: apiOrigin },
+      reuseExistingServer: false,
       timeout: 30000,
     },
   ],

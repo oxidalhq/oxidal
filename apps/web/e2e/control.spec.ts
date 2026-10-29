@@ -53,7 +53,9 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   context,
 }) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await expect(
     page.getByText('Development simulator · no audio.', { exact: true }),
   ).toBeVisible();
@@ -84,7 +86,9 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   ).toBeVisible();
   const second = await context.newPage();
   await second.goto('/?development=simulator');
-  await expect(second.getByText('Device connected')).toBeVisible();
+  await expect(
+    second.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
@@ -127,7 +131,9 @@ test('MIDI continues with browsers closed; simulator feedback cannot loop into i
   request,
 }) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.close();
   const live = (await (await request.get('/api/v1/state')).json()) as {
     session: string;
@@ -160,14 +166,20 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
   context,
 }) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await context.setOffline(true);
-  await expect(page.getByText('Reconnecting…', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Connection lost · reconnecting', { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Adjust NAM A level value' }),
   ).toBeDisabled();
   await context.setOffline(false);
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await expect(
     page.getByRole('button', { name: 'Adjust NAM A level value' }),
   ).toBeEnabled();
@@ -177,7 +189,9 @@ test('quiet interface has no detected WCAG AA violations', async ({
   page,
 }, testInfo) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
   const delay = await page.getByTestId('block-delay').boundingBox();
@@ -218,7 +232,9 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   request,
 }) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
@@ -259,7 +275,9 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   expect(state.preset).toBe('parallel');
   expect(state.feedback[0]?.value).toBe(0);
   await page.reload();
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
@@ -391,7 +409,9 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
     .toBe(true);
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await expect(page.getByTestId('value-nam-a.level')).toHaveText('50%');
   await expect(
     page.getByLabel('Draft NAM A level (%)', { exact: true }),
@@ -410,7 +430,9 @@ test('audio inspection keeps the authoring service connected', async ({
   request,
 }) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
   await panel
@@ -426,7 +448,9 @@ test('audio inspection keeps the authoring service connected', async ({
   );
   const health = await (await request.get('/api/v1/health')).json();
   expect(health.audio_available).toBe(false);
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(
     page.getByText('Development simulator · no audio.', { exact: true }),
@@ -438,7 +462,9 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   request,
 }, testInfo) => {
   await page.goto('/?development=simulator');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   const before = await (await request.get('/api/v1/state')).json();
   const delay = page.getByRole('button', { name: 'Focus Delay controls' });
   await delay.click();
@@ -588,7 +614,7 @@ test('native device defaults save independently of the playing tone', async ({
   page,
   request,
 }) => {
-  const endpoint = 'http://127.0.0.1:3210/api/v1/native/defaults';
+  const endpoint = '/api/v1/native/defaults';
   const initial = await (await request.get(endpoint)).json();
   try {
     await page.goto('/');
@@ -620,5 +646,32 @@ test('native device defaults save independently of the playing tone', async ({
     await request.post(endpoint, {
       data: { expected_revision: latest.revision, settings: initial.settings },
     });
+  }
+});
+
+test('global tuner is accessible outside preset authoring and survives rotation', async ({
+  page,
+}) => {
+  await page.goto('/');
+  for (const view of ['Rig', 'Library', 'Monitor', 'Settings']) {
+    await page.getByRole('button', { name: view, exact: true }).click();
+    await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Tuner', exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByText(/standalone input tuner is not available/),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: 'Start tuner', exact: true }),
+    ).toBeDisabled();
+    const size = page.viewportSize()!;
+    await page.setViewportSize({ width: size.height, height: size.width });
+    await expect(
+      dialog.getByRole('button', { name: 'Close dialog', exact: true }),
+    ).toBeInViewport();
+    await dialog
+      .getByRole('button', { name: 'Close dialog', exact: true })
+      .click();
+    await expect(dialog).toHaveCount(0);
   }
 });

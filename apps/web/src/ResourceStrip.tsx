@@ -140,7 +140,11 @@ export function ResourceStrip({
               ? 'Audio failed'
               : 'Audio stopped';
   return (
-    <aside className="resource-strip" aria-label="DSP and system resources">
+    <aside
+      className="resource-strip"
+      aria-label="DSP and system resources"
+      data-connected={connected && !disconnected}
+    >
       <div className="resource-strip-state">
         {onTuner && (
           <Button

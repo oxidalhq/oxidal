@@ -35,3 +35,16 @@ The ordinary `pnpm check` suite exercises edit ownership, sequence conflicts, ex
 ## Optional Linux LV2 qualification
 
 Install `liblilv-dev lv2-dev swh-lv2` on Debian/Ubuntu and run `pnpm lv2:check` for the native host and control-to-DSP graph suite. Linux CI runs the same gate after the standard checks. See [LV2 hosting](lv2.md) for supported plugins, graph semantics and current integration limits. Default macOS and cross-compilation checks keep the native feature disabled.
+
+### Browser tests alongside a running preview
+
+The maintained Playwright suite always starts its own daemon and web server. To
+leave an existing preview running, choose a separate pair of unused loopback ports:
+
+```sh
+OXIDAL_E2E_API_PORT=3211 OXIDAL_E2E_WEB_PORT=5174 pnpm test:e2e
+```
+
+The API proxy and browser requests use that pair together. Defaults remain 3210
+and 5173; occupied test ports fail rather than reusing a potentially unrelated
+server or its preset library. Native-worker qualification flags remain unchanged.

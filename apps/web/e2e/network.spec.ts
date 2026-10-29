@@ -46,7 +46,9 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     await route.fulfill({ json: state });
   });
   await page.goto('/');
-  await expect(page.getByText('Device connected')).toBeVisible();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
     .getByRole('navigation', { name: 'Settings sections' })
@@ -110,10 +112,12 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     .getByRole('dialog')
     .getByRole('button', { name: 'Confirm restart', exact: true })
     .click();
-  expect(commands.find((c) => c.type === 'power')).toEqual({
-    type: 'power',
-    action: 'reboot',
-  });
+  await expect
+    .poll(() => commands.find((c) => c.type === 'power'))
+    .toEqual({
+      type: 'power',
+      action: 'reboot',
+    });
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
