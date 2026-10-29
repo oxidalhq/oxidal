@@ -16,6 +16,7 @@ import { GearIcon } from './GearIcon';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
+import { ArtworkDeck } from './AssetArtwork';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -466,6 +467,9 @@ export function MixedRig({
   const eqBlock = wholeNative
     ? eqBlocks.find((e) => e.block_id === nativeTarget)
     : eqBlocks[0];
+  const selectedModel = state.control?.models
+    ?.find((row) => row.node === selected?.id)
+    ?.assignments.find((assignment) => assignment.target === eqBlock?.block_id);
   const visibleControls = controls
     .filter((c) => {
       if (c.target.kind === 'bypass') return false;
@@ -860,6 +864,9 @@ export function MixedRig({
               </Button>
             ))}
         </div>
+      )}
+      {running && selectedModel && (
+        <ArtworkDeck model id={selectedModel.asset} />
       )}
       {running && selected && nativeModels && !wholeNative && eqBlock && (
         <Button

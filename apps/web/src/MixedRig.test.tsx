@@ -18,6 +18,12 @@ vi.mock('./ModelPicker', () => ({
     <div data-testid="model-picker">{name}</div>
   ),
 }));
+vi.mock('./AssetArtwork', () => ({
+  ArtworkDeck: ({ id }: { id: string }) => (
+    <div data-testid="model-artwork">{id}</div>
+  ),
+}));
+vi.mock('./LiveEq', () => ({ LiveEq: () => null }));
 vi.mock('./SceneMidi', () => ({ SceneMidi: () => null }));
 beforeEach(() => {
   Object.defineProperties(HTMLDialogElement.prototype, {
@@ -192,4 +198,26 @@ it('offers both hybrid insertion lanes and carries the chosen position to the pi
     'Right chain · position 3',
   );
   expect(rigAudioCommand).not.toHaveBeenCalled();
+});
+
+it('shows artwork for the selected hybrid assignment rather than another block', async () => {
+  const state = setup();
+  state.control!.eq = [
+    { node: 'amp', blocks: [{ block_id: 'a' }, { block_id: 'b' }] },
+  ] as NonNullable<typeof state.control>['eq'];
+  state.control!.models = [
+    {
+      node: 'amp',
+      assignments: [
+        { target: 'a', asset: 'asset-a' },
+        { target: 'b', asset: 'asset-b' },
+      ],
+    },
+  ] as NonNullable<typeof state.control>['models'];
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Select model 1' }),
+  );
+  expect(screen.getByTestId('model-artwork')).toHaveTextContent('asset-a');
+  fireEvent.click(screen.getByRole('button', { name: 'Select model 2' }));
+  expect(screen.getByTestId('model-artwork')).toHaveTextContent('asset-b');
 });
