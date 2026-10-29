@@ -109,7 +109,7 @@ Regular laptop installation must preserve its network, desktop and boot settings
 
 ## Device branding
 
-Appliance provisioning includes the Oxidal ASCII login and post-login banner. Browser branding, SVG masters and derived PNGs travel with the web bundle. To show the supplied artwork during Linux startup, pass `--boot-splash` to `image.py`; this installs Plymouth, selects the Oxidal theme and rebuilds the initramfs. The option requires the branded bundle. It does not replace the Pi EEPROM/firmware display or change its bootloader. The normal console remains available (Escape switches a Plymouth splash to diagnostics); serial-console output remains usable. Graphical startup is not yet qualified on physical HDMI hardware. Ordinary Linux package installation does not change the host's theme or login banner.
+Appliance provisioning includes a plain ASCII block-letter Oxidal login and post-login banner, with no terminal control sequences or backslashes for the login program to interpret. Browser branding, SVG masters and derived PNGs travel with the web bundle. To show the supplied artwork during Linux startup, pass `--boot-splash` to `image.py`; this installs Plymouth, selects the Oxidal theme and rebuilds the initramfs. The option requires the branded bundle. It does not replace the Pi EEPROM/firmware display or change its bootloader. The normal console remains available (Escape switches a Plymouth splash to diagnostics); serial-console output remains usable. Graphical startup is not yet qualified on physical HDMI hardware. Ordinary Linux package installation does not change the host's theme or login banner.
 
 ## Private development presets
 

@@ -1,14 +1,15 @@
 
-          _     _       _
-   ___  _(_) __| | __ _ | |
-  / _ \\| | |/ _` |/ _` || |
- | (_) / | | (_| | (_| || |
-  \___/_/|_|\__,_|\__,_||_|
+   ###   #   #  #####  ####    ###   #
+  #   #   # #     #    #   #  #   #  #
+  #   #    #      #    #   #  #####  #
+  #   #   # #     #    #   #  #   #  #
+   ###   #   #  #####  ####   #   #  #####
 
- O X I D A L
+  O X I D A L
 
- Control from your phone: https://oxidal.local
- On the device hotspot:   https://10.42.0.1
- Use your supplied Wi-Fi and web access credentials.
- No keyboard is needed for normal operation.
+  Open Safari or Chrome on your phone:
+  https://oxidal.local
+  Hotspot: https://10.42.0.1
+
+  Sign in with your device web account.
 
