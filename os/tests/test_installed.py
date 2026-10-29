@@ -24,6 +24,14 @@ class InstalledTests(unittest.TestCase):
             self.assertIn('usr/share/plymouth/themes/oxidal/boot-splash.png', contents)
             self.assertIn('usr/share/plymouth/themes/oxidal/oxidal.script', contents)
 
+        if Path('/etc/NetworkManager/system-connections/oxidal.nmconnection').is_file():
+            dns = Path('/etc/NetworkManager/dnsmasq-shared.d/oxidal-portal.conf')
+            self.assertTrue(dns.is_file())
+            subprocess.run(['dnsmasq', '--test', '--conf-file=' + str(dns)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertTrue(Path('/etc/nginx/conf.d/oxidal-portal.conf').is_file())
+            self.assertIn('Open Oxidal', Path('/usr/share/oxidal/portal/index.html').read_text())
+            self.assertIn(b'<svg', Path('/opt/oxidal/ui/brand/wordmark.svg').read_bytes())
+
     def test_relocated_workers_ui_and_shutdown(self):
         home = Path('/opt/oxidal')
         import hashlib
