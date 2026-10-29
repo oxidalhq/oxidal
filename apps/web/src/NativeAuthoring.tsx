@@ -318,22 +318,26 @@ export function NativeAuthoring({
                   Copy block
                 </Button>
 
-                <Button
-                  variant="outline"
-                  disabled={editingDisabled || position === 0}
-                  onClick={() => reorder(-1)}
-                >
-                  Earlier
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={
-                    editingDisabled || position === laneBlocks.length - 1
-                  }
-                  onClick={() => reorder(1)}
-                >
-                  Later
-                </Button>
+                {historyControls && (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled={editingDisabled || position === 0}
+                      onClick={() => reorder(-1)}
+                    >
+                      Earlier
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={
+                        editingDisabled || position === laneBlocks.length - 1
+                      }
+                      onClick={() => reorder(1)}
+                    >
+                      Later
+                    </Button>
+                  </>
+                )}
                 <Button
                   variant="outline"
                   disabled={editingDisabled}

@@ -2397,3 +2397,135 @@ textarea {
     font-size: 0.75rem;
   }
 }
+
+.adjustment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  position: sticky;
+  top: -0.75rem;
+  z-index: 2;
+  background: var(--popover);
+  padding-block: 0.25rem;
+}
+.adjustment-heading h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.midi-message {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--control-accent);
+  background: var(--muted);
+  font: 0.8rem var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+/* Healthy telemetry is an instrument readout, not a stack of connection badges. */
+.resource-strip {
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 0.25rem 0.5rem;
+  padding-block: 0.2rem;
+}
+.resource-strip-state {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: end;
+}
+.resource-strip dl {
+  grid-column: 1;
+  grid-row: 1;
+  align-items: center;
+  padding-bottom: 0;
+  gap: 0.4rem;
+}
+.resource-strip-state > button {
+  margin: 0;
+  color: var(--control-accent);
+}
+.resource-strip-state > button[data-warning='true'] {
+  color: var(--destructive);
+}
+.resource-alert {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--destructive);
+}
+@media (max-width: 600px) {
+  .resource-strip {
+    padding-inline: max(8px, var(--safe-left)) max(8px, var(--safe-right));
+  }
+  .resource-strip dt {
+    font-size: 0.55rem;
+    letter-spacing: 0;
+  }
+  .resource-strip dd {
+    font-size: 0.65rem;
+  }
+  .resource-strip dd small {
+    display: none;
+  }
+}
+
+/* Compact mode represents devices on a wire; artwork mode keeps richer cards. */
+[data-chain-view='compact'] .signal-blocks {
+  gap: 1rem;
+  background: linear-gradient(var(--input), var(--input)) 0 1.9rem / 100% 2px
+    no-repeat;
+}
+[data-chain-view='compact'] .signal-block {
+  flex-basis: 6.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  outline: none;
+}
+[data-chain-view='compact'] .signal-block::after {
+  display: none;
+}
+[data-chain-view='compact'] .signal-block-select {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.375rem;
+  height: auto;
+  min-height: 5.25rem;
+  padding: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+[data-chain-view='compact'] .signal-model-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--input);
+  border-radius: 0.75rem;
+  background: var(--card);
+}
+[data-chain-view='compact']
+  .signal-block[data-selected='true']
+  .signal-model-icon {
+  border: 2px solid var(--control-accent);
+  background: var(--accent);
+}
+[data-chain-view='compact']
+  .signal-block[data-bypassed='true']
+  .signal-model-icon {
+  border-style: dashed;
+  color: var(--muted-foreground);
+}
+[data-chain-view='compact'] .signal-block-state {
+  display: none;
+}
+[data-chain-view='compact'] .live-effect-actions {
+  justify-content: center;
+}
+[data-chain-view='compact'] .effect-power {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+}

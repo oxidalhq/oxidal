@@ -8,7 +8,11 @@ import {
 import { afterEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
 import { nativeState, presetLibrary, type AudioState } from './api';
-import { controlGroup, confirmedControlDisplay } from './rigControls';
+import {
+  controlGroup,
+  confirmedControlDisplay,
+  movedBlockOrder,
+} from './rigControls';
 vi.mock('./api', () => ({ nativeState: vi.fn(), presetLibrary: vi.fn() }));
 afterEach(() => {
   cleanup();
@@ -82,4 +86,17 @@ it('groups imaging separately and never substitutes normalized percentages for p
   expect(controlGroup('toneBass')).toBe('tone');
   expect(confirmedControlDisplay('-12.0 st', true)).toBe('-12.0 st · updating');
   expect(confirmedControlDisplay('2.5 dB', false)).toBe('2.5 dB');
+});
+
+it('reorders actual chain models without dropping or moving insertion slots', () => {
+  const blocks = [
+    { id: 'amp', insert: false },
+    { id: 'slot', insert: true },
+    { id: 'cab', insert: false },
+  ];
+  expect(movedBlockOrder(blocks, 'amp', 1)).toEqual(['cab', 'slot', 'amp']);
+  expect(movedBlockOrder(blocks, 'cab', -1)).toEqual(['cab', 'slot', 'amp']);
+  expect(movedBlockOrder(blocks, 'amp', -1)).toBeNull();
+  expect(movedBlockOrder(blocks, 'missing', 1)).toBeNull();
+  expect(movedBlockOrder(blocks, 'slot', 1)).toBeNull();
 });

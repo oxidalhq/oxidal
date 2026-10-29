@@ -8,8 +8,17 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { LiveRig } from './LiveRig';
-import { playbackCommand, playbackState, type AudioState } from './api';
-vi.mock('./api', () => ({ playbackCommand: vi.fn(), playbackState: vi.fn() }));
+import {
+  presetArtwork,
+  playbackCommand,
+  playbackState,
+  type AudioState,
+} from './api';
+vi.mock('./api', () => ({
+  presetArtwork: vi.fn(),
+  playbackCommand: vi.fn(),
+  playbackState: vi.fn(),
+}));
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
 vi.mock('./SceneMidi', () => ({ MidiControls: () => null }));
 vi.mock('./NativeAuthoring', () => ({ NativeAuthoring: () => null }));
@@ -72,6 +81,7 @@ const opening = {
 } as unknown as AudioState;
 beforeEach(() => {
   localStorage.clear();
+  vi.mocked(presetArtwork).mockResolvedValue([]);
   vi.mocked(playbackState).mockResolvedValue(opening);
 });
 afterEach(() => {

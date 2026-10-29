@@ -31,3 +31,18 @@ export function shortControlLabel(label: string) {
 export function confirmedControlDisplay(display: string, pending: boolean) {
   return pending ? `${display} · updating` : display;
 }
+
+/** Move between actual models while retaining native insertion-slot identities. */
+export function movedBlockOrder(
+  blocks: readonly { id: string; insert: boolean }[],
+  id: string,
+  direction: -1 | 1,
+): string[] | null {
+  const models = blocks.filter((block) => !block.insert);
+  const selected = models.findIndex((block) => block.id === id);
+  const neighbour = models[selected + direction];
+  if (selected < 0 || !neighbour) return null;
+  return blocks.map((block) =>
+    block.id === id ? neighbour.id : block.id === neighbour.id ? id : block.id,
+  );
+}

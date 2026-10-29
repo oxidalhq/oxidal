@@ -1,3 +1,5 @@
+import { X } from '@phosphor-icons/react';
+import { Button } from './components/ui/button';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 /** Compact modal adjustment surface. Native modality keeps focus and touch events
@@ -58,9 +60,19 @@ export function AdjustmentDialog({
         cancel.current();
       }}
     >
-      <h2 id={heading} tabIndex={-1}>
-        {title}
-      </h2>
+      <div className="adjustment-heading">
+        <h2 id={heading} tabIndex={-1}>
+          {title}
+        </h2>
+        <Button
+          variant="ghost"
+          className="h-11 w-11 shrink-0 p-0"
+          aria-label="Close dialog"
+          onClick={() => cancel.current()}
+        >
+          <X aria-hidden="true" />
+        </Button>
+      </div>
       {children}
     </dialog>
   );

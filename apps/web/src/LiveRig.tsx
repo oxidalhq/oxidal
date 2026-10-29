@@ -1,3 +1,4 @@
+import { GearIcon } from './GearIcon';
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
@@ -12,12 +13,13 @@ import {
   Swap,
   ImageSquare,
   SquaresFour,
-  SpeakerHigh,
   ArrowCounterClockwise,
   ArrowClockwise,
+  ArrowLeft,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
+  movedBlockOrder,
   controlGroup,
   shortControlLabel,
   confirmedControlDisplay,
@@ -28,6 +30,8 @@ import { ArtworkDeck } from './AssetArtwork';
 import { ModelPicker } from './ModelPicker';
 import { useEffect, useRef, useState } from 'react';
 import {
+  presetArtwork,
+  type AssetArtwork,
   playbackCommand,
   playbackState,
   type AudioState,
@@ -63,6 +67,26 @@ export function LiveRig({
     }
   });
   const [restoreOpening, setRestoreOpening] = useState<AudioState | null>(null);
+  const [artwork, setArtwork] = useState<{
+    id: string;
+    owned: boolean;
+    items: AssetArtwork[];
+  } | null>(null);
+  const artworkId = state?.configured?.preset_id;
+  const artworkOwned = state?.configured?.owned ?? false;
+  useEffect(() => {
+    const abort = new AbortController();
+    if (artworkId)
+      void presetArtwork(artworkId, artworkOwned, abort.signal)
+        .then((items) => {
+          if (!abort.signal.aborted)
+            setArtwork({ id: artworkId, owned: artworkOwned, items });
+        })
+        .catch(() => {
+          if (!abort.signal.aborted) setArtwork(null);
+        });
+    return () => abort.abort();
+  }, [artworkId, artworkOwned]);
 
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -483,6 +507,12 @@ export function LiveRig({
   const selectedBlock = selectedTarget.startsWith('block:')
     ? selectedTarget.split(':')[1]
     : undefined;
+  const selectedLane = state.authoring?.layout?.right.some(
+    (block) => block.id === selectedBlock,
+  )
+    ? 'right'
+    : 'left';
+  const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
       <RigPresetSelector
@@ -647,9 +677,23 @@ export function LiveRig({
                         setDraft(null);
                       }}
                     >
-                      <SpeakerHigh
+                      <GearIcon
                         className="signal-model-icon"
-                        aria-hidden="true"
+                        gear={
+                          state.models?.some(
+                            (model) => model.target === c.target.slice(6, -8),
+                          )
+                            ? ''
+                            : ((artwork &&
+                              artwork.id === artworkId &&
+                              artwork.owned === artworkOwned
+                                ? artwork.items
+                                : []
+                              ).find(
+                                (item) =>
+                                  item.block_id === c.target.slice(6, -8),
+                              )?.gear ?? '')
+                        }
                       />
                       <span className="line-clamp-2">
                         {c.label.replace(/ · (left|right) · enabled$/, '')}
@@ -861,6 +905,40 @@ export function LiveRig({
             >
               <Swap aria-hidden="true" /> Change model
             </Button>
+          </div>
+          <div className="action-row" role="group" aria-label="Block position">
+            {([-1, 1] as const).map((direction) => {
+              const order = movedBlockOrder(
+                orderedBlocks,
+                selectedBlock,
+                direction,
+              );
+              return (
+                <Button
+                  key={direction}
+                  variant="ghost"
+                  disabled={disabled || !!draft || !order}
+                  onClick={() => {
+                    if (order)
+                      void author({
+                        kind: 'edit',
+                        edit: {
+                          kind: 'reorder',
+                          lane: selectedLane,
+                          block_ids: order,
+                        },
+                      });
+                  }}
+                >
+                  {direction === -1 ? (
+                    <ArrowLeft aria-hidden="true" />
+                  ) : (
+                    <ArrowRight aria-hidden="true" />
+                  )}
+                  {direction === -1 ? 'Move earlier' : 'Move later'}
+                </Button>
+              );
+            })}
           </div>
           {state.configured &&
             !state.configured.draft &&

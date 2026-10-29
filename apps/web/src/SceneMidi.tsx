@@ -122,6 +122,20 @@ export function MidiControls({
             {status?.events ?? 0} messages
           </p>
         )}
+        {configured && status?.last && (
+          <output className="midi-message" aria-label="Last MIDI message">
+            Channel {status.last.channel} ·{' '}
+            {status.last.kind === 'program'
+              ? `Program ${status.last.program + 1}`
+              : `CC ${status.last.controller} · ${status.last.value}`}
+          </output>
+        )}
+        {!scenes.length && (
+          <p className="caption">
+            Map CC messages to controls below. Program changes select scenes in
+            a scene rig.
+          </p>
+        )}
         {status?.error && (
           <p role="status" className="caption">
             {status.error}
@@ -556,7 +570,7 @@ export function MidiControls({
             Disable MIDI
           </Button>
         </div>
-        {!devices?.inputs.length && !loading && (
+        {devices && !devices.inputs.length && !loading && !error && (
           <p className="caption">No MIDI inputs detected.</p>
         )}
         {error && <p role="alert">{error}</p>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { monitoring, type Monitoring } from './api';
-import { ChartLine } from '@phosphor-icons/react';
+import { ChartLine, Waveform, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 
 const percent = (n: number | null | undefined) =>
@@ -140,28 +140,23 @@ export function ResourceStrip({
   return (
     <aside className="resource-strip" aria-label="DSP and system resources">
       <div className="resource-strip-state">
-        <span className="device-indicator" role="status">
-          <span
-            className={connected ? 'dot online' : 'dot'}
-            aria-hidden="true"
-          />
-          {connected ? 'Device connected' : 'Reconnecting…'}
-        </span>
-        <span
-          className="audio-indicator"
-          data-state={
-            failed || disconnected ? 'fault' : running ? 'running' : 'stopped'
-          }
-          data-testid="resource-state"
-        >
+        <span className="sr-only" data-testid="resource-state">
           {status}
         </span>
         <Button
           variant="ghost"
           onClick={onDetails}
           aria-label="Open resource details"
+          title={status}
+          data-warning={failed || disconnected || !connected}
         >
-          <ChartLine size={20} aria-hidden="true" />
+          {failed || disconnected || !connected ? (
+            <WarningCircle aria-hidden="true" />
+          ) : running ? (
+            <Waveform aria-hidden="true" />
+          ) : (
+            <ChartLine aria-hidden="true" />
+          )}
         </Button>
       </div>
       <dl>
@@ -197,6 +192,13 @@ export function ResourceStrip({
           <dd>{clips ?? '—'}</dd>
         </div>
       </dl>
+      {(!connected || disconnected || failed) && (
+        <p className="resource-alert" role="status">
+          {!connected || disconnected
+            ? 'Connection lost · reconnecting'
+            : 'Audio stopped unexpectedly · open diagnostics'}
+        </p>
+      )}
     </aside>
   );
 }
