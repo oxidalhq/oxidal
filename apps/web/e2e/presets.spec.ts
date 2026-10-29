@@ -2534,6 +2534,11 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const replacement = (await get()).control.models;
   expect(replacement[0].assignments).toHaveLength(1);
   await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Add NAM · position' })
+    .getByRole('button', { name: /Left chain · position/ })
+    .first()
+    .click();
   picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker
     .getByRole('button', {
@@ -2552,6 +2557,11 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .toBe('applied');
   expect((await get()).control.models[0].assignments).toHaveLength(2);
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Add IR · position' })
+    .getByRole('button', { name: /Left chain · position/ })
+    .first()
+    .click();
   picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker
     .getByRole('button', {
@@ -4119,6 +4129,11 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   expect((await get()).control.controls).toEqual(beforeAnalysis);
   await rig.getByText('Block spectrum', { exact: true }).click();
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Add IR · position' })
+    .getByRole('button', { name: /Left chain · position/ })
+    .first()
+    .click();
   picker = page.getByRole('dialog', { name: 'Choose model' });
   await picker
     .getByRole('button', { name: 'Local files', exact: true })

@@ -13,6 +13,11 @@ vi.mock('./api', () => ({
   rigAudioCommand: vi.fn(),
   rigDocument: vi.fn(),
 }));
+vi.mock('./ModelPicker', () => ({
+  ModelPicker: ({ name }: { name: string }) => (
+    <div data-testid="model-picker">{name}</div>
+  ),
+}));
 vi.mock('./SceneMidi', () => ({ SceneMidi: () => null }));
 beforeEach(() => {
   Object.defineProperties(HTMLDialogElement.prototype, {
@@ -162,5 +167,29 @@ it('rejects saving a different hybrid revision while its name dialog is open', a
   });
   await screen.findByText('The rig changed. Close and reopen Save copy.');
   expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+});
+
+it('offers both hybrid insertion lanes and carries the chosen position to the picker', async () => {
+  const state = setup();
+  state.control!.slots = [
+    {
+      node: 'amp',
+      slots: [
+        { target: 'left-insert', position: { lane: 0, index: 0 } },
+        { target: 'right-insert', position: { lane: 1, index: 2 } },
+      ],
+    },
+  ] as NonNullable<typeof state.control>['slots'];
+  fireEvent.click(await screen.findByRole('button', { name: 'Add NAM' }));
+  expect(
+    screen.getByRole('button', { name: 'Left chain · position 1' }),
+  ).toBeEnabled();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Right chain · position 3' }),
+  );
+  expect(screen.getByTestId('model-picker')).toHaveTextContent(
+    'Right chain · position 3',
+  );
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });

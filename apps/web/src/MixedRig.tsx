@@ -80,6 +80,11 @@ export function MixedRig({
     format?: 'nam' | 'ir';
     allowedFormat?: 'nam' | 'ir';
   } | null>(null);
+  const [insertion, setInsertion] = useState<{
+    opening: RigAudioState;
+    node: string;
+    format: 'nam' | 'ir';
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [eqBusy, setEqBusy] = useState(false);
   const [nativeSelection, setNativeSelection] = useState<{
@@ -841,21 +846,14 @@ export function MixedRig({
               Change model
             </Button>
           )}
-          {slots.some((s) => s.position.lane === 0) &&
+          {slots.length > 0 &&
             (['nam', 'ir'] as const).map((format) => (
               <Button
                 key={format}
                 variant="outline"
                 disabled={disabled || !!edit}
                 onClick={() =>
-                  setPicker({
-                    opening: state,
-                    node: selected.id,
-                    target: slots.find((s) => s.position.lane === 0)!.target,
-                    name: format.toUpperCase(),
-                    insert: true,
-                    format,
-                  })
+                  setInsertion({ opening: state, node: selected.id, format })
                 }
               >
                 Add {format.toUpperCase()}
@@ -933,6 +931,72 @@ export function MixedRig({
         <p role="alert" className="error">
           {modelChange.progress.error}
         </p>
+      )}
+      {insertion && (
+        <AdjustmentDialog
+          title={`Add ${insertion.format.toUpperCase()} · position`}
+          onCancel={() => setInsertion(null)}
+        >
+          <p className="caption">
+            Choose an available position in the selected native chain.
+          </p>
+          <div
+            className="grid gap-2"
+            aria-label="Available insertion positions"
+          >
+            {insertion.opening.control?.slots
+              ?.find((row) => row.node === insertion.node)
+              ?.slots.map((slot) => (
+                <Button
+                  key={slot.target}
+                  variant="outline"
+                  disabled={
+                    disabled ||
+                    state.session !== insertion.opening.session ||
+                    state.revision !== insertion.opening.revision ||
+                    state.control?.session !==
+                      insertion.opening.control?.session ||
+                    state.control?.revision !==
+                      insertion.opening.control?.revision
+                  }
+                  onClick={() => {
+                    const latest = current.current;
+                    if (
+                      !latest ||
+                      latest.session !== insertion.opening.session ||
+                      latest.revision !== insertion.opening.revision ||
+                      latest.control?.session !==
+                        insertion.opening.control?.session ||
+                      latest.control?.revision !==
+                        insertion.opening.control?.revision
+                    )
+                      return;
+                    setPicker({
+                      opening: insertion.opening,
+                      node: insertion.node,
+                      target: slot.target,
+                      name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
+                      insert: true,
+                      format: insertion.format,
+                    });
+                    setInsertion(null);
+                  }}
+                >
+                  {slot.position.lane === 0 ? 'Left' : 'Right'} chain · position{' '}
+                  {slot.position.index + 1}
+                </Button>
+              ))}
+          </div>
+          {(state.session !== insertion.opening.session ||
+            state.revision !== insertion.opening.revision ||
+            state.control?.session !== insertion.opening.control?.session ||
+            state.control?.revision !==
+              insertion.opening.control?.revision) && (
+            <p role="status">
+              The chain changed. Close and choose the position again.
+            </p>
+          )}
+        </AdjustmentDialog>
       )}
       {picker && (
         <ModelPicker
