@@ -2529,3 +2529,59 @@ textarea {
   box-shadow: none;
   background: transparent;
 }
+
+/* The preset selector is the native rig title; editing tools sit in one row. */
+.chain-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.chain-heading h2 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+.chain-heading [role='status'] {
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+.chain-heading [data-edited='true'] {
+  color: var(--control-accent);
+}
+.chain-toolbar .oxidal-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.chain-toolbar [aria-label='Chain view'] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  gap: 0;
+}
+@media (max-width: 600px) {
+  .chain-view-label {
+    display: none;
+  }
+  .live-rig {
+    padding: 0.65rem;
+  }
+  .chain-toolbar {
+    gap: 0.25rem;
+  }
+}
+
+.resource-strip small[data-warning='true'] {
+  color: var(--destructive);
+}
+.signal-blocks:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.resource-alert[data-warning='false'] {
+  color: var(--muted-foreground);
+}
+.signal-blocks {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}

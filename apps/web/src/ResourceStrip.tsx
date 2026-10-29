@@ -161,12 +161,15 @@ export function ResourceStrip({
       </div>
       <dl>
         <div
-          data-warning={peak != null && peak >= 100}
+          data-warning={load != null && load >= 100}
           title="Measured processing p95 / audio-period deadline; excludes device I/O and scheduling"
         >
           <dt>DSP p95</dt>
           <dd>
-            {percent(load)} <small>pk {percent(peak)}</small>
+            {percent(load)}{' '}
+            <small data-warning={peak != null && peak >= 100}>
+              pk {percent(peak)}
+            </small>
           </dd>
         </div>
         <div title="Total host CPU, not the audio processing percentage">
@@ -192,11 +195,19 @@ export function ResourceStrip({
           <dd>{clips ?? '—'}</dd>
         </div>
       </dl>
-      {(!connected || disconnected || failed) && (
-        <p className="resource-alert" role="status">
+      {(!connected || disconnected || failed || (state && !fresh)) && (
+        <p
+          className="resource-alert"
+          data-warning={
+            !connected || disconnected || failed || status === 'Audio stale'
+          }
+          role="status"
+        >
           {!connected || disconnected
             ? 'Connection lost · reconnecting'
-            : 'Audio stopped unexpectedly · open diagnostics'}
+            : failed
+              ? 'Audio stopped unexpectedly · open diagnostics'
+              : status}
         </p>
       )}
     </aside>

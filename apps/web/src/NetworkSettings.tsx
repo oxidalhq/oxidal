@@ -21,7 +21,6 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
   const [policyReview, setPolicyReview] = useState(false);
   const [country, setCountry] = useState('');
   const [channel, setChannel] = useState(0);
-  const [power, setPower] = useState<'reboot' | 'shutdown' | null>(null);
   useEffect(() => {
     let active = true;
     let pending = false;
@@ -96,61 +95,6 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
               </li>
             ))}
           </ul>
-          <details className="my-4">
-            <summary>System power</summary>
-            <p className="caption">
-              Audio Stop keeps the editor running. System power stops the audio
-              workers and closes the web interface. Save your preset edits
-              first.
-            </p>
-            <div className="action-row mt-3">
-              <Button
-                variant="outline"
-                disabled={busy || !connected || !!state.pending}
-                onClick={() => setPower('reboot')}
-              >
-                Reboot device
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy || !connected || !!state.pending}
-                onClick={() => setPower('shutdown')}
-              >
-                Shut down device
-              </Button>
-            </div>
-            {power && (
-              <div
-                className="mt-3 grid gap-2"
-                role="group"
-                aria-label="Confirm system power"
-              >
-                <p>
-                  {power === 'reboot'
-                    ? 'Restart the whole device?'
-                    : 'Power off the whole device?'}{' '}
-                  Unsaved edits will be lost.{' '}
-                  {power === 'shutdown' &&
-                    'Leave power connected until shutdown has finished.'}
-                </p>
-                <div className="action-row">
-                  <Button
-                    disabled={busy || !connected}
-                    onClick={() => {
-                      const action = power;
-                      setPower(null);
-                      void run({ type: 'power', action });
-                    }}
-                  >
-                    Confirm {power === 'reboot' ? 'reboot' : 'shutdown'}
-                  </Button>
-                  <Button variant="outline" onClick={() => setPower(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-          </details>
           <p className="caption">
             Wi-Fi radio: {state.wireless_enabled ? 'on' : 'off'}. Access the
             device at <strong>https://oxidal.local</strong>; the hotspot also

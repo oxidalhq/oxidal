@@ -1,3 +1,4 @@
+import { DevicePower } from './DevicePower';
 import {
   lazy,
   Suspense,
@@ -78,13 +79,14 @@ export default function App() {
     'rig',
   );
   const [settingsSection, setSettingsSection] = useState<
-    'audio' | 'connections' | 'midi' | 'display' | 'maintenance'
+    'audio' | 'connections' | 'midi' | 'display' | 'device' | 'maintenance'
   >('audio');
   const settingsLabels = {
     audio: 'Audio setup',
     connections: 'Connections',
     midi: 'MIDI controls',
     display: 'Display',
+    device: 'Device',
     maintenance: 'Maintenance',
   };
   const [displayMode, setDisplayMode] = useState(() => {
@@ -347,7 +349,11 @@ export default function App() {
       />
       <div className="workspace">
         <main>
-          <div className="page-heading">
+          <div
+            className={
+              view === 'rig' && playingName ? 'sr-only' : 'page-heading'
+            }
+          >
             <div>
               <span className="eyebrow">
                 {view === 'rig'
@@ -606,6 +612,7 @@ export default function App() {
                         connections: <WifiHigh aria-hidden="true" />,
                         midi: <SlidersHorizontal aria-hidden="true" />,
                         display: <Sun aria-hidden="true" />,
+                        device: <Power aria-hidden="true" />,
                         maintenance: <Wrench aria-hidden="true" />,
                       }[section]
                     }
@@ -708,6 +715,9 @@ export default function App() {
               )}
               {settingsSection === 'audio' && (
                 <AudioSettings connected={connected} />
+              )}
+              {settingsSection === 'device' && (
+                <DevicePower connected={connected} />
               )}
               {settingsSection === 'maintenance' && (
                 <>

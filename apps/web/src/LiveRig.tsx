@@ -4,7 +4,6 @@ import { NativeAuthoring } from './NativeAuthoring';
 import {
   Power,
   ArrowRight,
-  Stack,
   SlidersHorizontal,
   Waveform,
   MusicNotes,
@@ -520,16 +519,14 @@ export function LiveRig({
         disabled={disabled || !!draft || !!picker}
         onSelect={(id, owned) => void recall(id, owned)}
       />
-      <div className="section-heading">
-        <h2 className="flex items-center gap-2">
-          <Waveform size={20} aria-hidden="true" />
-          Signal chain
-        </h2>
-        <Button variant="outline" onClick={onLibrary}>
-          <Stack aria-hidden="true" /> Browse library
-        </Button>
-        <span role="status" data-testid="live-status">
-          {busy ? 'Applying…' : state.modified ? 'Edited' : 'Saved'}
+      <div className="chain-heading">
+        <h2>Signal chain</h2>
+        <span
+          role="status"
+          data-testid="live-status"
+          data-edited={state.modified}
+        >
+          {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
         </span>
       </div>
       <div className="chain-toolbar">
@@ -539,6 +536,8 @@ export function LiveRig({
               key={view}
               variant={chainView === view ? 'secondary' : 'ghost'}
               aria-pressed={chainView === view}
+              aria-label={view === 'compact' ? 'Compact' : 'Artwork'}
+              title={view === 'compact' ? 'Connected icons' : 'Artwork view'}
               onClick={() => {
                 setChainView(view);
                 try {
@@ -553,24 +552,30 @@ export function LiveRig({
               ) : (
                 <ImageSquare aria-hidden="true" />
               )}
-              {view === 'compact' ? 'Compact' : 'Artwork'}
+              <span className="chain-view-label">
+                {view === 'compact' ? 'Compact' : 'Artwork'}
+              </span>
             </Button>
           ))}
         </div>
         <div className="action-row" role="group" aria-label="Tone history">
           <Button
             variant="ghost"
+            aria-label="Undo change"
+            title="Undo change"
             disabled={disabled || !!draft || !state.authoring?.can_undo}
             onClick={() => void author({ kind: 'undo' })}
           >
-            <ArrowCounterClockwise aria-hidden="true" /> Undo change
+            <ArrowCounterClockwise aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
+            aria-label="Redo change"
+            title="Redo change"
             disabled={disabled || !!draft || !state.authoring?.can_redo}
             onClick={() => void author({ kind: 'redo' })}
           >
-            <ArrowClockwise aria-hidden="true" /> Redo change
+            <ArrowClockwise aria-hidden="true" />
           </Button>
           <Button
             variant="ghost"
@@ -621,7 +626,7 @@ export function LiveRig({
       )}
       {state.modified && (
         <p className="caption">
-          Live edits · saved preset unchanged. Save a copy to keep this sound.
+          Saved preset unchanged · save a copy to keep edits.
         </p>
       )}
       <div
@@ -649,7 +654,12 @@ export function LiveRig({
               <span className="signal-port">
                 {layout?.stereo ? (lane === 'left' ? 'IN L' : 'IN R') : 'IN'}
               </span>
-              <div className="signal-blocks">
+              <div
+                className="signal-blocks"
+                role="region"
+                aria-label={`${lane} chain blocks`}
+                tabIndex={0}
+              >
                 {laneGroups.map((c, index) => (
                   <div
                     key={c.target}
@@ -664,6 +674,7 @@ export function LiveRig({
                     <Button
                       variant="ghost"
                       className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
+                      title={c.label.replace(/ · (left|right) · enabled$/, '')}
                       aria-pressed={selectedBlock === c.target.split(':')[1]}
                       disabled={disabled || !!draft}
                       onClick={() => {

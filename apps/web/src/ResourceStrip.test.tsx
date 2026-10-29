@@ -123,3 +123,13 @@ it('shows a measured zero and recovered xruns instead of treating zero as unavai
   });
   expect(screen.getByText('Xruns').parentElement).toHaveTextContent('6');
 });
+
+it('keeps stopped audio visible without showing a normal running badge', async () => {
+  vi.mocked(monitoring).mockResolvedValue({
+    ...snapshot(1, 'stopped'),
+    graph_phase: 'stopped',
+  });
+  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  await act(async () => {});
+  expect(screen.getByRole('status')).toHaveTextContent('Audio stopped');
+});

@@ -100,13 +100,15 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   expect(commands.find((c) => c.type === 'policy')).toMatchObject({
     settings: { mode: 'not_at_home', home_ssid: 'Studio: Wi-Fi' },
   });
-  await panel.getByText('System power', { exact: true }).click();
-  await panel
-    .getByRole('button', { name: 'Reboot device', exact: true })
+  await page.getByRole('button', { name: 'Device', exact: true }).click();
+  const power = page.getByRole('region', { name: 'Device power' });
+  await power
+    .getByRole('button', { name: 'Restart device', exact: true })
     .click();
   expect(commands.filter((c) => c.type === 'power')).toHaveLength(0);
-  await panel
-    .getByRole('button', { name: 'Confirm reboot', exact: true })
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Confirm restart', exact: true })
     .click();
   expect(commands.find((c) => c.type === 'power')).toEqual({
     type: 'power',
