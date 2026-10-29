@@ -11,22 +11,24 @@ export function DevicePower({ connected }: { connected: boolean }) {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
+  const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
     void deviceNetwork()
       .then((next) => {
-        if (active) setState(next);
+        if (active) {
+          setState(next);
+          setReadError('');
+        }
       })
       .catch(() => {
-        if (active)
-          setError(
-            'Device controls unavailable. Reopen this section to retry.',
-          );
+        if (active) setReadError('Device controls could not be read.');
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [refresh]);
   async function confirm() {
     if (!action || busy) return;
     setBusy(true);
@@ -74,6 +76,25 @@ export function DevicePower({ connected }: { connected: boolean }) {
           Shut down device
         </Button>
       </div>
+      {!state && !readError && (
+        <p role="status" className="caption">
+          Reading device controls…
+        </p>
+      )}
+      {readError && (
+        <div className="space-y-2">
+          <p role="alert">{readError}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setReadError('');
+              setRefresh((value) => value + 1);
+            }}
+          >
+            <ArrowClockwise aria-hidden="true" /> Retry device controls
+          </Button>
+        </div>
+      )}
       {state?.pending && (
         <p role="status">Finish the pending network change first.</p>
       )}

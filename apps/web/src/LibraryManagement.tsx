@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  ArrowUp,
+  ArrowDown,
+  Archive,
+  ArrowCounterClockwise,
+} from '@phosphor-icons/react';
 import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
 import { Button } from './components/ui/button';
 
@@ -148,7 +154,7 @@ function LibraryRow({
               aria-label={`Move ${item.name} up`}
               onClick={() => onEdit({ kind: 'move', up: true })}
             >
-              ↑
+              <ArrowUp aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -156,7 +162,7 @@ function LibraryRow({
               aria-label={`Move ${item.name} down`}
               onClick={() => onEdit({ kind: 'move', up: false })}
             >
-              ↓
+              <ArrowDown aria-hidden="true" />
             </Button>
           </>
         )}
@@ -168,6 +174,11 @@ function LibraryRow({
             onEdit({ kind: 'visibility', archived: !item.archived })
           }
         >
+          {item.archived ? (
+            <ArrowCounterClockwise aria-hidden="true" />
+          ) : (
+            <Archive aria-hidden="true" />
+          )}
           {item.archived ? 'Restore' : 'Remove'}
         </Button>
       </div>
