@@ -237,7 +237,7 @@ test('rig controls follow the actual session without example effects', async ({
   const rig = page.getByRole('region', { name: 'Sounding rig' });
   await expect(rig).toBeVisible();
   await expect(page.getByTestId('active-preset')).toHaveText('Amp only');
-  await expect(rig.locator('.live-effect')).toHaveCount(1);
+  await expect(rig.locator('.rig-tile')).toHaveCount(1);
   await rig.getByRole('button', { name: 'My amp', exact: true }).click();
   await expect(
     rig.getByRole('button', {
@@ -296,12 +296,11 @@ test('rig controls follow the actual session without example effects', async ({
     0,
   );
   await rig.getByRole('button', { name: 'Model artwork', exact: true }).click();
-  await expect(rig.locator('.signal-rack')).toHaveAttribute(
+  await expect(rig.locator('.chain-view')).toHaveAttribute(
     'data-chain-view',
     'artwork',
   );
-  await expect(rig.locator('.signal-block-state')).toHaveCount(0);
-  await expect(rig.locator('.signal-block .effect-power')).toHaveCount(1);
+  await expect(rig.locator('.rig-tile .chain-led')).toHaveCount(1);
   await page.screenshot({
     path: info.outputPath('rig-artwork-mobile.png'),
     fullPage: true,
@@ -309,7 +308,7 @@ test('rig controls follow the actual session without example effects', async ({
   await rig
     .getByRole('button', { name: 'Connected icons', exact: true })
     .click();
-  await expect(rig.locator('.signal-rack')).toHaveAttribute(
+  await expect(rig.locator('.chain-view')).toHaveAttribute(
     'data-chain-view',
     'compact',
   );
@@ -372,7 +371,7 @@ test('rig controls follow the actual session without example effects', async ({
     controls: [audio.controls[0]],
   };
   await expect(page.getByTestId('active-preset')).toHaveText('Output only');
-  await expect(rig.locator('.live-effect')).toHaveCount(0);
+  await expect(rig.locator('.rig-tile')).toHaveCount(0);
   await expect(
     rig.getByRole('button', { name: 'Adjust sounding Output', exact: true }),
   ).toBeVisible();
@@ -1195,7 +1194,8 @@ test('playback lifecycle keeps native authoring available after stop and restart
       (c: { target: string }) =>
         c.target.startsWith('block:') && c.target.endsWith(':enabled'),
     );
-    const power = sounding.locator('.effect-power').first();
+    await sounding.locator('.rig-tile').first().click();
+    const power = sounding.locator('.led-toggle');
     await power.click();
     await expect
       .poll(async () => {
@@ -1221,16 +1221,14 @@ test('playback lifecycle keeps native authoring available after stop and restart
       portrait,
     ]) {
       await page.setViewportSize(viewport);
-      const cards = await sounding
-        .locator('.live-effect')
-        .evaluateAll((items) =>
-          items.map((item) => ({
-            top: item.getBoundingClientRect().top,
-            buttonBottom: item
-              .querySelector('.effect-power')!
-              .getBoundingClientRect().bottom,
-          })),
-        );
+      const cards = await sounding.locator('.rig-tile').evaluateAll((items) =>
+        items.map((item) => ({
+          top: item.getBoundingClientRect().top,
+          buttonBottom: item
+            .querySelector('.rig-tile-face')!
+            .getBoundingClientRect().bottom,
+        })),
+      );
       for (const card of cards)
         for (const other of cards) {
           if (Math.abs(card.top - other.top) < 1)
@@ -1244,12 +1242,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
         ),
       ).toBe(true);
     }
-    await sounding
-      .locator('.live-effect')
-      .first()
-      .getByRole('button')
-      .first()
-      .click();
+    await sounding.locator('.rig-tile').first().click();
     const eq = sounding.getByRole('region', { name: 'Block EQ' });
     await expect(eq).toBeVisible();
     const eqBefore = (await (await request.get('/api/v1/audio')).json()).eq[0];
@@ -1437,7 +1430,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const irFixture = fixtures.find((f) => f.metadata.format === 'ir')!;
     expect(irFixture).toBeTruthy();
     const beforeModel = await (await request.get('/api/v1/audio')).json();
-    await sounding.locator('.signal-block-select').first().click();
+    await sounding.locator('.rig-tile').first().click();
     await sounding
       .getByRole('button', { name: 'Change model', exact: true })
       .first()
@@ -1494,7 +1487,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
             ?.phase,
       )
       .toBe('applied');
-    await expect(sounding.locator('.live-effect').first()).toContainText(
+    await expect(sounding.locator('.rig-tile').first()).toContainText(
       'Audition fixture',
     );
     const confirmedAfterOther = await (
@@ -1717,7 +1710,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
             ?.phase,
       )
       .toBe('applied');
-    await expect(sounding.locator('.live-effect')).toHaveCount(1);
+    await expect(sounding.locator('.rig-tile')).toHaveCount(1);
     await sounding
       .getByRole('button', { name: 'Add NAM', exact: true })
       .click();
@@ -1735,7 +1728,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
           (await (await request.get('/api/v1/audio')).json()).models.length,
       )
       .toBe(2);
-    await expect(sounding.locator('.live-effect')).toHaveCount(2);
+    await expect(sounding.locator('.rig-tile')).toHaveCount(2);
     await sounding.getByRole('button', { name: 'Add IR', exact: true }).click();
     await sounding
       .getByLabel('Available insertion positions')
@@ -1757,7 +1750,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
           (await (await request.get('/api/v1/audio')).json()).models.length,
       )
       .toBe(3);
-    await expect(sounding.locator('.live-effect')).toHaveCount(3);
+    await expect(sounding.locator('.rig-tile')).toHaveCount(3);
     const created = await (await request.get('/api/v1/audio')).json();
     expect(created.configured.draft).toBe(true);
     expect(created.saved_copy).toBeNull();
@@ -1810,16 +1803,14 @@ test('playback lifecycle keeps native authoring available after stop and restart
       ).toEqual([]);
       // Compact blocks retain separate, full-size touch targets after rotation.
       const blockGeometry = await sounding
-        .locator('.live-effect')
+        .locator('.rig-tile')
         .evaluateAll((cards) =>
           cards.map((card) => ({
             height: card.getBoundingClientRect().height,
-            buttons: Array.from(card.querySelectorAll('button')).map(
-              (button) => {
-                const box = button.getBoundingClientRect();
-                return { width: box.width, height: box.height };
-              },
-            ),
+            buttons: [card].map((button) => {
+              const box = button.getBoundingClientRect();
+              return { width: box.width, height: box.height };
+            }),
           })),
         );
       for (const card of blockGeometry) {

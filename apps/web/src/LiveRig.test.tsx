@@ -100,7 +100,7 @@ function show() {
     />,
   );
 }
-it('keeps chain power direct, opens a single model inspector and retains display preference', async () => {
+it('keeps bypass in the block detail, opens a single model inspector and retains display preference', async () => {
   show();
   await screen.findByRole('button', { name: 'Save copy' });
   expect(
@@ -113,7 +113,13 @@ it('keeps chain power direct, opens a single model inspector and retains display
   expect(screen.getAllByRole('button', { name: 'Change model' })).toHaveLength(
     1,
   );
-  expect(screen.getByRole('button', { name: 'Enable Amp' })).toBeEnabled();
+  expect(
+    screen.queryByRole('button', { name: 'Enable Amp' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Amp on' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Model artwork' }));
   expect(localStorage.getItem('oxidal-chain-view')).toBe('artwork');
   expect(playbackCommand).not.toHaveBeenCalled();

@@ -1,10 +1,11 @@
 import { GearIcon } from './GearIcon';
+import { ChainView, LedToggle } from './ChainView';
+import { blockKind } from './rigChain';
 import { useWorkspaceState } from './workspaceMemory';
 import { ButtonGroup } from './components/ui/button-group';
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
-  Power,
   ArrowRight,
   SlidersHorizontal,
   Waveform,
@@ -48,6 +49,9 @@ import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
+const blockName = (label: string) =>
+  label.replace(/(?: · (?:left|right))? · enabled$/, '');
+
 export function LiveRig({
   connected,
   onPlaying,
@@ -725,12 +729,22 @@ export function LiveRig({
               )}
             </AdjustmentDialog>
           )}
-          <div
-            className="signal-rack"
-            data-chain-view={chainView}
-            aria-label="Sounding tone blocks"
-          >
-            {(['left', 'right'] as const).map((lane) => {
+          <ChainView
+            label="Sounding tone blocks"
+            appearance={chainView}
+            disabled={disabled || !!draft}
+            selected={selectedBlock}
+            onSelect={(id) => {
+              const prefix = `block:${id}:`;
+              setTarget(
+                state.controls.find(
+                  (item) => item.target.startsWith(prefix) && !item.toggle,
+                )?.target ?? `block:${id}:enabled`,
+              );
+              setDraft(null);
+              revealInspector();
+            }}
+            lanes={(['left', 'right'] as const).flatMap((lane) => {
               const layout = state.authoring?.layout;
               const laneGroups = layout
                 ? layout[lane].flatMap((b) =>
@@ -740,156 +754,53 @@ export function LiveRig({
                   ? groups
                   : [];
               if (lane === 'right' && !laneGroups.length && !layout?.stereo)
-                return null;
-              return (
-                <div
-                  className="signal-lane"
-                  key={lane}
-                  aria-label={`${lane} signal chain`}
-                >
-                  <span className="signal-port">
-                    {layout?.stereo
-                      ? lane === 'left'
-                        ? 'IN L'
-                        : 'IN R'
-                      : 'IN'}
-                  </span>
-                  <div
-                    className="signal-blocks"
-                    role="region"
-                    aria-label={`${lane} chain blocks`}
-                    tabIndex={0}
-                  >
-                    {laneGroups.map((c, index) => (
-                      <div
-                        key={c.target}
-                        className="live-effect signal-block"
-                        data-selected={selectedBlock === c.target.split(':')[1]}
-                        data-bypassed={c.value !== 1}
-                      >
-                        <span className="signal-block-index">
-                          {String(index + 1).padStart(2, '0')}{' '}
-                          <ArrowRight aria-hidden="true" />
-                        </span>
-                        <Button
-                          variant="ghost"
-                          className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
-                          aria-label={c.label.replace(
-                            /(?: · (?:left|right))? · enabled$/,
-                            '',
-                          )}
-                          title={c.label.replace(
-                            /(?: · (?:left|right))? · enabled$/,
-                            '',
-                          )}
-                          aria-pressed={
-                            selectedBlock === c.target.split(':')[1]
-                          }
-                          disabled={disabled || !!draft}
-                          onClick={() => {
-                            const prefix = c.target.slice(0, -7);
-                            setTarget(
-                              state.controls.find(
-                                (item) =>
-                                  item.target.startsWith(prefix) &&
-                                  !item.toggle,
-                              )?.target ?? c.target,
-                            );
-                            setDraft(null);
-                            revealInspector();
-                          }}
-                        >
-                          {chainView === 'compact' ||
-                          !state.configured ||
-                          state.configured.draft ? (
-                            <GearIcon
-                              className="signal-model-icon"
-                              gear={
-                                state.models?.some(
-                                  (model) =>
-                                    model.target === c.target.slice(6, -8),
-                                )
-                                  ? ''
-                                  : ((artwork &&
-                                    artwork.id === artworkId &&
-                                    artwork.owned === artworkOwned
-                                      ? artwork.items
-                                      : []
-                                    ).find(
-                                      (item) =>
-                                        item.block_id === c.target.slice(6, -8),
-                                    )?.gear ?? '')
-                              }
-                            />
-                          ) : null}
-                          {chainView === 'artwork' &&
-                            state.models?.find(
-                              (m) => m.target === c.target.slice(6, -8),
-                            ) && (
-                              <ArtworkDeck
-                                tile
-                                model
-                                id={
-                                  state.models.find(
-                                    (m) => m.target === c.target.slice(6, -8),
-                                  )!.asset
-                                }
-                              />
-                            )}
-                          {chainView === 'artwork' &&
-                            state.configured &&
-                            !state.configured.draft &&
-                            !state.models?.some(
-                              (m) => m.target === c.target.slice(6, -8),
-                            ) && (
-                              <ArtworkDeck
-                                tile
-                                id={state.configured.preset_id}
-                                owned={state.configured.owned}
-                                blockId={c.target.slice(6, -8)}
-                              />
-                            )}
-                          <span className="signal-block-label">
-                            <span className="line-clamp-2">
-                              {c.label.replace(
-                                /(?: · (?:left|right))? · enabled$/,
-                                '',
-                              )}
-                            </span>
-                          </span>
-                        </Button>
-                        <div className="live-effect-actions">
-                          <Button
-                            className="effect-power h-11 w-11 shrink-0 p-0"
-                            aria-label={`Enable ${c.label.replace(/(?: · (?:left|right))? · enabled$/, '')}`}
-                            title={
-                              c.value === 1
-                                ? 'On — tap to bypass'
-                                : 'Bypassed — tap to enable'
-                            }
-                            variant={c.value === 1 ? 'secondary' : 'ghost'}
-                            aria-pressed={c.value === 1}
-                            disabled={disabled}
-                            onClick={() =>
-                              void apply(c.target, c.value === 1 ? 0 : 1)
-                            }
-                          >
-                            <Power className="size-5" aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {!laneGroups.length && (
-                      <span className="signal-empty">Direct signal</span>
-                    )}
-                  </div>
-                  <span className="signal-port">
-                    OUT <ArrowRight aria-hidden="true" />
-                  </span>
-                </div>
-              );
+                return [];
+              return [
+                {
+                  id: lane,
+                  input: layout?.stereo
+                    ? lane === 'left'
+                      ? 'IN L'
+                      : 'IN R'
+                    : 'IN',
+                  blocks: laneGroups.map((c) => {
+                    const id = c.target.slice(6, -8);
+                    const model = state.models?.find((m) => m.target === id);
+                    const gear = model
+                      ? ''
+                      : ((artwork &&
+                        artwork.id === artworkId &&
+                        artwork.owned === artworkOwned
+                          ? artwork.items
+                          : []
+                        ).find((item) => item.block_id === id)?.gear ?? '');
+                    const showArtwork =
+                      chainView === 'artwork' &&
+                      !!state.configured &&
+                      !state.configured.draft;
+                    return {
+                      id,
+                      label: blockName(c.label),
+                      kind: blockKind(gear),
+                      on: c.value === 1,
+                      face: !showArtwork ? (
+                        <GearIcon gear={gear} />
+                      ) : model ? (
+                        <ArtworkDeck tile model id={model.asset} />
+                      ) : (
+                        <ArtworkDeck
+                          tile
+                          id={state.configured!.preset_id}
+                          owned={state.configured!.owned}
+                          blockId={id}
+                        />
+                      ),
+                    };
+                  }),
+                },
+              ];
             })}
-          </div>
+          />
           {!!state.slots?.length && (
             <div className="action-row">
               {(['nam', 'ir'] as const).map((format) => (
@@ -1124,6 +1035,26 @@ export function LiveRig({
                       ?.label.replace(/(?: · (?:left|right))? · enabled$/, '')}
                   </h3>
                 </div>
+                {(() => {
+                  const enabled = groups.find(
+                    (c) => c.target === `block:${selectedBlock}:enabled`,
+                  );
+                  return (
+                    enabled && (
+                      <LedToggle
+                        on={enabled.value === 1}
+                        label={`${blockName(enabled.label)} on`}
+                        disabled={disabled}
+                        onToggle={() =>
+                          void apply(
+                            enabled.target,
+                            enabled.value === 1 ? 0 : 1,
+                          )
+                        }
+                      />
+                    )
+                  );
+                })()}
                 <Button
                   aria-label="Change model"
                   title="Choose another model"

@@ -238,12 +238,7 @@ h2 {
   display: flex;
   gap: 6px;
 }
-.signal-path {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-}
+
 .block {
   border: 1px solid var(--border);
   border-radius: var(--display-radius);
@@ -473,9 +468,7 @@ summary:focus-visible {
   main {
     padding: var(--page-space);
   }
-  .signal-path {
-    gap: 6px;
-  }
+
   .block {
     padding: 12px 8px;
   }
@@ -777,12 +770,6 @@ h1 {
 }
 
 @media (max-width: 1050px) {
-  .signal-path {
-    flex-direction: column;
-    align-items: stretch;
-    padding-top: 0;
-    gap: 8px;
-  }
   .route-arrow {
     align-self: center;
     transform: rotate(90deg);
@@ -918,11 +905,6 @@ main {
 }
 /* Wide phones get a compact horizontal chain when rotated. */
 @media (orientation: landscape) and (min-width: 800px) and (max-width: 1050px) {
-  .signal-path {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-  }
   .branches {
     flex-direction: column;
   }
@@ -1049,10 +1031,7 @@ main {
   padding: 0;
   border: 0;
 }
-.signal-path {
-  gap: var(--rack-gap);
-  padding-block: var(--rack-gap);
-}
+
 .block,
 .branch .block {
   min-height: 80px;
@@ -1141,10 +1120,6 @@ button.block:focus-visible {
 }
 /* Keep the chain together on tablets; phones wrap its routing into two rows. */
 @media (min-width: 680px) and (max-width: 1050px) {
-  .signal-path {
-    flex-direction: row;
-    align-items: center;
-  }
   .branches {
     flex-direction: column;
   }
@@ -1183,54 +1158,6 @@ button.block:focus-visible {
   }
 }
 @media (max-width: 679px) {
-  .signal-path {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(
-        0,
-        1fr
-      );
-    gap: 8px;
-  }
-  .signal-path > .endpoint {
-    grid-column: 1;
-  }
-  .signal-path > .branches {
-    grid-column: 3 / 6;
-  }
-  .signal-path > .route-arrow,
-  .signal-path > .route-junction {
-    transform: none;
-    justify-self: center;
-  }
-  .signal-path > :nth-child(4) {
-    grid-column: 4;
-    grid-row: 2;
-    transform: rotate(90deg);
-    min-height: 20px;
-  }
-  .signal-path > .route-junction:nth-child(4) {
-    transform: none;
-  }
-  .signal-path > .route-junction:nth-child(4) svg {
-    transform: rotate(90deg);
-  }
-  .signal-path > .route-junction:nth-child(2) svg {
-    transform: none;
-  }
-  .signal-path > .wet-path {
-    grid-column: 1 / 4;
-    grid-row: 3;
-  }
-  .signal-path > :nth-child(6) {
-    grid-column: 4;
-    grid-row: 3;
-    transform: none;
-  }
-  .signal-path > :last-child {
-    grid-column: 5;
-    grid-row: 3;
-    min-height: 80px;
-  }
   .endpoint {
     flex-direction: column;
     align-items: flex-start;
@@ -1241,12 +1168,7 @@ button.block:focus-visible {
   .endpoint .eyebrow {
     display: block;
   }
-  .signal-path .block {
-    padding: 7px;
-  }
-  .signal-path .block-meta {
-    flex-wrap: wrap;
-  }
+
   .branches {
     gap: 6px;
   }
@@ -1727,13 +1649,7 @@ button.block:focus-visible {
 .native-value-trigger:disabled {
   opacity: 0.45;
 }
-.effect-power[aria-pressed='true']::before {
-  content: '';
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: currentColor;
-}
+
 .live-rig [data-testid='live-status'] {
   font: 500 0.7rem var(--font-mono);
   padding: 0.25rem 0.5rem;
@@ -1876,23 +1792,7 @@ textarea {
 }
 
 /* Effect bypass targets line up even when names or artwork differ in height. */
-.live-effect {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.live-effect-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: auto;
-}
-.live-effect-actions > .effect-power[aria-pressed='true']::before {
-  content: none;
-}
-.live-effect-actions > .effect-power[aria-pressed='false'] {
-  border: 1px dashed currentColor;
-}
+
 .live-parameter-grid > button {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -2110,84 +2010,6 @@ textarea {
 .library-import {
   margin-block: 0.75rem;
 }
-.signal-rack {
-  background: transparent;
-  border-block: 1px solid var(--border);
-  padding-block: 0.5rem;
-}
-.signal-lane {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  padding-block: 0.5rem;
-}
-.signal-port {
-  display: flex;
-  gap: 0.25rem;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.signal-port svg {
-  width: 1rem;
-}
-.signal-blocks {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  gap: 0.75rem;
-  overflow-x: auto;
-  padding: 0.25rem 0.25rem 0.75rem;
-}
-.signal-block {
-  position: relative;
-  flex: 0 0 9rem;
-  background: var(--card);
-  border: 1px solid var(--input);
-  border-top: 4px solid var(--control-accent);
-  border-radius: var(--radius);
-  padding: 0.5rem;
-}
-.signal-block[data-selected='true'] {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.signal-block[data-bypassed='true'] {
-  border-top-color: var(--muted-foreground);
-  border-style: dashed;
-}
-.signal-block-index {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--muted-foreground);
-  font: 0.7rem var(--font-mono);
-}
-.signal-block-index svg {
-  width: 1rem;
-  height: 1rem;
-}
-.signal-empty {
-  color: var(--muted-foreground);
-  font-size: 0.85rem;
-}
-@media (max-width: 600px) {
-  .signal-lane {
-    gap: 0.375rem;
-  }
-  .signal-port {
-    font-size: 0.6rem;
-  }
-  .signal-rack {
-    padding: 0.5rem;
-  }
-  .signal-block {
-    flex-basis: 8.5rem;
-  }
-}
 
 :root[data-display='epaper'] .oxidal-button {
   box-shadow: none;
@@ -2251,23 +2073,7 @@ textarea {
   font-size: 0.95rem;
   overflow-wrap: anywhere;
 }
-.signal-block-select {
-  box-shadow: none;
-}
-.signal-block::after {
-  content: '';
-  position: absolute;
-  right: -0.8rem;
-  top: 50%;
-  width: 0.75rem;
-  border-top: 2px solid var(--input);
-}
-.signal-block:last-child::after {
-  display: none;
-}
-.signal-block[data-bypassed='true'] .signal-block-select {
-  color: var(--muted-foreground);
-}
+
 @media (max-height: 500px) and (orientation: landscape) {
   .page-heading {
     margin-bottom: 0.5rem;
@@ -2284,9 +2090,7 @@ textarea {
 }
 
 /* A compact signal strip opens one shared inspector; power stays one tap away. */
-.signal-block .live-effect-actions {
-  justify-content: space-between;
-}
+
 .effect-inspector {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
@@ -2322,44 +2126,7 @@ textarea {
   font-size: 0.75rem;
   padding-inline: 0.5rem;
 }
-.signal-model-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-  color: var(--control-accent);
-}
-[data-chain-view='compact'] .signal-block-select {
-  height: auto;
-  min-height: 3rem;
-  font-size: 0.8rem;
-}
-[data-chain-view='artwork'] .signal-block {
-  flex-basis: 10rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  gap: 0;
-}
-[data-chain-view='artwork'] .signal-block-select {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: start;
-  height: auto;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  border-radius: var(--radius);
-  background: var(--card);
-}
-[data-chain-view='artwork'] .signal-block-select > .signal-block-label {
-  padding: 0.5rem;
-  height: 3.5rem;
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  text-align: left;
-}
+
 .signal-artwork {
   display: block;
   width: 100%;
@@ -2382,19 +2149,6 @@ textarea {
 .signal-artwork .artwork-placeholder svg {
   width: 2.5rem;
   height: 2.5rem;
-}
-[data-chain-view='artwork'] .live-effect-actions {
-  justify-content: center;
-}
-[data-chain-view='artwork'] .effect-power {
-  background: transparent;
-  box-shadow: none;
-}
-[data-chain-view='artwork']
-  .signal-block[data-bypassed='true']
-  .signal-block-select {
-  outline: 1px dashed var(--muted-foreground);
-  outline-offset: -1px;
 }
 
 .model-picker {
@@ -2479,15 +2233,6 @@ textarea {
 .live-rig > details[open] > summary {
   color: var(--control-accent);
   margin-bottom: 0.5rem;
-}
-[data-chain-view='compact'] .signal-block {
-  gap: 0.25rem;
-}
-.signal-block-index {
-  display: none;
-}
-[data-chain-view='compact'] .signal-block-select {
-  padding-block: 0.25rem;
 }
 
 /* Navigation icons stay paired with labels, with vertical grouping on small phones. */
@@ -2583,63 +2328,6 @@ textarea {
 }
 
 /* Compact mode represents devices on a wire; artwork mode keeps richer cards. */
-[data-chain-view='compact'] .signal-blocks {
-  gap: 0.75rem;
-  scroll-snap-type: x proximity;
-  overscroll-behavior-x: contain;
-  background: linear-gradient(var(--input), var(--input)) 0 1.9rem / 100% 2px
-    no-repeat;
-}
-[data-chain-view='compact'] .signal-block {
-  flex-basis: 5.25rem;
-  scroll-snap-align: start;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  outline: none;
-}
-[data-chain-view='compact'] .signal-block::after {
-  display: none;
-}
-[data-chain-view='compact'] .signal-block-select {
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 0.375rem;
-  height: auto;
-  min-height: 5.25rem;
-  padding: 0;
-  text-align: center;
-  font-size: 0.7rem;
-  line-height: 1.25;
-}
-[data-chain-view='compact'] .signal-model-icon {
-  width: 3.5rem;
-  height: 3.5rem;
-  padding: 0.75rem;
-  border: 1px solid var(--input);
-  border-radius: 0.75rem;
-  background: var(--card);
-}
-[data-chain-view='compact']
-  .signal-block[data-selected='true']
-  .signal-model-icon {
-  border: 2px solid var(--control-accent);
-  background: var(--accent);
-}
-[data-chain-view='compact']
-  .signal-block[data-bypassed='true']
-  .signal-model-icon {
-  border-style: dashed;
-  color: var(--muted-foreground);
-}
-[data-chain-view='compact'] .live-effect-actions {
-  justify-content: center;
-}
-[data-chain-view='compact'] .effect-power {
-  border-color: transparent;
-  box-shadow: none;
-  background: transparent;
-}
 
 /* The preset selector is the native rig title; editing tools sit in one row. */
 .chain-heading {
@@ -2675,17 +2363,9 @@ textarea {
 .resource-strip small[data-warning='true'] {
   color: var(--destructive);
 }
-.signal-blocks:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
 
 .resource-alert[data-warning='false'] {
   color: var(--muted-foreground);
-}
-.signal-blocks {
-  scrollbar-width: thin;
-  scrollbar-color: var(--muted-foreground) transparent;
 }
 
 .resource-strip {
