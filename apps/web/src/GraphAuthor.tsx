@@ -1,3 +1,4 @@
+import { Plus, Power, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
 import { RigComposer } from './RigComposer';
 import { lv2Effect, type DraftEffect } from './rigDraft';
 import { rigAudioState } from './api';
@@ -398,7 +399,7 @@ export function GraphAuthor({
               disabled={!connected || busy}
               onClick={() => void compose()}
             >
-              Add saved tone
+              <Plus aria-hidden="true" /> Add saved tone
             </Button>
             <Button
               disabled={!connected || busy || (!state && !audio)}
@@ -407,7 +408,7 @@ export function GraphAuthor({
                 if (state?.phase !== 'unavailable') void loadCatalog();
               }}
             >
-              Add effect
+              <Plus aria-hidden="true" /> Add effect
             </Button>
             <Button
               variant="outline"
@@ -417,7 +418,7 @@ export function GraphAuthor({
                 setName('New rig');
               }}
             >
-              Clear draft
+              <Eraser aria-hidden="true" /> Clear draft
             </Button>
           </div>
           <p className="caption">
@@ -449,7 +450,8 @@ export function GraphAuthor({
         <>
           <div className="action-row">
             <Button
-              variant={state.control.bypassed ? 'secondary' : 'outline'}
+              variant={state.control.bypassed ? 'outline' : 'secondary'}
+              aria-pressed={!state.control.bypassed}
               disabled={disabled || !!state.control.edit}
               onClick={() =>
                 void command({
@@ -468,6 +470,7 @@ export function GraphAuthor({
                 })
               }
             >
+              <Power aria-hidden="true" />
               {state.control.bypassed ? 'Bypassed' : 'Effects on'}
             </Button>
             <Button
@@ -475,7 +478,7 @@ export function GraphAuthor({
               disabled={disabled}
               onClick={() => void command({ kind: 'stop' })}
             >
-              Stop audio
+              <Stop aria-hidden="true" /> Stop audio
             </Button>
           </div>
           {effects.map((node, index) => {
@@ -530,7 +533,7 @@ export function GraphAuthor({
                 void command({ kind: 'save_copy', name: name.trim() })
               }
             >
-              Save preset
+              <FloppyDisk aria-hidden="true" /> Save preset
             </Button>
           </div>
         </>
