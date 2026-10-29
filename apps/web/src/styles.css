@@ -632,8 +632,12 @@ input[type='file'] {
   --foreground: var(--enclosure-foreground);
   --muted-foreground: var(--enclosure-foreground);
   --input: var(--enclosure-border);
-  --accent: var(--secondary);
-  --accent-foreground: var(--secondary-foreground);
+  --accent: color-mix(
+    in srgb,
+    var(--enclosure-foreground) 14%,
+    var(--enclosure)
+  );
+  --accent-foreground: var(--enclosure-foreground);
   --ring: var(--enclosure-foreground);
   --control-accent: var(--enclosure-foreground);
 }
@@ -767,6 +771,10 @@ h1 {
 }
 .masthead nav button:not([aria-current]) {
   color: color-mix(in srgb, var(--enclosure-foreground) 62%, var(--enclosure));
+}
+.masthead nav button:not([aria-current]):hover,
+.masthead nav button:not([aria-current]):focus-visible {
+  color: var(--enclosure-foreground);
 }
 
 @media (max-width: 1050px) {
@@ -2527,55 +2535,12 @@ textarea {
 .mixed-routing-node {
   position: absolute;
 }
-.mixed-node-card {
+.mixed-node {
   height: 100%;
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  overflow: hidden;
-}
-.mixed-node-card[data-selected='true'] {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-}
-.mixed-node-card[data-bypassed='true'] {
-  border-style: dashed;
-}
-.mixed-node-select.oxidal-button {
-  flex: 1;
-  min-height: 64px;
-  width: 100%;
-  padding: 4px;
-  flex-direction: column;
-  gap: 4px;
-  white-space: normal;
-  font-size: 0.75rem;
-  line-height: 1.1;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-.mixed-node-select.oxidal-button svg {
-  width: 24px;
-  height: 24px;
-}
-.mixed-node-card[data-bypassed='true'] .mixed-node-select {
-  color: var(--muted-foreground);
-}
-.mixed-node-power.oxidal-button {
-  height: 44px;
-  min-height: 44px;
-  width: 100%;
-  flex-shrink: 0;
-  border: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 0;
-  padding: 4px;
-  font-size: 0.7rem;
-  box-shadow: none;
+  justify-content: center;
+  /* Centre the tile face (3.5rem) on the topology wire at half the 132px cell. */
+  padding-top: calc(66px - 1.75rem);
 }
 
 /* Grid gaps own spacing; retain full-sized inputs without doubled field margins. */

@@ -1,4 +1,6 @@
-import { Plus, Power, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
+import { Plus, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
+import { ChainView, LedToggle } from './ChainView';
+import { GearIcon } from './GearIcon';
 import { RigComposer } from './RigComposer';
 import { lv2Effect, type DraftEffect } from './rigDraft';
 import { rigAudioState } from './api';
@@ -63,6 +65,7 @@ export function GraphAuthor({
       : 'New rig');
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
+  const [selected, setSelected] = useState<string>();
   const [namPicker, setNamPicker] = useState<'nam' | 'ir' | null>(null);
   const [mixedDraft, setMixedDraft] = useState<DraftEffect[] | null>(null);
   const newNative = useRef<AudioState | null>(null);
@@ -369,6 +372,9 @@ export function GraphAuthor({
     !connected || busy || !state || state.phase === 'unavailable';
   const active = running ? configured : draft;
   const effects = active?.rig.nodes.filter((n) => n.kind === 'lv2') ?? [];
+  const selectedEffect = effects.some((n) => n.id === selected)
+    ? selected
+    : effects[0]?.id;
   return (
     <section
       className={liveOnly ? 'panel space-y-3' : 'space-y-3'}
@@ -427,33 +433,39 @@ export function GraphAuthor({
           </p>
         </>
       )}
-      <div
-        className="flex flex-wrap items-center gap-2"
-        aria-label="Effects chain"
-      >
-        <span>Input</span>
-        {effects.map((node) => {
-          const binding = active?.bindings.find((b) => b.node === node.id);
-          const plugin = catalog.find((p) => p.uri === binding?.uri);
-          return (
-            <span
-              key={node.id}
-              className="rounded-md border border-border px-3 py-2"
-            >
-              {plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect'}
-            </span>
-          );
-        })}
-        <span>Output</span>
-      </div>
+      <ChainView
+        label="Effects chain"
+        selected={selectedEffect}
+        onSelect={setSelected}
+        lanes={[
+          {
+            id: 'main',
+            input: 'IN',
+            blocks: effects.map((node) => {
+              const binding = active?.bindings.find((b) => b.node === node.id);
+              const plugin = catalog.find((p) => p.uri === binding?.uri);
+              return {
+                id: node.id,
+                label:
+                  plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect',
+                kind: 'lv2' as const,
+                // LV2 hosting exposes one rig-wide bypass, not per-block bypass.
+                on: !state?.control?.bypassed,
+                face: <GearIcon gear="" />,
+              };
+            }),
+          },
+        ]}
+      />
       {running && state.control && (
         <>
           <div className="action-row">
-            <Button
-              variant={state.control.bypassed ? 'outline' : 'secondary'}
-              aria-pressed={!state.control.bypassed}
+            <LedToggle
+              on={!state.control.bypassed}
+              kind="lv2"
+              label="All effects on"
               disabled={disabled || !!state.control.edit}
-              onClick={() =>
+              onToggle={() =>
                 void command({
                   kind: 'control',
                   command: {
@@ -469,10 +481,7 @@ export function GraphAuthor({
                   },
                 })
               }
-            >
-              <Power aria-hidden="true" />
-              {state.control.bypassed ? 'Bypassed' : 'Effects on'}
-            </Button>
+            />
             <Button
               variant="outline"
               disabled={disabled}
@@ -482,6 +491,7 @@ export function GraphAuthor({
             </Button>
           </div>
           {effects.map((node, index) => {
+            if (node.id !== selectedEffect) return null;
             const binding = configured?.bindings.find(
               (b) => b.node === node.id,
             );

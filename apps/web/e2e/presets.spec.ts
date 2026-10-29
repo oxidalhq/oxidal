@@ -3150,6 +3150,17 @@ for (const layout of ['serial', 'scenes'] as const) {
       ),
     ).toBe(false);
     const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+    // Branch on/off lives in the selected block detail: select the branch tile first.
+    const branchToggle = async (name: string) => {
+      const id = (await state()).control.branches.find(
+        (b: { name: string }) => b.name === name,
+      ).id;
+      await rig.locator(`.mixed-node[data-node="${id}"] .rig-tile`).click();
+      return rig.getByRole('button', {
+        name: `Toggle branch ${name}`,
+        exact: true,
+      });
+    };
     await expect(
       rig.getByRole('button', {
         name: `1 · ${layout === 'scenes' ? 'Clean' : tone.name}`,
@@ -3169,12 +3180,11 @@ for (const layout of ['serial', 'scenes'] as const) {
       await expect
         .poll(async () => (await state()).control.scene_transitioning)
         .toBe(false);
-      await expect(
-        rig.getByRole('button', { name: 'Toggle branch Clean', exact: true }),
-      ).toHaveAttribute('aria-pressed', 'false');
-      await rig
-        .getByRole('button', { name: 'Toggle branch Clean', exact: true })
-        .click();
+      await expect(await branchToggle('Clean')).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      await (await branchToggle('Clean')).click();
       await expect
         .poll(async () =>
           (await state()).control.branches.every(
@@ -3331,12 +3341,14 @@ for (const layout of ['serial', 'scenes'] as const) {
       })
       .toEqual({ phase: 'running', revision: saved });
     if (layout === 'scenes') {
-      await expect(
-        rig.getByRole('button', { name: 'Toggle branch Clean', exact: true }),
-      ).toHaveAttribute('aria-pressed', 'true');
-      await expect(
-        rig.getByRole('button', { name: 'Toggle branch Lead', exact: true }),
-      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(await branchToggle('Clean')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(await branchToggle('Lead')).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
       expect((await state()).control.scene).toBeNull();
       expect(savedDoc.manifest.requiredExtensions).toContain(
         'urn:oxidal:gain:1',

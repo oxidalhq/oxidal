@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 /** LED category shared with footswitch LEDs; never used as a fill. */
 export type BlockKind = 'amp' | 'pedal' | 'cab' | 'time' | 'lv2' | 'other';
 
-interface RigBlockVM {
+export interface RigBlockVM {
   id: string;
   label: string;
   kind: BlockKind;

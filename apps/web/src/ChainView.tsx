@@ -1,4 +1,4 @@
-import type { BlockKind, RigLaneVM } from './rigChain';
+import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
 import { ArrowRight } from '@phosphor-icons/react';
 import './ChainView.css';
 
@@ -40,24 +40,13 @@ export function ChainView({
             tabIndex={0}
           >
             {lane.blocks.map((block) => (
-              <button
+              <RigTile
                 key={block.id}
-                type="button"
-                className="rig-tile"
-                data-kind={block.kind}
-                data-on={block.on}
-                aria-label={block.on ? block.label : `${block.label}, bypassed`}
-                title={block.label}
-                aria-pressed={selected === block.id}
+                block={block}
+                selected={selected === block.id}
                 disabled={disabled}
-                onClick={() => onSelect(block.id)}
-              >
-                <span className="rig-tile-face">
-                  <span className="chain-led" aria-hidden="true" />
-                  {block.face}
-                </span>
-                <span className="rig-tile-label">{block.label}</span>
-              </button>
+                onSelect={() => onSelect(block.id)}
+              />
             ))}
             {!lane.blocks.length && (
               <span className="chain-empty">Direct signal</span>
@@ -72,6 +61,39 @@ export function ChainView({
   );
 }
 
+/** One block: outlined face, category LED, short label. A tap selects. */
+export function RigTile({
+  block,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  block: RigBlockVM;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="rig-tile"
+      data-kind={block.kind}
+      data-on={block.on}
+      aria-label={block.on ? block.label : `${block.label}, bypassed`}
+      title={block.label}
+      aria-pressed={selected}
+      disabled={disabled}
+      onClick={onSelect}
+    >
+      <span className="rig-tile-face">
+        <span className="chain-led" aria-hidden="true" />
+        {block.face}
+      </span>
+      <span className="rig-tile-label">{block.label}</span>
+    </button>
+  );
+}
+
 /** Labelled LED toggle used for block and setting on/bypass state. */
 export function LedToggle({
   on,
@@ -79,8 +101,11 @@ export function LedToggle({
   label,
   disabled,
   onToggle,
+  state,
 }: {
   on: boolean;
+  /** Overrides On/Bypassed, e.g. "Mixed" for a partially enabled branch. */
+  state?: string;
   kind?: BlockKind;
   label: string;
   disabled?: boolean;
@@ -97,7 +122,7 @@ export function LedToggle({
       onClick={onToggle}
     >
       <span className="chain-led" aria-hidden="true" />
-      {on ? 'On' : 'Bypassed'}
+      {state ?? (on ? 'On' : 'Bypassed')}
     </button>
   );
 }

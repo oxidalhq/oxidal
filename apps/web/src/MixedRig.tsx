@@ -9,10 +9,11 @@ import {
   MusicNotes,
   ArrowsSplit,
   FloppyDisk,
-  Power,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
+import { LedToggle, RigTile } from './ChainView';
+import { blockKind } from './rigChain';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -524,6 +525,63 @@ export function MixedRig({
         logarithmic: edit.control.logarithmic,
       })
     : undefined;
+  const describeNode = (n: (typeof nodes)[number]) => {
+    const branch = state.control?.branches?.find((b) => b.id === n.id);
+    const bypass = state.control?.controls.find(
+      (c) => c.target.kind === 'bypass' && c.target.node === n.id,
+    );
+    const plugin = matching?.manifest.oxidal?.lv2.find(
+      (p) => p.id === n.instance,
+    );
+    const role = matching?.manifest.tone3000.instances.find(
+      (i) => i.id === n.instance,
+    )?.processingRole;
+    const activeModel = state.control?.controls.find(
+      (c) =>
+        c.target.kind === 'native' &&
+        c.target.node === n.id &&
+        c.target.parameter.startsWith('block:') &&
+        c.target.parameter.endsWith(':enabled'),
+    );
+    const modelName = activeModel?.label.replace(
+      / · (left|right) · enabled$/,
+      '',
+    );
+    const label =
+      (modelName && (role === 'amp' || role === 'cab')
+        ? `${role === 'amp' ? 'Amp' : 'Cab'} · ${modelName}`
+        : undefined) ??
+      rigNodeLabel(matching, n.id) ??
+      (n.kind === 'tone3000'
+        ? 'TONE3000'
+        : n.kind === 'lv2'
+          ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
+          : 'Mix');
+    const gear =
+      role === 'amp'
+        ? 'amp'
+        : role === 'cab'
+          ? 'cab'
+          : n.kind === 'lv2'
+            ? 'pedal'
+            : n.kind === 'merge'
+              ? 'full-rig'
+              : '';
+    return {
+      branch,
+      bypass,
+      label,
+      block: {
+        id: n.id,
+        label,
+        kind: n.kind === 'lv2' ? ('lv2' as const) : blockKind(gear),
+        // A bypass control value of 1 means bypassed; branches report enabled.
+        on: branch ? branch.enabled : bypass?.value !== 1,
+        face: <GearIcon gear={gear} />,
+      },
+    };
+  };
+  const selectedView = selected && describeNode(selected);
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -639,53 +697,16 @@ export function MixedRig({
         visible={nodes.map((n) => n.id)}
         selected={selected?.id}
       >
-        {(id, index) => {
+        {(id) => {
           const n = nodes.find((node) => node.id === id)!;
-          const branch = state.control?.branches?.find((b) => b.id === n.id);
-          const bypass = state.control?.controls.find(
-            (c) => c.target.kind === 'bypass' && c.target.node === n.id,
-          );
-          const plugin = matching?.manifest.oxidal?.lv2.find(
-            (p) => p.id === n.instance,
-          );
-          const role = matching?.manifest.tone3000.instances.find(
-            (i) => i.id === n.instance,
-          )?.processingRole;
-          const activeModel = state.control?.controls.find(
-            (c) =>
-              c.target.kind === 'native' &&
-              c.target.node === n.id &&
-              c.target.parameter.startsWith('block:') &&
-              c.target.parameter.endsWith(':enabled'),
-          );
-          const modelName = activeModel?.label.replace(
-            / · (left|right) · enabled$/,
-            '',
-          );
-          const label =
-            (modelName && (role === 'amp' || role === 'cab')
-              ? `${role === 'amp' ? 'Amp' : 'Cab'} · ${modelName}`
-              : undefined) ??
-            rigNodeLabel(matching, n.id) ??
-            (n.kind === 'tone3000'
-              ? 'TONE3000'
-              : n.kind === 'lv2'
-                ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
-                : 'Mix');
+          const view = describeNode(n);
           return (
-            <div
-              key={n.id}
-              data-node={n.id}
-              className="mixed-node-card"
-              data-selected={n.id === selected?.id}
-              data-bypassed={branch ? !branch.enabled : bypass?.value === 1}
-            >
-              <Button
-                className="mixed-node-select"
-                variant={n.id === selected?.id ? 'secondary' : 'outline'}
+            <div key={n.id} data-node={n.id} className="mixed-node">
+              <RigTile
+                block={view.block}
+                selected={n.id === selected?.id}
                 disabled={!!edit || !!picker}
-                aria-pressed={n.id === selected?.id}
-                onClick={() => {
+                onSelect={() => {
                   if (!revision) return;
                   const selected = { revision, node: n.id };
                   setSelection(selected);
@@ -698,69 +719,7 @@ export function MixedRig({
                     /* browsing preferences are optional */
                   }
                 }}
-              >
-                <GearIcon
-                  gear={
-                    role === 'amp'
-                      ? 'amp'
-                      : role === 'cab'
-                        ? 'cab'
-                        : n.kind === 'lv2'
-                          ? 'pedal'
-                          : n.kind === 'merge'
-                            ? 'full-rig'
-                            : ''
-                  }
-                />
-                <span className="line-clamp-2">{label}</span>
-              </Button>
-              {branch ? (
-                <Button
-                  className="mixed-node-power"
-                  variant={branch.enabled ? 'secondary' : 'outline'}
-                  aria-label={`Toggle branch ${branch.name}`}
-                  aria-pressed={branch.enabled}
-                  disabled={disabled || !!edit}
-                  onClick={() =>
-                    void command({
-                      kind: 'branch',
-                      command: {
-                        session: state.control!.session,
-                        expected_revision: state.control!.revision,
-                        branch: branch.id,
-                        enabled: !branch.enabled,
-                      },
-                    })
-                  }
-                >
-                  <Power aria-hidden="true" />
-                  {branch.partial ? 'Mixed' : branch.enabled ? 'On' : 'Off'}
-                </Button>
-              ) : (
-                bypass && (
-                  <Button
-                    className="mixed-node-power"
-                    variant="outline"
-                    aria-label={`Bypass ${index + 1} ${label}`}
-                    aria-pressed={bypass.value === 1}
-                    disabled={disabled || !!edit}
-                    onClick={() =>
-                      void command({
-                        kind: 'control',
-                        command: {
-                          session: state.control!.session,
-                          expected_revision: state.control!.revision,
-                          target: bypass.target,
-                          value: bypass.value === 1 ? 0 : 1,
-                        },
-                      })
-                    }
-                  >
-                    <Power aria-hidden="true" />
-                    {bypass.value === 1 ? 'Bypass' : 'On'}
-                  </Button>
-                )
-              )}
+              />
             </div>
           );
         }}
@@ -1082,6 +1041,51 @@ export function MixedRig({
           }}
         />
       )}
+      {running &&
+        selectedView &&
+        (selectedView.branch || selectedView.bypass) && (
+          <div className="selected-node" aria-label="Selected block">
+            <h3 className="min-w-0 flex-1 break-words">{selectedView.label}</h3>
+            {selectedView.branch ? (
+              <LedToggle
+                on={selectedView.branch.enabled}
+                kind={selectedView.block.kind}
+                state={selectedView.branch.partial ? 'Mixed' : undefined}
+                label={`Toggle branch ${selectedView.branch.name}`}
+                disabled={disabled || !!edit}
+                onToggle={() =>
+                  void command({
+                    kind: 'branch',
+                    command: {
+                      session: state.control!.session,
+                      expected_revision: state.control!.revision,
+                      branch: selectedView.branch!.id,
+                      enabled: !selectedView.branch!.enabled,
+                    },
+                  })
+                }
+              />
+            ) : (
+              <LedToggle
+                on={selectedView.bypass!.value !== 1}
+                kind={selectedView.block.kind}
+                label={`${selectedView.label} on`}
+                disabled={disabled || !!edit}
+                onToggle={() =>
+                  void command({
+                    kind: 'control',
+                    command: {
+                      session: state.control!.session,
+                      expected_revision: state.control!.revision,
+                      target: selectedView.bypass!.target,
+                      value: selectedView.bypass!.value === 1 ? 0 : 1,
+                    },
+                  })
+                }
+              />
+            )}
+          </div>
+        )}
       {running && (
         <div
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
