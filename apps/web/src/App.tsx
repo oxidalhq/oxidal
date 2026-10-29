@@ -1,3 +1,4 @@
+import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
 import {
@@ -765,13 +766,7 @@ export default function App() {
                 </>
               )}
               {settingsSection === 'midi' && !developmentSimulator && (
-                <section className="panel">
-                  <h2>MIDI controls</h2>
-                  <p>
-                    Physical MIDI control of the sounding rig is not available
-                    yet.
-                  </p>
-                </section>
+                <MidiSettings connected={connected} />
               )}
               {settingsSection === 'midi' && developmentSimulator && (
                 <>

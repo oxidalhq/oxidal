@@ -2703,3 +2703,17 @@ textarea {
     font-size: 1.1rem;
   }
 }
+
+.audio-diagnostics {
+  border-top: 1px solid var(--border);
+  padding-block: 0.75rem;
+}
+.audio-diagnostics > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+.audio-diagnostics[open] > summary {
+  margin-bottom: 0.75rem;
+}

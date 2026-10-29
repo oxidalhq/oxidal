@@ -91,144 +91,148 @@ export function AudioSettings({ connected }: { connected: boolean }) {
   }
   return (
     <section className="panel control-stack" aria-label="Audio devices">
-      <h2>Audio devices</h2>
-      <p className="caption">
-        Check your interface, then start a saved preset.
-      </p>
-      <Button
-        variant="outline"
-        disabled={busy || !connected}
-        onClick={() => void refresh()}
-      >
-        Refresh audio devices
-      </Button>
-      {inventory?.backend_available && inventory.endpoints.length > 0 && (
-        <>
-          <fieldset
-            disabled={busy || !connected}
-            className="audio-probe-fields"
-          >
-            <legend>Configuration check</legend>
-            <div className="form-grid">
-              <label className="field">
-                Audio endpoint
-                <select
-                  value={selected}
-                  onChange={(e) => {
-                    setSelected(e.target.value);
-                    invalidate(
-                      inventory.endpoints.find(
-                        (candidate) =>
-                          `${candidate.id}/${candidate.direction}` ===
-                          e.target.value,
-                      )?.direction,
-                    );
-                    setMessage('');
-                  }}
-                >
-                  <option value="">Choose a device and direction</option>
-                  {inventory.endpoints.map((e) => (
-                    <option
-                      key={`${e.id}/${e.direction}`}
-                      value={`${e.id}/${e.direction}`}
-                    >
-                      {e.name} · {e.direction} · {e.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                Sample rate (Hz)
-                <input
-                  type="number"
-                  min={8000}
-                  max={192000}
-                  value={request.sample_rate}
-                  onChange={(e) =>
-                    update('sample_rate', Number(e.target.value))
-                  }
-                />
-              </label>
-              <label className="field">
-                Channel count
-                <input
-                  type="number"
-                  min={1}
-                  max={64}
-                  value={request.channels}
-                  onChange={(e) => update('channels', Number(e.target.value))}
-                />
-              </label>
-              <label className="field">
-                Sample format
-                <select
-                  value={request.format}
-                  onChange={(e) =>
-                    update('format', e.target.value as AudioProbe['format'])
-                  }
-                >
-                  <option value="s16">16-bit integer</option>
-                  <option value="s24">24-bit in 32-bit container</option>
-                  <option value="s24_packed">24-bit packed</option>
-                  <option value="s32">32-bit integer</option>
-                  <option value="float">32-bit float</option>
-                </select>
-              </label>
-              <label className="field">
-                Buffer size (samples per period)
-                <input
-                  type="number"
-                  min={16}
-                  max={8192}
-                  value={request.period_frames}
-                  onChange={(e) =>
-                    update('period_frames', Number(e.target.value))
-                  }
-                />
-              </label>
-              <label className="field">
-                Buffer periods
-                <input
-                  type="number"
-                  min={2}
-                  max={8}
-                  value={request.periods}
-                  onChange={(e) => update('periods', Number(e.target.value))}
-                />
-              </label>
-            </div>
-            <details className="control-help">
-              <summary>Buffers &amp; configuration checks</summary>
-              <p>
-                Smaller buffers reduce delay but need more processing headroom.
-                Periods set queued capacity; this is not measured round-trip
-                latency.
-              </p>
-              <p>
-                Check input and output separately. A check briefly opens and
-                releases the device; it does not start playback or save the
-                setup.
-              </p>
-            </details>
-            <Button
-              variant="outline"
-              disabled={!endpoint}
-              onClick={() => void probe()}
-            >
-              Check audio settings
-            </Button>
-          </fieldset>
-        </>
-      )}
-      {inventory?.backend_available &&
-        inventory.warnings.map((warning, index) => (
-          <p key={index} className="muted">
-            {warning}
-          </p>
-        ))}
+      <h2>Audio</h2>
       <PlaybackSettings connected={connected} input={input} output={output} />
+      <details className="audio-diagnostics">
+        <summary>Interface diagnostics &amp; new device setup</summary>
+        <p className="caption">
+          Inspect and test a device here. A configuration check does not change
+          the playing rig; stop audio before testing an occupied interface.
+        </p>
+        <Button
+          variant="outline"
+          disabled={busy || !connected}
+          onClick={() => void refresh()}
+        >
+          Refresh audio devices
+        </Button>
+        {inventory?.backend_available && inventory.endpoints.length > 0 && (
+          <>
+            <fieldset
+              disabled={busy || !connected}
+              className="audio-probe-fields"
+            >
+              <legend>Configuration check</legend>
+              <div className="form-grid">
+                <label className="field">
+                  Audio endpoint
+                  <select
+                    value={selected}
+                    onChange={(e) => {
+                      setSelected(e.target.value);
+                      invalidate(
+                        inventory.endpoints.find(
+                          (candidate) =>
+                            `${candidate.id}/${candidate.direction}` ===
+                            e.target.value,
+                        )?.direction,
+                      );
+                      setMessage('');
+                    }}
+                  >
+                    <option value="">Choose a device and direction</option>
+                    {inventory.endpoints.map((e) => (
+                      <option
+                        key={`${e.id}/${e.direction}`}
+                        value={`${e.id}/${e.direction}`}
+                      >
+                        {e.name} · {e.direction} · {e.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  Sample rate (Hz)
+                  <input
+                    type="number"
+                    min={8000}
+                    max={192000}
+                    value={request.sample_rate}
+                    onChange={(e) =>
+                      update('sample_rate', Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  Channel count
+                  <input
+                    type="number"
+                    min={1}
+                    max={64}
+                    value={request.channels}
+                    onChange={(e) => update('channels', Number(e.target.value))}
+                  />
+                </label>
+                <label className="field">
+                  Sample format
+                  <select
+                    value={request.format}
+                    onChange={(e) =>
+                      update('format', e.target.value as AudioProbe['format'])
+                    }
+                  >
+                    <option value="s16">16-bit integer</option>
+                    <option value="s24">24-bit in 32-bit container</option>
+                    <option value="s24_packed">24-bit packed</option>
+                    <option value="s32">32-bit integer</option>
+                    <option value="float">32-bit float</option>
+                  </select>
+                </label>
+                <label className="field">
+                  Buffer size (samples per period)
+                  <input
+                    type="number"
+                    min={16}
+                    max={8192}
+                    value={request.period_frames}
+                    onChange={(e) =>
+                      update('period_frames', Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  Buffer periods
+                  <input
+                    type="number"
+                    min={2}
+                    max={8}
+                    value={request.periods}
+                    onChange={(e) => update('periods', Number(e.target.value))}
+                  />
+                </label>
+              </div>
+              <details className="control-help">
+                <summary>Buffers &amp; configuration checks</summary>
+                <p>
+                  Smaller buffers reduce delay but need more processing
+                  headroom. Periods set queued capacity; this is not measured
+                  round-trip latency.
+                </p>
+                <p>
+                  Check input and output separately. A check briefly opens and
+                  releases the device; it does not start playback or save the
+                  setup.
+                </p>
+              </details>
+              <Button
+                variant="outline"
+                disabled={!endpoint}
+                onClick={() => void probe()}
+              >
+                Check audio settings
+              </Button>
+            </fieldset>
+          </>
+        )}
+        {inventory?.backend_available &&
+          inventory.warnings.map((warning, index) => (
+            <p key={index} className="muted">
+              {warning}
+            </p>
+          ))}
+        <p role="status">{busy ? 'Inspecting audio…' : message}</p>
+      </details>
       <NativeDefaults connected={connected} />
-      <p role="status">{busy ? 'Inspecting audio…' : message}</p>
     </section>
   );
 }
