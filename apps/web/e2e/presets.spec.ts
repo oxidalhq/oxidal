@@ -1337,6 +1337,8 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .click();
     await picker.getByRole('button', { name: /Audition fixture/ }).click();
     await picker.getByRole('button', { name: /Prepared A2/ }).click();
+    await expect(picker.getByRole('status')).toContainText(/Auditioning/);
+    await picker.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(picker).toHaveCount(0);
     await expect
       .poll(
@@ -2428,6 +2430,8 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button')
     .first()
     .click();
+  await expect(picker.getByRole('status')).toContainText(/Auditioning/);
+  await picker.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(picker).toHaveCount(0);
   await expect
     .poll(async () => (await get()).control.model_change?.progress.phase)
@@ -3955,6 +3959,8 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await picker
     .getByRole('button', { name: 'Audition 2 files', exact: true })
     .click();
+  await expect(picker.getByRole('status')).toContainText(/Auditioning/);
+  await picker.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(picker).toHaveCount(0);
   await expect
     .poll(async () => (await get()).control.model_change?.progress.phase)
@@ -4100,4 +4106,141 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     .poll(async () => (await get()).configured.stream.hear_yourself)
     .toBe(true);
   await command({ kind: 'stop' });
+});
+
+test('live model comparison stays open, waits for application and rejects a changed session', async ({
+  page,
+  request,
+}) => {
+  const baseline = await (await request.get('/api/v1/audio')).json();
+  let audio = {
+    ...baseline,
+    phase: 'running',
+    preset_name: 'Comparison rig',
+    controls: [
+      {
+        target: 'block:amp:enabled',
+        label: 'Current amp · left · enabled',
+        display: 'On',
+        value: 1,
+        toggle: true,
+      },
+    ],
+    model_change: null,
+  };
+  let assignments = 0;
+  await page.route('**/api/v1/audio', async (route) => {
+    if (route.request().method() === 'POST') {
+      const command = route.request().postDataJSON();
+      expect(command.expected_revision).toBe(audio.revision);
+      expect(command.session).toBe(audio.session);
+      expect(command.action.kind).toBe('replace_model');
+      assignments++;
+      audio = {
+        ...audio,
+        revision: audio.revision + 1,
+        model_change: {
+          request: assignments,
+          assignment: command.action.assignment,
+          phase: 'preparing',
+          error: null,
+        },
+      };
+    }
+    await route.fulfill({ json: audio });
+  });
+  await page.route('**/api/v1/tone3000/tones?*', (route) =>
+    route.fulfill({
+      json: {
+        page: 1,
+        total_pages: 1,
+        data: [
+          {
+            id: 1,
+            title: 'Comparison amp',
+            format: 'nam',
+            gear: 'amp',
+            license: 'Fixture',
+            models_count: 2,
+            a2_models_count: 2,
+            url: 'https://www.tone3000.com',
+            user: { username: 'fixture' },
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/v1/tone3000/models?*', (route) =>
+    route.fulfill({
+      json: {
+        page: 1,
+        total_pages: 1,
+        data: [
+          {
+            id: 1,
+            tone_id: 1,
+            name: 'Clean fixture',
+            size: null,
+            architecture_version: '2',
+          },
+          {
+            id: 2,
+            tone_id: 1,
+            name: 'Drive fixture',
+            size: null,
+            architecture_version: '2',
+          },
+        ],
+      },
+    }),
+  );
+  await page.route('**/api/v1/tone3000/stage', (route) => {
+    const id = route.request().postDataJSON().model_id;
+    return route.fulfill({
+      json: {
+        id: String(id).repeat(64),
+        tone_id: 1,
+        model_id: id,
+        title: 'Comparison amp',
+        name: 'Fixture',
+        sha256: String(id).repeat(64),
+      },
+    });
+  });
+  await page.goto('/');
+  const rig = page.getByRole('region', { name: 'Sounding rig' });
+  await rig.getByRole('button', { name: 'Current amp', exact: true }).click();
+  await rig.getByRole('button', { name: 'Change model', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Choose model' });
+  await picker.getByRole('button', { name: /Comparison amp/ }).click();
+  await picker.getByRole('button', { name: /Clean fixture/ }).click();
+  await expect.poll(() => assignments).toBe(1);
+  await expect(
+    picker.getByRole('button', { name: /Drive fixture/ }),
+  ).toBeDisabled();
+  audio = {
+    ...audio,
+    revision: audio.revision + 1,
+    model_change: { ...audio.model_change, phase: 'applied' },
+  };
+  await expect(picker.getByRole('status')).toContainText(
+    'Auditioning Clean fixture',
+  );
+  await picker.getByRole('button', { name: /Drive fixture/ }).click();
+  await expect.poll(() => assignments).toBe(2);
+  audio = {
+    ...audio,
+    revision: audio.revision + 1,
+    model_change: { ...audio.model_change, phase: 'applied' },
+  };
+  await expect(picker.getByRole('status')).toContainText(
+    'Auditioning Drive fixture',
+  );
+  audio = { ...audio, session: 'replacement-session' };
+  await expect(
+    picker.getByRole('button', { name: /Clean fixture/ }),
+  ).toBeDisabled();
+  expect(assignments).toBe(2);
+  await picker.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(picker).toHaveCount(0);
 });

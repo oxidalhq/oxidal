@@ -9,6 +9,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
 import { nativeState, presetLibrary, type AudioState } from './api';
 import {
+  assertAuditionOwner,
   controlGroup,
   confirmedControlDisplay,
   movedBlockOrder,
@@ -149,4 +150,39 @@ it('opens gig pads on the playing bank and keeps playing identity during initial
   expect(screen.getByText('2 / 2')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Previous bank' }));
   expect(screen.getByText('1 / 2')).toBeInTheDocument();
+});
+
+it('allows repeat audition only after its own terminal receipt and rejects a changed session', () => {
+  const opening = { session: 'a', revision: 1 };
+  expect(() =>
+    assertAuditionOwner(opening, opening, undefined, null),
+  ).not.toThrow();
+  expect(() =>
+    assertAuditionOwner(opening, { ...opening, revision: 2 }, undefined, null),
+  ).toThrow(/target changed/);
+  for (const phase of ['applied', 'failed', 'cancelled'])
+    expect(() =>
+      assertAuditionOwner(opening, { ...opening, revision: 5 }, 7, {
+        request: 7,
+        phase,
+      }),
+    ).not.toThrow();
+  expect(() =>
+    assertAuditionOwner(opening, { session: 'b', revision: 5 }, 7, {
+      request: 7,
+      phase: 'applied',
+    }),
+  ).toThrow();
+  expect(() =>
+    assertAuditionOwner(opening, { ...opening, revision: 5 }, 7, {
+      request: 8,
+      phase: 'applied',
+    }),
+  ).toThrow();
+  expect(() =>
+    assertAuditionOwner(opening, { ...opening, revision: 5 }, 7, {
+      request: 7,
+      phase: 'applying',
+    }),
+  ).toThrow();
 });

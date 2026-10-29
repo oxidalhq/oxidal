@@ -46,3 +46,23 @@ export function movedBlockOrder(
     block.id === id ? neighbour.id : block.id === neighbour.id ? id : block.id,
   );
 }
+
+/** Repeat comparison may advance only the request accepted by this picker. */
+export function assertAuditionOwner(
+  opening: { session: string; revision: number },
+  current: { session: string; revision: number },
+  request: number | undefined,
+  progress: { request: number; phase: string } | null | undefined,
+) {
+  if (
+    opening.session !== current.session ||
+    (request == null
+      ? opening.revision !== current.revision
+      : !progress ||
+        progress.request !== request ||
+        !['applied', 'failed', 'cancelled'].includes(progress.phase))
+  )
+    throw new Error(
+      'The audition target changed. Close and reopen the model browser.',
+    );
+}

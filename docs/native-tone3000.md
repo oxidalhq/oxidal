@@ -726,3 +726,13 @@ unsaved working edits. Reimport through the normal preset import preserves
 those bytes as an original entry. This is a per-preset export, not a complete
 library backup: catalog ordering, device/MIDI configuration and hybrid bundles
 are outside this download.
+
+Live model replacement now keeps the picker open for repeated comparison in native
+and mixed native stages. A downloaded candidate is not labelled auditioning until
+the owning model request reports Applied. Further selections re-read the owner
+and accept only the opening cursor or that picker's completed request; a changed
+session or intervening model request requires reopening. Pending comparison blocks
+additional selections. Closing after acceptance leaves preparation running; the
+Rig cancellation control remains available. Insertions still close after one
+accepted request to avoid accidentally adding repeated blocks. Save remains
+explicit, and this UI change does not make native replacement gapless.

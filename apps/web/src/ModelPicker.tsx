@@ -23,7 +23,7 @@ import {
   type ToneQuery,
 } from './api';
 
-/** Selection is tied to the opening audio revision. Closing a download never applies it. */
+/** Selection starts at the opening revision; repeat comparison advances only its own receipt. */
 export function ModelPicker({
   name,
   intent = 'replace',
@@ -31,8 +31,15 @@ export function ModelPicker({
   allowedFormat,
   onClose,
   onAudition,
+  comparison,
 }: {
   name: string;
+  comparison?: {
+    pending: boolean;
+    appliedAsset?: string;
+    error?: string | null;
+    blocked?: boolean;
+  };
   intent?: 'add' | 'replace';
   initialFormat?: 'nam' | 'ir';
   allowedFormat?: 'nam' | 'ir';
@@ -56,6 +63,10 @@ export function ModelPicker({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
   const [error, setError] = useState('');
+  const [choice, setChoice] = useState<{ asset: string; label: string } | null>(
+    null,
+  );
+  const locked = !!busy || !!comparison?.pending || !!comparison?.blocked;
   const download = useRef<AbortController | null>(null);
   const alive = useRef(true);
   useEffect(() => {
@@ -101,7 +112,7 @@ export function ModelPicker({
     onClose();
   }
   async function audition(id: number) {
-    if (!tone || busy) return;
+    if (!tone || locked) return;
     const controller = new AbortController();
     download.current = controller;
     setBusy('download');
@@ -111,7 +122,13 @@ export function ModelPicker({
       if (controller.signal.aborted || !alive.current) return;
       setBusy('assign');
       await onAudition(asset.id);
-      if (alive.current) onClose();
+      if (alive.current) {
+        setChoice({
+          asset: asset.id,
+          label: models?.data.find((model) => model.id === id)?.name ?? 'Model',
+        });
+        if (!comparison) onClose();
+      }
     } catch (cause) {
       if (!controller.signal.aborted && alive.current) setError(String(cause));
     } finally {
@@ -119,7 +136,7 @@ export function ModelPicker({
     }
   }
   async function auditionLocal(asset?: string) {
-    if (busy || (!asset && files.length === 0)) return;
+    if (locked || (!asset && files.length === 0)) return;
     const controller = new AbortController();
     download.current = controller;
     setBusy(asset ? 'assign' : 'download');
@@ -155,7 +172,16 @@ export function ModelPicker({
       if (controller.signal.aborted || !alive.current) return;
       setBusy('assign');
       await onAudition(asset);
-      if (alive.current) onClose();
+      if (alive.current) {
+        setChoice({
+          asset,
+          label:
+            (local?.data.find((model) => model.id === asset)?.title ??
+              files.map((file) => file.name).join(', ')) ||
+            'Local model',
+        });
+        if (!comparison) onClose();
+      }
     } catch (cause) {
       if (!controller.signal.aborted && alive.current) setError(String(cause));
     } finally {
@@ -184,7 +210,7 @@ export function ModelPicker({
           <Button
             variant={source === 'tone3000' ? 'secondary' : 'ghost'}
             aria-pressed={source === 'tone3000'}
-            disabled={!!busy}
+            disabled={locked}
             onClick={() => setSource('tone3000')}
           >
             <CloudArrowDown aria-hidden="true" /> TONE3000
@@ -192,7 +218,7 @@ export function ModelPicker({
           <Button
             variant={source === 'local' ? 'secondary' : 'ghost'}
             aria-pressed={source === 'local'}
-            disabled={!!busy}
+            disabled={locked}
             onClick={() => setSource('local')}
           >
             <FolderOpen aria-hidden="true" /> Local files
@@ -213,11 +239,11 @@ export function ModelPicker({
                     ? '.wav'
                     : '.nam,.wav'
               }
-              disabled={!!busy}
+              disabled={locked}
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
             <Button
-              disabled={files.length === 0 || !!busy}
+              disabled={files.length === 0 || locked}
               onClick={() => void auditionLocal()}
             >
               {files.length > 1
@@ -247,7 +273,7 @@ export function ModelPicker({
                         key={m.id}
                         variant="outline"
                         className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
-                        disabled={!!busy}
+                        disabled={locked}
                         onClick={() => void auditionLocal(m.id)}
                       >
                         <span className="min-w-0 break-words">
@@ -265,14 +291,14 @@ export function ModelPicker({
               <div className="action-row">
                 <Button
                   variant="outline"
-                  disabled={!localAfter || loading || !!busy}
+                  disabled={!localAfter || loading || locked}
                   onClick={() => setLocalAfter(null)}
                 >
                   First page
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={!local?.next || loading || !!busy}
+                  disabled={!local?.next || loading || locked}
                   onClick={() => setLocalAfter(local!.next ?? null)}
                 >
                   More files
@@ -293,7 +319,7 @@ export function ModelPicker({
                       key={kind}
                       variant={format === kind ? 'secondary' : 'ghost'}
                       aria-pressed={format === kind}
-                      disabled={!!busy}
+                      disabled={locked}
                       onClick={() => setFormat(kind)}
                     >
                       {kind === 'nam' ? 'NAM' : 'Cab / IR'}
@@ -304,7 +330,7 @@ export function ModelPicker({
                   TONE3000 library
                   <select
                     value={query.collection}
-                    disabled={!!busy}
+                    disabled={locked}
                     onChange={(e) => {
                       setQuery({
                         collection: e.target.value as ToneQuery['collection'],
@@ -336,7 +362,7 @@ export function ModelPicker({
                         onChange={(e) => setSearch(e.target.value)}
                       />
                     </label>
-                    <Button type="submit" disabled={!!busy}>
+                    <Button type="submit" disabled={locked}>
                       <MagnifyingGlass aria-hidden="true" /> Search
                     </Button>
                   </form>
@@ -346,7 +372,7 @@ export function ModelPicker({
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  disabled={!!busy}
+                  disabled={locked}
                   onClick={() => {
                     setTone(null);
                     setModels(null);
@@ -363,7 +389,7 @@ export function ModelPicker({
             <div
               className="space-y-2"
               aria-label={tone ? 'Available models' : 'TONE3000 tones'}
-              aria-busy={loading || !!busy}
+              aria-busy={loading || locked}
             >
               {loading ? (
                 <p role="status">Loading…</p>
@@ -380,7 +406,7 @@ export function ModelPicker({
                       key={m.id}
                       variant="outline"
                       className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
-                      disabled={!!busy}
+                      disabled={locked}
                       onClick={() => void audition(m.id)}
                     >
                       <span className="min-w-0 break-words">
@@ -436,7 +462,23 @@ export function ModelPicker({
           Audition changes the live sound. Save a copy in Rig to keep it
           offline.
         </p>
-        {error && <p role="alert">{error}</p>}
+        {comparison?.pending && (
+          <p role="status">
+            Preparing comparison… Close leaves this request running.
+          </p>
+        )}
+        {choice &&
+          !comparison?.blocked &&
+          comparison?.appliedAsset === choice.asset && (
+            <p role="status">Auditioning {choice.label}</p>
+          )}
+        {(comparison?.blocked || error || comparison?.error) && (
+          <p role="alert">
+            {comparison?.blocked
+              ? 'The playing rig changed. Close and reopen the model browser.'
+              : error || comparison?.error}
+          </p>
+        )}
         {busy && (
           <p role="status">
             {busy === 'download'
@@ -451,7 +493,7 @@ export function ModelPicker({
             <>
               <Button
                 variant="outline"
-                disabled={loading || !!busy || page <= 1}
+                disabled={loading || locked || page <= 1}
                 onClick={() => turnPage(page - 1)}
               >
                 Previous
@@ -461,7 +503,7 @@ export function ModelPicker({
               </span>
               <Button
                 variant="outline"
-                disabled={loading || !!busy || page >= total}
+                disabled={loading || locked || page >= total}
                 onClick={() => turnPage(page + 1)}
               >
                 Next

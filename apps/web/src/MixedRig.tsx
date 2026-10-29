@@ -1,4 +1,4 @@
-import { confirmedControlDisplay } from './rigControls';
+import { assertAuditionOwner, confirmedControlDisplay } from './rigControls';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -58,6 +58,7 @@ export function MixedRig({
   });
   const [picker, setPicker] = useState<{
     opening: RigAudioState;
+    request?: number;
     node: string;
     target: string;
     name: string;
@@ -844,28 +845,70 @@ export function MixedRig({
           initialFormat={picker.format}
           allowedFormat={picker.allowedFormat}
           intent={picker.insert ? 'add' : 'replace'}
+          comparison={
+            picker.insert
+              ? undefined
+              : {
+                  pending: modelPending,
+                  appliedAsset:
+                    modelChange?.node === picker.node &&
+                    modelChange?.progress.request === picker.request &&
+                    modelChange.progress.phase === 'applied'
+                      ? modelChange.progress.assignment.asset
+                      : undefined,
+                  error:
+                    modelChange?.node === picker.node &&
+                    modelChange?.progress.request === picker.request
+                      ? modelChange.progress.error
+                      : undefined,
+                  blocked:
+                    state.session !== picker.opening.session ||
+                    state.control?.session !== picker.opening.control?.session,
+                }
+          }
           onClose={() => setPicker(null)}
           onAudition={async (asset) => {
             generation.current++;
             sending.current = true;
             setBusy(true);
             try {
-              const control = picker.opening.control!;
-              accept(
-                await rigAudioCommand(picker.opening, {
-                  kind: 'model',
-                  command: {
-                    session: control.session,
-                    expected_revision: control.revision,
-                    node: picker.node,
-                    operation: {
-                      kind: 'prepare',
-                      assignment: { target: picker.target, asset },
-                    },
-                  },
-                }),
+              const current = await rigAudioState();
+              if (
+                current.control?.session !== picker.opening.control?.session ||
+                !current.control ||
+                (picker.request != null &&
+                  current.control.model_change?.node !== picker.node)
+              )
+                throw new Error(
+                  'The playing rig changed. Close and reopen the model browser.',
+                );
+              assertAuditionOwner(
+                picker.opening,
+                current,
+                picker.request,
+                current.control.model_change?.progress,
               );
-              if (alive.current) setError('');
+              const control = current.control;
+              const next = await rigAudioCommand(current, {
+                kind: 'model',
+                command: {
+                  session: control.session,
+                  expected_revision: control.revision,
+                  node: picker.node,
+                  operation: {
+                    kind: 'prepare',
+                    assignment: { target: picker.target, asset },
+                  },
+                },
+              });
+              accept(next);
+              if (alive.current) {
+                setPicker({
+                  ...picker,
+                  request: next.control?.model_change?.progress.request,
+                });
+                setError('');
+              }
             } finally {
               sending.current = false;
               if (alive.current) setBusy(false);

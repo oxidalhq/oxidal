@@ -18,6 +18,7 @@ import {
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
+  assertAuditionOwner,
   movedBlockOrder,
   controlGroup,
   shortControlLabel,
@@ -96,6 +97,7 @@ export function LiveRig({
     target: string;
     name: string;
     opening: AudioState;
+    request?: number;
     insert?: boolean;
     format?: 'nam' | 'ir';
   } | null>(null);
@@ -820,18 +822,43 @@ export function LiveRig({
           name={picker.name}
           initialFormat={picker.format}
           intent={picker.insert ? 'add' : 'replace'}
+          comparison={
+            picker.insert
+              ? undefined
+              : {
+                  pending: modelPending,
+                  appliedAsset:
+                    state.model_change?.request === picker.request &&
+                    state.model_change?.phase === 'applied'
+                      ? state.model_change.assignment.asset
+                      : undefined,
+                  error:
+                    state.model_change?.request === picker.request
+                      ? state.model_change?.error
+                      : undefined,
+                  blocked: state.session !== picker.opening.session,
+                }
+          }
           onClose={() => setPicker(null)}
           onAudition={async (asset) => {
             generation.current += 1;
             sending.current = true;
             setBusy(true);
             try {
-              const next = await playbackCommand(picker.opening, {
+              const current = await playbackState();
+              assertAuditionOwner(
+                picker.opening,
+                current,
+                picker.request,
+                current.model_change,
+              );
+              const next = await playbackCommand(current, {
                 kind: 'replace_model',
                 assignment: { target: picker.target, asset },
               });
               if (alive.current) {
                 setState(next);
+                setPicker({ ...picker, request: next.model_change?.request });
                 setError('');
               }
             } finally {
