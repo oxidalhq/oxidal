@@ -3208,6 +3208,14 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     assert!(owner.snapshot(&mut engine)?.history_error.is_none());
     assert!(owner.snapshot(&mut engine)?.can_undo);
     owner.prepare_parameter(&mut engine, "osEnabled".into(), 1.0)?;
+    let session_settings = [
+        ("calibrateInput", 1.0),
+        ("inputCalibrationLevel", 0.65),
+        ("targetLoudness", 0.35),
+    ];
+    for (id, value) in session_settings {
+        owner.prepare_parameter(&mut engine, id.into(), value)?;
+    }
     let processing_latency = engine.latency_samples()?;
     owner.command(&mut engine, A::Undo)?;
     assert_eq!(
@@ -3225,12 +3233,32 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
         processing_latency,
         "Undo retains current processing configuration"
     );
+    for (id, value) in session_settings {
+        let actual = owner
+            .snapshot(&mut engine)?
+            .settings
+            .iter()
+            .find(|p| p.target == id)
+            .ok_or("Missing prepared setting")?
+            .value;
+        assert!((actual - value).abs() < 1e-5, "Undo retains {id}");
+    }
     assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
     assert!(!owner.snapshot(&mut engine)?.can_undo);
     let receipt = owner.working_receipt().unwrap().to_owned();
     owner = Authoring::for_source(&root, "gesture-qualification".into(), Some(receipt));
     assert!(owner.snapshot(&mut engine)?.can_redo);
     owner.command(&mut engine, A::Redo)?;
+    for (id, value) in session_settings {
+        let actual = owner
+            .snapshot(&mut engine)?
+            .settings
+            .iter()
+            .find(|p| p.target == id)
+            .ok_or("Missing prepared setting")?
+            .value;
+        assert!((actual - value).abs() < 1e-5, "Redo retains {id}");
+    }
     assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
     engine.set_live_control("chainPanLinked", 1.0)?;
     let before = engine.live_controls()?;

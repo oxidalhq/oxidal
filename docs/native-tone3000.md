@@ -579,11 +579,12 @@ An invalid current state still fails admission. New accepted edits can establish
 fresh valid history. Entry/profile/source/hash checks and non-recursive references
 prevent a history index from becoming an arbitrary file or nested-state reader.
 
-Tone Undo retains current oversampling and global pitch enable/window processing
-configuration. Those four topology settings are changed explicitly through DSP
-settings and do not add tone-history entries. This keeps old tone edits usable after
-processing changes without changing the negotiated reported latency. Other owned
-scalar/EQ/model/structure and measured-result history retains its existing scope.
+Tone Undo retains the current prepared session settings: oversampling, global
+pitch enable/window, calibration enable/reference level and normalization target
+loudness. These seven settings change explicitly through DSP settings and do not
+add tone-history entries. This keeps tone edits usable after device/processing
+changes without reverting input calibration or negotiated reported latency.
+Owned tone scalar/EQ/model/structure and measured-result history retains its scope.
 Live Undo still rejects an unexpected latency change and restores the current state.
 
 Actual scalar/EQ and mixed DAG reconstruction tests, native worker restart with a

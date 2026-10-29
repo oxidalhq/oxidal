@@ -521,14 +521,14 @@ impl Authoring {
         {
             return Err("No authoring history available".into());
         }
-        // Processing topology settings are device/session configuration, outside
+        // Prepared processing/calibration settings are device/session configuration, outside
         // tone history. Keep their current values while restoring an older tone.
         let monitoring = self.snapshot(engine)?.tools.solo;
         let processing = if matches!(action, AuthoringAction::Undo | AuthoringAction::Redo) {
             self.snapshot(engine)?
                 .settings
                 .into_iter()
-                .filter(|p| crate::protocol::staged(&p.target))
+                .filter(|p| prepared_setting(&p.target))
                 .collect::<Vec<_>>()
         } else {
             vec![]
@@ -652,8 +652,7 @@ impl Authoring {
                 self.redo.pop_back();
                 self.undo.push_back(before);
             }
-            AuthoringAction::Parameter { parameter, .. } if crate::protocol::staged(&parameter) => {
-            }
+            AuthoringAction::Parameter { parameter, .. } if prepared_setting(&parameter) => {}
             _ if before != after => {
                 self.undo.push_back(before);
                 self.redo.clear();
@@ -715,8 +714,7 @@ impl Authoring {
         let mut undo: Vec<_> = self.undo.iter().collect();
         let mut redo: Vec<_> = self.redo.iter().collect();
         match action {
-            Some(AuthoringAction::Parameter { parameter, .. })
-                if crate::protocol::staged(parameter) => {}
+            Some(AuthoringAction::Parameter { parameter, .. }) if prepared_setting(parameter) => {}
             Some(AuthoringAction::Undo) => {
                 undo.pop();
                 redo.push(before);
