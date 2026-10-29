@@ -36,3 +36,36 @@ References: NetworkManager's [checkpoint API](https://networkmanager.pages.freed
 The web settings support Always, Never, No Ethernet, Not at home and No remembered Wi-Fi in range. Home and remembered policies use visibility, not Internet reachability. Settings are persisted privately; a change has the same 90-second confirmation journal as a Wi-Fi join. Timeout or helper restart restores both policy and keyfile. Normal automatic decisions require two observations 30 seconds apart and pause during a pending transaction. Failed remembered-network authentication keeps the recovery AP available. Never can require Ethernet access. The helper manages only an appliance with its recovery AP installed; existing Linux hosts remain untouched. The hotspot form also supports persisted country and automatic/fixed 2.4 GHz channel selection. Country codes must exist in the system country database; the kernel must accept the country, and fixed channels must be permitted by the selected radio (disabled, no-IR and radar channels are excluded). Country/keyfile changes share the recovery journal. Physical radio transitions still require qualification.
 
 System Reboot and Shut down use an explicit confirmation in Settings and only two fixed systemctl verbs in the root helper. They invoke normal systemd shutdown, which sends SIGTERM to the daemon, awaits audio-worker cleanup and stops the service control group. They do not force power removal. Pending network changes block power requests. Audio Stop remains a separate operation that keeps the editor available. Unsaved editor changes must be saved first. Physical shutdown completion is not proven by the UI acknowledgement.
+
+## Hotspot welcome and discovery
+
+Pi hotspot provisioning includes an offline Oxidal welcome page with the shipped
+wordmark, large Open Oxidal link, friendly hostname and short browser help.
+NetworkManager's shared-mode dnsmasq answers selected Apple/Android HTTP-probe
+names and `oxidal.local` locally; explicit local zones also prevent AAAA probes
+from leaking upstream. Other domains, including the provider/account services,
+keep normal upstream DNS forwarding. No wildcard public-domain interception or
+new privileged service is introduced. Ordinary Linux bundle installs do not
+receive these hotspot files.
+
+The HTTP welcome is available only to the hotspot IPv4 subnet on its gateway
+address. Probe paths redirect to a fixed `http://10.42.0.1/welcome`; no incoming
+host/path/query controls the destination. The page serves only welcome content
+and the fixed logo, and links to the existing authenticated HTTPS app. HTTP does
+not proxy APIs, collect credentials or run commands. The current self-signed
+certificate setup is retained. A new browser context is requested for the app;
+phone captive assistants may require the user to open Safari/Chrome manually.
+
+This uses legacy HTTP-probe discovery rather than advertising a CAPPORT API URL
+whose TLS certificate a first-time phone would not yet trust. Popups depend on
+client OS detection, VPN/private-DNS policy and remembered network preferences.
+Friendly `https://oxidal.local` and the gateway link remain available if detection
+is suppressed. iPhone users may need Without Internet to remain associated with
+this offline device network. Physical XR/Fold/BOOX join/popup behavior remains an
+acceptance test, independently of DNS/HTTP software qualification.
+
+The existing OS access/provision suites exercise real nginx and dnsmasq, fixed
+redirects, AP address/client isolation, forbidden HTTP writes, offline A/AAAA
+resolution and unchanged provider DNS forwarding. The maintained device-layout
+browser flow renders the exact shipped HTML/logo in portrait and landscape and
+checks touch size, overflow and accessibility.

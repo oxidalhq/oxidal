@@ -187,6 +187,11 @@ address1=10.42.0.1/24
 [ipv6]
 method=disabled
 """.encode()
+        # Discovery is local to the recovery hotspot; ordinary Linux installs
+        # and NetworkManager client DNS configuration are left untouched.
+        files['etc/nginx/conf.d/oxidal-portal.conf'] = (HERE / 'config/oxidal-portal.conf').read_bytes()
+        files['etc/NetworkManager/dnsmasq-shared.d/oxidal-portal.conf'] = (HERE / 'config/oxidal-portal-dns.conf').read_bytes()
+        files['usr/share/oxidal/portal/index.html'] = (HERE / 'config/oxidal-welcome.html').read_bytes()
         # Vendor images may persist radio-off independently of rfkill.
         files['var/lib/NetworkManager/NetworkManager.state'] = b'[main]\nWirelessEnabled=true\n'
         files['etc/default/oxidal-wireless'] = b'COUNTRY=NZ\n'

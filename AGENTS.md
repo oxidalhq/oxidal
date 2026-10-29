@@ -155,3 +155,8 @@ monitoring preference independently of tone history. Maintenance has fixed nativ
 log copy/download with exact dependency identity; Linux has no upstream Bluetooth
 pairing dialog. Physical acceptance and the explicitly deferred authoring/routing
 scope remain separate from these software parity qualifications.
+
+Pi hotspot provisioning now includes branded offline HTTP discovery/welcome with
+selective local Apple/Android probe DNS and unchanged authenticated HTTPS control.
+Ordinary Linux installs are untouched; see docs/device-service.md. Software access
+and device-rendering tests do not qualify physical radio popup behavior.

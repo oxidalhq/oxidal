@@ -145,6 +145,10 @@ class ApplianceTests(ProvisionTests):
         for name in ('server.crt', 'server.key', 'access.htpasswd'):
             (access / name).write_text('fixture')
         (access / 'hotspot.json').write_text(json.dumps({'ssid': 'Oxidal-abcdef', 'password': 'test-only-password-123', 'country': 'NZ'}))
+        # The discovery files are never staged for a normal Linux bundle.
+        regular = provision.appliance_files(self.bundle, access, False)[0]
+        self.assertNotIn('etc/nginx/conf.d/oxidal-portal.conf', regular)
+        self.assertNotIn('etc/NetworkManager/dnsmasq-shared.d/oxidal-portal.conf', regular)
         state = self.root / 'var/lib/NetworkManager/NetworkManager.state'
         state.parent.mkdir(parents=True)
         state.write_text('[main]\nWirelessEnabled=false\n')
@@ -152,5 +156,12 @@ class ApplianceTests(ProvisionTests):
         self.assertIn('WirelessEnabled=false', state.read_text())
         provision.provision(self.root, True, self.bundle, access, True)
         self.assertIn('WirelessEnabled=true', state.read_text())
+        portal = self.root / 'usr/share/oxidal/portal/index.html'
+        self.assertIn('Open Oxidal', portal.read_text())
+        self.assertIn('/wordmark.svg', portal.read_text())
+        self.assertTrue((self.root / 'etc/nginx/conf.d/oxidal-portal.conf').is_file())
+        dns = (self.root / 'etc/NetworkManager/dnsmasq-shared.d/oxidal-portal.conf').read_text()
+        self.assertIn('host-record=captive.apple.com,10.42.0.1', dns)
+        self.assertNotIn('address=/#/', dns)
         self.assertEqual(state.stat().st_mode & 0o777, 0o600)
         self.assertEqual(provision.provision(self.root, True, self.bundle, access, True)['changes'], [])

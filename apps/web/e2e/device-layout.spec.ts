@@ -1,7 +1,7 @@
 import { setDisplayMode } from './display';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 
 // CSS viewports are representative: Android density, browser chrome and zoom vary.
 // Hardware resolution is not the browser viewport. See README.md for the matrix.
@@ -628,4 +628,53 @@ test('stage display navigation retains contrast after touch and hover', async ({
   } finally {
     await mouseContext.close();
   }
+});
+
+test('device portrait and landscape: hotspot welcome uses Oxidal branding and fits', async ({
+  page,
+}, info) => {
+  // Render shipped static bytes; the OS suite separately proves nginx/DNS routing.
+  const html = readFileSync('../../os/config/oxidal-welcome.html', 'utf8');
+  const logo = readFileSync('public/brand/wordmark.svg');
+  await page.route('**/hotspot-welcome', (route) =>
+    route.fulfill({ contentType: 'text/html', body: html }),
+  );
+  await page.route('**/wordmark.svg', (route) =>
+    route.fulfill({ contentType: 'image/svg+xml', body: logo }),
+  );
+  if (info.project.name === 'boox-air3c')
+    await page.emulateMedia({ contrast: 'more', reducedMotion: 'reduce' });
+  await page.goto('/hotspot-welcome');
+  await expect(
+    page.getByRole('img', { name: 'Oxidal', exact: true }),
+  ).toBeVisible();
+  const open = page.getByRole('link', { name: 'Open Oxidal' });
+  await expect(open).toHaveAttribute('href', 'https://10.42.0.1/');
+  const original = page.viewportSize()!;
+  mkdirSync('../../.local/previews/portal', { recursive: true });
+  for (const [name, viewport] of [
+    ['portrait', original],
+    ['landscape', { width: original.height, height: original.width }],
+  ] as const) {
+    await page.setViewportSize(viewport);
+    await fits(page);
+    await expect(open).toBeInViewport();
+    const target = await open.boundingBox();
+    expect(target!.height).toBeGreaterThanOrEqual(56);
+    await expect(
+      page.getByRole('link', { name: 'oxidal.local', exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: `../../.local/previews/portal/${info.project.name}-${name}.png`,
+      fullPage: true,
+    });
+  }
+  await page.getByText('Page not opening?', { exact: true }).click();
+  await expect(
+    page.getByText('This prototype uses a self-signed certificate', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
 });
