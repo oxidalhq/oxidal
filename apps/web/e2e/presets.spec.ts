@@ -1005,10 +1005,10 @@ test('playback lifecycle keeps native authoring available after stop and restart
             .preset_id,
       )
       .toBe(running.saved_copy);
-    await page.getByRole('button', { name: 'Switch rig', exact: true }).click();
+    // Recall directly from Rig without returning to Library or audio settings.
     await page
-      .getByRole('button', { name: `Load ${preset.name}`, exact: true })
-      .click();
+      .getByRole('combobox', { name: 'Playing preset' })
+      .selectOption(`original:${preset.sha256}`);
     await expect(
       page.getByRole('region', { name: 'Sounding rig' }),
     ).toBeVisible();
@@ -1151,7 +1151,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       });
     }
     await page.setViewportSize(portrait);
-    await sounding.getByRole('button', { name: 'Global', exact: true }).click();
+    await sounding.getByRole('button', { name: 'Tone', exact: true }).click();
     const outputControl = liveControls.controls.find(
       (c: { target: string }) => c.target === 'outputLevel',
     );
@@ -1193,9 +1193,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByRole('slider', { name: 'Adjust sounding value' })
       .press('ArrowLeft');
     await sounding.getByRole('button', { name: 'Done', exact: true }).click();
-    await expect(sounding.getByTestId('live-status')).toHaveText(
-      'Session modified',
-    );
+    await expect(sounding.getByTestId('live-status')).toHaveText('Edited');
     const live = await (await request.get('/api/v1/audio')).json();
     expect(live.modified).toBe(true);
     const liveLevel = live.controls.find(
@@ -1275,7 +1273,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       body: await sounding.screenshot(),
       contentType: 'image/png',
     });
-    await sounding.getByRole('button', { name: 'Global', exact: true }).click();
+    await sounding.getByRole('button', { name: 'Tone', exact: true }).click();
     await expect(spread).toHaveCount(0);
     // Only provider transport is a fixture. Selection, verified local asset, native
     // worker preparation, live readback and Save use the real daemon/processes.

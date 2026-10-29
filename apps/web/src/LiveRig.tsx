@@ -1,6 +1,23 @@
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
-import { Power, ArrowRight, Stack } from '@phosphor-icons/react';
+import {
+  Power,
+  ArrowRight,
+  Stack,
+  SlidersHorizontal,
+  Waveform,
+  MusicNotes,
+  ArrowsSplit,
+  Plus,
+  Swap,
+} from '@phosphor-icons/react';
+import { RigPresetSelector } from './RigPresetSelector';
+import {
+  controlGroup,
+  shortControlLabel,
+  confirmedControlDisplay,
+  type ControlGroup,
+} from './rigControls';
 import { LiveEq } from './LiveEq';
 import { ArtworkDeck } from './AssetArtwork';
 import { ModelPicker } from './ModelPicker';
@@ -44,7 +61,7 @@ export function LiveRig({
     format?: 'nam' | 'ir';
   } | null>(null);
   const [target, setTarget] = useState('outputLevel');
-  const [imageControls, setImageControls] = useState(false);
+  const [group, setGroup] = useState<ControlGroup>('tone');
   const [draft, setDraft] = useState<{
     target: string;
     value: number;
@@ -147,6 +164,36 @@ export function LiveRig({
         }
       } catch {
         /* Preserve last confirmed state. */
+      }
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function recall(id: string, owned: boolean) {
+    if (!state || sending.current || adjustment.current || eqEditing) return;
+    sending.current = true;
+    generation.current += 1;
+    setBusy(true);
+    setError('');
+    try {
+      const next = await playbackCommand(state, {
+        kind: 'load_preset',
+        preset_id: id,
+        owned,
+      });
+      if (alive.current) {
+        setState(next);
+        setTarget('outputLevel');
+        setGroup('tone');
+        setDraft(null);
+        onPlaying(next.preset_name ?? 'Saved preset');
+      }
+    } catch (cause) {
+      if (alive.current) {
+        setError(String(cause));
+        const next = await playbackState().catch(() => null);
+        if (next) setState(next);
       }
     } finally {
       sending.current = false;
@@ -379,20 +426,24 @@ export function LiveRig({
   );
   const selectedBlock = selectedTarget.startsWith('block:')
     ? selectedTarget.split(':')[1]
-    : groups[0]?.target.split(':')[1];
+    : undefined;
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
+      <RigPresetSelector
+        state={state}
+        disabled={disabled || !!draft || !!picker}
+        onSelect={(id, owned) => void recall(id, owned)}
+      />
       <div className="section-heading">
-        <h2>Signal chain</h2>
+        <h2 className="flex items-center gap-2">
+          <Waveform size={20} aria-hidden="true" />
+          Signal chain
+        </h2>
         <Button variant="outline" onClick={onLibrary}>
           <Stack aria-hidden="true" /> Switch rig
         </Button>
         <span role="status" data-testid="live-status">
-          {busy
-            ? 'Applying…'
-            : state.modified
-              ? 'Session modified'
-              : 'Saved preset playing'}
+          {busy ? 'Applying…' : state.modified ? 'Edited' : 'Saved'}
         </span>
       </div>
       <div className="signal-rack" aria-label="Sounding tone blocks">
@@ -430,7 +481,9 @@ export function LiveRig({
                     </span>
                     <Button
                       variant="ghost"
-                      className="h-11 w-full justify-start px-1 text-left whitespace-normal"
+                      className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
+                      aria-pressed={selectedBlock === c.target.split(':')[1]}
+                      disabled={disabled || !!draft}
                       onClick={() => {
                         const prefix = c.target.slice(0, -7);
                         setTarget(
@@ -473,7 +526,7 @@ export function LiveRig({
                           })
                         }
                       >
-                        Model
+                        <Swap aria-hidden="true" /> Model
                       </Button>
                       <Button
                         className="effect-power h-11 w-11 shrink-0 p-0"
@@ -524,6 +577,7 @@ export function LiveRig({
                 });
               }}
             >
+              <Plus aria-hidden="true" />
               {format === 'nam' ? 'Add NAM' : 'Add IR'}
             </Button>
           ))}
@@ -598,51 +652,50 @@ export function LiveRig({
       {state.model_change?.error && (
         <p role="alert">{state.model_change.error}</p>
       )}
-      <div className="section-heading">
-        <h3>Controls</h3>
-        <div className="flex gap-1">
-          <Button
-            variant={
-              !selectedTarget.startsWith('block:') && !imageControls
-                ? 'secondary'
-                : 'ghost'
-            }
-            aria-pressed={
-              !selectedTarget.startsWith('block:') && !imageControls
-            }
-            onClick={() => {
-              setTarget('outputLevel');
-              setImageControls(false);
-              setDraft(null);
-            }}
-          >
-            Global
-          </Button>
-          {state.controls.some((c) => c.target === 'spreadEnabled') && (
+      <div className="control-navigation" aria-label="Control groups">
+        {(
+          [
+            ['tone', 'Tone', SlidersHorizontal],
+            ['gate', 'Gate', Waveform],
+            ['pitch', 'Pitch', MusicNotes],
+            ['stereo', 'Stereo', ArrowsSplit],
+          ] as const
+        )
+          .filter(([id]) =>
+            state.controls.some(
+              (c) =>
+                !c.target.startsWith('block:') && controlGroup(c.target) === id,
+            ),
+          )
+          .map(([id, label, Icon]) => (
             <Button
-              variant={
-                !selectedTarget.startsWith('block:') && imageControls
-                  ? 'secondary'
-                  : 'ghost'
-              }
-              aria-pressed={
-                !selectedTarget.startsWith('block:') && imageControls
-              }
+              key={id}
+              variant={!selectedBlock && group === id ? 'secondary' : 'ghost'}
+              aria-pressed={!selectedBlock && group === id}
+              disabled={disabled || !!draft}
               onClick={() => {
-                setTarget('spreadEnabled');
-                setImageControls(true);
+                setGroup(id);
+                setTarget(
+                  state.controls.find(
+                    (c) =>
+                      !c.target.startsWith('block:') &&
+                      controlGroup(c.target) === id,
+                  )!.target,
+                );
                 setDraft(null);
               }}
             >
-              Stereo
+              <Icon aria-hidden="true" />
+              {label}
             </Button>
-          )}
-        </div>
+          ))}
       </div>
-      {imageControls && !selectedTarget.startsWith('block:') && (
-        <p className="text-sm text-muted-foreground">
-          Spread widens a mono chain into stereo.
-        </p>
+      {selectedBlock && (
+        <h3 className="selected-effect-heading">
+          {groups
+            .find((c) => c.target === `block:${selectedBlock}:enabled`)
+            ?.label.replace(/ · (left|right) · enabled$/, '')}
+        </h3>
       )}
       <div className="live-parameter-grid" aria-label="Sounding controls">
         {state.controls
@@ -657,9 +710,7 @@ export function LiveRig({
                     ),
                   )
                 : !item.target.startsWith('block:') &&
-                  imageControls ===
-                    (item.target.startsWith('spread') ||
-                      item.target === 'outputBalance')),
+                  controlGroup(item.target) === group),
           )
           .map((item) => (
             <button
@@ -678,7 +729,7 @@ export function LiveRig({
                 else openAdjustment(item);
               }}
             >
-              <span>{item.label}</span>
+              <span>{shortControlLabel(item.label)}</span>
               <strong>{item.display}</strong>
             </button>
           ))}
@@ -739,9 +790,7 @@ export function LiveRig({
             step={0.01}
             disabled={disabled || stale}
             format={(v) =>
-              v === control.value
-                ? control.display
-                : `${Math.round(v * 100)}% · sending`
+              confirmedControlDisplay(control.display, v !== control.value)
             }
             onChange={(value) => {
               latestValue.current = value;

@@ -2044,7 +2044,7 @@ textarea {
   background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--panel-radius);
-  padding: 0.75rem;
+  padding: 0.5rem;
 }
 .signal-lane {
   display: flex;
@@ -2075,7 +2075,7 @@ textarea {
 }
 .signal-block {
   position: relative;
-  flex: 0 0 12rem;
+  flex: 0 0 11rem;
   background: var(--card);
   border: 1px solid var(--input);
   border-top: 4px solid var(--control-accent);
@@ -2128,4 +2128,85 @@ textarea {
   align-items: center;
   gap: 0.375rem;
   min-height: 44px;
+}
+
+/* Rig workspace: navigation stays separate from signal and parameter controls. */
+.rig-preset-selector {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.rig-preset-selector > button {
+  width: 44px;
+  padding-inline: 0;
+}
+.rig-preset-field {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.rig-preset-field > span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+.rig-preset-field svg {
+  width: 14px;
+  height: 14px;
+}
+.rig-preset-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font-weight: 650;
+  background: var(--card);
+  border-color: var(--input);
+}
+.control-navigation {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding-block: 0.25rem;
+}
+.control-navigation .oxidal-button[aria-pressed='true'] {
+  box-shadow: inset 0 -3px 0 var(--control-accent);
+}
+.selected-effect-heading {
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.signal-block-select {
+  box-shadow: none;
+}
+.signal-block::after {
+  content: '';
+  position: absolute;
+  right: -0.8rem;
+  top: 50%;
+  width: 0.75rem;
+  border-top: 2px solid var(--input);
+}
+.signal-block:last-child::after {
+  display: none;
+}
+.signal-block[data-bypassed='true'] .signal-block-select {
+  color: var(--muted-foreground);
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .page-heading {
+    margin-bottom: 0.5rem;
+  }
+  .page-heading .eyebrow {
+    display: none;
+  }
+  .page-heading h1 {
+    font-size: 1.2rem;
+  }
+  .live-rig {
+    padding: 0.75rem;
+  }
 }
