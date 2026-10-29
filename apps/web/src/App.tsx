@@ -1,3 +1,4 @@
+import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
 import {
   lazy,
@@ -78,6 +79,7 @@ export default function App() {
   const [view, setView] = useState<'rig' | 'settings' | 'library' | 'monitor'>(
     'rig',
   );
+  const [tunerOpen, setTunerOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
     'audio' | 'connections' | 'midi' | 'display' | 'device' | 'maintenance'
   >('audio');
@@ -342,10 +344,17 @@ export default function App() {
           )}
         </nav>
       </header>
+      {tunerOpen && (
+        <GlobalTuner
+          onClose={() => setTunerOpen(false)}
+          slow={displayMode === 'epaper'}
+        />
+      )}
       <ResourceStrip
         displayMode={displayMode}
         connected={connected}
         onDetails={() => setView('monitor')}
+        onTuner={() => setTunerOpen(true)}
       />
       <div className="workspace">
         <main>

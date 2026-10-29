@@ -2274,13 +2274,24 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
-  await rig.getByText('Tuner & matching', { exact: true }).click();
-  await rig.getByRole('button', { name: 'Tuner', exact: true }).click();
+  await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Start tuner', exact: true })
+    .click();
   await expect(rig.getByLabel('Tuner reading')).toBeVisible();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.tools.tuner)
     .not.toBeNull();
-  await rig.getByRole('button', { name: 'Close tuner', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Stop tuner', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Close dialog', exact: true })
+    .click();
+  await rig.getByText('Chain matching', { exact: true }).click();
   await expect(rig.getByLabel('Tuner reading')).toHaveCount(0);
   await rig
     .getByRole('button', { name: 'Use stereo chains', exact: true })

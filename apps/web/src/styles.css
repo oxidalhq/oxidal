@@ -2585,3 +2585,41 @@ textarea {
   scrollbar-width: thin;
   scrollbar-color: var(--muted-foreground) transparent;
 }
+
+.resource-strip {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.resource-strip-state {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.resource-strip-state > button {
+  width: 44px;
+  padding: 0;
+}
+.tuner-access {
+  font-size: 0.7rem;
+}
+.tuner-note {
+  text-align: center;
+  font: 700 4rem var(--font-mono);
+}
+.tuner-meter {
+  position: relative;
+  height: 1.5rem;
+  background: var(--muted);
+  border-radius: var(--radius);
+}
+.tuner-center {
+  position: absolute;
+  left: 50%;
+  height: 100%;
+  border-left: 2px solid var(--foreground);
+}
+.tuner-needle {
+  position: absolute;
+  width: 6px;
+  margin-left: -3px;
+  height: 100%;
+  background: var(--control-accent);
+}

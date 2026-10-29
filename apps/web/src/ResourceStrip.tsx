@@ -11,10 +11,12 @@ export function ResourceStrip({
   displayMode,
   connected,
   onDetails,
+  onTuner,
 }: {
   displayMode: string;
   connected: boolean;
   onDetails: () => void;
+  onTuner?: () => void;
 }) {
   const [state, setState] = useState<Monitoring | null>(null);
   const [disconnected, setDisconnected] = useState(false);
@@ -140,6 +142,16 @@ export function ResourceStrip({
   return (
     <aside className="resource-strip" aria-label="DSP and system resources">
       <div className="resource-strip-state">
+        {onTuner && (
+          <Button
+            variant="ghost"
+            onClick={onTuner}
+            aria-label="Open tuner"
+            title="Tuner"
+          >
+            <span className="tuner-access">Tuner</span>
+          </Button>
+        )}
         <span className="sr-only" data-testid="resource-state">
           {status}
         </span>
