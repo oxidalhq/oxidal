@@ -2357,9 +2357,9 @@ textarea {
   border-radius: var(--radius);
   background: var(--card);
 }
-[data-chain-view='artwork'] .signal-block-select > .line-clamp-2 {
+[data-chain-view='artwork'] .signal-block-select > .signal-block-label {
   padding: 0.5rem;
-  min-height: 3rem;
+  height: 3.5rem;
   font-size: 0.75rem;
   line-height: 1.25rem;
   text-align: left;

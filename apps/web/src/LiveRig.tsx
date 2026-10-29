@@ -820,11 +820,13 @@ export function LiveRig({
                             blockId={c.target.slice(6, -8)}
                           />
                         )}
-                      <span className="line-clamp-2">
-                        {c.label.replace(
-                          /(?: · (?:left|right))? · enabled$/,
-                          '',
-                        )}
+                      <span className="signal-block-label">
+                        <span className="line-clamp-2">
+                          {c.label.replace(
+                            /(?: · (?:left|right))? · enabled$/,
+                            '',
+                          )}
+                        </span>
                       </span>
                     </Button>
                     <div className="live-effect-actions">
