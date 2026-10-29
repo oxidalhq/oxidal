@@ -3,6 +3,7 @@ import {
   ArrowClockwise,
   DownloadSimple,
   ListChecks,
+  FunnelX,
 } from '@phosphor-icons/react';
 import { controlAudit, type ControlAudit as History } from './api';
 import { Button } from './components/ui/button';
@@ -57,6 +58,33 @@ export function ControlAudit() {
         (!since || r.requested_at_ms >= new Date(since).getTime()) &&
         (!until || r.requested_at_ms <= new Date(until).getTime()),
     ) ?? [];
+  const invalidRange =
+    !!since && !!until && new Date(since).getTime() > new Date(until).getTime();
+  function exportFiltered() {
+    if (!history || invalidRange) return;
+    const url = URL.createObjectURL(
+      new Blob(
+        [
+          JSON.stringify(
+            {
+              ...history,
+              records,
+              export_scope: 'filtered',
+              filters: { operation: category, outcome, from: since, until },
+            },
+            null,
+            2,
+          ),
+        ],
+        { type: 'application/json' },
+      ),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'oxidal-audit-filtered.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   return (
     <details
       className="control-help"
@@ -154,6 +182,31 @@ export function ControlAudit() {
               />
             </label>
           </div>
+          <div className="action-row">
+            <Button
+              variant="outline"
+              disabled={busy || !history || invalidRange || !records.length}
+              onClick={exportFiltered}
+            >
+              <DownloadSimple aria-hidden="true" /> Export filtered
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={
+                category === 'all' && outcome === 'all' && !since && !until
+              }
+              onClick={() => {
+                setCategory('all');
+                setOutcome('all');
+                setSince('');
+                setUntil('');
+                setLimit(50);
+              }}
+            >
+              <FunnelX aria-hidden="true" /> Clear filters
+            </Button>
+          </div>
+          {invalidRange && <p role="alert">From must be before Until.</p>}
           {error && <p role="alert">{error}</p>}
           {history &&
             (history.storage_error ||
@@ -215,7 +268,9 @@ export function ControlAudit() {
               MiB. Request bodies, credentials, terminal commands and audio are
               excluded. Repeated adjustments are separate requests. Worker
               application events and interrupted requests are not yet recorded.
-              Export includes all retained records, regardless of filters.
+              Export all includes every retained record. Export filtered
+              includes every matching record, including entries beyond Show
+              more.
             </p>
           </details>
         </section>

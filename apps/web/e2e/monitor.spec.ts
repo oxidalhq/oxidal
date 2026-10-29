@@ -310,6 +310,28 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await panel.getByLabel('Outcome', { exact: true }).selectOption('accepted');
   await expect(panel.getByText('No matching requests.')).toBeVisible();
   await panel.getByLabel('Outcome', { exact: true }).selectOption('all');
+  const filteredDownload = page.waitForEvent('download');
+  await panel
+    .getByRole('button', { name: 'Export filtered', exact: true })
+    .click();
+  const filtered = await filteredDownload;
+  expect(filtered.suggestedFilename()).toBe('oxidal-audit-filtered.json');
+  const filteredData = JSON.parse(
+    await readFile((await filtered.path())!, 'utf8'),
+  );
+  expect(filteredData.records.length).toBeGreaterThan(0);
+  expect(
+    filteredData.records.every(
+      (r: { operation: string }) => r.operation === 'network',
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(filteredData)).not.toContain('PRIVATE');
+  await panel
+    .getByRole('button', { name: 'Clear filters', exact: true })
+    .click();
+  await expect(panel.getByLabel('Operation', { exact: true })).toHaveValue(
+    'all',
+  );
   const download = await request.get('/api/v1/audit/export');
   expect(download.headers()['content-disposition']).toContain(
     'control-audit.json',
