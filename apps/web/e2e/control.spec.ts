@@ -493,7 +493,7 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
     page.getByRole('heading', { name: 'Reverb / selected' }),
   ).toBeVisible();
   mkdirSync('../../.local/previews/instrument', { recursive: true });
-  for (const mode of ['orchid', 'stage'] as const) {
+  for (const mode of ['default', 'stage'] as const) {
     await setDisplayMode(page, mode);
     await page.screenshot({
       path: `../../.local/previews/instrument/${testInfo.project.name}-${mode}.png`,

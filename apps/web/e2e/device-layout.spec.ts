@@ -296,11 +296,11 @@ test('device portrait and landscape keep controls accessible and preserve a rota
       .getByRole('button', { name: 'Display', exact: true })
       .click();
     await expect(page.getByLabel('Display mode')).toHaveValue('epaper');
-    await setDisplayMode(page, 'orchid');
+    await setDisplayMode(page, 'default');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
       'data-display',
-      'orchid',
+      'default',
     );
     await page.getByRole('button', { name: 'Parallel', exact: true }).waitFor();
   }
@@ -608,7 +608,7 @@ test('stage display navigation retains contrast after touch and hover', async ({
       const navigation = target.getByRole('navigation', {
         name: 'Instrument navigation',
       });
-      for (const mode of ['orchid', 'stage', 'sunlight', 'epaper'] as const) {
+      for (const mode of ['default', 'stage', 'sunlight', 'epaper'] as const) {
         await setDisplayMode(target, mode);
         await navigation
           .getByRole('button', { name: 'Rig', exact: true })

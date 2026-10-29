@@ -642,6 +642,7 @@ input[type='file'] {
   --accent: var(--secondary);
   --accent-foreground: var(--secondary-foreground);
   --ring: var(--enclosure-foreground);
+  --control-accent: var(--enclosure-foreground);
 }
 .masthead nav {
   display: flex;
@@ -767,12 +768,12 @@ h1 {
   font-weight: 500;
 }
 
-/* Signature colour is an identity accent; status still has explicit text. */
+/* The faceplate is ink; oxide is reserved for live state, never decoration. */
 .masthead {
-  border-bottom: 2px solid var(--brand);
+  border-bottom: 1px solid var(--enclosure-border);
 }
-.brand-mark {
-  color: var(--brand);
+.masthead nav button:not([aria-current]) {
+  color: color-mix(in srgb, var(--enclosure-foreground) 62%, var(--enclosure));
 }
 
 @media (max-width: 1050px) {
@@ -1551,10 +1552,9 @@ button.block:focus-visible {
   border-radius: var(--panel-radius);
   color: var(--foreground);
   background: var(--card);
-  box-shadow: 0 8px 32px #0003;
 }
 .adjustment-dialog::backdrop {
-  background: #0002;
+  background: color-mix(in srgb, var(--foreground) 40%, transparent);
 }
 .adjustment-dialog h2 {
   margin: 0 0 0.5rem;
@@ -2070,10 +2070,6 @@ textarea {
 /* Instrument surfaces: consistent pressable controls and explicit signal flow. */
 .oxidal-button {
   border-radius: var(--radius);
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, currentColor 12%, transparent);
-}
-.oxidal-button:active:not(:disabled) {
-  box-shadow: inset 0 2px 0 color-mix(in srgb, currentColor 12%, transparent);
 }
 .oxidal-button svg {
   width: 1.125rem;

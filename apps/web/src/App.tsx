@@ -94,11 +94,13 @@ function InstrumentApp() {
   const [displayMode, setDisplayMode] = useState(() => {
     try {
       const saved = localStorage.getItem('oxidal.display');
-      return saved && ['orchid', 'sunlight', 'stage', 'epaper'].includes(saved)
+      // `orchid` was the default before the Oxidal identity.
+      if (saved === 'orchid') return 'default';
+      return saved && ['default', 'sunlight', 'stage', 'epaper'].includes(saved)
         ? saved
-        : 'orchid';
+        : 'default';
     } catch {
-      return 'orchid';
+      return 'default';
     }
   });
   useEffect(() => {
@@ -108,10 +110,10 @@ function InstrumentApp() {
       ?.setAttribute(
         'content',
         displayMode === 'stage'
-          ? '#151219'
-          : displayMode === 'orchid'
-            ? '#241b2b'
-            : '#ffffff',
+          ? '#0c0c0b'
+          : displayMode === 'default'
+            ? '#1b1a17'
+            : '#000000',
       );
     try {
       localStorage.setItem('oxidal.display', displayMode);
@@ -314,7 +316,7 @@ function InstrumentApp() {
             (destination) => (
               <Button
                 key={destination}
-                variant={view === destination ? 'secondary' : 'ghost'}
+                variant="ghost"
                 aria-current={view === destination ? 'page' : undefined}
                 onClick={() =>
                   destination === 'settings'
@@ -651,9 +653,9 @@ function InstrumentApp() {
                             setDisplayMode(event.target.value)
                           }
                         >
-                          <option value="orchid">Orchid</option>
+                          <option value="default">Default</option>
+                          <option value="stage">Night</option>
                           <option value="sunlight">Sunlight</option>
-                          <option value="stage">Dark stage</option>
                           <option value="epaper">E-paper</option>
                         </select>
                       </label>
@@ -716,9 +718,10 @@ function InstrumentApp() {
                           fullscreen alone does not prevent sleep.
                         </p>
                         <p>
-                          Sunlight increases contrast. Dark stage dims surfaces.
-                          E-paper removes colour and motion. Set brightness and
-                          e-paper refresh on your device.
+                          Night darkens every surface for a dark stage. Sunlight
+                          is pure black on white. E-paper removes colour and
+                          motion. Set brightness and e-paper refresh on your
+                          device.
                         </p>
                       </details>
                     </section>

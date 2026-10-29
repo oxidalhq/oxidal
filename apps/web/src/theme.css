@@ -1,56 +1,65 @@
-/* Oxidal / Orchid LCD — edit this file to restyle the entire interface.
-   Standard shadcn semantic colours + instrument layout tokens.
-   Keep foreground/background pairs readable; touch targets stay at least 44px. */
+/* Oxidal identity — paper, ink and one oxide accent. Edit this file to restyle the interface.
+   Oxide (brand) means live or committed state only: playing, unsaved edits, Save/Keep.
+   Category colour appears only as block LEDs. Selection inverts ink and paper.
+   One 4px radius, 1px rules, no shadows or gradients. Touch targets stay at least 44px. */
 :root {
   color-scheme: light;
-  --background: #f4f1eb;
-  --foreground: #29232e;
-  --card: #ffffff;
+  --background: #f3f1ec;
+  --foreground: #1b1a17;
+  --card: #fbfaf7;
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
-  --brand: #e363f7;
-  --brand-foreground: #291332;
-  --control-accent: #8b279e;
-  --readout-foreground: var(--control-accent);
-  --secondary: #ebe3ee;
-  --secondary-foreground: #48344f;
-  --muted: #eee8ee;
-  --muted-foreground: #6a5d6d;
-  --accent: #f3d9f8;
-  --accent-foreground: #632372;
-  --destructive: #a32d28;
-  --destructive-foreground: #ffffff;
-  --border: #d7ccd8;
-  --input: #a18da5;
-  --ring: var(--control-accent);
-  --success: #26704c;
-  --warning: #eee9dc;
-  --warning-foreground: #64542f;
+  --brand: #a8401a;
+  --brand-foreground: #ffffff;
+  --control-accent: var(--foreground);
+  --readout-foreground: var(--foreground);
+  --secondary: #e8e5dd;
+  --secondary-foreground: var(--foreground);
+  --muted: #e8e5dd;
+  --muted-foreground: #6a675f;
+  --accent: #e8e5dd;
+  --accent-foreground: var(--foreground);
+  --destructive: var(--foreground);
+  --destructive-foreground: var(--background);
+  --border: #d6d2c8;
+  --input: var(--foreground);
+  --ring: var(--foreground);
+  --success: var(--brand);
+  --warning: #e8e5dd;
+  --warning-foreground: var(--foreground);
+  --wire: #8a867c;
 
-  /* The graphite enclosure and monochrome LCD are independent of app surfaces. */
-  --enclosure: #241b2b;
-  --enclosure-foreground: #faf5fc;
-  --enclosure-border: #695371;
-  --lcd: #eeece4;
-  --lcd-foreground: #34312e;
-  --lcd-muted: #655f55;
-  --lcd-border: #b8b0a1;
-  --lcd-card: #faf8f1;
+  /* Block LEDs, shared with footswitch LEDs. Never used as fills. */
+  --led-amp: #d08a1a;
+  --led-pedal: #3f8f3a;
+  --led-cab: #7d7a70;
+  --led-time: #2f6fb0;
+  --led-lv2: #23807a;
+
+  /* The ink faceplate (header) and the readout panel. */
+  --enclosure: #1b1a17;
+  --enclosure-foreground: #f3f1ec;
+  --enclosure-border: #3a3832;
+  --lcd: var(--background);
+  --lcd-foreground: var(--foreground);
+  --lcd-muted: var(--muted-foreground);
+  --lcd-border: var(--border);
+  --lcd-card: var(--card);
   --lcd-action: var(--brand);
   --lcd-action-foreground: var(--brand-foreground);
-  --lcd-shadow: inset 0 2px 6px #34312e12;
+  --lcd-shadow: none;
   --panel-shadow: none;
-  --effect-shadow: 0 2px 4px #34312e08;
-  --effect-accent: var(--brand);
+  --effect-shadow: none;
+  --effect-accent: var(--foreground);
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  --radius: 0.5rem;
-  --panel-radius: 0.5rem;
-  --display-radius: 0.5rem;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --radius: 0.25rem;
+  --panel-radius: 0.25rem;
+  --display-radius: 0.25rem;
   --content-width: 80rem;
   --page-space: clamp(0.75rem, 2vw, 1.5rem);
   --panel-space: clamp(0.75rem, 1.5vw, 1.125rem);
@@ -60,7 +69,7 @@
   --title-size: clamp(1.5rem, 2.5vw, 2rem);
   --readout-size: 2rem;
   --rack-gap: 0.5rem;
-  --selected-edge: 3px;
+  --selected-edge: 2px;
 }
 
 /* Tailwind v4 / shadcn bridge. Components use semantic utilities, never hues. */
@@ -90,78 +99,72 @@
   --radius-xl: calc(var(--radius) * 1.5);
 }
 
-/* Explicit browser preference for BOOX and other e-paper displays. */
-:root[data-display='sunlight'],
-:root[data-display='epaper'] {
-  --background: #ffffff;
-  --foreground: #111111;
-  --card: #ffffff;
-  --brand: #222222;
-  --brand-foreground: #ffffff;
-  --control-accent: #111111;
-  --secondary: #eeeeee;
-  --secondary-foreground: #111111;
-  --muted: #ffffff;
-  --muted-foreground: #333333;
-  --accent: #eeeeee;
-  --accent-foreground: #111111;
-  --border: #555555;
-  --input: #555555;
-  --enclosure: #ffffff;
-  --enclosure-foreground: #111111;
-  --enclosure-border: #555555;
-  --lcd: #ffffff;
-  --lcd-foreground: #111111;
-  --lcd-muted: #333333;
-  --lcd-border: #555555;
-  --lcd-card: #ffffff;
-  --warning: #ffffff;
-  --warning-foreground: #111111;
-  --destructive: #111111;
-  --success: #111111;
-  --lcd-shadow: none;
-  --panel-shadow: none;
-  --effect-shadow: none;
-}
-
-/* Stage modes preserve status labels; colour never carries state alone. */
-:root[data-display='sunlight'] {
-  --brand: #811b92;
-  --brand-foreground: #ffffff;
-  --control-accent: #701180;
-}
+/* Night (stored as `stage`): dark stage, no pure white, darkest faceplate. */
 :root[data-display='stage'] {
   color-scheme: dark;
-  --background: #151219;
-  --foreground: #f4edf7;
-  --card: #211b27;
-  --brand: #e363f7;
-  --brand-foreground: #291332;
-  --control-accent: #ef9bfc;
-  --secondary: #352a40;
-  --secondary-foreground: #f4edf7;
-  --muted: #211b27;
-  --muted-foreground: #cabed0;
-  --accent: #47324e;
-  --accent-foreground: #fff4ff;
-  --border: #87718e;
-  --input: #a58aad;
-  --enclosure: #151219;
-  --enclosure-foreground: #f4edf7;
-  --enclosure-border: #87718e;
-  --lcd: #211b27;
-  --lcd-foreground: #f4edf7;
-  --lcd-muted: #cabed0;
-  --lcd-border: #87718e;
-  --lcd-card: #2a2231;
-  --warning: #30271b;
-  --warning-foreground: #f5d5a2;
-  --destructive: #ffb4aa;
-  --success: #66d9ab;
-  --destructive-foreground: #291312;
-  --lcd-shadow: none;
-  --panel-shadow: none;
-  --effect-shadow: none;
+  --background: #161513;
+  --foreground: #ece9e2;
+  --card: #1c1b18;
+  --brand: #e07a45;
+  --brand-foreground: #161513;
+  --secondary: #24221e;
+  --muted: #24221e;
+  --muted-foreground: #a29e94;
+  --accent: #24221e;
+  --border: #36342f;
+  --wire: #6f6b62;
+  --led-amp: #c99140;
+  --led-pedal: #62a35a;
+  --led-cab: #8f8b80;
+  --led-time: #5d8fc8;
+  --led-lv2: #45a198;
+  --enclosure: #0c0c0b;
+  --enclosure-foreground: #ece9e2;
+  --enclosure-border: #36342f;
+}
+
+/* Sunlight: pure black on white; secondary text stays black. */
+:root[data-display='sunlight'] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --brand: #8a3212;
+  --secondary: #ffffff;
+  --muted: #ffffff;
+  --muted-foreground: #000000;
+  --accent: #ffffff;
+  --border: #000000;
+  --wire: #000000;
+  --led-amp: #a86200;
+  --led-pedal: #1d6a19;
+  --led-cab: #4d4d4d;
+  --led-time: #0b4f99;
+  --led-lv2: #00625b;
+  --enclosure: #000000;
+  --enclosure-foreground: #ffffff;
+  --enclosure-border: #000000;
+}
+
+/* E-paper (BOOX): black and white only; no greys that dither. */
+:root[data-display='epaper'] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --brand: #000000;
+  --secondary: #ffffff;
+  --muted: #ffffff;
+  --muted-foreground: #000000;
+  --accent: #ffffff;
+  --border: #000000;
+  --wire: #000000;
+  --led-amp: #000000;
+  --led-pedal: #000000;
+  --led-cab: #000000;
+  --led-time: #000000;
+  --led-lv2: #000000;
+  --enclosure: #000000;
+  --enclosure-foreground: #ffffff;
+  --enclosure-border: #000000;
 }
 :root[data-display='sunlight'],
 :root[data-display='stage'],
@@ -170,13 +173,11 @@
   --readout-size: 2rem;
 }
 
-/* Monitoring colour remains legible in stage and monochrome modes. */
+/* Monitoring series stay legible in every mode. */
 :root {
-  --chart-secondary: #26704c;
+  --chart-secondary: var(--wire);
 }
-:root[data-display='stage'] {
-  --chart-secondary: #66d9ab;
-}
+:root[data-display='sunlight'],
 :root[data-display='epaper'] {
-  --chart-secondary: #222222;
+  --chart-secondary: #000000;
 }
