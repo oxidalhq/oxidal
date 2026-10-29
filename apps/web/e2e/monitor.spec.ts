@@ -1,7 +1,7 @@
 import { setDisplayMode } from './display';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import type { Monitoring } from '../src/api';
 test('monitor shows measured stereo data, freezes, resets and marks stale readings', async ({
   page,
@@ -218,6 +218,34 @@ test('monitor shows device history after browser reload and exports retained sam
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
   ).toBeVisible();
+  await page.getByLabel('History range', { exact: true }).selectOption('5');
+  await page
+    .getByLabel('History metric', { exact: true })
+    .selectOption('memory');
+  await expect(
+    page.getByRole('figure', { name: 'Recorded RAM · %' }),
+  ).toBeVisible();
+  await page
+    .getByLabel('History metric', { exact: true })
+    .selectOption('xruns');
+  await expect(
+    page.getByRole('figure', { name: 'Recorded New xruns per sample · count' }),
+  ).toBeVisible();
+  const csvPending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export shown CSV' }).click();
+  const csvDownload = await csvPending;
+  expect(csvDownload.suggestedFilename()).toBe('oxidal-monitor-shown.csv');
+  const csv = await readFile((await csvDownload.path())!, 'utf8');
+  expect(csv).toContain(
+    'recorded_at_utc,recorder_session,audio_session,elapsed_ms',
+  );
+  expect(csv).toContain('xruns_total');
+  expect(csv.split('\r\n').length).toBeGreaterThan(2);
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
   const download = await request.get('/api/v1/monitor/history/export');
   expect(download.headers()['content-disposition']).toContain(
     'monitor-history.json',

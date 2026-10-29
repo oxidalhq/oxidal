@@ -1,3 +1,4 @@
+import { historyPoints, historyCsv } from './historyData';
 import { useEffect, useState } from 'react';
 import {
   ArrowClockwise,
@@ -23,6 +24,8 @@ export function MonitoringHistory() {
   const [state, setState] = useState<History | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [range, setRange] = useState('all');
+  const [metric, setMetric] = useState('load');
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -38,26 +41,36 @@ export function MonitoringHistory() {
       });
     return () => controller.abort();
   }, [open, generation]);
-  const records = state?.records ?? [];
-  const points = records.map((record, index) => {
-    const sample = record.readings;
-    const previous = records[index - 1];
-    const boundary =
-      previous &&
-      (previous.recorder_session !== record.recorder_session ||
-        previous.audio_session !== record.audio_session ||
-        record.elapsed_ms - previous.elapsed_ms > 15000);
-    const valid =
-      sample.audio && sample.audio_age_ms != null && sample.audio_age_ms < 3000;
-    return {
-      time: new Date(record.recorded_at_ms).toLocaleTimeString(),
-      cpu: boundary ? null : sample.host.cpu_percent,
-      dsp:
-        !boundary && valid && sample.audio!.deadline_us > 0
-          ? (100 * sample.audio!.process_us_p95) / sample.audio!.deadline_us
-          : null,
-    };
-  });
+  const all = state?.records ?? [];
+  const latest = all.at(-1);
+  const records =
+    range === 'all'
+      ? all
+      : all.filter(
+          (r) =>
+            latest &&
+            r.recorder_session === latest.recorder_session &&
+            r.elapsed_ms >= latest.elapsed_ms - Number(range) * 60000,
+        );
+  const points = historyPoints(records);
+  const series =
+    metric === 'memory'
+      ? { key: 'memory', label: 'RAM', unit: '%' }
+      : metric === 'temperature'
+        ? { key: 'temperature', label: 'Temperature', unit: '°C' }
+        : metric === 'xruns'
+          ? { key: 'xruns', label: 'New xruns per sample', unit: 'count' }
+          : { key: 'dsp', label: 'DSP p95', unit: '%' };
+  function exportShown() {
+    const url = URL.createObjectURL(
+      new Blob([historyCsv(records)], { type: 'text/csv;charset=utf-8' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'oxidal-monitor-shown.csv';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   return (
     <details
       className="control-help"
@@ -94,13 +107,49 @@ export function MonitoringHistory() {
             </Button>
             <Button variant="outline" asChild>
               <a href="/api/v1/monitor/history/export" download>
-                <DownloadSimple aria-hidden="true" /> Export history
+                <DownloadSimple aria-hidden="true" /> Export all JSON
               </a>
             </Button>
           </div>
+          <div className="grid min-w-0 grid-cols-2 gap-2">
+            <label className="field">
+              History range
+              <select
+                aria-label="History range"
+                value={range}
+                onChange={(e) => setRange(e.target.value)}
+              >
+                <option value="all">All loaded</option>
+                <option value="5">Last 5 min · this run</option>
+                <option value="15">Last 15 min · this run</option>
+                <option value="60">Last hour · this run</option>
+              </select>
+            </label>
+            <label className="field">
+              History metric
+              <select
+                aria-label="History metric"
+                value={metric}
+                onChange={(e) => setMetric(e.target.value)}
+              >
+                <option value="load">DSP / CPU</option>
+                <option value="memory">RAM</option>
+                <option value="temperature">Temperature</option>
+                <option value="xruns">New xruns</option>
+              </select>
+            </label>
+          </div>
+          <Button
+            variant="outline"
+            disabled={!records.length}
+            onClick={exportShown}
+          >
+            <DownloadSimple aria-hidden="true" />
+            Export shown CSV
+          </Button>
           <p className="caption">
-            5-second device samples · latest 720 shown · export includes all
-            retained data.
+            5-second samples · latest 720 loaded. JSON includes all retained
+            data; CSV includes the selected range and all readings.
           </p>
           {error && <p role="alert">{error}</p>}
           {state &&
@@ -125,14 +174,25 @@ export function MonitoringHistory() {
                 {records.length} samples
               </p>
               <ChartContainer
-                label="Recorded DSP and CPU · %"
+                label={
+                  metric === 'load'
+                    ? 'Recorded DSP and CPU · %'
+                    : `Recorded ${series.label} · ${series.unit}`
+                }
                 config={{
-                  dsp: { label: 'DSP p95', color: 'var(--control-accent)' },
-                  cpu: {
-                    label: 'Host CPU',
-                    color: 'var(--chart-secondary)',
-                    dashed: true,
+                  [series.key]: {
+                    label: series.label,
+                    color: 'var(--control-accent)',
                   },
+                  ...(metric === 'load'
+                    ? {
+                        cpu: {
+                          label: 'Host CPU',
+                          color: 'var(--chart-secondary)',
+                          dashed: true,
+                        },
+                      }
+                    : {}),
                 }}
               >
                 <LineChart accessibilityLayer data={points}>
@@ -155,23 +215,32 @@ export function MonitoringHistory() {
                   />
                   <Line
                     type="linear"
-                    dataKey="dsp"
-                    name="DSP p95"
+                    dataKey={series.key}
+                    name={series.label}
                     stroke="var(--control-accent)"
                     dot={false}
                     isAnimationActive={false}
                   />
-                  <Line
-                    type="linear"
-                    dataKey="cpu"
-                    name="Host CPU"
-                    stroke="var(--chart-secondary)"
-                    strokeDasharray="6 4"
-                    dot={false}
-                    isAnimationActive={false}
-                  />
+                  {metric === 'load' && (
+                    <Line
+                      type="linear"
+                      dataKey="cpu"
+                      name="Host CPU"
+                      stroke="var(--chart-secondary)"
+                      strokeDasharray="6 4"
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  )}
                 </LineChart>
               </ChartContainer>
+              {metric === 'xruns' && (
+                <p className="caption">
+                  Recovered underruns/overruns between samples. Gaps mean stale
+                  data, a counter reset or a new audio session; they do not mean
+                  zero.
+                </p>
+              )}
               <details className="control-help">
                 <summary>Recording details</summary>
                 <p className="caption">

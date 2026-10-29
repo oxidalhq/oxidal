@@ -60,3 +60,16 @@ not a guaranteed security log. Interrupted appends are isolated and skipped.
 Sudden power loss may lose the latest writes. Worker-confirmed application events,
 unfinished requests and gesture coalescing are still pending; repeated knob
 adjustments currently produce separate request records.
+
+Device history offers DSP/CPU, RAM percentage, temperature and newly recovered
+xruns per recorded interval. Recent ranges use the recorder's elapsed clock and
+stay within its current run; All loaded includes the latest 720 stored samples.
+Xrun deltas require adjacent fresh samples in the same audio/recorder session and
+a nondecreasing counter. Session changes, counter resets and stale readings leave
+gaps rather than zeroes. These sampled counts cannot locate an individual glitch
+within the five-second interval or prove its cause.
+
+Export shown CSV exports every available reading for the selected loaded range,
+with explicit units, UTC timestamps, recorder/audio identities and blank missing
+values. The JSON export still includes all retained samples. Neither operation
+adds periodic browser polling or changes audio processing.
