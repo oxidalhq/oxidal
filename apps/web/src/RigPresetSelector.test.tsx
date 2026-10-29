@@ -115,3 +115,38 @@ it('uses the same authoritative recall from performance pads and preserves owned
   expect(playing).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByRole('button', { name: 'Next bank' })).toBeDisabled();
 });
+
+it('opens gig pads on the playing bank and keeps playing identity during initial loading', async () => {
+  library();
+  vi.mocked(presetLibrary).mockResolvedValue(
+    Array.from({ length: 12 }, (_, i) => ({
+      sha256: String(i),
+      name: `Tone ${i}`,
+    })) as Awaited<ReturnType<typeof presetLibrary>>,
+  );
+  vi.mocked(nativeState).mockResolvedValue({ owned: [] } as unknown as Awaited<
+    ReturnType<typeof nativeState>
+  >);
+  const playing = {
+    ...state,
+    configured: { ...state.configured!, preset_id: '10' },
+    preset_name: 'Tone 10',
+  };
+  const view = render(
+    <RigPresetSelector state={playing} disabled={false} onSelect={() => {}} />,
+  );
+  expect(screen.getByRole('option', { name: 'Tone 10' })).toBeInTheDocument();
+  view.rerender(
+    <RigPresetSelector
+      state={playing}
+      disabled={false}
+      onSelect={() => {}}
+      pads
+    />,
+  );
+  const active = await screen.findByRole('button', { name: /Tone 10/ });
+  expect(active).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Previous bank' }));
+  expect(screen.getByText('1 / 2')).toBeInTheDocument();
+});

@@ -26,7 +26,7 @@ export function RigPresetSelector({
   disabled: boolean;
   onSelect: (id: string, owned: boolean) => void;
 }) {
-  const [bank, setBank] = useState(0);
+  const [bank, setBank] = useState<number | null>(null);
   const [items, setItems] = useState<Choice[]>([]);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -65,6 +65,10 @@ export function RigPresetSelector({
       ? key({ id: state.configured.preset_id, owned: state.configured.owned })
       : '';
   const index = items.findIndex((p) => key(p) === selected);
+  const currentBank = Math.min(
+    Math.max(0, Math.ceil(items.length / 8) - 1),
+    bank ?? Math.max(0, Math.floor(index / 8)),
+  );
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item.id, item.owned);
   }
@@ -83,46 +87,48 @@ export function RigPresetSelector({
           </span>
         </div>
         <div className="preset-pad-grid">
-          {items.slice(bank * 8, bank * 8 + 8).map((item, index) => (
-            <Button
-              key={key(item)}
-              variant={key(item) === selected ? 'secondary' : 'outline'}
-              aria-pressed={key(item) === selected}
-              disabled={
-                disabled || loading || !!error || key(item) === selected
-              }
-              onClick={() => choose(item)}
-            >
-              <span className="preset-pad-number">
-                {String(bank * 8 + index + 1).padStart(2, '0')}
-              </span>
-              <strong>{item.name}</strong>
-              <span className="preset-pad-origin">
-                {key(item) === selected
-                  ? 'Playing'
-                  : item.owned
-                    ? 'Saved copy'
-                    : 'Original'}
-              </span>
-            </Button>
-          ))}
+          {items
+            .slice(currentBank * 8, currentBank * 8 + 8)
+            .map((item, index) => (
+              <Button
+                key={key(item)}
+                variant={key(item) === selected ? 'secondary' : 'outline'}
+                aria-pressed={key(item) === selected}
+                disabled={
+                  disabled || loading || !!error || key(item) === selected
+                }
+                onClick={() => choose(item)}
+              >
+                <span className="preset-pad-number">
+                  {String(currentBank * 8 + index + 1).padStart(2, '0')}
+                </span>
+                <strong>{item.name}</strong>
+                <span className="preset-pad-origin">
+                  {key(item) === selected
+                    ? 'Playing'
+                    : item.owned
+                      ? 'Saved copy'
+                      : 'Original'}
+                </span>
+              </Button>
+            ))}
         </div>
         <div className="action-row">
           <Button
             variant="ghost"
-            disabled={bank === 0 || disabled}
-            onClick={() => setBank(bank - 1)}
+            disabled={currentBank === 0 || disabled}
+            onClick={() => setBank(currentBank - 1)}
           >
             <CaretLeft aria-hidden="true" />
             Previous bank
           </Button>
           <span className="caption">
-            {bank + 1} / {Math.max(1, Math.ceil(items.length / 8))}
+            {currentBank + 1} / {Math.max(1, Math.ceil(items.length / 8))}
           </span>
           <Button
             variant="ghost"
-            disabled={(bank + 1) * 8 >= items.length || disabled}
-            onClick={() => setBank(bank + 1)}
+            disabled={(currentBank + 1) * 8 >= items.length || disabled}
+            onClick={() => setBank(currentBank + 1)}
           >
             Next bank
             <CaretRight aria-hidden="true" />
@@ -174,9 +180,8 @@ export function RigPresetSelector({
         >
           {index < 0 && (
             <option value="">
-              {loading
-                ? 'Loading presets…'
-                : (state.preset_name ?? 'Current rig')}
+              {state.preset_name ??
+                (loading ? 'Loading presets…' : 'Current rig')}
             </option>
           )}
           {['Saved copies', 'Originals'].map((label, group) => (
