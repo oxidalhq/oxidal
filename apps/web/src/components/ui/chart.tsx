@@ -43,7 +43,7 @@ export function ChartContainer({
           ))}
         </span>
       </figcaption>
-      <div className="h-40 min-w-0">
+      <div className="h-40 min-w-0 overflow-hidden">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           {children}
         </ResponsiveContainer>

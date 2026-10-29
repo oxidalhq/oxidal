@@ -99,9 +99,8 @@ export function MonitoringHistory() {
             </Button>
           </div>
           <p className="caption">
-            Recorded on the device every 5 seconds, even with the browser
-            closed. Up to 8 MiB retained across restarts. Export includes all
-            retained samples; this view shows the latest 720.
+            5-second device samples · latest 720 shown · export includes all
+            retained data.
           </p>
           {error && <p role="alert">{error}</p>}
           {state &&
@@ -173,11 +172,15 @@ export function MonitoringHistory() {
                   />
                 </LineChart>
               </ChartContainer>
-              <p className="caption">
-                Gaps mark stopped/stale audio, a session change or missed
-                recording. Device time may change when networking synchronises
-                the clock; exports include recorder identity and elapsed time.
-              </p>
+              <details className="control-help">
+                <summary>Recording details</summary>
+                <p className="caption">
+                  Recorded even with the browser closed; up to 8 MiB survives
+                  restarts. Gaps mark stale audio, session changes or missed
+                  samples. Exports include recorder identity and elapsed time
+                  for clock corrections.
+                </p>
+              </details>
             </>
           )}
         </div>
