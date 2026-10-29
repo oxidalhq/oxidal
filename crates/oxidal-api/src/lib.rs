@@ -321,6 +321,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/presets/{id}/original", get(presets::original))
         .route("/presets/owned/{id}/download", get(presets::owned_download))
+        .route("/models/{id}/artwork", get(artwork::model_list))
+        .route(
+            "/models/{id}/artwork/{key}",
+            get(artwork::model_read).post(artwork::model_download),
+        )
         .route("/presets/{id}/artwork", get(artwork::list))
         .route(
             "/presets/{id}/artwork/{key}",

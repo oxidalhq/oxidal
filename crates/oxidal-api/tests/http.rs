@@ -1737,3 +1737,94 @@ async fn control_audit_records_outcomes_without_request_secrets() {
     task.abort();
     let _ = std::fs::remove_dir_all(path.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn model_artwork_is_source_bound_and_metadata_only() {
+    use oxidal_presets::{ModelAsset, ModelStore};
+    use sha2::{Digest, Sha256};
+    let (url, task, path) = start(false).await;
+    let root = path.with_extension("presets");
+    let store = ModelStore::new(root.join("audition-models"));
+    let bytes = b"inert-test-model";
+    let asset = ModelAsset {
+        schema: 1,
+        tone_id: 10,
+        model_id: 20,
+        title: "Replacement cab".into(),
+        name: "Cab".into(),
+        format: "nam".into(),
+        sha256: format!("{:x}", Sha256::digest(bytes)),
+        tone: json!({"id":10,"gear":"cab","images":["https://example.com/cab.png"]}),
+    };
+    let id = store.stage(&asset, bytes).unwrap();
+    // Artwork need not read large inference weights, and is not a playback admission.
+    std::fs::remove_file(root.join("audition-models").join(&id).join("model.nam")).unwrap();
+    assert!(store.read(&id).is_err());
+    let client = reqwest::Client::new();
+    let base = format!("{url}/models/{id}/artwork");
+    let response = client.get(&base).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let rows: Value = response.json().await.unwrap();
+    assert_eq!(rows[0]["title"], "Replacement cab");
+    assert_eq!(rows[0]["gear"], "cab");
+    assert_eq!(rows[0]["cached"], false);
+    assert!(!rows.to_string().contains("example.com"));
+    let image_key = rows[0]["key"].as_str().unwrap();
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let png = png.into_inner();
+    let mut cache = Sha256::digest(&png).to_vec();
+    cache.extend_from_slice(&png);
+    std::fs::create_dir_all(root.join("artwork")).unwrap();
+    std::fs::write(
+        root.join("artwork").join(format!("{image_key}.cache")),
+        cache,
+    )
+    .unwrap();
+    let image = client
+        .get(format!("{base}/{image_key}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(image.status(), 200);
+    assert_eq!(image.bytes().await.unwrap().as_ref(), png);
+    // Already cached artwork is usable without an internet request.
+    assert_eq!(
+        client
+            .post(format!("{base}/{image_key}"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    let wrong = "f".repeat(64);
+    assert_eq!(
+        client
+            .post(format!("{base}/{wrong}"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    assert_eq!(
+        client
+            .get(format!("{base}/{wrong}"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    std::fs::write(
+        root.join("audition-models").join(&id).join("metadata.json"),
+        b"{}",
+    )
+    .unwrap();
+    assert_eq!(client.get(&base).send().await.unwrap().status(), 404);
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

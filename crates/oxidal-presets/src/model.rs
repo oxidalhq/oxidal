@@ -345,7 +345,9 @@ impl ModelStore {
         }
         Ok((rows, next))
     }
-    pub fn read(&self, id: &str) -> Result<(ModelAsset, PathBuf)> {
+    /// Verified display metadata only. This does not establish model-byte integrity
+    /// or authorize playback; audio consumers must continue using `read`.
+    pub fn metadata(&self, id: &str) -> Result<ModelAsset> {
         if !hash(id) {
             return Err(Error::Invalid("Invalid model asset identifier"));
         }
@@ -359,7 +361,11 @@ impl ModelStore {
         let asset: ModelAsset = serde_json::from_slice(&metadata)
             .map_err(|_| Error::Invalid("Invalid model metadata"))?;
         asset.validate()?;
-        let model = path.join(asset.filename());
+        Ok(asset)
+    }
+    pub fn read(&self, id: &str) -> Result<(ModelAsset, PathBuf)> {
+        let asset = self.metadata(id)?;
+        let model = self.root.join(id).join(asset.filename());
         let bytes = read(&model, MAX_FILE_BYTES)?;
         if bytes.is_empty() || digest(&bytes) != asset.sha256 {
             return Err(Error::Invalid("Model content integrity failed"));

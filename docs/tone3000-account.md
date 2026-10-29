@@ -77,3 +77,14 @@ supports starting an empty native rig with a selected NAM model or IR; Add NAM a
 fill its next left-lane slot. IR listings omit the upstream NAM architecture filter; the
 typed local API uses `architecture=any` to request that behavior. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
 provider preset export remain unfinished.
+
+### Live model artwork
+
+A confirmed native model replacement or insertion can show its own gear artwork
+in Rig, including before the working tone is saved. `GET /api/v1/models/{id}/artwork`
+reads verified, bounded staged metadata without loading model weights. It does not
+admit a model for playback. Image reads and explicit offline downloads use the
+same source-bound device cache as preset artwork; URLs never become browser image
+sources. Missing images use the gear fallback, and source changes discard old
+artwork immediately. Save artwork offline saves the image, not the working tone.
+Catalog browse thumbnails and hybrid-node artwork remain separate work.

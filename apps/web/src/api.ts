@@ -284,15 +284,25 @@ const artworkValidator = ajv.compile<AssetArtwork[]>({
   type: 'array',
   items: { $ref: '#/$defs/AssetArtwork' },
 });
-export function artworkPath(id: string, owned: boolean, key?: string) {
+export function artworkPath(
+  id: string,
+  owned: boolean,
+  key?: string,
+  model = false,
+) {
+  if (model)
+    return `/api/v1/models/${encodeURIComponent(id)}/artwork${key ? `/${encodeURIComponent(key)}` : ''}`;
   return `/api/v1/presets/${encodeURIComponent(id)}/artwork${key ? `/${encodeURIComponent(key)}` : ''}?owned=${owned}`;
 }
 export async function presetArtwork(
   id: string,
   owned: boolean,
   signal: AbortSignal,
+  model = false,
 ) {
-  const response = await fetch(artworkPath(id, owned), { signal });
+  const response = await fetch(artworkPath(id, owned, undefined, model), {
+    signal,
+  });
   const body: unknown = await response.json();
   if (!response.ok || !artworkValidator(body))
     throw new Error('Artwork is unavailable');
@@ -303,8 +313,9 @@ export async function saveArtwork(
   owned: boolean,
   key: string,
   signal: AbortSignal,
+  model = false,
 ) {
-  const response = await fetch(artworkPath(id, owned, key), {
+  const response = await fetch(artworkPath(id, owned, key, model), {
     method: 'POST',
     signal,
   });

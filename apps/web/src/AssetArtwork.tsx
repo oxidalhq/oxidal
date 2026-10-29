@@ -9,17 +9,29 @@ import {
 import { Button } from './components/ui/button';
 
 /** Device-owned images only: no third-party URLs, tracking or network fetches by img. */
-export function ArtworkDeck({
-  id,
-  owned = false,
-  blockId,
-  compact = false,
-}: {
+type ArtworkProps = {
   id: string;
   owned?: boolean;
+  model?: boolean;
   blockId?: string;
   compact?: boolean;
-}) {
+};
+export function ArtworkDeck(props: ArtworkProps) {
+  // Changing the source must immediately discard old metadata, errors and pending UI.
+  return (
+    <ArtworkContent
+      key={`${props.model}:${props.owned}:${props.id}`}
+      {...props}
+    />
+  );
+}
+function ArtworkContent({
+  id,
+  owned = false,
+  model = false,
+  blockId,
+  compact = false,
+}: ArtworkProps) {
   const [items, setItems] = useState<AssetArtwork[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -27,7 +39,7 @@ export function ArtworkDeck({
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller;
-    void presetArtwork(id, owned, controller.signal)
+    void presetArtwork(id, owned, controller.signal, model)
       .then((result) => {
         if (!controller.signal.aborted) setItems(result);
       })
@@ -35,7 +47,7 @@ export function ArtworkDeck({
         // Optional artwork never replaces editor or audio errors.
       });
     return () => controller.abort();
-  }, [id, owned]);
+  }, [id, owned, model]);
   async function save() {
     const signal = lifetime.current?.signal;
     if (!signal || signal.aborted || busy) return;
@@ -48,14 +60,14 @@ export function ArtworkDeck({
       );
       // One request at a time; stop on failure and retain successfully cached images.
       for (const item of pending)
-        await saveArtwork(id, owned, item.key!, signal);
+        await saveArtwork(id, owned, item.key!, signal, model);
     } catch (cause) {
       if (!signal.aborted)
         setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       if (!signal.aborted) {
         try {
-          setItems(await presetArtwork(id, owned, signal));
+          setItems(await presetArtwork(id, owned, signal, model));
         } catch {
           /* Keep metadata. */
         }
@@ -74,7 +86,9 @@ export function ArtworkDeck({
         <div className="artwork-thumb" data-artwork-image>
           <ArtworkImage
             key={`${item.block_id}-${item.key}-${item.cached}`}
-            src={item.cached ? artworkPath(id, owned, item.key) : undefined}
+            src={
+              item.cached ? artworkPath(id, owned, item.key, model) : undefined
+            }
             title={item.title}
             gear={item.gear}
           />

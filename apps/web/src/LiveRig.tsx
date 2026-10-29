@@ -771,6 +771,20 @@ export function LiveRig({
                       </span>
                     </Button>
                     {chainView === 'artwork' &&
+                      state.models?.find(
+                        (m) => m.target === c.target.slice(6, -8),
+                      ) && (
+                        <ArtworkDeck
+                          compact
+                          model
+                          id={
+                            state.models.find(
+                              (m) => m.target === c.target.slice(6, -8),
+                            )!.asset
+                          }
+                        />
+                      )}
+                    {chainView === 'artwork' &&
                       state.configured &&
                       !state.configured.draft &&
                       !state.models?.some(
@@ -1077,6 +1091,12 @@ export function LiveRig({
                 );
               })}
             </div>
+          )}
+          {state.models?.find((m) => m.target === selectedBlock) && (
+            <ArtworkDeck
+              model
+              id={state.models.find((m) => m.target === selectedBlock)!.asset}
+            />
           )}
           {state.configured &&
             !state.configured.draft &&

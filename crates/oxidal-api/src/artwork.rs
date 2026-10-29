@@ -6,7 +6,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use oxidal_presets::{ArtworkSource, OwnedStore, Store};
+use oxidal_presets::{ArtworkSource, ModelStore, OwnedStore, Store};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -36,6 +36,8 @@ pub struct AssetArtwork {
 pub struct Selection {
     #[serde(default)]
     owned: bool,
+    #[serde(skip)]
+    model: bool,
 }
 fn key(url: &str) -> String {
     format!("{:x}", Sha256::digest(url.as_bytes()))
@@ -50,8 +52,37 @@ fn cache_path(root: &FsPath, id: &str) -> Result<PathBuf, &'static str> {
     }
     Ok(root.join("artwork").join(format!("{id}.cache")))
 }
-fn sources(root: &FsPath, id: &str, owned: bool) -> Result<Vec<ArtworkSource>, &'static str> {
-    let bytes = if owned {
+fn sources(
+    root: &FsPath,
+    id: &str,
+    selection: Selection,
+) -> Result<Vec<ArtworkSource>, &'static str> {
+    if selection.model {
+        let asset = ModelStore::new(root.join("audition-models"))
+            .metadata(id)
+            .map_err(|_| "Model is unavailable")?;
+        return Ok(vec![ArtworkSource {
+            block_id: id.into(),
+            title: asset.title,
+            gear: asset
+                .tone
+                .get("gear")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .chars()
+                .take(256)
+                .collect(),
+            url: asset
+                .tone
+                .get("images")
+                .and_then(|v| v.as_array())
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty() && s.len() <= 4096)
+                .map(str::to_owned),
+        }]);
+    }
+    let bytes = if selection.owned {
         OwnedStore::new(root.join("owned")).read(id).map(|v| v.1)
     } else {
         Store::new(root.to_owned()).original(id)
@@ -243,6 +274,46 @@ async fn image_body(mut response: reqwest::Response) -> Result<Vec<u8>, &'static
     }
     Ok(bytes)
 }
+// Model routes reuse the same source-bound cache and download protections.
+pub(super) async fn model_list(state: State<Arc<Shared>>, path: Path<String>) -> Response {
+    list(
+        state,
+        path,
+        Query(Selection {
+            model: true,
+            owned: false,
+        }),
+    )
+    .await
+}
+pub(super) async fn model_read(
+    state: State<Arc<Shared>>,
+    path: Path<(String, String)>,
+) -> Response {
+    read(
+        state,
+        path,
+        Query(Selection {
+            model: true,
+            owned: false,
+        }),
+    )
+    .await
+}
+pub(super) async fn model_download(
+    state: State<Arc<Shared>>,
+    path: Path<(String, String)>,
+) -> Response {
+    download(
+        state,
+        path,
+        Query(Selection {
+            model: true,
+            owned: false,
+        }),
+    )
+    .await
+}
 pub(super) async fn list(
     State(shared): State<Arc<Shared>>,
     Path(id): Path<String>,
@@ -251,7 +322,7 @@ pub(super) async fn list(
     let root = shared.config.preset_dir.clone();
     match tokio::task::spawn_blocking(move || {
         Ok::<_, &'static str>(
-            sources(&root, &id, selection.owned)?
+            sources(&root, &id, selection)?
                 .into_iter()
                 .map(|s| {
                     let key = s.url.filter(|u| safe_url(u).is_ok()).map(|u| key(&u));
@@ -280,7 +351,7 @@ pub(super) async fn read(
 ) -> Response {
     let root = shared.config.preset_dir.clone();
     match tokio::task::spawn_blocking(move || {
-        let belongs = sources(&root, &id, selection.owned)?
+        let belongs = sources(&root, &id, selection)?
             .iter()
             .any(|s| s.url.as_ref().is_some_and(|u| self::key(u) == key));
         if !belongs {
@@ -314,7 +385,7 @@ pub(super) async fn download(
     let root_copy = root.clone();
     let key_copy = key.clone();
     let source = tokio::task::spawn_blocking(move || {
-        let source = sources(&root_copy, &id, selection.owned)?
+        let source = sources(&root_copy, &id, selection)?
             .into_iter()
             .find(|s| s.url.as_ref().is_some_and(|u| self::key(u) == key_copy))
             .ok_or("Artwork does not belong to this preset")?;
@@ -417,7 +488,7 @@ mod tests {
                 .as_nanos()
         ));
         let info = Store::new(root.clone()).import(FIXTURE).unwrap();
-        let sources = sources(&root, &info.sha256, false).unwrap();
+        let sources = sources(&root, &info.sha256, Selection::default()).unwrap();
         let first = key(sources[0].url.as_ref().unwrap());
         let second = key(sources[1].url.as_ref().unwrap());
         let png = thumbnail(&sample_png()).unwrap();
