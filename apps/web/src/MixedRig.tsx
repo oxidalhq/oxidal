@@ -1,4 +1,14 @@
-import { assertAuditionOwner, confirmedControlDisplay } from './rigControls';
+import {
+  assertAuditionOwner,
+  confirmedControlDisplay,
+  controlGroup,
+} from './rigControls';
+import {
+  SlidersHorizontal,
+  Waveform,
+  MusicNotes,
+  ArrowsSplit,
+} from '@phosphor-icons/react';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -452,8 +462,7 @@ export function MixedRig({
       if (eqBlock) return p.startsWith(`block:${eqBlock.block_id}:`);
       return (
         !p.startsWith('block:') &&
-        (nativeTarget === 'stereo') ===
-          (p.startsWith('spread') || p === 'outputBalance')
+        controlGroup(p) === (nativeTarget === 'global' ? 'tone' : nativeTarget)
       );
     })
     .map((c) => {
@@ -692,43 +701,69 @@ export function MixedRig({
           className="flex flex-wrap gap-2"
           aria-label="Native model controls"
         >
-          {['global', 'stereo', ...eqBlocks.map((b) => b.block_id)].map(
-            (target, index) => {
-              const control = controls.find(
+          {(
+            [
+              ['global', 'Tone', SlidersHorizontal],
+              ['gate', 'Gate', Waveform],
+              ['pitch', 'Pitch', MusicNotes],
+              ['stereo', 'Stereo', ArrowsSplit],
+            ] as const
+          )
+            .filter(([target]) =>
+              controls.some(
                 (c) =>
                   c.target.kind === 'native' &&
-                  c.target.parameter === `block:${target}:enabled`,
-              );
-              const title = control?.label.replace(/ · enabled$/, '');
-              return (
-                <Button
-                  key={target}
-                  variant={nativeTarget === target ? 'secondary' : 'outline'}
-                  aria-label={
-                    index < 2
-                      ? target === 'global'
-                        ? 'Global'
-                        : 'Stereo'
-                      : `Select model ${index - 1}`
-                  }
-                  aria-pressed={nativeTarget === target}
-                  disabled={disabled || !!edit}
-                  className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
-                  onClick={() =>
-                    setNativeSelection({ node: selected.id, target })
-                  }
-                >
-                  <span className="min-w-0 break-words">
-                    {index < 2
-                      ? target === 'global'
-                        ? 'Global'
-                        : 'Stereo'
-                      : `${index - 1} · ${title ?? 'Model'}`}
-                  </span>
-                </Button>
-              );
-            },
-          )}
+                  !c.target.parameter.startsWith('block:') &&
+                  controlGroup(c.target.parameter) ===
+                    (target === 'global' ? 'tone' : target),
+              ),
+            )
+            .map(([target, title, Icon]) => (
+              <Button
+                key={target}
+                variant={nativeTarget === target ? 'secondary' : 'ghost'}
+                aria-pressed={nativeTarget === target}
+                disabled={disabled || !!edit}
+                onClick={() =>
+                  setNativeSelection({ node: selected.id, target })
+                }
+              >
+                <Icon aria-hidden="true" />
+                {title}
+              </Button>
+            ))}
+          {eqBlocks.map((block, index) => {
+            const control = controls.find(
+              (c) =>
+                c.target.kind === 'native' &&
+                c.target.parameter === `block:${block.block_id}:enabled`,
+            );
+            const title =
+              control?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
+              'Model';
+            return (
+              <Button
+                key={block.block_id}
+                variant={
+                  nativeTarget === block.block_id ? 'secondary' : 'outline'
+                }
+                aria-label={`Select model ${index + 1}`}
+                aria-pressed={nativeTarget === block.block_id}
+                disabled={disabled || !!edit}
+                className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
+                onClick={() =>
+                  setNativeSelection({
+                    node: selected.id,
+                    target: block.block_id,
+                  })
+                }
+              >
+                <span className="min-w-0 break-words">
+                  {index + 1} · {title}
+                </span>
+              </Button>
+            );
+          })}
           {eqBlock && (
             <Button
               variant="outline"
@@ -927,7 +962,21 @@ export function MixedRig({
               className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
               variant="outline"
               disabled={disabled || !!edit}
-              onClick={() => open(c)}
+              onClick={() => {
+                if (c.toggle && state.control) {
+                  void command({
+                    kind: 'control',
+                    command: {
+                      session: state.control.session,
+                      expected_revision: state.control.revision,
+                      target: c.target,
+                      value: c.value === c.minimum ? c.maximum : c.minimum,
+                    },
+                  });
+                } else open(c);
+              }}
+              aria-pressed={c.toggle ? c.value !== c.minimum : undefined}
+              aria-haspopup={c.toggle ? undefined : 'dialog'}
               aria-label={`Adjust ${c.label}`}
             >
               <span className="break-words">{c.label}</span>
@@ -950,7 +999,7 @@ export function MixedRig({
               state.control.authoring.find((row) => row.node === selected.id)!
                 .status
             }
-            selectedBlock={nativeTarget === 'global' ? undefined : nativeTarget}
+            selectedBlock={eqBlock?.block_id}
             disabled={unavailable || !!edit}
             busy={busy}
             session={state.control.session}

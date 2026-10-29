@@ -704,3 +704,10 @@ current verified sound. Native authoring and model qualification cover fresh DAG
 reconstruction, and the local-file browser case restarts audio and reloads the page
 before Undo/Redo and offline Save. Oversampling/global pitch engine settings remain
 current through tone Undo. See [history scope](native-tone3000.md#persistent-bounded-tone-history).
+
+Whole-native nodes use the same Tone/Gate/Pitch/Stereo presentation groups as
+standalone native playback. Groups derive from actual controls; selecting a model
+still exposes only that model's controls. Boolean controls toggle directly through
+the existing confirmed control/gesture command path, with `aria-pressed` reflecting
+readback. Continuous controls keep the touch editor and native physical units.
+These presentation changes do not alter graph routing or DSP ownership.
