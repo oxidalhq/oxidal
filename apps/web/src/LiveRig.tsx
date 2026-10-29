@@ -15,6 +15,7 @@ import {
   ArrowCounterClockwise,
   ArrowClockwise,
   ArrowLeft,
+  FloppyDisk,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -92,6 +93,7 @@ export function LiveRig({
   const [busy, setBusy] = useState(false);
   const [eqEditing, setEqEditing] = useState(false);
   const [copyName, setCopyName] = useState('');
+  const [saveOpening, setSaveOpening] = useState<AudioState | null>(null);
   const [adjusting, setAdjusting] = useState(false);
   const [picker, setPicker] = useState<{
     target: string;
@@ -100,6 +102,10 @@ export function LiveRig({
     request?: number;
     insert?: boolean;
     format?: 'nam' | 'ir';
+  } | null>(null);
+  const [insertion, setInsertion] = useState<{
+    opening: AudioState;
+    format: 'nam' | 'ir';
   } | null>(null);
   const [performance, setPerformance] = useState(false);
   const [target, setTarget] = useState('outputLevel');
@@ -431,7 +437,14 @@ export function LiveRig({
     }
   }
   async function saveCopy() {
-    if (!state || sending.current) return;
+    if (!state || !saveOpening || sending.current) return;
+    if (
+      state.session !== saveOpening.session ||
+      state.revision !== saveOpening.revision
+    ) {
+      setError('The rig changed. Close and reopen Save copy.');
+      return;
+    }
     generation.current += 1;
     sending.current = true;
     setBusy(true);
@@ -444,6 +457,7 @@ export function LiveRig({
       if (alive.current) {
         setState(next);
         setDraft(null);
+        setSaveOpening(null);
       }
     } catch (cause) {
       if (alive.current) setError(String(cause));
@@ -541,8 +555,30 @@ export function LiveRig({
         disabled={disabled || !!draft || !!picker}
         onSelect={(id, owned) => void recall(id, owned)}
       />
-      <div className="chain-heading">
-        <h2>Signal chain</h2>
+      <div
+        className="flex flex-wrap items-center justify-between gap-2"
+        aria-label="Preset actions"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            role="status"
+            data-testid="live-status"
+            className="text-xs text-muted-foreground"
+            data-edited={state.modified}
+          >
+            {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
+          </span>
+          <Button
+            variant={state.modified ? 'default' : 'outline'}
+            disabled={disabled || !!draft || !!picker}
+            onClick={() => {
+              setCopyName(state.preset_name ?? 'My preset');
+              setSaveOpening(state);
+            }}
+          >
+            <FloppyDisk aria-hidden="true" /> Save copy
+          </Button>
+        </div>
         <Button
           variant="ghost"
           disabled={disabled || !!draft || !!picker}
@@ -550,15 +586,9 @@ export function LiveRig({
         >
           Gig view
         </Button>
-        <span
-          role="status"
-          data-testid="live-status"
-          data-edited={state.modified}
-        >
-          {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
-        </span>
       </div>
       <div className="chain-toolbar">
+        <h2 className="m-0 text-sm font-semibold">Signal chain</h2>
         <div className="action-row" role="group" aria-label="Chain view">
           {(['compact', 'artwork'] as const).map((view) => (
             <Button
@@ -652,11 +682,6 @@ export function LiveRig({
             <p role="status">The rig changed. Close and reopen Reload saved.</p>
           )}
         </AdjustmentDialog>
-      )}
-      {state.modified && (
-        <p className="caption">
-          Saved preset unchanged · save a copy to keep edits.
-        </p>
       )}
       <div
         className="signal-rack"
@@ -793,29 +818,65 @@ export function LiveRig({
           );
         })}
       </div>
-      {state.slots?.some((s) => s.position.lane === 0) && (
+      {!!state.slots?.length && (
         <div className="action-row">
           {(['nam', 'ir'] as const).map((format) => (
             <Button
               key={format}
               variant="outline"
               disabled={disabled || !!draft}
-              onClick={() => {
-                const slot = state.slots!.find((s) => s.position.lane === 0)!;
-                setPicker({
-                  target: slot.target,
-                  name: `slot ${slot.position.index + 1}`,
-                  opening: state,
-                  insert: true,
-                  format,
-                });
-              }}
+              onClick={() => setInsertion({ opening: state, format })}
             >
               <Plus aria-hidden="true" />
               {format === 'nam' ? 'Add NAM' : 'Add IR'}
             </Button>
           ))}
         </div>
+      )}
+      {insertion && (
+        <AdjustmentDialog
+          title={`Add ${insertion.format.toUpperCase()} · position`}
+          onCancel={() => setInsertion(null)}
+        >
+          <p className="caption">
+            Choose an available position in the signal chain.
+          </p>
+          <div
+            className="grid gap-2"
+            aria-label="Available insertion positions"
+          >
+            {insertion.opening.slots?.map((slot) => (
+              <Button
+                key={slot.target}
+                variant="outline"
+                disabled={
+                  disabled ||
+                  state.session !== insertion.opening.session ||
+                  state.revision !== insertion.opening.revision
+                }
+                onClick={() => {
+                  setPicker({
+                    target: slot.target,
+                    name: `${slot.position.lane === 0 ? 'Left' : 'Right'} chain · position ${slot.position.index + 1}`,
+                    opening: insertion.opening,
+                    insert: true,
+                    format: insertion.format,
+                  });
+                  setInsertion(null);
+                }}
+              >
+                {slot.position.lane === 0 ? 'Left' : 'Right'} chain · position{' '}
+                {slot.position.index + 1}
+              </Button>
+            ))}
+          </div>
+          {(state.session !== insertion.opening.session ||
+            state.revision !== insertion.opening.revision) && (
+            <p role="status">
+              The chain changed. Close and choose the position again.
+            </p>
+          )}
+        </AdjustmentDialog>
       )}
       {picker && (
         <ModelPicker
@@ -977,40 +1038,46 @@ export function LiveRig({
               <Swap aria-hidden="true" /> Change model
             </Button>
           </div>
-          <div className="action-row" role="group" aria-label="Block position">
-            {([-1, 1] as const).map((direction) => {
-              const order = movedBlockOrder(
-                orderedBlocks,
-                selectedBlock,
-                direction,
-              );
-              return (
-                <Button
-                  key={direction}
-                  variant="ghost"
-                  disabled={disabled || !!draft || !order}
-                  onClick={() => {
-                    if (order)
-                      void author({
-                        kind: 'edit',
-                        edit: {
-                          kind: 'reorder',
-                          lane: selectedLane,
-                          block_ids: order,
-                        },
-                      });
-                  }}
-                >
-                  {direction === -1 ? (
-                    <ArrowLeft aria-hidden="true" />
-                  ) : (
-                    <ArrowRight aria-hidden="true" />
-                  )}
-                  {direction === -1 ? 'Move earlier' : 'Move later'}
-                </Button>
-              );
-            })}
-          </div>
+          {orderedBlocks.length > 1 && (
+            <div
+              className="action-row"
+              role="group"
+              aria-label="Block position"
+            >
+              {([-1, 1] as const).map((direction) => {
+                const order = movedBlockOrder(
+                  orderedBlocks,
+                  selectedBlock,
+                  direction,
+                );
+                return (
+                  <Button
+                    key={direction}
+                    variant="ghost"
+                    disabled={disabled || !!draft || !order}
+                    onClick={() => {
+                      if (order)
+                        void author({
+                          kind: 'edit',
+                          edit: {
+                            kind: 'reorder',
+                            lane: selectedLane,
+                            block_ids: order,
+                          },
+                        });
+                    }}
+                  >
+                    {direction === -1 ? (
+                      <ArrowLeft aria-hidden="true" />
+                    ) : (
+                      <ArrowRight aria-hidden="true" />
+                    )}
+                    {direction === -1 ? 'Move earlier' : 'Move later'}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
           {state.configured &&
             !state.configured.draft &&
             !state.models?.some((m) => m.target === selectedBlock) && (
@@ -1179,27 +1246,47 @@ export function LiveRig({
           author={author}
         />
       )}
-      <details className="save-copy">
-        <summary>Save copy</summary>
-        <div className="form-grid">
-          <label className="field">
-            Name for sounding copy
-            <input
-              value={copyName}
-              onChange={(e) => setCopyName(e.target.value)}
-              maxLength={100}
-              disabled={busy}
-            />
-          </label>
-          <Button
-            variant="outline"
-            disabled={disabled || !!draft || !copyName.trim()}
-            onClick={() => void saveCopy()}
-          >
-            Save sounding copy
-          </Button>
-        </div>
-      </details>
+      {saveOpening && (
+        <AdjustmentDialog
+          title="Save copy"
+          onCancel={() => {
+            if (!busy) setSaveOpening(null);
+          }}
+        >
+          <p className="caption">
+            Keep this sound for offline use. The original preset stays
+            unchanged.
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              Name for sounding copy
+              <input
+                value={copyName}
+                onChange={(e) => setCopyName(e.target.value)}
+                maxLength={100}
+                disabled={busy}
+              />
+            </label>
+            <Button
+              disabled={
+                disabled ||
+                !!draft ||
+                !copyName.trim() ||
+                state.session !== saveOpening.session ||
+                state.revision !== saveOpening.revision
+              }
+              onClick={() => void saveCopy()}
+            >
+              {busy ? 'Saving…' : 'Save sounding copy'}
+            </Button>
+          </div>
+          {(state.session !== saveOpening.session ||
+            state.revision !== saveOpening.revision) && (
+            <p role="status">The rig changed. Close and reopen Save copy.</p>
+          )}
+          {error && <p role="alert">{error}</p>}
+        </AdjustmentDialog>
+      )}
       {!!draft && (
         <p className="caption">
           Finish the audible adjustment before saving a copy.

@@ -155,7 +155,7 @@ async function saveMixedRig(
 test('rig controls follow the actual session without example effects', async ({
   page,
   request,
-}) => {
+}, info) => {
   // Presentation contract fixture; the real worker lifecycle below verifies the same boundary.
   const baseline = await (await request.get('/api/v1/audio')).json();
   let audio = {
@@ -165,9 +165,23 @@ test('rig controls follow the actual session without example effects', async ({
     configured: null,
     preset_name: null,
   };
-  await page.route('**/api/v1/audio', (route) =>
-    route.fulfill({ json: audio }),
-  );
+  let saves = 0;
+  await page.route('**/api/v1/audio', async (route) => {
+    if (route.request().method() === 'POST') {
+      const command = route.request().postDataJSON();
+      expect(command.action.kind).toBe('save_copy');
+      expect(command.action.name).toBe('My live sound');
+      expect(command.session).toBe(audio.session);
+      expect(command.expected_revision).toBe(audio.revision);
+      saves++;
+      audio = {
+        ...audio,
+        revision: audio.revision + 1,
+        saved_copy: 'a'.repeat(64),
+      };
+    }
+    await route.fulfill({ json: audio });
+  });
   await page.goto('/');
   await expect(
     page.getByRole('heading', { name: 'Audio stopped', exact: true }),
@@ -226,6 +240,71 @@ test('rig controls follow the actual session without example effects', async ({
     }),
   ).toBeVisible();
   await expect(page.getByText(/delay|reverb/i)).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath('rig-selected-block.png'),
+    fullPage: true,
+  });
+  const picker = rig.getByRole('combobox', { name: 'Playing preset' });
+  const retry = rig.getByRole('button', { name: 'Retry presets' });
+  await expect(retry).toBeVisible();
+  const pickerBox = (await picker.boundingBox())!;
+  const retryBox = (await retry.boundingBox())!;
+  expect(retryBox.y).toBeGreaterThanOrEqual(pickerBox.y + pickerBox.height);
+  expect(pickerBox.width).toBeGreaterThan(150);
+  await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
+    0,
+  );
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  const saveDialog = page.getByRole('dialog', { name: 'Save copy' });
+  await expect(saveDialog.getByLabel('Name for sounding copy')).toHaveValue(
+    'Amp only',
+  );
+  const portrait = page.viewportSize()!;
+  await page.setViewportSize({
+    width: portrait.height,
+    height: portrait.width,
+  });
+  await expect(saveDialog).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  audio = { ...audio, revision: audio.revision + 1 };
+  await expect(
+    saveDialog.getByRole('button', { name: 'Save sounding copy' }),
+  ).toBeDisabled();
+  await expect(saveDialog.getByRole('status')).toContainText('The rig changed');
+  expect(saves).toBe(0);
+  await saveDialog.getByRole('button', { name: 'Close dialog' }).click();
+  await page.setViewportSize(portrait);
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await saveDialog.getByLabel('Name for sounding copy').fill('My live sound');
+  await saveDialog.getByRole('button', { name: 'Save sounding copy' }).click();
+  await expect(saveDialog).toHaveCount(0);
+  await expect(rig.getByTestId('live-saved')).toBeVisible();
+  expect(saves).toBe(1);
+  audio = {
+    ...audio,
+    slots: [
+      { target: 'slot-left', position: { lane: 0, index: 1 } },
+      { target: 'slot-right', position: { lane: 1, index: 2 } },
+    ],
+  };
+  await expect(
+    rig.getByRole('button', { name: 'Add NAM', exact: true }),
+  ).toBeVisible();
+  await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
+  const positions = page.getByRole('dialog', { name: 'Add NAM · position' });
+  await expect(
+    positions.getByRole('button', { name: 'Right chain · position 3' }),
+  ).toBeVisible();
+  audio = { ...audio, revision: audio.revision + 1 };
+  await expect(
+    positions.getByRole('button', { name: 'Right chain · position 3' }),
+  ).toBeDisabled();
+  await positions.getByRole('button', { name: 'Close dialog' }).click();
+  expect(saves).toBe(1);
   // A recalled session may not contain the previously selected block.
   audio = {
     ...audio,
@@ -1570,6 +1649,11 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await sounding
       .getByRole('button', { name: 'Add NAM', exact: true })
       .click();
+    await sounding
+      .getByLabel('Available insertion positions')
+      .getByRole('button')
+      .first()
+      .click();
     await picker.getByRole('button', { name: /Audition fixture/ }).click();
     await picker.getByRole('button', { name: /Prepared A2/ }).click();
     await expect(picker).toHaveCount(0);
@@ -1581,6 +1665,11 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .toBe(2);
     await expect(sounding.locator('.live-effect')).toHaveCount(2);
     await sounding.getByRole('button', { name: 'Add IR', exact: true }).click();
+    await sounding
+      .getByLabel('Available insertion positions')
+      .getByRole('button')
+      .first()
+      .click();
     await expect(
       picker.getByRole('button', { name: 'Cab / IR', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');

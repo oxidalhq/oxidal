@@ -206,18 +206,19 @@ export function RigPresetSelector({
         <CaretRight aria-hidden="true" />
       </Button>
       {error && (
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setLoading(true);
-            setRefresh((v) => v + 1);
-          }}
-        >
-          <ArrowsClockwise aria-hidden="true" />
-          Retry presets
-        </Button>
+        <div className="rig-preset-error" role="status">
+          <span>{error}</span>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setLoading(true);
+              setRefresh((v) => v + 1);
+            }}
+          >
+            <ArrowsClockwise aria-hidden="true" /> Retry presets
+          </Button>
+        </div>
       )}
-      {error && <span role="status">{error}</span>}
     </div>
   );
 }

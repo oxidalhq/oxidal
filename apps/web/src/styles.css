@@ -2147,10 +2147,23 @@ textarea {
 
 /* Rig workspace: navigation stays separate from signal and parameter controls. */
 .rig-preset-selector {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: end;
   gap: 0.5rem;
+}
+.rig-preset-error {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+.rig-preset-error .oxidal-button {
+  flex-shrink: 0;
 }
 .rig-preset-selector > button {
   width: 44px;
