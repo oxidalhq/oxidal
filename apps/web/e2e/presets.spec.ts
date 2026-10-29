@@ -2673,9 +2673,12 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     await route.continue();
   });
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
-  const nameInput = rig.getByLabel('Preset name', { exact: true });
-  await expect(nameInput).toBeDisabled();
+  await expect(
+    rig.getByRole('button', { name: 'Save copy', exact: true }),
+  ).toBeDisabled();
   releaseDocument();
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  const nameInput = rig.getByLabel('Preset name', { exact: true });
   const name = `Offline mixed ${info.project.name}`;
   await nameInput.fill(name);
   await page.unroute(documentUrl);
@@ -4133,6 +4136,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
   const edited = (await get()).control;
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
   await rig
     .getByLabel('Preset name', { exact: true })
     .fill('Offline local NAM and IR');

@@ -8,6 +8,7 @@ import {
   Waveform,
   MusicNotes,
   ArrowsSplit,
+  FloppyDisk,
 } from '@phosphor-icons/react';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
@@ -85,6 +86,7 @@ export function MixedRig({
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
+  const [saveOpening, setSaveOpening] = useState<RigAudioState | null>(null);
   const [edit, setEdit] = useState<{
     control: RigControl;
     value: number;
@@ -229,6 +231,7 @@ export function MixedRig({
           }),
         );
       } else accept(await rigAudioCommand(current.current, action));
+      return true;
     } catch (cause) {
       setError(String(cause));
       try {
@@ -236,6 +239,7 @@ export function MixedRig({
       } catch {
         /* retain confirmed state */
       }
+      return false;
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
@@ -477,6 +481,28 @@ export function MixedRig({
       };
       return { ...c, label: labels[suffix] ?? c.label };
     });
+  const saveStale =
+    !!saveOpening &&
+    (state.session !== saveOpening.session ||
+      state.revision !== saveOpening.revision ||
+      state.control?.session !== saveOpening.control?.session ||
+      state.control?.revision !== saveOpening.control?.revision);
+  async function saveCopy() {
+    const cursor = current.current;
+    if (
+      !cursor ||
+      !saveOpening ||
+      cursor.session !== saveOpening.session ||
+      cursor.revision !== saveOpening.revision ||
+      cursor.control?.session !== saveOpening.control?.session ||
+      cursor.control?.revision !== saveOpening.control?.revision
+    ) {
+      setError('The rig changed. Close and reopen Save copy.');
+      return;
+    }
+    if (await command({ kind: 'save', name: name.trim() }))
+      setSaveOpening(null);
+  }
   const scale = edit
     ? lv2Control({
         minimum: edit.control.minimum,
@@ -496,13 +522,27 @@ export function MixedRig({
               ? 'Preparing sound…'
               : running
                 ? changed
-                  ? 'Session modified'
+                  ? 'Unsaved changes'
                   : 'Playing'
                 : state.phase === 'failed'
                   ? 'Audio needs attention'
                   : 'Audio stopped'}
           </span>
         </div>
+        <Button
+          variant="outline"
+          disabled={
+            disabled || !matching || !!edit || !!picker || !!state.save?.running
+          }
+          onClick={() => {
+            setName(matching!.manifest.name);
+            setSaveOpening(state);
+            setError('');
+          }}
+        >
+          <FloppyDisk aria-hidden="true" />
+          {state.save?.running ? 'Saving…' : 'Save copy'}
+        </Button>
         {state.device_owned ? (
           <Button
             variant="outline"
@@ -579,7 +619,9 @@ export function MixedRig({
       <SceneMidi
         state={state}
         disabled={disabled || !!edit}
-        onCommand={command}
+        onCommand={async (action) => {
+          await command(action);
+        }}
       />
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
@@ -1146,29 +1188,46 @@ export function MixedRig({
           {error && <p role="alert">{error}</p>}
         </AdjustmentDialog>
       )}
-      <div className="form-grid">
-        <label className="field">
-          Preset name
-          <input
-            disabled={!matching}
-            value={name}
-            maxLength={128}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <Button
-          disabled={
-            disabled ||
-            !matching ||
-            !!edit ||
-            !!state.save?.running ||
-            !name.trim()
-          }
-          onClick={() => void command({ kind: 'save', name: name.trim() })}
+      {saveOpening && (
+        <AdjustmentDialog
+          title="Save copy"
+          onCancel={() => {
+            if (!busy) setSaveOpening(null);
+          }}
         >
-          {state.save?.running ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
+          <p className="caption">
+            Keep this sound for offline use. The original rig stays unchanged.
+          </p>
+          <div className="form-grid">
+            <label className="field">
+              Preset name
+              <input
+                disabled={busy}
+                value={name}
+                maxLength={128}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <Button
+              disabled={
+                disabled ||
+                !matching ||
+                !!edit ||
+                !!state.save?.running ||
+                !name.trim() ||
+                saveStale
+              }
+              onClick={() => void saveCopy()}
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+          {saveStale && (
+            <p role="status">The rig changed. Close and reopen Save copy.</p>
+          )}
+          {error && <p role="alert">{error}</p>}
+        </AdjustmentDialog>
+      )}
       {currentSave?.error && <p role="alert">{currentSave.error}</p>}
       {currentSave?.saved_revision && (
         <p role="status">

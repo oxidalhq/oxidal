@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MixedRig } from './MixedRig';
 import { rigAudioState, rigAudioCommand, rigDocument } from './api';
 vi.mock('./api', () => ({
@@ -14,11 +14,29 @@ vi.mock('./api', () => ({
   rigDocument: vi.fn(),
 }));
 vi.mock('./SceneMidi', () => ({ SceneMidi: () => null }));
+beforeEach(() => {
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.open = true;
+      },
+    },
+    close: {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.open = false;
+      },
+    },
+  });
+});
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
 });
-it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
+function setup() {
   const controls = [
     ['outputLevel', 'Output', '0 dB', false],
     ['gateEnabled', 'Gate enabled', 'Off', true],
@@ -70,6 +88,10 @@ it('groups native controls in hybrid rigs and toggles booleans without a slider'
       otherPlaying={false}
     />,
   );
+  return state;
+}
+it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
+  const state = setup();
   await screen.findByRole('button', { name: 'Adjust Output' });
   expect(
     screen.queryByRole('button', { name: 'Adjust Pitch' }),
@@ -101,4 +123,44 @@ it('groups native controls in hybrid rigs and toggles booleans without a slider'
     }),
   );
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('keeps hybrid save beside the chain and saves only a confirmed opening', async () => {
+  const state = setup();
+  const open = await screen.findByRole('button', { name: 'Save copy' });
+  await waitFor(() => expect(open).toBeEnabled());
+  expect(
+    screen.queryByRole('textbox', { name: 'Preset name' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(open);
+  expect(screen.getByRole('textbox', { name: 'Preset name' })).toHaveValue(
+    'Test rig',
+  );
+  fireEvent.change(screen.getByRole('textbox'), {
+    target: { value: 'My stage sound' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenCalledWith(state, {
+      kind: 'save',
+      name: 'My stage sound',
+    }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  );
+  expect(screen.queryByText('Saved for offline use')).not.toBeInTheDocument();
+});
+it('rejects saving a different hybrid revision while its name dialog is open', async () => {
+  const state = setup();
+  const open = await screen.findByRole('button', { name: 'Save copy' });
+  await waitFor(() => expect(open).toBeEnabled());
+  fireEvent.click(open);
+  vi.mocked(rigAudioState).mockResolvedValue({
+    ...state,
+    control: { ...state.control!, revision: 4 },
+  });
+  await screen.findByText('The rig changed. Close and reopen Save copy.');
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
 });
