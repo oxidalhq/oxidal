@@ -2811,3 +2811,8 @@ textarea {
   font-size: 0.7rem;
   box-shadow: none;
 }
+
+/* Grid gaps own spacing; retain full-sized inputs without doubled field margins. */
+.audio-routing-fields > .field {
+  margin-block: 0;
+}

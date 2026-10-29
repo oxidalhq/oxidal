@@ -61,7 +61,7 @@ export function AudioReconfigure({
       <p className="caption">
         Applying restarts audio. Your tone and live adjustments are kept.
       </p>
-      <div className="grid min-w-0 grid-cols-2 gap-3">
+      <div className="audio-routing-fields grid min-w-0 grid-cols-2 gap-3">
         <label className="field col-span-2">
           Sample rate (Hz)
           <input
@@ -75,7 +75,7 @@ export function AudioReconfigure({
           />
         </label>
         <label className="field">
-          Buffer size
+          Buffer (samples)
           <select
             aria-label="Session buffer (samples)"
             value={draft.input.period_frames}
@@ -83,7 +83,7 @@ export function AudioReconfigure({
           >
             {[16, 32, 64, 128, 256, 512, 1024, 2048].map((frames) => (
               <option key={frames} value={frames}>
-                {frames} samples
+                {frames}
                 {draft.input.sample_rate > 0
                   ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
                   : ''}
