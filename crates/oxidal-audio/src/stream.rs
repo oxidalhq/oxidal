@@ -22,6 +22,7 @@ pub struct Duplex {
     written: usize,
     pending: bool,
     faulted: bool,
+    recovered_xruns: u64,
     meter: crate::meter::Meter,
 }
 
@@ -89,9 +90,11 @@ impl Duplex {
             written: 0,
             pending: false,
             faulted: false,
+            recovered_xruns: 0,
         })
     }
-    /// At most one prepared block per call. EAGAIN waits at most 5ms; xruns/device failures fail closed.
+    /// At most one prepared block per call. EAGAIN waits at most 5ms; EPIPE re-primes both PCM handles.
+    /// Other device failures and processor errors fail closed.
     /// No allocations on successful transport steps; the processor has its own RT qualification boundary.
     pub fn step(
         &mut self,
@@ -118,17 +121,19 @@ impl Duplex {
         let in_stride =
             self.config.input.channels as usize * samples::width(self.config.input.format);
         let frames = self.left.len();
-        let received = match self
+        let read = self
             .capture
             .io_bytes()
-            .readi(&mut self.input[self.captured * in_stride..])
-        {
+            .readi(&mut self.input[self.captured * in_stride..]);
+        let received = match read {
             Ok(n) => n,
             Err(e) if e.errno() == 11 => {
-                self.capture.wait(Some(5)).map_err(|e| e.to_string())?;
-                return Ok(Step::Waiting);
+                return match self.capture.wait(Some(5)) {
+                    Ok(_) => Ok(Step::Waiting),
+                    Err(error) => self.transport_error(error, "Capture wait"),
+                };
             }
-            Err(e) => return Err(format!("Capture stopped (xrun/device error): {e}")),
+            Err(e) => return self.transport_error(e, "Capture"),
         };
         if received == 0 {
             return Err("Capture returned zero frames".into());
@@ -188,6 +193,44 @@ impl Duplex {
         self.pending = true;
         self.write_pending()
     }
+    fn transport_error(&mut self, error: alsa::Error, direction: &str) -> Result<Step, String> {
+        // EPIPE is ALSA's recoverable capture overrun / playback underrun. A USB
+        // disconnect, bad descriptor or processor error must not be disguised as recovery.
+        if error.errno() != 32 {
+            return Err(format!("{direction} stopped (device error): {error}"));
+        }
+        // Restart both sides together. Replaying an old partial output block or
+        // retaining captured frames would mix samples from opposite sides of the gap.
+        self.capture
+            .drop()
+            .map_err(|e| format!("Capture recovery stop failed: {e}"))?;
+        self.playback
+            .drop()
+            .map_err(|e| format!("Playback recovery stop failed: {e}"))?;
+        self.capture
+            .prepare()
+            .map_err(|e| format!("Capture recovery prepare failed: {e}"))?;
+        self.playback
+            .prepare()
+            .map_err(|e| format!("Playback recovery prepare failed: {e}"))?;
+        self.captured = 0;
+        self.written = 0;
+        self.pending = false;
+        self.input.fill(0);
+        self.output.fill(0);
+        self.left.fill(0.0);
+        self.right.fill(0.0);
+        self.recovered_xruns = self.recovered_xruns.saturating_add(1);
+        // Keep the installed meter protocol compatible. The worker journal exposes
+        // recovery until a separately versioned UI/daemon counter update ships.
+        eprintln!(
+            "Recovered ALSA xrun {} ({direction}); duplex re-primed",
+            self.recovered_xruns
+        );
+        // The existing playback start threshold re-primes its queue. DSP state,
+        // controls and accumulated meters remain intact; this is not gapless audio.
+        Ok(Step::Waiting)
+    }
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
         let mut snapshot = self.meter.snapshot();
         snapshot.monitoring = Some(self.host.state());
@@ -202,17 +245,19 @@ impl Duplex {
     fn write_pending(&mut self) -> Result<Step, String> {
         let stride =
             self.config.output.channels as usize * samples::width(self.config.output.format);
-        let written = match self
+        let write = self
             .playback
             .io_bytes()
-            .writei(&self.output[self.written * stride..])
-        {
+            .writei(&self.output[self.written * stride..]);
+        let written = match write {
             Ok(n) => n,
             Err(e) if e.errno() == 11 => {
-                self.playback.wait(Some(5)).map_err(|e| e.to_string())?;
-                return Ok(Step::Waiting);
+                return match self.playback.wait(Some(5)) {
+                    Ok(_) => Ok(Step::Waiting),
+                    Err(error) => self.transport_error(error, "Playback wait"),
+                };
             }
-            Err(e) => return Err(format!("Playback stopped (xrun/device error): {e}")),
+            Err(e) => return self.transport_error(e, "Playback"),
         };
         if written == 0 {
             return Err("Playback returned zero frames".into());
@@ -324,6 +369,65 @@ mod tests {
         cfg.output.endpoint = "null".into();
         cfg.input_map = [0, 2];
         assert!(cfg.validate().is_err());
+    }
+    #[test]
+    fn xrun_recovery_discards_partial_transport_and_preserves_processing() {
+        let mut stream = Duplex::open_pcm(config(SampleFormat::S24Packed)).unwrap();
+        let mut processed = 0;
+        for direction in ["Capture", "Playback", "Capture wait", "Playback wait"] {
+            stream
+                .step(|l, r| {
+                    processed += 1;
+                    l.fill(0.2);
+                    r.fill(0.3);
+                    Ok(())
+                })
+                .unwrap();
+            let frames = stream.telemetry().frames;
+            stream.captured = 19;
+            stream.written = 23;
+            stream.pending = true;
+            stream.output.fill(255);
+            assert_eq!(
+                stream
+                    .transport_error(alsa::Error::new("injected xrun", 32), direction)
+                    .unwrap(),
+                Step::Waiting
+            );
+            assert_eq!(
+                (stream.captured, stream.written, stream.pending),
+                (0, 0, false)
+            );
+            assert!(stream.output.iter().all(|b| *b == 0));
+            assert!(!stream.faulted);
+            assert_eq!(stream.telemetry().frames, frames);
+            assert_eq!(
+                stream
+                    .step(|l, r| {
+                        processed += 1;
+                        l.fill(0.4);
+                        r.fill(0.5);
+                        Ok(())
+                    })
+                    .unwrap(),
+                Step::Processed
+            );
+            assert_eq!(stream.telemetry().frames, frames + 128);
+        }
+        assert_eq!(processed, 8);
+        assert_eq!(stream.recovered_xruns, 4);
+        // Missing devices / invalid handles are not recoverable buffer xruns.
+        for errno in [19, 77, 5] {
+            assert!(
+                stream
+                    .transport_error(
+                        alsa::Error::new("injected device failure", errno),
+                        "Capture"
+                    )
+                    .is_err()
+            );
+        }
+        assert_eq!(stream.recovered_xruns, 4);
     }
     #[test]
     fn processor_failure_does_not_submit_output() {
