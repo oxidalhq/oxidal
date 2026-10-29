@@ -66,6 +66,10 @@ it('keeps comparison open and marks a model sounding only after confirmed applic
   );
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.queryByText(/Auditioning Clean/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Clean/ })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   view.rerender(<ModelPicker {...props} comparison={{ pending: true }} />);
   expect(screen.getByRole('button', { name: /Drive/ })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled();
@@ -76,6 +80,14 @@ it('keeps comparison open and marks a model sounding only after confirmed applic
     />,
   );
   expect(screen.getByText('Auditioning Clean')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Clean/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(screen.getByRole('button', { name: /Drive/ })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   fireEvent.click(screen.getByRole('button', { name: /Drive/ }));
   await waitFor(() => expect(onAudition).toHaveBeenCalledTimes(2));
   expect(onClose).not.toHaveBeenCalled();

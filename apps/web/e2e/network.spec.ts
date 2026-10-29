@@ -9,7 +9,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   const state: NetworkState = {
     available: true,
     wireless_enabled: true,
-    policy: null,
+    policy: { mode: 'no_ethernet', interface: 'wlan0', home_ssid: '' },
     radio: { country: 'NZ', channels: [1, 6, 11] },
     interfaces: [
       {
@@ -21,6 +21,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     ],
     networks: [
       { ssid: 'Studio: Wi-Fi', security: 'WPA2', signal: 75, active: false },
+      { ssid: 'Guest open', security: '--', signal: 80, active: false },
     ],
     saved: [],
     pending: null,
@@ -55,10 +56,30 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     .getByRole('button', { name: 'Connections', exact: true })
     .click();
   const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
+  await expect(
+    panel.getByRole('button', { name: /Guest open/ }),
+  ).toBeDisabled();
+  await panel.getByText('Automatic hotspot', { exact: true }).click();
+  await expect(
+    panel.getByRole('combobox', { name: 'Start hotspot', exact: true }),
+  ).toHaveValue('no_ethernet');
+  await panel.getByText('Automatic hotspot', { exact: true }).click();
   await panel.getByRole('button', { name: /Studio: Wi-Fi/ }).click();
   await panel
     .getByLabel('Wi-Fi password', { exact: true })
     .fill('test-only-password');
+  await panel
+    .getByRole('button', { name: 'Show password', exact: true })
+    .click();
+  await expect(
+    panel.getByLabel('Wi-Fi password', { exact: true }),
+  ).toHaveAttribute('type', 'text');
+  await panel
+    .getByRole('button', { name: 'Hide password', exact: true })
+    .click();
+  await expect(
+    panel.getByLabel('Wi-Fi password', { exact: true }),
+  ).toHaveAttribute('type', 'password');
   await panel.getByRole('button', { name: 'Review network change' }).click();
   expect(commands.filter((c) => c.type === 'join')).toHaveLength(0);
   await expect(panel.getByText(/The phone may disconnect/)).toBeVisible();
@@ -86,6 +107,9 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     .getByRole('button', { name: 'Edit hotspot', exact: true })
     .click();
   await expect(panel.getByLabel('New hotspot password')).toBeVisible();
+  await expect(panel.getByLabel('Hotspot name', { exact: true })).toHaveValue(
+    '',
+  );
   await expect(panel.getByLabel('Wireless country')).toHaveValue('NZ');
   await panel
     .getByRole('combobox', { name: 'Hotspot channel' })

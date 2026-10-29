@@ -1,3 +1,4 @@
+import { Eye, EyeSlash, WifiHigh, ArrowClockwise } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
 import { Button } from './components/ui/button';
@@ -8,16 +9,20 @@ import { Button } from './components/ui/button';
 export function NetworkSettings({ connected }: { connected: boolean }) {
   const [state, setState] = useState<NetworkState | null>(null);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [iface, setIface] = useState('');
   const [ssid, setSsid] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'join' | 'hotspot'>('join');
   const [review, setReview] = useState(false);
-  const [policyMode, setPolicyMode] = useState<
-    'always' | 'never' | 'no_ethernet' | 'not_at_home' | 'no_remembered'
-  >('always');
-  const [home, setHome] = useState('');
+  const [policyDraft, setPolicyMode] = useState<
+    NonNullable<NetworkState['policy']>['mode'] | null
+  >(null);
+  const [homeDraft, setHome] = useState<string | null>(null);
+  const policyMode = policyDraft ?? state?.policy?.mode ?? 'always';
+  const home = homeDraft ?? state?.policy?.home_ssid ?? '';
   const [policyReview, setPolicyReview] = useState(false);
   const [country, setCountry] = useState('');
   const [channel, setChannel] = useState(0);
@@ -29,10 +34,13 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
       pending = true;
       try {
         const next = await deviceNetwork();
-        if (active) setState(next);
+        if (active) {
+          setState(next);
+          setReadError('');
+        }
       } catch {
         if (active)
-          setError(
+          setReadError(
             'Cannot reach device settings. If the network changed, reconnect to the device and refresh.',
           );
       } finally {
@@ -55,6 +63,11 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
     setError('');
     try {
       setState(await deviceNetwork(command));
+      setReadError('');
+      if (command.type === 'policy') {
+        setPolicyMode(null);
+        setHome(null);
+      }
       setReview(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Network operation failed');
@@ -71,12 +84,13 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           disabled={!connected || busy}
           onClick={() => void run({ type: 'status' })}
         >
+          <ArrowClockwise aria-hidden="true" />
           Refresh network
         </Button>
       </div>
-      {error && (
+      {(error || readError) && (
         <p role="alert" className="error">
-          {error}
+          {error || readError}
         </p>
       )}
       <p role="status">{state?.message || 'Reading device network…'}</p>
@@ -154,9 +168,13 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   variant={mode === 'join' ? 'default' : 'outline'}
                   aria-pressed={mode === 'join'}
                   onClick={() => {
-                    setMode('join');
-                    setPassword('');
-                    setReview(false);
+                    if (mode !== 'join') {
+                      setMode('join');
+                      setSsid('');
+                      setPassword('');
+                      setShowPassword(false);
+                      setReview(false);
+                    }
                   }}
                 >
                   Join Wi-Fi
@@ -165,9 +183,13 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   variant={mode === 'hotspot' ? 'default' : 'outline'}
                   aria-pressed={mode === 'hotspot'}
                   onClick={() => {
-                    setMode('hotspot');
-                    setPassword('');
-                    setReview(false);
+                    if (mode !== 'hotspot') {
+                      setMode('hotspot');
+                      setSsid('');
+                      setPassword('');
+                      setShowPassword(false);
+                      setReview(false);
+                    }
                   }}
                 >
                   Edit hotspot
@@ -188,16 +210,31 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   {state.networks.map((n) => (
                     <Button
                       key={`${n.ssid}-${n.security}`}
-                      variant="outline"
+                      variant={ssid === n.ssid ? 'secondary' : 'outline'}
+                      aria-pressed={ssid === n.ssid}
+                      disabled={
+                        busy || !connected || !n.security || n.security === '--'
+                      }
                       className="h-auto min-h-11 min-w-0 justify-between text-left whitespace-normal"
                       onClick={() => {
                         setSsid(n.ssid);
                         setReview(false);
                       }}
                     >
-                      <span className="min-w-0 break-words">{n.ssid}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <WifiHigh aria-hidden="true" className="shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {n.ssid}
+                          {n.active && (
+                            <span className="block text-xs">Connected</span>
+                          )}
+                        </span>
+                      </span>
                       <span className="shrink-0 text-xs">
-                        {n.signal}% · {n.security || 'Open'}
+                        {n.signal}% ·{' '}
+                        {n.security && n.security !== '--'
+                          ? n.security
+                          : 'Open · unsupported'}
                       </span>
                     </Button>
                   ))}
@@ -221,6 +258,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                       : {}),
                   };
                   setPassword('');
+                  setShowPassword(false);
                   void run(command);
                 }}
               >
@@ -254,24 +292,46 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                     disabled={busy}
                   />
                 </label>
-                <label className="field">
-                  {mode === 'hotspot'
-                    ? 'New hotspot password'
-                    : 'Wi-Fi password'}
-                  <input
-                    type="password"
-                    required
-                    minLength={8}
-                    maxLength={63}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setReview(false);
-                    }}
-                    disabled={busy}
-                  />
-                </label>
+                <div className="field">
+                  <label htmlFor="network-password">
+                    {mode === 'hotspot'
+                      ? 'New hotspot password'
+                      : 'Wi-Fi password'}
+                  </label>
+                  <div className="flex min-w-0 gap-2">
+                    <input
+                      id="network-password"
+                      className="min-w-0 flex-1"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      maxLength={63}
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setReview(false);
+                      }}
+                      disabled={busy}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-11 shrink-0 p-0"
+                      aria-label={
+                        showPassword ? 'Hide password' : 'Show password'
+                      }
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeSlash aria-hidden="true" />
+                      ) : (
+                        <Eye aria-hidden="true" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
                 {mode === 'hotspot' && state.radio && (
                   <>
                     <label className="field">

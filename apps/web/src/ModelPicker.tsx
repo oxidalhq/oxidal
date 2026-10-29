@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Play,
   MagnifyingGlass,
+  Check,
 } from '@phosphor-icons/react';
 import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
@@ -63,9 +64,12 @@ export function ModelPicker({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
   const [error, setError] = useState('');
-  const [choice, setChoice] = useState<{ asset: string; label: string } | null>(
-    null,
-  );
+  const [choice, setChoice] = useState<{
+    asset: string;
+    label: string;
+    toneId?: number;
+    modelId?: number;
+  } | null>(null);
   const locked = !!busy || !!comparison?.pending || !!comparison?.blocked;
   const download = useRef<AbortController | null>(null);
   const alive = useRef(true);
@@ -125,6 +129,8 @@ export function ModelPicker({
       if (alive.current) {
         setChoice({
           asset: asset.id,
+          toneId: tone.id,
+          modelId: id,
           label: models?.data.find((model) => model.id === id)?.name ?? 'Model',
         });
         if (!comparison) onClose();
@@ -380,7 +386,13 @@ export function ModelPicker({
                 >
                   <ArrowLeft aria-hidden="true" /> Back to tones
                 </Button>
-                <strong className="min-w-0 break-words">{tone.title}</strong>
+                <div className="min-w-0 flex-1 break-words">
+                  <strong>{tone.title}</strong>
+                  <span className="block text-xs text-muted-foreground">
+                    <GearLabel gear={tone.gear} /> ·{' '}
+                    {tone.user.display_name || tone.user.username}
+                  </span>
+                </div>
                 <span className="text-xs text-muted-foreground">
                   {tone.license}
                 </span>
@@ -401,23 +413,36 @@ export function ModelPicker({
                       available for this tone.
                     </p>
                   )}
-                  {models?.data.map((m) => (
-                    <Button
-                      key={m.id}
-                      variant="outline"
-                      className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
-                      disabled={locked}
-                      onClick={() => void audition(m.id)}
-                    >
-                      <span className="min-w-0 break-words">
-                        {m.name}
-                        {m.size ? ` · ${m.size}` : ''}
-                      </span>
-                      <span className="model-audition">
-                        <Play aria-hidden="true" /> Audition
-                      </span>
-                    </Button>
-                  ))}
+                  {models?.data.map((m) => {
+                    const playing =
+                      !comparison?.blocked &&
+                      choice?.toneId === tone.id &&
+                      choice.modelId === m.id &&
+                      comparison?.appliedAsset === choice.asset;
+                    return (
+                      <Button
+                        key={m.id}
+                        aria-pressed={playing}
+                        variant={playing ? 'secondary' : 'outline'}
+                        className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
+                        disabled={locked}
+                        onClick={() => void audition(m.id)}
+                      >
+                        <span className="min-w-0 break-words">
+                          {m.name}
+                          {m.size ? ` · ${m.size}` : ''}
+                        </span>
+                        <span className="model-audition">
+                          {playing ? (
+                            <Check aria-hidden="true" />
+                          ) : (
+                            <Play aria-hidden="true" />
+                          )}{' '}
+                          {playing ? 'Playing' : 'Audition'}
+                        </span>
+                      </Button>
+                    );
+                  })}
                 </>
               ) : (
                 <>
@@ -459,8 +484,8 @@ export function ModelPicker({
           </>
         )}
         <p className="caption">
-          Audition changes the live sound. Save a copy in Rig to keep it
-          offline.
+          Audition changes live sound; closing keeps it. Save a copy in Rig for
+          offline use.
         </p>
         {comparison?.pending && (
           <p role="status">

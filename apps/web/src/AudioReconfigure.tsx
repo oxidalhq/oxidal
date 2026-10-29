@@ -61,10 +61,11 @@ export function AudioReconfigure({
       <p className="caption">
         Applying restarts audio. Your tone and live adjustments are kept.
       </p>
-      <div className="form-grid">
-        <label className="field">
-          Session sample rate (Hz)
+      <div className="grid min-w-0 grid-cols-2 gap-3">
+        <label className="field col-span-2">
+          Sample rate (Hz)
           <input
+            aria-label="Session sample rate (Hz)"
             type="number"
             min={8000}
             max={192000}
@@ -74,33 +75,43 @@ export function AudioReconfigure({
           />
         </label>
         <label className="field">
-          Session buffer (samples)
-          <input
-            type="number"
-            min={16}
-            max={2048}
-            step={1}
+          Buffer size
+          <select
+            aria-label="Session buffer (samples)"
             value={draft.input.period_frames}
             onChange={(e) => shared('period_frames', Number(e.target.value))}
-          />
+          >
+            {[16, 32, 64, 128, 256, 512, 1024, 2048].map((frames) => (
+              <option key={frames} value={frames}>
+                {frames} samples
+                {draft.input.sample_rate > 0
+                  ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
+                  : ''}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="field">
-          Session buffer periods
-          <input
-            type="number"
-            min={2}
-            max={8}
-            step={1}
+          Buffer periods
+          <select
+            aria-label="Session buffer periods"
             value={draft.input.periods}
             onChange={(e) => shared('periods', Number(e.target.value))}
-          />
+          >
+            {[2, 3, 4, 5, 6, 7, 8].map((periods) => (
+              <option key={periods} value={periods}>
+                {periods}
+              </option>
+            ))}
+          </select>
         </label>
         {(['input_map', 'output_map'] as const).flatMap((key) =>
           ([0, 1] as const).map((index) => (
             <label className="field" key={`${key}:${index}`}>
-              Session {key === 'input_map' ? 'input' : 'output'}{' '}
-              {index === 0 ? 'left' : 'right'} channel
+              {key === 'input_map' ? 'Input' : 'Output'}{' '}
+              {index === 0 ? 'left' : 'right'}
               <input
+                aria-label={`Session ${key === 'input_map' ? 'input' : 'output'} ${index === 0 ? 'left' : 'right'} channel`}
                 type="number"
                 min={1}
                 max={
@@ -119,11 +130,23 @@ export function AudioReconfigure({
           )),
         )}
       </div>
+      {valid && (
+        <p className="caption">
+          One audio period:{' '}
+          {(
+            (1000 * draft.input.period_frames) /
+            draft.input.sample_rate
+          ).toFixed(2)}{' '}
+          ms. This is the processing deadline, not total input-to-output
+          latency.
+        </p>
+      )}
       {checkedInput && checkedOutput && (
         <Button
           variant="outline"
           onClick={() =>
             setDraft({
+              ...draft,
               input: checkedInput,
               output: checkedOutput,
               input_map: draft.input_map.map((n) =>

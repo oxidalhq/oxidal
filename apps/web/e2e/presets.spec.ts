@@ -1478,7 +1478,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const currentBuffers = audio.getByRole('group', {
       name: 'Adjust current session',
     });
-    await currentBuffers.getByLabel('Session buffer (samples)').fill('256');
+    await currentBuffers
+      .getByLabel('Session buffer (samples)')
+      .selectOption('256');
     await currentBuffers.getByLabel('Session input right channel').fill('1');
     const appliedResponse = page.waitForResponse(
       (response) =>
@@ -2096,7 +2098,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .fill('44100');
   await playback
     .getByLabel('Session buffer (samples)', { exact: true })
-    .fill('256');
+    .selectOption('256');
   const apply = playback.getByRole('button', {
     name: 'Apply & restart audio',
     exact: true,
@@ -2608,11 +2610,15 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const buffers = audioSettings.getByRole('group', {
     name: 'Adjust current session',
   });
-  await buffers.getByLabel('Session buffer (samples)').fill('129');
+  await expect(
+    buffers
+      .getByLabel('Session buffer (samples)')
+      .locator('option[value="129"]'),
+  ).toHaveCount(0);
   await expect(
     buffers.getByRole('button', { name: 'Apply & restart audio', exact: true }),
   ).toBeDisabled();
-  await buffers.getByLabel('Session buffer (samples)').fill('256');
+  await buffers.getByLabel('Session buffer (samples)').selectOption('256');
   await buffers.getByLabel('Session sample rate (Hz)').fill('44100');
   await buffers
     .getByRole('button', { name: 'Apply & restart audio', exact: true })
@@ -4319,6 +4325,9 @@ test('live model comparison stays open, waits for application and rejects a chan
   await expect(picker.getByRole('status')).toContainText(
     'Auditioning Clean fixture',
   );
+  await expect(
+    picker.getByRole('button', { name: /Clean fixture/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await picker.getByRole('button', { name: /Drive fixture/ }).click();
   await expect.poll(() => assignments).toBe(2);
   audio = {
@@ -4329,6 +4338,12 @@ test('live model comparison stays open, waits for application and rejects a chan
   await expect(picker.getByRole('status')).toContainText(
     'Auditioning Drive fixture',
   );
+  await expect(
+    picker.getByRole('button', { name: /Drive fixture/ }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    picker.getByRole('button', { name: /Clean fixture/ }),
+  ).toHaveAttribute('aria-pressed', 'false');
   audio = { ...audio, session: 'replacement-session' };
   await expect(
     picker.getByRole('button', { name: /Clean fixture/ }),
@@ -4494,4 +4509,92 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
     path: info.outputPath('mixed-routing-landscape.png'),
     fullPage: true,
   });
+});
+
+test('playback lifecycle distinguishes loading and offers readable buffer choices', async ({
+  page,
+  request,
+}, info) => {
+  const baseline = await (await request.get('/api/v1/audio')).json();
+  const input = {
+    endpoint: 'hw:fixture',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 64,
+    periods: 3,
+  };
+  const audio = {
+    ...baseline,
+    phase: 'running',
+    device_owned: true,
+    preset_name: 'Fixture',
+    configured: {
+      preset_id: 'a'.repeat(64),
+      owned: false,
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
+    },
+  };
+  let release = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/v1/audio', async (route) => {
+    expect(route.request().method()).toBe('GET');
+    await ready;
+    await route.fulfill({ json: audio });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(
+    page.getByText('Reading audio settings…', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Audio playback is unavailable/)).toHaveCount(0);
+  release();
+  await expect(
+    page.getByRole('button', { name: 'Stop audio', exact: true }),
+  ).toBeVisible();
+  await page.getByText('Current device & buffers', { exact: true }).click();
+  const group = page.getByRole('group', { name: 'Adjust current session' });
+  const buffer = group.getByRole('combobox', {
+    name: 'Session buffer (samples)',
+  });
+  await buffer.selectOption('256');
+  await expect(group.getByText(/One audio period: 5.33 ms/)).toBeVisible();
+  await expect(
+    group.getByRole('button', { name: 'Apply & restart audio' }),
+  ).toBeEnabled();
+  const left = (await group
+    .getByLabel('Session input left channel')
+    .boundingBox())!;
+  const right = (await group
+    .getByLabel('Session input right channel')
+    .boundingBox())!;
+  expect(Math.abs(left.y - right.y)).toBeLessThan(2);
+  expect(right.x).toBeGreaterThan(left.x);
+  await group.getByRole('button', { name: 'Reset changes' }).click();
+  await expect(buffer).toHaveValue('64');
+  await expect(
+    group.getByRole('button', { name: 'Apply & restart audio' }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: info.outputPath('audio-settings-portrait.png'),
+    fullPage: true,
+  });
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({
+    width: viewport.height,
+    height: viewport.width,
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
 });

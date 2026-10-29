@@ -60,6 +60,7 @@ export function PlaybackSettings({
     );
   }
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
   const [graphMessage, setGraphMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [presets, setPresets] = useState<
@@ -90,9 +91,10 @@ export function PlaybackSettings({
           accept(next);
           acceptMixed(rig);
           acceptEffects(graph);
+          setReadError('');
         }
       } catch (cause) {
-        if (active) setError(String(cause));
+        if (active) setReadError(String(cause));
       } finally {
         if (active) timer = setTimeout(() => void refresh(), 1500);
       }
@@ -217,6 +219,21 @@ export function PlaybackSettings({
       onEffects={acceptEffects}
     />
   );
+  if (!state || !mixed || !effects)
+    return (
+      <section
+        className="control-stack"
+        aria-label="Playback controls"
+        aria-busy={!readError}
+      >
+        <p role="status">
+          {readError
+            ? 'Audio settings could not be read. Retrying…'
+            : 'Reading audio settings…'}
+        </p>
+        {readError && <p role="alert">{readError}</p>}
+      </section>
+    );
   if (
     effects?.configured &&
     effects.phase !== 'unavailable' &&
@@ -306,14 +323,11 @@ export function PlaybackSettings({
       {boot}
       {unavailable ? (
         <p className="muted">
-          Experimental Linux playback is not enabled. Silent authoring remains
-          available.
+          Audio playback is unavailable on this device. Saved tones can still be
+          edited.
         </p>
       ) : (
         <>
-          <p className="caption">
-            Prototype audio · hardware qualification pending.
-          </p>
           <div className="action-row">
             {state?.device_owned ? (
               <>
@@ -466,7 +480,9 @@ export function PlaybackSettings({
           </details>
         </>
       )}
-      {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
+      {(error || readError || state?.error) && (
+        <p role="alert">{error || readError || state?.error}</p>
+      )}
     </section>
   );
 }
