@@ -1,3 +1,4 @@
+import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { NativeTools } from './NativeTools';
 import { useEffect, useRef, useState } from 'react';
 import { tone3000Tone, type AudioState, type AudioAction } from './api';
@@ -75,6 +76,18 @@ export function NativeAuthoring({
   const position = laneBlocks.findIndex(
     (b) => b.id === selectedBlock && !b.insert,
   );
+  const variants = laneBlocks[position]?.variants ?? [];
+  const activeVariant = variants.findIndex(
+    (model) => model.id === laneBlocks[position]?.active_model,
+  );
+  function selectVariant(index: number) {
+    if (editingDisabled || busy || !selectedBlock || !variants[index]) return;
+    void author({
+      kind: 'select_model',
+      block_id: selectedBlock,
+      model_id: variants[index].id,
+    });
+  }
   function reorder(direction: number) {
     const next = position + direction;
     if (position < 0 || next < 0 || next >= laneBlocks.length) return;
@@ -87,6 +100,53 @@ export function NativeAuthoring({
   }
   return (
     <>
+      {variants.length > 1 && (
+        <div className="variant-selector" aria-label="Model comparison">
+          <Button
+            variant="outline"
+            aria-label="Previous model variant"
+            disabled={editingDisabled || busy || activeVariant <= 0}
+            onClick={() => selectVariant(activeVariant - 1)}
+          >
+            <CaretLeft aria-hidden="true" />
+          </Button>
+          <label className="field min-w-0">
+            Model variant · {activeVariant >= 0 ? activeVariant + 1 : '—'} /{' '}
+            {variants.length}
+            <select
+              aria-label="Model variant"
+              disabled={editingDisabled || busy}
+              value={laneBlocks[position]?.active_model ?? ''}
+              onChange={(event) =>
+                selectVariant(
+                  variants.findIndex(
+                    (model) => model.id === Number(event.target.value),
+                  ),
+                )
+              }
+            >
+              {variants.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            variant="outline"
+            aria-label="Next model variant"
+            disabled={
+              editingDisabled ||
+              busy ||
+              activeVariant < 0 ||
+              activeVariant >= variants.length - 1
+            }
+            onClick={() => selectVariant(activeVariant + 1)}
+          >
+            <CaretRight aria-hidden="true" />
+          </Button>
+        </div>
+      )}
       <NativeTools status={status} disabled={disabled} author={author} />
       {selectedBlock && position >= 0 && laneBlocks[position]?.tone_id && (
         <div className="space-y-2">
@@ -190,29 +250,6 @@ export function NativeAuthoring({
             </div>
           )}
         </details>
-      )}
-      {position >= 0 && (laneBlocks[position]?.variants?.length ?? 0) > 1 && (
-        <label className="space-y-2">
-          <span>Model variant</span>
-          <select
-            aria-label="Model variant"
-            disabled={editingDisabled}
-            value={laneBlocks[position]?.active_model ?? ''}
-            onChange={(event) =>
-              void author({
-                kind: 'select_model',
-                block_id: selectedBlock!,
-                model_id: Number(event.target.value),
-              })
-            }
-          >
-            {laneBlocks[position]!.variants!.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-        </label>
       )}
       {layout && (
         <details>

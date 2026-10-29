@@ -3975,7 +3975,9 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     exact: true,
   });
   await expect(variant.getByRole('option')).toHaveCount(2);
-  await variant.selectOption({ label: 'My variant 2' });
+  await rig
+    .getByRole('button', { name: 'Next model variant', exact: true })
+    .click();
   await expect(variant).toHaveValue(
     (await variant
       .getByRole('option', { name: 'My variant 2', exact: true })

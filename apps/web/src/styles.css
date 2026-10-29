@@ -2623,3 +2623,18 @@ textarea {
   height: 100%;
   background: var(--control-accent);
 }
+
+.variant-selector {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: end;
+  gap: 0.5rem;
+}
+.variant-selector > button {
+  min-height: 44px;
+  padding: 0;
+}
+.variant-selector select {
+  width: 100%;
+  min-width: 0;
+}
