@@ -86,6 +86,8 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
 test('interactive terminal reconnects without replaying input and stays usable after rotation', async ({
   page,
 }, testInfo) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const commands: import('../src/api').TerminalCommand[] = [];
   let session: import('../src/api').TerminalState['session'] = null;
   let loseInputReply = false;
@@ -214,11 +216,18 @@ test('interactive terminal reconnects without replaying input and stays usable a
   await expect(
     panel.getByRole('button', { name: 'Start terminal', exact: true }),
   ).toBeEnabled();
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Web terminal' })).toHaveCount(
+    0,
+  );
+  expect(pageErrors).toEqual([]);
 });
 
 test('administrator terminal is explicit and mode changes never start a shell', async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   const starts: string[] = [];
   await page.route('**/api/v1/terminal/*', async (route) => {
     const mode = route.request().url().split('/').at(-1)!;
@@ -253,4 +262,5 @@ test('administrator terminal is explicit and mode changes never start a shell', 
   await panel.getByLabel('Terminal access').selectOption('unprivileged');
   await expect(panel.getByRole('status')).toContainText('oxidal-debug');
   expect(starts).toEqual(['admin']);
+  expect(pageErrors).toEqual([]);
 });
