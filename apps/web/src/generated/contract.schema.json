@@ -88,6 +88,9 @@
     "monitoring": {
       "$ref": "#/$defs/Monitoring"
     },
+    "monitoring_history": {
+      "$ref": "#/$defs/History"
+    },
     "native_command": {
       "$ref": "#/$defs/EditorCommand"
     },
@@ -187,6 +190,7 @@
     "debug_state",
     "debug_command",
     "monitoring",
+    "monitoring_history",
     "network_state",
     "network_command",
     "audio_state",
@@ -3415,6 +3419,49 @@
         "normalized"
       ]
     },
+    "History": {
+      "type": "object",
+      "properties": {
+        "dropped_samples": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "interval_seconds": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Record"
+          }
+        },
+        "skipped_records": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "storage_error": {
+          "type": "boolean"
+        },
+        "storage_limit_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "records",
+        "interval_seconds",
+        "storage_limit_bytes",
+        "skipped_records",
+        "dropped_samples",
+        "storage_error"
+      ]
+    },
     "Host": {
       "type": "object",
       "properties": {
@@ -5834,6 +5881,47 @@
       "required": [
         "source_revision",
         "values"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "properties": {
+        "audio_session": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "readings": {
+          "$ref": "#/$defs/Monitoring"
+        },
+        "recorded_at_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "recorder_session": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "recorded_at_ms",
+        "recorder_session",
+        "elapsed_ms",
+        "readings"
       ]
     },
     "ResourceSource": {

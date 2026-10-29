@@ -1,3 +1,4 @@
+import { MonitoringHistory } from './MonitoringHistory';
 import { useEffect, useRef, useState } from 'react';
 import {
   Pause,
@@ -196,6 +197,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       className="panel grid gap-4"
       aria-label="Audio and system monitoring"
     >
+      <MonitoringHistory />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-sm">
           {frozen

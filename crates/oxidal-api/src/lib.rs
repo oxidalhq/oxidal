@@ -6,6 +6,7 @@ mod device;
 mod graph_playback;
 mod local_models;
 mod monitor;
+mod monitor_history;
 mod native_defaults;
 mod native_editor;
 mod playback;
@@ -86,6 +87,7 @@ pub struct Contract {
     pub debug_state: oxidal_debug::State,
     pub debug_command: oxidal_debug::Command,
     pub monitoring: monitor::Monitoring,
+    pub monitoring_history: monitor_history::History,
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
@@ -133,6 +135,7 @@ struct Shared {
     catalog_work: Arc<tokio::sync::Semaphore>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
+    history: Arc<monitor_history::Journal>,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
     rig_playback: rig_playback::RigPlayback,
@@ -205,6 +208,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         bundle_work: Arc::new(tokio::sync::Semaphore::new(1)),
         catalog_work: Arc::new(tokio::sync::Semaphore::new(1)),
         debug: debug::DebugBridge::new(config.debug_socket.clone()),
+        history: Arc::new(monitor_history::Journal::new(
+            config.preset_dir.join("monitor-history"),
+        )),
         monitor,
         playback: playback::Playback::new(&config, boot.clone())?,
         graph_playback: graph_playback::GraphPlayback::new(&config, boot.clone())?,
@@ -218,6 +224,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         config,
     });
     monitor::start(Arc::downgrade(&shared), monitor_updates);
+    monitor_history::start(Arc::downgrade(&shared));
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -255,6 +262,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))
         .route("/tone3000/models", get(provider::catalog::models))
         .route("/monitor", get(monitor::state))
+        .route("/monitor/history", get(monitor_history::state))
+        .route("/monitor/history/export", get(monitor_history::export))
         .route("/monitor/events", get(monitor::events))
         .route("/debug", get(debug::state).post(debug::command))
         .route("/debug/logs", get(debug::logs))

@@ -722,3 +722,18 @@ export async function libraryCatalog(
   if (!catalogValidator(body)) throw new Error('Incompatible library catalog');
   return body;
 }
+
+export type MonitoringHistory = Contract['monitoring_history'];
+const historyValidator = ajv.compile<MonitoringHistory>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/History',
+});
+export async function monitoringHistory(
+  signal?: AbortSignal,
+): Promise<MonitoringHistory> {
+  const response = await fetch('/api/v1/monitor/history', { signal });
+  const body = await presetResponse(response);
+  if (!historyValidator(body))
+    throw new Error('Incompatible monitoring history');
+  return body;
+}

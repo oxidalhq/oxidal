@@ -196,3 +196,57 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(strip).not.toContainText('23%');
   await expect(strip).not.toContainText('0.5/4.0 GiB');
 });
+
+test('monitor shows device history after browser reload and exports retained samples', async ({
+  page,
+  request,
+}) => {
+  await expect
+    .poll(
+      async () => {
+        const response = await request.get('/api/v1/monitor/history');
+        expect(response.ok()).toBe(true);
+        return (await response.json()).records.length;
+      },
+      { timeout: 10000 },
+    )
+    .toBeGreaterThan(0);
+  const initial = await (await request.get('/api/v1/monitor/history')).json();
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Monitor', exact: true }).click();
+  await page.getByText('Device history', { exact: true }).click();
+  await expect(
+    page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
+  ).toBeVisible();
+  const download = await request.get('/api/v1/monitor/history/export');
+  expect(download.headers()['content-disposition']).toContain(
+    'monitor-history.json',
+  );
+  const exported = await download.json();
+  expect(exported.records).toEqual(
+    expect.arrayContaining([initial.records[0]]),
+  );
+  await page.getByRole('button', { name: 'Reset view', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Monitor', exact: true }).click();
+  await page.getByText('Device history', { exact: true }).click();
+  await expect(
+    page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
+  ).toBeVisible();
+  const restored = await (await request.get('/api/v1/monitor/history')).json();
+  expect(restored.records).toEqual(
+    expect.arrayContaining([initial.records[0]]),
+  );
+  const portrait = page.viewportSize()!;
+  for (const size of [
+    portrait,
+    { width: portrait.height, height: portrait.width },
+  ]) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBe(true);
+  }
+});

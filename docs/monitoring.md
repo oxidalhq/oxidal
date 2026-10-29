@@ -10,3 +10,28 @@ The Monitor view reads real, decimated measurements from the isolated saved-pres
 - HTTP sampling is 1 Hz, UI history holds 120 points, and stale audio is marked after 3 seconds. Freeze retains the displayed readings. E-paper mode uses five-second polling and no chart animations. Right-channel and host-CPU traces use dashed strokes with matching legends so they remain distinguishable without colour. Hidden or closed history views do not poll. A compact sticky resource strip polls independently across all main views (1 Hz, 5 seconds for e-paper). A read-only `/monitor/events` SSE stream invalidates its cached snapshot on confirmed playback phase changes and first meter availability, so Start/Stop/failure do not wait for the slow e-paper poll. Older in-flight HTTP replies cannot overwrite that refresh; regular polling remains the fallback. Starting/stopping and waiting for initial meters are distinct from stopped or stale audio. Host sampling stays at 1 Hz and steady meter updates do not emit lifecycle events; freezing diagnostic history does not freeze live resource status. It displays DSP p95/peak deadline percentages, total host CPU, RAM used/total, cumulative clips and xruns when available. Stopped/stale/disconnected audio never retains a healthy-looking numeric DSP reading.
 
 Verification uses known-signal Rust meter tests, real ALSA-null native/LV2 worker HTTP tests, and desktop/mobile Playwright checks for freeze/reset/stale state, overflow and accessibility. Screenshot fixtures are labeled as fixtures, not hardware measurements. Physical Pi overhead/thermal/audio acceptance remains separate.
+
+## Recorded device history
+
+`GET /api/v1/monitor/history` returns the latest 720 validated samples.
+`GET /api/v1/monitor/history/export` downloads all retained samples as JSON.
+The Monitor page's **Device history** panel loads on demand and offers refresh
+and export; it does not add continuous graph polling. Freeze/Reset still affect
+only the current browser's live graph.
+
+The daemon records every five seconds independently of clients. Four rotating
+2 MiB JSONL files under `presets/monitor-history/` bound storage to 8 MiB. Rotation
+is size-based, not a guaranteed number of days. Records carry schema version,
+wall-clock milliseconds, recorder identity, monotonic elapsed time, audio session
+and the existing decimated host/stream/meter snapshot. Error message text is
+excluded. No audio samples, credentials, commands or model bytes are recorded.
+
+A two-entry nonblocking queue isolates collection from background file writes.
+Storage failure or a full queue drops history samples and reports counters; it
+does not stop audio. Interrupted/corrupt records are skipped and counted on read.
+The latest write is not guaranteed to survive sudden power loss. The graph leaves
+gaps across recorder/audio-session changes, long sampling gaps and stale audio.
+Exports retain timestamps and elapsed time so clock corrections can be identified.
+
+This is sampled telemetry, not an operation audit trail. Persistent action/outcome
+auditing and historical time/category filtering remain separate work.

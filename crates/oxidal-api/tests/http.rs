@@ -1615,3 +1615,48 @@ async fn owned_download_preserves_bytes_and_can_be_reimported() {
     task.abort();
     let _ = std::fs::remove_dir_all(path.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn monitoring_history_records_without_a_browser_and_exports_validated_samples() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let history = tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        loop {
+            let response = client
+                .get(format!("{url}/monitor/history"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), 200);
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            let body: Value = response.json().await.unwrap();
+            if !body["records"].as_array().unwrap().is_empty() {
+                break body;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(history["interval_seconds"], 5);
+    assert_eq!(history["storage_limit_bytes"], 8 * 1024 * 1024);
+    assert!(history["records"][0]["recorded_at_ms"].as_u64().unwrap() > 0);
+    assert!(history["records"][0]["readings"]["error"].is_null());
+    let download = client
+        .get(format!("{url}/monitor/history/export"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(download.status(), 200);
+    assert!(
+        download.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains("monitor-history.json")
+    );
+    let body: Value = download.json().await.unwrap();
+    assert_eq!(body["records"][0], history["records"][0]);
+    task.abort();
+    drop(client);
+    let _ = std::fs::remove_dir_all(path.with_extension("presets"));
+}

@@ -669,6 +669,7 @@ export interface Contract {
   model_page: Page2;
   model_query: ModelQuery;
   monitoring: Monitoring;
+  monitoring_history: History;
   native_command: EditorCommand;
   native_defaults: NativeDefaults;
   native_defaults_update: NativeDefaultsUpdate;
@@ -1360,6 +1361,22 @@ export interface Host {
   memory_used_bytes?: number | null;
   temperature_c?: number | null;
   temperature_sensor?: string | null;
+}
+export interface History {
+  dropped_samples: number;
+  interval_seconds: number;
+  records: Record[];
+  skipped_records: number;
+  storage_error: boolean;
+  storage_limit_bytes: number;
+}
+export interface Record {
+  audio_session?: string | null;
+  elapsed_ms: number;
+  readings: Monitoring;
+  recorded_at_ms: number;
+  recorder_session: string;
+  schema: number;
 }
 export interface EditorCommand {
   action: EditorAction;
