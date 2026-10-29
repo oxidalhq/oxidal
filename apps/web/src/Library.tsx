@@ -14,6 +14,8 @@ import {
   CircleNotch,
   DownloadSimple,
   MagnifyingGlass,
+  List,
+  ImageSquare,
   X,
 } from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
@@ -36,6 +38,13 @@ export function Library({
   const [refresh, setRefresh] = useState(0);
   const [manage, setManage] = useState(false);
   const [query, setQuery] = useState('');
+  const [showArtwork, setShowArtwork] = useState(() => {
+    try {
+      return localStorage.getItem('oxidal-library-artwork') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const matches = (name: string) =>
     name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
   const [page, setPage] = useState<'browse' | 'author' | 'new'>('browse');
@@ -217,6 +226,40 @@ export function Library({
               </Button>
             )}
           </div>
+          <div
+            className="mb-3 flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Library view"
+          >
+            <Button
+              variant={!showArtwork ? 'secondary' : 'ghost'}
+              aria-pressed={!showArtwork}
+              onClick={() => {
+                setShowArtwork(false);
+                try {
+                  localStorage.setItem('oxidal-library-artwork', 'false');
+                } catch {
+                  /* storage unavailable */
+                }
+              }}
+            >
+              <List aria-hidden="true" /> List
+            </Button>
+            <Button
+              variant={showArtwork ? 'secondary' : 'ghost'}
+              aria-pressed={showArtwork}
+              onClick={() => {
+                setShowArtwork(true);
+                try {
+                  localStorage.setItem('oxidal-library-artwork', 'true');
+                } catch {
+                  /* storage unavailable */
+                }
+              }}
+            >
+              <ImageSquare aria-hidden="true" /> Artwork
+            </Button>
+          </div>
           <Button
             variant={manage ? 'secondary' : 'outline'}
             aria-expanded={manage}
@@ -290,7 +333,7 @@ export function Library({
               .map((p) => (
                 <li key={`owned-${p.id}`}>
                   {loadButton(p.id, p.name, true)}
-                  <ArtworkDeck id={p.id} owned />
+                  {showArtwork && <ArtworkDeck id={p.id} owned />}
                   <a
                     href={`/api/v1/presets/owned/${p.id}/download`}
                     download
@@ -305,7 +348,7 @@ export function Library({
               .map((preset) => (
                 <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
                   {loadButton(preset.sha256, preset.name)}
-                  <ArtworkDeck id={preset.sha256} />
+                  {showArtwork && <ArtworkDeck id={preset.sha256} />}
                   <details>
                     <summary>File details</summary>
                     <p>

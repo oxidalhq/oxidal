@@ -1888,6 +1888,11 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     name: 'Shared name · amp',
     exact: true,
   });
+  await expect(image).toHaveCount(0);
+  await page
+    .getByRole('group', { name: 'Library view' })
+    .getByRole('button', { name: 'Artwork', exact: true })
+    .click();
   await expect(image).toBeVisible();
   await expect
     .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
