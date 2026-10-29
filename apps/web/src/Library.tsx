@@ -248,6 +248,13 @@ export function Library({
               <li key={`owned-${p.id}`}>
                 {loadButton(p.id, p.name, true)}
                 <ArtworkDeck id={p.id} owned />
+                <a
+                  href={`/api/v1/presets/owned/${p.id}/download`}
+                  download
+                  aria-label={`Download saved copy ${p.name}`}
+                >
+                  <DownloadSimple aria-hidden="true" /> Download saved copy
+                </a>
               </li>
             ))}
             {presets.map((preset) => (

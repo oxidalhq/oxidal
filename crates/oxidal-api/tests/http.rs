@@ -1555,3 +1555,63 @@ async fn native_log_export_is_bounded_read_only_and_does_not_follow_symlinks() {
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn owned_download_preserves_bytes_and_can_be_reimported() {
+    let (url, task, path) = start(true).await;
+    let store = oxidal_presets::OwnedStore::new(path.with_extension("presets").join("owned"));
+    let saved = store.save_created(CURRENT_PRESET).unwrap();
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{url}/presets/owned/{}/download", saved.id))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert!(
+        response.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .starts_with("attachment; filename=\"saved-")
+    );
+    let bytes = response.bytes().await.unwrap();
+    assert_eq!(bytes.as_ref(), CURRENT_PRESET);
+    let restored = client
+        .post(format!("{url}/presets"))
+        .header("content-type", "application/octet-stream")
+        .body(bytes)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(restored.status(), 201);
+    let info: Value = restored.json().await.unwrap();
+    assert_eq!(info["sha256"], saved.id);
+    assert_eq!(
+        client
+            .get(format!("{url}/presets/owned/invalid/download"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    std::fs::write(
+        path.with_extension("presets")
+            .join("owned")
+            .join(&saved.id)
+            .join("metadata.json"),
+        b"{}",
+    )
+    .unwrap();
+    assert_eq!(
+        client
+            .get(format!("{url}/presets/owned/{}/download", saved.id))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(path.with_extension("presets"));
+}

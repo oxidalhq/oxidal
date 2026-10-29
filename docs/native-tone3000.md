@@ -718,3 +718,11 @@ tolerance, while file round-trip values are checked exactly.
 These checks provide concrete settings-data compatibility evidence for the pinned
 processor. They are separate from physical Pi performance, every external model
 architecture and universal audio equivalence across interfaces/sample clocks.
+
+Saved native copies can be downloaded from Library through
+`GET /api/v1/presets/owned/{id}/download`. The endpoint verifies the immutable
+owned snapshot and returns its exact `.t3kpreset` bytes; it does not export
+unsaved working edits. Reimport through the normal preset import preserves
+those bytes as an original entry. This is a per-preset export, not a complete
+library backup: catalog ordering, device/MIDI configuration and hybrid bundles
+are outside this download.

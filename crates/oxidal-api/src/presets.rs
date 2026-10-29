@@ -85,6 +85,30 @@ pub(super) async fn original(
     .await
 }
 
+/// Download verified immutable saved bytes, not the currently edited working session.
+pub(super) async fn owned_download(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<String>,
+) -> Response {
+    let root = shared.config.preset_dir.join("owned");
+    job(shared, move |_| {
+        let (_, bytes) = oxidal_presets::OwnedStore::new(root).read(&id)?;
+        Ok((
+            [
+                (header::CONTENT_TYPE, "application/octet-stream".to_owned()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"saved-{id}.t3kpreset\""),
+                ),
+                (header::CACHE_CONTROL, "no-store".to_owned()),
+            ],
+            bytes,
+        )
+            .into_response())
+    })
+    .await
+}
+
 /// Graph documents are independent of native original/owned files. They contain
 /// plugin URIs and scalar/MIDI state, never executable paths or device bindings.
 pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
