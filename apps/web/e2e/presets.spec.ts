@@ -254,7 +254,11 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
     0,
   );
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Rig actions' })
+    .getByRole('button', { name: 'Save copy', exact: true })
+    .click();
   const saveDialog = page.getByRole('dialog', { name: 'Save copy' });
   await expect(saveDialog.getByLabel('Name for sounding copy')).toHaveValue(
     'Amp only',
@@ -278,7 +282,11 @@ test('rig controls follow the actual session without example effects', async ({
   expect(saves).toBe(0);
   await saveDialog.getByRole('button', { name: 'Close dialog' }).click();
   await page.setViewportSize(portrait);
-  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Rig actions' })
+    .getByRole('button', { name: 'Save copy', exact: true })
+    .click();
   await saveDialog.getByLabel('Name for sounding copy').fill('My live sound');
   await saveDialog.getByRole('button', { name: 'Save sounding copy' }).click();
   await expect(saveDialog).toHaveCount(0);
@@ -1448,7 +1456,13 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(
       sounding.getByRole('button', { name: 'Done', exact: true }),
     ).toHaveCount(0);
-    await sounding.getByText('Save copy', { exact: true }).click();
+    await sounding
+      .getByRole('button', { name: 'Rig actions', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Rig actions' })
+      .getByRole('button', { name: 'Save copy', exact: true })
+      .click();
     await sounding
       .getByLabel('Name for sounding copy')
       .fill(`Live ${test.info().project.name}`);
@@ -1776,7 +1790,13 @@ test('playback lifecycle keeps native authoring available after stop and restart
       });
     }
     await page.setViewportSize(portrait);
-    await sounding.getByText('Save copy', { exact: true }).click();
+    await sounding
+      .getByRole('button', { name: 'Rig actions', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Rig actions' })
+      .getByRole('button', { name: 'Save copy', exact: true })
+      .click();
     await sounding
       .getByLabel('Name for sounding copy')
       .fill(`New NAM ${test.info().project.name}`);

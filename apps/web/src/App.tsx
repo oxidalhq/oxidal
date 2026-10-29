@@ -601,7 +601,7 @@ export default function App() {
               )}
             </>
           ) : (
-            <>
+            <div className="settings-workspace">
               <nav className="settings-nav" aria-label="Settings sections">
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
@@ -634,353 +634,360 @@ export default function App() {
                   </Button>
                 ))}
               </nav>
-              {settingsSection === 'display' && (
-                <>
-                  <section
-                    className="panel control-stack"
-                    aria-label="Display preferences"
-                  >
-                    <h2 className="sr-only">Display</h2>
-                    <label className="field display-mode">
-                      <span>Display mode</span>
-                      <select
-                        value={displayMode}
-                        onChange={(event) => setDisplayMode(event.target.value)}
-                      >
-                        <option value="orchid">Orchid</option>
-                        <option value="sunlight">Sunlight</option>
-                        <option value="stage">Dark stage</option>
-                        <option value="epaper">E-paper</option>
-                      </select>
-                    </label>
-
-                    <div className="action-row">
-                      <Button
-                        variant="outline"
-                        disabled={!screen.fullscreenSupported}
-                        onClick={() => void screen.toggleFullscreen()}
-                      >
-                        {screen.fullscreen
-                          ? 'Exit fullscreen'
-                          : 'Enter fullscreen'}
-                      </Button>
-                      <Button
-                        variant={screen.keepAwake ? 'secondary' : 'outline'}
-                        aria-pressed={screen.keepAwake}
-                        disabled={!screen.wakeSupported}
-                        onClick={() => screen.setKeepAwake(!screen.keepAwake)}
-                      >
-                        Keep screen awake
-                      </Button>
-                      {screen.keepAwake &&
-                        screen.wakeSupported &&
-                        ['paused', 'denied'].includes(screen.wakeStatus) && (
-                          <Button variant="outline" onClick={screen.retryWake}>
-                            Retry keep-awake
-                          </Button>
-                        )}
-                    </div>
-                    <p role="status" aria-label="Screen awake status">
-                      {!screen.wakeSupported
-                        ? 'Keep-awake unavailable: use HTTPS and a supported browser.'
-                        : {
-                            off: 'Screen awake: off',
-                            requesting: 'Screen awake: requesting',
-                            active: 'Screen awake: active',
-                            paused: 'Screen awake: paused by browser',
-                            denied:
-                              'Screen awake: not allowed by browser or power settings',
-                          }[screen.wakeStatus]}
-                    </p>
-                    {!screen.fullscreenSupported && (
-                      <p className="caption">
-                        Page fullscreen is unavailable in this browser.
-                      </p>
-                    )}
-                    {screen.fullscreenError && (
-                      <p role="alert">{screen.fullscreenError}</p>
-                    )}
-                    <details className="control-help">
-                      <summary>Display &amp; screen help</summary>
-                      <p>
-                        Preferences are saved on this browser. Keep-awake works
-                        while Oxidal is visible and retries when you return.
-                        Browser power settings can release it; fullscreen alone
-                        does not prevent sleep.
-                      </p>
-                      <p>
-                        Sunlight increases contrast. Dark stage dims surfaces.
-                        E-paper removes colour and motion. Set brightness and
-                        e-paper refresh on your device.
-                      </p>
-                    </details>
-                  </section>
-                </>
-              )}
-              {settingsSection === 'connections' && (
-                <>
-                  <NetworkSettings connected={connected} />
-                  <Tone3000Account connected={connected} />
-                </>
-              )}
-              {settingsSection === 'audio' && (
-                <AudioSettings connected={connected} />
-              )}
-              {settingsSection === 'device' && (
-                <DevicePower connected={connected} />
-              )}
-              {settingsSection === 'maintenance' && (
-                <>
-                  <p className="caption">
-                    Device maintenance · control protocol {state.protocol}.
-                    Audio setup and monitoring remain available from their own
-                    pages.
-                  </p>
-                  <Suspense fallback={<p>Loading terminal…</p>}>
-                    <WebTerminal />
-                  </Suspense>
-                  <DebugConsole />
-                  {developmentSimulator && (
-                    <details className="panel">
-                      <summary>Rig validation inspector</summary>
-                      <label className="field">
-                        Rig JSON
-                        <textarea
-                          aria-label="Rig JSON"
-                          rows={8}
-                          value={draft || JSON.stringify(state.rig, null, 2)}
-                          onChange={(event) => setDraft(event.target.value)}
-                          spellCheck={false}
-                        />
-                      </label>
-                      <Button
-                        variant="outline"
-                        onClick={() => void validateDraft()}
-                        disabled={!connected}
-                      >
-                        Validate rig
-                      </Button>
-                      <p role="status">{validation}</p>
-                    </details>
-                  )}
-                </>
-              )}
-              {settingsSection === 'midi' && !developmentSimulator && (
-                <MidiSettings connected={connected} />
-              )}
-              {settingsSection === 'midi' && developmentSimulator && (
-                <>
-                  <section className="panel">
-                    <h2>MIDI mapping</h2>
-                    <p className="muted">
-                      Current mapping:{' '}
-                      {state.mappings.mappings
-                        .map(
-                          (mapping) => `CC ${mapping.cc} → ${mapping.target}`,
-                        )
-                        .join(', ') || 'none'}
-                      . This form replaces the PoC knob mapping.
-                    </p>
-                    <div className="form-grid">
-                      <label className="field">
-                        Target
+              <div className="settings-content">
+                {settingsSection === 'display' && (
+                  <>
+                    <section
+                      className="panel control-stack"
+                      aria-label="Display preferences"
+                    >
+                      <h2 className="sr-only">Display</h2>
+                      <label className="field display-mode">
+                        <span>Display mode</span>
                         <select
-                          aria-label="Target"
-                          value={target}
-                          onChange={(e) => setTarget(e.target.value)}
+                          value={displayMode}
+                          onChange={(event) =>
+                            setDisplayMode(event.target.value)
+                          }
                         >
-                          {state.parameters.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.label}
-                            </option>
-                          ))}
-                          {state.actions.map((action) => (
-                            <option key={action.id} value={action.id}>
-                              {action.label}
-                            </option>
-                          ))}
+                          <option value="orchid">Orchid</option>
+                          <option value="sunlight">Sunlight</option>
+                          <option value="stage">Dark stage</option>
+                          <option value="epaper">E-paper</option>
                         </select>
                       </label>
+
+                      <div className="action-row">
+                        <Button
+                          variant="outline"
+                          disabled={!screen.fullscreenSupported}
+                          onClick={() => void screen.toggleFullscreen()}
+                        >
+                          {screen.fullscreen
+                            ? 'Exit fullscreen'
+                            : 'Enter fullscreen'}
+                        </Button>
+                        <Button
+                          variant={screen.keepAwake ? 'secondary' : 'outline'}
+                          aria-pressed={screen.keepAwake}
+                          disabled={!screen.wakeSupported}
+                          onClick={() => screen.setKeepAwake(!screen.keepAwake)}
+                        >
+                          Keep screen awake
+                        </Button>
+                        {screen.keepAwake &&
+                          screen.wakeSupported &&
+                          ['paused', 'denied'].includes(screen.wakeStatus) && (
+                            <Button
+                              variant="outline"
+                              onClick={screen.retryWake}
+                            >
+                              Retry keep-awake
+                            </Button>
+                          )}
+                      </div>
+                      <p role="status" aria-label="Screen awake status">
+                        {!screen.wakeSupported
+                          ? 'Keep-awake unavailable: use HTTPS and a supported browser.'
+                          : {
+                              off: 'Screen awake: off',
+                              requesting: 'Screen awake: requesting',
+                              active: 'Screen awake: active',
+                              paused: 'Screen awake: paused by browser',
+                              denied:
+                                'Screen awake: not allowed by browser or power settings',
+                            }[screen.wakeStatus]}
+                      </p>
+                      {!screen.fullscreenSupported && (
+                        <p className="caption">
+                          Page fullscreen is unavailable in this browser.
+                        </p>
+                      )}
+                      {screen.fullscreenError && (
+                        <p role="alert">{screen.fullscreenError}</p>
+                      )}
+                      <details className="control-help">
+                        <summary>Display &amp; screen help</summary>
+                        <p>
+                          Preferences are saved on this browser. Keep-awake
+                          works while Oxidal is visible and retries when you
+                          return. Browser power settings can release it;
+                          fullscreen alone does not prevent sleep.
+                        </p>
+                        <p>
+                          Sunlight increases contrast. Dark stage dims surfaces.
+                          E-paper removes colour and motion. Set brightness and
+                          e-paper refresh on your device.
+                        </p>
+                      </details>
+                    </section>
+                  </>
+                )}
+                {settingsSection === 'connections' && (
+                  <>
+                    <NetworkSettings connected={connected} />
+                    <Tone3000Account connected={connected} />
+                  </>
+                )}
+                {settingsSection === 'audio' && (
+                  <AudioSettings connected={connected} />
+                )}
+                {settingsSection === 'device' && (
+                  <DevicePower connected={connected} />
+                )}
+                {settingsSection === 'maintenance' && (
+                  <>
+                    <p className="caption">
+                      Device maintenance · control protocol {state.protocol}.
+                      Audio setup and monitoring remain available from their own
+                      pages.
+                    </p>
+                    <Suspense fallback={<p>Loading terminal…</p>}>
+                      <WebTerminal />
+                    </Suspense>
+                    <DebugConsole />
+                    {developmentSimulator && (
+                      <details className="panel">
+                        <summary>Rig validation inspector</summary>
+                        <label className="field">
+                          Rig JSON
+                          <textarea
+                            aria-label="Rig JSON"
+                            rows={8}
+                            value={draft || JSON.stringify(state.rig, null, 2)}
+                            onChange={(event) => setDraft(event.target.value)}
+                            spellCheck={false}
+                          />
+                        </label>
+                        <Button
+                          variant="outline"
+                          onClick={() => void validateDraft()}
+                          disabled={!connected}
+                        >
+                          Validate rig
+                        </Button>
+                        <p role="status">{validation}</p>
+                      </details>
+                    )}
+                  </>
+                )}
+                {settingsSection === 'midi' && !developmentSimulator && (
+                  <MidiSettings connected={connected} />
+                )}
+                {settingsSection === 'midi' && developmentSimulator && (
+                  <>
+                    <section className="panel">
+                      <h2>MIDI mapping</h2>
+                      <p className="muted">
+                        Current mapping:{' '}
+                        {state.mappings.mappings
+                          .map(
+                            (mapping) => `CC ${mapping.cc} → ${mapping.target}`,
+                          )
+                          .join(', ') || 'none'}
+                        . This form replaces the PoC knob mapping.
+                      </p>
+                      <div className="form-grid">
+                        <label className="field">
+                          Target
+                          <select
+                            aria-label="Target"
+                            value={target}
+                            onChange={(e) => setTarget(e.target.value)}
+                          >
+                            {state.parameters.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.label}
+                              </option>
+                            ))}
+                            {state.actions.map((action) => (
+                              <option key={action.id} value={action.id}>
+                                {action.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          MIDI channel
+                          <input
+                            type="number"
+                            min="1"
+                            max="16"
+                            value={channel}
+                            onChange={(e) => setChannel(Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="field">
+                          CC number
+                          <input
+                            type="number"
+                            min="0"
+                            max="127"
+                            value={cc}
+                            onChange={(e) => setCc(Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="field">
+                          Knob mode
+                          <select
+                            value={mode}
+                            onChange={(e) =>
+                              setMode(e.target.value as typeof mode)
+                            }
+                          >
+                            <option value="absolute">Absolute</option>
+                            <option value="relative_twos_complement">
+                              Relative · two’s complement
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="form-grid">
+                        <label className="field">
+                          Mapped minimum (0–1)
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={minimum}
+                            onChange={(e) => setMinimum(Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="field">
+                          Mapped maximum (0–1)
+                          <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={maximum}
+                            onChange={(e) => setMaximum(Number(e.target.value))}
+                          />
+                        </label>
+                        <label className="field">
+                          Scaling curve
+                          <select
+                            value={curve}
+                            onChange={(e) =>
+                              setCurve(e.target.value as typeof curve)
+                            }
+                          >
+                            <option value="linear">Linear</option>
+                            <option value="logarithmic">
+                              Logarithmic (minimum above zero)
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="performance-actions">
+                        <Button
+                          variant="outline"
+                          disabled={!connected || !simulator}
+                          onClick={() => {
+                            learnArmed.current = !learnArmed.current;
+                            setLearning(learnArmed.current);
+                          }}
+                        >
+                          {learning
+                            ? 'Cancel MIDI learn'
+                            : 'Learn next MIDI message'}
+                        </Button>
+                        <span role="status">
+                          {learning
+                            ? 'Move a knob or send a simulator message…'
+                            : state.last_midi
+                              ? `Last input: CH ${state.last_midi.channel} / CC ${state.last_midi.cc} (${state.midi_mapped ? 'mapped' : 'unmapped'})`
+                              : 'No MIDI input yet'}
+                        </span>
+                      </div>
+                      <p className="caption">
+                        Bypass and preset targets use absolute CC, linear 0–1
+                        range, and no pickup. Values below 64 select off/serial;
+                        64–127 select on/parallel.
+                      </p>
+                      <div className="checkboxes">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={pickup}
+                            onChange={(e) => setPickup(e.target.checked)}
+                          />
+                          Pickup / soft takeover
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={feedback}
+                            onChange={(e) => setFeedback(e.target.checked)}
+                          />
+                          Send controller feedback
+                        </label>
+                      </div>
+                      <Button disabled={!connected} onClick={saveMapping}>
+                        Save mapping
+                      </Button>
+                      <p className="caption">
+                        Feedback updates supported displays, LEDs, or motors.
+                        Ordinary knobs use pickup; they cannot physically follow
+                        web edits.
+                      </p>
+                    </section>
+                    <section className="panel">
+                      <h2>MIDI simulator</h2>
+                      <p>
+                        Inject a CC message through the native control service.
+                        The simulator does not require a connected controller.
+                      </p>
                       <label className="field">
-                        MIDI channel
+                        MIDI value
                         <input
-                          type="number"
-                          min="1"
-                          max="16"
-                          value={channel}
-                          onChange={(e) => setChannel(Number(e.target.value))}
-                        />
-                      </label>
-                      <label className="field">
-                        CC number
-                        <input
+                          aria-label="MIDI value"
                           type="number"
                           min="0"
                           max="127"
-                          value={cc}
-                          onChange={(e) => setCc(Number(e.target.value))}
+                          value={midiValue}
+                          onChange={(e) => setMidiValue(Number(e.target.value))}
                         />
                       </label>
-                      <label className="field">
-                        Knob mode
-                        <select
-                          value={mode}
-                          onChange={(e) =>
-                            setMode(e.target.value as typeof mode)
-                          }
-                        >
-                          <option value="absolute">Absolute</option>
-                          <option value="relative_twos_complement">
-                            Relative · two’s complement
-                          </option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className="form-grid">
-                      <label className="field">
-                        Mapped minimum (0–1)
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={minimum}
-                          onChange={(e) => setMinimum(Number(e.target.value))}
-                        />
-                      </label>
-                      <label className="field">
-                        Mapped maximum (0–1)
-                        <input
-                          type="number"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={maximum}
-                          onChange={(e) => setMaximum(Number(e.target.value))}
-                        />
-                      </label>
-                      <label className="field">
-                        Scaling curve
-                        <select
-                          value={curve}
-                          onChange={(e) =>
-                            setCurve(e.target.value as typeof curve)
-                          }
-                        >
-                          <option value="linear">Linear</option>
-                          <option value="logarithmic">
-                            Logarithmic (minimum above zero)
-                          </option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className="performance-actions">
                       <Button
-                        variant="outline"
                         disabled={!connected || !simulator}
-                        onClick={() => {
-                          learnArmed.current = !learnArmed.current;
-                          setLearning(learnArmed.current);
-                        }}
+                        onClick={() =>
+                          void run({
+                            type: 'midi',
+                            input: {
+                              device: 'simulator',
+                              channel,
+                              cc,
+                              value: midiValue,
+                            },
+                          })
+                        }
                       >
-                        {learning
-                          ? 'Cancel MIDI learn'
-                          : 'Learn next MIDI message'}
+                        Send MIDI CC
                       </Button>
-                      <span role="status">
-                        {learning
-                          ? 'Move a knob or send a simulator message…'
-                          : state.last_midi
-                            ? `Last input: CH ${state.last_midi.channel} / CC ${state.last_midi.cc} (${state.midi_mapped ? 'mapped' : 'unmapped'})`
-                            : 'No MIDI input yet'}
-                      </span>
-                    </div>
-                    <p className="caption">
-                      Bypass and preset targets use absolute CC, linear 0–1
-                      range, and no pickup. Values below 64 select off/serial;
-                      64–127 select on/parallel.
-                    </p>
-                    <div className="checkboxes">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={pickup}
-                          onChange={(e) => setPickup(e.target.checked)}
-                        />
-                        Pickup / soft takeover
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={feedback}
-                          onChange={(e) => setFeedback(e.target.checked)}
-                        />
-                        Send controller feedback
-                      </label>
-                    </div>
-                    <Button disabled={!connected} onClick={saveMapping}>
-                      Save mapping
-                    </Button>
-                    <p className="caption">
-                      Feedback updates supported displays, LEDs, or motors.
-                      Ordinary knobs use pickup; they cannot physically follow
-                      web edits.
-                    </p>
-                  </section>
-                  <section className="panel">
-                    <h2>MIDI simulator</h2>
-                    <p>
-                      Inject a CC message through the native control service.
-                      The simulator does not require a connected controller.
-                    </p>
-                    <label className="field">
-                      MIDI value
-                      <input
-                        aria-label="MIDI value"
-                        type="number"
-                        min="0"
-                        max="127"
-                        value={midiValue}
-                        onChange={(e) => setMidiValue(Number(e.target.value))}
-                      />
-                    </label>
-                    <Button
-                      disabled={!connected || !simulator}
-                      onClick={() =>
-                        void run({
-                          type: 'midi',
-                          input: {
-                            device: 'simulator',
-                            channel,
-                            cc,
-                            value: midiValue,
-                          },
-                        })
-                      }
-                    >
-                      Send MIDI CC
-                    </Button>
-                    <div className="feedback" aria-label="MIDI feedback">
-                      <span className="eyebrow">
-                        Confirmed output / isolated feedback route
-                      </span>
-                      {state.feedback.length ? (
-                        state.feedback.map((item) => (
-                          <code key={item.mapping}>
-                            CH {item.channel} · CC {item.cc} · VALUE{' '}
-                            <span data-testid="feedback-value">
-                              {item.value}
-                            </span>
-                          </code>
-                        ))
-                      ) : (
-                        <span>No feedback yet</span>
-                      )}
-                    </div>
-                  </section>
-                </>
-              )}
-            </>
+                      <div className="feedback" aria-label="MIDI feedback">
+                        <span className="eyebrow">
+                          Confirmed output / isolated feedback route
+                        </span>
+                        {state.feedback.length ? (
+                          state.feedback.map((item) => (
+                            <code key={item.mapping}>
+                              CH {item.channel} · CC {item.cc} · VALUE{' '}
+                              <span data-testid="feedback-value">
+                                {item.value}
+                              </span>
+                            </code>
+                          ))
+                        ) : (
+                          <span>No feedback yet</span>
+                        )}
+                      </div>
+                    </section>
+                  </>
+                )}
+              </div>
+            </div>
           )}
         </main>
       </div>

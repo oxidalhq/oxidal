@@ -13,6 +13,9 @@ async function fits(page: Page) {
     for (const element of document.querySelectorAll<HTMLElement>(
       'button, input, select, textarea, summary, .chain-tile',
     )) {
+      // WebKit can retain native select geometry inside a closed disclosure.
+      // Such controls are neither rendered nor reachable until it opens.
+      if (!element.checkVisibility()) continue;
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
       const name =

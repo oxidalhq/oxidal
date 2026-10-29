@@ -16,6 +16,7 @@ import {
   ArrowClockwise,
   ArrowLeft,
   FloppyDisk,
+  DotsThree,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -108,6 +109,7 @@ export function LiveRig({
     format: 'nam' | 'ir';
   } | null>(null);
   const [performance, setPerformance] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [target, setTarget] = useState('outputLevel');
   const [group, setGroup] = useState<ControlGroup>('tone');
   const [draft, setDraft] = useState<{
@@ -531,7 +533,10 @@ export function LiveRig({
   const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
   if (performance)
     return (
-      <section className="panel live-rig space-y-3" aria-label="Gig view">
+      <section
+        className="instrument-surface live-rig space-y-3"
+        aria-label="Gig view"
+      >
         <div className="chain-heading">
           <h2>Gig view</h2>
           <Button variant="ghost" onClick={() => setPerformance(false)}>
@@ -549,46 +554,81 @@ export function LiveRig({
       </section>
     );
   return (
-    <section className="panel live-rig space-y-3" aria-label="Sounding rig">
+    <section
+      className="instrument-surface live-rig space-y-3"
+      aria-label="Sounding rig"
+    >
       <div className="rig-performance-header">
         <RigPresetSelector
           state={state}
           disabled={disabled || !!draft || !!picker}
           onSelect={(id, owned) => void recall(id, owned)}
         />
-        <div
-          className="flex flex-wrap items-center justify-between gap-2"
-          aria-label="Preset actions"
+        <div className="rig-preset-actions" aria-label="Preset actions">
+          <span
+            role="status"
+            data-testid="live-status"
+            className="text-xs text-muted-foreground"
+            data-edited={state.modified}
+          >
+            {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
+          </span>
+          <Button
+            variant="ghost"
+            aria-label="Rig actions"
+            title="Save a copy or open preset pads"
+            onClick={() => setOptionsOpen(true)}
+          >
+            <DotsThree aria-hidden="true" size={24} />
+          </Button>
+        </div>
+      </div>
+      {optionsOpen && (
+        <AdjustmentDialog
+          title="Rig actions"
+          onCancel={() => setOptionsOpen(false)}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              role="status"
-              data-testid="live-status"
-              className="text-xs text-muted-foreground"
-              data-edited={state.modified}
-            >
-              {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
-            </span>
+          <div className="control-stack">
             <Button
               variant={state.modified ? 'default' : 'outline'}
               disabled={disabled || !!draft || !!picker}
               onClick={() => {
+                setOptionsOpen(false);
                 setCopyName(state.preset_name ?? 'My preset');
                 setSaveOpening(state);
               }}
             >
               <FloppyDisk aria-hidden="true" /> Save copy
             </Button>
+            <Button
+              variant="outline"
+              disabled={disabled || !!draft || !!picker}
+              onClick={() => {
+                setOptionsOpen(false);
+                setPerformance(true);
+              }}
+            >
+              <SquaresFour aria-hidden="true" /> Preset pads
+            </Button>
+            <Button
+              variant="outline"
+              disabled={
+                disabled ||
+                !!draft ||
+                !state.modified ||
+                !state.configured ||
+                state.configured.draft
+              }
+              onClick={() => {
+                setOptionsOpen(false);
+                setRestoreOpening(state);
+              }}
+            >
+              Reload saved
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            disabled={disabled || !!draft || !!picker}
-            onClick={() => setPerformance(true)}
-          >
-            Gig view
-          </Button>
-        </div>
-      </div>
+        </AdjustmentDialog>
+      )}
       <div className="chain-toolbar">
         <h2 className="m-0 text-sm font-semibold">Signal chain</h2>
         <div className="action-row" role="group" aria-label="Chain view">
@@ -637,19 +677,6 @@ export function LiveRig({
             onClick={() => void author({ kind: 'redo' })}
           >
             <ArrowClockwise aria-hidden="true" />
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={
-              disabled ||
-              !!draft ||
-              !state.modified ||
-              !state.configured ||
-              state.configured.draft
-            }
-            onClick={() => setRestoreOpening(state)}
-          >
-            Reload saved
           </Button>
         </div>
       </div>

@@ -176,7 +176,7 @@ export function Library({
     }
   }
   return (
-    <section className="panel" aria-label="Preset library">
+    <section className="instrument-surface" aria-label="Preset library">
       <nav className="settings-nav" aria-label="Library sections">
         <Button
           variant={page === 'browse' ? 'secondary' : 'ghost'}

@@ -195,11 +195,9 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
   const stream = state?.stream;
   return (
     <section
-      className="panel grid gap-4"
+      className="instrument-surface grid gap-4"
       aria-label="Audio and system monitoring"
     >
-      <MonitoringHistory />
-      <ControlAudit />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-sm">
           {frozen
@@ -456,6 +454,8 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           {state.error}
         </p>
       )}
+      <MonitoringHistory />
+      <ControlAudit />
       <details>
         <summary>Measurement details</summary>
         <p className="caption break-words">
