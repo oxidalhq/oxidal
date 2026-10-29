@@ -8,6 +8,30 @@ export function DebugConsole() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [logText, setLogText] = useState('');
+  const [logMessage, setLogMessage] = useState('');
+  const [copying, setCopying] = useState(false);
+  async function copyLogs() {
+    setCopying(true);
+    setLogMessage('');
+    setLogText('');
+    try {
+      const response = await fetch('/api/v1/debug/logs', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Logs are temporarily unavailable.');
+      const text = await response.text();
+      try {
+        await navigator.clipboard.writeText(text);
+        setLogMessage('Logs copied.');
+      } catch {
+        setLogText(text);
+        setLogMessage('Select the text below, or download the logs.');
+      }
+    } catch (cause) {
+      setLogMessage(String(cause));
+    } finally {
+      setCopying(false);
+    }
+  }
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -45,6 +69,34 @@ export function DebugConsole() {
     <section className="panel" aria-label="Debug console">
       <details onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary>Debug console</summary>
+        <div className="action-row my-3">
+          <Button
+            variant="outline"
+            disabled={copying}
+            onClick={() => void copyLogs()}
+          >
+            {copying ? 'Collecting logs…' : 'Copy logs'}
+          </Button>
+          <a
+            className="inline-flex min-h-11 items-center rounded-md border px-3 text-sm"
+            href="/api/v1/debug/logs"
+            download="oxidal-logs.txt"
+          >
+            Download logs
+          </a>
+        </div>
+        {logMessage && <p role="status">{logMessage}</p>}
+        {logText && (
+          <textarea
+            aria-label="Collected native logs"
+            readOnly
+            value={logText}
+            rows={8}
+            className="mt-2 w-full font-mono text-xs"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        )}
+
         <p className="caption mt-3">
           Commands run as a separate unprivileged user, for up to 30 seconds
           with 8 KiB of combined output. This is a command runner, not an

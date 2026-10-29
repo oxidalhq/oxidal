@@ -45,7 +45,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0", "direction":"capture", "sample_rate":48000, "channels":2, "format":"s16", "period_frames":128, "periods":3});
     let mut output = input.clone();
     output["direction"] = json!("playback");
-    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false,"draft":false});
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1],"hear_yourself":true},"preset_id":preset.sha256,"owned":false,"draft":false});
     qualify_large_frames(config.audio_worker.as_ref().unwrap(), &root, &settings).await;
     let mut state = get(&client, &url, "audio").await;
     assert_eq!(state["phase"], "stopped");
@@ -83,6 +83,43 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     state = wait_phase(&client, &url, "running").await;
     assert_eq!(state["device_owned"], true);
     assert!(!state["controls"].as_array().unwrap().is_empty());
+    let before_monitor = state["controls"].clone();
+    let before_modified = state["modified"].clone();
+    for command in [
+        json!({"kind":"hear_yourself","enabled":false}),
+        json!({"kind":"test_tone"}),
+        json!({"kind":"stop_test_tone"}),
+    ] {
+        let response = send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"host_utility","command":command}),
+        )
+        .await;
+        let status = response.status();
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(status, 200, "host utility response: {body}");
+        state = body;
+        assert_eq!(state["phase"], "running");
+        assert_eq!(state["configured"]["stream"]["hear_yourself"], false);
+        assert_eq!(state["controls"], before_monitor);
+        assert_eq!(state["modified"], before_modified);
+    }
+    let response = send(&client, &url, &state, json!({"kind":"restart"})).await;
+    assert_eq!(response.status(), 200);
+    state = wait_phase(&client, &url, "running").await;
+    assert_eq!(state["configured"]["stream"]["hear_yourself"], false);
+    state = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"host_utility","command":{"kind":"hear_yourself","enabled":true}}),
+    )
+    .await
+    .json()
+    .await
+    .unwrap();
     let midi = json!({"input":"hw:Unavailable,0,0","channel":2,"bindings":[],"branch_bindings":[],"parameter_bindings":[{"target":{"kind":"native","node":"native","parameter":"inputLevel"},"controller":21,"mode":"relative_twos_complement"}]});
     let response = send(
         &client,
@@ -1405,7 +1442,7 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
     let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
     let mut output = input.clone();
     output["direction"] = json!("playback");
-    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":imported.sha256,"owned":false,"draft":false});
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1],"hear_yourself":true},"preset_id":imported.sha256,"owned":false,"draft":false});
     let mut state = get(&client, &url, "audio").await;
     let response = send(
         &client,

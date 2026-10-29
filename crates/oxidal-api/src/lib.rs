@@ -257,6 +257,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/monitor", get(monitor::state))
         .route("/monitor/events", get(monitor::events))
         .route("/debug", get(debug::state).post(debug::command))
+        .route("/debug/logs", get(debug::logs))
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))

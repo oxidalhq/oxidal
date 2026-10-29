@@ -1818,6 +1818,10 @@ fn qualify_model_preparation(root: &std::path::Path, preset: &[u8]) -> Result<()
     );
     metadata_owner.command(&mut engine, oxidal_audio::structure::AuthoringAction::Redo)?;
     let before = engine.capture()?;
+    let mut local = fresh.clone();
+    local["local"] = true.into();
+    assert!(engine.refresh_metadata(&target, &local).is_err());
+    assert_eq!(engine.capture()?, before);
     let mut wrong = fresh;
     wrong["id"] = 8.into();
     assert!(engine.refresh_metadata(&target, &wrong).is_err());

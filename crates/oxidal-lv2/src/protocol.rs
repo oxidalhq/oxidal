@@ -140,8 +140,13 @@ impl GraphRecall {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    HostUtility {
+        command: oxidal_audio::tools::HostUtility,
+    },
     Status,
-    Control { command: Box<Command> },
+    Control {
+        command: Box<Command>,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -178,14 +183,29 @@ pub struct GraphAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GraphAudioAction {
-    SetBoot { enabled: bool },
-    Reconfigure { stream: StreamConfig },
-    Configure { stream: StreamConfig },
-    Start { settings: Box<StartGraph> },
+    HostUtility {
+        command: oxidal_audio::tools::HostUtility,
+    },
+    SetBoot {
+        enabled: bool,
+    },
+    Reconfigure {
+        stream: StreamConfig,
+    },
+    Configure {
+        stream: StreamConfig,
+    },
+    Start {
+        settings: Box<StartGraph>,
+    },
     Stop,
     Restart,
-    SaveCopy { name: String },
-    Control { command: Box<Command> },
+    SaveCopy {
+        name: String,
+    },
+    Control {
+        command: Box<Command>,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

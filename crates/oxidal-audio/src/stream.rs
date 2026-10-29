@@ -10,6 +10,7 @@ pub enum Step {
 
 #[derive(Debug)]
 pub struct Duplex {
+    host: crate::tools::HostSignal,
     capture: PCM,
     playback: PCM,
     config: StreamConfig,
@@ -65,6 +66,7 @@ impl Duplex {
         drop(sw);
         let frames = config.input.period_frames as usize;
         Ok(Self {
+            host: crate::tools::HostSignal::new(config.input.sample_rate, config.hear_yourself),
             input: vec![
                 0;
                 frames
@@ -151,7 +153,9 @@ impl Duplex {
         }
         self.meter.input(&self.left, &self.right);
         let started = std::time::Instant::now();
+        self.host.input(&mut self.left, &mut self.right);
         process(&mut self.left, &mut self.right)?;
+        self.host.output(&mut self.left, &mut self.right);
         let process_us = started.elapsed().as_secs_f64() * 1_000_000.0;
         self.meter.output(&self.left, &self.right, process_us);
         self.output.fill(0);
@@ -185,7 +189,15 @@ impl Duplex {
         self.write_pending()
     }
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
-        self.meter.snapshot()
+        let mut snapshot = self.meter.snapshot();
+        snapshot.monitoring = Some(self.host.state());
+        snapshot
+    }
+    pub fn host_utility(&mut self, command: crate::tools::HostUtility) {
+        if let crate::tools::HostUtility::HearYourself { enabled } = command {
+            self.config.hear_yourself = enabled;
+        }
+        self.host.command(command);
     }
     fn write_pending(&mut self) -> Result<Step, String> {
         let stride =
@@ -240,11 +252,39 @@ mod tests {
         let mut output = input.clone();
         output.direction = Direction::Playback;
         StreamConfig {
+            hear_yourself: true,
             input,
             output,
             input_map: [0, 1],
             output_map: [0, 1],
         }
+    }
+    #[test]
+    fn null_transport_measures_host_output_tone_and_retains_input_monitor_state() {
+        let mut stream = Duplex::open_pcm(config(SampleFormat::Float)).unwrap();
+        stream.host_utility(crate::tools::HostUtility::HearYourself { enabled: false });
+        stream.host_utility(crate::tools::HostUtility::TestTone);
+        for _ in 0..20 {
+            stream
+                .step(|l, r| {
+                    assert!(l.iter().chain(r.iter()).all(|v| *v == 0.0));
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let sample = stream.telemetry();
+        assert!(sample.valid());
+        assert!(!sample.monitoring.unwrap().hear_yourself);
+        assert!(sample.monitoring.unwrap().test_tone_active);
+        assert!((-31.0..=-29.0).contains(&sample.output[0].peak_dbfs));
+        assert_eq!(sample.output[0].peak_dbfs, sample.output[1].peak_dbfs);
+        stream.host_utility(crate::tools::HostUtility::StopTestTone);
+        for _ in 0..20 {
+            stream.step(|_, _| Ok(())).unwrap();
+        }
+        let stopped = stream.telemetry();
+        assert!(!stopped.monitoring.unwrap().test_tone_active);
+        assert_eq!(stopped.output[0].peak_dbfs, -120.0);
     }
     #[test]
     fn real_null_duplex_processes_and_reopens_without_retained_handles() {

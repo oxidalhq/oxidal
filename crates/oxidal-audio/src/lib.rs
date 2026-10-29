@@ -82,6 +82,8 @@ impl AudioProbe {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StreamConfig {
+    #[serde(default = "crate::tools::hear_yourself_default")]
+    pub hear_yourself: bool,
     pub input: AudioProbe,
     pub output: AudioProbe,
     /// Zero-based channels; duplicate input indexes copy mono to both processor channels.

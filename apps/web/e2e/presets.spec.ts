@@ -4005,5 +4005,38 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     })),
   );
   expect((await get()).control.eq).toEqual(edited.eq);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  const utilities = page.getByRole('region', {
+    name: 'Audio monitoring and output test',
+    exact: true,
+  });
+  const beforeHost = (await get()).control.controls;
+  await utilities
+    .getByRole('button', { name: 'Monitor input', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).configured.stream.hear_yourself)
+    .toBe(false);
+  await utilities
+    .getByRole('button', { name: 'Output test · quiet', exact: true })
+    .click();
+  expect((await get()).control.controls).toEqual(beforeHost);
+  await command({ kind: 'restart' });
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  await expect(
+    utilities.getByRole('button', {
+      name: 'Input monitoring off',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await utilities
+    .getByRole('button', { name: 'Input monitoring off', exact: true })
+    .click();
+  await expect
+    .poll(async () => (await get()).configured.stream.hear_yourself)
+    .toBe(true);
   await command({ kind: 'stop' });
 });

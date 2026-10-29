@@ -55,6 +55,7 @@ fn stream() -> oxidal_audio::StreamConfig {
     let mut output = input.clone();
     output.direction = oxidal_audio::Direction::Playback;
     oxidal_audio::StreamConfig {
+        hear_yourself: true,
         input,
         output,
         input_map: [0, 1],

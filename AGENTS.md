@@ -150,6 +150,8 @@ embedded variant selection with owned history and cache-free native recall,
 identity-checked catalog metadata refresh, and optional bounded post-EQ spectra.
 The existing local-file/HTTP/native/mixed-browser suites cover these workflows;
 see docs/native-tone3000.md. Native replacement retains its explicit preparation
-boundary and is not gapless scene recall. Standalone host monitoring/test-tone and
-other residual host-equivalent operations require separate dispositions before
-claiming complete TONE3000 application parity.
+boundary and is not gapless scene recall. Standalone host monitoring/test-tone now share the audio transport and retain the
+monitoring preference independently of tone history. Maintenance has fixed native
+log copy/download with exact dependency identity; Linux has no upstream Bluetooth
+pairing dialog. Physical acceptance and the explicitly deferred authoring/routing
+scope remain separate from these software parity qualifications.

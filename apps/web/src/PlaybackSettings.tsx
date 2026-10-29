@@ -1,3 +1,4 @@
+import { HostAudioControls } from './HostAudioControls';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { BootPlayback } from './BootPlayback';
 import { RecoveryNotice } from './RecoveryNotice';
@@ -5,6 +6,7 @@ import { useEffect, useState } from 'react';
 import {
   playbackState,
   rigAudioState,
+  rigAudioCommand,
   type RigAudioState,
   type GraphAudioState,
   graphAudioState,
@@ -150,6 +152,52 @@ export function PlaybackSettings({
   const unavailable = !state || state.phase === 'unavailable';
   const transitioning =
     state?.phase === 'starting' || state?.phase === 'stopping';
+  const playing =
+    state?.phase === 'running'
+      ? { kind: 'native' as const, stream: state.configured?.stream }
+      : mixed?.phase === 'running'
+        ? { kind: 'mixed' as const, stream: mixed.configured?.stream }
+        : effects?.phase === 'running'
+          ? { kind: 'effects' as const, stream: effects.configured?.stream }
+          : null;
+  const hostControls = playing?.stream ? (
+    <HostAudioControls
+      hear={playing.stream.hear_yourself ?? true}
+      disabled={!connected || busy}
+      error={error}
+      send={async (hostCommand) => {
+        setBusy(true);
+        setError('');
+        try {
+          if (playing.kind === 'native' && state)
+            accept(
+              await playbackCommand(state, {
+                kind: 'host_utility',
+                command: hostCommand,
+              }),
+            );
+          else if (playing.kind === 'mixed' && mixed)
+            acceptMixed(
+              await rigAudioCommand(mixed, {
+                kind: 'host_utility',
+                command: hostCommand,
+              }),
+            );
+          else if (playing.kind === 'effects' && effects)
+            acceptEffects(
+              await graphAudioCommand(effects, {
+                kind: 'host_utility',
+                command: hostCommand,
+              }),
+            );
+        } catch (cause) {
+          setError(String(cause));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
+  ) : null;
   const boot = (
     <BootPlayback
       native={state}
@@ -179,14 +227,17 @@ export function PlaybackSettings({
       (!lastOwner && effects.configured.recall && !mixed?.configured))
   )
     return (
-      <EffectsPlaybackSettings
-        state={effects}
-        connected={connected}
-        input={input}
-        output={output}
-        onState={acceptEffects}
-        boot={boot}
-      />
+      <>
+        {hostControls}
+        <EffectsPlaybackSettings
+          state={effects}
+          connected={connected}
+          input={input}
+          output={output}
+          onState={acceptEffects}
+          boot={boot}
+        />
+      </>
     );
   if (
     mixed?.configured &&
@@ -195,17 +246,21 @@ export function PlaybackSettings({
     !effects?.device_owned
   )
     return (
-      <MixedPlaybackSettings
-        state={mixed}
-        connected={connected}
-        input={input}
-        output={output}
-        onState={acceptMixed}
-        boot={boot}
-      />
+      <>
+        {hostControls}
+        <MixedPlaybackSettings
+          state={mixed}
+          connected={connected}
+          input={input}
+          output={output}
+          onState={acceptMixed}
+          boot={boot}
+        />
+      </>
     );
   return (
     <section className="control-stack" aria-label="Playback controls">
+      {hostControls}
       <h3>Audio playback</h3>
       <RecoveryNotice message={mixed?.recovery_error} />
       {input && output && (

@@ -801,6 +801,41 @@ impl Owner {
                     return Err(e);
                 }
             }
+            RigAudioAction::HostUtility { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::HostUtility { command }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let hear = reply
+                    .telemetry
+                    .monitoring
+                    .ok_or("Missing input monitoring readback")?
+                    .hear_yourself;
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
+                }
+                self.state
+                    .configured
+                    .as_mut()
+                    .ok_or("Missing mixed configuration")?
+                    .stream
+                    .hear_yourself = hear;
+                self.confirmed = self.state.configured.clone();
+                if matches!(
+                    command,
+                    oxidal_audio::tools::HostUtility::HearYourself { .. }
+                ) {
+                    self.schedule_recovery();
+                }
+                self.changed();
+            }
             RigAudioAction::Midi { settings } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());
@@ -1213,6 +1248,7 @@ mod tests {
             prepared: Vec::new(),
             revision: "a".repeat(64),
             stream: oxidal_audio::StreamConfig {
+                hear_yourself: true,
                 input: probe,
                 output,
                 input_map: [0, 1],

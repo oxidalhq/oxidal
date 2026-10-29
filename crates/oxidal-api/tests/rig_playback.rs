@@ -50,7 +50,7 @@ fn stream() -> Value {
     let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
     let mut output = input.clone();
     output["direction"] = json!("playback");
-    json!({"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]})
+    json!({"input":input,"output":output,"input_map":[0,1],"output_map":[0,1],"hear_yourself":true})
 }
 fn set(s: &Value, target: Value, value: f64) -> Value {
     json!({"kind":"control","command":{"session":s["control"]["session"],"expected_revision":s["control"]["revision"],"target":target,"value":value}})
@@ -178,6 +178,28 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     assert_eq!(s["device_owned"], false);
     s = apply(&c, &url, json!({"kind":"start","settings":settings})).await;
     assert_eq!(s["device_owned"], true);
+    let host_controls = s["control"]["controls"].clone();
+    let host_modified = s["control"]["modified"].clone();
+    let worker_before = pids(&executable);
+    for command in [
+        json!({"kind":"hear_yourself","enabled":false}),
+        json!({"kind":"test_tone"}),
+        json!({"kind":"stop_test_tone"}),
+    ] {
+        s = apply(&c, &url, json!({"kind":"host_utility","command":command})).await;
+        assert_eq!(s["configured"]["stream"]["hear_yourself"], false);
+        assert_eq!(s["control"]["controls"], host_controls);
+        assert_eq!(s["control"]["modified"], host_modified);
+        assert_eq!(pids(&executable), worker_before);
+    }
+    s = apply(&c, &url, json!({"kind":"restart"})).await;
+    assert_eq!(s["configured"]["stream"]["hear_yourself"], false);
+    s = apply(
+        &c,
+        &url,
+        json!({"kind":"host_utility","command":{"kind":"hear_yourself","enabled":true}}),
+    )
+    .await;
     assert_eq!(
         c.post(format!("{url}/audio/probe"))
             .json(&stream()["input"])

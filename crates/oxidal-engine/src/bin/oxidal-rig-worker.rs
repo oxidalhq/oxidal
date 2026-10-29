@@ -230,6 +230,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             && let Ok(request) = received.try_recv()
         {
             let error = match request {
+                WorkerRequest::HostUtility { command } => {
+                    stream.host_utility(command);
+                    None
+                }
                 WorkerRequest::Status => None,
                 WorkerRequest::Authoring { command } => match model_root.as_deref() {
                     Some(root) => session.active_mut().authoring_command(command, root).err(),

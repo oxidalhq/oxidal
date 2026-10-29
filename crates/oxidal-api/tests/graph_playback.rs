@@ -148,6 +148,29 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
     pending.abort();
     s = wait(&c, &url, "running").await;
     assert_eq!(s["device_owned"], true);
+    let host_controls = s["control"].clone();
+    for command in [
+        json!({"kind":"hear_yourself","enabled":false}),
+        json!({"kind":"test_tone"}),
+        json!({"kind":"stop_test_tone"}),
+    ] {
+        apply(
+            &c,
+            &url,
+            &mut s,
+            json!({"kind":"host_utility","command":command}),
+        )
+        .await;
+        assert_eq!(s["configured"]["stream"]["hear_yourself"], false);
+        assert_eq!(s["control"], host_controls);
+    }
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"host_utility","command":{"kind":"hear_yourself","enabled":true}}),
+    )
+    .await;
     assert!(s["processed_frames"].as_u64().unwrap() > 0);
     assert!(s["telemetry"]["frames"].as_u64().unwrap() > 0);
     assert!(s["telemetry"]["deadline_us"].as_f64().unwrap() > 0.0);

@@ -172,6 +172,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             if let Ok(request) = received.try_recv() {
                 let error = match request {
+                    WorkerRequest::HostUtility { command } => {
+                        stream.host_utility(command);
+                        None
+                    }
                     WorkerRequest::Status => None,
                     WorkerRequest::Control { command } => graph.apply(*command, true).err(),
                 };

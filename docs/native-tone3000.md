@@ -661,3 +661,33 @@ entries, alter native controls or become portable preset data. Known-frequency
 rendered tests check the actual tap, range, missing-target rejection and unchanged
 captured tone state. These diagnostics do not establish Pi timing or thermal
 headroom.
+
+## Standalone host controls and diagnostics
+
+Settings → Audio exposes **Monitor input** and a quiet **Output test** for the
+current native, mixed or installed-effects playback owner. Input monitoring gates
+the hardware input before processing; existing DSP tails continue. Raw input
+meters remain useful when monitoring is off. This device preference survives
+Restart, working recovery and explicit boot-session capture; it never changes a
+tone's controls, dirty flag or Undo history. Older configurations default to
+monitoring enabled. Audio must be running to change these controls.
+
+Output test adds a sample-clocked 440 Hz tone after effects at −30 dBFS for half a
+second with 10 ms ramps. Repeated requests during a test do not reset its phase.
+The tone is temporary and is never saved or restarted automatically. It tests
+the selected output path; it does not measure acoustic loudness or calibrate an
+interface. Maintained transport and actual worker/API/browser tests cover the
+signal, retained preference and unchanged authoring state.
+
+Settings → Maintenance offers **Copy logs** and **Download logs**. The fixed
+native editor/playback/hybrid log tails include the Oxidal package version and
+exact pinned native dependency revision. They exclude provider credential stores
+and do not execute a shell. The export uses at most 64 KiB per log, skips symlinks
+and nonregular files, and does not accept browser-supplied paths. The interactive
+terminal remains available for systemd/device diagnostics. This is the headless
+equivalent of native log copying/file-manager reveal, not a Pi desktop window.
+
+The pinned JUCE implementation explicitly reports Bluetooth MIDI pairing dialogs
+unavailable on Linux. An Apple platform pairing dialog is therefore not required
+for Linux native parity; general Bluetooth administration and physical BLE MIDI
+acceptance remain separate from the existing ALSA input/mapping support.

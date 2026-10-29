@@ -318,6 +318,9 @@ pub fn valid_revision(s: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    HostUtility {
+        command: oxidal_audio::tools::HostUtility,
+    },
     Authoring {
         command: AuthoringCommand,
     },
@@ -410,6 +413,9 @@ pub struct RigAudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RigAudioAction {
+    HostUtility {
+        command: oxidal_audio::tools::HostUtility,
+    },
     Authoring {
         command: AuthoringCommand,
     },

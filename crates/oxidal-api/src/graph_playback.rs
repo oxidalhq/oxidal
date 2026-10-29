@@ -217,6 +217,34 @@ impl Owner {
             return Err("Graph worker unavailable".into());
         }
         match command.action {
+            GraphAudioAction::HostUtility { command } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Effects audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::HostUtility { command }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let hear = reply
+                    .telemetry
+                    .monitoring
+                    .ok_or("Missing input monitoring readback")?
+                    .hear_yourself;
+                let error = reply.error.clone();
+                self.readback(reply);
+                if let Some(error) = error {
+                    return Err(error);
+                }
+                self.state
+                    .configured
+                    .as_mut()
+                    .ok_or("Missing effects configuration")?
+                    .stream
+                    .hear_yourself = hear;
+                self.state.revision += 1;
+                self.publish();
+            }
+
             GraphAudioAction::SetBoot { enabled } => {
                 if enabled {
                     if self.state.phase != AudioPhase::Running {

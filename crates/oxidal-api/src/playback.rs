@@ -303,7 +303,8 @@ impl Owner {
                     PlaybackEvent::Meter { snapshot } if snapshot.valid() => {
                         meters.send_replace(Some((snapshot, std::time::Instant::now())));
                     }
-                    reply @ (PlaybackEvent::Midi { .. }
+                    reply @ (PlaybackEvent::HostUtility { .. }
+                    | PlaybackEvent::Midi { .. }
                     | PlaybackEvent::Control { .. }
                     | PlaybackEvent::Model { .. }
                     | PlaybackEvent::Eq { .. }
@@ -579,6 +580,80 @@ impl Owner {
             self.state.error = Some(error);
             self.updates.send_replace(self.state.clone());
         }
+    }
+    async fn host_utility(
+        &mut self,
+        command: oxidal_audio::tools::HostUtility,
+    ) -> Result<(), String> {
+        if self.state.phase != AudioPhase::Running {
+            return Err("Audio is not running".into());
+        }
+        let serial = self
+            .state
+            .revision
+            .checked_add(1)
+            .ok_or("Audio revision exhausted")?;
+        let worker = self.worker.as_mut().ok_or("Audio is not running")?;
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut bytes = serde_json::to_vec(&oxidal_audio::lifecycle::HostUtilityRequest {
+                serial,
+                host_utility: command,
+            })
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            worker
+                .input
+                .as_mut()
+                .ok_or("Audio input closed")?
+                .write_all(&bytes)
+                .await
+                .map_err(|e| e.to_string())?;
+            let event = worker
+                .control_replies
+                .as_mut()
+                .ok_or("Audio replies closed")?
+                .recv()
+                .await
+                .ok_or("Audio reply lost")?;
+            let PlaybackEvent::HostUtility {
+                serial: actual,
+                telemetry,
+            } = event
+            else {
+                return Err("Unexpected audio utility readback".to_string());
+            };
+            if actual != serial || !telemetry.valid() || telemetry.monitoring.is_none() {
+                return Err("Invalid audio utility readback".into());
+            }
+            Ok::<_, String>(telemetry)
+        })
+        .await
+        .map_err(|_| "Audio utility readback timed out".to_string())
+        .and_then(|r| r);
+        let telemetry = match result {
+            Ok(t) => t,
+            Err(error) => {
+                self.release().await?;
+                return Err(error);
+            }
+        };
+        let hear = telemetry
+            .monitoring
+            .ok_or("Missing input monitor state")?
+            .hear_yourself;
+        if let Some(settings) = &mut self.state.configured {
+            settings.stream.hear_yourself = hear;
+        }
+        self.meters
+            .send_replace(Some((telemetry, std::time::Instant::now())));
+        if matches!(
+            command,
+            oxidal_audio::tools::HostUtility::HearYourself { .. }
+        ) {
+            self.schedule_recovery();
+        }
+        self.publish(AudioPhase::Running, None);
+        Ok(())
     }
     async fn midi(
         &mut self,
@@ -1296,6 +1371,7 @@ impl Owner {
             return Err("Finish the active adjustment before changing sound".into());
         }
         let result = match command.action {
+            AudioAction::HostUtility { command } => self.host_utility(command).await,
             AudioAction::Midi { settings } => {
                 if let Some(settings) = &settings {
                     settings.validate_native(&self.state.controls)?;

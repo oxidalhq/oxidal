@@ -118,6 +118,9 @@ pub struct AudioState {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AudioAction {
+    HostUtility {
+        command: crate::tools::HostUtility,
+    },
     Midi {
         settings: Option<crate::midi::Settings>,
     },
@@ -201,6 +204,10 @@ pub struct LiveRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PlaybackEvent {
+    HostUtility {
+        serial: u64,
+        telemetry: crate::meter::Snapshot,
+    },
     Midi {
         serial: u64,
         status: crate::midi::Status,
@@ -392,6 +399,7 @@ pub struct ModelRequest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WorkerRequest {
+    HostUtility(HostUtilityRequest),
     Midi(MidiRequest),
     Authoring(crate::structure::AuthoringRequest),
     Eq(EqRequest),
@@ -512,4 +520,11 @@ impl crate::midi::Settings {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostUtilityRequest {
+    pub serial: u64,
+    pub host_utility: crate::tools::HostUtility,
 }

@@ -120,6 +120,7 @@ fn portable_lv2_latency_aligns_parallel_paths_bypass_and_offline_recall() {
                     prepared: Vec::new(),
                     revision,
                     stream: oxidal_audio::StreamConfig {
+                        hear_yourself: true,
                         input,
                         output,
                         input_map: [0, 1],
@@ -302,6 +303,7 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
             prepared: Vec::new(),
             revision,
             stream: oxidal_audio::StreamConfig {
+                hear_yourself: true,
                 input,
                 output,
                 input_map: [0, 1],
@@ -380,6 +382,7 @@ fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
             recall: None,
         }],
         stream: oxidal_audio::StreamConfig {
+            hear_yourself: true,
             input,
             output,
             input_map: [0, 1],

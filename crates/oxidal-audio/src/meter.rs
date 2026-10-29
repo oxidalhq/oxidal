@@ -12,6 +12,8 @@ pub struct Channel {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monitoring: Option<crate::tools::HostState>,
     pub frames: u64,
     pub input: [Channel; 2],
     pub output: [Channel; 2],
@@ -124,6 +126,7 @@ impl Meter {
             }
         };
         Snapshot {
+            monitoring: None,
             frames: self.frames,
             input: [self.input[0].snapshot(), self.input[1].snapshot()],
             output: [self.output[0].snapshot(), self.output[1].snapshot()],

@@ -192,6 +192,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
             let event = match request {
+                WorkerRequest::HostUtility(request) => {
+                    stream.host_utility(request.host_utility);
+                    PlaybackEvent::HostUtility {
+                        serial: request.serial,
+                        telemetry: stream.telemetry(),
+                    }
+                }
                 WorkerRequest::Midi(request) => {
                     let configure = matches!(
                         &request.midi,

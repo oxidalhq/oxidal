@@ -577,6 +577,23 @@
         {
           "type": "object",
           "properties": {
+            "command": {
+              "$ref": "#/$defs/HostUtility"
+            },
+            "kind": {
+              "type": "string",
+              "const": "host_utility"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "kind": {
               "type": "string",
               "const": "midi"
@@ -3040,6 +3057,23 @@
         {
           "type": "object",
           "properties": {
+            "command": {
+              "$ref": "#/$defs/HostUtility"
+            },
+            "kind": {
+              "type": "string",
+              "const": "host_utility"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "enabled": {
               "type": "boolean"
             },
@@ -3400,6 +3434,70 @@
         }
       },
       "additionalProperties": false
+    },
+    "HostState": {
+      "type": "object",
+      "properties": {
+        "hear_yourself": {
+          "type": "boolean"
+        },
+        "test_tone_active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "hear_yourself",
+        "test_tone_active"
+      ]
+    },
+    "HostUtility": {
+      "description": "Device/session utilities, deliberately outside native or portable tone state.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "hear_yourself"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "test_tone"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop_test_tone"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        }
+      ]
     },
     "InputMode": {
       "type": "string",
@@ -5804,6 +5902,23 @@
           "type": "object",
           "properties": {
             "command": {
+              "$ref": "#/$defs/HostUtility"
+            },
+            "kind": {
+              "type": "string",
+              "const": "host_utility"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "command": {
               "$ref": "#/$defs/AuthoringCommand"
             },
             "kind": {
@@ -6646,6 +6761,16 @@
           "format": "uint64",
           "minimum": 0
         },
+        "monitoring": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HostState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "output": {
           "type": "array",
           "items": {
@@ -7161,6 +7286,10 @@
     "StreamConfig": {
       "type": "object",
       "properties": {
+        "hear_yourself": {
+          "type": "boolean",
+          "default": true
+        },
         "input": {
           "$ref": "#/$defs/AudioProbe"
         },

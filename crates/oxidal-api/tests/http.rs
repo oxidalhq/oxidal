@@ -1486,3 +1486,72 @@ async fn local_file_upload_needs_no_provider_account_and_does_not_change_audio()
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn native_log_export_is_bounded_read_only_and_does_not_follow_symlinks() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let root = path.with_extension("presets");
+    let empty = client
+        .get(format!("{url}/debug/logs"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(empty.status(), 200);
+    assert!(
+        empty
+            .text()
+            .await
+            .unwrap()
+            .contains("No native engine logs")
+    );
+    for (folder, tail) in [
+        ("native-runtime", "recent editor event"),
+        ("audio-runtime", "recent playback event"),
+    ] {
+        let folder = root.join(folder).join("user/.config/TONE3000");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(
+            folder.join("TONE3000.log"),
+            format!("{}\n{tail}", "x".repeat(150000)),
+        )
+        .unwrap();
+    }
+    #[cfg(unix)]
+    {
+        let folder = root.join("rig-runtime/playback/user/.config/TONE3000");
+        std::fs::create_dir_all(&folder).unwrap();
+        let private = root.join("must-not-export.txt");
+        std::fs::write(&private, "not an allowed native log").unwrap();
+        std::os::unix::fs::symlink(&private, folder.join("TONE3000.log")).unwrap();
+    }
+    let response = client
+        .get(format!("{url}/debug/logs?path=/etc/passwd"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert!(
+        response.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/plain")
+    );
+    let text = response.text().await.unwrap();
+    assert!(text.len() < 200000);
+    assert!(text.contains("TONE3000 source pin:"));
+    assert!(text.contains("recent editor event") && text.contains("recent playback event"));
+    assert!(!text.contains("not an allowed native log"));
+    let audio: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(audio["phase"], "unavailable");
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

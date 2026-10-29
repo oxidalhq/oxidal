@@ -1272,7 +1272,20 @@ impl Engine {
         {
             return Err(NativeError("Invalid tone metadata".into()));
         }
+        if tone["local"].as_bool() == Some(true) {
+            return Err(NativeError(
+                "Catalog details cannot replace a local tone".into(),
+            ));
+        }
         let mut metadata = tone.clone();
+        metadata
+            .as_object_mut()
+            .ok_or_else(|| NativeError("Invalid tone metadata".into()))?
+            .remove("local");
+        metadata
+            .as_object_mut()
+            .ok_or_else(|| NativeError("Invalid tone metadata".into()))?
+            .remove("oxidal_collection");
         metadata
             .as_object_mut()
             .ok_or_else(|| NativeError("Invalid tone metadata".into()))?

@@ -14,6 +14,10 @@ export type AccountAction =
 export type AccountPhase = "disconnected" | "requesting" | "waiting" | "connected" | "reconnecting" | "error";
 export type AudioAction =
   | {
+      command: HostUtility;
+      kind: "host_utility";
+    }
+  | {
       kind: "midi";
       settings?: Settings2 | null;
     }
@@ -68,6 +72,20 @@ export type AudioAction =
   | {
       action: AuthoringAction;
       kind: "authoring";
+    };
+/**
+ * Device/session utilities, deliberately outside native or portable tone state.
+ */
+export type HostUtility =
+  | {
+      enabled: boolean;
+      kind: "hear_yourself";
+    }
+  | {
+      kind: "test_tone";
+    }
+  | {
+      kind: "stop_test_tone";
     };
 export type BranchMode = "toggle" | "gate";
 export type Target =
@@ -354,6 +372,10 @@ export type Command2 =
     };
 export type GraphAudioAction =
   | {
+      command: HostUtility;
+      kind: "host_utility";
+    }
+  | {
       enabled: boolean;
       kind: "set_boot";
     }
@@ -491,6 +513,10 @@ export type Command3 =
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type RigAudioAction =
+  | {
+      command: HostUtility;
+      kind: "host_utility";
+    }
   | {
       command: AuthoringCommand;
       kind: "authoring";
@@ -726,6 +752,7 @@ export interface ParameterBinding {
   target: Target;
 }
 export interface StreamConfig {
+  hear_yourself?: boolean;
   input: AudioProbe;
   /**
    * Zero-based channels; duplicate input indexes copy mono to both processor channels.
@@ -1167,6 +1194,7 @@ export interface Snapshot2 {
    */
   input: [Channel, Channel];
   invalid_samples: number;
+  monitoring?: HostState | null;
   /**
    * @minItems 2
    * @maxItems 2
@@ -1183,6 +1211,10 @@ export interface Channel {
   clips: number;
   peak_dbfs: number;
   rms_dbfs: number;
+}
+export interface HostState {
+  hear_yourself: boolean;
+  test_tone_active: boolean;
 }
 export interface SavedGraph {
   id: string;

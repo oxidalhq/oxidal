@@ -164,6 +164,87 @@ fn respond(result: Result<DebugState, String>) -> Response {
     }
 }
 
+/// Native engine diagnostics only: fixed daemon-owned files, no shell or client paths.
+fn native_logs(root: &std::path::Path) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut output = format!("Oxidal {} native diagnostics\n", env!("CARGO_PKG_VERSION"));
+    let pins: serde_json::Value =
+        serde_json::from_str(include_str!("../../../native/tone3000/sources.json"))
+            .unwrap_or_default();
+    output.push_str(&format!(
+        "TONE3000 source pin: {}\n",
+        pins["tone3000"]["revision"]
+            .as_str()
+            .unwrap_or("unavailable")
+    ));
+    let roots = [
+        ("Editor", "native-runtime"),
+        ("Native playback", "audio-runtime"),
+        ("Hybrid playback", "rig-runtime/playback"),
+    ];
+    let mut found = false;
+    for (label, relative) in roots {
+        let mut path = root.to_owned();
+        let mut safe = true;
+        let relative = format!("{relative}/user/.config/TONE3000/TONE3000.log");
+        for component in std::path::Path::new(&relative).components() {
+            path.push(component);
+            match std::fs::symlink_metadata(&path) {
+                Ok(meta) if !meta.file_type().is_symlink() => (),
+                _ => {
+                    safe = false;
+                    break;
+                }
+            }
+        }
+        if !safe || !std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.file_type().is_file()) {
+            continue;
+        }
+        let result = (|| -> std::io::Result<Vec<u8>> {
+            let mut file = std::fs::File::open(&path)?;
+            let meta = file.metadata()?;
+            if !meta.file_type().is_file() {
+                return Err(std::io::ErrorKind::InvalidInput.into());
+            }
+            file.seek(SeekFrom::Start(meta.len().saturating_sub(64 * 1024)))?;
+            let mut bytes = Vec::new();
+            file.take(64 * 1024).read_to_end(&mut bytes)?;
+            Ok(bytes)
+        })();
+        if let Ok(bytes) = result {
+            found = true;
+            output.push_str(&format!("\n--- {label}: recent log ---\n"));
+            output.push_str(&String::from_utf8_lossy(&bytes));
+            output.push('\n');
+        }
+    }
+    if !found {
+        output.push_str("\nNo native engine logs have been created on this device.\n");
+    }
+    output
+}
+pub(super) async fn logs(State(shared): State<Arc<Shared>>) -> Response {
+    let root = shared.config.preset_dir.clone();
+    match tokio::task::spawn_blocking(move || native_logs(&root)).await {
+        Ok(text) => (
+            [
+                (header::CACHE_CONTROL, "no-store"),
+                (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+                (
+                    header::CONTENT_DISPOSITION,
+                    "attachment; filename=oxidal-logs.txt",
+                ),
+            ],
+            text,
+        )
+            .into_response(),
+        Err(_) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Native logs are temporarily unavailable",
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
