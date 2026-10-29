@@ -1,6 +1,6 @@
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
-import { Power } from '@phosphor-icons/react';
+import { Power, ArrowRight, Stack } from '@phosphor-icons/react';
 import { LiveEq } from './LiveEq';
 import { ArtworkDeck } from './AssetArtwork';
 import { ModelPicker } from './ModelPicker';
@@ -343,9 +343,8 @@ export function LiveRig({
         </h2>
         {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
         <p>
-          Open a preset in the library to author it, or use Audio setup to play
-          a saved preset. Live controls appear here when its audio session is
-          running.
+          Choose a rig from Library to play. Audio setup is only needed when
+          configuring your interface.
         </p>
         <div className="action-row">
           <Button onClick={onLibrary}>Browse presets</Button>
@@ -384,7 +383,10 @@ export function LiveRig({
   return (
     <section className="panel live-rig space-y-3" aria-label="Sounding rig">
       <div className="section-heading">
-        <h2>Chain</h2>
+        <h2>Signal chain</h2>
+        <Button variant="outline" onClick={onLibrary}>
+          <Stack aria-hidden="true" /> Switch rig
+        </Button>
         <span role="status" data-testid="live-status">
           {busy
             ? 'Applying…'
@@ -393,112 +395,117 @@ export function LiveRig({
               : 'Saved preset playing'}
         </span>
       </div>
-      <div
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-        aria-label="Sounding tone blocks"
-      >
-        {groups.map((c) => (
-          <div
-            key={c.target}
-            className="live-effect min-w-0 rounded-md border border-border p-2"
-          >
-            <Button
-              variant="ghost"
-              className="h-11 w-full justify-start px-1 text-left whitespace-normal"
-              onClick={() => {
-                const prefix = c.target.slice(0, -7);
-                setTarget(
-                  state.controls.find(
-                    (item) => item.target.startsWith(prefix) && !item.toggle,
-                  )?.target ?? c.target,
-                );
-                setDraft(null);
-              }}
+      <div className="signal-rack" aria-label="Sounding tone blocks">
+        {(['left', 'right'] as const).map((lane) => {
+          const layout = state.authoring?.layout;
+          const laneGroups = layout
+            ? layout[lane].flatMap((b) =>
+                groups.filter((c) => c.target === `block:${b.id}:enabled`),
+              )
+            : lane === 'left'
+              ? groups
+              : [];
+          if (lane === 'right' && !laneGroups.length && !layout?.stereo)
+            return null;
+          return (
+            <div
+              className="signal-lane"
+              key={lane}
+              aria-label={`${lane} signal chain`}
             >
-              <span className="line-clamp-2">
-                {c.label.replace(/ · enabled$/, '')}
+              <span className="signal-port">
+                {layout?.stereo ? (lane === 'left' ? 'IN L' : 'IN R') : 'IN'}
               </span>
-            </Button>
-            {state.configured &&
-              !state.configured.draft &&
-              !state.models?.some(
-                (m) => m.target === c.target.slice(6, -8),
-              ) && (
-                <ArtworkDeck
-                  compact
-                  key={state.configured.preset_id}
-                  id={state.configured.preset_id}
-                  owned={state.configured.owned}
-                  blockId={c.target.slice(6, -8)}
-                />
-              )}
-            <div className="live-effect-actions">
-              <Button
-                variant="outline"
-                aria-label="Change model"
-                className="min-w-0 flex-1"
-                disabled={disabled || !!draft}
-                onClick={() =>
-                  setPicker({
-                    target: c.target.slice(6, -8),
-                    name: c.label.replace(/ · enabled$/, ''),
-                    opening: state,
-                  })
-                }
-              >
-                Model
-              </Button>
-              <Button
-                className="effect-power h-11 w-11 shrink-0 p-0"
-                aria-label={`Enable ${c.label.replace(/ · enabled$/, '')}`}
-                title={
-                  c.value === 1
-                    ? 'On — tap to bypass'
-                    : 'Bypassed — tap to enable'
-                }
-                variant={c.value === 1 ? 'secondary' : 'ghost'}
-                aria-pressed={c.value === 1}
-                disabled={disabled}
-                onClick={() => void apply(c.target, c.value === 1 ? 0 : 1)}
-              >
-                <Power className="size-5" aria-hidden="true" />
-              </Button>
+              <div className="signal-blocks">
+                {laneGroups.map((c, index) => (
+                  <div
+                    key={c.target}
+                    className="live-effect signal-block"
+                    data-selected={selectedBlock === c.target.split(':')[1]}
+                    data-bypassed={c.value !== 1}
+                  >
+                    <span className="signal-block-index">
+                      {String(index + 1).padStart(2, '0')}{' '}
+                      <ArrowRight aria-hidden="true" />
+                    </span>
+                    <Button
+                      variant="ghost"
+                      className="h-11 w-full justify-start px-1 text-left whitespace-normal"
+                      onClick={() => {
+                        const prefix = c.target.slice(0, -7);
+                        setTarget(
+                          state.controls.find(
+                            (item) =>
+                              item.target.startsWith(prefix) && !item.toggle,
+                          )?.target ?? c.target,
+                        );
+                        setDraft(null);
+                      }}
+                    >
+                      <span className="line-clamp-2">
+                        {c.label.replace(/ · (left|right) · enabled$/, '')}
+                      </span>
+                    </Button>
+                    {state.configured &&
+                      !state.configured.draft &&
+                      !state.models?.some(
+                        (m) => m.target === c.target.slice(6, -8),
+                      ) && (
+                        <ArtworkDeck
+                          compact
+                          key={state.configured.preset_id}
+                          id={state.configured.preset_id}
+                          owned={state.configured.owned}
+                          blockId={c.target.slice(6, -8)}
+                        />
+                      )}
+                    <div className="live-effect-actions">
+                      <Button
+                        variant="outline"
+                        aria-label="Change model"
+                        className="min-w-0 flex-1"
+                        disabled={disabled || !!draft}
+                        onClick={() =>
+                          setPicker({
+                            target: c.target.slice(6, -8),
+                            name: c.label.replace(/ · enabled$/, ''),
+                            opening: state,
+                          })
+                        }
+                      >
+                        Model
+                      </Button>
+                      <Button
+                        className="effect-power h-11 w-11 shrink-0 p-0"
+                        aria-label={`Enable ${c.label.replace(/ · (left|right) · enabled$/, '')}`}
+                        title={
+                          c.value === 1
+                            ? 'On — tap to bypass'
+                            : 'Bypassed — tap to enable'
+                        }
+                        variant={c.value === 1 ? 'secondary' : 'ghost'}
+                        aria-pressed={c.value === 1}
+                        disabled={disabled}
+                        onClick={() =>
+                          void apply(c.target, c.value === 1 ? 0 : 1)
+                        }
+                      >
+                        <Power className="size-5" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {!laneGroups.length && (
+                  <span className="signal-empty">Direct signal</span>
+                )}
+              </div>
+              <span className="signal-port">
+                OUT <ArrowRight aria-hidden="true" />
+              </span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <MidiControls
-        configured={state.configured?.midi ?? null}
-        disabled={disabled}
-        onApply={configureMidi}
-        control={{
-          midi: state.midi,
-          scenes: null,
-          branches: [],
-          controls: state.controls.map((c) => ({
-            target: { kind: 'native', node: 'native', parameter: c.target },
-            label: c.label,
-            value: c.value,
-            minimum: 0,
-            maximum: 1,
-            integer: c.toggle,
-            toggle: c.toggle,
-            logarithmic: false,
-            display: c.display,
-          })),
-        }}
-      />
-      {state.authoring && (
-        <NativeAuthoring
-          status={state.authoring}
-          selectedBlock={selectedBlock}
-          disabled={unavailable || !!draft}
-          busy={busy}
-          session={state.session}
-          revision={state.revision}
-          author={author}
-        />
-      )}
       {state.slots?.some((s) => s.position.lane === 0) && (
         <div className="action-row">
           {(['nam', 'ir'] as const).map((format) => (
@@ -763,6 +770,38 @@ export function LiveRig({
             </p>
           )}
         </AdjustmentDialog>
+      )}
+      <MidiControls
+        configured={state.configured?.midi ?? null}
+        disabled={disabled}
+        onApply={configureMidi}
+        control={{
+          midi: state.midi,
+          scenes: null,
+          branches: [],
+          controls: state.controls.map((c) => ({
+            target: { kind: 'native', node: 'native', parameter: c.target },
+            label: c.label,
+            value: c.value,
+            minimum: 0,
+            maximum: 1,
+            integer: c.toggle,
+            toggle: c.toggle,
+            logarithmic: false,
+            display: c.display,
+          })),
+        }}
+      />
+      {state.authoring && (
+        <NativeAuthoring
+          status={state.authoring}
+          selectedBlock={selectedBlock}
+          disabled={unavailable || !!draft}
+          busy={busy}
+          session={state.session}
+          revision={state.revision}
+          author={author}
+        />
       )}
       <details className="save-copy">
         <summary>Save copy</summary>

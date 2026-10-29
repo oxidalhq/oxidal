@@ -1251,6 +1251,102 @@ impl Owner {
         self.publish(self.state.phase, self.state.error.clone());
         Ok(self.state.clone())
     }
+    async fn load_preset(&mut self, preset_id: String, owned: bool) -> Reply {
+        if self.model_pending() {
+            return Err("Finish model audition before loading another rig".into());
+        }
+        let previous = self
+            .state
+            .configured
+            .clone()
+            .ok_or("Choose an audio interface in Settings first")?;
+        let mut proposed = previous.clone();
+        proposed.preset_id = preset_id;
+        proposed.owned = owned;
+        proposed.draft = false;
+        proposed.working = None;
+        proposed.validate()?;
+        if self.state.phase == AudioPhase::Running
+            && previous.preset_id == proposed.preset_id
+            && previous.owned == owned
+            && !previous.draft
+        {
+            return Ok(self.state.clone());
+        }
+        // Reject missing/corrupt library files before stopping the sounding rig.
+        if owned {
+            oxidal_presets::OwnedStore::new(self.preset_dir.join("owned"))
+                .read(&proposed.preset_id)
+                .map_err(|e| e.to_string())?;
+        } else {
+            oxidal_presets::Store::new(self.preset_dir.clone())
+                .original(&proposed.preset_id)
+                .map_err(|e| e.to_string())?;
+        }
+        let path = |s: &StartAudio| {
+            self.preset_dir
+                .join("rig-sessions")
+                .join(format!("{}-{}-{}.json", s.owned, s.draft, s.preset_id))
+        };
+        let previous_controls = self.resume_controls.clone();
+        let previous_models = self.state.models.clone();
+        let previous_eq = self.resume_eq.clone();
+        let candidate = Recovery::read(&path(&proposed))?;
+        if let Some(saved) = &candidate {
+            if saved.settings.preset_id != proposed.preset_id
+                || saved.settings.owned != owned
+                || saved.settings.draft
+            {
+                return Err("Saved rig session identity differs".into());
+            }
+            proposed.working = saved.settings.working.clone();
+        }
+        // Retain edits without a save/discard dialog or overwriting the original preset.
+        Recovery::new(
+            previous.clone(),
+            previous_controls.clone(),
+            previous_models.clone(),
+            previous_eq.clone(),
+        )
+        .write(&path(&previous))?;
+        let was_running = self.state.phase == AudioPhase::Running;
+        self.publish(AudioPhase::Stopping, None);
+        if let Err(error) = self.release().await {
+            self.publish(AudioPhase::Failed, Some(error.clone()));
+            return Err(error);
+        }
+        let (controls, models, eq) =
+            candidate
+                .map(|c| (c.controls, c.models, c.eq))
+                .unwrap_or((None, vec![], None));
+        match self.start(proposed, controls, models, eq).await {
+            Ok(()) => Ok(self.state.clone()),
+            Err(error) => {
+                if was_running {
+                    match self
+                        .start(previous, previous_controls, previous_models, previous_eq)
+                        .await
+                    {
+                        Ok(()) => {
+                            let message =
+                                format!("Could not load rig: {error}. Previous rig restored.");
+                            self.publish(AudioPhase::Running, Some(message.clone()));
+                            return Err(message);
+                        }
+                        Err(restore) => {
+                            let message = format!(
+                                "Could not load rig: {error}. Previous rig could not resume: {restore}"
+                            );
+                            self.publish(AudioPhase::Failed, Some(message.clone()));
+                            return Err(message);
+                        }
+                    }
+                }
+                self.publish(AudioPhase::Failed, Some(error.clone()));
+                Err(error)
+            }
+        }
+    }
     async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Reply {
         // Validate before releasing audio. Device support is established by worker readiness.
         stream.validate()?;
@@ -1332,6 +1428,7 @@ impl Owner {
                     | AudioAction::Stop
                     | AudioAction::Restart
                     | AudioAction::Reconfigure { .. }
+                    | AudioAction::LoadPreset { .. }
                     | AudioAction::SetBoot { enabled: true }
             )
         {
@@ -1388,6 +1485,9 @@ impl Owner {
                 self.schedule_recovery();
                 self.publish(AudioPhase::Running, None);
                 return Ok(self.state.clone());
+            }
+            AudioAction::LoadPreset { preset_id, owned } => {
+                return self.load_preset(preset_id, owned).await;
             }
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
             AudioAction::Authoring {

@@ -31,6 +31,11 @@ export type AudioAction =
       settings: StartAudio;
     }
   | {
+      kind: "load_preset";
+      owned: boolean;
+      preset_id: string;
+    }
+  | {
       kind: "stop";
     }
   | {
@@ -1203,6 +1208,10 @@ export interface Snapshot2 {
   process_us_max: number;
   process_us_p50: number;
   process_us_p95: number;
+  /**
+   * Recovered transport overruns/underruns in this worker lifetime.
+   */
+  xruns?: number | null;
 }
 export interface Channel {
   /**
@@ -1341,7 +1350,7 @@ export interface Monitoring {
   source?: string | null;
   stream?: StreamConfig | null;
   /**
-   * Transport currently fails closed on xruns; a cumulative recovery counter is not available.
+   * Recovered overruns/underruns for the current worker; unavailable with older workers.
    */
   xruns?: number | null;
 }

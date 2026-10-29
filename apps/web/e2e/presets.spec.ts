@@ -976,6 +976,49 @@ test('playback lifecycle keeps native authoring available after stop and restart
   });
   expect(started.ok(), await started.text()).toBe(true);
   try {
+    // One tap in Library replaces the sounding preset without audio setup.
+    let running = await (await request.get('/api/v1/audio')).json();
+    const recallCopy = await request.post('/api/v1/audio', {
+      data: {
+        session: running.session,
+        expected_revision: running.revision,
+        action: { kind: 'save_copy', name: 'Live recall test' },
+      },
+    });
+    expect(recallCopy.ok()).toBe(true);
+    running = await recallCopy.json();
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Instrument navigation' })
+      .getByRole('button', { name: 'Library', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Load Live recall test', exact: true })
+      .click();
+    await expect(
+      page.getByRole('region', { name: 'Sounding rig' }),
+    ).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).configured
+            .preset_id,
+      )
+      .toBe(running.saved_copy);
+    await page.getByRole('button', { name: 'Switch rig', exact: true }).click();
+    await page
+      .getByRole('button', { name: `Load ${preset.name}`, exact: true })
+      .click();
+    await expect(
+      page.getByRole('region', { name: 'Sounding rig' }),
+    ).toBeVisible();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/api/v1/audio')).json()).configured
+            .preset_id,
+      )
+      .toBe(preset.sha256);
     const nativeBefore = await (await request.get('/api/v1/native')).json();
     await page.goto('/');
     if (test.info().project.name === 'boox-air3c')
@@ -3731,11 +3774,9 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       name: 'Oversampling',
       exact: true,
     });
+    await expect(dialog.getByRole('slider')).toHaveCount(0);
     await dialog
-      .getByRole('button', {
-        name: `${before === 0 ? 'Increase' : 'Decrease'} Prepared setting value`,
-        exact: true,
-      })
+      .getByRole('switch', { name: 'Oversampling', exact: true })
       .click();
     await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(dialog).toHaveCount(0);

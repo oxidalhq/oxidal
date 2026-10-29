@@ -653,6 +653,28 @@
           ]
         },
         {
+          "description": "Load a saved native rig using the current device setup, retaining per-rig edits.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "load_preset"
+            },
+            "owned": {
+              "type": "boolean"
+            },
+            "preset_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "preset_id",
+            "owned"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "kind": {
@@ -4555,7 +4577,7 @@
           ]
         },
         "xruns": {
-          "description": "Transport currently fails closed on xruns; a cumulative recovery counter is not available.",
+          "description": "Recovered overruns/underruns for the current worker; unavailable with older workers.",
           "type": [
             "integer",
             "null"
@@ -6790,6 +6812,15 @@
         "process_us_p95": {
           "type": "number",
           "format": "double"
+        },
+        "xruns": {
+          "description": "Recovered transport overruns/underruns in this worker lifetime.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
         }
       },
       "additionalProperties": false,

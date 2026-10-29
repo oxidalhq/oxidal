@@ -182,9 +182,12 @@ export function ResourceStrip({
           <dt>RAM</dt>
           <dd>{memory}</dd>
         </div>
-        <div title="Cumulative xruns; unavailable until the audio transport reports them">
+        <div
+          data-warning={fresh && (state?.xruns ?? 0) > 0}
+          title="Recovered audio overruns/underruns since this worker started"
+        >
           <dt>Xruns</dt>
-          <dd>{fresh && state?.xruns != null ? state.xruns : 'N/A'}</dd>
+          <dd>{fresh && state?.xruns != null ? state.xruns : '—'}</dd>
         </div>
         <div
           data-warning={clips != null && clips > 0}

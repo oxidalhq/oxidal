@@ -14,6 +14,9 @@ pub struct Channel {
 pub struct Snapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monitoring: Option<crate::tools::HostState>,
+    /// Recovered transport overruns/underruns in this worker lifetime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xruns: Option<u64>,
     pub frames: u64,
     pub input: [Channel; 2],
     pub output: [Channel; 2],
@@ -127,6 +130,7 @@ impl Meter {
         };
         Snapshot {
             monitoring: None,
+            xruns: None,
             frames: self.frames,
             input: [self.input[0].snapshot(), self.input[1].snapshot()],
             output: [self.output[0].snapshot(), self.output[1].snapshot()],

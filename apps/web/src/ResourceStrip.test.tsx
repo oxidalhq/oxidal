@@ -98,3 +98,28 @@ it('refreshes BOOX on confirmed lifecycle changes without accepting an older in-
   });
   expect(monitoring).toHaveBeenCalledTimes(5);
 });
+
+it('shows a measured zero and recovered xruns instead of treating zero as unavailable', async () => {
+  const reading = {
+    ...snapshot(1, 'running'),
+    xruns: 0,
+    audio_age_ms: 0,
+    audio: {
+      frames: 128,
+      input: [],
+      output: [],
+      process_us_p95: 10,
+      deadline_us: 1000,
+    },
+  } as unknown as Monitoring;
+  vi.mocked(monitoring)
+    .mockResolvedValueOnce(reading)
+    .mockResolvedValueOnce({ ...reading, sequence: 2, xruns: 6 });
+  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  await act(async () => {});
+  expect(screen.getByText('Xruns').parentElement).toHaveTextContent('0');
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(screen.getByText('Xruns').parentElement).toHaveTextContent('6');
+});

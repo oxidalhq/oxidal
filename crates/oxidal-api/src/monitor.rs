@@ -41,7 +41,7 @@ pub struct Monitoring {
     pub stream: Option<StreamConfig>,
     pub audio: Option<Snapshot>,
     pub audio_age_ms: Option<u64>,
-    /// Transport currently fails closed on xruns; a cumulative recovery counter is not available.
+    /// Recovered overruns/underruns for the current worker; unavailable with older workers.
     pub xruns: Option<u64>,
     pub error: Option<String>,
 }
@@ -223,7 +223,7 @@ pub(super) fn start(shared: Weak<Shared>, updates: watch::Sender<Monitoring>) {
                 stream,
                 audio,
                 audio_age_ms: age,
-                xruns: None,
+                xruns: audio.and_then(|s| s.xruns),
                 error: if native.phase == AudioPhase::Running {
                     native.error
                 } else if graph.phase == AudioPhase::Running {

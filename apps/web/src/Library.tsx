@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { importPreset, presetLibrary, type Preset } from './api';
+import {
+  importPreset,
+  presetLibrary,
+  playbackState,
+  playbackCommand,
+  nativeState,
+  type AudioState,
+  type Preset,
+} from './api';
+import {
+  Play,
+  SpeakerHigh,
+  CircleNotch,
+  DownloadSimple,
+} from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
@@ -26,6 +40,79 @@ export function Library({
   const [message, setMessage] = useState('Loading library…');
   const [error, setError] = useState('');
   const generation = useRef(0);
+  const loading = useRef(false);
+  const [playing, setPlaying] = useState<AudioState | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [owned, setOwned] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let active = true;
+    void playbackState()
+      .then((s) => {
+        if (active) setPlaying(s);
+      })
+      .catch(() => {});
+    void nativeState()
+      .then((s) => {
+        if (active)
+          setOwned(s.owned.map((p) => ({ id: p.id, name: p.preset.name })));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [refresh]);
+  async function play(id: string, isOwned = false) {
+    if (loading.current) return;
+    loading.current = true;
+    setLoadingId(id);
+    setError('');
+    try {
+      const current = await playbackState();
+      const next = await playbackCommand(current, {
+        kind: 'load_preset',
+        preset_id: id,
+        owned: isOwned,
+      });
+      setPlaying(next);
+      onOpenRig();
+    } catch (cause) {
+      setError(String(cause));
+      void playbackState()
+        .then(setPlaying)
+        .catch(() => {});
+    } finally {
+      loading.current = false;
+      setLoadingId(null);
+    }
+  }
+  function loadButton(id: string, name: string, isOwned = false) {
+    const active =
+      playing?.phase === 'running' &&
+      playing.configured?.preset_id === id &&
+      playing.configured.owned === isOwned;
+    return (
+      <Button
+        className="preset-load"
+        variant={active ? 'secondary' : 'outline'}
+        disabled={!connected || loadingId !== null}
+        onClick={() => void play(id, isOwned)}
+        aria-label={`Load ${name}`}
+        aria-pressed={active}
+      >
+        {loadingId === id ? (
+          <CircleNotch aria-hidden="true" />
+        ) : active ? (
+          <SpeakerHigh weight="fill" aria-hidden="true" />
+        ) : (
+          <Play weight="fill" aria-hidden="true" />
+        )}
+        <span>{name}</span>
+        <small>
+          {loadingId === id ? 'Loading…' : active ? 'Playing' : 'Load rig'}
+        </small>
+      </Button>
+    );
+  }
   useEffect(() => {
     const lifecycle = generation;
     const request = ++lifecycle.current;
@@ -117,31 +204,34 @@ export function Library({
             refresh={refresh}
           />
           <h2 className="sr-only">Native preset library</h2>
-          <p>
-            Keep your TONE3000 originals here. Importing does not change the
-            current rig. Originals are kept unchanged.
-          </p>
-          <div className="form-grid">
-            <label className="field">
-              TONE3000 preset file
-              <input
-                type="file"
-                accept=".t3kpreset"
-                disabled={busy || !connected}
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-            <Button
-              disabled={!file || busy || !connected}
-              onClick={() => void upload()}
-            >
-              Import original
-            </Button>
-          </div>
-          <p className="caption">
-            Up to 32 MiB per file. Original bytes are preserved; importing the
-            same file twice keeps one copy.
-          </p>
+          <details className="library-import">
+            <summary>Import preset</summary>
+            <p>
+              Keep your TONE3000 originals here. Importing does not change the
+              current rig. Originals are kept unchanged.
+            </p>
+            <div className="form-grid">
+              <label className="field">
+                TONE3000 preset file
+                <input
+                  type="file"
+                  accept=".t3kpreset"
+                  disabled={busy || !connected}
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <Button
+                disabled={!file || busy || !connected}
+                onClick={() => void upload()}
+              >
+                Import original
+              </Button>
+            </div>
+            <p className="caption">
+              Up to 32 MiB per file. Original bytes are preserved; importing the
+              same file twice keeps one copy.
+            </p>
+          </details>
           {error && (
             <p role="alert" className="error">
               {error}
@@ -149,10 +239,20 @@ export function Library({
           )}
           <p role="status">{message}</p>
           {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
+          <p className="caption">
+            Tap a rig to play. Your current audio setup is reused; edits are
+            kept when you return.
+          </p>
           <ul className="preset-library">
+            {owned.map((p) => (
+              <li key={`owned-${p.id}`}>
+                {loadButton(p.id, p.name, true)}
+                <ArtworkDeck id={p.id} owned />
+              </li>
+            ))}
             {presets.map((preset) => (
               <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
-                <h3>{preset.name}</h3>
+                {loadButton(preset.sha256, preset.name)}
                 <ArtworkDeck id={preset.sha256} />
                 <details>
                   <summary>File details</summary>
@@ -169,7 +269,7 @@ export function Library({
                   download
                   aria-label={`Download original ${preset.name}`}
                 >
-                  Download original
+                  <DownloadSimple aria-hidden="true" /> Download original
                 </a>
               </li>
             ))}

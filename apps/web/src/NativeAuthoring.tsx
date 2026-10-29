@@ -419,34 +419,51 @@ export function NativeAuthoring({
             if (!busy) setSettingDraft(null);
           }}
         >
-          <TouchAdjust
-            label="Prepared setting value"
-            value={settingDraft.value}
-            baseline={settingDraft.control.value}
-            min={0}
-            max={1}
-            step={
-              status?.setting_steps?.[settingDraft.control.target] ??
-              (settingDraft.control.toggle ? 1 : 0.01)
-            }
-            disabled={busy}
-            onChange={(value) =>
-              setSettingDraft((old) => (old ? { ...old, value } : old))
-            }
-            format={(value) =>
-              settingDraft.control.target.endsWith(':slimSize') &&
-              (value === 0 || value === 1)
-                ? value === 0
-                  ? 'Lite'
-                  : 'Full'
-                : settingDraft.control.toggle
-                  ? value === 1
-                    ? 'On'
-                    : 'Off'
-                  : `${(value * 100).toFixed(1)}%`
-            }
-            commitHint="Audio restarts when applied."
-          />
+          {settingDraft.control.toggle ? (
+            <Button
+              role="switch"
+              aria-checked={settingDraft.value === 1}
+              aria-label={settingDraft.control.label}
+              variant={settingDraft.value === 1 ? 'default' : 'outline'}
+              disabled={busy}
+              onClick={() =>
+                setSettingDraft((old) =>
+                  old ? { ...old, value: old.value === 1 ? 0 : 1 } : old,
+                )
+              }
+            >
+              {settingDraft.value === 1 ? 'On' : 'Off'}
+            </Button>
+          ) : (
+            <TouchAdjust
+              label="Prepared setting value"
+              value={settingDraft.value}
+              baseline={settingDraft.control.value}
+              min={0}
+              max={1}
+              step={
+                status?.setting_steps?.[settingDraft.control.target] ??
+                (settingDraft.control.toggle ? 1 : 0.01)
+              }
+              disabled={busy}
+              onChange={(value) =>
+                setSettingDraft((old) => (old ? { ...old, value } : old))
+              }
+              format={(value) =>
+                settingDraft.control.target.endsWith(':slimSize') &&
+                (value === 0 || value === 1)
+                  ? value === 0
+                    ? 'Lite'
+                    : 'Full'
+                  : settingDraft.control.toggle
+                    ? value === 1
+                      ? 'On'
+                      : 'Off'
+                    : `${(value * 100).toFixed(1)}%`
+              }
+              commitHint="Audio restarts when applied."
+            />
+          )}
           <div className="action-row">
             <Button
               disabled={

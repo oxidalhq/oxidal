@@ -131,6 +131,11 @@ pub enum AudioAction {
     Start {
         settings: StartAudio,
     },
+    /// Load a saved native rig using the current device setup, retaining per-rig edits.
+    LoadPreset {
+        preset_id: String,
+        owned: bool,
+    },
     Stop,
     Restart,
     Resume,

@@ -234,6 +234,7 @@ impl Duplex {
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
         let mut snapshot = self.meter.snapshot();
         snapshot.monitoring = Some(self.host.state());
+        snapshot.xruns = Some(self.recovered_xruns);
         snapshot
     }
     pub fn host_utility(&mut self, command: crate::tools::HostUtility) {
@@ -416,6 +417,7 @@ mod tests {
         }
         assert_eq!(processed, 8);
         assert_eq!(stream.recovered_xruns, 4);
+        assert_eq!(stream.telemetry().xruns, Some(4));
         // Missing devices / invalid handles are not recoverable buffer xruns.
         for errno in [19, 77, 5] {
             assert!(
@@ -428,6 +430,7 @@ mod tests {
             );
         }
         assert_eq!(stream.recovered_xruns, 4);
+        assert_eq!(stream.telemetry().xruns, Some(4));
     }
     #[test]
     fn processor_failure_does_not_submit_output() {

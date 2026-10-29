@@ -363,6 +363,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
             assert_eq!(m["source"], "Saved preset");
             assert!(m["audio"]["process_us_max"].as_f64().unwrap().is_finite());
             assert!(m["audio_age_ms"].as_u64().unwrap() < 3000);
+            assert_eq!(m["xruns"], 0);
             measured = true;
             break;
         }
@@ -406,6 +407,62 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     assert_eq!(state["controls"], controls_before_save);
     assert_eq!(state["eq"], eq_before_save);
     let saved_id = state["saved_copy"].as_str().unwrap().to_owned();
+    // One command reuses the interface, retains per-rig edits and restores failed loads.
+    let original_configuration = state["configured"].clone();
+    let original_controls = state["controls"].clone();
+    for (id, owned) in [(&saved_id, true), (&preset.sha256, false)] {
+        let response = send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"load_preset","preset_id":id,"owned":owned}),
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        state = response.json().await.unwrap();
+        assert_eq!(state["phase"], "running");
+        assert_eq!(
+            state["configured"]["stream"],
+            original_configuration["stream"]
+        );
+    }
+    assert_eq!(state["controls"], original_controls);
+    assert_eq!(state["configured"], original_configuration);
+    let missing = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"load_preset","preset_id":"0".repeat(64),"owned":false}),
+    )
+    .await;
+    assert_eq!(missing.status(), 409);
+    assert_eq!(get(&client, &url, "audio").await, state);
+    let recovery = root
+        .join("presets/rig-sessions")
+        .join(format!("true-false-{saved_id}.json"));
+    let original_recovery = std::fs::read(&recovery).unwrap();
+    let mut broken: Value = serde_json::from_slice(&original_recovery).unwrap();
+    broken["settings"]["working"] = json!("0".repeat(64));
+    std::fs::write(&recovery, serde_json::to_vec(&broken).unwrap()).unwrap();
+    let failed = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"load_preset","preset_id":saved_id,"owned":true}),
+    )
+    .await;
+    assert_eq!(failed.status(), 409);
+    state = get(&client, &url, "audio").await;
+    assert_eq!(state["phase"], "running");
+    assert_eq!(state["configured"], original_configuration);
+    assert_eq!(state["controls"], original_controls);
+    assert!(
+        state["error"]
+            .as_str()
+            .unwrap()
+            .contains("Previous rig restored")
+    );
+    std::fs::write(&recovery, original_recovery).unwrap();
     let saved_info = oxidal_presets::OwnedStore::new(root.join("presets/owned"))
         .read(&saved_id)
         .unwrap()
