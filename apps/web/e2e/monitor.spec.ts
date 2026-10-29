@@ -250,3 +250,65 @@ test('monitor shows device history after browser reload and exports retained sam
       .toBe(true);
   }
 });
+
+test('monitor shows redacted control audit with filters and reload persistence', async ({
+  page,
+  request,
+}, info) => {
+  await request.post('/api/v1/device/network?password=PRIVATE_QUERY', {
+    data: { password: 'PRIVATE_BODY' },
+  });
+  await expect
+    .poll(async () => {
+      const history = await (await request.get('/api/v1/audit')).json();
+      return history.records.some(
+        (r: { operation: string }) => r.operation === 'network',
+      );
+    })
+    .toBe(true);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Monitor', exact: true }).click();
+  await page.getByText('Control audit', { exact: true }).click();
+  const panel = page.getByRole('region', { name: 'Control request history' });
+  await expect(panel.getByText(/Accepted means/)).toBeVisible();
+  await panel.getByLabel('Operation', { exact: true }).selectOption('network');
+  await panel.getByLabel('Outcome', { exact: true }).selectOption('rejected');
+  await expect(
+    panel.getByRole('list', { name: 'Audit entries' }),
+  ).toContainText('Wi-Fi / device');
+  await panel.getByLabel('From', { exact: true }).fill('2099-01-01T00:00');
+  await expect(panel.getByText('No matching requests.')).toBeVisible();
+  await panel.getByLabel('From', { exact: true }).fill('');
+  await panel.getByLabel('Outcome', { exact: true }).selectOption('accepted');
+  await expect(panel.getByText('No matching requests.')).toBeVisible();
+  await panel.getByLabel('Outcome', { exact: true }).selectOption('all');
+  const download = await request.get('/api/v1/audit/export');
+  expect(download.headers()['content-disposition']).toContain(
+    'control-audit.json',
+  );
+  expect(await download.text()).not.toContain('PRIVATE');
+  const portrait = page.viewportSize()!;
+  for (const size of [
+    portrait,
+    { width: portrait.height, height: portrait.width },
+  ]) {
+    await page.setViewportSize(size);
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBe(true);
+  }
+  await page.setViewportSize(portrait);
+  await panel.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: info.outputPath('control-audit.png'),
+    fullPage: true,
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Monitor', exact: true }).click();
+  await page.getByText('Control audit', { exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(
+    'Wi-Fi / device',
+  );
+});

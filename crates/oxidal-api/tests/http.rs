@@ -1660,3 +1660,80 @@ async fn monitoring_history_records_without_a_browser_and_exports_validated_samp
     drop(client);
     let _ = std::fs::remove_dir_all(path.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn control_audit_records_outcomes_without_request_secrets() {
+    let (url, task, path) = start(true).await;
+    let client = reqwest::Client::new();
+    let state: Value = client
+        .get(format!("{url}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let action = json!({"protocol":1,"request_id":"audit","session":state["session"],"expected_revision":0,"action":{"type":"midi","input":{"device":"simulator","channel":1,"cc":21,"value":127}}});
+    assert!(
+        client
+            .post(format!("{url}/commands"))
+            .json(&action)
+            .send()
+            .await
+            .unwrap()
+            .status()
+            .is_success()
+    );
+    client
+        .post(format!("{url}/device/network?password=PRIVATE_QUERY"))
+        .json(&json!({"password":"PRIVATE_BODY","ssid":"PRIVATE_NETWORK"}))
+        .send()
+        .await
+        .unwrap();
+    client
+        .post(format!("{url}/audio"))
+        .header("Origin", "https://untrusted.invalid")
+        .body("PRIVATE_ORIGIN")
+        .send()
+        .await
+        .unwrap();
+    let mut history = json!(null);
+    for _ in 0..100 {
+        history = client
+            .get(format!("{url}/audit"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        if history["records"].as_array().unwrap().len() == 3 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    let records = history["records"].as_array().unwrap();
+    assert_eq!(records.len(), 3, "{history}");
+    assert_eq!(records[0]["outcome"], "rejected");
+    assert_eq!(records[0]["http_status"], 403);
+    assert_eq!(records[1]["operation"], "network");
+    assert_eq!(records[2]["outcome"], "accepted");
+    let response = client
+        .get(format!("{url}/audit/export"))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        response.headers()["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains("control-audit.json")
+    );
+    let exported = response.text().await.unwrap();
+    assert!(!exported.contains("PRIVATE"));
+    assert!(!exported.contains("password"));
+    assert!(!exported.contains("request_id"));
+    assert_eq!(serde_json::from_str::<Value>(&exported).unwrap(), history);
+    task.abort();
+    let _ = std::fs::remove_dir_all(path.with_extension("presets"));
+}

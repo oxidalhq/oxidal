@@ -357,6 +357,22 @@ export type Edit =
       phase: "cancel";
       token: string;
     };
+export type Operation =
+  | "native_audio"
+  | "mixed_audio"
+  | "effects_audio"
+  | "network"
+  | "account"
+  | "native_editor"
+  | "native_defaults"
+  | "preset_import"
+  | "preset_library"
+  | "rig_save"
+  | "model_import"
+  | "model_collection"
+  | "model_download"
+  | "controls";
+export type Outcome = "accepted" | "rejected" | "failed";
 export type Command2 =
   | {
       type: "status";
@@ -653,6 +669,7 @@ export interface Contract {
   audio_state: AudioState;
   capabilities: Capabilities;
   command: Command;
+  control_audit: AuditHistory;
   debug_command: Command2;
   debug_state: State;
   error: ApiError;
@@ -1064,6 +1081,21 @@ export interface MidiInput {
   channel: number;
   device: string;
   value: number;
+}
+export interface AuditHistory {
+  dropped_records: number;
+  records: AuditRecord[];
+  skipped_records: number;
+  storage_error: boolean;
+  storage_limit_bytes: number;
+}
+export interface AuditRecord {
+  completed_at_ms: number;
+  http_status: number;
+  operation: Operation;
+  outcome: Outcome;
+  requested_at_ms: number;
+  schema: number;
 }
 export interface State {
   available: boolean;

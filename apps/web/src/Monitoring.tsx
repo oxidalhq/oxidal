@@ -1,3 +1,4 @@
+import { ControlAudit } from './ControlAudit';
 import { MonitoringHistory } from './MonitoringHistory';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -198,6 +199,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       aria-label="Audio and system monitoring"
     >
       <MonitoringHistory />
+      <ControlAudit />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-sm">
           {frozen

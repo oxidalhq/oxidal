@@ -11,6 +11,7 @@ const ajv = new Ajv2020({
   formats: {
     uint: true,
     uint8: true,
+    uint16: true,
     uint32: true,
     uint64: true,
     int32: true,
@@ -735,5 +736,18 @@ export async function monitoringHistory(
   const body = await presetResponse(response);
   if (!historyValidator(body))
     throw new Error('Incompatible monitoring history');
+  return body;
+}
+
+export type ControlAudit = Contract['control_audit'];
+const auditValidator = ajv.compile<ControlAudit>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/AuditHistory',
+});
+export async function controlAudit(
+  signal?: AbortSignal,
+): Promise<ControlAudit> {
+  const body = await presetResponse(await fetch('/api/v1/audit', { signal }));
+  if (!auditValidator(body)) throw new Error('Incompatible control audit');
   return body;
 }

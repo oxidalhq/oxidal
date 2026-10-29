@@ -1,6 +1,7 @@
 mod artwork;
 mod audio;
 mod audio_boot;
+mod audit;
 mod debug;
 mod device;
 mod graph_playback;
@@ -88,6 +89,7 @@ pub struct Contract {
     pub debug_command: oxidal_debug::Command,
     pub monitoring: monitor::Monitoring,
     pub monitoring_history: monitor_history::History,
+    pub control_audit: audit::AuditHistory,
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
@@ -136,6 +138,7 @@ struct Shared {
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
     history: Arc<monitor_history::Journal>,
+    audit: audit::Audit,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
     rig_playback: rig_playback::RigPlayback,
@@ -211,6 +214,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         history: Arc::new(monitor_history::Journal::new(
             config.preset_dir.join("monitor-history"),
         )),
+        audit: audit::Audit::new(config.preset_dir.join("control-audit")),
         monitor,
         playback: playback::Playback::new(&config, boot.clone())?,
         graph_playback: graph_playback::GraphPlayback::new(&config, boot.clone())?,
@@ -262,6 +266,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))
         .route("/tone3000/models", get(provider::catalog::models))
         .route("/monitor", get(monitor::state))
+        .route("/audit", get(audit::history))
+        .route("/audit/export", get(audit::export))
         .route("/monitor/history", get(monitor_history::state))
         .route("/monitor/history/export", get(monitor_history::export))
         .route("/monitor/events", get(monitor::events))
@@ -331,6 +337,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             .fallback_service(ui)
             .layer(DefaultBodyLimit::max(65536))
             .layer(middleware::from_fn(local_origin))
+            .layer(middleware::from_fn_with_state(
+                shared.clone(),
+                audit::capture,
+            ))
             .with_state(shared),
         stopped,
     ))

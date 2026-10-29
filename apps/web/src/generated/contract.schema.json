@@ -37,6 +37,9 @@
     "command": {
       "$ref": "#/$defs/Command"
     },
+    "control_audit": {
+      "$ref": "#/$defs/AuditHistory"
+    },
     "debug_command": {
       "$ref": "#/$defs/Command2"
     },
@@ -191,6 +194,7 @@
     "debug_command",
     "monitoring",
     "monitoring_history",
+    "control_audit",
     "network_state",
     "network_command",
     "audio_state",
@@ -1154,6 +1158,84 @@
         "start_on_boot",
         "controls",
         "modified"
+      ]
+    },
+    "AuditHistory": {
+      "type": "object",
+      "properties": {
+        "dropped_records": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AuditRecord"
+          }
+        },
+        "skipped_records": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "storage_error": {
+          "type": "boolean"
+        },
+        "storage_limit_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "records",
+        "dropped_records",
+        "skipped_records",
+        "storage_error",
+        "storage_limit_bytes"
+      ]
+    },
+    "AuditRecord": {
+      "type": "object",
+      "properties": {
+        "completed_at_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "http_status": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "operation": {
+          "$ref": "#/$defs/Operation"
+        },
+        "outcome": {
+          "$ref": "#/$defs/Outcome"
+        },
+        "requested_at_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "schema": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "requested_at_ms",
+        "completed_at_ms",
+        "operation",
+        "outcome",
+        "http_status"
       ]
     },
     "AuthoringAction": {
@@ -4930,6 +5012,33 @@
       "required": [
         "node",
         "receipt"
+      ]
+    },
+    "Operation": {
+      "type": "string",
+      "enum": [
+        "native_audio",
+        "mixed_audio",
+        "effects_audio",
+        "network",
+        "account",
+        "native_editor",
+        "native_defaults",
+        "preset_import",
+        "preset_library",
+        "rig_save",
+        "model_import",
+        "model_collection",
+        "model_download",
+        "controls"
+      ]
+    },
+    "Outcome": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "rejected",
+        "failed"
       ]
     },
     "OwnedPreset": {

@@ -35,3 +35,28 @@ Exports retain timestamps and elapsed time so clock corrections can be identifie
 
 This is sampled telemetry, not an operation audit trail. Persistent action/outcome
 auditing and historical time/category filtering remain separate work.
+
+## Control request audit
+
+Monitor → **Control audit** provides operation, outcome and local time-range
+filters, on-demand refresh, and a JSON export of all retained records. It does
+not poll while playing. Rows are newest first and rendered in pages of 50.
+`GET /api/v1/audit` and `/api/v1/audit/export` return the same validated records.
+
+The audit records completion of allowlisted POST requests for native/mixed/effects
+audio, device/network, provider account, draft/defaults, preset/library, model
+import/download and shared controls. **Accepted** means an HTTP success response,
+not confirmed audio application; **Rejected** covers non-server unsuccessful
+responses and **Failed** covers server errors. Records include request/completion
+time, a fixed operation category and HTTP status. No body, query string, path,
+header, terminal command, error text, credentials or audio is persisted. Unknown
+routes, polling, terminal and diagnostic commands are excluded. Proxy-level
+authentication rejection never reaches this journal.
+
+Two rotating 1 MiB JSONL files under `presets/control-audit/` bound retention.
+A nonblocking 64-entry queue delegates writes to the blocking pool. Dropped writes
+and unreadable records are exposed; this is best-effort troubleshooting history,
+not a guaranteed security log. Interrupted appends are isolated and skipped.
+Sudden power loss may lose the latest writes. Worker-confirmed application events,
+unfinished requests and gesture coalescing are still pending; repeated knob
+adjustments currently produce separate request records.
