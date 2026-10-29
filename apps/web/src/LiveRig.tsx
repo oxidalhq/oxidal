@@ -15,7 +15,6 @@ import {
   ArrowClockwise,
   ArrowLeft,
   FloppyDisk,
-  DotsThree,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -582,7 +581,7 @@ export function LiveRig({
             title="Save a copy or open preset pads"
             onClick={() => setOptionsOpen(true)}
           >
-            <DotsThree aria-hidden="true" size={24} />
+            <span className="text-xs">More</span>
           </Button>
         </div>
       </div>
@@ -751,6 +750,10 @@ export function LiveRig({
                     <Button
                       variant="ghost"
                       className="signal-block-select h-11 w-full justify-start px-1 text-left whitespace-normal"
+                      aria-label={c.label.replace(
+                        /(?: · (?:left|right))? · enabled$/,
+                        '',
+                      )}
                       title={c.label.replace(
                         /(?: · (?:left|right))? · enabled$/,
                         '',
@@ -768,24 +771,55 @@ export function LiveRig({
                         setDraft(null);
                       }}
                     >
-                      <GearIcon
-                        className="signal-model-icon"
-                        gear={
-                          state.models?.some(
-                            (model) => model.target === c.target.slice(6, -8),
-                          )
-                            ? ''
-                            : ((artwork &&
-                              artwork.id === artworkId &&
-                              artwork.owned === artworkOwned
-                                ? artwork.items
-                                : []
-                              ).find(
-                                (item) =>
-                                  item.block_id === c.target.slice(6, -8),
-                              )?.gear ?? '')
-                        }
-                      />
+                      {chainView === 'compact' ||
+                      !state.configured ||
+                      state.configured.draft ? (
+                        <GearIcon
+                          className="signal-model-icon"
+                          gear={
+                            state.models?.some(
+                              (model) => model.target === c.target.slice(6, -8),
+                            )
+                              ? ''
+                              : ((artwork &&
+                                artwork.id === artworkId &&
+                                artwork.owned === artworkOwned
+                                  ? artwork.items
+                                  : []
+                                ).find(
+                                  (item) =>
+                                    item.block_id === c.target.slice(6, -8),
+                                )?.gear ?? '')
+                          }
+                        />
+                      ) : null}
+                      {chainView === 'artwork' &&
+                        state.models?.find(
+                          (m) => m.target === c.target.slice(6, -8),
+                        ) && (
+                          <ArtworkDeck
+                            tile
+                            model
+                            id={
+                              state.models.find(
+                                (m) => m.target === c.target.slice(6, -8),
+                              )!.asset
+                            }
+                          />
+                        )}
+                      {chainView === 'artwork' &&
+                        state.configured &&
+                        !state.configured.draft &&
+                        !state.models?.some(
+                          (m) => m.target === c.target.slice(6, -8),
+                        ) && (
+                          <ArtworkDeck
+                            tile
+                            id={state.configured.preset_id}
+                            owned={state.configured.owned}
+                            blockId={c.target.slice(6, -8)}
+                          />
+                        )}
                       <span className="line-clamp-2">
                         {c.label.replace(
                           /(?: · (?:left|right))? · enabled$/,
@@ -793,37 +827,7 @@ export function LiveRig({
                         )}
                       </span>
                     </Button>
-                    {chainView === 'artwork' &&
-                      state.models?.find(
-                        (m) => m.target === c.target.slice(6, -8),
-                      ) && (
-                        <ArtworkDeck
-                          compact
-                          model
-                          id={
-                            state.models.find(
-                              (m) => m.target === c.target.slice(6, -8),
-                            )!.asset
-                          }
-                        />
-                      )}
-                    {chainView === 'artwork' &&
-                      state.configured &&
-                      !state.configured.draft &&
-                      !state.models?.some(
-                        (m) => m.target === c.target.slice(6, -8),
-                      ) && (
-                        <ArtworkDeck
-                          compact
-                          id={state.configured.preset_id}
-                          owned={state.configured.owned}
-                          blockId={c.target.slice(6, -8)}
-                        />
-                      )}
                     <div className="live-effect-actions">
-                      <span className="signal-block-state">
-                        {c.value === 1 ? 'On' : 'Bypassed'}
-                      </span>
                       <Button
                         className="effect-power h-11 w-11 shrink-0 p-0"
                         aria-label={`Enable ${c.label.replace(/(?: · (?:left|right))? · enabled$/, '')}`}

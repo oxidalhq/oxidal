@@ -74,3 +74,25 @@ it('saves replacement artwork through its own asset identity and keeps failed im
   ).toBeInTheDocument();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });
+
+it('renders only the selected block image in a tile and falls back without downloading', async () => {
+  vi.mocked(presetArtwork).mockResolvedValue([
+    item,
+    { ...item, block_id: 'other', title: 'Other model' },
+  ]);
+  const view = render(<ArtworkDeck id="original" blockId="block" tile />);
+  await waitFor(() =>
+    expect(view.container.querySelector('img')).toHaveAttribute(
+      'src',
+      '/api/v1/presets/original/artwork/image',
+    ),
+  );
+  expect(view.container.querySelectorAll('img')).toHaveLength(1);
+  expect(view.container.querySelector('figcaption')).toBeNull();
+  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  fireEvent.error(view.container.querySelector('img')!);
+  expect(
+    view.container.querySelector('.artwork-placeholder'),
+  ).toBeInTheDocument();
+  expect(saveArtwork).not.toHaveBeenCalled();
+});

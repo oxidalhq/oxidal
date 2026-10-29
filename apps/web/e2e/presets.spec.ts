@@ -263,6 +263,17 @@ test('rig controls follow the actual session without example effects', async ({
     'data-chain-view',
     'artwork',
   );
+  await expect(rig.locator('.signal-block-state')).toHaveCount(0);
+  await expect(rig.locator('.signal-block .effect-power')).toHaveCount(1);
+  await page
+    .getByRole('dialog', { name: 'Rig actions' })
+    .getByRole('button', { name: 'Close dialog' })
+    .click();
+  await page.screenshot({
+    path: info.outputPath('rig-artwork-mobile.png'),
+    fullPage: true,
+  });
+  await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
   await appearance.selectOption('compact');
   await expect(rig.locator('.signal-rack')).toHaveAttribute(
     'data-chain-view',

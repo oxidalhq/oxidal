@@ -15,6 +15,7 @@ type ArtworkProps = {
   model?: boolean;
   blockId?: string;
   compact?: boolean;
+  tile?: boolean;
 };
 export function ArtworkDeck(props: ArtworkProps) {
   // Changing the source must immediately discard old metadata, errors and pending UI.
@@ -31,6 +32,7 @@ function ArtworkContent({
   model = false,
   blockId,
   compact = false,
+  tile = false,
 }: ArtworkProps) {
   const [items, setItems] = useState<AssetArtwork[]>([]);
   const [busy, setBusy] = useState(false);
@@ -76,6 +78,23 @@ function ArtworkContent({
     }
   }
   const shown = items.filter((item) => !blockId || item.block_id === blockId);
+  if (tile) {
+    const item = shown.find((entry) => entry.key && entry.cached) ?? shown[0];
+    return (
+      <span className="signal-artwork" aria-hidden="true">
+        <ArtworkImage
+          key={`${item?.block_id}-${item?.key}-${item?.cached}`}
+          src={
+            item?.cached && item.key
+              ? artworkPath(id, owned, item.key, model)
+              : undefined
+          }
+          title={item?.title ?? 'Model'}
+          gear={item?.gear ?? ''}
+        />
+      </span>
+    );
+  }
   if (!shown.length) return null;
   const pending = shown.some((item) => item.key && !item.cached);
   const pictured = shown.filter((item) => item.key);
@@ -166,7 +185,7 @@ function ArtworkImage({
       onError={() => setFailed(true)}
     />
   ) : (
-    <div
+    <span
       className="artwork-placeholder"
       aria-label={`${title}: image unavailable`}
     >
@@ -174,6 +193,6 @@ function ArtworkImage({
       <span>
         <GearLabel gear={gear} />
       </span>
-    </div>
+    </span>
   );
 }
