@@ -255,6 +255,20 @@ test('rig controls follow the actual session without example effects', async ({
     0,
   );
   await rig.getByRole('button', { name: 'Rig actions', exact: true }).click();
+  const appearance = page
+    .getByRole('dialog', { name: 'Rig actions' })
+    .getByLabel('Chain appearance');
+  await appearance.selectOption('artwork');
+  await expect(rig.locator('.signal-rack')).toHaveAttribute(
+    'data-chain-view',
+    'artwork',
+  );
+  await appearance.selectOption('compact');
+  await expect(rig.locator('.signal-rack')).toHaveAttribute(
+    'data-chain-view',
+    'compact',
+  );
+
   await page
     .getByRole('dialog', { name: 'Rig actions' })
     .getByRole('button', { name: 'Save copy', exact: true })

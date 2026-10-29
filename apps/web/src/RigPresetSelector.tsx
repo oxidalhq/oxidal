@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  CaretLeft,
-  CaretRight,
-  ArrowsClockwise,
-  Stack,
-} from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, ArrowsClockwise } from '@phosphor-icons/react';
 import { nativeState, presetLibrary, type AudioState } from './api';
 import { Button } from './components/ui/button';
 
@@ -176,9 +171,6 @@ export function RigPresetSelector({
         <CaretLeft aria-hidden="true" />
       </Button>
       <label className="rig-preset-field">
-        <span>
-          <Stack aria-hidden="true" /> Preset
-        </span>
         <select
           aria-label="Playing preset"
           value={index < 0 ? '' : selected}

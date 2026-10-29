@@ -10,7 +10,6 @@ import {
   ArrowsSplit,
   Plus,
   Swap,
-  ImageSquare,
   SquaresFour,
   ArrowCounterClockwise,
   ArrowClockwise,
@@ -568,7 +567,11 @@ export function LiveRig({
           <span
             role="status"
             data-testid="live-status"
-            className="text-xs text-muted-foreground"
+            className={
+              busy || state.modified
+                ? 'text-xs text-muted-foreground'
+                : 'sr-only'
+            }
             data-edited={state.modified}
           >
             {busy ? 'Applying…' : state.modified ? 'Unsaved edits' : 'Saved'}
@@ -589,6 +592,25 @@ export function LiveRig({
           onCancel={() => setOptionsOpen(false)}
         >
           <div className="control-stack">
+            <label className="field">
+              Chain appearance
+              <select
+                value={chainView}
+                onChange={(event) => {
+                  const view =
+                    event.target.value === 'artwork' ? 'artwork' : 'compact';
+                  setChainView(view);
+                  try {
+                    localStorage.setItem('oxidal-chain-view', view);
+                  } catch {
+                    /* Optional preference. */
+                  }
+                }}
+              >
+                <option value="compact">Connected icons</option>
+                <option value="artwork">Model artwork</option>
+              </select>
+            </label>
             <Button
               variant={state.modified ? 'default' : 'outline'}
               disabled={disabled || !!draft || !!picker}
@@ -631,34 +653,6 @@ export function LiveRig({
       )}
       <div className="chain-toolbar">
         <h2 className="m-0 text-sm font-semibold">Signal chain</h2>
-        <div className="action-row" role="group" aria-label="Chain view">
-          {(['compact', 'artwork'] as const).map((view) => (
-            <Button
-              key={view}
-              variant={chainView === view ? 'secondary' : 'ghost'}
-              aria-pressed={chainView === view}
-              aria-label={view === 'compact' ? 'Compact' : 'Artwork'}
-              title={view === 'compact' ? 'Connected icons' : 'Artwork view'}
-              onClick={() => {
-                setChainView(view);
-                try {
-                  localStorage.setItem('oxidal-chain-view', view);
-                } catch {
-                  /* Optional preference. */
-                }
-              }}
-            >
-              {view === 'compact' ? (
-                <SquaresFour aria-hidden="true" />
-              ) : (
-                <ImageSquare aria-hidden="true" />
-              )}
-              <span className="chain-view-label">
-                {view === 'compact' ? 'Compact' : 'Artwork'}
-              </span>
-            </Button>
-          ))}
-        </div>
         <div className="action-row" role="group" aria-label="Tone history">
           <Button
             variant="ghost"

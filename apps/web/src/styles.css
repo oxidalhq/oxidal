@@ -2233,17 +2233,6 @@ textarea {
   display: grid;
   gap: 0.25rem;
 }
-.rig-preset-field > span {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.7rem;
-  color: var(--muted-foreground);
-}
-.rig-preset-field svg {
-  width: 14px;
-  height: 14px;
-}
 .rig-preset-field select {
   width: 100%;
   min-width: 0;
@@ -2626,13 +2615,7 @@ textarea {
   min-width: 44px;
   min-height: 44px;
 }
-.chain-toolbar [aria-label='Chain view'] {
-  gap: 0.25rem;
-}
 @media (max-width: 600px) {
-  .chain-view-label {
-    display: none;
-  }
   .live-rig {
     padding: 0;
   }
