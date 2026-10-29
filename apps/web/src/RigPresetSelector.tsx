@@ -33,25 +33,34 @@ export function RigPresetSelector({
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
-    void Promise.all([presetLibrary(), nativeState()])
+    void Promise.allSettled([presetLibrary(), nativeState()])
       .then(([originals, native]) => {
         if (!active) return;
         setItems([
-          ...native.owned.map((p) => ({
-            id: p.id,
-            name: p.preset.name,
-            owned: true,
-          })),
-          ...originals.map((p) => ({
-            id: p.sha256,
-            name: p.name,
-            owned: false,
-          })),
+          ...(native.status === 'fulfilled' ? native.value.owned : []).map(
+            (p) => ({
+              id: p.id,
+              name: p.preset.name,
+              owned: true,
+            }),
+          ),
+          ...(originals.status === 'fulfilled' ? originals.value : []).map(
+            (p) => ({
+              id: p.sha256,
+              name: p.name,
+              owned: false,
+            }),
+          ),
         ]);
-        setError('');
-      })
-      .catch(() => {
-        if (active) setError('Preset list unavailable');
+        setError(
+          originals.status === 'rejected' && native.status === 'rejected'
+            ? 'Preset list unavailable'
+            : originals.status === 'rejected'
+              ? 'Original presets unavailable'
+              : native.status === 'rejected'
+                ? 'Saved copies unavailable'
+                : '',
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -94,9 +103,7 @@ export function RigPresetSelector({
                 key={key(item)}
                 variant={key(item) === selected ? 'secondary' : 'outline'}
                 aria-pressed={key(item) === selected}
-                disabled={
-                  disabled || loading || !!error || key(item) === selected
-                }
+                disabled={disabled || loading || key(item) === selected}
                 onClick={() => choose(item)}
               >
                 <span className="preset-pad-number">
@@ -175,7 +182,7 @@ export function RigPresetSelector({
         <select
           aria-label="Playing preset"
           value={index < 0 ? '' : selected}
-          disabled={disabled || loading || !!error}
+          disabled={disabled || loading || !items.length}
           onChange={(e) => choose(items.find((p) => key(p) === e.target.value))}
         >
           {index < 0 && (

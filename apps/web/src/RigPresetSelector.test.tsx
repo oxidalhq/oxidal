@@ -66,7 +66,7 @@ it('keeps the current rig visible when the library fails, and permits retry', as
   render(
     <RigPresetSelector state={state} disabled={false} onSelect={() => {}} />,
   );
-  await screen.findByText('Preset list unavailable');
+  await screen.findByText('Original presets unavailable');
   expect(screen.getByRole('combobox')).toBeDisabled();
   expect(screen.getByRole('option', { name: 'Amp A' })).toBeInTheDocument();
   library();
@@ -185,4 +185,32 @@ it('allows repeat audition only after its own terminal receipt and rejects a cha
       phase: 'applying',
     }),
   ).toThrow();
+});
+
+it('keeps available originals selectable when saved copies cannot be read', async () => {
+  library();
+  vi.mocked(nativeState).mockRejectedValue(new Error('worker offline'));
+  const select = vi.fn();
+  render(
+    <RigPresetSelector state={state} disabled={false} onSelect={select} />,
+  );
+  await screen.findByText('Saved copies unavailable');
+  expect(
+    screen.getByRole('combobox', { name: 'Playing preset' }),
+  ).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Next preset' }));
+  expect(select).toHaveBeenCalledWith('b', false);
+});
+it('keeps saved copies selectable when originals cannot be read', async () => {
+  library();
+  vi.mocked(presetLibrary).mockRejectedValue(new Error('storage unavailable'));
+  const select = vi.fn();
+  render(
+    <RigPresetSelector state={state} disabled={false} onSelect={select} />,
+  );
+  await screen.findByText('Original presets unavailable');
+  fireEvent.change(screen.getByRole('combobox'), {
+    target: { value: 'copy:a' },
+  });
+  expect(select).toHaveBeenCalledWith('a', true);
 });
