@@ -1,3 +1,4 @@
+import { confirmedControlDisplay } from './rigControls';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -1023,7 +1024,20 @@ export function MixedRig({
               setEdit({ ...edit, value });
               queue.current?.preview(value);
             }}
-            format={scale?.format ?? String}
+            format={
+              edit.control.target.kind === 'native'
+                ? (value) => {
+                    const confirmed =
+                      state.control?.controls.find(
+                        (item) => key(item) === key(edit.control),
+                      ) ?? edit.control;
+                    return confirmedControlDisplay(
+                      confirmed.display,
+                      (scale?.native(value) ?? value) !== confirmed.value,
+                    );
+                  }
+                : (scale?.format ?? String)
+            }
           />
           <div className="action-row">
             <Button disabled={busy} onClick={() => void finish(false)}>

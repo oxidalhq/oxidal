@@ -375,6 +375,21 @@ summary {
   min-height: var(--touch-target);
   display: flex;
   align-items: center;
+  cursor: pointer;
+  gap: 0.5rem;
+  justify-content: space-between;
+  font-weight: 550;
+}
+details:not(.control-help):not(.routing-details):not(.recovery-notice)
+  > summary::after {
+  content: '›';
+  font-size: 1.25rem;
+  color: var(--muted-foreground);
+  margin-left: auto;
+}
+details[open]:not(.control-help):not(.routing-details):not(.recovery-notice)
+  > summary::after {
+  transform: rotate(90deg);
 }
 footer {
   display: flex;
@@ -2269,4 +2284,116 @@ textarea {
 }
 [data-chain-view='artwork'] .signal-block {
   flex-basis: 11rem;
+}
+
+.model-picker {
+  width: min(
+    40rem,
+    calc(100% - max(8px, var(--safe-left)) - max(8px, var(--safe-right)))
+  );
+}
+.catalog-tone {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 5rem;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+.catalog-gear {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  flex-shrink: 0;
+  background: var(--muted);
+  color: var(--control-accent);
+  border-radius: var(--radius);
+}
+.catalog-gear svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.catalog-description {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.2rem;
+  overflow-wrap: anywhere;
+}
+.catalog-description > span {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.catalog-description .catalog-meta {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+}
+.model-audition {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+.model-audition svg {
+  width: 1rem;
+}
+.artwork-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+}
+.artwork-placeholder svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+[data-chain-view='artwork'] .artwork-thumb {
+  width: 64px;
+}
+[data-chain-view='artwork'] .artwork-entry figcaption {
+  font-size: 0.65rem;
+}
+
+.oxidal-button[data-variant='ghost'] {
+  box-shadow: none;
+}
+.live-rig > details {
+  border-top: 1px solid var(--border);
+  padding-block: 0.25rem;
+}
+.live-rig > details[open] > summary {
+  color: var(--control-accent);
+  margin-bottom: 0.5rem;
+}
+[data-chain-view='compact'] .signal-block {
+  gap: 0.25rem;
+}
+[data-chain-view='compact'] .signal-block-index {
+  display: none;
+}
+[data-chain-view='compact'] .signal-block-select {
+  padding-block: 0.25rem;
+}
+
+/* Navigation icons stay paired with labels, with vertical grouping on small phones. */
+@media (max-width: 600px) {
+  .masthead nav > button {
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.65rem;
+    padding-block: 0.25rem;
+  }
+  .masthead nav {
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    gap: 0.25rem;
+  }
+  .settings-nav button {
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+  }
 }

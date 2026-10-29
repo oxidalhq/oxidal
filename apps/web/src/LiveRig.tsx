@@ -496,7 +496,7 @@ export function LiveRig({
           Signal chain
         </h2>
         <Button variant="outline" onClick={onLibrary}>
-          <Stack aria-hidden="true" /> Library
+          <Stack aria-hidden="true" /> Browse library
         </Button>
         <span role="status" data-testid="live-status">
           {busy ? 'Applying…' : state.modified ? 'Edited' : 'Saved'}

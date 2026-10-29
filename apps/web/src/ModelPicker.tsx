@@ -1,3 +1,12 @@
+import {
+  CaretRight,
+  ArrowLeft,
+  CloudArrowDown,
+  FolderOpen,
+  Play,
+  MagnifyingGlass,
+} from '@phosphor-icons/react';
+import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
@@ -162,7 +171,11 @@ export function ModelPicker({
     else setQuery({ ...query, page: next });
   }
   return (
-    <AdjustmentDialog title="Choose model" onCancel={close}>
+    <AdjustmentDialog
+      title="Choose model"
+      onCancel={close}
+      className="model-picker"
+    >
       <div className="space-y-3">
         <p className="truncate text-sm text-muted-foreground">
           {intent === 'add' ? 'Add to' : 'Replace'} {name}
@@ -174,7 +187,7 @@ export function ModelPicker({
             disabled={!!busy}
             onClick={() => setSource('tone3000')}
           >
-            TONE3000
+            <CloudArrowDown aria-hidden="true" /> TONE3000
           </Button>
           <Button
             variant={source === 'local' ? 'secondary' : 'ghost'}
@@ -182,7 +195,7 @@ export function ModelPicker({
             disabled={!!busy}
             onClick={() => setSource('local')}
           >
-            Local files
+            <FolderOpen aria-hidden="true" /> Local files
           </Button>
         </div>
         {source === 'local' ? (
@@ -240,7 +253,9 @@ export function ModelPicker({
                         <span className="min-w-0 break-words">
                           {m.title} · {m.format === 'nam' ? 'NAM' : 'IR'}
                         </span>
-                        <span>Audition</span>
+                        <span className="model-audition">
+                          <Play aria-hidden="true" /> Audition
+                        </span>
                       </Button>
                     ))}
                 </>
@@ -322,7 +337,7 @@ export function ModelPicker({
                       />
                     </label>
                     <Button type="submit" disabled={!!busy}>
-                      Search
+                      <MagnifyingGlass aria-hidden="true" /> Search
                     </Button>
                   </form>
                 )}
@@ -337,7 +352,7 @@ export function ModelPicker({
                     setModels(null);
                   }}
                 >
-                  Back to tones
+                  <ArrowLeft aria-hidden="true" /> Back to tones
                 </Button>
                 <strong className="min-w-0 break-words">{tone.title}</strong>
                 <span className="text-xs text-muted-foreground">
@@ -372,7 +387,9 @@ export function ModelPicker({
                         {m.name}
                         {m.size ? ` · ${m.size}` : ''}
                       </span>
-                      <span>Audition</span>
+                      <span className="model-audition">
+                        <Play aria-hidden="true" /> Audition
+                      </span>
                     </Button>
                   ))}
                 </>
@@ -390,16 +407,24 @@ export function ModelPicker({
                       <Button
                         key={t.id}
                         variant="outline"
-                        className="h-auto min-h-11 w-full flex-col items-start gap-1 py-3 text-left whitespace-normal"
+                        className="catalog-tone"
                         onClick={() => {
                           setTone(t);
                           setModelPage(1);
                         }}
                       >
-                        <strong className="break-words">{t.title}</strong>
-                        <span className="text-xs text-muted-foreground">
-                          {t.user.display_name || t.user.username} · {t.gear}
+                        <span className="catalog-gear">
+                          <GearIcon gear={t.gear} />
                         </span>
+                        <span className="catalog-description">
+                          <strong>{t.title}</strong>
+                          <span>{t.user.display_name || t.user.username}</span>
+                          <span className="catalog-meta">
+                            <GearLabel gear={t.gear} /> · {t.models_count}{' '}
+                            {t.models_count === 1 ? 'model' : 'models'}
+                          </span>
+                        </span>
+                        <CaretRight aria-hidden="true" />
                       </Button>
                     ))}
                 </>
@@ -407,6 +432,10 @@ export function ModelPicker({
             </div>
           </>
         )}
+        <p className="caption">
+          Audition changes the live sound. Save a copy in Rig to keep it
+          offline.
+        </p>
         {error && <p role="alert">{error}</p>}
         {busy && (
           <p role="status">

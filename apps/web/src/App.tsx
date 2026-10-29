@@ -6,7 +6,20 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ArrowsSplit, Power, WarningCircle } from '@phosphor-icons/react';
+import {
+  ArrowsSplit,
+  Power,
+  WarningCircle,
+  Waveform,
+  Stack,
+  ChartLine,
+  GearSix,
+  SpeakerHigh,
+  WifiHigh,
+  SlidersHorizontal,
+  Sun,
+  Wrench,
+} from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { LiveRig } from './LiveRig';
 const MixedRig = lazy(() =>
@@ -308,6 +321,14 @@ export default function App() {
               >
                 {
                   {
+                    rig: <Waveform aria-hidden="true" />,
+                    library: <Stack aria-hidden="true" />,
+                    monitor: <ChartLine aria-hidden="true" />,
+                    settings: <GearSix aria-hidden="true" />,
+                  }[destination]
+                }
+                {
+                  {
                     rig: 'Rig',
                     library: 'Library',
                     monitor: 'Monitor',
@@ -579,6 +600,15 @@ export default function App() {
                     }
                     onClick={() => setSettingsSection(section)}
                   >
+                    {
+                      {
+                        audio: <SpeakerHigh aria-hidden="true" />,
+                        connections: <WifiHigh aria-hidden="true" />,
+                        midi: <SlidersHorizontal aria-hidden="true" />,
+                        display: <Sun aria-hidden="true" />,
+                        maintenance: <Wrench aria-hidden="true" />,
+                      }[section]
+                    }
                     {section === 'audio'
                       ? 'Audio'
                       : section === 'midi'

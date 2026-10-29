@@ -1,3 +1,4 @@
+import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
 import {
   artworkPath,
@@ -82,7 +83,7 @@ export function ArtworkDeck({
       <figcaption>
         <strong>{item.title}</strong>
         <span>
-          {item.gear} ·{' '}
+          <GearLabel gear={item.gear} /> ·{' '}
           {item.cached
             ? 'Saved offline'
             : item.key
@@ -155,7 +156,10 @@ function ArtworkImage({
       className="artwork-placeholder"
       aria-label={`${title}: image unavailable`}
     >
-      {gear}
+      <GearIcon gear={gear} />
+      <span>
+        <GearLabel gear={gear} />
+      </span>
     </div>
   );
 }
