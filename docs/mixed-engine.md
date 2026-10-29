@@ -711,3 +711,11 @@ still exposes only that model's controls. Boolean controls toggle directly throu
 the existing confirmed control/gesture command path, with `aria-pressed` reflecting
 readback. Continuous controls keep the touch editor and native physical units.
 These presentation changes do not alter graph routing or DSP ownership.
+
+The live hybrid chain uses compact independently selectable/powerable tiles.
+Connections are derived from the portable graph, including paths through hidden
+selector nodes; independent parallel branches are not depicted as a serial chain.
+A missing or cyclic display graph retains controls with a routing warning. This is
+navigation of confirmed routing, not a new parallel-routing editor. MIDI mapping
+stays below the sound inspector. Save copy sits beside chain status and captures
+both lifecycle and control revisions before accepting a name.

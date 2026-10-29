@@ -4337,3 +4337,161 @@ test('live model comparison stays open, waits for application and rejects a chan
   await picker.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(picker).toHaveCount(0);
 });
+
+test('mixed rig authoring presents parallel routing and guarded Save on small screens', async ({
+  page,
+  request,
+}, info) => {
+  // Presentation/API contract fixture; no DSP qualification is implied.
+  const baseline = await (await request.get('/api/v1/rig-audio')).json();
+  const input = {
+    endpoint: 'default',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const ids = ['amp-a', 'amp-b', 'cab'];
+  const graph = {
+    nodes: ids.map((id) => ({
+      id,
+      kind: 'lv2',
+      instance: id,
+      audioInputs: 2,
+      audioOutputs: 2,
+    })),
+    edges: ['amp-a', 'amp-b'].map((id) => ({
+      from: { node: id, port: 0 },
+      to: { node: 'cab', port: 0 },
+    })),
+  };
+  const document = {
+    revision: 'fixture',
+    manifest: {
+      format: 'oxidal',
+      formatVersion: 1,
+      id: 'fixture',
+      name: 'Parallel sound',
+      extensions: {},
+      requiredExtensions: [],
+      resources: [],
+      tone3000: { instances: [] },
+      oxidal: {
+        graph,
+        recall: { tails: 'cut' },
+        lv2: ids.map((id) => ({
+          id,
+          pluginUri: `urn:fixture/${id}`,
+          assets: [],
+          controls: {},
+          requiredFeatures: [],
+        })),
+      },
+    },
+  };
+  let state = {
+    ...baseline,
+    phase: 'running',
+    device_owned: true,
+    configured: {
+      revision: 'fixture',
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
+    },
+    control: {
+      session: 'sound',
+      revision: 1,
+      source_revision: 'fixture',
+      modified: false,
+      buffer_bytes: 1024,
+      latency_frames: 0,
+      controls: ids.map((node) => ({
+        target: { kind: 'bypass', node },
+        display: 'Off',
+        label: 'Bypass',
+        value: 0,
+        minimum: 0,
+        maximum: 1,
+        integer: true,
+        toggle: true,
+        logarithmic: false,
+      })),
+    },
+  };
+  let saves = 0;
+  await page.route('**/api/v1/rig-audio', async (route) => {
+    if (route.request().method() === 'POST') {
+      const action = route.request().postDataJSON().action;
+      expect(action.kind).toBe('save');
+      expect(action.name).toBe('My parallel sound');
+      saves++;
+      state = {
+        ...state,
+        save: {
+          running: false,
+          source_session: 'sound',
+          source_control_revision: state.control.revision,
+          saved_revision: 'saved',
+        },
+      };
+    }
+    await route.fulfill({ json: state });
+  });
+  await page.route('**/api/v1/presets/rigs/fixture', (route) =>
+    route.fulfill({ json: document }),
+  );
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await expect(rig.locator('[data-node]')).toHaveCount(3);
+  const a = (await rig.locator('[data-node="amp-a"]').boundingBox())!;
+  const b = (await rig.locator('[data-node="amp-b"]').boundingBox())!;
+  const cab = (await rig.locator('[data-node="cab"]').boundingBox())!;
+  expect(a.x).toBe(b.x);
+  expect(b.y).toBeGreaterThan(a.y + a.height);
+  expect(cab.x).toBeGreaterThan(a.x + a.width);
+  await expect(rig.locator('.mixed-routing-lines path')).toHaveCount(2);
+  for (const button of await rig.locator('[data-node] button').all()) {
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({
+    path: info.outputPath('mixed-routing-portrait.png'),
+    fullPage: true,
+  });
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save copy' });
+  await expect(dialog.getByLabel('Preset name')).toHaveValue('Parallel sound');
+  state = { ...state, control: { ...state.control, revision: 2 } };
+  await expect(
+    dialog.getByRole('button', { name: 'Save', exact: true }),
+  ).toBeDisabled();
+  await expect(dialog.getByRole('status')).toContainText('The rig changed');
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
+  await dialog.getByLabel('Preset name').fill('My parallel sound');
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({
+    width: viewport.height,
+    height: viewport.width,
+  });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.document.documentElement.scrollWidth <= innerWidth,
+      ),
+    )
+    .toBe(true);
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saves).toBe(1);
+  await page.screenshot({
+    path: info.outputPath('mixed-routing-landscape.png'),
+    fullPage: true,
+  });
+});

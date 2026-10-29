@@ -9,7 +9,10 @@ import {
   MusicNotes,
   ArrowsSplit,
   FloppyDisk,
+  Power,
 } from '@phosphor-icons/react';
+import { RigTopology } from './RigTopology';
+import { GearIcon } from './GearIcon';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -616,24 +619,19 @@ export function MixedRig({
           ))}
         </div>
       )}
-      <SceneMidi
-        state={state}
-        disabled={disabled || !!edit}
-        onCommand={async (action) => {
-          await command(action);
-        }}
-      />
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (
         <p role="alert" className="error">
           {error || readError || state.error}
         </p>
       )}
-      <div
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
-        aria-label="Mixed signal chain"
+      <RigTopology
+        graph={matching?.manifest.oxidal?.graph ?? { nodes: [], edges: [] }}
+        visible={nodes.map((n) => n.id)}
+        selected={selected?.id}
       >
-        {nodes.map((n, index) => {
+        {(id, index) => {
+          const n = nodes.find((node) => node.id === id)!;
           const branch = state.control?.branches?.find((b) => b.id === n.id);
           const bypass = state.control?.controls.find(
             (c) => c.target.kind === 'bypass' && c.target.node === n.id,
@@ -666,9 +664,15 @@ export function MixedRig({
                 ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
                 : 'Mix');
           return (
-            <div key={n.id} data-node={n.id} className="flex min-w-0 gap-2">
+            <div
+              key={n.id}
+              data-node={n.id}
+              className="mixed-node-card"
+              data-selected={n.id === selected?.id}
+              data-bypassed={branch ? !branch.enabled : bypass?.value === 1}
+            >
               <Button
-                className="h-11 min-w-0 flex-1 justify-start gap-1 px-2 text-left text-sm"
+                className="mixed-node-select"
                 variant={n.id === selected?.id ? 'secondary' : 'outline'}
                 disabled={!!edit || !!picker}
                 aria-pressed={n.id === selected?.id}
@@ -686,12 +690,24 @@ export function MixedRig({
                   }
                 }}
               >
-                <span className="shrink-0">{index + 1} ·</span>
-                <span className="truncate">{label}</span>
+                <GearIcon
+                  gear={
+                    role === 'amp'
+                      ? 'amp'
+                      : role === 'cab'
+                        ? 'cab'
+                        : n.kind === 'lv2'
+                          ? 'pedal'
+                          : n.kind === 'merge'
+                            ? 'full-rig'
+                            : ''
+                  }
+                />
+                <span className="line-clamp-2">{label}</span>
               </Button>
               {branch ? (
                 <Button
-                  className="h-11 min-w-16 shrink-0 px-2 text-sm"
+                  className="mixed-node-power"
                   variant={branch.enabled ? 'secondary' : 'outline'}
                   aria-label={`Toggle branch ${branch.name}`}
                   aria-pressed={branch.enabled}
@@ -708,12 +724,13 @@ export function MixedRig({
                     })
                   }
                 >
+                  <Power aria-hidden="true" />
                   {branch.partial ? 'Mixed' : branch.enabled ? 'On' : 'Off'}
                 </Button>
               ) : (
                 bypass && (
                   <Button
-                    className="h-11 min-w-16 shrink-0 px-2 text-sm"
+                    className="mixed-node-power"
                     variant="outline"
                     aria-label={`Bypass ${index + 1} ${label}`}
                     aria-pressed={bypass.value === 1}
@@ -730,14 +747,15 @@ export function MixedRig({
                       })
                     }
                   >
-                    {bypass.value === 1 ? 'Bypassed' : 'On'}
+                    <Power aria-hidden="true" />
+                    {bypass.value === 1 ? 'Bypass' : 'On'}
                   </Button>
                 )
               )}
             </div>
           );
-        })}
-      </div>
+        }}
+      </RigTopology>
       {running && selected && wholeNative && (
         <div
           className="flex flex-wrap gap-2"
@@ -1188,6 +1206,13 @@ export function MixedRig({
           {error && <p role="alert">{error}</p>}
         </AdjustmentDialog>
       )}
+      <SceneMidi
+        state={state}
+        disabled={disabled || !!edit}
+        onCommand={async (action) => {
+          await command(action);
+        }}
+      />
       {saveOpening && (
         <AdjustmentDialog
           title="Save copy"

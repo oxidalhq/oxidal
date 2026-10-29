@@ -2733,3 +2733,81 @@ textarea {
 .audio-diagnostics[open] > summary {
   margin-bottom: 0.75rem;
 }
+
+/* Actual hybrid routing: parallel branches share a column; only real paths connect. */
+.mixed-routing-scroll {
+  overflow: auto;
+  max-height: 55dvh;
+  padding: 4px;
+  overscroll-behavior: contain;
+}
+.mixed-routing-scroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mixed-routing-canvas {
+  position: relative;
+}
+.mixed-routing-lines {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+}
+.mixed-routing-lines path {
+  fill: none;
+  stroke: var(--muted-foreground);
+  stroke-width: 2;
+}
+.mixed-routing-node {
+  position: absolute;
+}
+.mixed-node-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  overflow: hidden;
+}
+.mixed-node-card[data-selected='true'] {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.mixed-node-card[data-bypassed='true'] {
+  border-style: dashed;
+}
+.mixed-node-select.oxidal-button {
+  flex: 1;
+  min-height: 64px;
+  width: 100%;
+  padding: 4px;
+  flex-direction: column;
+  gap: 4px;
+  white-space: normal;
+  font-size: 0.75rem;
+  line-height: 1.1;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.mixed-node-select.oxidal-button svg {
+  width: 24px;
+  height: 24px;
+}
+.mixed-node-card[data-bypassed='true'] .mixed-node-select {
+  color: var(--muted-foreground);
+}
+.mixed-node-power.oxidal-button {
+  height: 44px;
+  min-height: 44px;
+  width: 100%;
+  flex-shrink: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 4px;
+  font-size: 0.7rem;
+  box-shadow: none;
+}
