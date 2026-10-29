@@ -160,3 +160,8 @@ Pi hotspot provisioning now includes branded offline HTTP discovery/welcome with
 selective local Apple/Android probe DNS and unchanged authenticated HTTPS control.
 Ordinary Linux installs are untouched; see docs/device-service.md. Software access
 and device-rendering tests do not qualify physical radio popup behavior.
+
+The maintained native qualifier includes --preset-settings: actual file-level
+36-tone-parameter import/current Save/reopen, missing defaults, five historical
+Transpose aliases and retained instance-scope settings. See
+docs/native-tone3000.md for concrete coverage; physical timing remains separate.

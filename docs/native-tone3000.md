@@ -1,6 +1,12 @@
 # Native TONE3000 adapter qualification
 
-`oxidal-tone3000` provides an **optional offline native editor** connected to the daemon through a dedicated worker process. It calls the real pinned TONE3000 processor through a bounded C ABI. The adapter itself is not an ALSA driver, LV2 host, real-time-qualified callback implementation, complete settings editor or shipping audio engine. The same offline adapter builds on macOS and Linux. Native execution has been qualified on macOS ARM64 and Debian Bookworm ARM64 without a display server; a separate experimental Linux playback worker now uses this adapter with ALSA; see [audio lifecycle](audio.md). Physical-device and real-time qualification remain required.
+`oxidal-tone3000` supplies the pinned native DSP/authoring adapter used by the
+silent editor and isolated native/mixed playback workers. It calls the actual
+TONE3000 processor through a bounded C ABI, including its own preset reader and
+writer. ALSA transport and LV2 hosting remain separate crates. The adapter builds
+on macOS and Linux; headless ARM64 execution and preset/settings workflows have
+maintained software qualification. Physical device timing and real-time deadlines
+remain separate acceptance gates; see [audio lifecycle](audio.md).
 
 ## Build and repeat the qualification
 
@@ -691,3 +697,24 @@ The pinned JUCE implementation explicitly reports Bluetooth MIDI pairing dialogs
 unavailable on Linux. An Apple platform pairing dialog is therefore not required
 for Linux native parity; general Bluetooth administration and physical BLE MIDI
 acceptance remain separate from the existing ALSA input/mapping support.
+
+## Native preset settings fidelity
+
+The adapter stages unchanged imported bytes, then uses the pinned TONE3000
+preset reader and processor's own `loadPreset`; Save uses its native writer.
+Preset settings are not translated into a substitute DSP model. Existing
+qualification checks all 43 descriptor ranges/defaults, 39 editable globals,
+block controls/EQ, prepared settings and retained device defaults.
+
+The maintained qualifier additionally accepts `--preset-settings` for a focused
+file-level check, and runs it in the complete `pnpm native:check` gate. It
+independently encodes a small legacy-framed preset, verifies all 36 saved tone
+parameter values in native units through import and current-format Save/reopen,
+resets every missing tone entry to its native default, retains the five
+non-monitoring instance parameters and checks all five legacy Transpose aliases
+in both duplicate-entry orders. Skewed Hz readback uses a float32-relative
+tolerance, while file round-trip values are checked exactly.
+
+These checks provide concrete settings-data compatibility evidence for the pinned
+processor. They are separate from physical Pi performance, every external model
+architecture and universal audio equivalence across interfaces/sample clocks.

@@ -360,6 +360,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     if arguments.as_slice() == ["--gestures"] {
         return qualify_live_gestures();
     }
+    if arguments.as_slice() == ["--preset-settings"] {
+        return qualify_preset_settings();
+    }
     if arguments.as_slice() == ["--defaults"] {
         return qualify_device_defaults();
     }
@@ -386,6 +389,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_local_files()?;
     qualify_live_gestures()?;
     qualify_device_defaults()?;
+    qualify_preset_settings()?;
     qualify_latency()?;
     qualify_spread()?;
     qualify_image_authoring()?;
@@ -3795,6 +3799,221 @@ fn qualify_local_files() -> Result<(), Box<dyn Error>> {
     );
     println!(
         "local files: real A2 NAM and WAV IR insert, native local tone identity, no-account preparation, standalone Save and cache-independent matching PCM passed"
+    );
+    Ok(())
+}
+
+// Small independently encoded legacy ValueTree fixtures exercise the real pinned
+// preset reader/default/migration path, not an Oxidal preset translation.
+fn qualify_preset_settings() -> Result<(), Box<dyn Error>> {
+    fn count(out: &mut Vec<u8>, value: usize) {
+        let bytes = (value as u32).to_le_bytes();
+        let width = bytes.iter().rposition(|b| *b != 0).map_or(0, |i| i + 1);
+        out.push(width as u8);
+        out.extend_from_slice(&bytes[..width]);
+    }
+    fn text(value: &str) -> Vec<u8> {
+        let mut out = vec![5];
+        out.extend_from_slice(value.as_bytes());
+        out.push(0);
+        out
+    }
+    fn tree(kind: &str, properties: Vec<(&str, Vec<u8>)>, children: Vec<Vec<u8>>) -> Vec<u8> {
+        let mut out = kind.as_bytes().to_vec();
+        out.push(0);
+        count(&mut out, properties.len());
+        for (name, value) in properties {
+            out.extend_from_slice(name.as_bytes());
+            out.push(0);
+            count(&mut out, value.len());
+            out.extend(value);
+        }
+        count(&mut out, children.len());
+        for child in children {
+            out.extend(child);
+        }
+        out
+    }
+    fn preset(parameters: &[(&str, f64)]) -> Vec<u8> {
+        let params = parameters
+            .iter()
+            .map(|(id, value)| {
+                let mut number = vec![4];
+                number.extend(value.to_le_bytes());
+                tree("Param", vec![("id", text(id)), ("value", number)], vec![])
+            })
+            .collect();
+        let body = tree(
+            "T3KPreset",
+            vec![
+                ("schemaVersion", vec![1, 1, 0, 0, 0]),
+                ("id", text("oxidal-settings-fixture")),
+                ("name", text("Settings qualification")),
+            ],
+            vec![
+                tree(
+                    "ChainSnapshot",
+                    vec![],
+                    vec![
+                        tree("ChainBlocks", vec![], vec![]),
+                        tree("RightChainBlocks", vec![], vec![]),
+                    ],
+                ),
+                tree("Params", vec![], params),
+            ],
+        );
+        let mut bytes = b"T3KB".to_vec();
+        bytes.extend(body);
+        bytes
+    }
+    let mut engine = Engine::new(48000.0, 128)?;
+    let catalog = engine.catalog()?;
+    let rows = catalog.as_array().ok_or("Missing settings catalog")?;
+    assert_eq!(rows.iter().filter(|p| p["tone"] == true).count(), 36);
+    for row in rows {
+        if row["id"].as_str().unwrap().starts_with("chainSolo") {
+            continue;
+        }
+        let value = if row["toggle"] == true {
+            if row["value"].as_f64().unwrap() > 0.5 {
+                0.0
+            } else {
+                1.0
+            }
+        } else {
+            0.31
+        };
+        engine.set_normalized(row["id"].as_str().unwrap(), value)?;
+    }
+    engine.pump()?;
+    let changed = engine.catalog()?;
+    let retained = changed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["tone"] == false && !p["id"].as_str().unwrap().starts_with("chainSolo"))
+        .cloned()
+        .collect::<Vec<_>>();
+    // Missing tone entries reset to upstream defaults, not the previously loaded tone.
+    let absent = preset(&[]);
+    assert_eq!(oxidal_presets::inspect(&absent)?.parameter_count, 0);
+    engine.load_preset(&absent)?;
+    engine.pump()?;
+    for row in engine.catalog()?.as_array().unwrap() {
+        if row["tone"] == true {
+            assert!(
+                (row["value"].as_f64().unwrap() - row["default"].as_f64().unwrap()).abs() < 1e-5,
+                "missing entry default: {}",
+                row["id"]
+            );
+        }
+    }
+    for before in &retained {
+        let actual = engine.catalog()?;
+        let after = actual
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == before["id"])
+            .unwrap();
+        assert_eq!(
+            after["value"], before["value"],
+            "preset changed instance setting {}",
+            before["id"]
+        );
+    }
+    // Values in presets are denormalized. Cover every tone ID in a file, not just
+    // an isolated control gesture, then round-trip the native current framing.
+    let tone_rows = changed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["tone"] == true)
+        .collect::<Vec<_>>();
+    let values = tone_rows
+        .iter()
+        .map(|p| (p["id"].as_str().unwrap(), p["value"].as_f64().unwrap()))
+        .collect::<Vec<_>>();
+    let bytes = preset(&values);
+    engine.load_preset(&bytes)?;
+    engine.pump()?;
+    let loaded = engine.catalog()?;
+    for expected in &tone_rows {
+        let actual = loaded
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == expected["id"])
+            .unwrap();
+        assert_eq!(
+            actual["value"], expected["value"],
+            "imported units/range: {}",
+            expected["id"]
+        );
+    }
+    let saved = engine.save_preset("All native settings")?;
+    assert_eq!(
+        oxidal_presets::inspect(&saved)?.framing,
+        oxidal_presets::Framing::Current
+    );
+    assert_eq!(oxidal_presets::inspect(&saved)?.parameter_count, 36);
+    let mut reopened = Engine::new(48000.0, 128)?;
+    reopened.load_preset(&saved)?;
+    reopened.pump()?;
+    for expected in &tone_rows {
+        let actual = reopened.catalog()?;
+        let actual = actual
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["id"] == expected["id"])
+            .unwrap();
+        assert_eq!(
+            actual["value"], expected["value"],
+            "saved settings recall: {}",
+            expected["id"]
+        );
+    }
+    // The upstream migration keeps the legacy entry when both names are present.
+    // Exercise both entry orders and all five historical Transpose aliases.
+    for reverse in [false, true] {
+        let mut legacy = vec![
+            ("pitchSemitones", 4.0),
+            ("transposeEnabled", 1.0),
+            ("transposeSemitones", -7.0),
+            ("transposeStep", 1.0),
+            ("transposeTonality", 12000.0),
+            ("transposeWindow", 2.0),
+        ];
+        if reverse {
+            legacy.reverse();
+        }
+        engine.load_preset(&preset(&legacy))?;
+        engine.pump()?;
+        let migrated = engine.catalog()?;
+        for (id, value) in [
+            ("pitchEnabled", 1.0_f64),
+            ("pitchSemitones", -7.0),
+            ("pitchStep", 1.0),
+            ("pitchTonality", 12000.0),
+            ("pitchWindow", 2.0),
+        ] {
+            let actual = migrated
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == id)
+                .unwrap();
+            // JUCE's skewed Hz range converts through float32 normalization.
+            let tolerance = value.abs().max(1.0) * f64::from(f32::EPSILON) * 4.0;
+            assert!(
+                (actual["value"].as_f64().unwrap() - value).abs() <= tolerance,
+                "legacy rename {id}: {actual}"
+            );
+        }
+    }
+    eprintln!(
+        "preset settings: 36 tone IDs in native units import/save/reopen; all absent defaults; five legacy aliases/both duplicate orders; five instance settings retained passed"
     );
     Ok(())
 }
