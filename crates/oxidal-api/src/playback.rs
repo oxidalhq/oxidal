@@ -49,6 +49,7 @@ impl Drop for Worker {
     }
 }
 struct Owner {
+    last_tool_poll: std::time::Instant,
     levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     worker: Option<Worker>,
@@ -573,16 +574,21 @@ impl Owner {
         Ok(self.state.clone())
     }
     async fn poll_tools(&mut self) {
+        let Some(status) = self.state.authoring.as_ref() else {
+            return;
+        };
+        // The tuner and measurements need fast readings. An open adjustment only
+        // needs its 120 s expiry checked, so it polls once a second: every poll
+        // runs between audio blocks on the worker's realtime thread.
+        let fast = status.tools.active();
         if self.state.phase != AudioPhase::Running
             || self.model_pending()
-            || !self
-                .state
-                .authoring
-                .as_ref()
-                .is_some_and(|s| s.tools.active() || s.gesture.is_some())
+            || !(fast || status.gesture.is_some())
+            || (!fast && self.last_tool_poll.elapsed() < Duration::from_secs(1))
         {
             return;
         }
+        self.last_tool_poll = std::time::Instant::now();
         if let Err(error) = self
             .authoring_command(AuthoringAction::Utility {
                 command: oxidal_audio::tools::Command::Poll,
@@ -1754,6 +1760,7 @@ impl Playback {
         let (meters, meter_state) = watch::channel(None);
         let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            last_tool_poll: std::time::Instant::now(),
             levels,
             boot: policy.clone(),
             worker: None,

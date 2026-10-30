@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use oxidal_audio::{
         lifecycle::{PlaybackEvent, PlaybackStart, WorkerRequest},
         stream::{Duplex, Step},
+        structure::AuthoringAction,
     };
     use oxidal_tone3000::Engine;
     use std::{
@@ -150,6 +151,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_meter = Instant::now();
     let mut blocks = 0;
     let mut last_block = Instant::now();
+    // Requests run between audio blocks on this realtime thread. Rebuilding the
+    // control catalog, slots and EQ through the native engine is the costly part,
+    // so replies reuse the last readback unless the request can change it.
+    let mut readback: Option<Readback> = None;
+    let period = Duration::from_secs_f64(
+        f64::from(settings.stream.input.period_frames)
+            / f64::from(settings.stream.input.sample_rate),
+    );
     while !stop.load(Ordering::Acquire) {
         if stream.step(|l, r| engine.process(l, r).map_err(|e| e.to_string()))? == Step::Processed {
             last_block = Instant::now();
@@ -186,15 +195,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if blocks >= settings.stream.output.periods - 1 {
             let blocked =
                 models.pending() || authoring.measurement_pending() || authoring.gesture_pending();
+            let mut moved = false;
             midi.poll(|settings, message| {
+                moved = true;
                 oxidal_tone3000::midi::dispatch(&mut engine, settings, message, blocked)
             });
+            // A MIDI CC can move any control: the next reply reads them again.
+            if moved {
+                readback = None;
+            }
         }
         if blocks >= settings.stream.output.periods - 1
             && let Ok(request) = commands.try_recv()
         {
             // Serialization, catalog readback and native control work can allocate.
             // Kept out of the DSP closure; physical deadline qualification remains required.
+            let started = Instant::now();
+            let kind = request_kind(&request);
             let event = match request {
                 WorkerRequest::HostUtility(request) => {
                     stream.host_utility(request.host_utility);
@@ -241,6 +258,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 WorkerRequest::Authoring(request) => {
                     let mutating = request.authoring.changes_tone();
+                    // A finishing measurement or an expiring gesture writes controls
+                    // even during a poll, so only a quiet poll may reuse the readback.
+                    let quiet = !authoring.measurement_pending();
+                    let gesture_before = authoring.gesture_pending();
+                    // Polls and inspections read; previews move only control values.
+                    let reads_only = quiet && matches!(
+                        request.authoring,
+                        AuthoringAction::Inspect
+                            | AuthoringAction::Utility {
+                                command: oxidal_audio::tools::Command::Poll
+                            }
+                    );
+                    let values_only = matches!(
+                        request.authoring,
+                        AuthoringAction::Gesture {
+                            edit: oxidal_audio::structure::LiveGesture::Preview { .. }
+                        }
+                    );
                     let before_working = authoring.working_receipt().map(str::to_owned);
                     let result = if models.pending() {
                         Err("Finish model preparation before changing the chain".into())
@@ -259,16 +294,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         Err(error) => (authoring.snapshot(&mut engine)?, Some(error)),
                     };
-                    PlaybackEvent::Authored {
+                    let current = match readback.take() {
+                        Some(cached)
+                            if reads_only
+                                && !mutating
+                                && authoring.gesture_pending() == gesture_before =>
+                        {
+                            cached
+                        }
+                        Some(mut cached) if values_only => {
+                            cached.controls = engine.live_controls()?;
+                            cached
+                        }
+                        _ => Readback::read(&mut engine)?,
+                    };
+                    let event = PlaybackEvent::Authored {
                         serial: request.serial,
                         authoring: status,
-                        controls: engine.live_controls()?,
-                        slots: engine.slots()?,
-                        eq: engine.eq_snapshot()?,
+                        controls: current.controls.clone(),
+                        slots: current.slots.clone(),
+                        eq: current.eq.clone(),
                         error,
-                    }
+                    };
+                    readback = Some(current);
+                    event
                 }
                 WorkerRequest::Eq(request) => {
+                    readback = None;
                     let error = if models.pending()
                         || authoring.measurement_pending()
                         || authoring.gesture_pending()
@@ -288,6 +340,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 WorkerRequest::Control(request) => {
+                    readback = None;
                     let error = if models.pending()
                         || authoring.measurement_pending()
                         || authoring.gesture_pending()
@@ -308,6 +361,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 WorkerRequest::Model(request) => {
+                    readback = None;
                     let result = if authoring.measurement_pending() || authoring.gesture_pending() {
                         Err("Cancel measurement before loading models".into())
                     } else {
@@ -342,6 +396,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             };
+            let took = started.elapsed();
+            if took > period {
+                eprintln!(
+                    "Slow {kind} request on the audio thread: {:.2} ms (period {:.2} ms)",
+                    took.as_secs_f64() * 1000.0,
+                    period.as_secs_f64() * 1000.0
+                );
+            }
             meter_send.try_send(event)?;
         }
     }
@@ -485,4 +547,34 @@ fn prepare_parameter() -> Result<(), Box<dyn std::error::Error>> {
         status.working.ok_or("Missing prepared native receipt")?
     );
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+struct Readback {
+    controls: Vec<oxidal_audio::lifecycle::LiveControl>,
+    slots: Vec<oxidal_audio::lifecycle::NativeSlot>,
+    eq: Vec<oxidal_audio::eq::BlockEqState>,
+}
+#[cfg(target_os = "linux")]
+impl Readback {
+    fn read(engine: &mut oxidal_tone3000::Engine) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            controls: engine.live_controls()?,
+            slots: engine.slots()?,
+            eq: engine.eq_snapshot()?,
+        })
+    }
+}
+#[cfg(target_os = "linux")]
+fn request_kind(request: &oxidal_audio::lifecycle::WorkerRequest) -> &'static str {
+    use oxidal_audio::lifecycle::WorkerRequest;
+    match request {
+        WorkerRequest::HostUtility(_) => "host",
+        WorkerRequest::Midi(_) => "MIDI",
+        WorkerRequest::Authoring(_) => "authoring",
+        WorkerRequest::Eq(_) => "EQ",
+        WorkerRequest::Control(_) => "control",
+        WorkerRequest::Model(_) => "model",
+    }
 }
