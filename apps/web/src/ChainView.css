@@ -217,3 +217,8 @@
 .setting-dialog > .action-row {
   margin-top: 0.25rem;
 }
+
+/* A lane that is shown but not sounding (another scene) recedes. */
+.chain-lane[data-dim] {
+  opacity: 0.45;
+}

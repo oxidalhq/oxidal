@@ -30,6 +30,7 @@ export function ChainView({
         <div
           key={lane.id}
           className="chain-lane"
+          data-dim={lane.dim || undefined}
           aria-label={`${lane.id} signal chain`}
         >
           <span className="chain-port">{lane.input}</span>

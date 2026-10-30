@@ -15,7 +15,8 @@ import {
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
-import { LedToggle, RigTile } from './ChainView';
+import { ChainView, LedToggle, RigTile } from './ChainView';
+import type { RigLaneVM } from './rigChain';
 import { blockKind } from './rigChain';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
@@ -579,6 +580,47 @@ export function MixedRig({
     };
   };
   const selectedView = selected && describeNode(selected);
+  // Scenes rigs: each branch is a whole native preset. Draw it as a chain lane
+  // of its own blocks, in scene order, with the sounding scene's lane bright.
+  const sceneList = state.control?.scenes?.scenes ?? [];
+  const sceneBranches = sceneList.length
+    ? nodes.filter((n) => n.kind === 'tone3000').slice(0, sceneList.length)
+    : [];
+  const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
+    const layout = state.control?.authoring?.find((a) => a.node === n.id)
+      ?.status.layout;
+    const blocks = [
+      ...(layout?.left ?? []),
+      ...(layout?.stereo ? (layout.right ?? []) : []),
+    ];
+    const scene = sceneList[index];
+    return {
+      id: scene?.name ?? n.id,
+      input: String(index + 1),
+      dim: !!scene && state.control?.scene !== scene.id,
+      // Insertion tiles are empty slots, not sound: the lane shows real blocks.
+      blocks: blocks
+        .filter((block) => !block.insert)
+        .map((block) => {
+          const enabled = state.control?.controls.find(
+            (c) =>
+              c.target.kind === 'native' &&
+              c.target.node === n.id &&
+              c.target.parameter === `block:${block.id}:enabled`,
+          );
+          const name =
+            enabled?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
+            'Block';
+          return {
+            id: block.id,
+            label: name,
+            kind: blockKind('', name),
+            on: enabled?.value !== 0,
+            face: <GearIcon gear="" name={name} />,
+          };
+        }),
+    };
+  });
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -676,9 +718,32 @@ export function MixedRig({
           {error || readError || state.error}
         </p>
       )}
+      {sceneLanes.length > 0 && (
+        <ChainView
+          label="Scene branches"
+          lanes={sceneLanes}
+          selected={
+            selected && sceneBranches.some((n) => n.id === selected.id)
+              ? nativeTarget
+              : undefined
+          }
+          disabled={!!edit || !!picker}
+          onSelect={(blockId) => {
+            const lane = sceneLanes.find((l) =>
+              l.blocks.some((b) => b.id === blockId),
+            );
+            const node = sceneBranches[sceneLanes.indexOf(lane!)];
+            if (!revision || !node) return;
+            setSelection({ revision, node: node.id });
+            setNativeSelection({ node: node.id, target: blockId });
+          }}
+        />
+      )}
       <RigTopology
         graph={matching?.manifest.oxidal?.graph ?? { nodes: [], edges: [] }}
-        visible={nodes.map((n) => n.id)}
+        visible={nodes
+          .filter((n) => !sceneBranches.some((b) => b.id === n.id))
+          .map((n) => n.id)}
         selected={selected?.id}
       >
         {(id) => {
