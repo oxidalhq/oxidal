@@ -1135,6 +1135,10 @@ export interface Progress {
   done: number;
   error?: string | null;
   /**
+   * Presets or scenes that could not be measured this run, with why.
+   */
+  failed?: string[];
+  /**
    * Measured this run; the rest were already measured and unchanged.
    */
   measured: number;

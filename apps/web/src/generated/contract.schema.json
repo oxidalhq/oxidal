@@ -6329,6 +6329,14 @@
             "null"
           ]
         },
+        "failed": {
+          "description": "Presets or scenes that could not be measured this run, with why.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
         "measured": {
           "description": "Measured this run; the rest were already measured and unchanged.",
           "type": "integer",

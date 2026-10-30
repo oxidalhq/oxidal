@@ -91,6 +91,9 @@ pub struct Progress {
     /// Measured this run; the rest were already measured and unchanged.
     pub measured: usize,
     pub current: Option<String>,
+    /// Presets or scenes that could not be measured this run, with why.
+    #[serde(default)]
+    pub failed: Vec<String>,
     pub error: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -693,7 +696,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
             }
             // One preset that will not load or play is skipped, not fatal.
             Err(e) => shared.calibration.update(|p| {
-                p.error = Some(format!("{}: {e}", item.name));
+                p.failed.push(format!("{}: {e}", item.name));
             }),
         }
         shared.calibration.update(|p| p.done += 1);

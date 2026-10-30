@@ -1341,7 +1341,26 @@ impl Owner {
             candidate
                 .map(|c| (c.controls, c.models, c.eq))
                 .unwrap_or((None, vec![], None));
-        match self.start(proposed, controls, models, eq).await {
+        let restored_edits = proposed.working.is_some();
+        let mut result = self.start(proposed.clone(), controls, models, eq).await;
+        if result.is_err() && restored_edits {
+            // Edits kept by an older TONE3000 build cannot load into this one
+            // (the worker refuses the checkpoint). Play the saved preset rather
+            // than leave it unloadable.
+            let mut fresh = proposed;
+            fresh.working = None;
+            if self.start(fresh, None, vec![], None).await.is_ok() {
+                self.publish(
+                    AudioPhase::Running,
+                    Some(
+                        "Unsaved edits for this preset could not be restored, so the saved preset is playing."
+                            .into(),
+                    ),
+                );
+                result = Ok(());
+            }
+        }
+        match result {
             Ok(()) => Ok(self.state.clone()),
             Err(error) => {
                 if was_running {

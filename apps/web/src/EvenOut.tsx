@@ -124,14 +124,30 @@ export function EvenOut({ connected }: { connected: boolean }) {
               </>
             )}
           </div>
-          {progress.total > 0 && !progress.error && (
-            <p role="status">
-              {progress.measured
-                ? `Measured ${progress.measured}; the rest were already even.`
-                : 'Everything was already even.'}
-            </p>
-          )}
+          {progress.total > 0 &&
+            !progress.error &&
+            !progress.failed?.length && (
+              <p role="status">
+                {progress.measured
+                  ? `Measured ${progress.measured}; the rest were already even.`
+                  : 'Everything was already even.'}
+              </p>
+            )}
         </>
+      )}
+      {!running && !!progress.failed?.length && (
+        <div role="alert">
+          <p>
+            {progress.failed.length === 1
+              ? 'One could not be measured:'
+              : `${progress.failed.length} could not be measured:`}
+          </p>
+          <ul className="caption">
+            {progress.failed.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {progress.error && <p role="alert">{progress.error}</p>}
       {error && <p role="alert">{error}</p>}
