@@ -453,7 +453,13 @@ function InstrumentApp() {
               <span>
                 <strong>Development simulator · no audio.</strong>
               </span>
-              <Button variant="outline" onClick={showSettings}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSettingsSection('audio');
+                  showSettings();
+                }}
+              >
                 Audio setup
               </Button>
             </div>

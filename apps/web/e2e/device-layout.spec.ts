@@ -302,6 +302,8 @@ test('device portrait and landscape keep controls accessible and preserve a rota
       'data-display',
       'default',
     );
+    // A reload reopens the last view (Settings here); return to Rig explicitly.
+    await page.getByRole('button', { name: 'Rig', exact: true }).click();
     await page.getByRole('button', { name: 'Parallel', exact: true }).waitFor();
   }
 });
