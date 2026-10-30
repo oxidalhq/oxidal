@@ -73,7 +73,7 @@
 }
 
 .master-mono {
-  min-height: 2rem;
+  min-height: var(--touch-target);
   padding: 0 0.625rem;
   border: 1px solid var(--foreground);
   border-radius: 4px;

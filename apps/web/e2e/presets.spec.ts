@@ -4670,7 +4670,7 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
     name: 'Session buffer (samples)',
   });
   await buffer.selectOption('256');
-  await expect(group.getByText(/One audio period: 5.33 ms/)).toBeVisible();
+  await expect(group.getByText(/one period 5\.33 ms/)).toBeVisible();
   await expect(
     group.getByRole('button', { name: 'Apply & restart audio' }),
   ).toBeEnabled();
