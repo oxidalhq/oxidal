@@ -22,7 +22,7 @@ export function ChartContainer({
   return (
     <figure
       aria-label={label}
-      className="min-w-0 rounded-md border border-border p-3"
+      className="min-w-0 border-t border-foreground pt-2"
       style={style}
     >
       <figcaption className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm font-medium">

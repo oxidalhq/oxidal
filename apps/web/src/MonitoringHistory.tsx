@@ -1,10 +1,6 @@
 import { historyPoints, historyCsv } from './historyData';
 import { useEffect, useState } from 'react';
-import {
-  ArrowClockwise,
-  DownloadSimple,
-  ClockCounterClockwise,
-} from '@phosphor-icons/react';
+import { ArrowClockwise, DownloadSimple } from '@phosphor-icons/react';
 import {
   CartesianGrid,
   Line,
@@ -83,10 +79,7 @@ export function MonitoringHistory() {
         }
       }}
     >
-      <summary>
-        <ClockCounterClockwise aria-hidden="true" className="inline size-4" />{' '}
-        Device history
-      </summary>
+      <summary>Device history</summary>
       {open && (
         <div
           className="grid min-w-0 gap-3 pt-3"

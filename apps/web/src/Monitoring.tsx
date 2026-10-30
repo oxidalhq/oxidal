@@ -1,12 +1,7 @@
 import { ControlAudit } from './ControlAudit';
 import { MonitoringHistory } from './MonitoringHistory';
+import './Monitoring.css';
 import { useEffect, useRef, useState } from 'react';
-import {
-  Pause,
-  Play,
-  ArrowCounterClockwise,
-  Leaf,
-} from '@phosphor-icons/react';
 import {
   Area,
   AreaChart,
@@ -58,20 +53,13 @@ function Meter({
     channel && !stale
       ? Math.max(0, Math.min(100, ((channel.peak_dbfs + 60) / 60) * 100))
       : 0;
+  const rms =
+    channel && !stale
+      ? Math.max(0, Math.min(100, ((channel.rms_dbfs + 60) / 60) * 100))
+      : 0;
   return (
-    <div className="grid min-w-0 gap-1 rounded-md border border-border p-3">
-      <div className="meter-heading">
-        <strong>{label}</strong>
-        <span
-          className={clips > 0 ? 'text-destructive' : 'text-muted-foreground'}
-        >
-          {clips > 0
-            ? `CLIP · ${clips}`
-            : stale
-              ? 'No live reading'
-              : 'No clips'}
-        </span>
-      </div>
+    <div className="meter-row" data-clip={clips > 0 || undefined}>
+      <span className="meter-label">{label}</span>
       <div
         role="meter"
         aria-label={`${label} peak`}
@@ -85,21 +73,22 @@ function Meter({
         aria-valuetext={
           stale ? 'No live reading' : number(channel?.peak_dbfs, ' dBFS')
         }
-        className="h-4 overflow-hidden rounded-sm bg-muted"
+        className="meter-track"
       >
-        <div
-          className="h-full"
-          style={{
-            width: `${level}%`,
-            background:
-              clips > 0 ? 'var(--destructive)' : 'var(--control-accent)',
-          }}
-        />
+        <i style={{ width: `${rms}%` }} />
+        <b style={{ left: `${level}%` }} />
       </div>
-      <div className="flex flex-wrap justify-between gap-2 font-mono text-xs">
-        <span>Peak {stale ? '—' : number(channel?.peak_dbfs, ' dBFS')}</span>
-        <span>RMS {stale ? '—' : number(channel?.rms_dbfs, ' dBFS')}</span>
-      </div>
+      <span className="meter-read">
+        {stale || !channel ? '—' : channel.peak_dbfs.toFixed(1)}
+        <small> pk</small>
+      </span>
+      <span className="meter-sub">
+        {clips > 0
+          ? `Clip · ${clips}`
+          : stale
+            ? 'No live reading'
+            : `RMS ${number(channel?.rms_dbfs)}`}
+      </span>
     </div>
   );
 }
@@ -198,8 +187,14 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       className="instrument-surface grid gap-4"
       aria-label="Audio and system monitoring"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p role="status" className="text-sm">
+      <div className="monitor-bar">
+        <p
+          role="status"
+          className="monitor-state"
+          data-live={
+            (!frozen && !error && !!state?.source && !stale) || undefined
+          }
+        >
           {frozen
             ? 'Frozen readings'
             : error ||
@@ -207,43 +202,36 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
                 ? `${state.source} · ${stale ? 'waiting for live readings' : 'live'}`
                 : 'Audio stopped')}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="monitor-actions">
           <Button
-            variant="outline"
+            variant="ghost"
             aria-label={frozen ? 'Resume readings' : 'Freeze readings'}
             aria-pressed={frozen}
             onClick={() => setFrozen((v) => !v)}
           >
-            {frozen ? (
-              <Play aria-hidden="true" />
-            ) : (
-              <Pause aria-hidden="true" />
-            )}
             {frozen ? 'Resume' : 'Freeze'}
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             aria-label="Reset view"
             onClick={() => {
               setBaseline(channels.map((c) => c.clips));
               setHistory([]);
             }}
           >
-            <ArrowCounterClockwise aria-hidden="true" />
             Reset
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             aria-pressed={slow || displayMode === 'epaper'}
             disabled={displayMode === 'epaper'}
             onClick={() => setSlow((v) => !v)}
           >
-            <Leaf aria-hidden="true" />
             Slow refresh
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="meter-list" aria-label="Levels">
         {['Input L', 'Input R', 'Output L', 'Output R'].map((label, i) => (
           <Meter
             key={label}
@@ -407,7 +395,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           </LineChart>
         </ChartContainer>
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+      <dl className="health-list">
         <div>
           <dt className="text-muted-foreground">Process p50 / p95 / max</dt>
           <dd className="font-mono">

@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  ArrowClockwise,
-  DownloadSimple,
-  ListChecks,
-  FunnelX,
-} from '@phosphor-icons/react';
+import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
 import { controlAudit, type ControlAudit as History } from './api';
 import { Button } from './components/ui/button';
 
@@ -96,10 +91,7 @@ export function ControlAudit() {
         }
       }}
     >
-      <summary>
-        <ListChecks aria-hidden="true" className="inline size-4" /> Control
-        audit
-      </summary>
+      <summary>Control audit</summary>
       {open && (
         <section
           aria-label="Control request history"

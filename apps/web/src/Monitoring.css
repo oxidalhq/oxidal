@@ -1,0 +1,145 @@
+/* Monitor: state first, compact meter rows, label/value health. Values from theme.css. */
+.monitor-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.monitor-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.monitor-state::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--muted-foreground);
+}
+.monitor-state[data-live]::before {
+  background: var(--brand);
+  box-shadow: none;
+}
+.monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+.monitor-actions > .oxidal-button {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.monitor-actions > .oxidal-button[aria-pressed='true'] {
+  color: var(--foreground);
+  font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--foreground);
+  border-radius: 0;
+}
+
+/* One row per channel: label, bar (RMS fill, peak tick, clip zone), readout. */
+.meter-list {
+  display: grid;
+  border-top: 1px solid var(--foreground);
+}
+.meter-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.meter-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.meter-track {
+  position: relative;
+  height: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--foreground);
+}
+.meter-track::after {
+  /* Top 10% of a -60..0 dBFS scale: above -6 dBFS. */
+  content: '';
+  position: absolute;
+  inset: 0 0 0 90%;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 3px,
+    var(--border) 3px 4px
+  );
+}
+.meter-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--foreground);
+}
+.meter-track b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--foreground);
+}
+.meter-read {
+  min-width: 4.5rem;
+  font: 500 0.875rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.meter-read small {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.meter-sub {
+  grid-column: 2 / -1;
+  color: var(--muted-foreground);
+  font: 500 0.75rem var(--font-mono);
+}
+.meter-row[data-clip] .meter-sub {
+  color: var(--foreground);
+  font-weight: 650;
+}
+.meter-row[data-clip] .meter-sub::after {
+  content: ' ▲';
+}
+:root[data-display='epaper'] .meter-track::after {
+  background: none;
+  border-left: 2px solid var(--foreground);
+}
+
+/* Health readings: label over a large tabular value. */
+.health-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--foreground);
+}
+@media (min-width: 640px) {
+  .health-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.health-list > div {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: 0.5rem 0.5rem 0.625rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.health-list dt {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.health-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: 500 1rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
