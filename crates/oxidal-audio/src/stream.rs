@@ -23,8 +23,16 @@ pub struct Duplex {
     pending: bool,
     faulted: bool,
     recovered_xruns: u64,
+    /// Last completed block, or the last re-prime: a stall is measured from here.
+    progress: std::time::Instant,
     meter: crate::meter::Meter,
 }
+/// A running stream that moves no audio for this long is re-primed. USB
+/// interfaces can come back from a restart with ALSA reporting RUNNING while
+/// neither side moves; without this only the worker's 2 s watchdog would act.
+const STALL: std::time::Duration = std::time::Duration::from_millis(250);
+/// A single block slower than this is logged with its duration.
+const SLOW_BLOCK_US: f64 = 50_000.0;
 
 impl Duplex {
     /// Opens only freshly enumerated hardware endpoints. No default/fallback output.
@@ -95,6 +103,7 @@ impl Duplex {
             pending: false,
             faulted: false,
             recovered_xruns: 0,
+            progress: std::time::Instant::now(),
         })
     }
     /// At most one prepared block per call. EAGAIN waits at most 5ms; EPIPE re-primes both PCM handles.
@@ -107,7 +116,14 @@ impl Duplex {
         if self.faulted {
             return Err("Stream failed; close and reopen it before processing".into());
         }
-        let result = self.step_inner(process);
+        let mut result = self.step_inner(process);
+        match result {
+            Ok(Step::Processed) => self.progress = std::time::Instant::now(),
+            Ok(Step::Waiting) if self.progress.elapsed() > STALL => {
+                result = self.reprime("stalled; nothing moved for 250 ms");
+            }
+            _ => {}
+        }
         if result.is_err() {
             self.faulted = true;
             let _ = self.capture.drop();
@@ -166,6 +182,10 @@ impl Duplex {
         process(&mut self.left, &mut self.right)?;
         self.host.output(&mut self.left, &mut self.right);
         let process_us = started.elapsed().as_secs_f64() * 1_000_000.0;
+        if process_us > SLOW_BLOCK_US {
+            // Rare and already late: the evidence matters more than this write.
+            eprintln!("Slow audio block: {:.1} ms", process_us / 1000.0);
+        }
         self.meter.output(&self.left, &self.right, process_us);
         self.output.fill(0);
         let width = samples::width(self.config.output.format);
@@ -203,8 +223,12 @@ impl Duplex {
         if error.errno() != 32 {
             return Err(format!("{direction} stopped (device error): {error}"));
         }
-        // Restart both sides together. Replaying an old partial output block or
-        // retaining captured frames would mix samples from opposite sides of the gap.
+        self.reprime(direction)
+    }
+    /// Restarts both sides together and re-primes playback. Replaying an old
+    /// partial output block or retaining captured frames would mix samples from
+    /// opposite sides of the gap.
+    fn reprime(&mut self, direction: &str) -> Result<Step, String> {
         self.capture
             .drop()
             .map_err(|e| format!("Capture recovery stop failed: {e}"))?;
@@ -233,6 +257,7 @@ impl Duplex {
         );
         // The existing playback start threshold re-primes its queue. DSP state,
         // controls and accumulated meters remain intact; this is not gapless audio.
+        self.progress = std::time::Instant::now();
         Ok(Step::Waiting)
     }
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
@@ -315,6 +340,25 @@ mod tests {
             input_map: [0, 1],
             output_map: [0, 1],
         }
+    }
+    #[test]
+    fn a_re_prime_mid_stream_counts_once_and_audio_flows_again() {
+        // The null device never stalls, so this covers what the stall branch
+        // calls: a re-prime from any point in a block.
+        let mut stream = Duplex::open_pcm(config(SampleFormat::Float)).unwrap();
+        let processed = |stream: &mut Duplex| {
+            (0..40)
+                .filter(|_| stream.step(|_, _| Ok(())).unwrap() == Step::Processed)
+                .count()
+        };
+        assert!(processed(&mut stream) > 0);
+        stream.progress = std::time::Instant::now() - STALL * 2;
+        stream.pending = true;
+        assert_eq!(stream.reprime("test").unwrap(), Step::Waiting);
+        assert_eq!(stream.telemetry().xruns, Some(1));
+        assert!(stream.progress.elapsed() < STALL);
+        assert!(!stream.pending);
+        assert!(processed(&mut stream) > 0, "audio resumes after a re-prime");
     }
     #[test]
     fn null_transport_measures_host_output_tone_and_retains_input_monitor_state() {
