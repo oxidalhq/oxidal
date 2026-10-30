@@ -130,6 +130,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let world = World::discover()?;
+    // Before the rig is built, so its graphs create their lane helpers now on
+    // this thread rather than later on the render thread.
+    oxidal_engine::render::enable_render_thread();
     let session = ResidentSet::new_with_models(
         &store,
         &world,
@@ -166,7 +169,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // processes the rig; this owner thread (JUCE's message thread, which built
     // the rig) does MIDI, JUCE pumping, switching and every request. They share
     // the rig under a short lock.
-    oxidal_engine::render::enable_render_thread();
     let shared = oxidal_engine::render::SharedRig::new(session);
     let frames = std::sync::atomic::AtomicU64::new(0);
     let ready = AtomicBool::new(false);

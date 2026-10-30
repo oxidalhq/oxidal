@@ -109,3 +109,181 @@ impl Drop for OwnerGuard<'_> {
         }
     }
 }
+
+/// One native lane for a helper: its render port and its block in the graph's
+/// sample buffer. Valid only between `LanePool::start` and `LanePool::finish`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LaneJob {
+    port: *mut oxidal_tone3000::AudioPort,
+    left: *mut f32,
+    right: *mut f32,
+    frames: usize,
+}
+impl LaneJob {
+    /// A lane rendering the stereo block at `offset` of a graph buffer that
+    /// starts at `samples`. The caller keeps `port` and that block alive and
+    /// untouched by anyone else until the job has run.
+    pub(crate) fn block(
+        port: &mut oxidal_tone3000::AudioPort,
+        samples: *mut f32,
+        offset: usize,
+        frames: usize,
+    ) -> Self {
+        Self {
+            port,
+            left: samples.wrapping_add(offset),
+            right: samples.wrapping_add(offset + frames),
+            frames,
+        }
+    }
+    /// Renders the lane on the calling thread (see `block` for the contract).
+    pub(crate) fn run(self) -> Result<(), String> {
+        // SAFETY: per `block`, the port and the disjoint block are exclusively
+        // this job's until it returns.
+        let (port, left, right) = unsafe {
+            (
+                &mut *self.port,
+                std::slice::from_raw_parts_mut(self.left, self.frames),
+                std::slice::from_raw_parts_mut(self.right, self.frames),
+            )
+        };
+        port.process(left, right).map_err(|e| e.to_string())
+    }
+}
+const IDLE: u32 = 0;
+const READY: u32 = 1;
+const DONE: u32 = 2;
+#[derive(Debug)]
+struct Mailbox {
+    state: std::sync::atomic::AtomicU32,
+    quit: AtomicBool,
+    failed: AtomicBool,
+    /// Written by the render thread while IDLE, read by the helper while READY.
+    jobs: std::cell::UnsafeCell<Vec<LaneJob>>,
+}
+// SAFETY: `jobs` has one writer at a time, handed over by the `state`
+// release/acquire pair; the raw pointers inside are only dereferenced by the
+// helper between READY and DONE, while the render thread waits.
+unsafe impl Sync for Mailbox {}
+unsafe impl Send for Mailbox {}
+#[derive(Debug)]
+struct Helper {
+    mailbox: std::sync::Arc<Mailbox>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+/// Realtime helper threads that render independent native lanes of one graph
+/// in parallel with the render thread. Each lane keeps the same thread for the
+/// life of the graph, because a native engine binds to its first audio thread.
+#[derive(Debug)]
+pub(crate) struct LanePool {
+    helpers: Vec<Helper>,
+}
+impl LanePool {
+    /// Spawned on the owner thread while the graph is built, never in render.
+    pub(crate) fn new(helpers: usize, jobs_each: usize) -> Result<Self, String> {
+        let mut pool = Self {
+            helpers: Vec::with_capacity(helpers),
+        };
+        for index in 0..helpers {
+            let mailbox = std::sync::Arc::new(Mailbox {
+                state: std::sync::atomic::AtomicU32::new(IDLE),
+                quit: AtomicBool::new(false),
+                failed: AtomicBool::new(false),
+                jobs: std::cell::UnsafeCell::new(Vec::with_capacity(jobs_each)),
+            });
+            let worker = mailbox.clone();
+            let thread = std::thread::Builder::new()
+                .name(format!("oxidal-lane-{}", index + 1))
+                .spawn(move || {
+                    oxidal_audio::realtime::enter();
+                    loop {
+                        while worker.state.load(Ordering::Acquire) != READY {
+                            if worker.quit.load(Ordering::Acquire) {
+                                return;
+                            }
+                            std::thread::park();
+                        }
+                        // SAFETY: READY hands `jobs` and every job in it to this
+                        // thread until it stores DONE (see LaneJob::block).
+                        let jobs = unsafe { &*worker.jobs.get() };
+                        for job in jobs {
+                            if job.run().is_err() {
+                                worker.failed.store(true, Ordering::Relaxed);
+                            }
+                        }
+                        worker.state.store(DONE, Ordering::Release);
+                    }
+                })
+                .map_err(|e| format!("Lane helper unavailable: {e}"))?;
+            pool.helpers.push(Helper {
+                mailbox,
+                thread: Some(thread),
+            });
+        }
+        Ok(pool)
+    }
+    pub(crate) fn helpers(&self) -> usize {
+        self.helpers.len()
+    }
+    /// Queues a lane for helper `helper` (render thread, before `start`).
+    pub(crate) fn queue(&self, helper: usize, job: LaneJob) {
+        let mailbox = &self.helpers[helper].mailbox;
+        debug_assert_eq!(mailbox.state.load(Ordering::Acquire), IDLE);
+        // SAFETY: the helper does not read `jobs` while IDLE; capacity was
+        // reserved for every lane it owns, so this never allocates.
+        unsafe { (*mailbox.jobs.get()).push(job) };
+    }
+    /// Wakes every helper with queued lanes.
+    pub(crate) fn start(&self) {
+        for helper in &self.helpers {
+            // SAFETY: still IDLE; only the render thread touches `jobs`.
+            if unsafe { (*helper.mailbox.jobs.get()).is_empty() } {
+                continue;
+            }
+            helper.mailbox.state.store(READY, Ordering::Release);
+            if let Some(thread) = &helper.thread {
+                thread.thread().unpark();
+            }
+        }
+    }
+    /// Waits for every started helper, then clears the queues. Must always be
+    /// called after `start`, even when the caller's own lane failed.
+    pub(crate) fn finish(&self) -> Result<(), String> {
+        let mut failed = false;
+        for helper in &self.helpers {
+            let mailbox = &helper.mailbox;
+            if mailbox.state.load(Ordering::Acquire) == IDLE {
+                continue;
+            }
+            let mut spins = 0u32;
+            while mailbox.state.load(Ordering::Acquire) != DONE {
+                spins = spins.saturating_add(1);
+                if spins < 20_000 {
+                    std::hint::spin_loop();
+                } else {
+                    std::thread::yield_now();
+                }
+            }
+            failed |= mailbox.failed.swap(false, Ordering::Relaxed);
+            // SAFETY: DONE returns `jobs` to the render thread.
+            unsafe { (*mailbox.jobs.get()).clear() };
+            mailbox.state.store(IDLE, Ordering::Release);
+        }
+        if failed {
+            Err("Native lane render failed".into())
+        } else {
+            Ok(())
+        }
+    }
+}
+impl Drop for LanePool {
+    fn drop(&mut self) {
+        for helper in &mut self.helpers {
+            helper.mailbox.quit.store(true, Ordering::Release);
+            if let Some(thread) = helper.thread.take() {
+                thread.thread().unpark();
+                let _ = thread.join();
+            }
+        }
+    }
+}
