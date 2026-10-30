@@ -1527,7 +1527,8 @@ export interface LocalModel {
   sha256: string;
   title: string;
   /**
-   * The TONE3000 tone it came from; 0 for a file added on this unit.
+   * The TONE3000 tone it came from; absent for a file added on this unit,
+   * which carries no provider data.
    */
   tone_id?: number;
 }

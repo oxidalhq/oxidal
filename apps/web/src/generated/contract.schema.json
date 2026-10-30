@@ -4467,8 +4467,7 @@
         },
         "gear": {
           "description": "The tone's gear type (amp, pedal, cab…), when known.",
-          "type": "string",
-          "default": ""
+          "type": "string"
         },
         "id": {
           "type": "string"
@@ -4483,10 +4482,9 @@
           "type": "string"
         },
         "tone_id": {
-          "description": "The TONE3000 tone it came from; 0 for a file added on this unit.",
+          "description": "The TONE3000 tone it came from; absent for a file added on this unit,\nwhich carries no provider data.",
           "type": "integer",
           "format": "uint64",
-          "default": 0,
           "minimum": 0
         }
       },

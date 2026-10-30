@@ -22,12 +22,16 @@ pub struct LocalModel {
     pub name: String,
     pub format: String,
     pub sha256: String,
-    /// The TONE3000 tone it came from; 0 for a file added on this unit.
-    #[serde(default)]
+    /// The TONE3000 tone it came from; absent for a file added on this unit,
+    /// which carries no provider data.
+    #[serde(default, skip_serializing_if = "is_local")]
     pub tone_id: u64,
     /// The tone's gear type (amp, pedal, cab…), when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gear: String,
+}
+fn is_local(tone_id: &u64) -> bool {
+    *tone_id == 0
 }
 impl LocalModel {
     fn new(id: String, asset: ModelAsset) -> Self {
