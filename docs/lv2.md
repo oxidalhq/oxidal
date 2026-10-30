@@ -21,7 +21,7 @@ Latency semantics follow the official [latency designation](https://lv2plug.in/n
 
 ## Oxidal plugins
 
-Oxidal builds its own LV2 effects in `native/`. The first is [Oxidal Pitch](native-pitch.md), the TONE3000 pitch engine as a standalone mono or stereo effect.
+Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain.
 
 ## Atom Sequence transport
 
