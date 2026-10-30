@@ -52,9 +52,13 @@
   gap: 0.375rem;
   margin-top: 0.125rem;
 }
-.tool-row-actions [aria-pressed='true'] {
+/* Outranks the global ghost tab underline: in a row every pressed button,
+   ghost or outline, is the same ink inversion. */
+.tool-row .tool-row-actions .oxidal-button[aria-pressed='true'] {
   background: var(--foreground);
   border-color: var(--foreground);
+  border-radius: var(--radius);
+  box-shadow: none;
   color: var(--background);
 }
 .tool-status {
