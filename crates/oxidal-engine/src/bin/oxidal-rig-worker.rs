@@ -249,19 +249,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut announced = false;
         let mut switch_reply = false;
         let mut pump = Instant::now();
-        // TIMING (temporary)
-        let mut report = Instant::now();
-        let (mut hold_midi, mut hold_tick, mut hold_req, mut hold_disp) =
-            (0u128, 0u128, 0u128, 0u128);
         while !stop.load(Ordering::Acquire) {
-            if report.elapsed() >= Duration::from_secs(5) {
-                let (wait, work) = oxidal_engine::render::timing::take();
-                eprintln!(
-                    "TIMING render wait {wait} work {work} us; owner holds midi {hold_midi} tick {hold_tick} request {hold_req} dispatcher {hold_disp} us"
-                );
-                (hold_midi, hold_tick, hold_req, hold_disp) = (0, 0, 0, 0);
-                report = Instant::now();
-            }
             if let Ok(slot) = failure.lock()
                 && let Some(error) = slot.clone()
             {
@@ -280,26 +268,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
             if primed {
-                let t = Instant::now();
                 let mut rig = shared.lock();
                 if !rig.switching() {
                     midi.poll(|settings, message| rig.active_mut().midi_message(settings, message));
                 }
-                drop(rig);
-                hold_midi = hold_midi.max(t.elapsed().as_micros());
             }
             if pump.elapsed() >= Duration::from_millis(10) {
                 // JUCE dispatch waits up to 1 ms: run it outside the rig lock so
                 // the render thread never waits for it.
-                let t = Instant::now();
                 let dispatcher = shared.lock().dispatcher();
-                hold_disp = hold_disp.max(t.elapsed().as_micros());
                 if let Some(dispatcher) = dispatcher {
                     dispatcher.pump().map_err(|e| e.to_string())?;
                 }
-                let t = Instant::now();
                 shared.lock().tick()?;
-                hold_tick = hold_tick.max(t.elapsed().as_micros());
                 pump = Instant::now();
             }
             if switch_reply && !shared.lock().switching() {
@@ -322,7 +303,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let Ok(request) = received.recv_timeout(Duration::from_millis(2)) else {
                 continue;
             };
-            let t_req = Instant::now();
             let mut rig = shared.lock();
             let error = match request {
                 WorkerRequest::HostUtility { command } => {
@@ -367,7 +347,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let control = snapshot(&rig, &midi.status);
             drop(rig);
-            hold_req = hold_req.max(t_req.elapsed().as_micros());
             responses.send(WorkerReply {
                 control,
                 telemetry: latest(),

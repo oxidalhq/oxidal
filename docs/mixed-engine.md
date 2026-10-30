@@ -719,3 +719,9 @@ A missing or cyclic display graph retains controls with a routing warning. This 
 navigation of confirmed routing, not a new parallel-routing editor. MIDI mapping
 stays below the sound inspector. Save copy sits beside chain status and captures
 both lifecycle and control revisions before accepting a name.
+
+## Realtime render thread
+
+The rig worker renders on a SCHED_RR render thread that owns the duplex stream and only calls `ResidentSet::process` through `render::SharedRig`. The worker's main thread, which built the rig and is JUCE's message thread, keeps MIDI, requests, model steps and graph switching under the same lock. Native nodes render through lazily bound `AudioPort`s. The per-block native latency check moves to the owner's 10 ms tick, because latency queries are owner-thread calls. JUCE message dispatch (`runDispatchLoopUntil(1)`, up to 1 ms) runs outside the lock through an owner-only `PumpPort`, so the render thread never waits for it. The pinned plugin patch `tone3000-RtWorkerPool.h.patch` starts the multi-core workers at SCHED_RR 89: the upstream priority 10 maps to 99, which a 95 rtprio limit refuses, and the workers then silently ran at normal priority.
+
+Measured on the owner's Pi with a 3-branch Scenes rig (Bogner Fullstack, Dumble Spread, Marshall Bluesbreaker), 30 s each: 64 × 4 (5.3 ms) **0 xruns** (53 before the split), 96 × 3 one xrun, 64 × 3 96, 48 × 3 about 140. The remaining small-buffer spikes come from one branch: a long room IR ("The Green-Wood Cemetery Catacombs") whose partitioned convolution does about 2.7 ms of work in occasional blocks. One engine alone absorbs it inside 48 × 3; three together cannot. Smoothing that work inside the plugin's convolver is a separate item. Gains, bypass, scenes and LV2 control values still apply under the lock rather than through a lock-free queue (phase B).

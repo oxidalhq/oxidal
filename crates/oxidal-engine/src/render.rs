@@ -50,32 +50,9 @@ impl SharedRig {
     }
     /// Render-thread access: processing only.
     pub fn render(&self, input: &[&[f32]], output: &mut [&mut [f32]]) -> Result<(), String> {
-        let t0 = std::time::Instant::now();
-        let mut rig = self.lock();
-        let waited = t0.elapsed();
-        let result = rig.process(input, output);
-        drop(rig);
-        timing::record(waited, t0.elapsed() - waited);
-        result
+        self.lock().process(input, output)
     }
     pub fn into_inner(self) -> crate::ResidentSet {
         self.0.into_inner().unwrap_or_else(|e| e.into_inner())
-    }
-}
-
-/// TIMING (temporary): render lock wait and process maxima, reported every 5 s.
-pub mod timing {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static WAIT: AtomicU64 = AtomicU64::new(0);
-    static WORK: AtomicU64 = AtomicU64::new(0);
-    pub fn record(wait: std::time::Duration, work: std::time::Duration) {
-        WAIT.fetch_max(wait.as_micros() as u64, Ordering::Relaxed);
-        WORK.fetch_max(work.as_micros() as u64, Ordering::Relaxed);
-    }
-    pub fn take() -> (u64, u64) {
-        (
-            WAIT.swap(0, Ordering::Relaxed),
-            WORK.swap(0, Ordering::Relaxed),
-        )
     }
 }
