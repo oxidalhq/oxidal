@@ -14,6 +14,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
+import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
 import './Library.css';
@@ -276,6 +277,7 @@ export function Library({
               onChanged={() => setRefresh((v) => v + 1)}
             />
           )}
+          <EvenOut connected={connected} />
           <p className="caption">
             Tap a preset to play it with your current audio setup. Changing
             preset briefly interrupts audio; scenes switch without a gap on Rig.

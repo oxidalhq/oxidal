@@ -37,6 +37,12 @@
     "boosts": {
       "$ref": "#/$defs/BoostState"
     },
+    "calibration": {
+      "$ref": "#/$defs/CalibrationState"
+    },
+    "calibration_command": {
+      "$ref": "#/$defs/CalibrationCommand"
+    },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
@@ -220,6 +226,8 @@
     "guitars",
     "boosts",
     "boost_update",
+    "calibration",
+    "calibration_command",
     "midi_devices",
     "audio_probe",
     "audio_probe_result",
@@ -1737,7 +1745,7 @@
       "type": "object",
       "properties": {
         "applied_db": {
-          "description": "Their sum as applied at the output, clamped to −12…+12 dB.",
+          "description": "Calibration plus boosts as applied at the output, clamped to −24…+24 dB.",
           "type": "number",
           "format": "float"
         },
@@ -1747,6 +1755,12 @@
             "type": "number",
             "format": "float"
           }
+        },
+        "calibrated_db": {
+          "description": "The calibration offset of what is playing (Even out all), in dB.",
+          "type": "number",
+          "format": "float",
+          "default": 0
         },
         "playing": {
           "description": "Keys of what is playing: the preset, then its scene when it has one.",
@@ -1859,6 +1873,94 @@
         "name",
         "enabled",
         "partial"
+      ]
+    },
+    "CalibrationAction": {
+      "oneOf": [
+        {
+          "description": "Measure every preset and scene that is new or changed since last time.",
+          "type": "string",
+          "const": "run"
+        },
+        {
+          "description": "Measure every preset and scene again.",
+          "type": "string",
+          "const": "run_all"
+        },
+        {
+          "description": "Stop after the current measurement and put back what was playing.",
+          "type": "string",
+          "const": "cancel"
+        },
+        {
+          "description": "Forget every measurement: all presets play at their own level again.",
+          "type": "string",
+          "const": "reset"
+        }
+      ]
+    },
+    "CalibrationCommand": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/CalibrationAction"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "action"
+      ]
+    },
+    "CalibrationEntry": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "lufs": {
+          "type": "number",
+          "format": "float"
+        },
+        "name": {
+          "type": "string"
+        },
+        "offset_db": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "lufs",
+        "offset_db"
+      ]
+    },
+    "CalibrationState": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CalibrationEntry"
+          }
+        },
+        "progress": {
+          "$ref": "#/$defs/Progress"
+        },
+        "target_lufs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entries",
+        "progress"
       ]
     },
     "Capabilities": {
@@ -3727,7 +3829,7 @@
       "type": "object",
       "properties": {
         "boost_db": {
-          "description": "Boost of the playing preset and scene in dB (−12 to +12), added to the\noutput level. Set by the daemon from the boost store, never by a view.",
+          "description": "Calibration offset plus boost of the playing preset and scene in dB\n(−24 to +24), added to the\noutput level. Set by the daemon from the boost store, never by a view.",
           "type": "number",
           "format": "float"
         },
@@ -3774,6 +3876,17 @@
             "mono": false,
             "output_level_db": 0
           }
+        },
+        "reference": {
+          "description": "The calibration measurement while the reference riff plays.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceReading"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "test_tone_active": {
           "type": "boolean"
@@ -3846,6 +3959,29 @@
           "required": [
             "kind",
             "levels"
+          ]
+        },
+        {
+          "description": "Plays the calibration riff into the rig in place of the guitar, at\n`peak_db`, and measures the rig's loudness; disabled returns to the guitar.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "reference"
+            },
+            "peak_db": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled",
+            "peak_db"
           ]
         }
       ]
@@ -6128,6 +6264,49 @@
         "modified"
       ]
     },
+    "Progress": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "done": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "measured": {
+          "description": "Measured this run; the rest were already measured and unchanged.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "total": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "running",
+        "done",
+        "total",
+        "measured"
+      ]
+    },
     "Radio": {
       "type": "object",
       "properties": {
@@ -6231,6 +6410,29 @@
         "recorder_session",
         "elapsed_ms",
         "readings"
+      ]
+    },
+    "ReferenceReading": {
+      "description": "Loudness of the rig's output while the reference riff plays.",
+      "type": "object",
+      "properties": {
+        "lufs": {
+          "description": "K-weighted loudness (LUFS) over those seconds; none until measured.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "seconds": {
+          "description": "Seconds measured so far (the first second after starting is skipped).",
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seconds"
       ]
     },
     "ResourceSource": {

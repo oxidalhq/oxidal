@@ -95,6 +95,11 @@ export type HostUtility =
   | {
       kind: "levels";
       levels: HostLevels;
+    }
+  | {
+      enabled: boolean;
+      kind: "reference";
+      peak_db: number;
     };
 export type BranchMode = "toggle" | "gate";
 export type Target =
@@ -297,6 +302,7 @@ export type Message =
     };
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
+export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
 /**
  * One command entry point; relative edits are applied to current authoritative state.
  * @see docs/architecture.md
@@ -673,6 +679,8 @@ export interface Contract {
   audio_state: AudioState;
   boost_update: BoostUpdate;
   boosts: BoostState;
+  calibration: CalibrationState;
+  calibration_command: CalibrationCommand;
   capabilities: Capabilities;
   command: Command;
   control_audit: AuditHistory;
@@ -757,7 +765,8 @@ export interface AudioCommand {
  */
 export interface HostLevels {
   /**
-   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * Calibration offset plus boost of the playing preset and scene in dB
+   * (−24 to +24), added to the
    * output level. Set by the daemon from the boost store, never by a view.
    */
   boost_db?: number;
@@ -846,7 +855,8 @@ export interface AudioProbe {
  */
 export interface HostLevels1 {
   /**
-   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * Calibration offset plus boost of the playing preset and scene in dB
+   * (−24 to +24), added to the
    * output level. Set by the daemon from the boost store, never by a view.
    */
   boost_db?: number;
@@ -1092,16 +1102,45 @@ export interface BoostUpdate {
 }
 export interface BoostState {
   /**
-   * Their sum as applied at the output, clamped to −12…+12 dB.
+   * Calibration plus boosts as applied at the output, clamped to −24…+24 dB.
    */
   applied_db: number;
   boosts: {
     [k: string]: number;
   };
   /**
+   * The calibration offset of what is playing (Even out all), in dB.
+   */
+  calibrated_db?: number;
+  /**
    * Keys of what is playing: the preset, then its scene when it has one.
    */
   playing: string[];
+}
+export interface CalibrationState {
+  entries: CalibrationEntry[];
+  progress: Progress;
+  target_lufs?: number | null;
+}
+export interface CalibrationEntry {
+  key: string;
+  lufs: number;
+  name: string;
+  offset_db: number;
+}
+export interface Progress {
+  current?: string | null;
+  done: number;
+  error?: string | null;
+  /**
+   * Measured this run; the rest were already measured and unchanged.
+   */
+  measured: number;
+  running: boolean;
+  total: number;
+}
+export interface CalibrationCommand {
+  action: CalibrationAction;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.
@@ -1344,6 +1383,10 @@ export interface Channel {
 export interface HostState {
   hear_yourself: boolean;
   levels?: HostLevels2;
+  /**
+   * The calibration measurement while the reference riff plays.
+   */
+  reference?: ReferenceReading | null;
   test_tone_active: boolean;
 }
 /**
@@ -1352,7 +1395,8 @@ export interface HostState {
  */
 export interface HostLevels2 {
   /**
-   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * Calibration offset plus boost of the playing preset and scene in dB
+   * (−24 to +24), added to the
    * output level. Set by the daemon from the boost store, never by a view.
    */
   boost_db?: number;
@@ -1374,6 +1418,19 @@ export interface HostLevels2 {
    * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
    */
   output_level_db: number;
+}
+/**
+ * Loudness of the rig's output while the reference riff plays.
+ */
+export interface ReferenceReading {
+  /**
+   * K-weighted loudness (LUFS) over those seconds; none until measured.
+   */
+  lufs?: number | null;
+  /**
+   * Seconds measured so far (the first second after starting is skipped).
+   */
+  seconds: number;
 }
 export interface SavedGraph {
   id: string;

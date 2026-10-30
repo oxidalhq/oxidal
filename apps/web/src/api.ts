@@ -730,6 +730,33 @@ export async function boosts(
   return body;
 }
 
+export type CalibrationState = Contract['calibration'];
+const calibrationValidator = ajv.compile<CalibrationState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/CalibrationState',
+});
+/** Even out all: state, or a run / run_all / cancel / reset command. */
+export async function calibration(
+  action?: Contract['calibration_command']['action'],
+  signal?: AbortSignal,
+): Promise<CalibrationState | null> {
+  const response = await fetch(
+    '/api/v1/calibration',
+    action
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!calibrationValidator(body)) throw new Error('Incompatible calibration');
+  return body;
+}
+
 export type LocalModel = Contract['local_model'];
 export type LocalModelPage = Contract['local_model_page'];
 const localModelValidator = ajv.compile<LocalModel>({

@@ -41,10 +41,21 @@ pub struct BoostState {
     pub boosts: BTreeMap<String, f32>,
     /// Keys of what is playing: the preset, then its scene when it has one.
     pub playing: Vec<String>,
-    /// Their sum as applied at the output, clamped to −12…+12 dB.
+    /// The calibration offset of what is playing (Even out all), in dB.
+    #[serde(default)]
+    pub calibrated_db: f32,
+    /// Calibration plus boosts as applied at the output, clamped to −24…+24 dB.
     pub applied_db: f32,
 }
 
+/// Boost and calibration key of a TONE3000 original or saved copy.
+pub(crate) fn key_tone3000(id: &str, owned: bool) -> String {
+    format!("tone3000:{}:{id}", if owned { "copy" } else { "original" })
+}
+/// Boost and calibration key of one scene of a preset with scenes.
+pub(crate) fn key_scene(preset: &str, scene: &str) -> String {
+    format!("scenes:{preset}#{scene}")
+}
 fn valid_key(key: &str) -> bool {
     let id = |s: &str| {
         (1..=128).contains(&s.len())
@@ -137,8 +148,7 @@ async fn playing(shared: &Shared) -> Vec<String> {
     if native.phase == AudioPhase::Running
         && let Some(c) = native.configured.filter(|c| !c.draft)
     {
-        let kind = if c.owned { "copy" } else { "original" };
-        return vec![format!("tone3000:{kind}:{}", c.preset_id)];
+        return vec![key_tone3000(&c.preset_id, c.owned)];
     }
     let rig = shared.rig_playback.snapshot();
     let (Some(configured), AudioPhase::Running) = (rig.configured, rig.phase) else {
@@ -171,7 +181,7 @@ async fn playing(shared: &Shared) -> Vec<String> {
     };
     let preset = format!("scenes:{id}");
     match rig.control.and_then(|c| c.scene) {
-        Some(scene) => vec![preset.clone(), format!("{preset}#{scene}")],
+        Some(scene) => vec![preset, key_scene(&id, &scene)],
         None => vec![preset],
     }
 }
@@ -181,7 +191,9 @@ async fn playing(shared: &Shared) -> Vec<String> {
 pub(crate) async fn follow(shared: &Shared) -> BoostState {
     let playing = playing(shared).await;
     let boosts = shared.boosts.current();
-    let applied_db = boosts.total(&playing);
+    let calibrated_db = shared.calibration.current().total(&playing);
+    let (lo, hi) = HostLevels::OFFSET_RANGE;
+    let applied_db = (boosts.total(&playing) + calibrated_db).clamp(lo, hi);
     let current = shared.levels.current();
     if current.boost_db != applied_db {
         let levels = HostLevels {
@@ -195,6 +207,7 @@ pub(crate) async fn follow(shared: &Shared) -> BoostState {
     BoostState {
         boosts: boosts.boosts,
         playing,
+        calibrated_db,
         applied_db,
     }
 }

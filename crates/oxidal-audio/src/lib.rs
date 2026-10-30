@@ -6,6 +6,7 @@ pub mod meter;
 pub mod midi;
 #[allow(unsafe_code)]
 pub mod realtime;
+pub mod reference;
 pub mod structure;
 pub mod tools;
 use schemars::JsonSchema;

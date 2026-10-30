@@ -118,10 +118,20 @@ impl State {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostUtility {
-    HearYourself { enabled: bool },
+    HearYourself {
+        enabled: bool,
+    },
     TestTone,
     StopTestTone,
-    Levels { levels: HostLevels },
+    Levels {
+        levels: HostLevels,
+    },
+    /// Plays the calibration riff into the rig in place of the guitar, at
+    /// `peak_db`, and measures the rig's loudness; disabled returns to the guitar.
+    Reference {
+        enabled: bool,
+        peak_db: f32,
+    },
 }
 /// Unit-wide gain staging around every rig: guitar input trim before the rig,
 /// master output level after it. Never stored in presets.
@@ -140,7 +150,8 @@ pub struct HostLevels {
     /// ungated. Set from the active guitar's measured noise floor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate_db: Option<f32>,
-    /// Boost of the playing preset and scene in dB (−12 to +12), added to the
+    /// Calibration offset plus boost of the playing preset and scene in dB
+    /// (−24 to +24), added to the
     /// output level. Set by the daemon from the boost store, never by a view.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub boost_db: f32,
@@ -153,16 +164,18 @@ impl HostLevels {
     pub const OUTPUT_RANGE: (f32, f32) = (-60.0, 12.0);
     pub const GATE_RANGE: (f32, f32) = (-96.0, -20.0);
     pub const BOOST_RANGE: (f32, f32) = (-12.0, 12.0);
+    /// Calibration offset plus boost, as applied at the output.
+    pub const OFFSET_RANGE: (f32, f32) = (-24.0, 24.0);
     pub fn validate(&self) -> Result<(), String> {
         let within = |v: f32, (lo, hi): (f32, f32)| v.is_finite() && (lo..=hi).contains(&v);
         if within(self.input_trim_db, Self::INPUT_RANGE)
             && within(self.output_level_db, Self::OUTPUT_RANGE)
             && self.gate_db.is_none_or(|g| within(g, Self::GATE_RANGE))
-            && within(self.boost_db, Self::BOOST_RANGE)
+            && within(self.boost_db, Self::OFFSET_RANGE)
         {
             Ok(())
         } else {
-            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS, boost −12 to +12 dB".into())
+            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS, offset −24 to +24 dB".into())
         }
     }
     fn input_gain(&self) -> f32 {
@@ -186,6 +199,9 @@ pub struct HostState {
     pub test_tone_active: bool,
     #[serde(default)]
     pub levels: HostLevels,
+    /// The calibration measurement while the reference riff plays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<crate::reference::ReferenceReading>,
 }
 #[derive(Debug)]
 pub struct HostSignal {
@@ -197,6 +213,7 @@ pub struct HostSignal {
     input_gain: Glide,
     output_gain: Glide,
     gate: Gate,
+    reference: crate::reference::Reference,
 }
 /// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
 /// 50 ms, then fades over about 80 ms. Closes 6 dB below the threshold so
@@ -319,6 +336,7 @@ impl HostSignal {
             input_gain: Glide::new(rate, levels.input_gain()),
             output_gain: Glide::new(rate, levels.output_gain()),
             gate: Gate::new(rate, levels.gate_db),
+            reference: crate::reference::Reference::new(rate),
         }
     }
     pub fn command(&mut self, command: HostUtility) {
@@ -331,6 +349,13 @@ impl HostSignal {
                 }
             }
             HostUtility::StopTestTone => self.test_active = false,
+            HostUtility::Reference { enabled, peak_db } => {
+                if enabled && peak_db.is_finite() && (-40.0..=0.0).contains(&peak_db) {
+                    self.reference.start(peak_db);
+                } else {
+                    self.reference.stop();
+                }
+            }
             HostUtility::Levels { levels } => {
                 // Invalid levels never reach the audio path; the caller validates first.
                 if levels.validate().is_ok() {
@@ -347,9 +372,15 @@ impl HostSignal {
             hear_yourself: self.hear,
             test_tone_active: self.test_active,
             levels: self.levels,
+            reference: self.reference.reading(),
         }
     }
     pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
+        // The riff stands in for a guitar at the reference level: no trim or gate.
+        if self.reference.active() {
+            self.reference.input(left, right);
+            return;
+        }
         if !self.hear {
             left.fill(0.0);
             right.fill(0.0);
@@ -359,6 +390,13 @@ impl HostSignal {
         self.gate.apply(left, right);
     }
     pub fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.reference.active() {
+            // Calibration is silent: measure the rig, send nothing to the speakers.
+            self.reference.measure(left, right);
+            left.fill(0.0);
+            right.fill(0.0);
+            return;
+        }
         self.test_tone(left, right);
         self.output_gain.apply(left, right);
         if self.levels.mono {
@@ -592,12 +630,41 @@ mod host_tests {
         assert_eq!(muted.output_gain(), 0.0);
         assert!(
             HostLevels {
-                boost_db: 12.5,
+                boost_db: 24.5,
                 ..HostLevels::default()
             }
             .validate()
             .is_err()
         );
+    }
+    #[test]
+    fn the_reference_replaces_the_guitar_measures_the_rig_and_stays_silent() {
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        signal.command(HostUtility::Reference {
+            enabled: true,
+            peak_db: -12.0,
+        });
+        let mut heard = 0.0f32;
+        for _ in 0..(48000 * 2 / 64) {
+            // A loud live guitar is ignored while the riff plays.
+            let (mut l, mut r) = ([0.9; 64], [0.9; 64]);
+            signal.input(&mut l, &mut r);
+            assert!(l.iter().all(|v| v.abs() < 0.5));
+            signal.output(&mut l, &mut r);
+            heard = heard.max(l.iter().chain(&r).fold(0.0, |m, v| m.max(v.abs())));
+        }
+        assert_eq!(heard, 0.0);
+        let reading = signal.state().reference.unwrap();
+        assert!(reading.seconds > 0.9 && reading.lufs.is_some());
+        signal.command(HostUtility::Reference {
+            enabled: false,
+            peak_db: 0.0,
+        });
+        assert!(signal.state().reference.is_none());
+        let (mut l, mut r) = ([0.25; 64], [0.25; 64]);
+        signal.input(&mut l, &mut r);
+        signal.output(&mut l, &mut r);
+        assert!((l[63] - 0.25).abs() < 1e-6, "the guitar is back");
     }
     #[test]
     fn mono_sums_both_sides_and_cancels_opposite_polarity() {

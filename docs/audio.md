@@ -242,6 +242,17 @@ Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an inp
 - **API:** `GET /api/v1/levels` returns `{input_trim_db, output_level_db}`. `POST` validates the range (422 outside it, 400 for unknown fields), sends the levels to whichever engine is running through its host-utility command, then stores them. A stopped unit just stores them for the next start.
 - **UI:** the Level fader sits under the preset picker on Rig (TONE3000 and hybrid), on Perform and in Settings → Audio. Its taper gives the lower quarter to −60 to −30 dB and the rest to −30 to +12 dB, in 0.5 dB steps. Arrow keys move 1 dB. While a request is in flight only the newest value waits. A daemon without levels hides the fader.
 
+## Even out all
+
+One button (Library → Even out all) brings every preset and every scene to the same loudness, so switching never jumps.
+
+- **Reference riff:** the host stage plays a built-in riff (Karplus–Strong plucked strings: power chords, palm-muted chugs and single notes, four seconds, identical on every unit) into the rig in place of the guitar, at the reference guitar's measured strum peak plus its trim, or −12 dBFS when no guitar is measured. Trim and gate are skipped: the riff stands for a guitar after its trim.
+- **Measurement:** ITU-R BS.1770 K-weighted loudness of the rig's output, before Level, Boost and Mono, over three seconds after one settling second. The host mutes its output while the riff plays, so a run is silent.
+- **Run:** the daemon lists visible originals, saved copies and every scene of every preset with scenes, skips anything whose content (original or copy hash, scene preset revision) was already measured, and loads and measures the rest one by one (about four seconds each). A preset that fails to load or play is reported and skipped. Afterwards it restarts exactly what was playing, including a scene preset's unsaved edits and its scene.
+- **Offsets:** the target is the median of all measurements, so the unit stays about as loud as before; each preset or scene gets target − measured, in 0.5 dB steps within ±12 dB. Offsets are stored in `calibration.json` and applied at the host output with the boost (`boost_db` = offset + boost, within ±24 dB).
+- **API:** `GET /api/v1/calibration` (target, entries with offsets, progress); `POST {action}` with `run`, `run_all`, `cancel` or `reset`.
+- **Not yet:** recording your own riff instead of the built-in one, and rendering faster than real time.
+
 ## Boost
 
 A boost is deliberate extra level for a solo preset or scene, on top of the evened-out level: −12 to +12 dB in 0.5 dB steps. It is set from the **Boost** button beside Level on Rig, with one row for the preset and, for a preset with scenes, one for the sounding scene; they add up.

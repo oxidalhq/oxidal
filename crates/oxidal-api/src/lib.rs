@@ -3,6 +3,7 @@ mod audio;
 mod audio_boot;
 mod audit;
 mod boosts;
+mod calibration;
 mod debug;
 mod device;
 mod graph_playback;
@@ -106,6 +107,8 @@ pub struct Contract {
     pub guitars: guitars::Guitars,
     pub boosts: boosts::BoostState,
     pub boost_update: boosts::BoostUpdate,
+    pub calibration: calibration::CalibrationState,
+    pub calibration_command: calibration::CalibrationCommand,
     pub midi_devices: oxidal_audio::midi::Devices,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
@@ -151,6 +154,7 @@ struct Shared {
     levels: Arc<levels::Levels>,
     guitars: Arc<guitars::Store>,
     boosts: Arc<boosts::Store>,
+    calibration: Arc<calibration::Store>,
     rig_playback: rig_playback::RigPlayback,
     control: Mutex<Control>,
     native: Arc<Mutex<Option<native_editor::Worker>>>,
@@ -239,6 +243,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         levels,
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         boosts: Arc::new(boosts::Store::load(config.preset_dir.join("boosts.json"))),
+        calibration: Arc::new(calibration::Store::load(
+            config.preset_dir.join("calibration.json"),
+        )),
         control: Mutex::new(control),
         native: Arc::new(Mutex::new(native_editor::Worker::start(&config)?)),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
@@ -299,6 +306,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/levels", get(levels::state).post(levels::update))
         .route("/guitars", get(guitars::state).post(guitars::update))
         .route("/boosts", get(boosts::state).post(boosts::update))
+        .route(
+            "/calibration",
+            get(calibration::state).post(calibration::command),
+        )
         .route(
             "/native/defaults",
             get(native_defaults::state).post(native_defaults::update),

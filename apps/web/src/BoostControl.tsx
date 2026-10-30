@@ -104,6 +104,12 @@ export function BoostControl({
                 </Button>
               </div>
             ))}
+            {!!state?.calibrated_db && (
+              <p className="caption">
+                Evened out by {db(state.calibrated_db)} (Library → Even out
+                all); the boost adds to that.
+              </p>
+            )}
             {targets.length > 1 && (
               <p role="status">Playing now: {db(total)} in all.</p>
             )}

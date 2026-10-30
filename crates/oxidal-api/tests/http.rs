@@ -1399,7 +1399,7 @@ async fn boosts_are_stored_per_preset_and_scene_and_validated() {
         .unwrap();
     assert_eq!(
         empty,
-        json!({"boosts": {}, "playing": [], "applied_db": 0.0})
+        json!({"boosts": {}, "playing": [], "calibrated_db": 0.0, "applied_db": 0.0})
     );
     let set = |key: &str, db: f64| {
         client
@@ -1430,6 +1430,74 @@ async fn boosts_are_stored_per_preset_and_scene_and_validated() {
     assert!(root.join("boosts.json").is_file());
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn calibration_reports_progress_and_refuses_without_audio_setup() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/calibration");
+    let idle: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(idle["target_lufs"], Value::Null);
+    assert_eq!(idle["entries"], json!([]));
+    assert_eq!(idle["progress"]["running"], false);
+    // Nothing has ever played, so there is no audio setup to calibrate with.
+    let mut state: Value = client
+        .post(&endpoint)
+        .json(&json!({"action": "run"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    for _ in 0..50 {
+        if state["progress"]["running"] == false {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        state = client
+            .get(&endpoint)
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+    }
+    assert_eq!(state["progress"]["running"], false);
+    assert!(
+        state["progress"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("Settings → Audio")
+    );
+    let bad = client
+        .post(&endpoint)
+        .json(&json!({"action": "everything"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+    let reset: Value = client
+        .post(&endpoint)
+        .json(&json!({"action": "reset"}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(reset["entries"], json!([]));
+    task.abort();
+    std::fs::remove_dir_all(path.with_extension("presets")).unwrap();
 }
 
 #[tokio::test]
