@@ -1371,6 +1371,9 @@ export function LiveRig({
                   Change model
                 </Button>
               </div>
+              {selectedToneId != null && (
+                <ToneDetails toneId={selectedToneId} />
+              )}
               {orderedBlocks.length > 1 && (
                 <div
                   className="action-row"
@@ -1514,7 +1517,6 @@ export function LiveRig({
                 }}
               />
             ))}
-          {selectedToneId != null && <ToneDetails toneId={selectedToneId} />}
           {selectedBlock &&
             (state.models?.some((m) => m.target === selectedBlock) ||
               (state.configured && !state.configured.draft)) && (
