@@ -49,6 +49,7 @@ import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
 import { ArtworkDeck } from './AssetArtwork';
+import { ToneDetails } from './ToneDetails';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -625,6 +626,22 @@ export function MixedRig({
     nativeSelection && nativeSelection.node === selected?.id
       ? nativeSelection.target
       : 'global';
+  /** The TONE3000 tone behind the selected block of a TONE3000 node, when known. */
+  const selectedToneId = (() => {
+    if (selected?.kind !== 'tone3000') return null;
+    const layout = state.control?.authoring?.find((a) => a.node === selected.id)
+      ?.status.layout;
+    const blocks = [...(layout?.left ?? []), ...(layout?.right ?? [])].filter(
+      (b) => !b.insert,
+    );
+    // With no block chosen, a node of one block is that block.
+    const block =
+      blocks.find((b) => b.id === nativeTarget) ??
+      (nativeTarget === 'global' && blocks.length === 1
+        ? blocks[0]
+        : undefined);
+    return block?.tone_id ?? null;
+  })();
   const eqBlock = wholeNative
     ? eqBlocks.find((e) => e.block_id === nativeTarget)
     : eqBlocks[0];
@@ -1222,6 +1239,9 @@ export function MixedRig({
       )}
       {running && selectedModel && (
         <ArtworkDeck model id={selectedModel.asset} />
+      )}
+      {running && selectedToneId != null && (
+        <ToneDetails toneId={selectedToneId} />
       )}
       {running && selected && nativeModels && !wholeNative && eqBlock && (
         <Button

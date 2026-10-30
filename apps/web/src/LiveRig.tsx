@@ -34,6 +34,7 @@ import {
 } from './rigControls';
 import { LiveEq } from './LiveEq';
 import { ArtworkDeck } from './AssetArtwork';
+import { ToneDetails } from './ToneDetails';
 import { ModelPicker } from './ModelPicker';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -715,6 +716,10 @@ export function LiveRig({
     ? 'right'
     : 'left';
   const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
+  /** The TONE3000 tone behind the selected block, when it has one. */
+  const selectedToneId =
+    orderedBlocks.find((b) => b.id === selectedBlock && !b.insert)?.tone_id ??
+    null;
   const chainLanes: RigLaneVM[] = (['left', 'right'] as const).flatMap(
     (lane) => {
       const layout = state.authoring?.layout;
@@ -1509,6 +1514,7 @@ export function LiveRig({
                 }}
               />
             ))}
+          {selectedToneId != null && <ToneDetails toneId={selectedToneId} />}
           {selectedBlock &&
             (state.models?.some((m) => m.target === selectedBlock) ||
               (state.configured && !state.configured.draft)) && (
