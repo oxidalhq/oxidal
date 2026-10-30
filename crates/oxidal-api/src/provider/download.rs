@@ -130,6 +130,23 @@ fn valid_initial(access: &Access, value: &str, model: u64) -> Result<reqwest::Ur
     }
     Ok(url)
 }
+/// A redirect may go to any public HTTPS host (the provider's file storage),
+/// never to an address, a local name, another port or embedded credentials.
+pub(super) fn trusted_redirect(url: &reqwest::Url) -> bool {
+    // `domain()` is none for IPv4 and IPv6 addresses.
+    let named = url.domain().is_some_and(|name| {
+        name.contains('.')
+            && !name.ends_with(".local")
+            && !name.ends_with(".localhost")
+            && !name.eq_ignore_ascii_case("localhost")
+    });
+    url.scheme() == "https"
+        && named
+        && url.port_or_known_default() == Some(443)
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.fragment().is_none()
+}
 async fn download(access: &Access, value: &str, model: u64) -> Result<Vec<u8>, &'static str> {
     let mut url = valid_initial(access, value, model)?;
     for hop in 0..4 {
@@ -153,15 +170,9 @@ async fn download(access: &Access, value: &str, model: u64) -> Result<Vec<u8>, &
             let next = url
                 .join(location)
                 .map_err(|_| "Invalid download redirect")?;
-            // Only the documented/observed provider model service receives redirected
-            // downloads, and it never receives the account's Bearer token.
-            if next.scheme() != "https"
-                || next.host_str() != Some("api.tone3000.com")
-                || next.port_or_known_default() != Some(443)
-                || !next.username().is_empty()
-                || next.password().is_some()
-                || next.fragment().is_some()
-            {
+            // The provider hands model files to its storage service, as the
+            // TONE3000 plugin follows. Redirects never carry the Bearer token.
+            if !trusted_redirect(&next) {
                 return Err("Untrusted model download redirect");
             }
             url = next;

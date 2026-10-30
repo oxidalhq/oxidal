@@ -186,3 +186,23 @@ async fn empty_download_and_disconnect_during_transfer_leave_no_selectable_asset
     );
     server.abort();
 }
+
+#[test]
+fn redirects_go_only_to_public_https_names() {
+    for (url, trusted) in [
+        ("https://api.tone3000.com/files/a.nam", true),
+        ("https://cdn.example-storage.net/o/a.nam?sig=x", true),
+        ("http://cdn.example-storage.net/a.nam", false),
+        ("https://127.0.0.1/a.nam", false),
+        ("https://[::1]/a.nam", false),
+        ("https://localhost/a.nam", false),
+        ("https://oxidal.local/a.nam", false),
+        ("https://intranet/a.nam", false),
+        ("https://cdn.example-storage.net:8443/a.nam", false),
+        ("https://user:pass@cdn.example-storage.net/a.nam", false),
+        ("https://cdn.example-storage.net/a.nam#x", false),
+    ] {
+        let parsed = reqwest::Url::parse(url).unwrap();
+        assert_eq!(trusted_redirect(&parsed), trusted, "{url}");
+    }
+}
