@@ -19,6 +19,10 @@ Feature behavior follows the LV2 [buffer-size](https://lv2plug.in/ns/ext/buf-siz
 
 Latency semantics follow the official [latency designation](https://lv2plug.in/ns/lv2core#latency) and [core run contract](https://lv2plug.in/c/html/group__lv2core.html). Intentional musical delay is not processing latency.
 
+## Oxidal plugins
+
+Oxidal builds its own LV2 effects in `native/`. The first is [Oxidal Pitch](native-pitch.md), the TONE3000 pitch engine as a standalone mono or stereo effect.
+
 ## Atom Sequence transport
 
 The declared-port host connects frame-timed Atom Sequence ports with fixed 16 KiB
