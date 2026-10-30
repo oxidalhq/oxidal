@@ -10,7 +10,8 @@
 namespace oxidal_hold {
 inline constexpr const char* MonoUri = "urn:oxidal:plugin:hold#mono";
 inline constexpr const char* StereoUri = "urn:oxidal:plugin:hold#stereo";
-enum Port : uint32_t { Hold, Attack, Release, Level, Dry, InputL, OutputL, InputR, OutputR, PortCount };
+/** The mono plugin has no Width: its audio ports are one lower (see connect). */
+enum Port : uint32_t { Hold, Attack, Release, Level, Dry, Focus, Width, InputL, OutputL, InputR, OutputR, PortCount };
 /** Analysis/synthesis frame: about 85 ms at 48 kHz, long enough to separate
  * the harmonics of a low guitar string, short enough to be the last note. */
 inline constexpr uint32_t FrameSize = 4096;

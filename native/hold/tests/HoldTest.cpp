@@ -18,18 +18,21 @@ struct Fixture {
     const LV2_Descriptor* descriptor;
     LV2_Handle instance;
     double rate;
-    float controls[5] = {0, 50, 200, 0, 1};
+    // Hold, Attack, Release, Level, Dry, Focus, Width
+    float controls[7] = {0, 50, 200, 0, 1, 80, 100};
     std::vector<float> in[2], out[2];
     Fixture(bool stereo, double rate = 48000) : rate(rate) {
         descriptor = lv2_descriptor(stereo ? 1 : 0);
         check(descriptor && !std::strcmp(descriptor->URI, stereo ? StereoUri : MonoUri), "Descriptor");
         instance = descriptor->instantiate(descriptor, rate, "", nullptr);
         check(instance, "Instantiate");
-        for (uint32_t p = 0; p < 5; ++p) descriptor->connect_port(instance, p, &controls[p]);
+        // The mono plugin has no Width, so its audio ports start one place earlier.
+        for (uint32_t p = 0; p < (stereo ? 7u : 6u); ++p) descriptor->connect_port(instance, p, &controls[p]);
         descriptor->activate(instance);
     }
     ~Fixture() { descriptor->cleanup(instance); }
     bool stereo() const { return !std::strcmp(descriptor->URI, StereoUri); }
+    uint32_t port(uint32_t p) const { return stereo() || p < Width ? p : p - 1; }
     /** Runs `count` frames of `source(frame)` in blocks of 64 and keeps the output. */
     template <typename F> std::vector<float> render(uint32_t count, F source, uint32_t channel = 0) {
         std::vector<float> kept;
@@ -40,11 +43,11 @@ struct Fixture {
                 out[ch].assign(n, 0);
                 for (uint32_t i = 0; i < n; ++i) in[ch][i] = source(done + i);
             }
-            descriptor->connect_port(instance, InputL, in[0].data());
-            descriptor->connect_port(instance, OutputL, out[0].data());
+            descriptor->connect_port(instance, port(InputL), in[0].data());
+            descriptor->connect_port(instance, port(OutputL), out[0].data());
             if (stereo()) {
-                descriptor->connect_port(instance, InputR, in[1].data());
-                descriptor->connect_port(instance, OutputR, out[1].data());
+                descriptor->connect_port(instance, port(InputR), in[1].data());
+                descriptor->connect_port(instance, port(OutputR), out[1].data());
             }
             descriptor->run(instance, n);
             kept.insert(kept.end(), out[channel].begin(), out[channel].end());
@@ -102,41 +105,57 @@ void holdSustainsTheCapturedToneAfterTheInputStops(double rate) {
     for (float v : held) check(std::isfinite(v), "Non-finite output");
 }
 
-void stereoSidesHoldOnTheirOwn() {
-    Fixture f(true);
-    // Left and right play different notes; each side must hold its own.
-    auto left = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 330 * i / 48000.0)); };
-    auto right = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 440 * i / 48000.0)); };
-    for (uint32_t done = 0; done < 24000; done += 64) {
-        for (uint32_t i = 0; i < 64; ++i) f.in[0].assign(64, 0), f.in[1].assign(64, 0);
-        for (uint32_t i = 0; i < 64; ++i) f.in[0][i] = left(done + i), f.in[1][i] = right(done + i);
+/** Runs a stereo fixture for `count` frames; Hold goes on at `holdAt`. */
+template <typename L, typename R>
+void renderStereo(Fixture& f, uint32_t count, uint32_t holdAt, L left, R right, std::vector<float>& heldL,
+                  std::vector<float>& heldR) {
+    for (uint32_t done = 0; done < count; done += 64) {
+        if (done >= holdAt) f.controls[Hold] = 1;
+        for (uint32_t i = 0; i < 64; ++i) {
+            f.in[0].resize(64);
+            f.in[1].resize(64);
+            f.in[0][i] = done < holdAt ? left(done + i) : 0.0f;
+            f.in[1][i] = done < holdAt ? right(done + i) : 0.0f;
+        }
         f.out[0].assign(64, 0);
         f.out[1].assign(64, 0);
-        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
-        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
-        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
-        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
-        f.descriptor->run(f.instance, 64);
-    }
-    f.controls[Hold] = 1;
-    std::vector<float> heldL, heldR;
-    for (uint32_t done = 0; done < 96000; done += 64) {
-        f.in[0].assign(64, 0);
-        f.in[1].assign(64, 0);
-        f.out[0].assign(64, 0);
-        f.out[1].assign(64, 0);
-        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
-        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
-        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
-        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
+        f.descriptor->connect_port(f.instance, f.port(InputL), f.in[0].data());
+        f.descriptor->connect_port(f.instance, f.port(OutputL), f.out[0].data());
+        f.descriptor->connect_port(f.instance, f.port(InputR), f.in[1].data());
+        f.descriptor->connect_port(f.instance, f.port(OutputR), f.out[1].data());
         f.descriptor->run(f.instance, 64);
         heldL.insert(heldL.end(), f.out[0].begin(), f.out[0].end());
         heldR.insert(heldR.end(), f.out[1].begin(), f.out[1].end());
     }
-    const size_t settled = 24000;
+}
+double correlation(const std::vector<float>& a, const std::vector<float>& b, size_t from) {
+    double ab = 0, aa = 0, bb = 0;
+    for (size_t i = from; i < a.size(); ++i) ab += a[i] * b[i], aa += a[i] * a[i], bb += b[i] * b[i];
+    return ab / std::sqrt(aa * bb);
+}
+
+void stereoSidesHoldOnTheirOwn() {
+    Fixture f(true);  // Width 100: the original image
+    auto left = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 330 * i / 48000.0)); };
+    auto right = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 440 * i / 48000.0)); };
+    std::vector<float> heldL, heldR;
+    renderStereo(f, 24000 + 96000, 24000, left, right, heldL, heldR);
+    const size_t settled = 24000 + 24000;
     check(rms(heldL, settled) > 0.1 && rms(heldR, settled) > 0.1, "Stereo sides are not both held");
     check(tone(heldL, 330, 48000, settled) > 50 * tone(heldL, 440, 48000, settled), "Left did not keep its own note");
     check(tone(heldR, 440, 48000, settled) > 50 * tone(heldR, 330, 48000, settled), "Right did not keep its own note");
+}
+
+/** Width 0 holds the centre: both sides carry the same drone. */
+void widthPullsTheSidesTogether() {
+    Fixture f(true);
+    f.controls[Width] = 0;
+    auto left = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 330 * i / 48000.0)); };
+    auto right = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 440 * i / 48000.0 + 1)); };
+    std::vector<float> heldL, heldR;
+    renderStereo(f, 24000 + 96000, 24000, left, right, heldL, heldR);
+    check(correlation(heldL, heldR, 24000 + 24000) > 0.99, "Width 0 did not centre the held sound");
+    check(rms(heldL, 24000 + 24000) > 0.05, "Centred hold is silent");
 }
 
 /** What was playing, not a wash: a harmonic stack keeps its lines and valleys, and
@@ -150,20 +169,7 @@ void holdKeepsHarmonicsAndTheStereoImage() {
         return float(0.15 * x);
     };
     std::vector<float> heldL, heldR;
-    for (uint32_t done = 0; done < 24000 + 96000; done += 64) {
-        if (done >= 24000) f.controls[Hold] = 1;
-        for (uint32_t i = 0; i < 64; ++i) f.in[0].assign(64, 0), f.in[1].assign(64, 0);
-        for (uint32_t i = 0; i < 64; ++i) f.in[0][i] = f.in[1][i] = done < 24000 ? stack(done + i) : 0.0f;
-        f.out[0].assign(64, 0);
-        f.out[1].assign(64, 0);
-        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
-        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
-        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
-        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
-        f.descriptor->run(f.instance, 64);
-        heldL.insert(heldL.end(), f.out[0].begin(), f.out[0].end());
-        heldR.insert(heldR.end(), f.out[1].begin(), f.out[1].end());
-    }
+    renderStereo(f, 24000 + 96000, 24000, stack, stack, heldL, heldR);
     const size_t settled = 24000 + 24000;
     double lines = 0, valleys = 0;
     for (int h = 1; h <= 8; ++h) {
@@ -171,9 +177,33 @@ void holdKeepsHarmonicsAndTheStereoImage() {
         valleys += tone(heldL, fundamental * (h + 0.5), 48000, settled);
     }
     check(lines > 100 * valleys, "Held sound lost the harmonic structure of the note");
-    double ab = 0, aa = 0, bb = 0;
-    for (size_t i = settled; i < heldL.size(); ++i) ab += heldL[i] * heldR[i], aa += heldL[i] * heldL[i], bb += heldR[i] * heldR[i];
-    check(ab / std::sqrt(aa * bb) > 0.95, "Identical sides were decorrelated by the hold");
+    check(correlation(heldL, heldR, settled) > 0.95, "Identical sides were decorrelated by the hold");
+}
+
+/** Focus keeps the note and drops the hiss and room around it. */
+void focusKeepsTheNoteNotTheNoise() {
+    auto held = [](float focus) {
+        Fixture f(true);
+        f.controls[Focus] = focus;
+        uint32_t seed = 4321;
+        auto hiss = [&seed] {
+            seed = seed * 1664525u + 1013904223u;
+            return float(seed >> 8) / float(1 << 24) - 0.5f;
+        };
+        auto source = [&](uint32_t i) { return float(0.2 * std::sin(2 * M_PI * 196 * i / 48000.0) + 0.08 * hiss()); };
+        std::vector<float> left, right;
+        renderStereo(f, 24000 + 96000, 24000, source, source, left, right);
+        return left;
+    };
+    const auto wide = held(0), narrow = held(100);
+    const size_t settled = 24000 + 24000;
+    auto between = [&](const std::vector<float>& v) {
+        double sum = 0;
+        for (double frequency : {1000.0, 1700.0, 2600.0, 3900.0}) sum += tone(v, frequency, 48000, settled);
+        return sum;
+    };
+    check(between(narrow) * 30 < between(wide), "Focus did not remove the noise around the note");
+    check(tone(narrow, 196, 48000, settled) > 0.3 * tone(wide, 196, 48000, settled), "Focus dropped the note itself");
 }
 
 void invalidInputAndControlsAreSafe() {
@@ -197,7 +227,9 @@ int main() {
         holdSustainsTheCapturedToneAfterTheInputStops(48000);
         holdSustainsTheCapturedToneAfterTheInputStops(96000);
         stereoSidesHoldOnTheirOwn();
+        widthPullsTheSidesTogether();
         holdKeepsHarmonicsAndTheStereoImage();
+        focusKeepsTheNoteNotTheNoise();
         invalidInputAndControlsAreSafe();
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << "\n";

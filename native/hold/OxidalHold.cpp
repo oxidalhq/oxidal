@@ -74,11 +74,13 @@ struct Channel {
 class Instance {
 public:
     Instance(double rate, uint32_t channels)
-        : rate(rate), channels(channels), n(frameFor(rate)), hop(n / 4), fft(n), window(n), scratch(n), earlier(n),
-          lanes{Channel(n), Channel(n)} {
+        : rate(rate), channels(channels), n(frameFor(rate)), hop(n / 4), fft(n), window(n), scratch(n),
+          frames{{{std::vector<Complex>(n), std::vector<Complex>(n)}, {std::vector<Complex>(n), std::vector<Complex>(n)}}},
+          loudest(n / 2 + 1), keep(n / 2 + 1), lanes{Channel(n), Channel(n)} {
         for (uint32_t i = 0; i < n; ++i) window[i] = 0.5f - 0.5f * std::cos(2 * Pi * float(i) / float(n));
     }
     std::array<float*, PortCount> ports{};
+    bool stereo() const noexcept { return channels == 2; }
 
     void activate() noexcept {
         for (auto& lane : lanes) {
@@ -131,8 +133,12 @@ private:
     }
     /** Reads the newest frame and the one a hop before it: the magnitudes are
      * held, and the phase each bin turned through between them is how far it
-     * keeps turning, so a held note stays one steady note. */
+     * keeps turning, so a held note stays one steady note. Width pulls the two
+     * sides toward their mid; Focus lets only the spectral peaks (the note's
+     * partials) through, so noise, room and amp hiss are not frozen into a wash. */
     void capture() noexcept {
+        const float focus = control(Focus, 0, 100, 80) / 100;
+        const float width = control(Width, 0, 100, 50) / 100;
         for (uint32_t ch = 0; ch < channels; ++ch) {
             auto& lane = lanes[ch];
             // A new hold starts clean: nothing of the previous one overlaps it.
@@ -140,20 +146,72 @@ private:
             const auto size = uint32_t(lane.history.size());
             for (uint32_t frame = 0; frame < 2; ++frame) {
                 const uint32_t start = (lane.write + size - n - frame * hop) % size;
-                std::vector<Complex>& target = frame ? earlier : scratch;
+                auto& target = frames[ch][frame];
                 for (uint32_t i = 0; i < n; ++i) target[i] = Complex(lane.history[(start + i) % size] * window[i], 0);
                 fft.run(target.data(), false);
             }
+        }
+        if (channels == 2 && width < 1)
+            for (uint32_t frame = 0; frame < 2; ++frame)
+                for (uint32_t k = 0; k <= n / 2; ++k) {
+                    const Complex mid = (frames[0][frame][k] + frames[1][frame][k]) * 0.5f;
+                    frames[0][frame][k] = mid + width * (frames[0][frame][k] - mid);
+                    frames[1][frame][k] = mid + width * (frames[1][frame][k] - mid);
+                }
+        pickPeaks(focus);
+        for (uint32_t ch = 0; ch < channels; ++ch) {
+            auto& lane = lanes[ch];
+            const auto& newest = frames[ch][0];
+            const auto& older = frames[ch][1];
+            double before = 0, after = 0;
             for (uint32_t k = 0; k <= n / 2; ++k) {
-                lane.magnitude[k] = std::abs(scratch[k]);
-                lane.phase[k] = std::arg(scratch[k]);
+                const float magnitude = std::abs(newest[k]);
+                const float kept = magnitude * keep[k];
+                before += double(magnitude) * magnitude;
+                after += double(kept) * kept;
+                lane.magnitude[k] = kept;
+                lane.phase[k] = std::arg(newest[k]);
                 const float expected = 2 * Pi * float(k) * float(hop) / float(n);
-                float turned = std::arg(scratch[k]) - std::arg(earlier[k]) - expected;
+                float turned = std::arg(newest[k]) - std::arg(older[k]) - expected;
                 turned -= 2 * Pi * std::round(turned / (2 * Pi));
                 lane.advance[k] = expected + turned;
             }
+            // What is left of the sound keeps the loudness the whole had.
+            const float restore = after > 0 ? std::min(4.0f, float(std::sqrt(before / after))) : 1.0f;
+            for (auto& m : lane.magnitude) m *= restore;
         }
         position = hop;
+    }
+    /** Per-bin gain: 1 within two bins of a spectral peak, 1 - focus elsewhere.
+     * A peak is a local maximum of the sides' summed magnitude that stands well
+     * above both its neighbourhood and the loudest partial. */
+    void pickPeaks(float focus) noexcept {
+        const uint32_t bins = n / 2 + 1;
+        for (uint32_t k = 0; k < bins; ++k) {
+            float sum = 0;
+            for (uint32_t ch = 0; ch < channels; ++ch) sum += std::abs(frames[ch][0][k]);
+            loudest[k] = sum;
+        }
+        const float top = *std::max_element(loudest.begin(), loudest.end());
+        std::fill(keep.begin(), keep.end(), 1.0f - focus);
+        if (focus <= 0 || top <= 0) return;
+        constexpr uint32_t Reach = 24, Side = 3, Spread = 2;
+        // Running sum over +-Reach bins gives each bin's neighbourhood level.
+        double running = 0;
+        for (uint32_t k = 0; k <= std::min(Reach, bins - 1); ++k) running += loudest[k];
+        for (uint32_t k = 0; k < bins; ++k) {
+            if (k > 0) {
+                if (k + Reach < bins) running += loudest[k + Reach];
+                if (k > Reach) running -= loudest[k - Reach - 1];
+            }
+            const uint32_t lo = k > Reach ? k - Reach : 0, hi = std::min(bins - 1, k + Reach);
+            const float around = float(running / double(hi - lo + 1));
+            bool peak = loudest[k] > 2.0f * around && loudest[k] > 0.03f * top;
+            for (uint32_t j = k > Side ? k - Side : 0; peak && j <= std::min(bins - 1, k + Side); ++j)
+                if (loudest[j] > loudest[k]) peak = false;
+            if (!peak) continue;
+            for (uint32_t j = k > Spread ? k - Spread : 0; j <= std::min(bins - 1, k + Spread); ++j) keep[j] = 1.0f;
+        }
     }
     /** One hop of held sound: the held magnitudes, each bin's phase turned on by its own rate. */
     void synthesise() noexcept {
@@ -186,7 +244,9 @@ private:
     Fft fft;
     std::vector<float> window;
     std::vector<Complex> scratch;
-    std::vector<Complex> earlier;  // the frame a hop before `scratch`'s capture
+    std::array<std::array<std::vector<Complex>, 2>, 2> frames;  // [side][newest, a hop earlier]
+    std::vector<float> loudest;                                  // summed magnitude across sides
+    std::vector<float> keep;                                     // per-bin gain from the peak picker
     std::array<Channel, 2> lanes;
     float gain = 0;
     bool held = false;
@@ -204,7 +264,11 @@ LV2_Handle instantiate(const LV2_Descriptor* descriptor, double rate, const char
     }
 }
 void connect(LV2_Handle handle, uint32_t port, void* data) noexcept {
-    if (handle && port < PortCount) static_cast<Instance*>(handle)->ports[port] = static_cast<float*>(data);
+    if (!handle) return;
+    auto* instance = static_cast<Instance*>(handle);
+    // Mono has no Width control, so its audio ports start one place earlier.
+    if (!instance->stereo() && port >= Width) ++port;
+    if (port < PortCount) instance->ports[port] = static_cast<float*>(data);
 }
 void activate(LV2_Handle handle) noexcept {
     if (handle) static_cast<Instance*>(handle)->activate();
