@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { monitoring, type AudioState, type Monitoring } from './api';
+import { useState } from 'react';
+import type { AudioState, Monitoring } from './api';
+import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
 import { RigPresetSelector } from './RigPresetSelector';
 import './PerformView.css';
@@ -126,53 +127,39 @@ export function PerformView({
     clips: number[];
   } | null>(null);
   const slow = document.documentElement.dataset.display === 'epaper';
-  useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    const abort = new AbortController();
-    const poll = async () => {
-      const started = performance.now();
-      try {
-        const next = await monitoring(abort.signal);
-        if (!active) return;
-        const now = performance.now();
-        const audio = next.audio ?? null;
-        const peak = Math.max(
-          ...(audio?.input ?? []).map((c) => c.peak_dbfs ?? FLOOR_DB),
-          FLOOR_DB,
-        );
-        const loudest = Math.max(
-          peak,
-          ...(audio?.output ?? []).map((c) => c.peak_dbfs ?? FLOOR_DB),
-        );
-        setLive((old) => {
-          const signalAt = loudest > FLOOR_DB ? now : old.signalAt;
-          const silentSince =
-            audio && peak <= FLOOR_DB ? (old.silentSince ?? now) : null;
-          return {
-            snapshot: next,
-            link: now - started,
-            inHeld: hold(old.inHeld, audio?.input, now),
-            outHeld: hold(old.outHeld, audio?.output, now),
-            silentSince,
-            quiet: silentSince != null && now - silentSince >= NO_INPUT_MS,
-            signalAt,
-            showing: signalAt != null && now - signalAt < SHOW_MS,
-          };
-        });
-      } catch {
-        if (active) setLive((old) => ({ ...old, link: null }));
-      } finally {
-        if (active) timer = setTimeout(() => void poll(), slow ? 5000 : 1000);
-      }
-    };
-    void poll();
-    return () => {
-      active = false;
-      abort.abort();
-      clearTimeout(timer);
-    };
-  }, [slow]);
+  useMonitorReadings(slow ? 5000 : 1000, (feed) => {
+    const next = feed.snapshot;
+    const now = feed.at;
+    if (feed.link == null) {
+      setLive((old) => ({ ...old, link: null }));
+      return;
+    }
+    if (!next || now == null) return;
+    const audio = next.audio ?? null;
+    const peak = Math.max(
+      ...(audio?.input ?? []).map((c) => c.peak_dbfs ?? FLOOR_DB),
+      FLOOR_DB,
+    );
+    const loudest = Math.max(
+      peak,
+      ...(audio?.output ?? []).map((c) => c.peak_dbfs ?? FLOOR_DB),
+    );
+    setLive((old) => {
+      const signalAt = loudest > FLOOR_DB ? now : old.signalAt;
+      const silentSince =
+        audio && peak <= FLOOR_DB ? (old.silentSince ?? now) : null;
+      return {
+        snapshot: next,
+        link: feed.link,
+        inHeld: hold(old.inHeld, audio?.input, now),
+        outHeld: hold(old.outHeld, audio?.output, now),
+        silentSince,
+        quiet: silentSince != null && now - silentSince >= NO_INPUT_MS,
+        signalAt,
+        showing: signalAt != null && now - signalAt < SHOW_MS,
+      };
+    });
+  });
 
   const { snapshot, link, quiet } = live;
   const audio = snapshot?.audio ?? null;

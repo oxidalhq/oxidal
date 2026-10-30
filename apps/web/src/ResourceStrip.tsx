@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { monitoring, type Monitoring } from './api';
+import { useMonitorFeed } from './monitorFeed';
 import { ChartLine, Waveform, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 
@@ -18,61 +17,9 @@ export function ResourceStrip({
   onDetails: () => void;
   onTuner?: () => void;
 }) {
-  const [state, setState] = useState<Monitoring | null>(null);
-  const [disconnected, setDisconnected] = useState(false);
-  useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    let pending: AbortController | null = null;
-    let sequence: number | undefined;
-    let advanced = performance.now();
-    async function refresh() {
-      if (!active) return;
-      clearTimeout(timer);
-      pending?.abort();
-      const abort = new AbortController();
-      pending = abort;
-      const deadline = setTimeout(() => abort.abort(), 4000);
-      try {
-        const next = await monitoring(abort.signal);
-        if (!active || pending !== abort) return;
-        if (sequence !== next.sequence) {
-          sequence = next.sequence;
-          advanced = performance.now();
-        }
-        if (performance.now() - advanced >= 3000)
-          throw new Error('Monitoring sampler is stale');
-        if (active) {
-          setState(next);
-          setDisconnected(false);
-        }
-      } catch {
-        if (active && pending === abort) setDisconnected(true);
-      } finally {
-        clearTimeout(deadline);
-        if (active && pending === abort)
-          timer = setTimeout(
-            () => void refresh(),
-            displayMode === 'epaper' ? 5000 : 1000,
-          );
-      }
-    }
-    // Poll remains the fallback. Lifecycle SSE only invalidates the snapshot;
-    // it never guesses state from a button click or increases meter refresh rates.
-    const events = new EventSource('/api/v1/monitor/events');
-    events.addEventListener('lifecycle', () => {
-      sequence = undefined;
-      advanced = performance.now();
-      void refresh();
-    });
-    void refresh();
-    return () => {
-      events.close();
-      active = false;
-      pending?.abort();
-      clearTimeout(timer);
-    };
-  }, [displayMode]);
+  const feed = useMonitorFeed(displayMode === 'epaper' ? 5000 : 1000);
+  const state = feed.snapshot;
+  const disconnected = feed.disconnected;
   const running =
     state?.audio_phase === 'running' ||
     state?.graph_phase === 'running' ||

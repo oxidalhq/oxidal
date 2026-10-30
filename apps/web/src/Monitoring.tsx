@@ -1,7 +1,7 @@
 import { ControlAudit } from './ControlAudit';
 import { MonitoringHistory } from './MonitoringHistory';
 import './Monitoring.css';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -13,7 +13,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { monitoring, type Monitoring as Readings } from './api';
+import type { Monitoring as Readings } from './api';
+import { useMonitorReadings } from './monitorFeed';
 import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
 type Point = {
@@ -104,74 +105,58 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
     source: string | null | undefined;
     frames: number;
   } | null>(null);
-  useEffect(() => {
+  const every = slow || displayMode === 'epaper' ? 5000 : 1000;
+  const accepted = useRef(0);
+  useMonitorReadings(every, (feed) => {
     if (frozen) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    const abort = new AbortController();
-    async function poll() {
-      if (document.hidden) {
-        timer = setTimeout(() => void poll(), 5000);
-        return;
-      }
-      try {
-        const next = await monitoring(abort.signal);
-        if (!active) return;
-        setState(next);
-        setError('');
-        if (next.audio) {
-          if (
-            lastAudio.current &&
-            (lastAudio.current.source !== next.source ||
-              next.audio.frames < lastAudio.current.frames)
-          )
-            setBaseline([0, 0, 0, 0]);
-          lastAudio.current = {
-            source: next.source,
-            frames: next.audio.frames,
-          };
-        }
-        if (next.sequence !== latest.current) {
-          latest.current = next.sequence;
-          const valid =
-            next.audio && next.audio_age_ms != null && next.audio_age_ms < 3000;
-          setHistory((h) => [
-            ...h.slice(-119),
-            {
-              time: new Date().toLocaleTimeString(),
-              left: valid ? next.audio!.output[0].peak_dbfs : null,
-              right: valid ? next.audio!.output[1].peak_dbfs : null,
-              deadline:
-                valid && next.audio!.deadline_us > 0
-                  ? (100 * next.audio!.process_us_p95) / next.audio!.deadline_us
-                  : null,
-              cpu: next.host.cpu_percent ?? null,
-              memory:
-                next.host.memory_used_bytes != null
-                  ? next.host.memory_used_bytes / 1048576
-                  : null,
-              temperature: next.host.temperature_c ?? null,
-              xruns: valid ? (next.xruns ?? null) : null,
-            },
-          ]);
-        }
-      } catch {
-        if (active) setError('Disconnected · readings are stale');
-      } finally {
-        if (active)
-          timer = setTimeout(
-            () => void poll(),
-            slow || displayMode === 'epaper' ? 5000 : 1000,
-          );
-      }
+    if (feed.disconnected && feed.link == null) {
+      setError('Disconnected · readings are stale');
+      return;
     }
-    void poll();
-    return () => {
-      active = false;
-      abort.abort();
-      clearTimeout(timer);
-    };
-  }, [frozen, slow, displayMode]);
+    const next = feed.snapshot;
+    if (!next || feed.at == null) return;
+    // Other views may keep the shared feed faster; Slow refresh still thins this page.
+    if (feed.at - accepted.current < every - 100) return;
+    accepted.current = feed.at;
+    setState(next);
+    setError('');
+    if (next.audio) {
+      if (
+        lastAudio.current &&
+        (lastAudio.current.source !== next.source ||
+          next.audio.frames < lastAudio.current.frames)
+      )
+        setBaseline([0, 0, 0, 0]);
+      lastAudio.current = {
+        source: next.source,
+        frames: next.audio.frames,
+      };
+    }
+    if (next.sequence !== latest.current) {
+      latest.current = next.sequence;
+      const valid =
+        next.audio && next.audio_age_ms != null && next.audio_age_ms < 3000;
+      setHistory((h) => [
+        ...h.slice(-119),
+        {
+          time: new Date().toLocaleTimeString(),
+          left: valid ? next.audio!.output[0].peak_dbfs : null,
+          right: valid ? next.audio!.output[1].peak_dbfs : null,
+          deadline:
+            valid && next.audio!.deadline_us > 0
+              ? (100 * next.audio!.process_us_p95) / next.audio!.deadline_us
+              : null,
+          cpu: next.host.cpu_percent ?? null,
+          memory:
+            next.host.memory_used_bytes != null
+              ? next.host.memory_used_bytes / 1048576
+              : null,
+          temperature: next.host.temperature_c ?? null,
+          xruns: valid ? (next.xruns ?? null) : null,
+        },
+      ]);
+    }
+  });
   const stale =
     !!error ||
     !state?.audio ||
