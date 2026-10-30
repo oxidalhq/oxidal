@@ -5,7 +5,11 @@ import {
   rigAudioCommand,
   rigAudioState,
 } from './api';
-import { discardsSceneEdits, playScenes } from './presetChoices';
+import {
+  discardsSceneEdits,
+  playScenes,
+  type PresetChoice,
+} from './presetChoices';
 vi.mock('./api', () => ({
   graphAudioCommand: vi.fn(),
   graphAudioState: vi.fn(),
@@ -22,8 +26,12 @@ afterEach(() => {
 });
 const a = 'a'.repeat(64);
 const b = 'b'.repeat(64);
-const scenes = (revision: string) =>
-  ({ kind: 'scenes', revision, name: revision, scenes: [] }) as const;
+const scenes = (revision: string): PresetChoice => ({
+  kind: 'scenes',
+  revision,
+  name: revision,
+  scenes: [],
+});
 
 it('asks before another scenes preset replaces unsaved edits, unless it is kept ready', () => {
   const playing = { revision: a, modified: true, ready: [] as string[] };
