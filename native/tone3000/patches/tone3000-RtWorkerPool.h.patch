@@ -1,0 +1,16 @@
+diff --git a/plugin/include/RtWorkerPool.h b/plugin/include/RtWorkerPool.h
+index f0da705..caafbe6 100644
+--- a/plugin/include/RtWorkerPool.h
++++ b/plugin/include/RtWorkerPool.h
+@@ -121,8 +121,10 @@ public:
+     for (int i = 0; i < numWorkers; ++i) {
+       auto worker = std::make_unique<Worker>(*this, i);
+       const bool startedRealtime = worker->startRealtimeThread(
++          // Oxidal: 9 maps to SCHED_RR 89, inside a 95 rtprio limit and just
++          // below the host audio thread (90). 10 maps to 99 and is refused.
+           juce::Thread::RealtimeOptions{}
+-              .withPriority(10)
++              .withPriority(9)
+               .withMaximumProcessingTimeMs(budgetMs));
+       // Linux without rtprio privileges refuses SCHED_RR at pthread_create,
+       // so the realtime start fails outright there (macOS and Windows always

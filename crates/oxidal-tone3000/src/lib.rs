@@ -3,7 +3,9 @@
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
-pub use native::{AudioPort, Engine, InputMode, NativeError, ProcessingRole, SplitStages, State};
+pub use native::{
+    AudioPort, Engine, InputMode, NativeError, ProcessingRole, PumpPort, SplitStages, State,
+};
 
 #[cfg(feature = "native")]
 pub mod editor;

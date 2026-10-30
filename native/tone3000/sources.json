@@ -71,6 +71,14 @@
       "before": "4a6016bcc90ca22d12eb639f40ab74639f2d7d0edf276bb4054ce4711da9a805",
       "after": "98431a8b587dffd8ec16d9227daa92b155635416597e4ab1735197378410340b",
       "patch_sha256": "394c66c29afb8782e0e15861b8c6a4ca5f9484011736120166ae69f241c7d01a"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/include/RtWorkerPool.h",
+      "patch": "tone3000-RtWorkerPool.h.patch",
+      "before": "f59ec93376551f87ebfc10e0450f5db631d7303de36a6e6bfe9f8a79ee4f0eec",
+      "after": "a667f23c4c12f6424ba3559e85fadf1bf3b212722cd499cb5b7ffdca0760f692",
+      "patch_sha256": "7b72f0d14f5087c7c6779dee4516d441782cbd32d6c0e94a39492ed17e1aea00"
     }
   ],
   "addons": [

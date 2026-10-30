@@ -130,7 +130,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let world = World::discover()?;
-    let mut session = ResidentSet::new_with_models(
+    let session = ResidentSet::new_with_models(
         &store,
         &world,
         &settings,
@@ -162,105 +162,198 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         state.midi = midi.clone();
         state
     }
-    let mut stream = {
-        #[cfg(feature = "qualification")]
-        if null {
-            Duplex::qualification_null(settings.stream.clone())?
-        } else {
-            Duplex::open(settings.stream.clone())?
-        }
-        #[cfg(not(feature = "qualification"))]
-        Duplex::open(settings.stream.clone())?
-    };
-    let mut left = vec![0.0; settings.stream.input.period_frames as usize];
-    let mut right = left.clone();
-    let mut frames = 0u64;
-    let mut ready = false;
-    let mut switch_reply = false;
-    let mut progress = Instant::now();
-    let mut pump = Instant::now();
-    while !stop.load(Ordering::Acquire) {
-        let step = stream.step(|l, r| {
-            left.copy_from_slice(l);
-            right.copy_from_slice(r);
-            session.process(&[&left, &right], &mut [l, r])
-        })?;
-        if step == Step::Processed {
-            frames += u64::from(settings.stream.input.period_frames);
-            progress = Instant::now();
-            if !ready
-                && frames
-                    >= u64::from(
-                        settings.stream.input.period_frames * (settings.stream.output.periods - 1),
-                    )
+    // Realtime handoff: a SCHED_RR render thread owns the duplex stream and only
+    // processes the rig; this owner thread (JUCE's message thread, which built
+    // the rig) does MIDI, JUCE pumping, switching and every request. They share
+    // the rig under a short lock.
+    oxidal_engine::render::enable_render_thread();
+    let shared = oxidal_engine::render::SharedRig::new(session);
+    let frames = std::sync::atomic::AtomicU64::new(0);
+    let ready = AtomicBool::new(false);
+    let failure = std::sync::Mutex::new(None::<String>);
+    let telemetry = std::sync::Mutex::new(oxidal_audio::meter::Snapshot::default());
+    let (host_send, host_recv) = mpsc::sync_channel::<oxidal_audio::tools::HostUtility>(1);
+    let period_frames = u64::from(settings.stream.input.period_frames);
+    let prime_frames =
+        u64::from(settings.stream.input.period_frames * (settings.stream.output.periods - 1));
+    let result = std::thread::scope(|scope| -> Result<(), Box<dyn std::error::Error>> {
+        let render = scope.spawn(|| {
+            // Moved in: only the render thread receives host utilities.
+            let host_recv = host_recv;
+            let outcome = (|| -> Result<(), String> {
+                let mut stream = {
+                    #[cfg(feature = "qualification")]
+                    if null {
+                        Duplex::qualification_null(settings.stream.clone())?
+                    } else {
+                        Duplex::open(settings.stream.clone())?
+                    }
+                    #[cfg(not(feature = "qualification"))]
+                    Duplex::open(settings.stream.clone())?
+                };
+                let mut left = vec![0.0; settings.stream.input.period_frames as usize];
+                let mut right = left.clone();
+                let mut progress = Instant::now();
+                let mut published = Instant::now();
+                while !stop.load(Ordering::Acquire) {
+                    let step = stream.step(|l, r| {
+                        left.copy_from_slice(l);
+                        right.copy_from_slice(r);
+                        shared.render(&[&left, &right], &mut [l, r])
+                    })?;
+                    if step == Step::Processed {
+                        let total =
+                            frames.fetch_add(period_frames, Ordering::AcqRel) + period_frames;
+                        progress = Instant::now();
+                        if total >= prime_frames {
+                            ready.store(true, Ordering::Release);
+                        }
+                        if published.elapsed() >= Duration::from_millis(50) {
+                            if let Ok(mut slot) = telemetry.try_lock() {
+                                *slot = stream.telemetry();
+                            }
+                            published = Instant::now();
+                        }
+                        if null {
+                            std::thread::sleep(Duration::from_secs_f64(
+                                f64::from(settings.stream.input.period_frames)
+                                    / f64::from(settings.stream.input.sample_rate),
+                            ));
+                        }
+                    } else if progress.elapsed() > Duration::from_secs(2) {
+                        return Err("Rig PCM made no progress for two seconds".into());
+                    }
+                    if let Ok(command) = host_recv.try_recv() {
+                        stream.host_utility(command);
+                        if let Ok(mut slot) = telemetry.lock() {
+                            *slot = stream.telemetry();
+                        }
+                    }
+                }
+                drop(stream);
+                Ok(())
+            })();
+            if let Err(error) = &outcome {
+                eprintln!("Hybrid render stopped: {error}");
+                if let Ok(mut slot) = failure.lock() {
+                    *slot = Some(error.clone());
+                }
+            }
+            stop.store(true, Ordering::Release);
+            outcome
+        });
+        // Any early return stops the render thread before the scope joins it.
+        let _stop_render = StopOnDrop(stop.clone());
+        oxidal_audio::realtime::leave();
+        let latest = || telemetry.lock().map(|t| *t).unwrap_or_default();
+        let mut announced = false;
+        let mut switch_reply = false;
+        let mut pump = Instant::now();
+        // TIMING (temporary)
+        let mut report = Instant::now();
+        let (mut hold_midi, mut hold_tick, mut hold_req, mut hold_disp) =
+            (0u128, 0u128, 0u128, 0u128);
+        while !stop.load(Ordering::Acquire) {
+            if report.elapsed() >= Duration::from_secs(5) {
+                let (wait, work) = oxidal_engine::render::timing::take();
+                eprintln!(
+                    "TIMING render wait {wait} work {work} us; owner holds midi {hold_midi} tick {hold_tick} request {hold_req} dispatcher {hold_disp} us"
+                );
+                (hold_midi, hold_tick, hold_req, hold_disp) = (0, 0, 0, 0);
+                report = Instant::now();
+            }
+            if let Ok(slot) = failure.lock()
+                && let Some(error) = slot.clone()
             {
-                responses.try_send(WorkerReply {
-                    control: snapshot(&session, &midi.status),
-                    telemetry: stream.telemetry(),
-                    processed_frames: frames,
+                return Err(error.into());
+            }
+            let primed = ready.load(Ordering::Acquire);
+            if primed && !announced {
+                let control = snapshot(&shared.lock(), &midi.status);
+                responses.send(WorkerReply {
+                    control,
+                    telemetry: latest(),
+                    processed_frames: frames.load(Ordering::Acquire),
                     error: None,
                 })?;
-                ready = true;
+                announced = true;
             }
-            if null {
-                std::thread::sleep(Duration::from_secs_f64(
-                    f64::from(settings.stream.input.period_frames)
-                        / f64::from(settings.stream.input.sample_rate),
-                ));
+            // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
+            if primed {
+                let t = Instant::now();
+                let mut rig = shared.lock();
+                if !rig.switching() {
+                    midi.poll(|settings, message| rig.active_mut().midi_message(settings, message));
+                }
+                drop(rig);
+                hold_midi = hold_midi.max(t.elapsed().as_micros());
             }
-        } else if progress.elapsed() > Duration::from_secs(2) {
-            return Err("Rig PCM made no progress for two seconds".into());
-        }
-        // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
-        if ready && !session.switching() {
-            midi.poll(|settings, message| session.active_mut().midi_message(settings, message));
-        }
-        if pump.elapsed() >= Duration::from_millis(10) {
-            session.pump()?;
-            pump = Instant::now();
-        }
-        if switch_reply && !session.switching() {
-            let error = session.take_switch_error();
-            responses.try_send(WorkerReply {
-                control: snapshot(&session, &midi.status),
-                telemetry: stream.telemetry(),
-                processed_frames: frames,
-                error,
-            })?;
-            switch_reply = false;
-        }
-        if ready
-            && !switch_reply
-            && let Ok(request) = received.try_recv()
-        {
+            if pump.elapsed() >= Duration::from_millis(10) {
+                // JUCE dispatch waits up to 1 ms: run it outside the rig lock so
+                // the render thread never waits for it.
+                let t = Instant::now();
+                let dispatcher = shared.lock().dispatcher();
+                hold_disp = hold_disp.max(t.elapsed().as_micros());
+                if let Some(dispatcher) = dispatcher {
+                    dispatcher.pump().map_err(|e| e.to_string())?;
+                }
+                let t = Instant::now();
+                shared.lock().tick()?;
+                hold_tick = hold_tick.max(t.elapsed().as_micros());
+                pump = Instant::now();
+            }
+            if switch_reply && !shared.lock().switching() {
+                let mut rig = shared.lock();
+                let error = rig.take_switch_error();
+                let control = snapshot(&rig, &midi.status);
+                drop(rig);
+                responses.send(WorkerReply {
+                    control,
+                    telemetry: latest(),
+                    processed_frames: frames.load(Ordering::Acquire),
+                    error,
+                })?;
+                switch_reply = false;
+            }
+            if !announced || switch_reply {
+                std::thread::sleep(Duration::from_millis(2));
+                continue;
+            }
+            let Ok(request) = received.recv_timeout(Duration::from_millis(2)) else {
+                continue;
+            };
+            let t_req = Instant::now();
+            let mut rig = shared.lock();
             let error = match request {
                 WorkerRequest::HostUtility { command } => {
-                    stream.host_utility(command);
+                    drop(rig);
+                    host_send.send(command)?;
+                    // The render thread applies it between blocks.
+                    std::thread::sleep(Duration::from_millis(5));
+                    rig = shared.lock();
                     None
                 }
                 WorkerRequest::Status => None,
                 WorkerRequest::Authoring { command } => match model_root.as_deref() {
-                    Some(root) => session.active_mut().authoring_command(command, root).err(),
+                    Some(root) => rig.active_mut().authoring_command(command, root).err(),
                     None => Some("Native working store unavailable".into()),
                 },
-                WorkerRequest::Midi { settings } => match validate_midi(&settings, &session) {
+                WorkerRequest::Midi { settings } => match validate_midi(&settings, &rig) {
                     Err(error) => Some(error),
                     Ok(()) => {
                         midi.configure(settings);
                         None
                     }
                 },
-                WorkerRequest::Control { command } => session.active_mut().apply(command).err(),
-                WorkerRequest::Scene { command } => {
-                    session.active_mut().select_scene(command).err()
-                }
-                WorkerRequest::Branch { command } => session.active_mut().set_branch(command).err(),
-                WorkerRequest::Eq { command } => session.active_mut().apply_eq(command).err(),
+                WorkerRequest::Control { command } => rig.active_mut().apply(command).err(),
+                WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
+                WorkerRequest::Branch { command } => rig.active_mut().set_branch(command).err(),
+                WorkerRequest::Eq { command } => rig.active_mut().apply_eq(command).err(),
                 WorkerRequest::Model { command } => match model_root.as_deref() {
-                    Some(root) => session.active_mut().model_command(command, root).err(),
+                    Some(root) => rig.active_mut().model_command(command, root).err(),
                     None => Some("Model asset store is unavailable".into()),
                 },
-                WorkerRequest::Switch { command } => match session.switch(command) {
+                WorkerRequest::Switch { command } => match rig.switch(command) {
                     Ok(()) => {
                         midi.configure(None);
                         switch_reply = true;
@@ -269,19 +362,48 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Err(error) => Some(error),
                 },
             };
-            if !session.healthy() {
+            if !rig.healthy() {
                 return Err(error.unwrap_or_else(|| "Rig failed".into()).into());
             }
-            responses.try_send(WorkerReply {
-                control: snapshot(&session, &midi.status),
-                telemetry: stream.telemetry(),
-                processed_frames: frames,
+            let control = snapshot(&rig, &midi.status);
+            drop(rig);
+            hold_req = hold_req.max(t_req.elapsed().as_micros());
+            responses.send(WorkerReply {
+                control,
+                telemetry: latest(),
+                processed_frames: frames.load(Ordering::Acquire),
                 error,
             })?;
         }
+        stop.store(true, Ordering::Release);
+        render
+            .join()
+            .map_err(|_| "Render thread panicked")?
+            .map_err(Into::into)
+    });
+    // A render failure explains any later owner error (a failed session), so report it first.
+    let result = match failure.lock().ok().and_then(|slot| slot.clone()) {
+        Some(error) if result.is_err() => Err(error.into()),
+        _ => result,
+    };
+    // The render thread is joined; the owner drops the rig and its engines.
+    drop(shared.into_inner());
+    result
+}
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+struct StopOnDrop(std::sync::Arc<std::sync::atomic::AtomicBool>);
+#[cfg(target_os = "linux")]
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.stop_flag();
     }
-    drop(stream);
-    Ok(())
+}
+#[cfg(target_os = "linux")]
+impl StopOnDrop {
+    fn stop_flag(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release);
+    }
 }
 #[cfg(not(target_os = "linux"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {

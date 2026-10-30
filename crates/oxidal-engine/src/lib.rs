@@ -27,6 +27,9 @@ mod resident;
 #[cfg(feature = "native")]
 pub use resident::ResidentSet;
 #[cfg(feature = "native")]
+#[allow(unsafe_code)]
+pub mod render;
+#[cfg(feature = "native")]
 mod saving;
 #[cfg(feature = "native")]
 pub use saving::{prepare_native_setting, save_revision, save_revision_with_models};

@@ -21,8 +21,15 @@ sha2 = "0.10"
 oxidal-tone3000 = { path = "../oxidal-tone3000", version = "0.1.0" }
 oxidal-lv2 = { path = "../oxidal-lv2", version = "0.1.0" }
 
-[lints]
-workspace = true
+# Workspace lints, except unsafe code is denied rather than forbidden so the
+# render module alone can state the hybrid realtime-thread contract.
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = "warn"
 
 [[example]]
 name = "qualify_mixed"

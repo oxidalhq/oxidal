@@ -310,6 +310,29 @@ impl Session {
         }
         result
     }
+    /// JUCE dispatch handle for the owner to pump outside the rig lock.
+    pub(crate) fn dispatcher(&mut self) -> Option<oxidal_tone3000::PumpPort> {
+        if self.failed {
+            return None;
+        }
+        for node in &self.bundle.manifest().oxidal.as_ref()?.graph.nodes {
+            if let Some(Processor::Native(p)) = self.graph.processor_mut(&node.id) {
+                return Some(crate::render::pump_port(p));
+            }
+        }
+        None
+    }
+    /// Owner upkeep without JUCE dispatch: latency verification and model steps.
+    pub(crate) fn tick(&mut self) -> Result<(), String> {
+        if self.failed {
+            return Err("Failed rig session".into());
+        }
+        if let Err(error) = self.graph.verify_latency() {
+            self.failed = true;
+            return Err(error);
+        }
+        self.advance_model()
+    }
     pub fn pump(&mut self) -> Result<(), String> {
         if self.failed {
             return Err("Failed rig session".into());
@@ -323,6 +346,12 @@ impl Session {
                 // JUCE's message loop is process-wide; one dispatch per owner tick.
                 break;
             }
+        }
+        if crate::render::render_thread_enabled()
+            && let Err(error) = self.graph.verify_latency()
+        {
+            self.failed = true;
+            return Err(error);
         }
         self.advance_model()
     }

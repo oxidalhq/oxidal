@@ -18,6 +18,8 @@ struct PortNode {
     latency: u32,
     dry: Vec<Delay>,
     processor: Option<Processor>,
+    /// Render-thread handle for a native processor, created on first render.
+    port: Option<oxidal_tone3000::AudioPort>,
     bypassed: bool,
     gains: Vec<Gain>,
 }
@@ -251,6 +253,7 @@ impl PreparedPorts {
                 latency,
                 dry: vec![],
                 processor,
+                port: None,
                 bypassed: declaration.bypassed.unwrap_or(false),
                 gains: declaration.input_gains.as_ref().map_or_else(Vec::new, |g| {
                     g.iter().map(|v| Gain::new(*v as f32)).collect()
@@ -366,6 +369,22 @@ impl PreparedPorts {
     }
     pub fn buffer_bytes(&self) -> usize {
         self.buffer_bytes
+    }
+    /// Owner-thread check that no processor's latency moved away from the
+    /// prepared alignment. Marks the graph failed if one did.
+    pub(crate) fn verify_latency(&mut self) -> Result<(), String> {
+        for node in &self.nodes {
+            if node
+                .processor
+                .as_ref()
+                .map_or(Ok(0), Processor::latency_frames)?
+                != node.latency
+            {
+                self.failed = true;
+                return Err("Processor latency changed; prepare a new graph".into());
+            }
+        }
+        Ok(())
     }
     /// Reported processing delay plus host alignment, excluding device/transport.
     pub fn latency_frames(&self) -> u32 {
@@ -518,13 +537,17 @@ impl PreparedPorts {
         Ok(())
     }
     fn run(&mut self) -> Result<(), String> {
+        // With a separate render thread, the owner verifies latency instead
+        // (`verify_latency`): native latency queries are owner-thread calls.
+        let check_latency = !crate::render::render_thread_enabled();
         for &index in &self.order {
             let node = &mut self.nodes[index];
-            if node
-                .processor
-                .as_ref()
-                .map_or(Ok(0), Processor::latency_frames)?
-                != node.latency
+            if check_latency
+                && node
+                    .processor
+                    .as_ref()
+                    .map_or(Ok(0), Processor::latency_frames)?
+                    != node.latency
             {
                 return Err("Processor latency changed; prepare a new graph".into());
             }
@@ -576,7 +599,14 @@ impl PreparedPorts {
                     match node.processor.as_mut().ok_or("Missing processor")? {
                         Processor::Native(p) => {
                             let (left, right) = data.split_at_mut(self.frames);
-                            p.process(left, right).map_err(|e| e.to_string())?;
+                            if crate::render::render_thread_enabled() {
+                                node.port
+                                    .get_or_insert_with(|| crate::render::audio_port(p))
+                                    .process(left, right)
+                                    .map_err(|e| e.to_string())?;
+                            } else {
+                                p.process(left, right).map_err(|e| e.to_string())?;
+                            }
                         }
                         Processor::Lv2(p) if node.channels == 1 => p.process_mono(data)?,
                         Processor::Lv2(p) => {

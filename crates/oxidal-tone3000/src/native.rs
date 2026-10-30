@@ -261,18 +261,25 @@ pub struct Engine {
 pub struct AudioPort {
     ptr: NonNull<c_void>,
     frames: usize,
+    bound: bool,
 }
 // SAFETY: the port renders only, from the single thread it binds; the bridge
 // rejects any other caller. `Engine::audio_port` requires the owner to stop that
 // thread before the engine is dropped.
 unsafe impl Send for AudioPort {}
 impl AudioPort {
-    /// Call once on the audio thread before its first `process`.
-    pub fn bind(&self) -> Result<()> {
+    /// Bind the calling thread as the one audio thread. `process` also binds on
+    /// first use, so a port created after a graph switch needs no extra step.
+    pub fn bind(&mut self) -> Result<()> {
         // SAFETY: live handle; the bridge records the calling thread.
-        checked(unsafe { oxidal_t3k_bind_audio_thread(self.ptr.as_ptr()) })
+        checked(unsafe { oxidal_t3k_bind_audio_thread(self.ptr.as_ptr()) })?;
+        self.bound = true;
+        Ok(())
     }
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) -> Result<()> {
+        if !self.bound {
+            self.bind()?;
+        }
         if left.is_empty() || left.len() != right.len() || left.len() > self.frames {
             return Err(NativeError("invalid stereo buffer lengths".into()));
         }
@@ -285,6 +292,20 @@ impl AudioPort {
                 left.len(),
             )
         })
+    }
+}
+/// Owner-thread handle for JUCE's process-wide message dispatch, usable while
+/// the engine's container is locked by a render thread.
+#[derive(Debug)]
+pub struct PumpPort {
+    ptr: NonNull<c_void>,
+    owner: PhantomData<Rc<()>>,
+}
+impl PumpPort {
+    /// Run JUCE's message loop for up to 1 ms on the owner thread.
+    pub fn pump(&self) -> Result<()> {
+        // SAFETY: owner-thread only (!Send); the bridge checks the owner.
+        checked(unsafe { oxidal_t3k_pump(self.ptr.as_ptr()) })
     }
 }
 impl std::fmt::Debug for Engine {
@@ -963,6 +984,17 @@ impl Engine {
         AudioPort {
             ptr: self.ptr,
             frames: self.frames,
+            bound: false,
+        }
+    }
+    /// Message-dispatch handle for the owner thread.
+    ///
+    /// # Safety
+    /// Only the owner thread may hold it, and not after the engine is dropped.
+    pub unsafe fn pump_port(&self) -> PumpPort {
+        PumpPort {
+            ptr: self.ptr,
+            owner: PhantomData,
         }
     }
     /// Forget the audio thread after it has stopped; the owner renders again.

@@ -283,6 +283,33 @@ impl ResidentSet {
     pub fn take_switch_error(&mut self) -> Option<String> {
         self.switch_error.take()
     }
+    /// JUCE dispatch handle from the first healthy resident, for the owner to
+    /// pump outside the rig lock (dispatch is process-wide).
+    pub fn dispatcher(&mut self) -> Option<oxidal_tone3000::PumpPort> {
+        self.residents
+            .iter_mut()
+            .filter(|r| r.error.is_none())
+            .find_map(|r| r.session.dispatcher())
+    }
+    /// Owner upkeep under the rig lock, without JUCE dispatch.
+    pub fn tick(&mut self) -> Result<(), String> {
+        for (index, r) in self.residents.iter_mut().enumerate() {
+            if r.error.is_some() {
+                continue;
+            }
+            if let Err(error) = r.session.tick() {
+                if index == self.active {
+                    return Err(error);
+                }
+                r.error = Some(error.clone());
+                if self.transition.as_ref().is_some_and(|t| t.target == index) {
+                    self.transition = None;
+                    self.switch_error = Some(format!("Prepared alternative failed: {error}"));
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn pump(&mut self) -> Result<(), String> {
         for (index, r) in self.residents.iter_mut().enumerate() {
             if r.error.is_some() {
