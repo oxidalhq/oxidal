@@ -3971,11 +3971,16 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       .getByRole('button', { name: 'Redo change', exact: true })
       .click();
     await expect.poll(count).toBe(2);
-    // Engine settings belong to the whole rig: leave the selected block first.
-    await sounding
-      .getByRole('button', { name: 'Show rig controls', exact: true })
+    // Engine settings are unit-wide and live in Settings → Audio.
+    await page
+      .getByRole('navigation', { name: 'Instrument navigation' })
+      .getByRole('button', { name: 'Settings', exact: true })
       .click();
-    const settings = sounding.getByRole('group', {
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('button', { name: 'Audio', exact: true })
+      .click();
+    const settings = page.getByRole('group', {
       name: 'Prepared DSP settings',
     });
     state = await (await request.get('/api/v1/audio')).json();
@@ -3983,7 +3988,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       (p: { target: string }) => p.target === 'osEnabled',
     ).value;
     await settings.getByRole('button', { name: /^Oversampling ·/ }).click();
-    const dialog = sounding.getByRole('dialog', {
+    const dialog = page.getByRole('dialog', {
       name: 'Oversampling',
       exact: true,
     });

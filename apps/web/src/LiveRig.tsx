@@ -1315,6 +1315,7 @@ export function LiveRig({
           historyControls={false}
           scope="split"
           settingsScope="unit"
+          onEngineSettings={onAudioSetup}
           status={state.authoring}
           selectedBlock={selectedBlock}
           disabled={unavailable || !!draft}

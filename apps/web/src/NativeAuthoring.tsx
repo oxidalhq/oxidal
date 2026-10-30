@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { tone3000Tone, type AudioState, type AudioAction } from './api';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { TouchAdjust } from './TouchAdjust';
+import { SettingDialog } from './SettingDialog';
+import { settingHelp } from './engineHelp';
 const inputLabels = {
   stereo: {
     name: 'Stereo',
@@ -25,26 +26,13 @@ const inputLabels = {
     detail: 'Each input runs through its own copy of a mono chain.',
   },
 } as const;
-const settingHelp: Record<string, string> = {
-  targetLoudness:
-    'Loudness the models are normalised to, so different captures sit at a similar level.',
-  calibrateInput:
-    'Matches the input level to the reference the captures expect from your interface.',
-  inputCalibrationLevel:
-    'Reference input level used when input calibration is on.',
-  osEnabled:
-    'Runs the models at a higher internal rate to reduce aliasing. Uses more DSP.',
-  osFactor: 'How much higher the internal rate is. Higher costs more DSP.',
-  pitchEnabled: 'Turns on the pitch engine used by Pitch shift. Off saves DSP.',
-  pitchWindow:
-    'Analysis window for the pitch engine. Longer tracks low notes better but adds latency.',
-};
 
 export function NativeAuthoring({
   status,
   historyControls = true,
   scope = 'all',
   settingsScope = 'rig',
+  onEngineSettings,
   selectedBlock,
   disabled,
   busy,
@@ -57,6 +45,8 @@ export function NativeAuthoring({
   scope?: 'split' | 'all';
   /** Where engine settings live: this unit (native) or this rig (hybrid node). */
   settingsScope?: 'unit' | 'rig';
+  /** Opens Settings → Audio, where unit-scope engine settings live. */
+  onEngineSettings?: () => void;
   status: NonNullable<AudioState['authoring']>;
   selectedBlock?: string;
   disabled: boolean;
@@ -533,21 +523,26 @@ export function NativeAuthoring({
             </ToolRow>
           </ToolSection>
           <NativeTools status={status} disabled={disabled} author={author} />
-          {!!status?.settings?.some(
-            (setting) => !setting.target.startsWith('block:'),
-          ) && (
-            <ToolSection
-              title="Engine"
-              scope={
-                settingsScope === 'unit'
-                  ? 'This unit · kept across presets, not saved in them'
-                  : 'Saved with this rig'
-              }
-            >
+          {settingsScope === 'unit' ? (
+            <ToolSection title="Engine" scope="This unit, not this rig">
+              <ToolRow
+                inline
+                title="Loudness, calibration, oversampling, pitch engine"
+                detail="These apply to every preset on this unit, so they live in Settings → Audio."
+              >
+                {onEngineSettings && (
+                  <Button variant="outline" onClick={onEngineSettings}>
+                    Open
+                  </Button>
+                )}
+              </ToolRow>
+            </ToolSection>
+          ) : status?.settings?.some(
+              (setting) => !setting.target.startsWith('block:'),
+            ) ? (
+            <ToolSection title="Engine" scope="Saved with this rig">
               <p className="tool-row-detail">
                 Applying a change restarts audio briefly.
-                {settingsScope === 'unit' &&
-                  ' New starts use Settings → Audio → Native device defaults.'}
               </p>
               <div role="group" aria-label="Prepared DSP settings">
                 {status.settings
@@ -581,7 +576,7 @@ export function NativeAuthoring({
                   ))}
               </div>
             </ToolSection>
-          )}
+          ) : null}
         </>
       )}
       {confirm && (
@@ -615,86 +610,23 @@ export function NativeAuthoring({
         </AdjustmentDialog>
       )}
       {settingDraft && (
-        <AdjustmentDialog
-          title={settingDraft.control.label}
-          onCancel={() => {
-            if (!busy) setSettingDraft(null);
-          }}
-        >
-          {settingDraft.control.toggle ? (
-            <Button
-              role="switch"
-              aria-checked={settingDraft.value === 1}
-              aria-label={settingDraft.control.label}
-              variant={settingDraft.value === 1 ? 'default' : 'outline'}
-              disabled={busy}
-              onClick={() =>
-                setSettingDraft((old) =>
-                  old ? { ...old, value: old.value === 1 ? 0 : 1 } : old,
-                )
-              }
-            >
-              {settingDraft.value === 1 ? 'On' : 'Off'}
-            </Button>
-          ) : (
-            <TouchAdjust
-              label="Prepared setting value"
-              value={settingDraft.value}
-              baseline={settingDraft.control.value}
-              min={0}
-              max={1}
-              step={
-                status?.setting_steps?.[settingDraft.control.target] ??
-                (settingDraft.control.toggle ? 1 : 0.01)
-              }
-              disabled={busy}
-              onChange={(value) =>
-                setSettingDraft((old) => (old ? { ...old, value } : old))
-              }
-              format={(value) =>
-                settingDraft.control.target.endsWith(':slimSize') &&
-                (value === 0 || value === 1)
-                  ? value === 0
-                    ? 'Lite'
-                    : 'Full'
-                  : settingDraft.control.toggle
-                    ? value === 1
-                      ? 'On'
-                      : 'Off'
-                    : `${(value * 100).toFixed(1)}%`
-              }
-              commitHint="Audio restarts when applied."
-            />
-          )}
-          <div className="action-row">
-            <Button
-              disabled={
-                busy ||
-                !Number.isFinite(settingDraft.value) ||
-                session !== settingDraft.session ||
-                revision !== settingDraft.revision
-              }
-              onClick={() => {
-                void author({
-                  kind: 'parameter',
-                  parameter: settingDraft.control.target,
-                  value: settingDraft.value,
-                }).then(() => {
-                  setSettingDraft(null);
-                });
-              }}
-            >
-              Apply
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setSettingDraft(null)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </AdjustmentDialog>
+        <SettingDialog
+          control={settingDraft.control}
+          step={status?.setting_steps?.[settingDraft.control.target]}
+          busy={busy}
+          stale={
+            session !== settingDraft.session ||
+            revision !== settingDraft.revision
+          }
+          onCancel={() => setSettingDraft(null)}
+          onApply={(value) =>
+            author({
+              kind: 'parameter',
+              parameter: settingDraft.control.target,
+              value,
+            }).then(() => setSettingDraft(null))
+          }
+        />
       )}
     </>
   );

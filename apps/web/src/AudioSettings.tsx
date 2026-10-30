@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EngineSettings } from './EngineSettings';
 import { NativeDefaults } from './NativeDefaults';
 import { PlaybackSettings } from './PlaybackSettings';
 import {
@@ -232,6 +233,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
           ))}
         <p role="status">{busy ? 'Inspecting audio…' : message}</p>
       </details>
+      <EngineSettings connected={connected} />
       <NativeDefaults connected={connected} />
     </section>
   );
