@@ -18,11 +18,6 @@ import {
   Stack,
   ChartLine,
   GearSix,
-  SpeakerHigh,
-  WifiHigh,
-  SlidersHorizontal,
-  Sun,
-  Wrench,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { LiveRig } from './LiveRig';
@@ -617,24 +612,12 @@ function InstrumentApp() {
                 ).map((section) => (
                   <Button
                     key={section}
-                    variant={
-                      settingsSection === section ? 'secondary' : 'ghost'
-                    }
+                    variant="ghost"
                     aria-current={
                       settingsSection === section ? 'page' : undefined
                     }
                     onClick={() => setSettingsSection(section)}
                   >
-                    {
-                      {
-                        audio: <SpeakerHigh aria-hidden="true" />,
-                        connections: <WifiHigh aria-hidden="true" />,
-                        midi: <SlidersHorizontal aria-hidden="true" />,
-                        display: <Sun aria-hidden="true" />,
-                        device: <Power aria-hidden="true" />,
-                        maintenance: <Wrench aria-hidden="true" />,
-                      }[section]
-                    }
                     {section === 'audio'
                       ? 'Audio'
                       : section === 'midi'

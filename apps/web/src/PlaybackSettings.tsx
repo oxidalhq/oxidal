@@ -316,22 +316,29 @@ export function PlaybackSettings({
         </div>
       )}
 
-      <p role="status">
+      <p
+        role="status"
+        className="playback-state"
+        data-phase={state?.phase ?? 'checking'}
+      >
         Audio: {state?.phase ?? 'checking'}
         {state?.device_owned ? ' · interface reserved' : ''}
       </p>
-      {boot}
       {unavailable ? (
-        <p className="muted">
-          Audio playback is unavailable on this device. Saved tones can still be
-          edited.
-        </p>
+        <>
+          <p className="muted">
+            Audio playback is unavailable on this device. Saved tones can still
+            be edited.
+          </p>
+          {boot}
+        </>
       ) : (
         <>
           <div className="action-row">
             {state?.device_owned ? (
               <>
                 <Button
+                  variant="outline"
                   disabled={!connected || busy || transitioning}
                   onClick={() => void command({ kind: 'stop' })}
                 >
@@ -356,6 +363,7 @@ export function PlaybackSettings({
               </Button>
             ) : null}
           </div>
+          {boot}
           <details className="control-help">
             <summary>Playback help</summary>
             <p>
