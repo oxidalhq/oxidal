@@ -20,6 +20,18 @@
   grid-template-columns: repeat(auto-fill, minmax(min(9rem, 46%), 1fr));
   gap: 0.375rem;
 }
+.scene-pad-grid[data-few] {
+  grid-template-columns: repeat(var(--pads), minmax(0, 1fr));
+}
+@media (max-width: 480px) {
+  .scene-pad-grid[data-few] .scene-pad {
+    grid-template-columns: 1rem minmax(0, 1fr);
+    padding: 0 0.5rem;
+  }
+  .scene-pad-grid[data-few] .scene-pad strong {
+    font-size: 0.875rem;
+  }
+}
 .scene-pad {
   display: grid;
   grid-template-columns: 1.5rem minmax(0, 1fr);

@@ -41,6 +41,15 @@ const tooltipStyle = {
   border: '1px solid var(--border)',
   borderRadius: 6,
 };
+/** The daemon names engines; the player knows presets. */
+const SOURCE_LABELS: Record<string, string> = {
+  'Saved preset': 'TONE3000 preset',
+  'Mixed rig': 'Preset with scenes',
+  'LV2 graph': 'Effects preset',
+};
+const sourceLabel = (source: string) => SOURCE_LABELS[source] ?? source;
+const ms = (us: number | null | undefined) =>
+  us == null ? '—' : (us / 1000).toFixed(2);
 const number = (value: number | null | undefined, suffix = '') =>
   value == null ? 'Unavailable' : `${value.toFixed(1)}${suffix}`;
 function Meter({
@@ -190,7 +199,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
             ? 'Frozen readings'
             : error ||
               (state?.source
-                ? `${state.source} · ${stale ? 'waiting for live readings' : 'live'}`
+                ? `${sourceLabel(state.source)} · ${stale ? 'waiting for live readings' : 'live'}`
                 : 'Audio stopped')}
         </p>
         <div className="monitor-actions">
@@ -395,11 +404,11 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       </div>
       <dl className="health-list">
         <div>
-          <dt className="text-muted-foreground">Process p50 / p95 / max</dt>
+          <dt className="text-muted-foreground">Block time p50 / p95 / max</dt>
           <dd className="font-mono">
-            {stale
+            {stale || !state?.audio
               ? 'Unavailable'
-              : `${number(state?.audio?.process_us_p50)} / ${number(state?.audio?.process_us_p95)} / ${number(state?.audio?.process_us_max)} µs`}
+              : `${ms(state.audio.process_us_p50)} / ${ms(state.audio.process_us_p95)} / ${ms(state.audio.process_us_max)} ms of ${ms(state.audio.deadline_us)}`}
           </dd>
         </div>
         <div>
@@ -446,7 +455,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
         <summary>Measurement details</summary>
         <p className="caption break-words">
           TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
-          {state?.graph_phase || 'reading'} · Mixed rig:{' '}
+          {state?.graph_phase || 'reading'} · Presets with scenes:{' '}
           {state?.rig_phase || 'reading'}
           {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
         </p>

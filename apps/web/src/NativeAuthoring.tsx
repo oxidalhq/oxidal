@@ -15,11 +15,11 @@ const inputLabels = {
   },
   left: {
     name: 'Left only',
-    detail: 'Only the left input feeds the rig; the right input is ignored.',
+    detail: 'Only the left input feeds the preset; the right input is ignored.',
   },
   right: {
     name: 'Right only',
-    detail: 'Only the right input feeds the rig; the left input is ignored.',
+    detail: 'Only the right input feeds the preset; the left input is ignored.',
   },
   dual: {
     name: 'Dual mono',
@@ -361,7 +361,7 @@ export function NativeAuthoring({
             </ToolRow>
             <ToolRow
               title="Copies"
-              detail="Duplicate adds a copy right after this block. Copy keeps it on this device so you can paste it into any rig."
+              detail="Duplicate adds a copy right after this block. Copy keeps it on this device so you can paste it into any preset."
             >
               <Button
                 variant="outline"
@@ -511,7 +511,7 @@ export function NativeAuthoring({
             <ToolRow
               inline
               title="Start over"
-              detail="Clears every block from this rig's chain. Undo brings them back; the saved preset is untouched until you Save."
+              detail="Clears every block from this preset's chain. Undo brings them back; the saved preset is untouched until you Save."
             >
               <Button
                 variant="outline"
@@ -524,7 +524,7 @@ export function NativeAuthoring({
           </ToolSection>
           <NativeTools status={status} disabled={disabled} author={author} />
           {settingsScope === 'unit' ? (
-            <ToolSection title="Engine" scope="This unit, not this rig">
+            <ToolSection title="Engine" scope="This unit, not this preset">
               <ToolRow
                 inline
                 title="Loudness, calibration, oversampling, pitch engine"
@@ -589,7 +589,7 @@ export function NativeAuthoring({
           <p>
             {confirm === 'remove'
               ? 'The block leaves the chain now. Undo brings it back.'
-              : 'Every block leaves this rig’s chain now. Undo brings them back.'}
+              : 'Every block leaves this preset’s chain now. Undo brings them back.'}
           </p>
           <div className="action-row">
             <Button

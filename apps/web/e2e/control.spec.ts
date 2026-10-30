@@ -618,7 +618,7 @@ test('native device defaults save independently of the playing tone', async ({
     await page.goto('/');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const panel = page.locator('details').filter({
-      has: page.locator('summary', { hasText: 'Native device defaults' }),
+      has: page.locator('summary', { hasText: 'TONE3000 device defaults' }),
     });
     await panel.locator('summary').click();
     await panel.getByLabel('NAM size for new models').selectOption('0.75');

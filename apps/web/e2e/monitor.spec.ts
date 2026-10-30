@@ -88,9 +88,11 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
-  await expect(panel.getByRole('status')).toHaveText('Saved preset · live');
+  await expect(panel.getByRole('status')).toHaveText('TONE3000 preset · live');
   mixed = true;
-  await expect(panel.getByRole('status')).toHaveText('Mixed rig · live');
+  await expect(panel.getByRole('status')).toHaveText(
+    'Preset with scenes · live',
+  );
   const wrapped = await panel
     .locator('.meter-heading > *')
     .evaluateAll((items) =>
@@ -184,7 +186,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   });
   stale = true;
   await expect(panel.getByRole('status')).toHaveText(
-    'Mixed rig · waiting for live readings',
+    'Preset with scenes · waiting for live readings',
   );
   await expect(
     panel.getByRole('meter', { name: 'Output L peak' }),

@@ -61,6 +61,9 @@ export function ScenePads({
         role="group"
         aria-label="Scenes"
         aria-busy={fading}
+        // Up to four scenes share one row, even on a phone.
+        data-few={scenes.length <= 4 || undefined}
+        style={{ '--pads': Math.min(scenes.length, 4) } as React.CSSProperties}
       >
         {scenes.map((scene, i) => (
           <button

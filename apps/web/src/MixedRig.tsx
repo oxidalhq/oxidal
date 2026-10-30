@@ -21,6 +21,8 @@ import {
   MusicNotes,
   ArrowsSplit,
   FloppyDisk,
+  Play,
+  Stop,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
@@ -682,6 +684,7 @@ export function MixedRig({
         />
         <Button
           variant="outline"
+          aria-label="Save copy"
           disabled={
             disabled || !matching || !!edit || !!picker || !!state.save?.running
           }
@@ -692,22 +695,32 @@ export function MixedRig({
           }}
         >
           <FloppyDisk aria-hidden="true" />
-          {state.save?.running ? 'Saving…' : 'Save copy'}
+          <span className="phone-hidden">
+            {state.save?.running ? 'Saving…' : 'Save'}
+          </span>
         </Button>
         {state.device_owned ? (
           <Button
             variant="outline"
+            aria-label={
+              state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'
+            }
             disabled={!connected || busy || eqBusy || !!edit || !!picker}
             onClick={() => void command({ kind: 'stop' })}
           >
-            {state.phase === 'starting' ? 'Cancel loading' : 'Stop audio'}
+            <Stop aria-hidden="true" />
+            <span className="phone-hidden">
+              {state.phase === 'starting' ? 'Cancel' : 'Stop'}
+            </span>
           </Button>
         ) : (
           <Button
+            aria-label="Resume audio"
             disabled={!connected || busy}
             onClick={() => void command({ kind: 'restart' })}
           >
-            Resume audio
+            <Play aria-hidden="true" />
+            <span className="phone-hidden">Resume</span>
           </Button>
         )}
       </div>

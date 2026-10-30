@@ -2391,6 +2391,24 @@ textarea {
   flex: 1 1 12rem;
   min-width: 0;
 }
+@media (max-width: 480px) {
+  .rig-performance-header .preset-picker {
+    flex-basis: 9rem;
+  }
+  /* Icon-only header buttons on phones; their names stay for screen readers. */
+  .rig-performance-header .phone-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .rig-performance-header > .oxidal-button:has(.phone-hidden) {
+    width: var(--touch-target);
+    padding: 0;
+  }
+}
 .rig-workspace {
   display: grid;
   gap: 1rem;

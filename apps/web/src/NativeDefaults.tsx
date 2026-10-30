@@ -51,7 +51,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
   }
   return (
     <details className="panel control-stack">
-      <summary>Native device defaults</summary>
+      <summary>TONE3000 device defaults</summary>
       <p className="text-muted-foreground">
         New native instances use these defaults. Saved tone and session settings
         take priority; playing audio stays unchanged.

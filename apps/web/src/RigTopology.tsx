@@ -40,6 +40,8 @@ export function RigTopology({
     0,
     ...layout.nodes.map((n) => (n.row + 1) * (height + gapY) - gapY),
   );
+  // Scene presets draw their lanes elsewhere; nothing left means no section.
+  if (!layout.nodes.length && layout.valid) return null;
   return (
     <div className="mixed-routing">
       <div

@@ -904,7 +904,7 @@ impl Engine {
                             "Off".into()
                         }
                     } else if p.parameter == "inputGain" || p.parameter == "outputGain" {
-                        format!("{:.1} dB", (p.value - 0.5) * 48.0)
+                        db_display((p.value - 0.5) * 48.0)
                     } else {
                         format!("{:.1}%", p.value * 100.0)
                     },
@@ -1533,6 +1533,11 @@ pub(crate) fn parameter_label(id: &str) -> &str {
         _ => id,
     }
 }
+/// One decimal place of dB; a value that rounds to zero reads "0.0", never "-0.0".
+pub(crate) fn db_display(value: f64) -> String {
+    let rounded = (value * 10.0).round() / 10.0 + 0.0;
+    format!("{rounded:.1} dB")
+}
 pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
     if p.toggle {
         return if p.value == 0.0 {
@@ -1542,8 +1547,8 @@ pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
         };
     }
     match p.id.as_str() {
-        "inputLevel" | "outputLevel" => format!("{:.1} dB", (p.normalized - 0.5) * 48.0),
-        "outputBalance" => format!("{:.1} dB", (p.normalized - 0.5) * 24.0),
+        "inputLevel" | "outputLevel" => db_display((p.normalized - 0.5) * 48.0),
+        "outputBalance" => db_display((p.normalized - 0.5) * 24.0),
         "spreadOffset" | "alignOffset" => {
             let ms = (p.normalized - 0.5) * 48.0;
             if ms.abs() < 0.05 {
@@ -1576,7 +1581,7 @@ pub(crate) fn parameter_display(p: &crate::protocol::Parameter) -> String {
                 format!("{:.0} Hz", p.value)
             }
         }
-        "gateThreshold" | "gateRange" => format!("{:.1} dB", p.value),
+        "gateThreshold" | "gateRange" => db_display(p.value),
         "gateRelease" | "gateHold" => format!("{:.1} ms", p.value),
         "toneBass" | "toneMid" | "toneTreble" => format!("{:.1}", p.value),
         _ => p.display.clone(),
