@@ -92,13 +92,17 @@ impl Owner {
         let Some(settings) = self.state.configured.clone() else {
             return;
         };
-        let result = Recovery::new(
-            settings,
+        let recovery = Recovery::new(
+            settings.clone(),
             self.resume_controls.clone(),
             self.state.models.clone(),
             self.resume_eq.clone(),
-        )
-        .write(&self.preset_dir.join("last-audio-session.json"));
+        );
+        // Recall restores the per-preset copy, so keep it as current as the session
+        // file: edits since the last preset switch then survive restart or power loss.
+        let result = recovery
+            .write(&self.preset_dir.join("last-audio-session.json"))
+            .and_then(|()| recovery.write(&self.rig_session_path(&settings)));
         match result {
             Ok(()) => {
                 self.recovery_due = None;
@@ -119,6 +123,13 @@ impl Owner {
                 }
             }
         }
+    }
+    /// Working copy of one preset's edits, restored when that preset is recalled.
+    fn rig_session_path(&self, settings: &StartAudio) -> std::path::PathBuf {
+        self.preset_dir.join("rig-sessions").join(format!(
+            "{}-{}-{}.json",
+            settings.owned, settings.draft, settings.preset_id
+        ))
     }
     async fn release(&mut self) -> Result<(), String> {
         let Some(worker) = self.worker.as_mut() else {
@@ -1283,11 +1294,7 @@ impl Owner {
                 .original(&proposed.preset_id)
                 .map_err(|e| e.to_string())?;
         }
-        let path = |s: &StartAudio| {
-            self.preset_dir
-                .join("rig-sessions")
-                .join(format!("{}-{}-{}.json", s.owned, s.draft, s.preset_id))
-        };
+        let path = |s: &StartAudio| self.rig_session_path(s);
         let previous_controls = self.resume_controls.clone();
         let previous_models = self.state.models.clone();
         let previous_eq = self.resume_eq.clone();

@@ -802,6 +802,18 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
     }
     assert!(state["error"].is_null());
     assert!(recovery_path.is_file());
+    // Recall restores the per-preset copy, which must track edits without a preset
+    // switch so that a restart or power loss keeps them.
+    let session: Value = serde_json::from_slice(&std::fs::read(&recovery_path).unwrap()).unwrap();
+    let per_preset = root.join("presets/rig-sessions").join(format!(
+        "{}-{}-{}.json",
+        recovery_settings["owned"],
+        recovery_settings["draft"],
+        recovery_settings["preset_id"].as_str().unwrap()
+    ));
+    let preset_copy: Value = serde_json::from_slice(&std::fs::read(&per_preset).unwrap()).unwrap();
+    assert_eq!(preset_copy["settings"], session["settings"]);
+    assert_eq!(preset_copy["controls"], session["controls"]);
     shutdown.send_replace(true);
     task.abort();
     stopped.wait().await.unwrap();
