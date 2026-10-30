@@ -5,6 +5,7 @@ mod audit;
 mod debug;
 mod device;
 mod graph_playback;
+mod levels;
 mod local_models;
 mod monitor;
 mod monitor_history;
@@ -99,6 +100,7 @@ pub struct Contract {
     pub graph_audio_command: oxidal_lv2::protocol::GraphAudioCommand,
     pub audio_command: oxidal_audio::lifecycle::AudioCommand,
     pub audio_devices: oxidal_audio::AudioDevices,
+    pub unit_levels: oxidal_audio::tools::HostLevels,
     pub midi_devices: oxidal_audio::midi::Devices,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
@@ -141,6 +143,7 @@ struct Shared {
     audit: audit::Audit,
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
+    levels: Arc<levels::Levels>,
     rig_playback: rig_playback::RigPlayback,
     control: Mutex<Control>,
     native: Arc<Mutex<Option<native_editor::Worker>>>,
@@ -206,6 +209,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let boot = Arc::new(audio_boot::Policy::new(
         config.preset_dir.join("boot-audio.json"),
     ));
+    let levels = Arc::new(levels::Levels::load(
+        config.preset_dir.join("unit-levels.json"),
+    ));
     let shared = Arc::new(Shared {
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
@@ -220,9 +226,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )),
         audit: audit::Audit::new(config.preset_dir.join("control-audit")),
         monitor,
-        playback: playback::Playback::new(&config, boot.clone())?,
-        graph_playback: graph_playback::GraphPlayback::new(&config, boot.clone())?,
-        rig_playback: rig_playback::RigPlayback::new(&config, boot)?,
+        playback: playback::Playback::new(&config, boot.clone(), levels.clone())?,
+        graph_playback: graph_playback::GraphPlayback::new(&config, boot.clone(), levels.clone())?,
+        rig_playback: rig_playback::RigPlayback::new(&config, boot, levels.clone())?,
+        levels,
         control: Mutex::new(control),
         native: Arc::new(Mutex::new(native_editor::Worker::start(&config)?)),
         presets: Arc::new(std::sync::Mutex::new(oxidal_presets::Store::new(
@@ -280,6 +287,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
         .route("/audio", get(playback::state).post(playback::command))
+        .route("/levels", get(levels::state).post(levels::update))
         .route(
             "/native/defaults",
             get(native_defaults::state).post(native_defaults::update),

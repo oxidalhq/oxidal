@@ -91,6 +91,10 @@ export type HostUtility =
     }
   | {
       kind: "stop_test_tone";
+    }
+  | {
+      kind: "levels";
+      levels: HostLevels;
     };
 export type BranchMode = "toggle" | "gate";
 export type Target =
@@ -708,6 +712,7 @@ export interface Contract {
   terminal_state: TerminalState;
   tone_page: Page;
   tone_query: ToneQuery;
+  unit_levels: HostLevels;
   validation: Validation;
 }
 export interface AccountCommand {
@@ -742,6 +747,20 @@ export interface AudioCommand {
   action: AudioAction;
   expected_revision: number;
   session: string;
+}
+/**
+ * Unit-wide gain staging around every rig: guitar input trim before the rig,
+ * master output level after it. Never stored in presets.
+ */
+export interface HostLevels {
+  /**
+   * Input trim in dB, applied before the rig (−24 to +24).
+   */
+  input_trim_db: number;
+  /**
+   * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
+   */
+  output_level_db: number;
 }
 /**
  * Device-local configuration, deliberately absent from portable sound data.
@@ -784,6 +803,7 @@ export interface StreamConfig {
    * @maxItems 2
    */
   input_map: [number, number];
+  levels?: HostLevels1;
   output: AudioProbe;
   /**
    * Duplicate output indexes mix the stereo processor output equally into mono.
@@ -801,6 +821,20 @@ export interface AudioProbe {
   period_frames: number;
   periods: number;
   sample_rate: number;
+}
+/**
+ * Unit-wide gain staging around every rig: guitar input trim before the rig,
+ * master output level after it. Never stored in presets.
+ */
+export interface HostLevels1 {
+  /**
+   * Input trim in dB, applied before the rig (−24 to +24).
+   */
+  input_trim_db: number;
+  /**
+   * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
+   */
+  output_level_db: number;
 }
 export interface StartAudio {
   /**
@@ -1256,7 +1290,22 @@ export interface Channel {
 }
 export interface HostState {
   hear_yourself: boolean;
+  levels?: HostLevels2;
   test_tone_active: boolean;
+}
+/**
+ * Unit-wide gain staging around every rig: guitar input trim before the rig,
+ * master output level after it. Never stored in presets.
+ */
+export interface HostLevels2 {
+  /**
+   * Input trim in dB, applied before the rig (−24 to +24).
+   */
+  input_trim_db: number;
+  /**
+   * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
+   */
+  output_level_db: number;
 }
 export interface SavedGraph {
   id: string;

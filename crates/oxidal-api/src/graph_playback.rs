@@ -57,6 +57,7 @@ impl Worker {
     }
 }
 struct Owner {
+    levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     midi_enabled: bool,
     executable: Option<PathBuf>,
@@ -143,9 +144,11 @@ impl Owner {
     }
     async fn start_reserved(
         &mut self,
-        settings: StartGraph,
+        mut settings: StartGraph,
         reserved: &mut Option<tokio::sync::SemaphorePermit<'static>>,
     ) -> Result<(), String> {
+        // Unit levels follow the player, not the preset or the recovered session.
+        settings.stream.levels = self.levels.current();
         settings.validate()?;
         if self.worker.is_some() {
             return Err("Stop graph audio before changing its configuration".into());
@@ -241,6 +244,12 @@ impl Owner {
                     .ok_or("Missing effects configuration")?
                     .stream
                     .hear_yourself = hear;
+                if let oxidal_audio::tools::HostUtility::Levels { levels } = command {
+                    self.levels.save(levels)?;
+                    if let Some(configured) = self.state.configured.as_mut() {
+                        configured.stream.levels = levels;
+                    }
+                }
                 self.state.revision += 1;
                 self.publish();
             }
@@ -478,7 +487,11 @@ impl Owner {
     }
 }
 impl GraphPlayback {
-    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
+    pub fn new(
+        config: &Config,
+        policy: Arc<Policy>,
+        levels: Arc<crate::levels::Levels>,
+    ) -> Result<Self, String> {
         if let Some(p) = &config.graph_worker
             && (!p.is_absolute() || !p.is_file())
         {
@@ -515,6 +528,7 @@ impl GraphPlayback {
         let (commands, mut receiver) =
             mpsc::channel::<(GraphAudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            levels,
             boot: policy.clone(),
             midi_enabled: config.simulator,
             executable: config.graph_worker.clone(),

@@ -160,6 +160,9 @@
     "tone_query": {
       "$ref": "#/$defs/ToneQuery"
     },
+    "unit_levels": {
+      "$ref": "#/$defs/HostLevels"
+    },
     "validation": {
       "$ref": "#/$defs/Validation"
     }
@@ -204,6 +207,7 @@
     "graph_audio_command",
     "audio_command",
     "audio_devices",
+    "unit_levels",
     "midi_devices",
     "audio_probe",
     "audio_probe_result",
@@ -3586,11 +3590,39 @@
       },
       "additionalProperties": false
     },
+    "HostLevels": {
+      "description": "Unit-wide gain staging around every rig: guitar input trim before the rig,\nmaster output level after it. Never stored in presets.",
+      "type": "object",
+      "properties": {
+        "input_trim_db": {
+          "description": "Input trim in dB, applied before the rig (−24 to +24).",
+          "type": "number",
+          "format": "float"
+        },
+        "output_level_db": {
+          "description": "Master output level in dB, applied after the rig (−60 to +12; −60 is silent).",
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input_trim_db",
+        "output_level_db"
+      ]
+    },
     "HostState": {
       "type": "object",
       "properties": {
         "hear_yourself": {
           "type": "boolean"
+        },
+        "levels": {
+          "$ref": "#/$defs/HostLevels",
+          "default": {
+            "input_trim_db": 0,
+            "output_level_db": 0
+          }
         },
         "test_tone_active": {
           "type": "boolean"
@@ -3646,6 +3678,23 @@
           "additionalProperties": false,
           "required": [
             "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "levels"
+            },
+            "levels": {
+              "$ref": "#/$defs/HostLevels"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "levels"
           ]
         }
       ]
@@ -7531,6 +7580,14 @@
           },
           "maxItems": 2,
           "minItems": 2
+        },
+        "levels": {
+          "description": "Unit-wide input trim and master level; the daemon fills these at every start.",
+          "$ref": "#/$defs/HostLevels",
+          "default": {
+            "input_trim_db": 0,
+            "output_level_db": 0
+          }
         },
         "output": {
           "$ref": "#/$defs/AudioProbe"

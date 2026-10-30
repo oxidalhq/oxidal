@@ -67,7 +67,11 @@ impl Duplex {
         drop(sw);
         let frames = config.input.period_frames as usize;
         Ok(Self {
-            host: crate::tools::HostSignal::new(config.input.sample_rate, config.hear_yourself),
+            host: crate::tools::HostSignal::new(
+                config.input.sample_rate,
+                config.hear_yourself,
+                config.levels,
+            ),
             input: vec![
                 0;
                 frames
@@ -238,8 +242,14 @@ impl Duplex {
         snapshot
     }
     pub fn host_utility(&mut self, command: crate::tools::HostUtility) {
-        if let crate::tools::HostUtility::HearYourself { enabled } = command {
-            self.config.hear_yourself = enabled;
+        match command {
+            crate::tools::HostUtility::HearYourself { enabled } => {
+                self.config.hear_yourself = enabled;
+            }
+            crate::tools::HostUtility::Levels { levels } if levels.validate().is_ok() => {
+                self.config.levels = levels;
+            }
+            _ => (),
         }
         self.host.command(command);
     }
@@ -298,6 +308,7 @@ mod tests {
         let mut output = input.clone();
         output.direction = Direction::Playback;
         StreamConfig {
+            levels: Default::default(),
             hear_yourself: true,
             input,
             output,

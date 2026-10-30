@@ -49,6 +49,7 @@ impl Drop for Worker {
     }
 }
 struct Owner {
+    levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     worker: Option<Worker>,
     executable: Option<PathBuf>,
@@ -154,11 +155,13 @@ impl Owner {
     }
     async fn start(
         &mut self,
-        settings: StartAudio,
+        mut settings: StartAudio,
         controls: Option<Vec<LiveControl>>,
         models: Vec<ModelAssignment>,
         eq: Option<Vec<BlockEqState>>,
     ) -> Result<(), String> {
+        // Unit levels follow the player, not the preset or the recovered session.
+        settings.stream.levels = self.levels.current();
         if !valid_models(&models) || eq.as_ref().is_some_and(|e| !valid_snapshot(e)) {
             return Err("Invalid model assignments".into());
         }
@@ -654,6 +657,12 @@ impl Owner {
             .hear_yourself;
         if let Some(settings) = &mut self.state.configured {
             settings.stream.hear_yourself = hear;
+        }
+        if let oxidal_audio::tools::HostUtility::Levels { levels } = command {
+            self.levels.save(levels)?;
+            if let Some(settings) = &mut self.state.configured {
+                settings.stream.levels = levels;
+            }
         }
         self.meters
             .send_replace(Some((telemetry, std::time::Instant::now())));
@@ -1692,7 +1701,11 @@ impl Owner {
     }
 }
 impl Playback {
-    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
+    pub fn new(
+        config: &Config,
+        policy: Arc<Policy>,
+        levels: Arc<crate::levels::Levels>,
+    ) -> Result<Self, String> {
         if let Some(path) = &config.audio_worker
             && (!path.is_absolute() || !path.is_file())
         {
@@ -1741,6 +1754,7 @@ impl Playback {
         let (meters, meter_state) = watch::channel(None);
         let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            levels,
             boot: policy.clone(),
             worker: None,
             executable: config.audio_worker.clone(),

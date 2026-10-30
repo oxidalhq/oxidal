@@ -121,6 +121,41 @@ pub enum HostUtility {
     HearYourself { enabled: bool },
     TestTone,
     StopTestTone,
+    Levels { levels: HostLevels },
+}
+/// Unit-wide gain staging around every rig: guitar input trim before the rig,
+/// master output level after it. Never stored in presets.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct HostLevels {
+    /// Input trim in dB, applied before the rig (−24 to +24).
+    pub input_trim_db: f32,
+    /// Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
+    pub output_level_db: f32,
+}
+impl HostLevels {
+    pub const INPUT_RANGE: (f32, f32) = (-24.0, 24.0);
+    pub const OUTPUT_RANGE: (f32, f32) = (-60.0, 12.0);
+    pub fn validate(&self) -> Result<(), String> {
+        let within = |v: f32, (lo, hi): (f32, f32)| v.is_finite() && (lo..=hi).contains(&v);
+        if within(self.input_trim_db, Self::INPUT_RANGE)
+            && within(self.output_level_db, Self::OUTPUT_RANGE)
+        {
+            Ok(())
+        } else {
+            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB".into())
+        }
+    }
+    fn input_gain(&self) -> f32 {
+        10f32.powf(self.input_trim_db / 20.0)
+    }
+    fn output_gain(&self) -> f32 {
+        if self.output_level_db <= Self::OUTPUT_RANGE.0 {
+            0.0
+        } else {
+            10f32.powf(self.output_level_db / 20.0)
+        }
+    }
 }
 pub const fn hear_yourself_default() -> bool {
     true
@@ -130,6 +165,8 @@ pub const fn hear_yourself_default() -> bool {
 pub struct HostState {
     pub hear_yourself: bool,
     pub test_tone_active: bool,
+    #[serde(default)]
+    pub levels: HostLevels,
 }
 #[derive(Debug)]
 pub struct HostSignal {
@@ -137,14 +174,55 @@ pub struct HostSignal {
     rate: u32,
     test_frame: u32,
     test_active: bool,
+    levels: HostLevels,
+    input_gain: Glide,
+    output_gain: Glide,
+}
+/// Per-sample one-pole glide (about 10 ms) so level moves never click.
+#[derive(Debug)]
+struct Glide {
+    current: f32,
+    target: f32,
+    coefficient: f32,
+}
+impl Glide {
+    fn new(rate: u32, value: f32) -> Self {
+        Self {
+            current: value,
+            target: value,
+            coefficient: 1.0 - (-1.0 / (0.01 * rate.max(1) as f32)).exp(),
+        }
+    }
+    fn apply(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.current == self.target {
+            if self.current != 1.0 {
+                for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                    *l *= self.current;
+                    *r *= self.current;
+                }
+            }
+            return;
+        }
+        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+            self.current += (self.target - self.current) * self.coefficient;
+            *l *= self.current;
+            *r *= self.current;
+        }
+        if (self.current - self.target).abs() < 1e-6 {
+            self.current = self.target;
+        }
+    }
 }
 impl HostSignal {
-    pub fn new(rate: u32, hear: bool) -> Self {
+    pub fn new(rate: u32, hear: bool, levels: HostLevels) -> Self {
         Self {
             hear,
             rate,
             test_frame: 0,
             test_active: false,
+            levels,
+            input_gain: Glide::new(rate, levels.input_gain()),
+            output_gain: Glide::new(rate, levels.output_gain()),
         }
     }
     pub fn command(&mut self, command: HostUtility) {
@@ -157,21 +235,36 @@ impl HostSignal {
                 }
             }
             HostUtility::StopTestTone => self.test_active = false,
+            HostUtility::Levels { levels } => {
+                // Invalid levels never reach the audio path; the caller validates first.
+                if levels.validate().is_ok() {
+                    self.levels = levels;
+                    self.input_gain.target = levels.input_gain();
+                    self.output_gain.target = levels.output_gain();
+                }
+            }
         }
     }
     pub fn state(&self) -> HostState {
         HostState {
             hear_yourself: self.hear,
             test_tone_active: self.test_active,
+            levels: self.levels,
         }
     }
-    pub fn input(&self, left: &mut [f32], right: &mut [f32]) {
+    pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
         if !self.hear {
             left.fill(0.0);
             right.fill(0.0);
+            return;
         }
+        self.input_gain.apply(left, right);
     }
     pub fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
+        self.test_tone(left, right);
+        self.output_gain.apply(left, right);
+    }
+    fn test_tone(&mut self, left: &mut [f32], right: &mut [f32]) {
         if !self.test_active {
             return;
         }
@@ -204,7 +297,7 @@ mod host_tests {
     #[test]
     fn input_monitor_and_output_test_are_independent_bounded_and_sample_clocked() {
         for rate in [44100, 48000, 96000] {
-            let mut signal = HostSignal::new(rate, true);
+            let mut signal = HostSignal::new(rate, true, HostLevels::default());
             let (mut l, mut r) = ([0.1; 127], [0.2; 127]);
             signal.input(&mut l, &mut r);
             assert_eq!(l, [0.1; 127]);
@@ -241,5 +334,62 @@ mod host_tests {
             signal.command(HostUtility::StopTestTone);
             assert!(!signal.state().test_tone_active);
         }
+    }
+    #[test]
+    fn levels_trim_input_and_scale_output_without_clicks() {
+        let rate = 48000;
+        let mut signal = HostSignal::new(
+            rate,
+            true,
+            HostLevels {
+                input_trim_db: -6.0,
+                output_level_db: 0.0,
+            },
+        );
+        let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
+        signal.input(&mut l, &mut r);
+        assert!((l[0] - 0.501).abs() < 0.002 && (r[63] - 0.501).abs() < 0.002);
+        signal.command(HostUtility::Levels {
+            levels: HostLevels {
+                input_trim_db: -6.0,
+                output_level_db: -60.0,
+            },
+        });
+        assert_eq!(signal.state().levels.output_level_db, -60.0);
+        // The first block glides toward silence: no single-sample jump.
+        let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
+        signal.output(&mut l, &mut r);
+        assert!(l[0] > 0.99 && l[63] < l[0] && l[63] > 0.0);
+        for _ in 0..200 {
+            let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
+            signal.output(&mut l, &mut r);
+        }
+        let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
+        signal.output(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| v.abs() < 1e-5));
+        // Out-of-range levels are ignored, never applied.
+        signal.command(HostUtility::Levels {
+            levels: HostLevels {
+                input_trim_db: f32::NAN,
+                output_level_db: 0.0,
+            },
+        });
+        assert_eq!(signal.state().levels.output_level_db, -60.0);
+        assert!(
+            HostLevels {
+                input_trim_db: 25.0,
+                output_level_db: 0.0
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            HostLevels {
+                input_trim_db: 0.0,
+                output_level_db: 12.5
+            }
+            .validate()
+            .is_err()
+        );
     }
 }

@@ -84,6 +84,9 @@ impl AudioProbe {
 pub struct StreamConfig {
     #[serde(default = "crate::tools::hear_yourself_default")]
     pub hear_yourself: bool,
+    /// Unit-wide input trim and master level; the daemon fills these at every start.
+    #[serde(default)]
+    pub levels: crate::tools::HostLevels,
     pub input: AudioProbe,
     pub output: AudioProbe,
     /// Zero-based channels; duplicate input indexes copy mono to both processor channels.
@@ -110,7 +113,7 @@ impl StreamConfig {
         if self.input.endpoint != self.output.endpoint {
             return Err("Independent input/output devices require clock-drift handling; this experimental stream requires one duplex endpoint".into());
         }
-        Ok(())
+        self.levels.validate()
     }
 }
 

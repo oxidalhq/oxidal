@@ -79,6 +79,7 @@ struct Export {
     name: String,
 }
 struct Owner {
+    levels: Arc<crate::levels::Levels>,
     boot: Arc<Policy>,
     executable: Option<PathBuf>,
     root: PathBuf,
@@ -244,9 +245,11 @@ impl Owner {
     }
     async fn start_reserved(
         &mut self,
-        settings: StartRig,
+        mut settings: StartRig,
         reserved: Option<tokio::sync::SemaphorePermit<'static>>,
     ) -> Result<(), String> {
+        // Unit levels follow the player, not the preset or the recovered session.
+        settings.stream.levels = self.levels.current();
         settings.validate()?;
         let bytes = encode(&settings)?;
         if self.worker.is_some() {
@@ -827,6 +830,12 @@ impl Owner {
                     .ok_or("Missing mixed configuration")?
                     .stream
                     .hear_yourself = hear;
+                if let oxidal_audio::tools::HostUtility::Levels { levels } = command {
+                    self.levels.save(levels)?;
+                    if let Some(configured) = self.state.configured.as_mut() {
+                        configured.stream.levels = levels;
+                    }
+                }
                 self.confirmed = self.state.configured.clone();
                 if matches!(
                     command,
@@ -1071,7 +1080,11 @@ impl Owner {
     }
 }
 impl RigPlayback {
-    pub fn new(config: &Config, policy: Arc<Policy>) -> Result<Self, String> {
+    pub fn new(
+        config: &Config,
+        policy: Arc<Policy>,
+        levels: Arc<crate::levels::Levels>,
+    ) -> Result<Self, String> {
         if config
             .rig_worker
             .as_ref()
@@ -1113,6 +1126,7 @@ impl RigPlayback {
         let (commands, mut receiver) =
             mpsc::channel::<(RigAudioCommand, oneshot::Sender<Reply>)>(1);
         let mut owner = Owner {
+            levels,
             boot: policy.clone(),
             executable: config.rig_worker.clone(),
             root: config.preset_dir.join("bundles"),
@@ -1230,6 +1244,9 @@ mod tests {
                 shutdown: Some(signal),
             },
             Arc::new(Policy::new(root.join("presets/boot-audio.json"))),
+            Arc::new(crate::levels::Levels::load(
+                root.join("presets/unit-levels.json"),
+            )),
         )
         .unwrap();
         let probe = oxidal_audio::AudioProbe {
@@ -1248,6 +1265,7 @@ mod tests {
             prepared: Vec::new(),
             revision: "a".repeat(64),
             stream: oxidal_audio::StreamConfig {
+                levels: Default::default(),
                 hear_yourself: true,
                 input: probe,
                 output,

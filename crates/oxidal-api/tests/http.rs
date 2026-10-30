@@ -1342,6 +1342,49 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
 }
 
 #[tokio::test]
+async fn unit_levels_are_validated_durable_and_outside_presets() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/levels");
+    let get_levels = || async {
+        client
+            .get(&endpoint)
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap()
+    };
+    assert_eq!(
+        get_levels().await,
+        json!({"input_trim_db": 0.0, "output_level_db": 0.0})
+    );
+    for invalid in [
+        json!({"input_trim_db": 30.0, "output_level_db": 0.0}),
+        json!({"input_trim_db": 0.0, "output_level_db": 13.0}),
+    ] {
+        let response = client.post(&endpoint).json(&invalid).send().await.unwrap();
+        assert_eq!(response.status(), 422);
+    }
+    let unknown = json!({"input_trim_db": 0.0, "output_level_db": 0.0, "eq": 1});
+    let response = client.post(&endpoint).json(&unknown).send().await.unwrap();
+    assert_eq!(response.status(), 400);
+    let wanted = json!({"input_trim_db": -4.5, "output_level_db": -12.0});
+    let response = client.post(&endpoint).json(&wanted).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(get_levels().await, wanted);
+    let root = path.with_extension("presets");
+    assert_eq!(
+        serde_json::from_slice::<Value>(&std::fs::read(root.join("unit-levels.json")).unwrap())
+            .unwrap(),
+        wanted
+    );
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn native_device_defaults_are_durable_validated_and_revision_checked() {
     let (url, task, path) = start(false).await;
     let client = reqwest::Client::new();
