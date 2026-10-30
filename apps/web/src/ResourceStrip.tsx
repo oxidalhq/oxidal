@@ -198,14 +198,14 @@ export function ResourceStrip({
         </div>
         <div
           data-warning={fresh && (state?.xruns ?? 0) > 0}
-          title="Recovered audio overruns/underruns since this worker started"
+          title="Recovered audio overruns/underruns since audio last started"
         >
           <dt>Xruns</dt>
           <dd>{fresh && state?.xruns != null ? state.xruns : '—'}</dd>
         </div>
         <div
           data-warning={clips != null && clips > 0}
-          title="Full-scale samples across input and output channels, cumulative for this worker"
+          title="Full-scale samples across input and output channels, counted since audio last started"
         >
           <dt>Clips</dt>
           <dd>{clips ?? '—'}</dd>

@@ -4,13 +4,13 @@ import { controlAudit, type ControlAudit as History } from './api';
 import { Button } from './components/ui/button';
 
 const labels: Record<History['records'][number]['operation'], string> = {
-  native_audio: 'Native audio',
+  native_audio: 'TONE3000 audio',
   mixed_audio: 'Hybrid audio',
   effects_audio: 'Effects audio',
   network: 'Wi-Fi / device',
   account: 'TONE3000 account',
   native_editor: 'Draft authoring',
-  native_defaults: 'Native defaults',
+  native_defaults: 'TONE3000 defaults',
   preset_import: 'Preset import',
   preset_library: 'Library',
   rig_save: 'Rig save',

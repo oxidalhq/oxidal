@@ -78,7 +78,7 @@ export function EngineSettings({ connected }: { connected: boolean }) {
                   value={setting.display}
                   detail={
                     <>
-                      {settingHelp[setting.target] ?? 'Native engine setting.'}
+                      {settingHelp[setting.target] ?? 'Engine setting.'}
                       {shown && ` Device default: ${shown}.`}
                     </>
                   }
@@ -105,7 +105,7 @@ export function EngineSettings({ connected }: { connected: boolean }) {
         </>
       ) : (
         <p className="tool-row-detail">
-          Start a native rig to change the running engine. The device defaults
+          Start a TONE3000 rig to change the running engine. The device defaults
           below apply whenever audio starts.
         </p>
       )}

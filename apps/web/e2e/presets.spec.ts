@@ -458,7 +458,7 @@ test('native preset upload, durable library, exact download and rejected replace
     .fill('no-matching-rig-unique');
   await expect(rows).toHaveCount(0);
   await expect(
-    page.getByText('No native presets match this name.'),
+    page.getByText('No TONE3000 presets match this name.'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear preset search' }).click();
   await expect(rows).toHaveCount(2);

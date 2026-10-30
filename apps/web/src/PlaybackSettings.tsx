@@ -369,7 +369,7 @@ export function PlaybackSettings({
             <p>
               Stop releases the interface and keeps Oxidal open. Resume and
               Restart retain live adjustments. The last confirmed session is
-              checkpointed for recovery after a daemon restart.
+              checkpointed so it can be recovered if Oxidal restarts.
             </p>
             <p>
               To use another audio app, stop here first. Close that app’s audio

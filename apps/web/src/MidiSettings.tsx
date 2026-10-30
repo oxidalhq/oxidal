@@ -115,7 +115,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         <p className="caption">
           {!native || !mixed
             ? 'Reading the active rig…'
-            : 'Start a native or hybrid rig to configure its MIDI assignments. Effects-only MIDI configuration is not available here yet.'}
+            : 'Start a TONE3000 or hybrid rig to configure its MIDI assignments. Effects-only MIDI configuration is not available here yet.'}
         </p>
       )}
     </section>

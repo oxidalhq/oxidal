@@ -88,6 +88,8 @@ it('explains that a native rig must be running', async () => {
   vi.mocked(nativeDefaults).mockRejectedValue(new Error('offline'));
   render(<EngineSettings connected />);
   expect(
-    await screen.findByText(/Start a native rig to change the running engine/),
+    await screen.findByText(
+      /Start a TONE3000 rig to change the running engine/,
+    ),
   ).toBeInTheDocument();
 });

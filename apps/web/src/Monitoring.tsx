@@ -447,7 +447,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       <details>
         <summary>Measurement details</summary>
         <p className="caption break-words">
-          Saved preset worker: {state?.audio_phase || 'reading'} · Graph worker:{' '}
+          TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
           {state?.graph_phase || 'reading'} · Mixed rig:{' '}
           {state?.rig_phase || 'reading'}
           {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
@@ -457,13 +457,12 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
           Levels measure the mapped DSP input/output, before physical output
           mixing. −120 dBFS is the display floor. Clip counts are full-scale
           samples; Reset view clears only this browser’s history and clip hold.
-          ALSA accepts these settings exactly or refuses to start. Processing
-          statistics cover the latest 128 blocks and exclude device I/O. Buffer
-          sizes are not a round-trip latency measurement. Recovered xruns are
-          cumulative for the current worker and reset when it restarts.
-          Throttling flags remain unavailable. Charts retain at most 120 samples
-          in this browser; sampling slows on e-paper and pauses while the page
-          is hidden.
+          The audio interface accepts these settings exactly or refuses to
+          start. Processing statistics cover the latest 128 blocks and exclude
+          device I/O. Buffer sizes are not a round-trip latency measurement.
+          Recovered xruns are counted since audio last started. Throttling flags
+          remain unavailable. Charts retain at most 120 samples in this browser;
+          sampling slows on e-paper and pauses while the page is hidden.
         </p>
       </details>
     </section>

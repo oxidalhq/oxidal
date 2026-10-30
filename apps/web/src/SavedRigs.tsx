@@ -193,7 +193,7 @@ export function SavedRigs({
           <div className="min-w-0">
             <h3 className="break-words">{p.name}</h3>
             <p className="caption">
-              {p.native_instances} native · {p.lv2_instances} LV2
+              {p.native_instances} TONE3000 · {p.lv2_instances} effects
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

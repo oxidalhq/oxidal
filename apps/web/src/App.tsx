@@ -465,7 +465,7 @@ function InstrumentApp() {
             </div>
           )}
           {!state ? (
-            <p className="empty">Waiting for the local Rust service…</p>
+            <p className="empty">Waiting for Oxidal…</p>
           ) : view === 'monitor' ? (
             <Suspense fallback={<p>Loading monitor…</p>}>
               <Monitoring displayMode={displayMode} />
@@ -929,8 +929,8 @@ function InstrumentApp() {
                     <section className="panel">
                       <h2>MIDI simulator</h2>
                       <p>
-                        Inject a CC message through the native control service.
-                        The simulator does not require a connected controller.
+                        Inject a CC message into the running TONE3000 rig. The
+                        simulator does not require a connected controller.
                       </p>
                       <label className="field">
                         MIDI value

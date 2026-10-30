@@ -343,7 +343,7 @@ export function Library({
             !owned.some((p) => matches(p.name)) &&
             !presets.some((p) => matches(p.name)) && (
               <p role="status" className="caption">
-                No native presets match this name.
+                No TONE3000 presets match this name.
               </p>
             )}
           <ul className="preset-library">
