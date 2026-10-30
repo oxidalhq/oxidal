@@ -28,8 +28,8 @@ import {
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle, RigTile } from './ChainView';
-import type { RigLaneVM } from './rigChain';
-import { blockKind } from './rigChain';
+import type { RigBlockVM, RigLaneVM } from './rigChain';
+import { blockKind, chainLanes } from './rigChain';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -45,6 +45,7 @@ import { EditQueue } from './editQueue';
 import { controlDisplay, controlLabel, lv2Control } from './lv2Control';
 import {
   rigAudioState,
+  presetArtwork,
   rigAudioCommand,
   rigDocument,
   type RigAudioState,
@@ -204,6 +205,37 @@ export function MixedRig({
     };
   }, [revision]);
   const matching = document?.revision === revision ? document : null;
+  // Each TONE3000 block's type (amp, cab, pedal…) for its icon, by node and
+  // block id, read from the artwork of the preset the node was made from.
+  const [gears, setGears] = useState<Record<string, Record<string, string>>>(
+    {},
+  );
+  useEffect(() => {
+    const abort = new AbortController();
+    const instances = matching?.manifest.tone3000.instances ?? [];
+    const resources = matching?.manifest.resources ?? [];
+    void Promise.all(
+      instances.map(async (instance) => {
+        const sha = resources.find((r) => r.id === instance.preset)?.sha256;
+        if (!sha) return [instance.id, {}] as const;
+        for (const owned of [true, false]) {
+          try {
+            const items = await presetArtwork(sha, owned, abort.signal);
+            return [
+              instance.id,
+              Object.fromEntries(items.map((i) => [i.block_id, i.gear ?? ''])),
+            ] as const;
+          } catch {
+            /* try the other library, then go without icons */
+          }
+        }
+        return [instance.id, {}] as const;
+      }),
+    ).then((pairs) => {
+      if (!abort.signal.aborted) setGears(Object.fromEntries(pairs));
+    });
+    return () => abort.abort();
+  }, [matching]);
   useEffect(() => {
     onPlaying(
       state?.phase === 'running' ? (matching?.manifest.name ?? 'Rig') : null,
@@ -635,59 +667,94 @@ export function MixedRig({
   const sceneBranches = sceneList.length
     ? nodes.filter((n) => n.kind === 'tone3000').slice(0, sceneList.length)
     : [];
-  const inSceneLane =
-    !!selected && sceneBranches.some((n) => n.id === selected.id);
-  const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
+  /** A TONE3000 node's own blocks as tiles, empty slots as + tiles. */
+  const nativeTiles = (n: (typeof nodes)[number]): RigBlockVM[] => {
     const layout = state.control?.authoring?.find((a) => a.node === n.id)
       ?.status.layout;
     const blocks = [
       ...(layout?.left ?? []),
       ...(layout?.stereo ? (layout.right ?? []) : []),
     ];
+    const instance = n.instance ?? '';
+    return blocks
+      .filter(
+        (block) =>
+          !block.insert ||
+          state.control?.slots
+            ?.find((row) => row.node === n.id)
+            ?.slots.some((slot) => slot.target === block.id),
+      )
+      .map((block) => {
+        if (block.insert)
+          return {
+            id: laneBlockId(n.id, block.id),
+            label: 'Empty slot',
+            kind: blockKind('', ''),
+            on: false,
+            face: null,
+            empty: true,
+          };
+        const enabled = state.control?.controls.find(
+          (c) =>
+            c.target.kind === 'native' &&
+            c.target.node === n.id &&
+            c.target.parameter === `block:${block.id}:enabled`,
+        );
+        const name =
+          enabled?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
+          'Block';
+        const gear = gears[instance]?.[block.id] ?? '';
+        return {
+          // Lanes reuse block ids; the lane prefix keeps selection to one tile.
+          id: laneBlockId(n.id, block.id),
+          label: name,
+          kind: blockKind(gear, name),
+          on: enabled?.value !== 0,
+          face: <GearIcon gear={gear} name={name} />,
+        };
+      });
+  };
+  const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
     const scene = sceneList[index];
     return {
       id: scene?.name ?? n.id,
       input: String(index + 1),
       dim: !!scene && state.control?.scene !== scene.id,
-      // Empty slots stay in place as + tiles; the rest are the real blocks.
-      blocks: blocks
-        .filter(
-          (block) =>
-            !block.insert ||
-            state.control?.slots
-              ?.find((row) => row.node === n.id)
-              ?.slots.some((slot) => slot.target === block.id),
-        )
-        .map((block) => {
-          if (block.insert)
-            return {
-              id: laneBlockId(n.id, block.id),
-              label: 'Empty slot',
-              kind: blockKind('', ''),
-              on: false,
-              face: null,
-              empty: true,
-            };
-          const enabled = state.control?.controls.find(
-            (c) =>
-              c.target.kind === 'native' &&
-              c.target.node === n.id &&
-              c.target.parameter === `block:${block.id}:enabled`,
-          );
-          const name =
-            enabled?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
-            'Block';
-          return {
-            // Lanes reuse block ids; the lane prefix keeps selection to one tile.
-            id: laneBlockId(n.id, block.id),
-            label: name,
-            kind: blockKind('', name),
-            on: enabled?.value !== 0,
-            face: <GearIcon gear="" name={name} />,
-          };
-        }),
+      blocks: nativeTiles(n),
     };
   });
+  // Presets with effects: a straight chain, or a split into lanes, drawn like
+  // every other chain. Other shapes keep the routing view.
+  const chainIds =
+    !sceneLanes.length && matching?.manifest.oxidal
+      ? chainLanes(matching.manifest.oxidal.graph)
+      : null;
+  const chainNodes = new Set(chainIds?.flat() ?? []);
+  const effectLanes: RigLaneVM[] = (chainIds ?? []).map((ids, index) => ({
+    id: chainIds!.length > 1 ? `Lane ${index + 1}` : 'Chain',
+    input: chainIds!.length > 1 ? String(index + 1) : 'IN',
+    blocks: ids.flatMap((id) => {
+      const n = nodes.find((node) => node.id === id);
+      if (!n) return [];
+      if (n.kind === 'tone3000') return nativeTiles(n);
+      return [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
+    }),
+  }));
+  const lanedNodes = new Set([
+    ...sceneBranches.map((n) => n.id),
+    ...chainNodes,
+  ]);
+  const inLane = !!selected && lanedNodes.has(selected.id);
+  /** A lane tile's node, and its block for a TONE3000 node ('' for an effect). */
+  const laneTarget = (laneBlock: string) => {
+    const node = nodes.find((n) => laneBlock.startsWith(laneBlockId(n.id, '')));
+    return node
+      ? {
+          node: node.id,
+          block: laneBlock.slice(laneBlockId(node.id, '').length),
+        }
+      : null;
+  };
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
       <div className="rig-performance-header">
@@ -855,45 +922,36 @@ export function MixedRig({
           {error || readError || state.error}
         </p>
       )}
-      {sceneLanes.length > 0 && (
+      {(sceneLanes.length > 0 || effectLanes.length > 0) && (
         <ChainView
-          label="Scene branches"
-          parallel
+          label={sceneLanes.length ? 'Scene branches' : 'Chain'}
+          parallel={sceneLanes.length > 0 || effectLanes.length > 1}
           onAdd={(laneBlock) => {
-            const node = sceneBranches.find((n) =>
-              laneBlock.startsWith(laneBlockId(n.id, '')),
-            );
-            if (node)
-              setLaneSlot({
-                node: node.id,
-                target: laneBlock.slice(laneBlockId(node.id, '').length),
-              });
+            const at = laneTarget(laneBlock);
+            if (at?.block) setLaneSlot({ node: at.node, target: at.block });
           }}
-          lanes={sceneLanes}
+          lanes={sceneLanes.length ? sceneLanes : effectLanes}
           selected={
-            selected && sceneBranches.some((n) => n.id === selected.id)
-              ? laneBlockId(selected.id, nativeTarget)
+            selected && lanedNodes.has(selected.id)
+              ? laneBlockId(
+                  selected.id,
+                  selected.kind === 'tone3000' ? nativeTarget : '',
+                )
               : undefined
           }
           disabled={!!edit || !!picker}
           onSelect={(laneBlock) => {
-            const node = sceneBranches.find((n) =>
-              laneBlock.startsWith(laneBlockId(n.id, '')),
-            );
-            if (!revision || !node) return;
-            setSelection({ revision, node: node.id });
-            setNativeSelection({
-              node: node.id,
-              target: laneBlock.slice(laneBlockId(node.id, '').length),
-            });
+            const at = laneTarget(laneBlock);
+            if (!revision || !at) return;
+            setSelection({ revision, node: at.node });
+            if (at.block)
+              setNativeSelection({ node: at.node, target: at.block });
           }}
         />
       )}
       <RigTopology
         graph={matching?.manifest.oxidal?.graph ?? { nodes: [], edges: [] }}
-        visible={nodes
-          .filter((n) => !sceneBranches.some((b) => b.id === n.id))
-          .map((n) => n.id)}
+        visible={nodes.filter((n) => !lanedNodes.has(n.id)).map((n) => n.id)}
         selected={selected?.id}
       >
         {(id) => {
@@ -960,7 +1018,7 @@ export function MixedRig({
               </Button>
             ))}
           {/* Scene lanes select models by their tiles; other rigs list them here. */}
-          {!inSceneLane &&
+          {!inLane &&
             eqBlocks.map((block, index) => {
               const control = controls.find(
                 (c) =>
