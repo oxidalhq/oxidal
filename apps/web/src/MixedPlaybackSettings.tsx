@@ -2,6 +2,7 @@ import { RecoveryNotice } from './RecoveryNotice';
 import { useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
+import { BufferFinder } from './BufferFinder';
 import {
   rigAudioCommand,
   rigAudioState,
@@ -99,6 +100,12 @@ export function MixedPlaybackSettings({
           disabled={!connected || busy || transitioning}
           running={state.phase === 'running'}
           onApply={(stream) => void command({ kind: 'reconfigure', stream })}
+        />
+        <BufferFinder
+          stream={stream}
+          running={state.phase === 'running'}
+          disabled={!connected || busy || transitioning}
+          apply={(stream) => command({ kind: 'reconfigure', stream })}
         />
       </details>
     </section>

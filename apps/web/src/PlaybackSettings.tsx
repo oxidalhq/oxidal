@@ -22,9 +22,17 @@ import {
 import { Button } from './components/ui/button';
 import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 import { AudioReconfigure } from './AudioReconfigure';
+import { BufferFinder } from './BufferFinder';
+import { bufferMs } from './bufferTiming';
 
 function configurationLabel(configuration: AudioProbe) {
-  return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${configuration.channels} channels · ${configuration.format} · ${configuration.period_frames} samples × ${configuration.periods} periods (${configuration.period_frames * configuration.periods} samples total)`;
+  const channels =
+    configuration.channels === 1
+      ? 'mono'
+      : configuration.channels === 2
+        ? 'stereo'
+        : `${configuration.channels} channels`;
+  return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${channels} · ${configuration.period_frames} samples × ${configuration.periods} = ${bufferMs(configuration).toFixed(1)} ms`;
 }
 
 /** Audio ownership is independent of silent authoring. @see docs/audio.md */
@@ -396,6 +404,12 @@ export function PlaybackSettings({
                 onApply={(stream) =>
                   void command({ kind: 'reconfigure', stream })
                 }
+              />
+              <BufferFinder
+                stream={state.configured.stream}
+                running={state.phase === 'running'}
+                disabled={!connected || busy || transitioning}
+                apply={(stream) => command({ kind: 'reconfigure', stream })}
               />
             </details>
           )}

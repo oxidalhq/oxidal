@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AudioProbe, StartAudio } from './api';
+import { bufferMs } from './bufferTiming';
 import { Button } from './components/ui/button';
 
 type Stream = StartAudio['stream'];
@@ -64,15 +65,27 @@ export function AudioReconfigure({
       <div className="audio-routing-fields grid min-w-0 grid-cols-2 gap-3">
         <label className="field col-span-2">
           Sample rate (Hz)
-          <input
+          <select
             aria-label="Session sample rate (Hz)"
-            type="number"
-            min={8000}
-            max={192000}
-            step={1}
             value={draft.input.sample_rate}
             onChange={(e) => shared('sample_rate', Number(e.target.value))}
-          />
+          >
+            {[
+              ...new Set([
+                44100,
+                48000,
+                88200,
+                96000,
+                initial.input.sample_rate,
+              ]),
+            ]
+              .sort((a, b) => a - b)
+              .map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}
+                </option>
+              ))}
+          </select>
         </label>
         <label className="field">
           Buffer (samples)
@@ -132,13 +145,9 @@ export function AudioReconfigure({
       </div>
       {valid && (
         <p className="caption">
-          One audio period:{' '}
-          {(
-            (1000 * draft.input.period_frames) /
-            draft.input.sample_rate
-          ).toFixed(2)}{' '}
-          ms. This is the processing deadline, not total input-to-output
-          latency.
+          {`Buffer: ${draft.input.period_frames} × ${draft.input.periods} = ${bufferMs(draft.input).toFixed(1)} ms · one period ${((1000 * draft.input.period_frames) / draft.input.sample_rate).toFixed(2)} ms.`}{' '}
+          Total input-to-output delay also includes the converters and USB, so
+          it is a little higher.
         </p>
       )}
       {checkedInput && checkedOutput && (

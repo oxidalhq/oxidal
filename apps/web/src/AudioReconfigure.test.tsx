@@ -38,7 +38,7 @@ it('offers supported buffers with timing while applying only after explicit conf
   });
   expect(buffer.querySelector('option[value="129"]')).toBeNull();
   fireEvent.change(buffer, { target: { value: '256' } });
-  expect(screen.getByText(/One audio period: 5.33 ms/)).toBeVisible();
+  expect(screen.getByText(/one period 5\.33 ms/)).toBeVisible();
   expect(apply).not.toHaveBeenCalled();
   fireEvent.click(button);
   expect(apply).toHaveBeenCalledWith({

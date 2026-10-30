@@ -591,9 +591,7 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   await expect(panel.getByLabel('Buffer periods')).toHaveValue('3');
   await panel.getByRole('button', { name: 'Check audio settings' }).click();
   const checked = panel.getByLabel('Checked audio configuration');
-  await expect(checked).toContainText(
-    '128 samples × 3 periods (384 samples total)',
-  );
+  await expect(checked).toContainText('128 samples × 3 = 8.0 ms');
   await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/playback');
   await panel.getByRole('button', { name: 'Check audio settings' }).click();
   await expect(checked).not.toContainText('Not checked');
