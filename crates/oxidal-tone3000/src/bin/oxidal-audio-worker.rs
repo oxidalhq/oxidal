@@ -155,6 +155,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // control catalog, slots and EQ through the native engine is the costly part,
     // so replies reuse the last readback unless the request can change it.
     let mut readback: Option<Readback> = None;
+    let mut last_status: Option<oxidal_audio::structure::AuthoringStatus> = None;
     let period = Duration::from_secs_f64(
         f64::from(settings.stream.input.period_frames)
             / f64::from(settings.stream.input.sample_rate),
@@ -263,21 +264,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let quiet = !authoring.measurement_pending();
                     let gesture_before = authoring.gesture_pending();
                     // Polls and inspections read; previews move only control values.
-                    let reads_only = quiet && matches!(
+                    let reads_only = quiet
+                        && matches!(
+                            request.authoring,
+                            AuthoringAction::Inspect
+                                | AuthoringAction::Utility {
+                                    command: oxidal_audio::tools::Command::Poll
+                                }
+                        );
+                    // Adjustments move one control or EQ value, never the chain's slots.
+                    let values_only = matches!(request.authoring, AuthoringAction::Gesture { .. });
+                    let quiet_poll = matches!(
                         request.authoring,
-                        AuthoringAction::Inspect
-                            | AuthoringAction::Utility {
-                                command: oxidal_audio::tools::Command::Poll
-                            }
-                    );
-                    let values_only = matches!(
-                        request.authoring,
-                        AuthoringAction::Gesture {
-                            edit: oxidal_audio::structure::LiveGesture::Preview { .. }
+                        AuthoringAction::Utility {
+                            command: oxidal_audio::tools::Command::Poll
                         }
-                    );
+                    ) && authoring.poll_is_quiet();
                     let before_working = authoring.working_receipt().map(str::to_owned);
-                    let result = if models.pending() {
+                    let result = if quiet_poll && let Some(status) = last_status.clone() {
+                        Ok(status)
+                    } else if models.pending() {
                         Err("Finish model preparation before changing the chain".into())
                     } else {
                         authoring.command(&mut engine, request.authoring)
@@ -296,7 +302,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     let current = match readback.take() {
                         Some(cached)
-                            if reads_only
+                            if (quiet_poll || reads_only)
                                 && !mutating
                                 && authoring.gesture_pending() == gesture_before =>
                         {
@@ -304,10 +310,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         Some(mut cached) if values_only => {
                             cached.controls = engine.live_controls()?;
+                            cached.eq = engine.eq_snapshot()?;
                             cached
                         }
                         _ => Readback::read(&mut engine)?,
                     };
+                    last_status = Some(status.clone());
                     let event = PlaybackEvent::Authored {
                         serial: request.serial,
                         authoring: status,

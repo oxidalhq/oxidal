@@ -11,6 +11,17 @@ impl Authoring {
     pub fn measurement_pending(&self) -> bool {
         self.measurement.is_some()
     }
+    /// True when a poll could only re-read unchanged state: no tuner or
+    /// measurement running and no adjustment old enough to expire. Workers answer
+    /// such polls from their last reply instead of querying the native engine.
+    pub fn poll_is_quiet(&self) -> bool {
+        !self.tools.active()
+            && self.measurement.is_none()
+            && self
+                .gesture
+                .as_ref()
+                .is_none_or(|g| g.updated.elapsed() <= std::time::Duration::from_secs(110))
+    }
     fn cancel_tools(&mut self, engine: &mut Engine) -> Result<(), String> {
         engine
             .utility(5)
