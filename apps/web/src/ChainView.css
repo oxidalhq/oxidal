@@ -282,3 +282,19 @@
   min-width: 1.25rem;
   justify-content: center;
 }
+
+/* Empty slot: a dashed outline on the wire, quieter than a block. */
+.rig-slot .rig-tile-face {
+  border-style: dashed;
+  border-color: var(--wire);
+  color: var(--muted-foreground);
+}
+.rig-slot .rig-tile-label {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.rig-slot:hover:not(:disabled) .rig-tile-face,
+.rig-slot:focus-visible .rig-tile-face {
+  border-color: var(--foreground);
+  color: var(--foreground);
+}

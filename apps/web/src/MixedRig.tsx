@@ -42,7 +42,7 @@ import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
-import { lv2Control } from './lv2Control';
+import { controlDisplay, controlLabel, lv2Control } from './lv2Control';
 import {
   rigAudioState,
   rigAudioCommand,
@@ -102,6 +102,11 @@ export function MixedRig({
     allowedFormat?: 'nam' | 'ir';
   } | null>(null);
   const [adding, setAdding] = useState(false);
+  // An empty lane slot the player tapped: which node, which slot.
+  const [laneSlot, setLaneSlot] = useState<{
+    node: string;
+    target: string;
+  } | null>(null);
   const [insertion, setInsertion] = useState<{
     opening: RigAudioState;
     node: string;
@@ -644,10 +649,25 @@ export function MixedRig({
       id: scene?.name ?? n.id,
       input: String(index + 1),
       dim: !!scene && state.control?.scene !== scene.id,
-      // Insertion tiles are empty slots, not sound: the lane shows real blocks.
+      // Empty slots stay in place as + tiles; the rest are the real blocks.
       blocks: blocks
-        .filter((block) => !block.insert)
+        .filter(
+          (block) =>
+            !block.insert ||
+            state.control?.slots
+              ?.find((row) => row.node === n.id)
+              ?.slots.some((slot) => slot.target === block.id),
+        )
         .map((block) => {
+          if (block.insert)
+            return {
+              id: laneBlockId(n.id, block.id),
+              label: 'Empty slot',
+              kind: blockKind('', ''),
+              on: false,
+              face: null,
+              empty: true,
+            };
           const enabled = state.control?.controls.find(
             (c) =>
               c.target.kind === 'native' &&
@@ -839,6 +859,16 @@ export function MixedRig({
         <ChainView
           label="Scene branches"
           parallel
+          onAdd={(laneBlock) => {
+            const node = sceneBranches.find((n) =>
+              laneBlock.startsWith(laneBlockId(n.id, '')),
+            );
+            if (node)
+              setLaneSlot({
+                node: node.id,
+                target: laneBlock.slice(laneBlockId(node.id, '').length),
+              });
+          }}
           lanes={sceneLanes}
           selected={
             selected && sceneBranches.some((n) => n.id === selected.id)
@@ -1077,6 +1107,22 @@ export function MixedRig({
           {modelChange.progress.error}
         </p>
       )}
+      {laneSlot && (
+        <AddBlockChooser
+          onCancel={() => setLaneSlot(null)}
+          onChoose={(format) => {
+            setPicker({
+              opening: state,
+              node: laneSlot.node,
+              target: laneSlot.target,
+              name: 'Empty slot',
+              insert: true,
+              format,
+            });
+            setLaneSlot(null);
+          }}
+        />
+      )}
       {insertion && (
         <AdjustmentDialog
           title={`Add ${insertion.format.toUpperCase()} · position`}
@@ -1291,10 +1337,10 @@ export function MixedRig({
               }}
               aria-pressed={c.toggle ? c.value !== c.minimum : undefined}
               aria-haspopup={c.toggle ? undefined : 'dialog'}
-              aria-label={`Adjust ${c.label}`}
+              aria-label={`Adjust ${controlLabel(c.label)}`}
             >
-              <span className="break-words">{c.label}</span>
-              <strong className="font-mono">{c.display}</strong>
+              <span className="break-words">{controlLabel(c.label)}</span>
+              <strong className="font-mono">{controlDisplay(c)}</strong>
             </Button>
           ))}
           {!matching ? (

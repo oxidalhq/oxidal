@@ -17,7 +17,7 @@ import {
 
 const origin = (item: Choice) =>
   item.kind === 'scenes'
-    ? scenesLabel(item.scenes) || 'Parallel chains'
+    ? scenesLabel(item.scenes) || 'With effects'
     : item.owned
       ? 'My copy'
       : 'Original';
@@ -267,7 +267,7 @@ export function RigPresetSelector({
           </p>
           {(
             [
-              ['With scenes', (p: Choice) => p.kind === 'scenes'],
+              ['Scenes and effects', (p: Choice) => p.kind === 'scenes'],
               ['My copies', (p: Choice) => p.kind === 'tone3000' && p.owned],
               ['Originals', (p: Choice) => p.kind === 'tone3000' && !p.owned],
             ] as const
@@ -302,7 +302,7 @@ export function RigPresetSelector({
                       ) : (
                         p.kind === 'scenes' && (
                           <span className="preset-picker-scenes">
-                            {scenesLabel(p.scenes) || 'Parallel'}
+                            {scenesLabel(p.scenes) || 'Effects'}
                           </span>
                         )
                       )}

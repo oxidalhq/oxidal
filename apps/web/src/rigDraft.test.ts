@@ -4,6 +4,7 @@ import schema from '../../../docs/presets/manifest.schema.json';
 import {
   lv2Effect,
   serialRig,
+  parallelRig,
   sceneRig,
   splitNative,
   removeEffect,
@@ -288,4 +289,49 @@ it('keeps outgoing branch histories by selecting input gates and unity-summing o
   expect(manifest.extensions['urn:oxidal:authoring'].scene_tails).toBe(
     'preserve',
   );
+});
+
+it('splits after shared blocks into two lanes that sum before OUT, as a finished preset', () => {
+  const pitch = { ...lv2Effect(mono), id: 'pitch', name: 'Pitch' };
+  const rig = parallelRig(
+    '68448a6d-0168-4fc8-b337-c12959165271',
+    'Amp + octave',
+    [],
+    [[native], [pitch]],
+    'tone3000-plugin:test',
+    false,
+  );
+  const manifest = JSON.parse(rig.manifest_json);
+  expect(validator(manifest)).toBe(true);
+  const edges = manifest.oxidal.graph.edges.map(
+    (e: {
+      from: { node: string; port: number };
+      to: { node: string; port: number };
+    }) => `${e.from.node}:${e.from.port}>${e.to.node}:${e.to.port}`,
+  );
+  // The input feeds both splits; each split feeds both lanes on its side.
+  expect(edges).toEqual(
+    expect.arrayContaining([
+      'in:0>split-left:0',
+      'in:1>split-right:0',
+      `split-left:0>${native.id}:0`,
+      `split-right:0>${native.id}:1`,
+      'split-left:1>pitch-mono:0',
+      'split-right:1>pitch-mono:1',
+      `${native.id}:0>merge-left:0`,
+      'pitch-stereo:0>merge-left:1',
+      `${native.id}:1>merge-right:0`,
+      'pitch-stereo:1>merge-right:1',
+      'merge-left:0>out:0',
+      'merge-right:0>out:1',
+    ]),
+  );
+  const merge = manifest.oxidal.graph.nodes.find(
+    (n: { id: string }) => n.id === 'merge-left',
+  );
+  expect(merge.inputGains).toEqual([1, 1]);
+  expect(manifest.extensions['urn:oxidal:authoring'].draft).toBe(false);
+  expect(() =>
+    parallelRig('id', 'x', [], [[native], []], 'tone3000-plugin:test'),
+  ).toThrow(/at least one block/);
 });

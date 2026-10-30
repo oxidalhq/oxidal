@@ -1,5 +1,5 @@
 import type { BlockKind, RigBlockVM, RigLaneVM } from './rigChain';
-import { ArrowRight } from '@phosphor-icons/react';
+import { ArrowRight, Plus } from '@phosphor-icons/react';
 import './ChainView.css';
 
 /**
@@ -16,7 +16,10 @@ export function ChainView({
   label,
   appearance,
   parallel = false,
+  onAdd,
 }: {
+  /** Empty slots are shown only when blocks can be added to them. */
+  onAdd?: (slot: string) => void;
   lanes: RigLaneVM[];
   /** Lanes are branches of one signal: one input splits to all, one output sums them. */
   parallel?: boolean;
@@ -27,6 +30,20 @@ export function ChainView({
   disabled?: boolean;
   label: string;
 }) {
+  const block = (b: RigBlockVM) =>
+    b.empty ? (
+      onAdd && (
+        <SlotTile key={b.id} disabled={disabled} onAdd={() => onAdd(b.id)} />
+      )
+    ) : (
+      <RigTile
+        key={b.id}
+        block={b}
+        selected={selected === b.id}
+        disabled={disabled}
+        onSelect={() => onSelect(b.id)}
+      />
+    );
   const tiles = (lane: RigLaneVM) => (
     <div
       className="chain-blocks"
@@ -34,15 +51,7 @@ export function ChainView({
       aria-label={`${lane.id} chain blocks`}
       tabIndex={0}
     >
-      {lane.blocks.map((block) => (
-        <RigTile
-          key={block.id}
-          block={block}
-          selected={selected === block.id}
-          disabled={disabled}
-          onSelect={() => onSelect(block.id)}
-        />
-      ))}
+      {lane.blocks.map(block)}
       {!lane.blocks.length && (
         <span className="chain-empty">Direct signal</span>
       )}
@@ -98,15 +107,7 @@ export function ChainView({
             aria-label={`${lane.id} chain blocks`}
             tabIndex={0}
           >
-            {lane.blocks.map((block) => (
-              <RigTile
-                key={block.id}
-                block={block}
-                selected={selected === block.id}
-                disabled={disabled}
-                onSelect={() => onSelect(block.id)}
-              />
-            ))}
+            {lane.blocks.map(block)}
             {!lane.blocks.length && (
               <span className="chain-empty">Direct signal</span>
             )}
@@ -117,6 +118,30 @@ export function ChainView({
         </div>
       ))}
     </div>
+  );
+}
+
+/** An empty slot: a dashed + tile on the wire. A tap adds a block here. */
+function SlotTile({
+  disabled,
+  onAdd,
+}: {
+  disabled?: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="rig-tile rig-slot"
+      aria-label="Add a block here"
+      disabled={disabled}
+      onClick={onAdd}
+    >
+      <span className="rig-tile-face">
+        <Plus aria-hidden="true" />
+      </span>
+      <span className="rig-tile-label">Add</span>
+    </button>
   );
 }
 

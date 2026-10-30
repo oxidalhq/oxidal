@@ -131,14 +131,12 @@ function validateStages(effects: DraftEffect[]) {
   }
 }
 
-/** Construct explicit scalar routing. No backend/plugin code runs in the browser. */
-export function serialRig(
-  id: string,
-  name: string,
-  effects: DraftEffect[],
-  profile: string,
-): RigPublish {
-  validateStages(effects);
+type Port = { node: string; port: number };
+/** The two sides of a stereo signal at one point of the graph. */
+type Stereo = [Port, Port];
+
+/** A preset manifest under construction: blocks are chained from stereo points. */
+function rigBuilder(id: string, name: string, profile: string, draft: boolean) {
   const manifest: RigDocument['manifest'] = {
     format: 'oxidal.preset',
     formatVersion: 1,
@@ -160,102 +158,187 @@ export function serialRig(
   const host = manifest.oxidal!;
   const sources: RigPublish['resources'] = {};
   const labels: Record<string, string> = {};
-  const link = (from: string, fromPort: number, to: string, toPort: number) =>
-    host.graph.edges.push({
-      from: { node: from, port: fromPort },
-      to: { node: to, port: toPort },
-    });
-  let previous = 'in';
-  for (const effect of effects) {
-    labels[effect.id] = effect.name;
-    const mono =
-      effect.kind === 'lv2' &&
-      effect.plugin.ports.filter((p) => p.audio && p.input).length === 1;
-    if (mono && effect.kind === 'lv2') {
-      const merge = `${effect.id}-mono`;
-      host.graph.nodes.push({
-        id: merge,
-        kind: 'merge',
-        audioInputs: 2,
-        audioOutputs: 1,
-        inputGains:
-          effect.mono === 'left'
-            ? [1, 0]
-            : effect.mono === 'right'
-              ? [0, 1]
-              : [0.5, 0.5],
-      });
-      link(previous, 0, merge, 0);
-      link(previous, 1, merge, 1);
-      labels[merge] =
-        effect.mono === 'sum'
-          ? 'L + R → Mono'
-          : `${effect.mono === 'left' ? 'L' : 'R'} → Mono`;
-      previous = merge;
-    }
-    host.graph.nodes.push({
-      id: effect.id,
-      kind: effect.kind === 'native' ? 'tone3000' : 'lv2',
-      audioInputs: mono ? 1 : 2,
-      audioOutputs: mono ? 1 : 2,
-      instance: effect.id,
-      bypassed: false,
-    });
-    link(previous, 0, effect.id, 0);
-    if (!mono) link(previous, 1, effect.id, 1);
-    if (effect.kind === 'native') {
-      const resource =
-        manifest.resources.find((r) => r.sha256 === effect.preset.sha256)?.id ??
-        `preset-${manifest.resources.length}`;
-      if (!sources[resource]) {
-        manifest.resources.push({
-          id: resource,
-          path: `tone3000/${effect.preset.sha256}.t3kpreset`,
-          kind: 'tone3000-preset',
-          sha256: effect.preset.sha256,
-          bytes: effect.preset.size_bytes,
+  const link = (from: Port, to: string, toPort: number) =>
+    host.graph.edges.push({ from, to: { node: to, port: toPort } });
+  /** Chains `effects` after `from` and returns the stereo point after them. */
+  function chain(effects: DraftEffect[], from: Stereo): Stereo {
+    let previous = from;
+    for (const effect of effects) {
+      labels[effect.id] = effect.name;
+      const mono =
+        effect.kind === 'lv2' &&
+        effect.plugin.ports.filter((p) => p.audio && p.input).length === 1;
+      if (mono && effect.kind === 'lv2') {
+        const merge = `${effect.id}-mono`;
+        host.graph.nodes.push({
+          id: merge,
+          kind: 'merge',
+          audioInputs: 2,
+          audioOutputs: 1,
+          inputGains:
+            effect.mono === 'left'
+              ? [1, 0]
+              : effect.mono === 'right'
+                ? [0, 1]
+                : [0.5, 0.5],
         });
-        sources[resource] = effect.source;
+        link(previous[0], merge, 0);
+        link(previous[1], merge, 1);
+        labels[merge] =
+          effect.mono === 'sum'
+            ? 'L + R → Mono'
+            : `${effect.mono === 'left' ? 'L' : 'R'} → Mono`;
+        previous = [
+          { node: merge, port: 0 },
+          { node: merge, port: 0 },
+        ];
       }
-      manifest.tone3000.instances.push({
-        id: effect.id,
-        preset: resource,
-        profile,
-        processingRole: effect.stage?.role ?? 'whole',
-        ...(effect.stage ? { partition: effect.stage.recipe } : {}),
-      });
-    } else {
-      host.lv2.push({
-        id: effect.id,
-        pluginUri: effect.plugin.uri,
-        controls: { ...effect.controls },
-        assets: [],
-        requiredFeatures: [],
-      });
-    }
-    previous = effect.id;
-    if (mono) {
-      const split = `${effect.id}-stereo`;
       host.graph.nodes.push({
-        id: split,
-        kind: 'split',
-        audioInputs: 1,
-        audioOutputs: 2,
+        id: effect.id,
+        kind: effect.kind === 'native' ? 'tone3000' : 'lv2',
+        audioInputs: mono ? 1 : 2,
+        audioOutputs: mono ? 1 : 2,
+        instance: effect.id,
+        bypassed: false,
       });
-      link(previous, 0, split, 0);
-      previous = split;
+      link(previous[0], effect.id, 0);
+      if (!mono) link(previous[1], effect.id, 1);
+      if (effect.kind === 'native') {
+        const resource =
+          manifest.resources.find((r) => r.sha256 === effect.preset.sha256)
+            ?.id ?? `preset-${manifest.resources.length}`;
+        if (!sources[resource]) {
+          manifest.resources.push({
+            id: resource,
+            path: `tone3000/${effect.preset.sha256}.t3kpreset`,
+            kind: 'tone3000-preset',
+            sha256: effect.preset.sha256,
+            bytes: effect.preset.size_bytes,
+          });
+          sources[resource] = effect.source;
+        }
+        manifest.tone3000.instances.push({
+          id: effect.id,
+          preset: resource,
+          profile,
+          processingRole: effect.stage?.role ?? 'whole',
+          ...(effect.stage ? { partition: effect.stage.recipe } : {}),
+        });
+      } else {
+        host.lv2.push({
+          id: effect.id,
+          pluginUri: effect.plugin.uri,
+          controls: { ...effect.controls },
+          assets: [],
+          requiredFeatures: [],
+        });
+      }
+      previous = [
+        { node: effect.id, port: 0 },
+        { node: effect.id, port: mono ? 0 : 1 },
+      ];
+      if (mono) {
+        const split = `${effect.id}-stereo`;
+        host.graph.nodes.push({
+          id: split,
+          kind: 'split',
+          audioInputs: 1,
+          audioOutputs: 2,
+        });
+        link({ node: effect.id, port: 0 }, split, 0);
+        previous = [
+          { node: split, port: 0 },
+          { node: split, port: 1 },
+        ];
+      }
     }
+    return previous;
   }
-  host.graph.nodes.push({
-    id: 'out',
-    kind: 'output',
-    audioInputs: 2,
-    audioOutputs: 0,
+  function finish(last: Stereo): RigPublish {
+    host.graph.nodes.push({
+      id: 'out',
+      kind: 'output',
+      audioInputs: 2,
+      audioOutputs: 0,
+    });
+    link(last[0], 'out', 0);
+    link(last[1], 'out', 1);
+    manifest.extensions['urn:oxidal:authoring'] = { labels, draft };
+    return { manifest_json: JSON.stringify(manifest), resources: sources };
+  }
+  const input: Stereo = [
+    { node: 'in', port: 0 },
+    { node: 'in', port: 1 },
+  ];
+  return { host, labels, chain, finish, input };
+}
+
+/** Construct explicit scalar routing. No backend/plugin code runs in the browser.
+ * `draft` presets are working copies; a finished one appears in the library. */
+export function serialRig(
+  id: string,
+  name: string,
+  effects: DraftEffect[],
+  profile: string,
+  draft = true,
+): RigPublish {
+  validateStages(effects);
+  const rig = rigBuilder(id, name, profile, draft);
+  return rig.finish(rig.chain(effects, rig.input));
+}
+
+/** Shared blocks, then two lanes side by side that sum before OUT: a split.
+ * The graph aligns the lanes' latencies, so a pitch lane stays in time. */
+export function parallelRig(
+  id: string,
+  name: string,
+  shared: DraftEffect[],
+  lanes: [DraftEffect[], DraftEffect[]],
+  profile: string,
+  draft = true,
+): RigPublish {
+  validateStages([...shared, ...lanes[0], ...lanes[1]]);
+  if (!lanes[0].length || !lanes[1].length)
+    throw new Error('Each side of a split needs at least one block.');
+  const rig = rigBuilder(id, name, profile, draft);
+  const before = rig.chain(shared, rig.input);
+  const splits = (['left', 'right'] as const).map((side, port): Port => {
+    const node = `split-${side}`;
+    rig.host.graph.nodes.push({
+      id: node,
+      kind: 'split',
+      audioInputs: 1,
+      audioOutputs: 2,
+    });
+    rig.host.graph.edges.push({ from: before[port]!, to: { node, port: 0 } });
+    rig.labels[node] = `Split · ${side === 'left' ? 'L' : 'R'}`;
+    return { node, port: 0 };
   });
-  link(previous, 0, 'out', 0);
-  link(previous, 1, 'out', 1);
-  manifest.extensions['urn:oxidal:authoring'] = { labels, draft: true };
-  return { manifest_json: JSON.stringify(manifest), resources: sources };
+  const ends = lanes.map((lane, index) =>
+    rig.chain(lane, [
+      { node: splits[0]!.node, port: index },
+      { node: splits[1]!.node, port: index },
+    ]),
+  );
+  const merges = (['left', 'right'] as const).map((side, port): Port => {
+    const node = `merge-${side}`;
+    rig.host.graph.nodes.push({
+      id: node,
+      kind: 'merge',
+      audioInputs: 2,
+      audioOutputs: 1,
+      inputGains: [1, 1],
+    });
+    ends.forEach((end, index) =>
+      rig.host.graph.edges.push({
+        from: end[port]!,
+        to: { node, port: index },
+      }),
+    );
+    rig.labels[node] = `Merge · ${side === 'left' ? 'L' : 'R'}`;
+    return { node, port: 0 };
+  });
+  return rig.finish([merges[0]!, merges[1]!]);
 }
 
 /** Simple scenes: each saved native tone runs in parallel; scalar LV2 effects

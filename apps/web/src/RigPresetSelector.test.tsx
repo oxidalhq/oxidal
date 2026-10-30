@@ -302,7 +302,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   const groups = screen
     .getAllByRole('region')
     .map((g) => g.getAttribute('aria-label'));
-  expect(groups).toEqual(['With scenes', 'My copies', 'Originals']);
+  expect(groups).toEqual(['Scenes and effects', 'My copies', 'Originals']);
   fireEvent.click(
     screen.getByRole('button', { name: /^Clean to heavy\s*3 scenes$/ }),
   );

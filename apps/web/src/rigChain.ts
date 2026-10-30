@@ -16,6 +16,8 @@ export interface RigBlockVM {
   on: boolean;
   /** Model artwork or gear glyph drawn inside the tile face. */
   face: ReactNode;
+  /** An empty slot: drawn as a + tile where a block can be added. */
+  empty?: boolean;
 }
 
 export interface RigLaneVM {

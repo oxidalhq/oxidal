@@ -14,6 +14,8 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
+import { SlotChooser } from './SlotChooser';
+import { playingTone, presetWithEffect, type Placement } from './slotEffects';
 import { BoostControl } from './BoostControl';
 import {
   boostKey,
@@ -40,6 +42,10 @@ import {
   playbackState,
   type AudioState,
   type AudioAction,
+  publishRig,
+  rigLibrary,
+  rigNativeSources,
+  type Lv2Plugin,
 } from './api';
 import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -120,6 +126,9 @@ export function LiveRig({
   const [performance, setPerformance] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  // An empty slot the player tapped, and a preset with effects being made.
+  const [slot, setSlot] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
   const [matching, setMatching] = useState(false);
   const [selection, setSelection] = useWorkspaceState('native-selection', {
     session: '',
@@ -290,6 +299,36 @@ export function LiveRig({
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
+    }
+  }
+  /** A TONE3000 chain cannot hold effects: make a new preset with effects
+   * around it, then play that. The original stays as it is. */
+  async function addEffect(plugin: Lv2Plugin, placement: Placement) {
+    const configured = state?.configured;
+    if (!configured || configured.draft) return;
+    setSlot(null);
+    setMaking(true);
+    setError('');
+    try {
+      const [sources, library] = await Promise.all([
+        rigNativeSources(),
+        rigLibrary(),
+      ]);
+      const tone = playingTone(sources, configured.preset_id, configured.owned);
+      if (!tone) throw new Error('This preset is not in the library.');
+      const made = presetWithEffect({
+        tone,
+        name: state?.preset_name ?? tone.preset.name,
+        plugin,
+        placement,
+        profile: library.native_profile,
+      });
+      const document = await publishRig(made.publish);
+      await playScenes(document.revision);
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (alive.current) setMaking(false);
     }
   }
   async function reloadSaved(opening: AudioState) {
@@ -678,19 +717,38 @@ export function LiveRig({
   const chainLanes: RigLaneVM[] = (['left', 'right'] as const).flatMap(
     (lane) => {
       const layout = state.authoring?.layout;
-      const laneGroups = layout
-        ? layout[lane].flatMap((b) =>
-            groups.filter((c) => c.target === `block:${b.id}:enabled`),
+      // Empty slots keep their place in the chain, as + tiles.
+      const slotIds = new Set(state.slots?.map((slot) => slot.target));
+      const laneGroups: ((typeof groups)[number] | { empty: string })[] = layout
+        ? layout[lane].flatMap(
+            (b): ((typeof groups)[number] | { empty: string })[] =>
+              b.insert && slotIds.has(b.id)
+                ? [{ empty: b.id }]
+                : groups.filter((c) => c.target === `block:${b.id}:enabled`),
           )
         : lane === 'left'
           ? groups
           : [];
-      if (lane === 'right' && !laneGroups.length && !layout?.stereo) return [];
+      if (
+        lane === 'right' &&
+        !laneGroups.some((c) => !('empty' in c)) &&
+        !layout?.stereo
+      )
+        return [];
       return [
         {
           id: lane,
           input: layout?.stereo ? (lane === 'left' ? 'IN L' : 'IN R') : 'IN',
           blocks: laneGroups.map((c) => {
+            if ('empty' in c)
+              return {
+                id: c.empty,
+                label: 'Empty slot',
+                kind: blockKind(''),
+                on: false,
+                face: null,
+                empty: true,
+              };
             const id = c.target.slice(6, -8);
             const model = state.models?.find((m) => m.target === id);
             const gear = model
@@ -1008,7 +1066,8 @@ export function LiveRig({
           <ChainView
             label="Sounding tone blocks"
             appearance={chainView}
-            disabled={disabled || !!draft}
+            disabled={disabled || !!draft || making}
+            onAdd={(target) => setSlot(target)}
             selected={selectedBlock}
             onSelect={(id) => {
               const prefix = `block:${id}:`;
@@ -1022,6 +1081,32 @@ export function LiveRig({
             }}
             lanes={chainLanes}
           />
+          {making && <p role="status">Making a preset with that effect…</p>}
+          {slot && state.configured && (
+            <SlotChooser
+              sampleRate={state.configured.stream.input.sample_rate}
+              presetName={state.preset_name ?? 'this preset'}
+              modified={state.modified}
+              allowEffects={!state.configured.draft}
+              onCancel={() => setSlot(null)}
+              onModel={(format) => {
+                const position = state.slots?.find((s) => s.target === slot);
+                setPicker({
+                  target: slot,
+                  name: position
+                    ? `${position.position.lane === 0 ? 'Left' : 'Right'} chain · position ${position.position.index + 1}`
+                    : 'Empty slot',
+                  opening: state,
+                  insert: true,
+                  format,
+                });
+                setSlot(null);
+              }}
+              onEffect={(plugin, placement) =>
+                void addEffect(plugin, placement)
+              }
+            />
+          )}
           {insertion && (
             <AdjustmentDialog
               title={`Add ${insertion.format.toUpperCase()} · position`}

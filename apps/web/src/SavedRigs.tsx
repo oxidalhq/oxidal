@@ -106,7 +106,7 @@ export function SavedRigs({
   return (
     <section className="library-scenes" aria-label="Presets with scenes">
       <div className="section-heading">
-        <h2>With scenes</h2>
+        <h2>Scenes and effects</h2>
         <Button
           variant="ghost"
           aria-pressed={choosing}
@@ -150,7 +150,7 @@ export function SavedRigs({
                       )}
                       {[scenesLabel(scenes), scenes.join(', ')]
                         .filter(Boolean)
-                        .join(': ') || `${p.native_instances} parallel chains`}
+                        .join(': ') || 'With effects'}
                     </>
                   )}
                 </span>

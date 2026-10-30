@@ -62,3 +62,23 @@ export function lv2Control(
         : String(Number(native(value).toPrecision(6))),
   };
 }
+
+/** "input_mode" → "Input mode": effect ports carry only a symbol. */
+export function controlLabel(label: string) {
+  if (!/^[a-z][a-z0-9_]*$/.test(label)) return label;
+  const words = label.replace(/_/g, ' ');
+  return words[0]!.toUpperCase() + words.slice(1);
+}
+/** Toggles read On/Off; numbers lose their trailing zeros ("300", "0.25"). */
+export function controlDisplay(control: {
+  display: string;
+  toggle: boolean;
+  value: number;
+  minimum: number;
+}) {
+  if (control.toggle) return control.value !== control.minimum ? 'On' : 'Off';
+  const number = Number(control.display);
+  return Number.isFinite(number) && /^-?\d+(\.\d+)?$/.test(control.display)
+    ? String(Math.round(number * 1000) / 1000 + 0)
+    : control.display;
+}
