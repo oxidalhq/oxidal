@@ -299,7 +299,6 @@ impl StartRig {
                         .is_some_and(|r| r.source_revision != p.revision)
             })
             || frames > 2048
-            || !frames.is_power_of_two()
             || self
                 .recall
                 .as_ref()

@@ -102,11 +102,15 @@ int ox_lv2_port(void* world, const LilvPlugin* p, uint32_t index, float* def, fl
     lilv_node_free(d);lilv_node_free(lo);lilv_node_free(hi);
     return flags;
 }
-static int features_ok(LilvWorld* w, const LilvPlugin* p) {
+/* power_of_two: whether the host's block size can honour powerOf2BlockLength. */
+static int features_ok(LilvWorld* w, const LilvPlugin* p, int power_of_two) {
     LilvNodes* required=lilv_plugin_get_required_features(p);
     int ok=1;
     LILV_FOREACH(nodes,i,required) {
         const char* uri=lilv_node_as_uri(lilv_nodes_get(required,i));
+        if (uri && !power_of_two && !strcmp(uri,LV2_BUF_SIZE__powerOf2BlockLength)) {
+            fail("Plugin needs a power-of-two buffer; choose 64 or 128 samples"); ok=0;break;
+        }
         if (!uri || (strcmp(uri,LV2_URID__map) && strcmp(uri,LV2_URID__unmap)
             && strcmp(uri,LV2_WORKER__schedule) && strcmp(uri,LV2_OPTIONS__options) && strcmp(uri,LV2_BUF_SIZE__boundedBlockLength)
             && strcmp(uri,LV2_BUF_SIZE__fixedBlockLength) && strcmp(uri,LV2_BUF_SIZE__powerOf2BlockLength))) {
@@ -125,7 +129,7 @@ static int features_ok(LilvWorld* w, const LilvPlugin* p) {
     }
     lilv_nodes_free(required);return ok;
 }
-int ox_lv2_supported(void* w,const LilvPlugin* p) { return features_ok(w,p)?0:-1; }
+int ox_lv2_supported(void* w,const LilvPlugin* p) { return features_ok(w,p,1)?0:-1; }
 // SPSC queues: audio owner produces requests and consumes responses; the
 // background worker does the inverse. No allocation, lock or wake syscall in
 // schedule_work/respond. Publication uses release/acquire, never volatile.
@@ -238,6 +242,7 @@ typedef struct {
     Worker* worker;
     LV2_Feature features[7];
     const LV2_Feature* feature_ptrs[8];
+    uint32_t base_features;
 } Host;
 static LV2_URID map_uri(void* handle,const char* uri) {
     Host* h=handle;if (!uri || strlen(uri)>=256) return 0;
@@ -260,8 +265,11 @@ void ox_lv2_free(void* raw) {
     pthread_mutex_destroy(&h->urid_lock);free(h->worker);free(h);
 }
 void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
-    if (!isfinite(rate)||rate<8000||rate>192000||!frames||frames>2048||(frames&(frames-1))) {fail("Require power-of-two block size 1–2048 and rate 8000–192000");return NULL;}
-    if (!features_ok(world,p)) return NULL;
+    if (!isfinite(rate)||rate<8000||rate>192000||!frames||frames>2048) {fail("Require block size 1–2048 and rate 8000–192000");return NULL;}
+    // USB interfaces commonly run 48-frame periods; powerOf2BlockLength is only
+    // offered, and only plugins needing it refused, when the block is not one.
+    const int power_of_two=!(frames&(frames-1));
+    if (!features_ok(world,p,power_of_two)) return NULL;
     uint32_t ports=lilv_plugin_get_num_ports(p);
     if (!ports||ports>MAX_PORTS) {fail("Port count outside 1–128");return NULL;}
     Host* h=calloc(1,sizeof(Host));if (!h) {fail("Host allocation failed");return NULL;}
@@ -275,12 +283,15 @@ void* ox_lv2_new(void* world,const LilvPlugin* p,double rate,uint32_t frames) {
     h->features[3]=(LV2_Feature){LV2_BUF_SIZE__boundedBlockLength,NULL};
     h->features[4]=(LV2_Feature){LV2_BUF_SIZE__fixedBlockLength,NULL};
     h->features[5]=(LV2_Feature){LV2_BUF_SIZE__powerOf2BlockLength,NULL};
-    for (int i=0;i<6;i++) h->feature_ptrs[i]=&h->features[i];
+    // Pointer list stays NULL-terminated and dense; slot 5 only for power-of-two blocks.
+    uint32_t listed=0;
+    for (int i=0;i<6;i++) if (i!=5 || power_of_two) h->feature_ptrs[listed++]=&h->features[i];
+    h->base_features=listed;
     if (wants_worker(world,p)) {
         h->worker=worker_new();
         if (!h->worker) {fail("Worker queue allocation/lock-free atomics unavailable");goto failed;}
         h->features[6]=(LV2_Feature){LV2_WORKER__schedule,&h->worker->schedule};
-        h->feature_ptrs[6]=&h->features[6];
+        h->feature_ptrs[listed]=&h->features[6];
     }
     uint32_t latency_ports=0;
     for (uint32_t i=0;i<ports;i++) {
@@ -469,8 +480,9 @@ int ox_lv2_state(void* raw,int restore,LV2_State_Store_Function store,LV2_State_
     LV2_Worker_Schedule synchronous={&context,state_schedule};
     LV2_Feature map_feature={LV2_STATE__mapPath,&map},free_feature={LV2_STATE__freePath,&free_path},worker_feature={LV2_WORKER__schedule,&synchronous};
     const LV2_Feature* features[10]={0};
-    for(unsigned i=0;i<6;i++)features[i]=h->feature_ptrs[i];
-    features[6]=&map_feature;features[7]=&free_feature;if(h->worker)features[8]=&worker_feature;
+    unsigned n=0;
+    for(unsigned i=0;i<h->base_features;i++)features[n++]=h->feature_ptrs[i];
+    features[n++]=&map_feature;features[n++]=&free_feature;if(h->worker)features[n++]=&worker_feature;
     // Restore is instantiation-class: no processing or background work overlaps it.
     if(restore && h->active) {lilv_instance_deactivate(h->instance);h->active=0;}
     LV2_State_Status status=restore

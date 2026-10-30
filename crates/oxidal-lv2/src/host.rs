@@ -404,8 +404,8 @@ impl Plugin {
         frames: usize,
         stereo: bool,
     ) -> Result<Self, String> {
-        if frames == 0 || frames > 2048 || !frames.is_power_of_two() {
-            return Err("Require fixed power-of-two frames 1–2048".into());
+        if frames == 0 || frames > 2048 {
+            return Err("Require fixed frames 1–2048".into());
         }
         for p in world.handles()? {
             let info = world.describe(p, rate)?;

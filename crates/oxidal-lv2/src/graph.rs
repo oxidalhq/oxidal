@@ -40,11 +40,7 @@ impl PreparedGraph {
         rate: f64,
         frames: usize,
     ) -> Result<Self, String> {
-        if frames == 0
-            || frames > 2048
-            || !frames.is_power_of_two()
-            || !rate.is_finite()
-            || !(8000.0..=192000.0).contains(&rate)
+        if frames == 0 || frames > 2048 || !rate.is_finite() || !(8000.0..=192000.0).contains(&rate)
         {
             return Err("Invalid processing configuration".into());
         }

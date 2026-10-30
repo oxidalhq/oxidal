@@ -41,8 +41,8 @@ impl StartGraph {
             recall.validate()?;
         }
         let frames = self.stream.input.period_frames;
-        if frames > 2048 || !frames.is_power_of_two() {
-            return Err("LV2 requires power-of-two periods up to 2048 frames".into());
+        if frames == 0 || frames > 2048 {
+            return Err("LV2 requires periods of 1–2048 frames".into());
         }
         validate_graph(&self.rig, &self.bindings)?;
         if serde_json::to_vec(self).map_err(|e| e.to_string())?.len() >= REQUEST_LIMIT {

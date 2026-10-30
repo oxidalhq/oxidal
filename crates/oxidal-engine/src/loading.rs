@@ -34,11 +34,7 @@ impl PreparedPorts {
         manifest
             .check_required_extensions()
             .map_err(|e| e.to_string())?;
-        if !rate.is_finite()
-            || !(8000.0..=192000.0).contains(&rate)
-            || frames == 0
-            || frames > 2048
-            || !frames.is_power_of_two()
+        if !rate.is_finite() || !(8000.0..=192000.0).contains(&rate) || frames == 0 || frames > 2048
         {
             return Err("Invalid bundle audio configuration".into());
         }
