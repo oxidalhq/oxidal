@@ -676,6 +676,33 @@ export async function unitLevels(
   return body;
 }
 
+export type GuitarProfiles = Contract['guitars'];
+const guitarsValidator = ajv.compile<GuitarProfiles>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Guitars',
+});
+/** Unit-wide guitar profiles; saving applies the active guitar's input trim. */
+export async function guitarProfiles(
+  update?: GuitarProfiles,
+  signal?: AbortSignal,
+): Promise<GuitarProfiles | null> {
+  const response = await fetch(
+    '/api/v1/guitars',
+    update
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!guitarsValidator(body)) throw new Error('Incompatible guitar profiles');
+  return body;
+}
+
 export type LocalModel = Contract['local_model'];
 export type LocalModelPage = Contract['local_model_page'];
 const localModelValidator = ajv.compile<LocalModel>({

@@ -84,6 +84,7 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
       <label htmlFor="master-level">Level</label>
       <input
         id="master-level"
+        className="ink-range"
         type="range"
         min={0}
         max={STEPS}

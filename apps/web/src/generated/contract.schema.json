@@ -61,6 +61,9 @@
         "$ref": "#/$defs/SavedGraph"
       }
     },
+    "guitars": {
+      "$ref": "#/$defs/Guitars"
+    },
     "library": {
       "$ref": "#/$defs/Library"
     },
@@ -208,6 +211,7 @@
     "audio_command",
     "audio_devices",
     "unit_levels",
+    "guitars",
     "midi_devices",
     "audio_probe",
     "audio_probe_result",
@@ -3503,6 +3507,64 @@
       "required": [
         "target",
         "normalized"
+      ]
+    },
+    "Guitar": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "peak_dbfs": {
+          "description": "Peak of the player's loudest stage strum, before any trim, in dBFS.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ]
+    },
+    "Guitars": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "character": {
+          "description": "0 matches every guitar exactly; 1 keeps each guitar's natural output.",
+          "type": "number",
+          "format": "float"
+        },
+        "guitars": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Guitar"
+          }
+        },
+        "reference": {
+          "description": "The guitar presets were set up with; it plays with no trim.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "guitars",
+        "character"
       ]
     },
     "History": {

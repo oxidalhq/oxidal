@@ -65,7 +65,7 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
 }
 /// Sends levels to whichever engine is playing. Each supervisor stores them
 /// after its worker confirms; a stopped unit just stores them for the next start.
-async fn apply_running(shared: &Shared, levels: HostLevels) -> Result<(), String> {
+pub(crate) async fn apply_running(shared: &Shared, levels: HostLevels) -> Result<(), String> {
     use oxidal_audio::lifecycle::AudioPhase::Running;
     let command = oxidal_audio::tools::HostUtility::Levels { levels };
     let native = shared.playback.snapshot();

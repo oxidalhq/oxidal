@@ -1385,6 +1385,50 @@ async fn unit_levels_are_validated_durable_and_outside_presets() {
 }
 
 #[tokio::test]
+async fn guitar_profiles_set_the_unit_input_trim() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let guitars = format!("{url}/guitars");
+    let empty: Value = client
+        .get(&guitars)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(empty["guitars"], json!([]));
+    let profiles = json!({
+        "guitars": [
+            {"id": "jiva", "name": "Ibanez Jiva", "peak_dbfs": -8.0},
+            {"id": "steinberger", "name": "Steinberger", "peak_dbfs": -14.0}
+        ],
+        "reference": "jiva",
+        "active": "steinberger",
+        "character": 0.0
+    });
+    let response = client.post(&guitars).json(&profiles).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let levels: Value = client
+        .get(format!("{url}/levels"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(levels["input_trim_db"], 6.0);
+    let mut unknown = profiles.clone();
+    unknown["active"] = json!("strat");
+    let response = client.post(&guitars).json(&unknown).send().await.unwrap();
+    assert_eq!(response.status(), 422);
+    let root = path.with_extension("presets");
+    assert!(root.join("guitars.json").is_file());
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn native_device_defaults_are_durable_validated_and_revision_checked() {
     let (url, task, path) = start(false).await;
     let client = reqwest::Client::new();

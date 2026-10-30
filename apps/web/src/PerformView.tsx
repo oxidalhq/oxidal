@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AudioState, Monitoring } from './api';
+import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
@@ -303,6 +304,7 @@ export function PerformView({
             })}
           </div>
           <MasterLevel />
+          <GuitarSwitch />
           <div className="perform-now">
             <span className="perform-now-state">
               {state.phase === 'running' ? 'Playing' : 'Not playing'}

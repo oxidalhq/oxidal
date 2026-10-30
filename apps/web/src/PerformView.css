@@ -392,3 +392,10 @@
 :root[data-display='sunlight'] .preset-step button {
   border-width: 2px;
 }
+
+/* Guitar switch: one tap per instrument; the active one is ink-inverted. */
+.perform-guitars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

@@ -680,6 +680,7 @@ export interface Contract {
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
   graph_presets: SavedGraph[];
+  guitars: Guitars;
   library: Library;
   library_catalog: LibraryCatalog;
   library_update: LibraryUpdate;
@@ -1318,6 +1319,26 @@ export interface GraphPreset {
   rig: Rig;
   sample_rate: number;
   version: number;
+}
+export interface Guitars {
+  active?: string | null;
+  /**
+   * 0 matches every guitar exactly; 1 keeps each guitar's natural output.
+   */
+  character: number;
+  guitars: Guitar[];
+  /**
+   * The guitar presets were set up with; it plays with no trim.
+   */
+  reference?: string | null;
+}
+export interface Guitar {
+  id: string;
+  name: string;
+  /**
+   * Peak of the player's loudest stage strum, before any trim, in dBFS.
+   */
+  peak_dbfs?: number | null;
 }
 export interface Library {
   presets: Inspection[];

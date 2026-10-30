@@ -233,3 +233,13 @@ Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an inp
 - **Store:** `unit-levels.json` in the preset directory, never in a preset. The daemon writes the stored values into the stream settings of every start, restart and recovery, so a preset switch, an engine change or a reboot keeps them.
 - **API:** `GET /api/v1/levels` returns `{input_trim_db, output_level_db}`. `POST` validates the range (422 outside it, 400 for unknown fields), sends the levels to whichever engine is running through its host-utility command, then stores them. A stopped unit just stores them for the next start.
 - **UI:** the Level fader sits under the preset picker on Rig (TONE3000 and hybrid), on Perform and in Settings → Audio. Its taper gives the lower quarter to −60 to −30 dB and the rest to −30 to +12 dB, in 0.5 dB steps. Arrow keys move 1 dB. While a request is in flight only the newest value waits. A daemon without levels hides the fader.
+
+## Guitar profiles
+
+Guitars with different pickups hit the rig at different levels, which changes both loudness and how hard a capture is driven. A guitar profile stores each instrument's loudest stage strum (peak dBFS before any trim) and sets the unit input trim when that guitar is chosen.
+
+- **Measure:** Settings → Audio → Guitars → Measure listens for six seconds on the shared monitor feed, using the raw input meter (which reads before the trim). Silence below −60 dBFS is refused; a peak above −1 dBFS warns about interface clipping.
+- **Match:** trim = (reference peak − this guitar's peak) × (1 − Character), in 0.5 dB steps and clamped to ±24 dB. The reference guitar (by default the first measured) plays untrimmed, so presets built on it are unchanged. Unmeasured guitars play untrimmed. Character 0% matches exactly; 100% keeps every guitar's natural output.
+- **Switch:** Perform shows one button per guitar once two exist. MIDI and footswitch selection wait for physical MIDI.
+- **Store and API:** `guitars.json` in the preset directory, never in presets. `GET`/`POST /api/v1/guitars` (up to 16 guitars, names of 1–40 characters). Saving computes the active guitar's trim, applies it to a running engine and stores it in the unit levels.
+- **Not yet:** per-guitar gate thresholds and tone tilt. The gate lives inside each engine today.
