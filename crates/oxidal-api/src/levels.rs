@@ -63,8 +63,49 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
     )
         .into_response()
 }
-/// Stores levels for the next start. A running rig takes them through its own
-/// host-utility command, which also stores them.
+/// Sends levels to whichever engine is playing. Each supervisor stores them
+/// after its worker confirms; a stopped unit just stores them for the next start.
+async fn apply_running(shared: &Shared, levels: HostLevels) -> Result<(), String> {
+    use oxidal_audio::lifecycle::AudioPhase::Running;
+    let command = oxidal_audio::tools::HostUtility::Levels { levels };
+    let native = shared.playback.snapshot();
+    if native.phase == Running {
+        shared
+            .playback
+            .dispatch(oxidal_audio::lifecycle::AudioCommand {
+                session: native.session,
+                expected_revision: native.revision,
+                action: oxidal_audio::lifecycle::AudioAction::HostUtility { command },
+            })
+            .await?;
+    }
+    let mixed = shared.rig_playback.snapshot();
+    if mixed.phase == Running {
+        shared
+            .rig_playback
+            .dispatch(oxidal_engine::protocol::RigAudioCommand {
+                session: mixed.session,
+                expected_revision: mixed.revision,
+                action: oxidal_engine::protocol::RigAudioAction::HostUtility { command },
+            })
+            .await?;
+    }
+    let effects = shared.graph_playback.snapshot();
+    if effects.phase == Running {
+        shared
+            .graph_playback
+            .dispatch(oxidal_lv2::protocol::GraphAudioCommand {
+                session: effects.session,
+                expected_revision: effects.revision,
+                action: oxidal_lv2::protocol::GraphAudioAction::HostUtility { command },
+            })
+            .await?;
+    }
+    Ok(())
+}
+
+/// One entry point for every view: live engines apply the levels at once, and
+/// the unit store keeps them for every later start.
 pub(super) async fn update(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<HostLevels>, JsonRejection>,
@@ -74,6 +115,9 @@ pub(super) async fn update(
     };
     if let Err(e) = levels.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
+    }
+    if let Err(e) = apply_running(&shared, levels).await {
+        return failure(StatusCode::CONFLICT, &e);
     }
     let store = shared.levels.clone();
     match tokio::task::spawn_blocking(move || store.save(levels).map(|()| store.current())).await {

@@ -578,7 +578,7 @@ impl GraphPlayback {
         state.start_on_boot = self.boot.enabled(Role::Effects);
         state
     }
-    async fn dispatch(&self, command: GraphAudioCommand) -> Reply {
+    pub(crate) async fn dispatch(&self, command: GraphAudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
         self.commands
             .try_send((command, response))

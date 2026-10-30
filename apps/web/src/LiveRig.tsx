@@ -39,6 +39,7 @@ import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
 import { DragFader } from './DragFader';
+import { MasterLevel } from './MasterLevel';
 import { EditQueue } from './editQueue';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
@@ -704,6 +705,7 @@ export function LiveRig({
           <DotsThree aria-hidden="true" />
         </Button>
       </div>
+      <MasterLevel />
       <span
         role="status"
         data-testid="live-status"

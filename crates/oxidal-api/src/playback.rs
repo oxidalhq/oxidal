@@ -1833,7 +1833,7 @@ impl Playback {
         state.start_on_boot = self.boot.enabled(Role::Native);
         state
     }
-    async fn dispatch(&self, command: AudioCommand) -> Reply {
+    pub(crate) async fn dispatch(&self, command: AudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
         self.commands
             .try_send((command, response))

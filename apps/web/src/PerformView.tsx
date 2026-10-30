@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { AudioState, Monitoring } from './api';
+import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
 import { RigPresetSelector } from './RigPresetSelector';
@@ -301,6 +302,7 @@ export function PerformView({
               );
             })}
           </div>
+          <MasterLevel />
           <div className="perform-now">
             <span className="perform-now-state">
               {state.phase === 'running' ? 'Playing' : 'Not playing'}

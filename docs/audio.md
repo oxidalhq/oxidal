@@ -225,3 +225,11 @@ Fold and BOOX in both orientations. Physical boot/device timing remains open.
 ## Direct native preset recall
 
 Library preset buttons send `load_preset` through the audio owner, reusing the configured device, format and MIDI setup. Original and owned presets are supported. The owner retains confirmed working controls, models, EQ and captures per preset before switching, and restores them when returning. Missing sources are rejected before stopping audio; failed target startup attempts to restore the previous running session. Initial audio configuration is still required. This path restarts the native worker and is not gapless or a cross-engine handoff.
+
+## Unit levels
+
+Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an input trim before the rig (−24 to +24 dB, for evening out guitars) and a master output level after it (−60 dB, which is off, to +12 dB). They live in the shared host stage (`HostSignal`), next to Hear yourself and the test tone, so no engine needs its own copy. Changes glide over about 10 ms so moves never click.
+
+- **Store:** `unit-levels.json` in the preset directory, never in a preset. The daemon writes the stored values into the stream settings of every start, restart and recovery, so a preset switch, an engine change or a reboot keeps them.
+- **API:** `GET /api/v1/levels` returns `{input_trim_db, output_level_db}`. `POST` validates the range (422 outside it, 400 for unknown fields), sends the levels to whichever engine is running through its host-utility command, then stores them. A stopped unit just stores them for the next start.
+- **UI:** the Level fader sits under the preset picker on Rig (TONE3000 and hybrid), on Perform and in Settings → Audio. Its taper gives the lower quarter to −60 to −30 dB and the rest to −30 to +12 dB, in 0.5 dB steps. Arrow keys move 1 dB. While a request is in flight only the newest value waits. A daemon without levels hides the fader.

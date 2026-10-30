@@ -649,6 +649,33 @@ export async function nativeDefaults(
   return body;
 }
 
+export type UnitLevels = Contract['unit_levels'];
+const unitLevelsValidator = ajv.compile<UnitLevels>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/HostLevels',
+});
+/** Unit-wide input trim and master level; null when the daemon predates them. */
+export async function unitLevels(
+  update?: UnitLevels,
+  signal?: AbortSignal,
+): Promise<UnitLevels | null> {
+  const response = await fetch(
+    '/api/v1/levels',
+    update
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!unitLevelsValidator(body)) throw new Error('Incompatible levels');
+  return body;
+}
+
 export type LocalModel = Contract['local_model'];
 export type LocalModelPage = Contract['local_model_page'];
 const localModelValidator = ajv.compile<LocalModel>({

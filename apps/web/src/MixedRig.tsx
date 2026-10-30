@@ -1,4 +1,5 @@
 import { AddBlockChooser } from './AddBlockChooser';
+import { MasterLevel } from './MasterLevel';
 import {
   assertAuditionOwner,
   confirmedControlDisplay,
@@ -625,6 +626,7 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      <MasterLevel />
       {!!state.control?.scenes?.scenes.length && (
         <div
           className="flex flex-wrap gap-2"

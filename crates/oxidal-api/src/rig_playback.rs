@@ -1187,7 +1187,7 @@ impl RigPlayback {
         state.start_on_boot = self.boot.enabled(Role::Mixed);
         state
     }
-    async fn dispatch(&self, command: RigAudioCommand) -> Reply {
+    pub(crate) async fn dispatch(&self, command: RigAudioCommand) -> Reply {
         let (response, received) = oneshot::channel();
         self.commands
             .try_send((command, response))
