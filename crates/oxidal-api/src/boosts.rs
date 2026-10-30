@@ -142,19 +142,8 @@ impl Store {
     }
 }
 
-/// Keys of what is sounding now: one engine plays at a time.
-async fn playing(shared: &Shared) -> Vec<String> {
-    let native = shared.playback.snapshot();
-    if native.phase == AudioPhase::Running
-        && let Some(c) = native.configured.filter(|c| !c.draft)
-    {
-        return vec![key_tone3000(&c.preset_id, c.owned)];
-    }
-    let rig = shared.rig_playback.snapshot();
-    let (Some(configured), AudioPhase::Running) = (rig.configured, rig.phase) else {
-        return Vec::new();
-    };
-    let revision = configured.revision;
+/// The stable id of a preset with scenes, from its revision (read once).
+pub(crate) async fn preset_id(shared: &Shared, revision: String) -> Option<String> {
     let cached = shared
         .boosts
         .ids
@@ -171,13 +160,31 @@ async fn playing(shared: &Shared) -> Vec<String> {
             })
             .await
             else {
-                return Vec::new();
+                return None;
             };
             if let Ok(mut ids) = shared.boosts.ids.lock() {
                 ids.insert(revision, manifest.id.clone());
             }
             manifest.id
         }
+    };
+    Some(id)
+}
+
+/// Keys of what is sounding now: one engine plays at a time.
+async fn playing(shared: &Shared) -> Vec<String> {
+    let native = shared.playback.snapshot();
+    if native.phase == AudioPhase::Running
+        && let Some(c) = native.configured.filter(|c| !c.draft)
+    {
+        return vec![key_tone3000(&c.preset_id, c.owned)];
+    }
+    let rig = shared.rig_playback.snapshot();
+    let (Some(configured), AudioPhase::Running) = (rig.configured, rig.phase) else {
+        return Vec::new();
+    };
+    let Some(id) = preset_id(shared, configured.revision).await else {
+        return Vec::new();
     };
     let preset = format!("scenes:{id}");
     match rig.control.and_then(|c| c.scene) {

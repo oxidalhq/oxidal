@@ -440,6 +440,7 @@ async fn select_scene(shared: &Shared, scene: &str) -> Result<(), String> {
                         session: control.session,
                         expected_revision: control.revision,
                         scene: scene.into(),
+                        release_ms: None,
                     },
                 },
             })

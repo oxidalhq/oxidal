@@ -154,6 +154,12 @@
     "rig_publish": {
       "$ref": "#/$defs/RigPublish"
     },
+    "scene_blend_update": {
+      "$ref": "#/$defs/BlendUpdate"
+    },
+    "scene_blends": {
+      "$ref": "#/$defs/Blends"
+    },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
@@ -227,6 +233,8 @@
     "boosts",
     "boost_update",
     "calibration",
+    "scene_blends",
+    "scene_blend_update",
     "calibration_command",
     "midi_devices",
     "audio_probe",
@@ -1658,6 +1666,43 @@
       "additionalProperties": false,
       "required": [
         "scene"
+      ]
+    },
+    "BlendUpdate": {
+      "description": "Sets one preset's blend; 0 returns it to trails.",
+      "type": "object",
+      "properties": {
+        "blend_ms": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "preset": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "blend_ms"
+      ]
+    },
+    "Blends": {
+      "description": "Blend times in ms by scene preset id; a preset without one trails.",
+      "type": "object",
+      "properties": {
+        "blends": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "blends"
       ]
     },
     "BlockControl": {
@@ -7116,6 +7161,15 @@
         "expected_revision": {
           "type": "integer",
           "format": "uint64",
+          "minimum": 0
+        },
+        "release_ms": {
+          "description": "How long the outgoing scene takes to fade out, in ms (up to 10 s); none\nuses the preset's own fade, so delay and reverb tails ring out.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
           "minimum": 0
         },
         "scene": {

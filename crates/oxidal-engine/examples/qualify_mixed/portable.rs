@@ -593,6 +593,7 @@ pub fn qualify_scenes(world: &World, current: &[u8], root: &Path) -> Result<(), 
                 session: cursor.session,
                 expected_revision: cursor.revision,
                 scene: if block == 150 { "lead" } else { "clean" }.into(),
+                release_ms: None,
             })?;
         }
         let input: Vec<_> = (0..128)

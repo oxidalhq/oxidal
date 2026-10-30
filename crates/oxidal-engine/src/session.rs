@@ -404,6 +404,12 @@ impl Session {
         if !self.matches_cursor(&command.session, command.expected_revision) {
             return Err("rig_control_conflict; refresh status".into());
         }
+        if command
+            .release_ms
+            .is_some_and(|ms| ms > crate::protocol::MAX_RELEASE_MS)
+        {
+            return Err("Scene blend must be at most 10 seconds".into());
+        }
         let scenes = self.state.scenes.as_ref().ok_or("Rig has no scenes")?;
         let scene = scenes
             .scenes
@@ -412,7 +418,9 @@ impl Session {
             .ok_or("Unknown rig scene")?;
         let gains = scene.gains.clone();
         let fade_ms = scenes.fade_ms;
-        self.apply_mix(&gains, fade_ms)?;
+        // A blend keeps the outgoing scene sounding while it fades out.
+        let release_ms = command.release_ms.unwrap_or(fade_ms).max(fade_ms);
+        self.apply_mix(&gains, fade_ms, release_ms)?;
         self.state.scene = Some(command.scene);
         Ok(())
     }
@@ -443,7 +451,7 @@ impl Session {
             })
             .collect();
         let fade_ms = scenes.fade_ms;
-        self.apply_mix(&gains, fade_ms)?;
+        self.apply_mix(&gains, fade_ms, fade_ms)?;
         self.state.scene = None;
         Ok(())
     }
@@ -461,6 +469,7 @@ impl Session {
                     session: cursor.session,
                     expected_revision: cursor.revision,
                     scene: scene.into(),
+                    release_ms: None,
                 })?;
             }
             return Ok(true);
@@ -510,14 +519,16 @@ impl Session {
         &mut self,
         gains: &[oxidal_presets::manifest::SceneGain],
         fade_ms: u32,
+        release_ms: u32,
     ) -> Result<(), String> {
         let revision = self
             .state
             .revision
             .checked_add(1)
             .ok_or("Rig revision exhausted")?;
-        let frames = (self.rate * f64::from(fade_ms) / 1000.0).round().max(1.0) as u32;
-        self.graph.scene_gains(gains, frames)?;
+        let frames_for = |ms: u32| (self.rate * f64::from(ms) / 1000.0).round().max(1.0) as u32;
+        self.graph
+            .scene_gains(gains, frames_for(fade_ms), frames_for(release_ms))?;
         for gain in gains {
             let target = Target::Merge {
                 node: gain.node.clone(),

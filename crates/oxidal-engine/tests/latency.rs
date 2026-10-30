@@ -622,6 +622,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
         session: before.session,
         expected_revision: before.revision,
         scene: "lead".into(),
+        release_ms: None,
     };
     session.select_scene(command.clone()).unwrap();
     assert!(session.select_scene(command).is_err());
@@ -646,6 +647,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
         session: before.session,
         expected_revision: before.revision,
         scene: "missing".into(),
+        release_ms: None,
     };
     assert!(session.select_scene(command.clone()).is_err());
     assert_eq!(session.snapshot().revision, before.revision);
@@ -658,6 +660,7 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
             session: before.session,
             expected_revision: before.revision,
             scene: "lead".into(),
+            release_ms: None,
         })
         .unwrap();
     let mut samples = Vec::new();
@@ -671,6 +674,48 @@ fn scenes_ramp_exact_samples_preserve_shared_history_and_reject_stale_commands()
             .all(|w| (w[1] - w[0]).abs() <= 2.0 / 144.0 + 0.00001)
     );
     assert_eq!(samples.last(), Some(&-1.0));
+}
+#[test]
+fn a_blend_fades_the_outgoing_scene_slowly_while_the_new_one_opens_at_once() {
+    use oxidal_engine::protocol::SceneCommand;
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let mut session = Session::new(scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
+    let input = [[1.0; 64], [-1.0; 64]];
+    let mut render = |session: &mut Session| {
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        session
+            .process(&[&input[0], &input[1]], &mut [&mut l, &mut r])
+            .unwrap();
+        l
+    };
+    for _ in 0..4 {
+        render(&mut session);
+    }
+    let before = session.snapshot();
+    let blend = |release_ms| SceneCommand {
+        session: before.session.clone(),
+        expected_revision: before.revision,
+        scene: "lead".into(),
+        release_ms: Some(release_ms),
+    };
+    assert!(session.select_scene(blend(10_001)).is_err());
+    // 30 ms: the outgoing scene (+1) closes over 1440 frames; the incoming
+    // (−1) opens over the preset's own 3 ms (144 frames).
+    session.select_scene(blend(30)).unwrap();
+    let mut samples = Vec::new();
+    for _ in 0..30 {
+        samples.extend(render(&mut session));
+    }
+    let at = |frame: usize| samples[137 + frame];
+    assert!((at(143) - (1.0 - 144.0 / 1440.0 - 1.0)).abs() < 0.0001);
+    assert!((at(719) - (1.0 - 720.0 / 1440.0 - 1.0)).abs() < 0.0001);
+    assert!((at(1439) + 1.0).abs() < 0.0001);
+    assert!(samples[137 + 1440..].iter().all(|v| *v == -1.0));
+    assert!(
+        samples
+            .windows(2)
+            .all(|w| (w[1] - w[0]).abs() <= 1.0 / 144.0 + 1.0 / 1440.0 + 0.00001)
+    );
 }
 #[test]
 fn scene_definitions_reject_partial_duplicate_or_foreign_targets() {
@@ -881,6 +926,7 @@ fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades()
             session: cursor.session,
             expected_revision: cursor.revision,
             scene: "lead".into(),
+            release_ms: None,
         })
         .unwrap();
     for _ in 0..10 {
@@ -901,6 +947,7 @@ fn scene_input_gates_keep_outgoing_branch_audio_and_latency_aligned_crossfades()
             session: cursor.session,
             expected_revision: cursor.revision,
             scene: "lead".into(),
+            release_ms: None,
         })
         .unwrap();
     for _ in 0..12 {

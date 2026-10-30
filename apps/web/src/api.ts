@@ -730,6 +730,33 @@ export async function boosts(
   return body;
 }
 
+export type SceneBlends = Contract['scene_blends'];
+const blendsValidator = ajv.compile<SceneBlends>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Blends',
+});
+/** How presets with scenes change scene: trails, or a blend of N ms. */
+export async function sceneBlends(
+  update?: Contract['scene_blend_update'],
+  signal?: AbortSignal,
+): Promise<SceneBlends | null> {
+  const response = await fetch(
+    '/api/v1/scene-blends',
+    update
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!blendsValidator(body)) throw new Error('Incompatible scene blends');
+  return body;
+}
+
 export type CalibrationState = Contract['calibration'];
 const calibrationValidator = ajv.compile<CalibrationState>({
   $defs: schema.$defs,

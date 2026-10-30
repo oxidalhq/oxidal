@@ -1073,6 +1073,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
         session: before.control.session.clone(),
         expected_revision: before.control.revision,
         scene: "lead".into(),
+        release_ms: None,
     };
     send(
         &mut child,

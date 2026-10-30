@@ -25,12 +25,15 @@ export function ScenePads({
   fading,
   disabled,
   onSelect,
+  extra,
 }: {
   scenes: Scene[];
   active: string | null | undefined;
   fading: boolean;
   disabled: boolean;
   onSelect: (id: string) => void;
+  /** A control for the heading, such as how scenes change. */
+  extra?: React.ReactNode;
 }) {
   // Latest props for the key handler without re-registering it every render.
   const latest = useRef({ scenes, active, disabled, onSelect });
@@ -54,7 +57,11 @@ export function ScenePads({
   return (
     <section className="scene-pads" aria-label="Scenes">
       <h3>
-        Scenes <span>{fading ? 'fading…' : 'tap or press 1–9'}</span>
+        Scenes
+        <span className="scene-pads-meta">
+          {fading ? 'fading…' : 'tap or press 1–9'}
+          {extra}
+        </span>
       </h3>
       <div
         className="scene-pad-grid"

@@ -1206,9 +1206,10 @@ pub(super) async fn command(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<RigAudioCommand>, JsonRejection>,
 ) -> Response {
-    let Ok(Json(command)) = body else {
+    let Ok(Json(mut command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_rig_audio_command");
     };
+    crate::blends::apply(&shared, &mut command).await;
     let result = shared.rig_playback.dispatch(command).await;
     if result.is_ok() {
         // A preset or scene change brings its own boost.

@@ -242,6 +242,14 @@ Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an inp
 - **API:** `GET /api/v1/levels` returns `{input_trim_db, output_level_db}`. `POST` validates the range (422 outside it, 400 for unknown fields), sends the levels to whichever engine is running through its host-utility command, then stores them. A stopped unit just stores them for the next start.
 - **UI:** the Level fader sits under the preset picker on Rig (TONE3000 and hybrid), on Perform and in Settings → Audio. Its taper gives the lower quarter to −60 to −30 dB and the rest to −30 to +12 dB, in 0.5 dB steps. Arrow keys move 1 dB. While a request is in flight only the newest value waits. A daemon without levels hides the fader.
 
+## Scene change: trails or blend
+
+Presets with scenes feed each lane through its own input gate and keep every lane's output open at the merge, so a scene change normally **trails**: the outgoing lane stops getting guitar at once while its delay and reverb ring out over the new scene.
+
+- **Blend:** the Scene change control in the scene pads heading switches a preset to blend. The incoming scene still opens at the preset's own short fade; gains that close ramp over the blend time instead (0.5–10 s), so the whole outgoing scene fades out. `SceneCommand.release_ms` carries the release; the engine rejects more than 10 s.
+- **Store and API:** `blends.json` in the preset directory, by the preset's stable id. `GET`/`POST /api/v1/scene-blends {preset, blend_ms}` (0 returns the preset to trails). The daemon adds the playing preset's blend to every scene command it forwards that does not set its own release.
+- **Not yet:** MIDI scene changes inside the worker use the preset's own fade until physical MIDI forwards through the daemon; a hard cut that also silences the outgoing tails.
+
 ## Even out all
 
 One button (Library → Even out all) brings every preset and every scene to the same loudness, so switching never jumps.

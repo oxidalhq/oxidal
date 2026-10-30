@@ -1,6 +1,7 @@
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
+import { SceneChange } from './SceneChange';
 import { BoostControl } from './BoostControl';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -783,6 +784,11 @@ export function MixedRig({
       />
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
+          extra={
+            matching && (
+              <SceneChange preset={matching.manifest.id} disabled={disabled} />
+            )
+          }
           scenes={state.control.scenes.scenes}
           active={state.control.scene}
           fading={!!state.control.scene_transitioning}

@@ -514,12 +514,15 @@ impl PreparedPorts {
     }
     /// Validate every target before touching DSP, then start all gain ramps at
     /// the same stream position. Retargeting starts at the current audible gain.
+    /// Ramps scene gains: opening ones over `frames`, closing ones over
+    /// `release` (a blend lets the outgoing scene fade out slowly).
     pub(crate) fn scene_gains(
         &mut self,
         values: &[oxidal_presets::manifest::SceneGain],
         frames: u32,
+        release: u32,
     ) -> Result<(), String> {
-        if self.failed || frames == 0 {
+        if self.failed || frames == 0 || release == 0 {
             return Err("Invalid scene transition".into());
         }
         for (i, value) in values.iter().enumerate() {
@@ -539,7 +542,9 @@ impl PreparedPorts {
         }
         for value in values {
             let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
-            node.gains[usize::from(value.port)].set(value.value as f32, frames);
+            let gain = &mut node.gains[usize::from(value.port)];
+            let closing = (value.value as f32) < gain.target;
+            gain.set(value.value as f32, if closing { release } else { frames });
         }
         Ok(())
     }

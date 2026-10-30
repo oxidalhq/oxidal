@@ -244,7 +244,13 @@ pub struct SceneCommand {
     pub session: String,
     pub expected_revision: u64,
     pub scene: String,
+    /// How long the outgoing scene takes to fade out, in ms (up to 10 s); none
+    /// uses the preset's own fade, so delay and reverb tails ring out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_ms: Option<u32>,
 }
+/// Longest blend between scenes.
+pub const MAX_RELEASE_MS: u32 = 10_000;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PreparedRecall {

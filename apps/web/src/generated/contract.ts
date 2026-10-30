@@ -716,6 +716,8 @@ export interface Contract {
   rig_library: RigPage;
   rig_native_sources: RigNativeSource[];
   rig_publish: RigPublish;
+  scene_blend_update: BlendUpdate;
+  scene_blends: Blends;
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
@@ -1818,6 +1820,11 @@ export interface SwitchCommand {
 }
 export interface SceneCommand {
   expected_revision: number;
+  /**
+   * How long the outgoing scene takes to fade out, in ms (up to 10 s); none
+   * uses the preset's own fade, so delay and reverb tails ring out.
+   */
+  release_ms?: number | null;
   scene: string;
   session: string;
 }
@@ -2065,6 +2072,21 @@ export interface RigPublish {
    */
   resources: {
     [k: string]: ResourceSource;
+  };
+}
+/**
+ * Sets one preset's blend; 0 returns it to trails.
+ */
+export interface BlendUpdate {
+  blend_ms: number;
+  preset: string;
+}
+/**
+ * Blend times in ms by scene preset id; a preset without one trails.
+ */
+export interface Blends {
+  blends: {
+    [k: string]: number;
   };
 }
 export interface StageModel {
