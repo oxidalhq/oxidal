@@ -3179,12 +3179,12 @@ for (const layout of ['serial', 'scenes'] as const) {
     if (layout === 'scenes') {
       const scenes = rig.getByRole('group', { name: 'Rig scenes' });
       await expect(
-        scenes.getByRole('button', { name: 'Clean', exact: true }),
+        scenes.getByRole('button', { name: /^Scene \d+: Clean$/ }),
       ).toHaveAttribute('aria-pressed', 'true');
-      await scenes.getByRole('button', { name: 'Lead', exact: true }).click();
+      await scenes.getByRole('button', { name: /^Scene \d+: Lead$/ }).click();
       await expect.poll(async () => (await state()).control.scene).toBeTruthy();
       await expect(
-        scenes.getByRole('button', { name: 'Lead', exact: true }),
+        scenes.getByRole('button', { name: /^Scene \d+: Lead$/ }),
       ).toHaveAttribute('aria-pressed', 'true');
       await expect
         .poll(async () => (await state()).control.scene_transitioning)

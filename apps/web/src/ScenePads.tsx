@@ -1,0 +1,83 @@
+import { useEffect, useRef } from 'react';
+import './ScenePads.css';
+
+type Scene = { id: string; name: string };
+
+/** True when a key press belongs to a text field or other editor. */
+function typing(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  return (
+    !!el &&
+    (el.isContentEditable ||
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
+  );
+}
+
+/**
+ * Scene pads for hybrid rigs: one large numbered pad per scene, the sounding
+ * one ink-inverted. Number keys 1–9 select scenes too, so a USB keypad or a
+ * footswitch that sends keystrokes works before physical MIDI.
+ * @see docs/mixed-engine.md
+ */
+export function ScenePads({
+  scenes,
+  active,
+  fading,
+  disabled,
+  onSelect,
+}: {
+  scenes: Scene[];
+  active: string | null | undefined;
+  fading: boolean;
+  disabled: boolean;
+  onSelect: (id: string) => void;
+}) {
+  // Latest props for the key handler without re-registering it every render.
+  const latest = useRef({ scenes, active, disabled, onSelect });
+  useEffect(() => {
+    latest.current = { scenes, active, disabled, onSelect };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (document.querySelector('dialog[open]')) return;
+      const index = Number(e.key) - 1;
+      const { scenes, active, disabled, onSelect } = latest.current;
+      const scene = Number.isInteger(index) ? scenes[index] : undefined;
+      if (!scene || disabled || scene.id === active) return;
+      e.preventDefault();
+      onSelect(scene.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return (
+    <section className="scene-pads" aria-label="Scenes">
+      <h3>
+        Scenes <span>{fading ? 'fading…' : 'tap or press 1–9'}</span>
+      </h3>
+      <div
+        className="scene-pad-grid"
+        role="group"
+        aria-label="Rig scenes"
+        aria-busy={fading}
+      >
+        {scenes.map((scene, i) => (
+          <button
+            key={scene.id}
+            type="button"
+            className="scene-pad"
+            aria-label={`Scene ${i + 1}: ${scene.name}`}
+            aria-pressed={scene.id === active}
+            aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
+            disabled={disabled}
+            onClick={() => scene.id !== active && onSelect(scene.id)}
+          >
+            <span className="scene-pad-number">{i + 1}</span>
+            <strong>{scene.name}</strong>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}

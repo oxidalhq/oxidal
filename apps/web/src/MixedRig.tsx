@@ -1,5 +1,6 @@
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
+import { ScenePads } from './ScenePads';
 import {
   assertAuditionOwner,
   confirmedControlDisplay,
@@ -628,36 +629,24 @@ export function MixedRig({
       </div>
       <MasterLevel />
       {!!state.control?.scenes?.scenes.length && (
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="Rig scenes"
-          aria-busy={state.control.scene_transitioning}
-        >
-          {state.control.scenes.scenes.map((scene) => (
-            <Button
-              key={scene.id}
-              className="h-auto min-h-12 max-w-full min-w-20 whitespace-normal"
-              variant="outline"
-              aria-pressed={state.control?.scene === scene.id}
-              disabled={disabled || !!edit}
-              onClick={() => {
-                const control = current.current?.control;
-                if (control)
-                  void command({
-                    kind: 'scene',
-                    command: {
-                      session: control.session,
-                      expected_revision: control.revision,
-                      scene: scene.id,
-                    },
-                  });
-              }}
-            >
-              {scene.name}
-            </Button>
-          ))}
-        </div>
+        <ScenePads
+          scenes={state.control.scenes.scenes}
+          active={state.control.scene}
+          fading={!!state.control.scene_transitioning}
+          disabled={disabled || !!edit}
+          onSelect={(scene) => {
+            const control = current.current?.control;
+            if (control)
+              void command({
+                kind: 'scene',
+                command: {
+                  session: control.session,
+                  expected_revision: control.revision,
+                  scene,
+                },
+              });
+          }}
+        />
       )}
       {!!state.control?.prepared?.length && (
         <div
