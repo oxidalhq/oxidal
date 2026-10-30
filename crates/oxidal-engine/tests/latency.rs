@@ -681,7 +681,7 @@ fn a_blend_fades_the_outgoing_scene_slowly_while_the_new_one_opens_at_once() {
     let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
     let mut session = Session::new(scene_bundle(), &world, 48000.0, 64, 1024 * 1024).unwrap();
     let input = [[1.0; 64], [-1.0; 64]];
-    let mut render = |session: &mut Session| {
+    let render = |session: &mut Session| {
         let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
         session
             .process(&[&input[0], &input[1]], &mut [&mut l, &mut r])
