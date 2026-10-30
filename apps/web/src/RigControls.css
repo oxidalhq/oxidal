@@ -6,6 +6,9 @@
   gap: 0.125rem;
   min-height: var(--touch-target);
 }
+.chain-bar .oxidal-button {
+  padding-inline: 0.5rem;
+}
 .chain-bar h3 {
   margin: 0 auto 0 0;
   font-size: 0.875rem;
@@ -121,4 +124,8 @@
 }
 :root[data-display='sunlight'] .value-row-fader b {
   border-width: 2px;
+}
+
+.preset-actions.oxidal-button {
+  color: var(--foreground);
 }

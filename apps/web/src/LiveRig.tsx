@@ -7,10 +7,6 @@ import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
   ArrowRight,
-  SlidersHorizontal,
-  Waveform,
-  MusicNotes,
-  ArrowsSplit,
   Plus,
   DotsThree,
   SquaresFour,
@@ -606,6 +602,7 @@ export function LiveRig({
           variant="ghost"
           size="icon"
           aria-label="Preset actions"
+          className="preset-actions"
           disabled={disabled || !!draft || !!picker}
           onClick={() => setActionsOpen(true)}
         >
@@ -637,11 +634,12 @@ export function LiveRig({
                 <Button
                   key={format}
                   variant="ghost"
+                  aria-label={format === 'nam' ? 'Add NAM' : 'Add IR'}
                   disabled={disabled || !!draft}
                   onClick={() => setInsertion({ opening: state, format })}
                 >
                   <Plus aria-hidden="true" />
-                  {format === 'nam' ? 'Add NAM' : 'Add IR'}
+                  {format === 'nam' ? 'NAM' : 'IR'}
                 </Button>
               ))}
             <Button
@@ -992,10 +990,10 @@ export function LiveRig({
             <div className="control-navigation" aria-label="Control groups">
               {(
                 [
-                  ['tone', 'Tone', SlidersHorizontal],
-                  ['gate', 'Gate', Waveform],
-                  ['pitch', 'Pitch', MusicNotes],
-                  ['stereo', 'Stereo', ArrowsSplit],
+                  ['tone', 'Tone'],
+                  ['gate', 'Gate'],
+                  ['pitch', 'Pitch'],
+                  ['stereo', 'Stereo'],
                 ] as const
               )
                 .filter(([id]) =>
@@ -1005,12 +1003,10 @@ export function LiveRig({
                       controlGroup(c.target) === id,
                   ),
                 )
-                .map(([id, label, Icon]) => (
+                .map(([id, label]) => (
                   <Button
                     key={id}
-                    variant={
-                      !selectedBlock && group === id ? 'secondary' : 'ghost'
-                    }
+                    variant="ghost"
                     aria-pressed={!selectedBlock && group === id}
                     disabled={disabled || !!draft}
                     onClick={() => {
@@ -1025,7 +1021,6 @@ export function LiveRig({
                       setDraft(null);
                     }}
                   >
-                    <Icon aria-hidden="true" />
                     {label}
                   </Button>
                 ))}

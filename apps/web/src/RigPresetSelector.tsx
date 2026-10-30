@@ -202,13 +202,13 @@ export function RigPresetSelector({
             )}
           </span>
           <span className="preset-picker-meta">
-            {current ? (current.owned ? 'My copy' : 'Original') : 'Current rig'}
-            {' · '}
             {state.modified ? (
               <span className="preset-picker-edited">edited, not saved</span>
             ) : (
               'saved'
             )}
+            {' · '}
+            {current ? (current.owned ? 'My copy' : 'Original') : 'Current rig'}
             {index >= 0 && ` · ${index + 1} of ${items.length}`}
           </span>
         </span>

@@ -2007,14 +2007,25 @@ textarea {
 .rig-preset-error .oxidal-button {
   flex-shrink: 0;
 }
+/* Group switch: underlined text tabs that always fit the row. */
 .control-navigation {
   display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
-  padding-block: 0.25rem;
+}
+.resource-strip dt {
+  white-space: nowrap;
+}
+.control-navigation .oxidal-button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 0.25rem;
+  border-radius: 0;
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 .control-navigation .oxidal-button[aria-pressed='true'] {
-  box-shadow: inset 0 -3px 0 var(--control-accent);
+  color: var(--foreground);
+  font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--foreground);
 }
 .selected-effect-heading {
   font-size: 0.95rem;
