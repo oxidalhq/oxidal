@@ -96,6 +96,7 @@ export function PerformView({
   onToggle,
   onRecall,
   onEdit,
+  knobs,
 }: {
   state: AudioState;
   lanes: RigLaneVM[];
@@ -103,6 +104,8 @@ export function PerformView({
   onToggle: (blockId: string) => void;
   onRecall: (id: string, owned: boolean) => void;
   onEdit: () => void;
+  /** Performance knob strip, rendered by the rig that owns the controls. */
+  knobs?: React.ReactNode;
 }) {
   const [live, setLive] = useState<{
     snapshot: Monitoring | null;
@@ -303,6 +306,7 @@ export function PerformView({
               );
             })}
           </div>
+          {knobs}
           <MasterLevel />
           <GuitarSwitch />
           <div className="perform-now">

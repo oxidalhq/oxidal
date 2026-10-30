@@ -199,3 +199,40 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* Performance knobs: five rig controls in one row (wraps to 3 + 2 on phones),
+   label, readout and an in-place fader per cell. */
+.knob-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: 0 1rem;
+  border-top: 1px solid var(--foreground);
+}
+.knob-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.125rem 0.5rem;
+  padding: 0.5rem 0 0.375rem;
+  border-bottom: 1px solid var(--border);
+}
+.knob-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.knob-value {
+  font: 500 0.9375rem/1.1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.knob-cell .value-row-fader,
+.knob-hint {
+  grid-column: 1 / -1;
+}
+.knob-hint {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.knob-cell[data-inactive] .knob-value {
+  color: var(--muted-foreground);
+}

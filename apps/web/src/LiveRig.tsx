@@ -593,6 +593,75 @@ export function LiveRig({
   const selectedBlock = selectedTarget.startsWith('block:')
     ? selectedTarget.split(':')[1]
     : undefined;
+  // Six performance knobs (Nano Cortex style): five rig controls saved with the
+  // preset, plus the unit Level below them. Dragging never changes the selection.
+  const knob = (target: string | undefined) =>
+    target ? state.controls.find((c) => c.target === target) : undefined;
+  const toneOn = knob('toneEqEnabled')?.value !== 0;
+  const knobs = [
+    { label: 'Gain', item: knob('inputLevel'), hint: '' },
+    {
+      label: 'Bass',
+      item: knob('toneBass'),
+      hint: toneOn ? '' : 'Tone stack off',
+    },
+    {
+      label: 'Mid',
+      item: knob('toneMid'),
+      hint: toneOn ? '' : 'Tone stack off',
+    },
+    {
+      label: 'Treble',
+      item: knob('toneTreble'),
+      hint: toneOn ? '' : 'Tone stack off',
+    },
+    {
+      label: 'Amount',
+      item: knob(selectedBlock && `block:${selectedBlock}:mix`),
+      hint: selectedBlock ? 'No mix on this block' : 'Select a block',
+    },
+  ];
+  const knobStrip = knobs.some((k) => k.item) ? (
+    <div className="knob-strip" role="group" aria-label="Performance knobs">
+      {knobs.map(({ label, item, hint }) => {
+        const shown =
+          item && draft?.target === item.target ? draft.value : item?.value;
+        return (
+          <div
+            key={label}
+            className="knob-cell"
+            data-inactive={!item || !!hint || undefined}
+            title={item?.label}
+          >
+            <span className="knob-label">{label}</span>
+            <strong className="knob-value">{item ? item.display : '—'}</strong>
+            {item ? (
+              <DragFader
+                value={shown ?? 0}
+                dragging={draft?.target === item.target && !adjusting}
+                disabled={disabled}
+                onBegin={(value) => {
+                  openAdjustment(item, true);
+                  latestValue.current = value;
+                  setDraft((old) => (old ? { ...old, value } : old));
+                  adjustment.current?.preview(value);
+                }}
+                onMove={(value) => {
+                  latestValue.current = value;
+                  setDraft((old) => (old ? { ...old, value } : old));
+                  adjustment.current?.preview(value);
+                }}
+                onEnd={(cancel) => void finishAdjustment(cancel)}
+              />
+            ) : (
+              <span className="knob-hint">{hint}</span>
+            )}
+            {item && hint && <span className="knob-hint">{hint}</span>}
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
   const selectedLane = state.authoring?.layout?.right.some(
     (block) => block.id === selectedBlock,
   )
@@ -668,6 +737,7 @@ export function LiveRig({
           }}
           onRecall={(id, owned) => void recall(id, owned)}
           onEdit={() => setPerformance(false)}
+          knobs={knobStrip}
         />
         {error && <p role="alert">{error}</p>}
       </>
@@ -707,6 +777,7 @@ export function LiveRig({
           <DotsThree aria-hidden="true" />
         </Button>
       </div>
+      {knobStrip}
       <MasterLevel />
       <span
         role="status"
