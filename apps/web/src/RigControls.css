@@ -205,7 +205,10 @@
   width: 1.75rem;
   height: 1.75rem;
 }
-.add-block-option:hover {
+.add-block-option:disabled {
+  opacity: 0.5;
+}
+.add-block-option:hover:not(:disabled) {
   background: var(--muted);
 }
 .add-block-option:focus-visible {

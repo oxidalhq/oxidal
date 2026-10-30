@@ -298,3 +298,31 @@
   border-color: var(--foreground);
   color: var(--foreground);
 }
+
+/* Dragging a block: it lifts and follows the pointer; a bar marks the drop. */
+.rig-tile[data-movable] {
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.rig-tile[data-lifted] {
+  position: relative;
+  z-index: 3;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.rig-tile[data-drop-before] {
+  position: relative;
+}
+.rig-tile[data-drop-before]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 1.25rem;
+  left: -0.4rem;
+  width: 3px;
+  background: var(--foreground);
+}
+.chain-view[data-dragging] {
+  cursor: grabbing;
+}

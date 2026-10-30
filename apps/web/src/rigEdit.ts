@@ -122,13 +122,23 @@ export function removeBlock(lanes: Lanes, id: string): Lanes {
     : next;
 }
 
-/** Moves a block to `index` within its own lane. */
-export function moveBlock(lanes: Lanes, id: string, index: number): Lanes {
-  return lanes.map((blocks) => {
-    const from = blocks.findIndex((b) => b.id === id);
-    if (from < 0) return blocks;
-    const rest = blocks.filter((b) => b.id !== id);
-    const at = Math.max(0, Math.min(rest.length, index));
-    return [...rest.slice(0, at), blocks[from]!, ...rest.slice(at)];
-  });
+/**
+ * Moves a block to `index` in `lane` (its own lane by default), counted
+ * without the block. A split side left empty becomes a straight chain.
+ */
+export function moveBlock(
+  lanes: Lanes,
+  id: string,
+  index: number,
+  lane?: number,
+): Lanes {
+  const from = lanes.findIndex((blocks) => blocks.some((b) => b.id === id));
+  if (from < 0) return lanes;
+  const moving = lanes[from]!.find((b) => b.id === id)!;
+  const to = lane ?? from;
+  const taken = lanes.map((blocks) => blocks.filter((b) => b.id !== id));
+  const placed = insertBlock(taken, to, index, moving);
+  return placed.some((blocks) => !blocks.length) && placed.length > 1
+    ? placed.filter((blocks) => blocks.length)
+    : placed;
 }

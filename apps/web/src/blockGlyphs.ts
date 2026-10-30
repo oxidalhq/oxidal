@@ -272,6 +272,7 @@ const nameGlyphs: [RegExp, GlyphKey][] = [
   [/flang/, 'flanger'],
   [/chorus|ensemble|doubl/, 'chorus'],
   [/reverb|plate|hall|spring|room|shimmer/, 'reverb'],
+  [/freeze|\bhold\b|sustain/, 'space'],
   [/delay|echo/, 'delay'],
   [/ambien|space|spatial|stereo|width/, 'space'],
   [/limit/, 'limit'],

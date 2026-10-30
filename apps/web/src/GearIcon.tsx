@@ -1,4 +1,4 @@
-import { glyphFor, glyphs } from './blockGlyphs';
+import { glyphFor, glyphs, type GlyphKey } from './blockGlyphs';
 
 const gearLabels: Record<string, string> = {
   amp: 'Amp head',
@@ -23,10 +23,13 @@ export function GearLabel({ gear }: { gear: string }) {
 export function GearIcon({
   gear,
   name,
+  glyph,
   className,
 }: {
   gear: string;
   name?: string;
+  /** A glyph already chosen, e.g. from an LV2 class. */
+  glyph?: GlyphKey;
   className?: string;
 }) {
   return (
@@ -34,7 +37,9 @@ export function GearIcon({
       viewBox="0 0 24 24"
       aria-hidden="true"
       className={`block-glyph ${className ?? ''}`}
-      dangerouslySetInnerHTML={{ __html: glyphs[glyphFor(gear, name)].svg }}
+      dangerouslySetInnerHTML={{
+        __html: glyphs[glyph ?? glyphFor(gear, name)].svg,
+      }}
     />
   );
 }

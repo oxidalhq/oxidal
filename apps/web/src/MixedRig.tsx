@@ -833,7 +833,33 @@ export function MixedRig({
     ),
   ]);
   const inLane = !!selected && lanedNodes.has(selected.id);
+  /** A dragged effect dropped before tile `before` in `lane` (null: the end). */
+  function dropBlock(tile: string, lane: number, before: string | null) {
+    const id = laneTarget(tile)?.node;
+    const ids = chainIds?.[lane];
+    if (!id || !ids) return;
+    const rest = ids.filter((n) => n !== id);
+    const at = before ? laneTarget(before) : null;
+    let index = rest.length;
+    if (at && at.node !== END) {
+      const node = rest.indexOf(at.node);
+      // Before a TONE3000 chain only at its first tile; otherwise after it.
+      const first = effectLanes[lane]?.blocks.find(
+        (b) => laneTarget(b.id)?.node === at.node,
+      );
+      if (node >= 0) index = first?.id === before ? node : node + 1;
+    }
+    if (chainIds?.findIndex((l) => l.includes(id)) === lane)
+      if (ids.indexOf(id) === index) return;
+    void editChain((lanes) => moveBlock(lanes, id, index, lane));
+  }
   const editable = effectLanes.length > 0;
+  /** Where the selected block sits in its lane, to stop moves at the ends. */
+  const place = (() => {
+    const lane = chainIds?.find((ids) => ids.includes(selected?.id ?? ''));
+    const at = lane?.indexOf(selected!.id) ?? -1;
+    return { first: at <= 0, last: !lane || at >= lane.length - 1 };
+  })();
   /** A lane tile's node, and its block for a TONE3000 node ('' for an effect). */
   const laneTarget = (laneBlock: string) => {
     if (laneBlock.startsWith(laneBlockId(END, '')))
@@ -1022,6 +1048,14 @@ export function MixedRig({
             if (at?.block) setLaneSlot({ node: at.node, target: at.block });
           }}
           lanes={sceneLanes.length ? sceneLanes : effectLanes}
+          movable={
+            editable && !editing
+              ? (tile) =>
+                  nodes.find((n) => n.id === laneTarget(tile)?.node)?.kind ===
+                  'lv2'
+              : undefined
+          }
+          onMove={editable ? dropBlock : undefined}
           selected={
             selected && lanedNodes.has(selected.id)
               ? laneBlockId(
@@ -1468,7 +1502,7 @@ export function MixedRig({
                   variant="ghost"
                   size="icon"
                   aria-label={`Move ${selectedView.label} left`}
-                  disabled={disabled || !!edit || editing}
+                  disabled={disabled || !!edit || editing || place.first}
                   onClick={() => void shift(selected.id, -1)}
                 >
                   <CaretLeft aria-hidden="true" />
@@ -1477,7 +1511,7 @@ export function MixedRig({
                   variant="ghost"
                   size="icon"
                   aria-label={`Move ${selectedView.label} right`}
-                  disabled={disabled || !!edit || editing}
+                  disabled={disabled || !!edit || editing || place.last}
                   onClick={() => void shift(selected.id, 1)}
                 >
                   <CaretRight aria-hidden="true" />

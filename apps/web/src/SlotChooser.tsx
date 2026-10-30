@@ -3,6 +3,13 @@ import { AdjustmentDialog } from './AdjustmentDialog';
 import { installedLv2, type Lv2Plugin } from './api';
 import { Button } from './components/ui/button';
 import { GearIcon } from './GearIcon';
+import {
+  EFFECT_TYPES,
+  effectGlyph,
+  effectSource,
+  effectType,
+  type EffectType,
+} from './effectCatalog';
 import type { Placement } from './slotEffects';
 
 /**
@@ -42,12 +49,15 @@ export function SlotChooser({
   const [plugins, setPlugins] = useState<Lv2Plugin[] | null>(null);
   const [plugin, setPlugin] = useState<Lv2Plugin | null>(null);
   const [query, setQuery] = useState('');
+  const [type, setType] = useState<EffectType | null>(null);
+  const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     if (step !== 'effect' || plugins) return;
     const abort = new AbortController();
-    installedLv2(sampleRate, abort.signal)
-      .then((all) =>
+    installedLv2(sampleRate)
+      .then((all) => {
+        if (abort.signal.aborted) return;
         setPlugins(
           // Our own effects first, then the rest by name.
           [...all].sort(
@@ -56,14 +66,58 @@ export function SlotChooser({
                 Number(!b.uri.startsWith('urn:oxidal:')) ||
               a.name.localeCompare(b.name),
           ),
-        ),
-      )
+        );
+      })
       .catch((cause) => {
         if (!abort.signal.aborted) setError(String(cause));
       });
     return () => abort.abort();
   }, [step, plugins, sampleRate]);
   const found = query.trim().toLowerCase();
+  const usable = (p: Lv2Plugin) => !p.unsupported;
+  // Only the types and sources that have effects here are offered.
+  const types = EFFECT_TYPES.filter((t) =>
+    plugins?.some((p) => usable(p) && effectType(p) === t),
+  );
+  const sources = [
+    ...new Set(plugins?.filter(usable).map(effectSource) ?? []),
+  ].sort(
+    (a, b) =>
+      Number(a !== 'Oxidal') - Number(b !== 'Oxidal') || a.localeCompare(b),
+  );
+  const shown = (plugins ?? [])
+    .filter(
+      (p) =>
+        (!type || effectType(p) === type) &&
+        (!source || effectSource(p) === source) &&
+        (p.name.toLowerCase().includes(found) ||
+          effectSource(p).toLowerCase().includes(found)),
+    )
+    // Effects that cannot run here go last.
+    .sort((a, b) => Number(!usable(a)) - Number(!usable(b)));
+  function chips(
+    label: string,
+    options: readonly string[],
+    value: string | null,
+    choose: (value: string | null) => void,
+  ) {
+    return (
+      options.length > 1 && (
+        <div className="action-row" role="group" aria-label={label}>
+          {[null, ...options].map((option) => (
+            <Button
+              key={option ?? 'all'}
+              variant="ghost"
+              aria-pressed={value === option}
+              onClick={() => choose(option)}
+            >
+              {option ?? 'All'}
+            </Button>
+          ))}
+        </div>
+      )
+    );
+  }
   return (
     <AdjustmentDialog
       title={
@@ -131,29 +185,36 @@ export function SlotChooser({
             onChange={(e) => setQuery(e.target.value)}
           />
           {!plugins && !error && <p role="status">Reading effects…</p>}
-          <div className="menu-list" aria-label="Effects">
-            {plugins
-              ?.filter((p) => p.name.toLowerCase().includes(found))
-              .map((p) => (
-                <button
-                  key={p.uri}
-                  type="button"
-                  disabled={!!p.unsupported}
-                  onClick={() => {
-                    if (placement === 'here') {
-                      onEffect(p, 'after');
-                      return;
-                    }
-                    setPlugin(p);
-                    setStep('place');
-                  }}
-                >
-                  {p.name}
-                  {p.unsupported && (
-                    <span className="caption">{p.unsupported}</span>
-                  )}
-                </button>
-              ))}
+          {chips('Effect type', types, type, (t) => setType(t as EffectType))}
+          {chips('Source', sources, source, setSource)}
+          <div className="add-block-list" aria-label="Effects">
+            {shown.map((p) => (
+              <button
+                key={p.uri}
+                type="button"
+                className="add-block-option"
+                disabled={!!p.unsupported}
+                onClick={() => {
+                  if (placement === 'here') {
+                    onEffect(p, 'after');
+                    return;
+                  }
+                  setPlugin(p);
+                  setStep('place');
+                }}
+              >
+                <GearIcon gear="" glyph={effectGlyph(p)} />
+                <span>
+                  <strong>{p.name}</strong>
+                  <span className="caption">
+                    {p.unsupported ?? `${effectType(p)} · ${effectSource(p)}`}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {plugins && !shown.length && (
+              <p className="caption">No effects match.</p>
+            )}
           </div>
         </div>
       )}

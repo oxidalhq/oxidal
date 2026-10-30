@@ -116,6 +116,8 @@ it('inserts, moves and removes blocks; an emptied split side becomes straight', 
   expect(ids(moveBlock(one, 'flange', 0))).toEqual([['flange', 'amp']]);
   expect(ids(removeBlock(one, 'flange'))).toEqual([['amp']]);
   const split: Lanes = [[amp], [flange]];
+  // Across a split: the side left empty becomes a straight chain.
+  expect(ids(moveBlock(split, 'flange', 0, 0))).toEqual([['flange', 'amp']]);
   expect(ids(removeBlock(split, 'flange'))).toEqual([['amp']]);
   const built = buildLanes('p', 'x', removeBlock(split, 'flange'), 'prof');
   expect(
