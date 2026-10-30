@@ -2060,8 +2060,16 @@ textarea {
   gap: 0.5rem;
 }
 .effect-inspector-heading .eyebrow {
-  font-size: 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--muted-foreground);
+}
+/* Change model sits on its own row under the name, never in the close column. */
+.effect-inspector-heading > :nth-child(4) {
+  grid-column: 2 / -1;
+  justify-self: start;
 }
 .effect-inspector-heading h3 {
   margin: 0.15rem 0;

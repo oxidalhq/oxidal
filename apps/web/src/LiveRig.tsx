@@ -10,7 +10,6 @@ import {
   Plus,
   DotsThree,
   SquaresFour,
-  Swap,
   ArrowLeft,
   X,
 } from '@phosphor-icons/react';
@@ -1042,7 +1041,8 @@ export function LiveRig({
                 </Button>
                 <div className="min-w-0">
                   <span className="eyebrow">
-                    {selectedLane} · selected effect
+                    {selectedLane === 'left' ? 'Left' : 'Right'} chain ·
+                    selected block
                   </span>
                   <h3 className="selected-effect-heading">
                     {groups
@@ -1088,8 +1088,7 @@ export function LiveRig({
                     })
                   }
                 >
-                  <Swap aria-hidden="true" />{' '}
-                  <span className="max-[420px]:sr-only">Change model</span>
+                  Change model
                 </Button>
               </div>
               {orderedBlocks.length > 1 && (

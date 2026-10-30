@@ -1,3 +1,4 @@
+import './RigControls.css';
 import { useEffect, useRef, useState } from 'react';
 import { type AudioAction, type AudioState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -242,7 +243,7 @@ export function LiveEq<S extends EqSession>({
           <button
             key={field}
             type="button"
-            className="live-value-trigger min-w-0"
+            className="value-cell min-w-0"
             aria-label={`Adjust EQ ${fields[field].label}`}
             aria-haspopup="dialog"
             disabled={

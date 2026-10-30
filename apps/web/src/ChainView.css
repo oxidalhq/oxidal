@@ -181,9 +181,18 @@
   border-color: var(--wire);
   color: var(--muted-foreground);
 }
-.led-toggle:disabled,
-.rig-tile:disabled {
+.led-toggle:disabled {
   opacity: 0.55;
+}
+/* Busy tiles stay opaque so the wire never shows through the face. */
+.rig-tile:disabled .rig-tile-face,
+.rig-tile:disabled .rig-tile-label {
+  color: var(--muted-foreground);
+}
+.rig-tile:disabled[aria-pressed='true'] .rig-tile-face {
+  background: var(--muted-foreground);
+  color: var(--background);
+  outline-color: var(--muted-foreground);
 }
 
 /* Selected block detail header for graph rigs. */
