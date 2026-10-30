@@ -1,3 +1,4 @@
+import { ArrowLeft } from '@phosphor-icons/react';
 import { useState } from 'react';
 import type { AudioState, Monitoring } from './api';
 import { GuitarSwitch } from './GuitarSettings';
@@ -6,6 +7,7 @@ import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
 import { RigPresetSelector } from './RigPresetSelector';
 import { tone3000Key, type PresetChoice } from './presetChoices';
+import './ChainView.css';
 import './PerformView.css';
 
 const FLOOR_DB = -60;
@@ -256,13 +258,22 @@ export function PerformView({
     },
   ];
 
+  // Empty slots are for editing; on stage only real blocks are shown.
+  const played = lanes
+    .map((lane) => ({ ...lane, blocks: lane.blocks.filter((b) => !b.empty) }))
+    .filter((lane) => lane.blocks.length);
   return (
     <section className="perform" aria-label="Perform">
       <div className="perform-bar">
-        <h2>Perform</h2>
-        <button type="button" className="perform-edit" onClick={onEdit}>
-          Edit
+        <button
+          type="button"
+          className="perform-edit"
+          aria-label="Back to Rig"
+          onClick={onEdit}
+        >
+          <ArrowLeft aria-hidden="true" /> Rig
         </button>
+        <h2>Perform</h2>
       </div>
       <div className="perform-body">
         <EdgeMeter
@@ -309,51 +320,61 @@ export function PerformView({
           </div>
           {knobs}
           <MasterLevel />
-          <GuitarSwitch />
-          <div className="perform-now">
-            <span className="perform-now-state">
-              {state.phase === 'running' ? 'Playing' : 'Not playing'}
-            </span>
-            <strong className="perform-now-name">
-              {state.preset_name ?? 'Unsaved preset'}
-            </strong>
-            <span className="perform-now-sub">
-              {state.modified ? (
-                <span className="perform-edited">edited, not saved</span>
-              ) : (
-                'saved'
-              )}
-            </span>
+          <div className="perform-headline">
+            <div className="perform-now">
+              <span className="perform-now-state">
+                {state.phase === 'running' ? 'Playing' : 'Not playing'}
+              </span>
+              <strong className="perform-now-name">
+                {state.preset_name ?? 'Unsaved preset'}
+              </strong>
+              <span className="perform-now-sub">
+                {state.modified ? (
+                  <span className="perform-edited">edited, not saved</span>
+                ) : (
+                  'saved'
+                )}
+              </span>
+            </div>
+            <GuitarSwitch compact />
           </div>
-          {lanes.some((l) => l.blocks.length) && (
+          {played.length > 0 && (
             <div className="perform-section">
               <h3>
                 Blocks <span>tap to bypass</span>
               </h3>
-              <div className="perform-stomps">
-                {lanes.flatMap((lane) =>
-                  lane.blocks.map((block) => (
-                    <button
-                      key={block.id}
-                      type="button"
-                      className="perform-stomp"
-                      data-kind={block.kind}
-                      data-on={block.on}
-                      aria-pressed={block.on}
-                      aria-label={`${block.label} on`}
-                      disabled={disabled}
-                      onClick={() => onToggle(block.id)}
-                    >
-                      <span className="chain-led" aria-hidden="true" />
-                      <span className="perform-stomp-name">{block.label}</span>
-                      <span className="perform-stomp-meta">
-                        {block.on ? 'On' : 'Bypassed'}
-                        {lanes.length > 1 &&
-                          ` · ${lane.id === 'left' ? 'L' : 'R'}`}
+              <div className="perform-lanes">
+                {played.map((lane) => (
+                  <div key={lane.id} className="perform-lane">
+                    {played.length > 1 && (
+                      <span className="perform-lane-tag">
+                        {lane.id === 'left' ? 'L' : 'R'}
                       </span>
-                    </button>
-                  )),
-                )}
+                    )}
+                    <div className="perform-tiles">
+                      {lane.blocks.map((block) => (
+                        <button
+                          key={block.id}
+                          type="button"
+                          className="rig-tile"
+                          data-kind={block.kind}
+                          data-on={block.on}
+                          aria-pressed={block.on}
+                          aria-label={`${block.label} on`}
+                          title={block.label}
+                          disabled={disabled}
+                          onClick={() => onToggle(block.id)}
+                        >
+                          <span className="rig-tile-face">
+                            <span className="chain-led" aria-hidden="true" />
+                            {block.face}
+                          </span>
+                          <span className="rig-tile-label">{block.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

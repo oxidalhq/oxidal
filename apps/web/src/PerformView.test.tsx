@@ -66,6 +66,14 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
           input: 'IN L',
           blocks: [
             { id: 'amp', label: 'AC30', kind: 'amp', on: true, face: null },
+            {
+              id: 'slot',
+              label: 'Empty slot',
+              kind: 'other',
+              on: false,
+              face: null,
+              empty: true,
+            },
           ],
         },
         {
@@ -102,10 +110,12 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(stats).toHaveTextContent('None');
   expect(screen.getByText('Stereo Fuzz')).toBeInTheDocument();
   expect(screen.getByText('edited, not saved')).toBeInTheDocument();
+  // Empty slots are not shown on stage.
+  expect(screen.queryByText('Empty slot')).not.toBeInTheDocument();
   const muff = screen.getByRole('button', { name: 'Muff on' });
   expect(muff).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(muff);
   expect(toggle).toHaveBeenCalledWith('fuzz');
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
   expect(edit).toHaveBeenCalled();
 });

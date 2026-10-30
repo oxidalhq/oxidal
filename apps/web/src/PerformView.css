@@ -10,13 +10,16 @@
   min-height: var(--touch-target);
 }
 .perform-bar h2 {
-  margin: 0 auto 0 0;
+  margin: 0;
   font-size: 1rem;
   font-weight: 650;
 }
 .perform-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   min-height: var(--touch-target);
-  padding: 0 1rem;
+  padding: 0 1rem 0 0.75rem;
   border: 1px solid var(--foreground);
   border-radius: var(--radius);
   background: none;
@@ -398,4 +401,56 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* The preset name and the guitar switch share a row; the switch wraps below
+   the name on a narrow screen instead of taking a section of its own. */
+.perform-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+.perform-headline .perform-now {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.perform-guitar {
+  display: grid;
+  gap: 0.25rem;
+}
+.perform-guitar-label {
+  color: var(--muted-foreground);
+  font: 500 0.75rem var(--font-mono);
+}
+
+/* Blocks are the chain's icon tiles; a tap bypasses. Lit = on, dim = bypassed. */
+.perform-lanes {
+  display: grid;
+  gap: 0.5rem;
+}
+.perform-lane {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.perform-lane-tag {
+  flex: none;
+  width: 1rem;
+  padding-top: 1.125rem;
+  color: var(--muted-foreground);
+  font: 600 0.75rem var(--font-mono);
+  text-align: center;
+}
+.perform-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.25rem;
+  min-width: 0;
+}
+.perform-tiles .rig-tile[aria-pressed='true'] .rig-tile-face {
+  background: var(--card);
+  color: var(--foreground);
+  outline: none;
 }

@@ -399,7 +399,8 @@ export function GuitarSettings() {
 }
 
 /** One tap to switch guitars on stage. Hidden until two guitars exist. */
-export function GuitarSwitch() {
+/** One tap per instrument. Compact sits beside the preset name, taking no row. */
+export function GuitarSwitch({ compact = false }: { compact?: boolean }) {
   const { profiles, busy, save } = useGuitars();
   if (
     profiles == null ||
@@ -408,8 +409,12 @@ export function GuitarSwitch() {
   )
     return null;
   return (
-    <div className="perform-section">
-      <h3>Guitar</h3>
+    <div className={compact ? 'perform-guitar' : 'perform-section'}>
+      {compact ? (
+        <span className="perform-guitar-label">Guitar</span>
+      ) : (
+        <h3>Guitar</h3>
+      )}
       <div className="perform-guitars" role="group" aria-label="Guitar">
         {profiles.guitars.map((g) => (
           <Button
