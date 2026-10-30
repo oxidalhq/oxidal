@@ -60,6 +60,35 @@ impl Architecture {
         }
     }
 }
+/// TONE3000 gear types a tone list can be narrowed to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Gear {
+    Amp,
+    AmpCab,
+    Pedal,
+    Outboard,
+    Cab,
+    Space,
+    Experimental,
+}
+impl Gear {
+    fn value(self) -> &'static str {
+        match self {
+            Self::Amp => "amp",
+            Self::AmpCab => "amp-cab",
+            Self::Pedal => "pedal",
+            Self::Outboard => "outboard",
+            Self::Cab => "cab",
+            Self::Space => "space",
+            Self::Experimental => "experimental",
+        }
+    }
+    /// The provider still sends `full-rig` for older amp-and-cab tones.
+    fn matches(self, gear: &str) -> bool {
+        gear == self.value() || (self == Self::AmpCab && gear == "full-rig")
+    }
+}
 fn first() -> u32 {
     1
 }
@@ -72,6 +101,9 @@ pub struct ToneQuery {
     pub page: u32,
     #[serde(default)]
     pub query: String,
+    /// Only tones of this gear type; none lists every type.
+    #[serde(default)]
+    pub gear: Option<Gear>,
 }
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -189,7 +221,7 @@ impl Account {
         if !query.collection.paginated() && (query.page != 1 || !query.query.is_empty()) {
             return Err("This feed has one page and no text filter");
         }
-        let params = if query.collection.paginated() {
+        let mut params = if query.collection.paginated() {
             vec![
                 ("page", query.page.to_string()),
                 ("page_size", "20".into()),
@@ -198,11 +230,21 @@ impl Account {
         } else {
             vec![]
         };
-        let page: Page<Tone> = self
+        // Every list but Latest filters by gear on TONE3000; Latest takes no
+        // parameters, so its ten tones are narrowed here.
+        if let Some(gear) = query.gear
+            && !matches!(query.collection, Collection::Latest)
+        {
+            params.push(("gear", gear.value().into()));
+        }
+        let mut page: Page<Tone> = self
             .catalog(&format!("tones/{}", query.collection.path()), &params)
             .await?;
         if page.data.len() > 20 || page.page != query.page || !page.data.iter().all(Tone::valid) {
             return Err("Invalid TONE3000 library response");
+        }
+        if let Some(gear) = query.gear {
+            page.data.retain(|tone| gear.matches(&tone.gear));
         }
         Ok(page)
     }
@@ -230,7 +272,7 @@ impl Account {
         }
         Ok(page)
     }
-    async fn tone(&self, id: u64) -> Result<Tone, &'static str> {
+    pub(super) async fn tone(&self, id: u64) -> Result<Tone, &'static str> {
         if id == 0 {
             return Err("Invalid tone");
         }

@@ -22,7 +22,51 @@ import {
   type ModelPage,
   type TonePage,
   type ToneQuery,
+  toneImage,
 } from './api';
+
+/** Gear types TONE3000 can narrow a list to, per model type. */
+const GEARS = {
+  nam: [
+    ['amp', 'Amp'],
+    ['amp-cab', 'Full rig'],
+    ['pedal', 'Pedal'],
+    ['outboard', 'Outboard'],
+    ['experimental', 'Experimental'],
+  ],
+  ir: [
+    ['cab', 'Cab'],
+    ['space', 'Space'],
+  ],
+} as const;
+type Gear = NonNullable<ToneQuery['gear']>;
+
+/** A tone's picture through the unit, or its gear glyph when there is none. */
+function ToneThumb({ id, gear }: { id: number; gear: string }) {
+  const [failed, setFailed] = useState(false);
+  return failed ? (
+    <span className="catalog-gear">
+      <GearIcon gear={gear} />
+    </span>
+  ) : (
+    <img
+      className="catalog-picture"
+      src={toneImage(id)}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+function readView(): 'pictures' | 'list' {
+  try {
+    return localStorage.getItem('oxidal.picker.view') === 'list'
+      ? 'list'
+      : 'pictures';
+  } catch {
+    return 'pictures';
+  }
+}
 
 /** Selection starts at the opening revision; repeat comparison advances only its own receipt. */
 export function ModelPicker({
@@ -48,6 +92,15 @@ export function ModelPicker({
   onAudition: (asset: string) => Promise<void>;
 }) {
   const [source, setSource] = useState<'tone3000' | 'local'>('tone3000');
+  const [view, setView] = useState(readView);
+  function chooseView(next: 'pictures' | 'list') {
+    setView(next);
+    try {
+      localStorage.setItem('oxidal.picker.view', next);
+    } catch {
+      /* optional preference */
+    }
+  }
   const [files, setFiles] = useState<File[]>([]);
   const [local, setLocal] = useState<LocalModelPage | null>(null);
   const [localAfter, setLocalAfter] = useState<string | null>(null);
@@ -87,7 +140,7 @@ export function ModelPicker({
       setError('');
       try {
         if (source === 'local') {
-          const page = await localModels(localAfter, controller.signal);
+          const page = await localModels(localAfter, controller.signal, true);
           if (!controller.signal.aborted) setLocal(page);
         } else if (tone) {
           const page = await tone3000Models(
@@ -227,39 +280,44 @@ export function ModelPicker({
             disabled={locked}
             onClick={() => setSource('local')}
           >
-            <FolderOpen aria-hidden="true" /> Local files
+            <FolderOpen aria-hidden="true" /> On this unit
           </Button>
         </div>
         {source === 'local' ? (
           <div className="space-y-3">
-            <label htmlFor="local-model-file">NAM / IR file</label>
-            <input
-              id="local-model-file"
-              className="w-full min-w-0"
-              type="file"
-              multiple
-              accept={
-                allowedFormat === 'nam'
-                  ? '.nam'
-                  : allowedFormat === 'ir'
-                    ? '.wav'
-                    : '.nam,.wav'
-              }
-              disabled={locked}
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-            />
-            <Button
-              variant="outline"
-              disabled={files.length === 0 || locked}
-              onClick={() => void auditionLocal()}
-            >
-              {files.length > 1
-                ? `Audition ${files.length} files`
-                : 'Audition file'}
-            </Button>
+            <details className="local-upload">
+              <summary>Add a file from this device</summary>
+              <div className="space-y-3">
+                <label htmlFor="local-model-file">NAM / IR file</label>
+                <input
+                  id="local-model-file"
+                  className="w-full min-w-0"
+                  type="file"
+                  multiple
+                  accept={
+                    allowedFormat === 'nam'
+                      ? '.nam'
+                      : allowedFormat === 'ir'
+                        ? '.wav'
+                        : '.nam,.wav'
+                  }
+                  disabled={locked}
+                  onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                />
+                <Button
+                  variant="outline"
+                  disabled={files.length === 0 || locked}
+                  onClick={() => void auditionLocal()}
+                >
+                  {files.length > 1
+                    ? `Audition ${files.length} files`
+                    : 'Audition file'}
+                </Button>
+              </div>
+            </details>
             <p className="caption">
-              No sign-in needed. Save the playing preset to keep its model and
-              IR bytes offline.
+              Everything already on this unit: models you downloaded from
+              TONE3000 and files you added. No internet needed.
             </p>
             <div
               aria-label="Local model files"
@@ -267,24 +325,38 @@ export function ModelPicker({
               aria-busy={loading}
             >
               {loading ? (
-                <p role="status">Reading local files…</p>
+                <p role="status">Reading this unit…</p>
               ) : (
                 <>
                   {!local?.data.some(
                     (m) => !allowedFormat || m.format === allowedFormat,
-                  ) && <p>No local files here yet.</p>}
+                  ) && <p>Nothing on this unit yet.</p>}
                   {local?.data
                     .filter((m) => !allowedFormat || m.format === allowedFormat)
                     .map((m) => (
                       <Button
                         key={m.id}
                         variant="outline"
-                        className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
+                        className="catalog-tone"
                         disabled={locked}
                         onClick={() => void auditionLocal(m.id)}
                       >
-                        <span className="min-w-0 break-words">
-                          {m.title} · {m.format === 'nam' ? 'NAM' : 'IR'}
+                        {m.tone_id ? (
+                          <ToneThumb id={m.tone_id} gear={m.gear ?? ''} />
+                        ) : (
+                          <span className="catalog-gear">
+                            <GearIcon
+                              gear={m.gear || (m.format === 'ir' ? 'ir' : '')}
+                            />
+                          </span>
+                        )}
+                        <span className="catalog-description">
+                          <strong>{m.title}</strong>
+                          <span className="catalog-meta">
+                            {m.gear ? <GearLabel gear={m.gear} /> : 'File'} ·{' '}
+                            {m.format === 'nam' ? 'NAM' : 'IR'}
+                            {m.name && m.name !== m.title ? ` · ${m.name}` : ''}
+                          </span>
                         </span>
                         <span className="model-audition">
                           <Play aria-hidden="true" /> Audition
@@ -327,7 +399,10 @@ export function ModelPicker({
                       variant="ghost"
                       aria-pressed={format === kind}
                       disabled={locked}
-                      onClick={() => setFormat(kind)}
+                      onClick={() => {
+                        setFormat(kind);
+                        setQuery({ ...query, gear: null, page: 1 });
+                      }}
                     >
                       {kind === 'nam' ? 'NAM' : 'Cab / IR'}
                     </Button>
@@ -353,6 +428,46 @@ export function ModelPicker({
                     <option value="trending">Trending</option>
                   </select>
                 </label>
+                <div className="catalog-filters">
+                  <div
+                    className="action-row"
+                    role="group"
+                    aria-label="Gear type"
+                  >
+                    {(
+                      [[null, 'All'], ...GEARS[format]] as [
+                        Gear | null,
+                        string,
+                      ][]
+                    ).map(([gear, label]) => (
+                      <Button
+                        key={label}
+                        variant="ghost"
+                        aria-pressed={(query.gear ?? null) === gear}
+                        disabled={locked}
+                        onClick={() => setQuery({ ...query, gear, page: 1 })}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div
+                    className="action-row"
+                    role="group"
+                    aria-label="Show tones as"
+                  >
+                    {(['pictures', 'list'] as const).map((v) => (
+                      <Button
+                        key={v}
+                        variant="ghost"
+                        aria-pressed={view === v}
+                        onClick={() => chooseView(v)}
+                      >
+                        {v === 'pictures' ? 'Pictures' : 'List'}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
                 {paginated && (
                   <form
                     className="flex items-end gap-2"
@@ -376,32 +491,34 @@ export function ModelPicker({
                 )}
               </>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="catalog-tone-header">
                 <Button
-                  variant="outline"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Back to tones"
                   disabled={locked}
                   onClick={() => {
                     setTone(null);
                     setModels(null);
                   }}
                 >
-                  <ArrowLeft aria-hidden="true" /> Back to tones
+                  <ArrowLeft aria-hidden="true" />
                 </Button>
-                <div className="min-w-0 flex-1 break-words">
+                <ToneThumb id={tone.id} gear={tone.gear} />
+                <div className="catalog-description">
                   <strong>{tone.title}</strong>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="catalog-meta">
                     <GearLabel gear={tone.gear} /> ·{' '}
-                    {tone.user.display_name || tone.user.username}
+                    {tone.user.display_name || tone.user.username} · licence{' '}
+                    {tone.license.toUpperCase()}
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {tone.license}
-                </span>
               </div>
             )}
             <div
               className="space-y-2"
               aria-label={tone ? 'Available models' : 'TONE3000 tones'}
+              data-view={tone ? undefined : view}
               aria-busy={loading || locked}
             >
               {loading ? (
@@ -460,14 +577,19 @@ export function ModelPicker({
                         key={t.id}
                         variant="outline"
                         className="catalog-tone"
+                        data-view={view}
                         onClick={() => {
                           setTone(t);
                           setModelPage(1);
                         }}
                       >
-                        <span className="catalog-gear">
-                          <GearIcon gear={t.gear} />
-                        </span>
+                        {view === 'pictures' ? (
+                          <ToneThumb id={t.id} gear={t.gear} />
+                        ) : (
+                          <span className="catalog-gear">
+                            <GearIcon gear={t.gear} />
+                          </span>
+                        )}
                         <span className="catalog-description">
                           <strong>{t.title}</strong>
                           <span>{t.user.display_name || t.user.username}</span>

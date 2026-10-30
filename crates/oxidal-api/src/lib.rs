@@ -296,6 +296,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/tone3000/stage", post(provider::download::stage))
         .route("/tone3000/tones", get(provider::catalog::tones))
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))
+        .route(
+            "/tone3000/tones/{id}/image",
+            get(provider::images::tone_image),
+        )
         .route("/tone3000/models", get(provider::catalog::models))
         .route("/monitor", get(monitor::state))
         .route("/audit", get(audit::history))

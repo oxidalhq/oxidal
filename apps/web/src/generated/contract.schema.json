@@ -3351,6 +3351,19 @@
         "current"
       ]
     },
+    "Gear": {
+      "description": "TONE3000 gear types a tone list can be narrowed to.",
+      "type": "string",
+      "enum": [
+        "amp",
+        "amp-cab",
+        "pedal",
+        "outboard",
+        "cab",
+        "space",
+        "experimental"
+      ]
+    },
     "GestureOwner": {
       "type": "object",
       "properties": {
@@ -4452,6 +4465,11 @@
         "format": {
           "type": "string"
         },
+        "gear": {
+          "description": "The tone's gear type (amp, pedal, cab…), when known.",
+          "type": "string",
+          "default": ""
+        },
         "id": {
           "type": "string"
         },
@@ -4463,6 +4481,13 @@
         },
         "title": {
           "type": "string"
+        },
+        "tone_id": {
+          "description": "The TONE3000 tone it came from; 0 for a file added on this unit.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -8618,6 +8643,18 @@
         "collection": {
           "$ref": "#/$defs/Collection",
           "default": "favorites"
+        },
+        "gear": {
+          "description": "Only tones of this gear type; none lists every type.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Gear"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "page": {
           "type": "integer",

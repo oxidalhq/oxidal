@@ -2104,6 +2104,57 @@ textarea {
   font-family: var(--font-mono);
   font-size: 0.65rem;
 }
+/* Tone pictures: square, cropped, the same size as the gear glyph tile. */
+.catalog-picture {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+/* Pictures view: a grid of cards, picture on top. */
+[data-view='pictures'][aria-label='TONE3000 tones'] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+}
+[data-view='pictures'][aria-label='TONE3000 tones'] > * {
+  margin: 0;
+}
+.catalog-tone[data-view='pictures'] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.catalog-tone[data-view='pictures'] > svg {
+  display: none;
+}
+.catalog-tone[data-view='pictures'] .catalog-picture,
+.catalog-tone[data-view='pictures'] .catalog-gear {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+.catalog-tone-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.local-upload > summary {
+  min-height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  cursor: pointer;
+}
 .model-audition {
   display: flex;
   align-items: center;

@@ -51,6 +51,7 @@ fn favorites() -> ToneQuery {
         collection: Collection::Favorites,
         page: 1,
         query: "clean & warm".into(),
+        gear: None,
     }
 }
 #[tokio::test]
@@ -149,7 +150,8 @@ async fn catalog_rejects_redirects_overlarge_replies_wrong_targets_and_rate_limi
             .tones(ToneQuery {
                 collection: Collection::Latest,
                 page: 1,
-                query: String::new()
+                query: String::new(),
+                gear: None
             })
             .await
             .is_err()
@@ -174,7 +176,8 @@ async fn catalog_rejects_redirects_overlarge_replies_wrong_targets_and_rate_limi
             .tones(ToneQuery {
                 collection: Collection::Favorites,
                 page: 0,
-                query: String::new()
+                query: String::new(),
+                gear: None
             })
             .await
             .is_err()
@@ -201,6 +204,60 @@ async fn ir_catalog_omits_nam_architecture_filter() {
         .await
         .unwrap();
     assert_eq!(models.data[0].architecture_version, None);
+    server.abort();
+    drop(account);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn gear_filters_on_tone3000_and_narrows_latest_here() {
+    let app = Router::new()
+        .route(
+            "/api/v1/tones/downloaded",
+            get(
+                |Query(query): Query<std::collections::HashMap<String, String>>| async move {
+                    assert_eq!(query["gear"], "amp-cab");
+                    Json(json!({"data":[tone()],"page":1,"total_pages":1}))
+                },
+            ),
+        )
+        .route(
+            "/api/v1/tones/latest",
+            get(|RawQuery(query): RawQuery| async move {
+                assert_eq!(query, None);
+                let mut pedal = tone();
+                pedal["id"] = json!(8);
+                pedal["gear"] = json!("pedal");
+                let mut rig = tone();
+                rig["id"] = json!(9);
+                rig["gear"] = json!("full-rig");
+                Json(json!({"data":[tone(), pedal, rig]}))
+            }),
+        );
+    let (account, server, root) = account(app).await;
+    let downloaded = account
+        .tones(ToneQuery {
+            collection: Collection::Downloaded,
+            page: 1,
+            query: String::new(),
+            gear: Some(Gear::AmpCab),
+        })
+        .await
+        .unwrap();
+    // The provider filtered; this fixture tone is an amp, so nothing is left.
+    assert!(downloaded.data.is_empty());
+    let latest = |gear| {
+        account.tones(ToneQuery {
+            collection: Collection::Latest,
+            page: 1,
+            query: String::new(),
+            gear: Some(gear),
+        })
+    };
+    let ids = |page: Page<Tone>| page.data.iter().map(|t| t.id).collect::<Vec<_>>();
+    assert_eq!(ids(latest(Gear::Pedal).await.unwrap()), [8]);
+    // Older amp-and-cab tones still say `full-rig`.
+    assert_eq!(ids(latest(Gear::AmpCab).await.unwrap()), [9]);
     server.abort();
     drop(account);
     std::fs::remove_dir_all(root).unwrap();

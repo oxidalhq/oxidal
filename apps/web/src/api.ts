@@ -402,6 +402,7 @@ export async function tone3000Tones(
     page: String(query.page ?? 1),
     query: query.query ?? '',
   });
+  if (query.gear) params.set('gear', query.gear);
   const body = await presetResponse(
     await fetch(`/api/v1/tone3000/tones?${params}`, {
       signal,
@@ -794,11 +795,17 @@ const localModelsValidator = ajv.compile<LocalModelPage>({
   $defs: schema.$defs,
   $ref: '#/$defs/LocalModelPage',
 });
+/** A tone's picture, fetched once through the unit and kept there. */
+export const toneImage = (id: number) => `/api/v1/tone3000/tones/${id}/image`;
 export async function localModels(
   after: string | null,
   signal: AbortSignal,
+  all = false,
 ): Promise<LocalModelPage> {
-  const query = after ? `?${new URLSearchParams({ after })}` : '';
+  const params = new URLSearchParams();
+  if (after) params.set('after', after);
+  if (all) params.set('all', 'true');
+  const query = params.size ? `?${params}` : '';
   const body = await presetResponse(
     await fetch(`/api/v1/models/local${query}`, { signal, cache: 'no-store' }),
   );

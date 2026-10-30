@@ -20,6 +20,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Instant;
 pub(super) mod catalog;
 pub(super) mod download;
+pub(super) mod images;
 mod storage;
 #[cfg(test)]
 mod tests;

@@ -16,6 +16,7 @@ vi.mock('./api', () => ({
   localModels: vi.fn(),
   uploadLocalModel: vi.fn(),
   stageLocalCollection: vi.fn(),
+  toneImage: (id: number) => `/tone-${id}.png`,
 }));
 vi.mock('./AdjustmentDialog', () => ({
   AdjustmentDialog: ({ children }: { children: ReactNode }) => (
@@ -101,4 +102,37 @@ it('keeps comparison open and marks a model sounding only after confirmed applic
   expect(screen.getByRole('alert')).toHaveTextContent(
     'The playing preset changed',
   );
+});
+
+it('filters tones by gear, shows pictures by default and remembers a list view', async () => {
+  vi.mocked(tone3000Tones).mockResolvedValue({
+    data: [
+      {
+        id: 5,
+        title: 'Tube Screamer',
+        format: 'nam',
+        gear: 'pedal',
+        user: { username: 'author' },
+        license: 't3k',
+        url: '',
+        models_count: 4,
+      },
+    ],
+    total_pages: 1,
+  } as Awaited<ReturnType<typeof tone3000Tones>>);
+  render(<ModelPicker name="Slot" onClose={() => {}} onAudition={vi.fn()} />);
+  const card = await screen.findByRole('button', { name: /Tube Screamer/ });
+  expect(card.querySelector('img')).toHaveAttribute('src', '/tone-5.png');
+  fireEvent.click(screen.getByRole('button', { name: 'Pedal' }));
+  await waitFor(() =>
+    expect(vi.mocked(tone3000Tones).mock.lastCall?.[0]).toMatchObject({
+      gear: 'pedal',
+      page: 1,
+    }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'List' }));
+  expect(localStorage.getItem('oxidal.picker.view')).toBe('list');
+  const listed = await screen.findByRole('button', { name: /Tube Screamer/ });
+  expect(listed.querySelector('img')).toBeNull();
+  localStorage.removeItem('oxidal.picker.view');
 });

@@ -132,7 +132,7 @@ fn valid_initial(access: &Access, value: &str, model: u64) -> Result<reqwest::Ur
 }
 /// A redirect may go to any public HTTPS host (the provider's file storage),
 /// never to an address, a local name, another port or embedded credentials.
-pub(super) fn trusted_redirect(url: &reqwest::Url) -> bool {
+pub(crate) fn trusted_redirect(url: &reqwest::Url) -> bool {
     // `domain()` is none for IPv4 and IPv6 addresses.
     let named = url.domain().is_some_and(|name| {
         name.contains('.')

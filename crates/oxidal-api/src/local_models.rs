@@ -22,11 +22,26 @@ pub struct LocalModel {
     pub name: String,
     pub format: String,
     pub sha256: String,
+    /// The TONE3000 tone it came from; 0 for a file added on this unit.
+    #[serde(default)]
+    pub tone_id: u64,
+    /// The tone's gear type (amp, pedal, cab…), when known.
+    #[serde(default)]
+    pub gear: String,
 }
 impl LocalModel {
     fn new(id: String, asset: ModelAsset) -> Self {
         Self {
             id,
+            gear: asset
+                .tone
+                .get("gear")
+                .and_then(|g| g.as_str())
+                .unwrap_or("")
+                .chars()
+                .take(64)
+                .collect(),
+            tone_id: asset.tone_id,
             title: asset.title,
             name: asset.name,
             format: asset.format,
@@ -49,6 +64,9 @@ pub struct Upload {
 #[serde(deny_unknown_fields)]
 pub struct List {
     after: Option<String>,
+    /// Include models downloaded from TONE3000, not only local files.
+    #[serde(default)]
+    all: bool,
 }
 fn error(error: Error) -> Response {
     match error {
@@ -129,7 +147,7 @@ pub(super) async fn list(
     };
     let root = shared.config.preset_dir.join("audition-models");
     match tokio::task::spawn_blocking(move || {
-        ModelStore::new(root).local_page(query.after.as_deref())
+        ModelStore::new(root).page(query.after.as_deref(), query.all)
     })
     .await
     {

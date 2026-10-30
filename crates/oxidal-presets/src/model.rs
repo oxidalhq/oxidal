@@ -306,6 +306,11 @@ impl ModelStore {
     }
     /// Metadata listing is bounded per page; payload bytes are verified on use.
     pub fn local_page(&self, after: Option<&str>) -> Result<LocalAssetPage> {
+        self.page(after, false)
+    }
+    /// Every model kept on this unit: local files and, with `downloads`,
+    /// models fetched from TONE3000 too.
+    pub fn page(&self, after: Option<&str>, downloads: bool) -> Result<LocalAssetPage> {
         if after.is_some_and(|s| !hash(s)) {
             return Err(Error::Invalid("Invalid local model cursor"));
         }
@@ -334,7 +339,7 @@ impl ModelStore {
             let asset: ModelAsset = serde_json::from_slice(&bytes)
                 .map_err(|_| Error::Invalid("Invalid model metadata"))?;
             asset.validate()?;
-            if asset.tone_id != 0 {
+            if asset.tone_id != 0 && !downloads {
                 continue;
             }
             if rows.len() == 64 {

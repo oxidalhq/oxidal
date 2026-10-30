@@ -663,6 +663,10 @@ export type TerminalCommand =
       id: string;
       type: "end";
     };
+/**
+ * TONE3000 gear types a tone list can be narrowed to.
+ */
+export type Gear = "amp" | "amp-cab" | "pedal" | "outboard" | "cab" | "space" | "experimental";
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -1514,10 +1518,18 @@ export interface LibraryUpdate {
 }
 export interface LocalModel {
   format: string;
+  /**
+   * The tone's gear type (amp, pedal, cab…), when known.
+   */
+  gear?: string;
   id: string;
   name: string;
   sha256: string;
   title: string;
+  /**
+   * The TONE3000 tone it came from; 0 for a file added on this unit.
+   */
+  tone_id?: number;
 }
 export interface LocalModelPage {
   data: LocalModel[];
@@ -2146,6 +2158,10 @@ export interface Creator {
 }
 export interface ToneQuery {
   collection?: "favorites" | "downloaded" | "created" | "trending" | "latest";
+  /**
+   * Only tones of this gear type; none lists every type.
+   */
+  gear?: Gear | null;
   page?: number;
   query?: string;
 }
