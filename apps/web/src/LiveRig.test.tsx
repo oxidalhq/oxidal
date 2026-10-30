@@ -206,3 +206,17 @@ it('restores valid block context across navigation but never carries it into a d
   ).not.toBeInTheDocument();
   expect(playbackCommand).not.toHaveBeenCalled();
 });
+it('offers Resume after audio stops so unsaved edits come back without a library trip', async () => {
+  const stopped = { ...opening, phase: 'stopped' } as AudioState;
+  vi.mocked(playbackState).mockResolvedValue(stopped);
+  vi.mocked(playbackCommand).mockResolvedValue(opening);
+  show();
+  const resume = await screen.findByRole('button', {
+    name: `Resume ${opening.preset_name}`,
+  });
+  expect(screen.getByText(/including\s+unsaved edits/)).toBeInTheDocument();
+  fireEvent.click(resume);
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(stopped, { kind: 'resume' }),
+  );
+});

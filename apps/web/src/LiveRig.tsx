@@ -507,12 +507,48 @@ export function LiveRig({
                     : 'Audio stopped'}
         </h2>
         {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
-        <p>
-          Choose a rig from Library to play. Audio setup is only needed when
-          configuring your interface.
-        </p>
+        {state?.phase === 'stopped' && state.configured ? (
+          <p>
+            Resume picks up where you left off
+            {state.preset_name ? ` with ${state.preset_name}` : ''}, including
+            unsaved edits. Or choose another rig from Library.
+          </p>
+        ) : (
+          <p>
+            Choose a rig from Library to play. Audio setup is only needed when
+            configuring your interface.
+          </p>
+        )}
         <div className="action-row">
-          <Button onClick={onLibrary}>Browse presets</Button>
+          {state?.phase === 'stopped' && state.configured && (
+            <Button
+              disabled={!connected || busy}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                try {
+                  const next = await playbackCommand(state, { kind: 'resume' });
+                  if (alive.current) setState(next);
+                } catch (cause) {
+                  if (alive.current) setError(String(cause));
+                } finally {
+                  if (alive.current) setBusy(false);
+                }
+              }}
+            >
+              Resume{state.preset_name ? ` ${state.preset_name}` : ''}
+            </Button>
+          )}
+          <Button
+            variant={
+              state?.phase === 'stopped' && state.configured
+                ? 'outline'
+                : 'default'
+            }
+            onClick={onLibrary}
+          >
+            Browse presets
+          </Button>
           <Button variant="outline" onClick={onAudioSetup}>
             Audio setup
           </Button>
