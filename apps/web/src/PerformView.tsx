@@ -336,7 +336,7 @@ export function PerformView({
                 )}
               </span>
             </div>
-            <GuitarSwitch compact />
+            <GuitarSwitch layout="compact" />
           </div>
           {played.length > 0 && (
             <div className="perform-section">

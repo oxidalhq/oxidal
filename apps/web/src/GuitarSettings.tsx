@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { GuitarProfiles } from './api';
-import { Minus, Plus } from '@phosphor-icons/react';
+import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import './MasterLevel.css';
@@ -399,8 +399,15 @@ export function GuitarSettings() {
 }
 
 /** One tap to switch guitars on stage. Hidden until two guitars exist. */
-/** One tap per instrument. Compact sits beside the preset name, taking no row. */
-export function GuitarSwitch({ compact = false }: { compact?: boolean }) {
+/**
+ * One tap per instrument. Compact sits beside the preset name, taking no row;
+ * the default is a section of its own.
+ */
+export function GuitarSwitch({
+  layout = 'section',
+}: {
+  layout?: 'section' | 'compact';
+}) {
   const { profiles, busy, save } = useGuitars();
   if (
     profiles == null ||
@@ -408,26 +415,84 @@ export function GuitarSwitch({ compact = false }: { compact?: boolean }) {
     profiles.guitars.length < 2
   )
     return null;
+  const buttons = profiles.guitars.map((g) => (
+    <Button
+      key={g.id}
+      variant="outline"
+      aria-pressed={profiles.active === g.id}
+      disabled={busy}
+      onClick={() => void save({ ...profiles, active: g.id })}
+    >
+      {g.name}
+    </Button>
+  ));
   return (
-    <div className={compact ? 'perform-guitar' : 'perform-section'}>
-      {compact ? (
+    <div
+      className={layout === 'compact' ? 'perform-guitar' : 'perform-section'}
+    >
+      {layout === 'compact' ? (
         <span className="perform-guitar-label">Guitar</span>
       ) : (
         <h3>Guitar</h3>
       )}
       <div className="perform-guitars" role="group" aria-label="Guitar">
-        {profiles.guitars.map((g) => (
-          <Button
-            key={g.id}
-            variant="outline"
-            aria-pressed={profiles.active === g.id}
-            disabled={busy}
-            onClick={() => void save({ ...profiles, active: g.id })}
-          >
-            {g.name}
-          </Button>
-        ))}
+        {buttons}
       </div>
     </div>
+  );
+}
+
+/**
+ * The guitar in use, as a button beside Level; it opens the choice. Rig view
+ * has no room for a row of guitars, and the choice rarely changes mid-song.
+ */
+export function GuitarPicker() {
+  const { profiles, busy, save } = useGuitars();
+  const [open, setOpen] = useState(false);
+  if (
+    profiles == null ||
+    profiles === 'unsupported' ||
+    profiles.guitars.length < 2
+  )
+    return null;
+  const active =
+    profiles.guitars.find((g) => g.id === profiles.active) ??
+    profiles.guitars[0]!;
+  return (
+    <>
+      <Button
+        variant="outline"
+        aria-label={`Guitar: ${active.name}`}
+        aria-haspopup="dialog"
+        title="Choose the guitar being played"
+        onClick={() => setOpen(true)}
+      >
+        <GuitarIcon aria-hidden="true" />
+        <span className="phone-hidden">{active.name}</span>
+      </Button>
+      {open && (
+        <AdjustmentDialog title="Guitar" onCancel={() => setOpen(false)}>
+          <div className="menu-list">
+            {profiles.guitars.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                aria-pressed={profiles.active === g.id}
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false);
+                  void save({ ...profiles, active: g.id });
+                }}
+              >
+                {g.name}
+                {profiles.active === g.id && (
+                  <span className="caption">Playing</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </AdjustmentDialog>
+      )}
+    </>
   );
 }

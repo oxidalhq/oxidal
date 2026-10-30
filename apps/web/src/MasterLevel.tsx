@@ -149,7 +149,7 @@ export function MasterLevel({
       >
         Mono
       </button>
-      {extra}
+      {extra && <div className="master-extra">{extra}</div>}
       {error && (
         <p className="master-level-error" role="alert">
           {error}

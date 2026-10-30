@@ -11,7 +11,7 @@ import { guitarProfiles, monitoring, type GuitarProfiles } from './api';
 import { gateFor, trimFor } from './useGuitars';
 vi.unmock('./GuitarSettings');
 vi.mock('./api', () => ({ guitarProfiles: vi.fn(), monitoring: vi.fn() }));
-const { GuitarSettings } = await import('./GuitarSettings');
+const { GuitarPicker, GuitarSettings } = await import('./GuitarSettings');
 
 // jsdom has no modal dialog.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -176,4 +176,34 @@ it('adds, switches and renames guitars', async () => {
   );
   await act(async () => {});
   expect(saved.guitars[1]!.name).toBe('Steinberger Spirit');
+});
+
+it('shows the playing guitar beside Level and switches it from a dialog', async () => {
+  saved = {
+    guitars: [
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 },
+      { id: 'st', name: 'Steinberger', trim_db: 4, peak_dbfs: -14 },
+    ],
+    reference: 'jiva',
+    active: 'jiva',
+  };
+  render(<GuitarPicker />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Guitar: Jiva' }));
+  fireEvent.click(screen.getByRole('button', { name: /Steinberger/ }));
+  await act(async () => {});
+  expect(saved.active).toBe('st');
+  expect(
+    await screen.findByRole('button', { name: 'Guitar: Steinberger' }),
+  ).toBeInTheDocument();
+});
+
+it('offers no picker with fewer than two guitars', async () => {
+  saved = {
+    guitars: [{ id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 }],
+    reference: 'jiva',
+    active: 'jiva',
+  };
+  render(<GuitarPicker />);
+  await act(async () => {});
+  expect(screen.queryByRole('button', { name: /Guitar:/ })).toBeNull();
 });

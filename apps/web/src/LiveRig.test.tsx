@@ -21,6 +21,10 @@ vi.mock('./api', () => ({
   playbackState: vi.fn(),
 }));
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
+vi.mock('./GuitarSettings', () => ({
+  GuitarPicker: () => null,
+  GuitarSwitch: () => null,
+}));
 vi.mock('./SceneMidi', () => ({ MidiControls: () => null }));
 vi.mock('./NativeAuthoring', () => ({ NativeAuthoring: () => null }));
 vi.mock('./LiveEq', () => ({ LiveEq: () => null }));

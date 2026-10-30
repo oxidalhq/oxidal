@@ -1,5 +1,6 @@
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle } from './ChainView';
+import { GuitarPicker } from './GuitarSettings';
 import { PerformView } from './PerformView';
 import './RigControls.css';
 import { blockKind, type RigLaneVM } from './rigChain';
@@ -854,20 +855,22 @@ export function LiveRig({
       {knobStrip}
       <MasterLevel
         extra={
-          state.configured &&
-          !state.configured.draft && (
-            <BoostControl
-              targets={[
-                {
-                  key: boostKey.tone3000(
-                    state.configured.preset_id,
-                    state.configured.owned,
-                  ),
-                  label: state.preset_name ?? 'This preset',
-                },
-              ]}
-            />
-          )
+          <>
+            <GuitarPicker />
+            {state.configured && !state.configured.draft && (
+              <BoostControl
+                targets={[
+                  {
+                    key: boostKey.tone3000(
+                      state.configured.preset_id,
+                      state.configured.owned,
+                    ),
+                    label: state.preset_name ?? 'This preset',
+                  },
+                ]}
+              />
+            )}
+          </>
         }
       />
       <span

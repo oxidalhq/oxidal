@@ -17,10 +17,16 @@
   .master-level[data-extra] {
     grid-template-columns: auto minmax(0, 1fr) 4.75rem auto;
   }
-  .master-level[data-extra] > .boost-button {
+  .master-level[data-extra] > .master-extra {
     grid-column: 1 / -1;
     justify-self: end;
   }
+}
+/* Boost and the guitar sit together as one cell of the Level row. */
+.master-extra {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 .boost-value {
   font: 500 0.875rem var(--font-mono);

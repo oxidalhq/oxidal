@@ -15,6 +15,10 @@ vi.mock('./api', () => ({
 }));
 // The picker has its own tests; here it only needs to render.
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
+vi.mock('./GuitarSettings', () => ({
+  GuitarPicker: () => null,
+  GuitarSwitch: () => null,
+}));
 vi.mock('./ModelPicker', () => ({
   ModelPicker: ({ name }: { name: string }) => (
     <div data-testid="model-picker">{name}</div>

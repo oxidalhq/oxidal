@@ -13,6 +13,7 @@ import {
   type Lanes,
 } from './rigEdit';
 import { BoostControl } from './BoostControl';
+import { GuitarPicker } from './GuitarSettings';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
   boostKey,
@@ -963,27 +964,30 @@ export function MixedRig({
       )}
       <MasterLevel
         extra={
-          matching && (
-            <BoostControl
-              targets={[
-                {
-                  key: boostKey.scenes(matching.manifest.id),
-                  label: matching.manifest.name,
-                },
-                ...(soundingScene
-                  ? [
-                      {
-                        key: boostKey.scene(
-                          matching.manifest.id,
-                          soundingScene.id,
-                        ),
-                        label: `Scene · ${soundingScene.name}`,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )
+          <>
+            <GuitarPicker />
+            {matching && (
+              <BoostControl
+                targets={[
+                  {
+                    key: boostKey.scenes(matching.manifest.id),
+                    label: matching.manifest.name,
+                  },
+                  ...(soundingScene
+                    ? [
+                        {
+                          key: boostKey.scene(
+                            matching.manifest.id,
+                            soundingScene.id,
+                          ),
+                          label: `Scene · ${soundingScene.name}`,
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
+          </>
         }
       />
       {!!state.control?.scenes?.scenes.length && (
