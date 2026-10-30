@@ -42,3 +42,11 @@ export function trimFor(profiles: GuitarProfiles) {
   const trim = (reference - active) * (1 - profiles.character);
   return Math.min(24, Math.max(-24, Math.round(trim * 2) / 2));
 }
+
+/** Gate threshold the daemon will apply for the active guitar (mirrors guitars.rs). */
+export function gateFor(profiles: GuitarProfiles) {
+  const guitar = profiles.guitars.find((g) => g.id === profiles.active);
+  if (!guitar?.gate || guitar.noise_dbfs == null) return null;
+  const gate = Math.round(guitar.noise_dbfs + trimFor(profiles) + 6);
+  return Math.min(-20, Math.max(-96, gate));
+}

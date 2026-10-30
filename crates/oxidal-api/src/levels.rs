@@ -113,6 +113,7 @@ pub(super) async fn update(
     let Ok(Json(levels)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid levels");
     };
+    let levels = shared.guitars.current().own(levels);
     if let Err(e) = levels.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }

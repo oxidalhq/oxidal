@@ -238,11 +238,13 @@ Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an inp
 
 Guitars with different pickups hit the rig at different levels, which changes both loudness and how hard a capture is driven. A guitar profile stores each instrument's loudest stage strum (peak dBFS before any trim) and sets the unit input trim when that guitar is chosen.
 
-- **Measure:** Settings → Audio → Guitars → Measure listens for six seconds on the shared monitor feed, using the raw input meter (which reads before the trim). Silence below −60 dBFS is refused; a peak above −1 dBFS warns about interface clipping.
+- **Measure:** Guitars → Measure listens for six seconds on the shared monitor feed, using the raw input meter (which reads before the trim). Silence below −60 dBFS is refused; a peak above −1 dBFS warns about interface clipping.
 - **Match:** trim = (reference peak − this guitar's peak) × (1 − Character), in 0.5 dB steps and clamped to ±24 dB. The reference guitar (by default the first measured) plays untrimmed, so presets built on it are unchanged. Unmeasured guitars play untrimmed. Character 0% matches exactly; 100% keeps every guitar's natural output.
 - **Switch:** Perform shows one button per guitar once two exist. MIDI and footswitch selection wait for physical MIDI.
 - **Store and API:** `guitars.json` in the preset directory, never in presets. `GET`/`POST /api/v1/guitars` (up to 16 guitars, names of 1–40 characters). Saving computes the active guitar's trim, applies it to a running engine and stores it in the unit levels.
-- **Not yet:** per-guitar gate thresholds and tone tilt. The gate lives inside each engine today.
+- **Noise gate:** Guitars → Measure noise listens for six seconds with the strings muted and stores the raw noise peak (`noise_dbfs`). Anything above −30 dBFS is refused as playing. The guitar's gate then opens at noise + trim + 6 dB (rounded, clamped to −96…−20 dBFS) and closes 6 dB lower, after the trim and before every engine. It opens within about 1 ms, holds 50 ms and fades over about 80 ms; the Gate button turns it off per guitar. It is sent as `gate_db` in the unit levels and adds nothing to the rig's own gate.
+- **Ownership:** while a guitar is active, the guitar store owns `input_trim_db` and `gate_db`. A `POST /api/v1/levels` from a view holding older levels changes the master level and Mono only.
+- **Not yet:** tone tilt per guitar.
 
 ## Preset level matching
 

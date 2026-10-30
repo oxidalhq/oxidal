@@ -6,17 +6,20 @@ import { Button } from './components/ui/button';
 import './MasterLevel.css';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
-import { trimFor, useGuitars } from './useGuitars';
+import { gateFor, trimFor, useGuitars } from './useGuitars';
 
 const LISTEN_MS = 6000;
 const SILENT_DB = -60;
+/** Muted strings louder than this are playing, not hiss. */
+const NOISE_CEILING_DB = -30;
 
 const db = (n: number) =>
   `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dB`;
 
 /**
  * Guitar profiles: measure each guitar's loudest strum once, then switching
- * guitars evens out pickup output before the rig. Unit-wide, never in presets.
+ * guitars evens out pickup output before the rig. Measuring its muted hiss sets
+ * a noise gate just above it. Unit-wide, never in presets.
  * @see docs/audio.md
  */
 export function GuitarSettings() {
@@ -28,6 +31,8 @@ export function GuitarSettings() {
   } | null>(null);
   const [listening, setListening] = useState<{
     id: string;
+    /** Loudest strum, or the hiss and hum with the strings muted. */
+    kind: 'strum' | 'noise';
     until: number;
     peak: number;
   } | null>(null);
@@ -48,6 +53,28 @@ export function GuitarSettings() {
       return;
     }
     listen(null);
+    if (run.kind === 'noise') {
+      if (!feed.snapshot?.audio) {
+        setNote('No input. Start audio and measure again.');
+        return;
+      }
+      if (peak > NOISE_CEILING_DB) {
+        setNote(
+          'That was louder than hiss. Mute the strings with your hand, keep the volume up and measure again.',
+        );
+        return;
+      }
+      setNote('');
+      void save({
+        ...profiles,
+        guitars: profiles.guitars.map((g) =>
+          g.id === run.id
+            ? { ...g, noise_dbfs: Math.round(peak * 10) / 10, gate: true }
+            : g,
+        ),
+      });
+      return;
+    }
     if (!feed.snapshot?.audio || peak <= SILENT_DB) {
       setNote(
         'No guitar heard. Start audio, turn the guitar up and strum hard.',
@@ -85,28 +112,42 @@ export function GuitarSettings() {
         reference guitar, so presets sound the same on all of them. Set the
         interface gain once for your hottest guitar and leave it.
       </p>
+      <p className="caption">
+        Measure noise with the volume up and the strings muted by your hand. The
+        guitar&apos;s gate then opens just above its own hiss, so single coils
+        and quiet humbuckers each get the threshold they need.
+      </p>
       {profiles.guitars.map((g) => {
         const active = profiles.active === g.id;
         const reference = profiles.reference === g.id;
         const trim = trimFor({ ...profiles, active: g.id });
+        const gate = gateFor({ ...profiles, active: g.id });
+        const levels = [
+          g.peak_dbfs == null
+            ? 'Plays untrimmed until measured.'
+            : `Loudest strum ${g.peak_dbfs.toFixed(1)} dBFS.`,
+          g.noise_dbfs == null
+            ? 'Ungated.'
+            : `Noise ${g.noise_dbfs.toFixed(1)} dBFS · gate ${
+                gate == null ? 'off' : `${gate.toFixed(0)} dBFS`
+              }.`,
+        ];
         return (
           <ToolRow
             key={g.id}
             title={g.name}
             value={
               listening?.id === g.id
-                ? 'Strum hard…'
+                ? listening.kind === 'noise'
+                  ? 'Strings muted…'
+                  : 'Strum hard…'
                 : g.peak_dbfs == null
                   ? 'Not measured'
                   : reference
                     ? 'Reference'
                     : `Trim ${db(trim)}`
             }
-            detail={
-              g.peak_dbfs == null
-                ? 'Plays untrimmed until measured.'
-                : `Loudest strum ${g.peak_dbfs.toFixed(1)} dBFS.`
-            }
+            detail={levels.join(' ')}
           >
             <Button
               variant="outline"
@@ -123,12 +164,42 @@ export function GuitarSettings() {
                 setNote('');
                 listen({
                   id: g.id,
+                  kind: 'strum',
                   until: performance.now() + LISTEN_MS,
                   peak: -120,
                 });
               }}
             >
               Measure
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy || !!listening}
+              onClick={() => {
+                setNote('');
+                listen({
+                  id: g.id,
+                  kind: 'noise',
+                  until: performance.now() + LISTEN_MS,
+                  peak: -120,
+                });
+              }}
+            >
+              Measure noise
+            </Button>
+            <Button
+              variant="ghost"
+              aria-pressed={!!g.gate && g.noise_dbfs != null}
+              disabled={busy || g.noise_dbfs == null}
+              onClick={() =>
+                edit({
+                  guitars: profiles.guitars.map((x) =>
+                    x.id === g.id ? { ...x, gate: !x.gate } : x,
+                  ),
+                })
+              }
+            >
+              Gate
             </Button>
             <Button
               variant="ghost"

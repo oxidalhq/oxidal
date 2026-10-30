@@ -755,6 +755,11 @@ export interface AudioCommand {
  */
 export interface HostLevels {
   /**
+   * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
+   * ungated. Set from the active guitar's measured noise floor.
+   */
+  gate_db?: number | null;
+  /**
    * Input trim in dB, applied before the rig (−24 to +24).
    */
   input_trim_db: number;
@@ -833,6 +838,11 @@ export interface AudioProbe {
  * master output level after it. Never stored in presets.
  */
 export interface HostLevels1 {
+  /**
+   * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
+   * ungated. Set from the active guitar's measured noise floor.
+   */
+  gate_db?: number | null;
   /**
    * Input trim in dB, applied before the rig (−24 to +24).
    */
@@ -1310,6 +1320,11 @@ export interface HostState {
  */
 export interface HostLevels2 {
   /**
+   * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
+   * ungated. Set from the active guitar's measured noise floor.
+   */
+  gate_db?: number | null;
+  /**
    * Input trim in dB, applied before the rig (−24 to +24).
    */
   input_trim_db: number;
@@ -1348,8 +1363,16 @@ export interface Guitars {
   reference?: string | null;
 }
 export interface Guitar {
+  /**
+   * Gate this guitar just above its measured noise.
+   */
+  gate?: boolean;
   id: string;
   name: string;
+  /**
+   * Peak hiss and hum with the strings muted, before any trim, in dBFS.
+   */
+  noise_dbfs?: number | null;
   /**
    * Peak of the player's loudest stage strum, before any trim, in dBFS.
    */

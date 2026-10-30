@@ -3512,11 +3512,25 @@
     "Guitar": {
       "type": "object",
       "properties": {
+        "gate": {
+          "description": "Gate this guitar just above its measured noise.",
+          "type": "boolean",
+          "default": false
+        },
         "id": {
           "type": "string"
         },
         "name": {
           "type": "string"
+        },
+        "noise_dbfs": {
+          "description": "Peak hiss and hum with the strings muted, before any trim, in dBFS.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "default": null
         },
         "peak_dbfs": {
           "description": "Peak of the player's loudest stage strum, before any trim, in dBFS.",
@@ -3656,6 +3670,14 @@
       "description": "Unit-wide gain staging around every rig: guitar input trim before the rig,\nmaster output level after it. Never stored in presets.",
       "type": "object",
       "properties": {
+        "gate_db": {
+          "description": "Noise gate threshold after the trim, in dBFS (−96 to −20); none plays\nungated. Set from the active guitar's measured noise floor.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
         "input_trim_db": {
           "description": "Input trim in dB, applied before the rig (−24 to +24).",
           "type": "number",

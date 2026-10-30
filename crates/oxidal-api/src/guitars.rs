@@ -1,5 +1,5 @@
-//! Guitar profiles: one measured input level per instrument, so every guitar
-//! reaches the rig at the same level. Unit-wide, never stored in presets.
+//! Guitar profiles: one measured input level and noise floor per instrument,
+//! so every guitar reaches the rig at the same level and only as quiet as it can. Unit-wide, never stored in presets.
 use crate::{Shared, failure};
 use axum::{
     Json,
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf, sync::Arc};
 
 const MAX_GUITARS: usize = 16;
+const GATE_MARGIN_DB: f32 = 6.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +22,12 @@ pub struct Guitar {
     pub name: String,
     /// Peak of the player's loudest stage strum, before any trim, in dBFS.
     pub peak_dbfs: Option<f32>,
+    /// Peak hiss and hum with the strings muted, before any trim, in dBFS.
+    #[serde(default)]
+    pub noise_dbfs: Option<f32>,
+    /// Gate this guitar just above its measured noise.
+    #[serde(default)]
+    pub gate: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -52,11 +59,13 @@ impl Guitars {
                     && g.id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
                     && (1..=40).contains(&g.name.chars().count())
                     && !g.name.chars().any(char::is_control)
-                    && g.peak_dbfs
-                        .is_none_or(|p| p.is_finite() && (-120.0..=0.0).contains(&p))
+                    && [g.peak_dbfs, g.noise_dbfs]
+                        .iter()
+                        .flatten()
+                        .all(|p| p.is_finite() && (-120.0..=0.0).contains(p))
             })
         {
-            return Err("Up to 16 guitars with unique ids, names of 1–40 characters, peaks −120 to 0 dBFS and character 0–1".into());
+            return Err("Up to 16 guitars with unique ids, names of 1–40 characters, levels −120 to 0 dBFS and character 0–1".into());
         }
         Ok(())
     }
@@ -76,6 +85,34 @@ impl Guitars {
             }
             _ => 0.0,
         }
+    }
+    /// Levels with the fields this store owns: the active guitar's trim, and
+    /// its gate. A view holding older levels can never undo a guitar switch.
+    pub fn own(&self, levels: HostLevels) -> HostLevels {
+        HostLevels {
+            input_trim_db: if self.active.is_some() {
+                self.trim_db()
+            } else {
+                levels.input_trim_db
+            },
+            gate_db: self.gate_db(),
+            ..levels
+        }
+    }
+    /// Gate threshold for the active guitar: its noise peak plus the trim it
+    /// plays with, and a 6 dB margin so hiss never flickers the gate open.
+    pub fn gate_db(&self) -> Option<f32> {
+        let (lo, hi) = HostLevels::GATE_RANGE;
+        self.active
+            .as_ref()
+            .and_then(|id| self.guitars.iter().find(|g| &g.id == id))
+            .filter(|g| g.gate)
+            .and_then(|g| g.noise_dbfs)
+            .map(|noise| {
+                (noise + self.trim_db() + GATE_MARGIN_DB)
+                    .round()
+                    .clamp(lo, hi)
+            })
     }
 }
 
@@ -97,7 +134,7 @@ impl Store {
             value: std::sync::Mutex::new(value),
         }
     }
-    fn current(&self) -> Guitars {
+    pub(crate) fn current(&self) -> Guitars {
         self.value.lock().map(|g| g.clone()).unwrap_or_default()
     }
     fn save(&self, guitars: Guitars) -> Result<(), String> {
@@ -135,10 +172,10 @@ pub(super) async fn update(
     if let Err(e) = guitars.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }
-    let levels = HostLevels {
+    let levels = guitars.own(HostLevels {
         input_trim_db: guitars.trim_db(),
         ..shared.levels.current()
-    };
+    });
     if let Err(e) = crate::levels::apply_running(&shared, levels).await {
         return failure(StatusCode::CONFLICT, &e);
     }
@@ -164,6 +201,8 @@ mod tests {
             id: id.into(),
             name: id.into(),
             peak_dbfs: peak,
+            noise_dbfs: None,
+            gate: false,
         }
     }
     #[test]
@@ -191,6 +230,34 @@ mod tests {
         g.guitars[1].peak_dbfs = Some(-110.0);
         g.character = 0.0;
         assert_eq!(g.trim_db(), 24.0);
+    }
+    #[test]
+    fn gate_sits_above_the_active_guitars_trimmed_noise() {
+        let mut g = Guitars {
+            guitars: vec![
+                guitar("jiva", Some(-8.0)),
+                Guitar {
+                    noise_dbfs: Some(-70.0),
+                    gate: true,
+                    ..guitar("steinberger", Some(-14.0))
+                },
+            ],
+            reference: Some("jiva".into()),
+            active: Some("steinberger".into()),
+            character: 0.0,
+        };
+        assert!(g.validate().is_ok());
+        // −70 noise, +6 trim, +6 margin.
+        assert_eq!(g.gate_db(), Some(-58.0));
+        g.guitars[1].gate = false;
+        assert_eq!(g.gate_db(), None);
+        g.guitars[1].gate = true;
+        g.guitars[1].noise_dbfs = Some(-118.0);
+        assert_eq!(g.gate_db(), Some(-96.0));
+        g.active = Some("jiva".into());
+        assert_eq!(g.gate_db(), None);
+        g.guitars[1].noise_dbfs = Some(1.0);
+        assert!(g.validate().is_err());
     }
     #[test]
     fn rejects_unknown_references_duplicates_and_bad_values() {

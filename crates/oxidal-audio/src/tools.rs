@@ -136,18 +136,24 @@ pub struct HostLevels {
     /// wide rig survives mono without thinning out.
     #[serde(default)]
     pub mono: bool,
+    /// Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
+    /// ungated. Set from the active guitar's measured noise floor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate_db: Option<f32>,
 }
 impl HostLevels {
     pub const INPUT_RANGE: (f32, f32) = (-24.0, 24.0);
     pub const OUTPUT_RANGE: (f32, f32) = (-60.0, 12.0);
+    pub const GATE_RANGE: (f32, f32) = (-96.0, -20.0);
     pub fn validate(&self) -> Result<(), String> {
         let within = |v: f32, (lo, hi): (f32, f32)| v.is_finite() && (lo..=hi).contains(&v);
         if within(self.input_trim_db, Self::INPUT_RANGE)
             && within(self.output_level_db, Self::OUTPUT_RANGE)
+            && self.gate_db.is_none_or(|g| within(g, Self::GATE_RANGE))
         {
             Ok(())
         } else {
-            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB".into())
+            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS".into())
         }
     }
     fn input_gain(&self) -> f32 {
@@ -181,6 +187,82 @@ pub struct HostSignal {
     levels: HostLevels,
     input_gain: Glide,
     output_gain: Glide,
+    gate: Gate,
+}
+/// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
+/// 50 ms, then fades over about 80 ms. Closes 6 dB below the threshold so
+/// a decaying note does not chatter at the edge.
+#[derive(Debug)]
+struct Gate {
+    open_at: Option<f32>,
+    envelope: f32,
+    envelope_fall: f32,
+    hold: u32,
+    hold_frames: u32,
+    open: bool,
+    gain: f32,
+    attack: f32,
+    release: f32,
+}
+impl Gate {
+    fn new(rate: u32, threshold_db: Option<f32>) -> Self {
+        let rate = rate.max(1) as f32;
+        let pole = |seconds: f32| 1.0 - (-1.0 / (seconds * rate)).exp();
+        let mut gate = Self {
+            open_at: None,
+            envelope: 0.0,
+            envelope_fall: (-1.0 / (0.01 * rate)).exp(),
+            hold: 0,
+            hold_frames: (0.05 * rate) as u32,
+            open: true,
+            gain: 1.0,
+            attack: pole(0.001),
+            release: pole(0.08),
+        };
+        gate.set(threshold_db);
+        gate
+    }
+    fn set(&mut self, threshold_db: Option<f32>) {
+        self.open_at = threshold_db.map(|db| 10f32.powf(db / 20.0));
+    }
+    fn apply(&mut self, left: &mut [f32], right: &mut [f32]) {
+        let Some(open_at) = self.open_at else {
+            // Ungated: finish any fade back to unity instead of jumping.
+            if self.gain < 1.0 {
+                for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                    self.gain += (1.0 - self.gain) * self.attack;
+                    *l *= self.gain;
+                    *r *= self.gain;
+                }
+                if self.gain > 0.9999 {
+                    self.gain = 1.0;
+                }
+            }
+            self.open = true;
+            return;
+        };
+        let close_at = open_at * 0.5;
+        for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+            let level = l.abs().max(r.abs());
+            self.envelope = level.max(self.envelope * self.envelope_fall);
+            if self.envelope >= open_at || (self.open && self.envelope >= close_at) {
+                self.open = true;
+                self.hold = self.hold_frames;
+            } else if self.hold > 0 {
+                self.hold -= 1;
+            } else {
+                self.open = false;
+            }
+            let (target, pole) = if self.open {
+                (1.0, self.attack)
+            } else {
+                (0.0, self.release)
+            };
+            self.gain += (target - self.gain) * pole;
+            *l *= self.gain;
+            *r *= self.gain;
+        }
+    }
 }
 /// Per-sample one-pole glide (about 10 ms) so level moves never click.
 #[derive(Debug)]
@@ -227,6 +309,7 @@ impl HostSignal {
             levels,
             input_gain: Glide::new(rate, levels.input_gain()),
             output_gain: Glide::new(rate, levels.output_gain()),
+            gate: Gate::new(rate, levels.gate_db),
         }
     }
     pub fn command(&mut self, command: HostUtility) {
@@ -245,6 +328,7 @@ impl HostSignal {
                     self.levels = levels;
                     self.input_gain.target = levels.input_gain();
                     self.output_gain.target = levels.output_gain();
+                    self.gate.set(levels.gate_db);
                 }
             }
         }
@@ -263,6 +347,7 @@ impl HostSignal {
             return;
         }
         self.input_gain.apply(left, right);
+        self.gate.apply(left, right);
     }
     pub fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
         self.test_tone(left, right);
@@ -356,6 +441,7 @@ mod host_tests {
                 input_trim_db: -6.0,
                 output_level_db: 0.0,
                 mono: false,
+                gate_db: None,
             },
         );
         let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
@@ -366,6 +452,7 @@ mod host_tests {
                 input_trim_db: -6.0,
                 output_level_db: -60.0,
                 mono: false,
+                gate_db: None,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
@@ -386,6 +473,7 @@ mod host_tests {
                 input_trim_db: f32::NAN,
                 output_level_db: 0.0,
                 mono: false,
+                gate_db: None,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
@@ -394,6 +482,7 @@ mod host_tests {
                 input_trim_db: 25.0,
                 output_level_db: 0.0,
                 mono: false,
+                gate_db: None,
             }
             .validate()
             .is_err()
@@ -403,6 +492,65 @@ mod host_tests {
                 input_trim_db: 0.0,
                 output_level_db: 12.5,
                 mono: false,
+                gate_db: None,
+            }
+            .validate()
+            .is_err()
+        );
+    }
+    #[test]
+    fn gate_mutes_noise_passes_playing_and_fades_without_clicks() {
+        let rate = 48000;
+        let levels = HostLevels {
+            gate_db: Some(-50.0),
+            ..HostLevels::default()
+        };
+        let mut signal = HostSignal::new(rate, true, levels);
+        let block = |signal: &mut HostSignal, value: f32| {
+            let (mut l, mut r) = ([value; 64], [-value; 64]);
+            signal.input(&mut l, &mut r);
+            (l, r)
+        };
+        // Hiss at −60 dBFS fades to silence within hold plus release.
+        let hiss = 0.001;
+        let first = block(&mut signal, hiss).0;
+        assert!((first[0] - hiss).abs() < 1e-6, "starts open, no jump");
+        let mut previous = first[63];
+        for _ in 0..(rate as usize / 64) {
+            let (l, _) = block(&mut signal, hiss);
+            // Never a step bigger than the release slope allows.
+            assert!((l[0] - previous).abs() < hiss * 0.01);
+            previous = l[63];
+        }
+        assert!(previous.abs() < hiss * 1e-3);
+        // A note at −20 dBFS opens it within about 1 ms.
+        let note = 0.1;
+        let (l, r) = block(&mut signal, note);
+        assert!(l[63] > note * 0.7 && r[63] < -note * 0.7);
+        for _ in 0..10 {
+            block(&mut signal, note);
+        }
+        assert!((block(&mut signal, note).0[63] - note).abs() < 1e-4);
+        // A decay between the close (−56) and open (−50) thresholds stays open.
+        for _ in 0..(rate as usize / 64) {
+            block(&mut signal, 0.002);
+        }
+        assert!((block(&mut signal, 0.002).0[63] - 0.002).abs() < 1e-5);
+        // Removing the gate glides back to unity.
+        for _ in 0..(rate as usize / 64) {
+            block(&mut signal, hiss);
+        }
+        signal.command(HostUtility::Levels {
+            levels: HostLevels::default(),
+        });
+        for _ in 0..40 {
+            block(&mut signal, hiss);
+        }
+        assert!((block(&mut signal, hiss).0[63] - hiss).abs() < 1e-7);
+        assert!(
+            HostLevels {
+                gate_db: Some(-10.0),
+                ..HostLevels::default()
             }
             .validate()
             .is_err()

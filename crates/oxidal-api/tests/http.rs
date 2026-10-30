@@ -1401,7 +1401,8 @@ async fn guitar_profiles_set_the_unit_input_trim() {
     let profiles = json!({
         "guitars": [
             {"id": "jiva", "name": "Ibanez Jiva", "peak_dbfs": -8.0},
-            {"id": "steinberger", "name": "Steinberger", "peak_dbfs": -14.0}
+            {"id": "steinberger", "name": "Steinberger", "peak_dbfs": -14.0,
+             "noise_dbfs": -70.0, "gate": true}
         ],
         "reference": "jiva",
         "active": "steinberger",
@@ -1418,6 +1419,22 @@ async fn guitar_profiles_set_the_unit_input_trim() {
         .await
         .unwrap();
     assert_eq!(levels["input_trim_db"], 6.0);
+    assert_eq!(levels["gate_db"], -58.0);
+    // A view holding older levels changes the master level, not the guitar's.
+    let stale = json!({"input_trim_db": 0.0, "output_level_db": -6.0, "mono": false});
+    let levels: Value = client
+        .post(format!("{url}/levels"))
+        .json(&stale)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        levels,
+        json!({"input_trim_db": 6.0, "output_level_db": -6.0, "mono": false, "gate_db": -58.0})
+    );
     let mut unknown = profiles.clone();
     unknown["active"] = json!("strat");
     let response = client.post(&guitars).json(&unknown).send().await.unwrap();
