@@ -396,7 +396,15 @@ export function LiveRig({
       },
     }).then((next) => {
       cursor = next;
-      if (alive.current) setState(next);
+      if (!alive.current) return;
+      setState(next);
+      // Beginning the adjustment advances the revision; the draft follows it,
+      // otherwise the dialog would mistake its own begin for a changed session.
+      setDraft((old) =>
+        old?.target === control.target && old.session === next.session
+          ? { ...old, revision: next.revision }
+          : old,
+      );
     });
     void ready.catch((cause) => {
       if (alive.current) setError(String(cause));
@@ -1448,7 +1456,7 @@ export function LiveRig({
           </div>
           {draftStale && (
             <p role="alert">
-              Sounding session changed. Cancel and reopen this adjusted.
+              Sounding session changed. Cancel and reopen this control.
             </p>
           )}
         </AdjustmentDialog>

@@ -205,7 +205,7 @@
 .knob-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  border-top: 1px solid var(--foreground);
+  /* The preset picker's underline above is the strip's top edge. */
   border-bottom: 1px solid var(--border);
 }
 .knob-cell {
