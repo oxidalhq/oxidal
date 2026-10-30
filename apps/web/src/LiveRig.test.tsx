@@ -220,3 +220,26 @@ it('offers Resume after audio stops so unsaved edits come back without a library
     expect(playbackCommand).toHaveBeenCalledWith(stopped, { kind: 'resume' }),
   );
 });
+it('keeps an adjustment usable when beginning it advances the session revision', async () => {
+  // The real engine moves the revision forward on gesture begin; the dialog
+  // must follow it instead of reporting a changed session (regression).
+  vi.mocked(playbackCommand).mockImplementation(async (state) => ({
+    ...(state as AudioState),
+    revision: (state as AudioState).revision + 1,
+  }));
+  show();
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Adjust sounding Output level' }),
+  );
+  const dialog = await screen.findByRole('dialog', { name: 'Output level' });
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ revision: 10 }),
+      expect.objectContaining({ kind: 'authoring' }),
+    ),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled(),
+  );
+  expect(dialog).not.toHaveTextContent('Sounding session changed');
+});
