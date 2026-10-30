@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import type { GuitarProfiles } from './api';
+import { Plus } from '@phosphor-icons/react';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import './MasterLevel.css';
 import { useMonitorReadings } from './monitorFeed';
@@ -19,7 +21,11 @@ const db = (n: number) =>
  */
 export function GuitarSettings() {
   const { profiles, error, busy, save } = useGuitars();
-  const [name, setName] = useState('');
+  // Add (id null) or rename one guitar in a dialog.
+  const [naming, setNaming] = useState<{
+    id: string | null;
+    value: string;
+  } | null>(null);
   const [listening, setListening] = useState<{
     id: string;
     until: number;
@@ -69,7 +75,7 @@ export function GuitarSettings() {
     void save({ ...profiles, ...next });
   return (
     <ToolSection
-      title="Guitars"
+      title="Profiles"
       scope="This unit · kept across presets, not saved in them"
       label="Guitar profiles"
     >
@@ -135,6 +141,13 @@ export function GuitarSettings() {
             <Button
               variant="ghost"
               disabled={busy}
+              onClick={() => setNaming({ id: g.id, value: g.name })}
+            >
+              Rename
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
               onClick={() =>
                 edit({
                   guitars: profiles.guitars.filter((x) => x.id !== g.id),
@@ -168,43 +181,69 @@ export function GuitarSettings() {
         />
       </ToolRow>
       {profiles.guitars.length < 16 && (
-        <form
-          className="action-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const trimmed = name.trim().slice(0, 40);
-            if (!trimmed) return;
-            const id = `${
-              trimmed
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-|-$/g, '') || 'guitar'
-            }-${crypto.randomUUID().slice(0, 8)}`;
-            setName('');
-            edit({
-              guitars: [
-                ...profiles.guitars,
-                { id, name: trimmed, peak_dbfs: null },
-              ],
-              active: profiles.active ?? id,
-            });
-          }}
-        >
-          <input
-            aria-label="New guitar name"
-            placeholder="Guitar name"
-            maxLength={40}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+        <div className="action-row">
           <Button
-            type="submit"
             variant="outline"
-            disabled={busy || !name.trim()}
+            disabled={busy}
+            onClick={() => setNaming({ id: null, value: '' })}
           >
+            <Plus aria-hidden="true" />
             Add guitar
           </Button>
-        </form>
+        </div>
+      )}
+      {naming && (
+        <AdjustmentDialog
+          title={naming.id ? 'Rename guitar' : 'Add guitar'}
+          onCancel={() => setNaming(null)}
+        >
+          <form
+            className="form-grid"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const trimmed = naming.value.trim().slice(0, 40);
+              if (!trimmed) return;
+              if (naming.id) {
+                edit({
+                  guitars: profiles.guitars.map((g) =>
+                    g.id === naming.id ? { ...g, name: trimmed } : g,
+                  ),
+                });
+              } else {
+                const id = `${
+                  trimmed
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, '') || 'guitar'
+                }-${crypto.randomUUID().slice(0, 8)}`;
+                edit({
+                  guitars: [
+                    ...profiles.guitars,
+                    { id, name: trimmed, peak_dbfs: null },
+                  ],
+                  active: profiles.active ?? id,
+                });
+              }
+              setNaming(null);
+            }}
+          >
+            <label className="field">
+              Name
+              <input
+                autoFocus
+                maxLength={40}
+                placeholder="For example: Ibanez Jiva"
+                value={naming.value}
+                onChange={(e) =>
+                  setNaming({ ...naming, value: e.target.value })
+                }
+              />
+            </label>
+            <Button type="submit" disabled={busy || !naming.value.trim()}>
+              {naming.id ? 'Rename' : 'Add guitar'}
+            </Button>
+          </form>
+        </AdjustmentDialog>
       )}
       {error && <p role="alert">{error}</p>}
     </ToolSection>

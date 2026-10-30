@@ -1665,7 +1665,7 @@ textarea {
 }
 .masthead nav {
   display: grid;
-  grid-template-columns: repeat(4, minmax(44px, max-content));
+  grid-template-columns: repeat(5, minmax(44px, max-content));
   flex: 0 0 auto;
   width: auto;
   min-width: 0;
@@ -2146,11 +2146,13 @@ textarea {
   .masthead nav > button {
     flex-direction: column;
     gap: 0.1rem;
+    min-width: 0;
     font-size: 0.65rem;
     padding-block: 0.25rem;
+    padding-inline: 0;
   }
   .masthead nav {
-    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    grid-template-columns: repeat(5, minmax(44px, 1fr));
     gap: 0.5rem;
   }
   .settings-nav button {

@@ -1,4 +1,5 @@
 import { WorkspaceMemory, useWorkspaceNavigation } from './workspaceMemory';
+import { GuitarSettings } from './GuitarSettings';
 import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
@@ -17,6 +18,7 @@ import {
   Waveform,
   Stack,
   ChartLine,
+  Guitar,
   GearSix,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
@@ -307,7 +309,7 @@ function InstrumentApp() {
         </a>
 
         <nav aria-label="Instrument navigation">
-          {(['rig', 'library', 'monitor', 'settings'] as const).map(
+          {(['rig', 'guitars', 'library', 'monitor', 'settings'] as const).map(
             (destination) => (
               <Button
                 key={destination}
@@ -322,6 +324,7 @@ function InstrumentApp() {
                 {
                   {
                     rig: <Waveform aria-hidden="true" />,
+                    guitars: <Guitar aria-hidden="true" />,
                     library: <Stack aria-hidden="true" />,
                     monitor: <ChartLine aria-hidden="true" />,
                     settings: <GearSix aria-hidden="true" />,
@@ -330,6 +333,7 @@ function InstrumentApp() {
                 {
                   {
                     rig: 'Rig',
+                    guitars: 'Guitars',
                     library: 'Library',
                     monitor: 'Monitor',
                     settings: 'Settings',
@@ -367,11 +371,13 @@ function InstrumentApp() {
                     : developmentSimulator
                       ? 'Development simulator'
                       : 'Rig'
-                  : view === 'monitor'
-                    ? 'Monitor'
-                    : view === 'library'
-                      ? 'Library'
-                      : 'Settings'}
+                  : view === 'guitars'
+                    ? 'Guitars'
+                    : view === 'monitor'
+                      ? 'Monitor'
+                      : view === 'library'
+                        ? 'Library'
+                        : 'Settings'}
               </span>
               <h1 data-testid="active-preset">
                 {view === 'rig'
@@ -387,11 +393,13 @@ function InstrumentApp() {
                           : state.preset === 'parallel'
                             ? 'Parallel rig'
                             : 'Serial rig'))
-                  : view === 'monitor'
-                    ? 'Signal & system'
-                    : view === 'library'
-                      ? 'Preset library'
-                      : settingsLabels[settingsSection]}
+                  : view === 'guitars'
+                    ? 'Your guitars'
+                    : view === 'monitor'
+                      ? 'Signal & system'
+                      : view === 'library'
+                        ? 'Preset library'
+                        : settingsLabels[settingsSection]}
               </h1>
             </div>
             {state &&
@@ -466,6 +474,8 @@ function InstrumentApp() {
           )}
           {!state ? (
             <p className="empty">Waiting for Oxidal…</p>
+          ) : view === 'guitars' ? (
+            <GuitarSettings />
           ) : view === 'monitor' ? (
             <Suspense fallback={<p>Loading monitor…</p>}>
               <Monitoring displayMode={displayMode} />

@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { guitarProfiles, monitoring, type GuitarProfiles } from './api';
@@ -12,6 +13,13 @@ vi.unmock('./GuitarSettings');
 vi.mock('./api', () => ({ guitarProfiles: vi.fn(), monitoring: vi.fn() }));
 const { GuitarSettings } = await import('./GuitarSettings');
 
+// jsdom has no modal dialog.
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.open = false;
+};
 class Events extends EventTarget {
   close() {}
 }
@@ -53,10 +61,15 @@ it('adds a guitar, makes it the one playing, and switches between guitars', asyn
   render(<GuitarSettings />);
   await act(async () => {});
   for (const name of ['Ibanez Jiva', 'Steinberger']) {
-    fireEvent.change(screen.getByLabelText('New guitar name'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Add guitar' }));
+    fireEvent.change(screen.getByLabelText('Name'), {
       target: { value: name },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add guitar' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Add guitar',
+      }),
+    );
     await act(async () => {});
   }
   expect(saved.guitars.map((g) => g.name)).toEqual([
@@ -68,4 +81,13 @@ it('adds a guitar, makes it the one playing, and switches between guitars', asyn
   fireEvent.click(screen.getAllByRole('button', { name: 'Play this' })[0]!);
   await act(async () => {});
   expect(saved.active).toBe(saved.guitars[1]!.id);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[1]!);
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Steinberger Spirit' },
+  });
+  fireEvent.click(
+    within(screen.getByRole('dialog')).getByRole('button', { name: 'Rename' }),
+  );
+  await act(async () => {});
+  expect(saved.guitars[1]!.name).toBe('Steinberger Spirit');
 });

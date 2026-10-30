@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { EngineSettings } from './EngineSettings';
-import { GuitarSettings } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
 import { NativeDefaults } from './NativeDefaults';
 import { PlaybackSettings } from './PlaybackSettings';
@@ -96,7 +95,6 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     <section className="panel control-stack" aria-label="Audio devices">
       <h2>Audio</h2>
       <MasterLevel />
-      <GuitarSettings />
       <PlaybackSettings connected={connected} input={input} output={output} />
       <details className="audio-diagnostics">
         <summary>Interface diagnostics &amp; new device setup</summary>

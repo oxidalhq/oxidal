@@ -28,8 +28,15 @@ export function useWorkspaceState<T>(
   return [value, update];
 }
 
-export type WorkspaceView = 'rig' | 'library' | 'monitor' | 'settings';
-const views: WorkspaceView[] = ['rig', 'library', 'monitor', 'settings'];
+export type WorkspaceView =
+  'rig' | 'guitars' | 'library' | 'monitor' | 'settings';
+const views: WorkspaceView[] = [
+  'rig',
+  'guitars',
+  'library',
+  'monitor',
+  'settings',
+];
 function locationView(): WorkspaceView {
   const value = window.location.hash.slice(1) as WorkspaceView;
   return views.includes(value) ? value : 'rig';
