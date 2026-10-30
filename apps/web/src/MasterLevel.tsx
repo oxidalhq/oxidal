@@ -130,7 +130,7 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
         className="master-mono"
         aria-pressed={levels?.mono ?? false}
         disabled={disabled || !levels}
-        title="Sum left and right: check how the rig sounds on a mono PA, or leave on for mono output"
+        title="Sum left and right: check how the preset sounds on a mono PA, or leave on for mono output"
         onClick={() => {
           const now = latest.current;
           if (now) update({ ...now, mono: !now.mono });

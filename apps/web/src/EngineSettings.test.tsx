@@ -89,7 +89,7 @@ it('explains that a native rig must be running', async () => {
   render(<EngineSettings connected />);
   expect(
     await screen.findByText(
-      /Start a TONE3000 rig to change the running engine/,
+      /Play a TONE3000 preset to change the running engine/,
     ),
   ).toBeInTheDocument();
 });

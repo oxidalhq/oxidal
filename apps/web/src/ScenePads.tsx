@@ -59,7 +59,7 @@ export function ScenePads({
       <div
         className="scene-pad-grid"
         role="group"
-        aria-label="Rig scenes"
+        aria-label="Scenes"
         aria-busy={fading}
       >
         {scenes.map((scene, i) => (

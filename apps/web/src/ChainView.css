@@ -219,6 +219,66 @@
 }
 
 /* A lane that is shown but not sounding (another scene) recedes. */
-.chain-lane[data-dim] {
-  opacity: 0.45;
+/* A receding lane mutes its colours but keeps solid tiles, so wires behind
+   them stay hidden instead of showing through transparency. */
+.chain-lane[data-dim] > .chain-port,
+.chain-lane[data-dim] .rig-tile-label {
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+.chain-lane[data-dim] .rig-tile:not([aria-pressed='true']) .rig-tile-face {
+  border-color: var(--wire);
+  color: var(--muted-foreground);
+}
+.chain-lane[data-dim] .rig-tile:not([aria-pressed='true']) .rig-tile-face > * {
+  opacity: 0.55;
+}
+/* Parallel branches: IN splits on one bar, branches run side by side and sum
+   on a second bar into OUT. Wires sit 2rem down, level with the tile centres. */
+.chain-parallel {
+  position: relative;
+  /* Own stacking context: the IN–OUT wire sits behind every tile and label. */
+  isolation: isolate;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0;
+}
+.chain-parallel::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 2rem 0 auto;
+  border-top: 1px solid var(--wire);
+}
+.chain-parallel-lanes {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.chain-branch {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 0 0.625rem;
+}
+.chain-bus {
+  position: absolute;
+  top: -0.5rem;
+  bottom: 0;
+  border-left: 1px solid var(--wire);
+}
+.chain-bus[data-side='split'] {
+  left: 0;
+}
+.chain-bus[data-side='sum'] {
+  right: 0;
+}
+.chain-branch:first-child > .chain-bus {
+  top: 2rem;
+}
+.chain-branch:last-child > .chain-bus {
+  bottom: auto;
+  height: 2.5rem;
+}
+.chain-branch-number {
+  min-width: 1.25rem;
+  justify-content: center;
 }

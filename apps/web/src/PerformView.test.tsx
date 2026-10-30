@@ -5,6 +5,7 @@ import {
   monitoring,
   nativeState,
   presetLibrary,
+  rigLibrary,
   type AudioState,
   type Monitoring,
 } from './api';
@@ -12,6 +13,7 @@ vi.mock('./api', () => ({
   monitoring: vi.fn(),
   nativeState: vi.fn(),
   presetLibrary: vi.fn(),
+  rigLibrary: vi.fn(),
 }));
 afterEach(() => {
   cleanup();
@@ -45,6 +47,10 @@ const snapshot = {
 it('shows edge meters and live stats measured from this preset, and toggles stomps', async () => {
   vi.mocked(monitoring).mockResolvedValue(snapshot);
   vi.mocked(presetLibrary).mockResolvedValue([]);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [],
+    native_profile: 'tone3000-plugin:test',
+  });
   vi.mocked(nativeState).mockResolvedValue({
     owned: [],
   } as unknown as Awaited<ReturnType<typeof nativeState>>);

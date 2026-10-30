@@ -100,7 +100,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
         <summary>Interface diagnostics &amp; new device setup</summary>
         <p className="caption">
           Inspect and test a device here. A configuration check does not change
-          the playing rig; stop audio before testing an occupied interface.
+          the playing preset; stop audio before testing an occupied interface.
         </p>
         <Button
           variant="outline"

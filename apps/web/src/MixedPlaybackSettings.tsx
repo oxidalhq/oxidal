@@ -53,7 +53,7 @@ export function MixedPlaybackSettings({
   return (
     <section className="control-stack" aria-label="Playback controls">
       <div className="section-heading">
-        <h3>Rig audio</h3>
+        <h3>Presets with scenes</h3>
         <span role="status">
           {state.phase === 'starting' ? 'Preparing…' : state.phase}
         </span>

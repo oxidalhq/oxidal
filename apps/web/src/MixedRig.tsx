@@ -1,6 +1,8 @@
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
+import { RigPresetSelector } from './RigPresetSelector';
+import { choiceKey, playChoice, type PresetChoice } from './presetChoices';
 import {
   assertAuditionOwner,
   confirmedControlDisplay,
@@ -43,6 +45,9 @@ import {
 
 const key = (c: RigControl) => JSON.stringify(c.target);
 /** Actual mixed readback only; an edited document never masquerades as sounding. */
+/** A tile id unique across scene lanes: the branch node, then its block. */
+const laneBlockId = (node: string, block: string) => `${node}::${block}`;
+
 export function MixedRig({
   connected,
   onPlaying,
@@ -93,6 +98,7 @@ export function MixedRig({
     format: 'nam' | 'ir';
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [eqBusy, setEqBusy] = useState(false);
   const [nativeSelection, setNativeSelection] = useState<{
     node: string;
@@ -258,6 +264,18 @@ export function MixedRig({
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
+    }
+  }
+  /** Any preset from the picker: scene presets stay here, TONE3000 ones hand over. */
+  async function choose(choice: PresetChoice) {
+    setSwitching(true);
+    setError('');
+    try {
+      await playChoice(choice);
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (alive.current) setSwitching(false);
     }
   }
   async function switchPrepared(revision: string) {
@@ -586,6 +604,8 @@ export function MixedRig({
   const sceneBranches = sceneList.length
     ? nodes.filter((n) => n.kind === 'tone3000').slice(0, sceneList.length)
     : [];
+  const inSceneLane =
+    !!selected && sceneBranches.some((n) => n.id === selected.id);
   const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
     const layout = state.control?.authoring?.find((a) => a.node === n.id)
       ?.status.layout;
@@ -612,7 +632,8 @@ export function MixedRig({
             enabled?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
             'Block';
           return {
-            id: block.id,
+            // Lanes reuse block ids; the lane prefix keeps selection to one tile.
+            id: laneBlockId(n.id, block.id),
             label: name,
             kind: blockKind('', name),
             on: enabled?.value !== 0,
@@ -623,21 +644,19 @@ export function MixedRig({
   });
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="section-heading min-w-0 flex-1">
-          <h2>Chain</h2>
-          <span role="status">
-            {state.phase === 'starting'
-              ? 'Preparing sound…'
-              : running
-                ? changed
-                  ? 'Unsaved changes'
-                  : 'Playing'
-                : state.phase === 'failed'
-                  ? 'Audio needs attention'
-                  : 'Audio stopped'}
-          </span>
-        </div>
+      <div className="rig-performance-header">
+        <RigPresetSelector
+          current={{
+            key: revision
+              ? choiceKey({ kind: 'scenes', revision, name: '', scenes: [] })
+              : '',
+            name: matching?.manifest.name,
+            modified: !!changed,
+            refresh: revision,
+          }}
+          disabled={disabled || busy || switching || !!edit || !!picker}
+          onSelect={(choice) => void choose(choice)}
+        />
         <Button
           variant="outline"
           disabled={
@@ -669,6 +688,17 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {(state.phase !== 'running' || switching) && (
+        <p role="status" className="caption">
+          {switching
+            ? 'Changing preset…'
+            : state.phase === 'starting'
+              ? 'Preparing sound…'
+              : state.phase === 'failed'
+                ? 'Audio needs attention'
+                : 'Audio stopped'}
+        </p>
+      )}
       <MasterLevel />
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
@@ -721,21 +751,24 @@ export function MixedRig({
       {sceneLanes.length > 0 && (
         <ChainView
           label="Scene branches"
+          parallel
           lanes={sceneLanes}
           selected={
             selected && sceneBranches.some((n) => n.id === selected.id)
-              ? nativeTarget
+              ? laneBlockId(selected.id, nativeTarget)
               : undefined
           }
           disabled={!!edit || !!picker}
-          onSelect={(blockId) => {
-            const lane = sceneLanes.find((l) =>
-              l.blocks.some((b) => b.id === blockId),
+          onSelect={(laneBlock) => {
+            const node = sceneBranches.find((n) =>
+              laneBlock.startsWith(laneBlockId(n.id, '')),
             );
-            const node = sceneBranches[sceneLanes.indexOf(lane!)];
             if (!revision || !node) return;
             setSelection({ revision, node: node.id });
-            setNativeSelection({ node: node.id, target: blockId });
+            setNativeSelection({
+              node: node.id,
+              target: laneBlock.slice(laneBlockId(node.id, '').length),
+            });
           }}
         />
       )}
@@ -775,7 +808,7 @@ export function MixedRig({
       </RigTopology>
       {running && selected && wholeNative && (
         <div
-          className="flex flex-wrap gap-2"
+          className="flex flex-wrap items-center gap-2"
           aria-label="Native model controls"
         >
           {(
@@ -809,63 +842,69 @@ export function MixedRig({
                 {title}
               </Button>
             ))}
-          {eqBlocks.map((block, index) => {
-            const control = controls.find(
-              (c) =>
-                c.target.kind === 'native' &&
-                c.target.parameter === `block:${block.block_id}:enabled`,
-            );
-            const title =
-              control?.label.replace(/(?: · (?:left|right))? · enabled$/, '') ??
-              'Model';
-            return (
+          {/* Scene lanes select models by their tiles; other rigs list them here. */}
+          {!inSceneLane &&
+            eqBlocks.map((block, index) => {
+              const control = controls.find(
+                (c) =>
+                  c.target.kind === 'native' &&
+                  c.target.parameter === `block:${block.block_id}:enabled`,
+              );
+              const title =
+                control?.label.replace(
+                  /(?: · (?:left|right))? · enabled$/,
+                  '',
+                ) ?? 'Model';
+              return (
+                <Button
+                  key={block.block_id}
+                  variant="outline"
+                  aria-label={`Select model ${index + 1}`}
+                  aria-pressed={nativeTarget === block.block_id}
+                  disabled={disabled || !!edit}
+                  className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
+                  onClick={() =>
+                    setNativeSelection({
+                      node: selected.id,
+                      target: block.block_id,
+                    })
+                  }
+                >
+                  <span className="min-w-0 break-words">
+                    {index + 1} · {title}
+                  </span>
+                </Button>
+              );
+            })}
+          <div className="ml-auto flex flex-wrap gap-2">
+            {eqBlock && (
               <Button
-                key={block.block_id}
                 variant="outline"
-                aria-label={`Select model ${index + 1}`}
-                aria-pressed={nativeTarget === block.block_id}
                 disabled={disabled || !!edit}
-                className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
                 onClick={() =>
-                  setNativeSelection({
+                  setPicker({
+                    opening: state,
                     node: selected.id,
-                    target: block.block_id,
+                    target: eqBlock.block_id,
+                    name: 'Selected model',
+                    insert: false,
                   })
                 }
               >
-                <span className="min-w-0 break-words">
-                  {index + 1} · {title}
-                </span>
+                Change model
               </Button>
-            );
-          })}
-          {eqBlock && (
-            <Button
-              variant="outline"
-              disabled={disabled || !!edit}
-              onClick={() =>
-                setPicker({
-                  opening: state,
-                  node: selected.id,
-                  target: eqBlock.block_id,
-                  name: 'Selected model',
-                  insert: false,
-                })
-              }
-            >
-              Change model
-            </Button>
-          )}
-          {slots.length > 0 && (
-            <Button
-              variant="outline"
-              aria-label="Add block"
-              disabled={disabled || !!edit}
-              onClick={() => setAdding(true)}
-            >
-              Add
-            </Button>
-          )}
+            )}
+            {slots.length > 0 && (
+              <Button
+                variant="outline"
+                aria-label="Add block"
+                disabled={disabled || !!edit}
+                onClick={() => setAdding(true)}
+              >
+                Add
+              </Button>
+            )}
+          </div>
           {adding && selected && (
             <AddBlockChooser
               onCancel={() => setAdding(false)}
@@ -1058,7 +1097,7 @@ export function MixedRig({
                   current.control.model_change?.node !== picker.node)
               )
                 throw new Error(
-                  'The playing rig changed. Close and reopen the model browser.',
+                  'The playing preset changed. Close and reopen the model browser.',
                 );
               assertAuditionOwner(
                 picker.opening,

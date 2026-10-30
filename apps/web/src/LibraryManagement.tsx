@@ -125,8 +125,8 @@ function LibraryRow({
             : item.kind === 'owned'
               ? 'Saved tone'
               : item.kind === 'rig'
-                ? 'Rig'
-                : 'Effects rig'}
+                ? 'Preset with scenes'
+                : 'Effects preset'}
           <input
             aria-label={`Name for ${item.name}`}
             value={name}

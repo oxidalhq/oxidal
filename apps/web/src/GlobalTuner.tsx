@@ -42,7 +42,7 @@ export function GlobalTuner({
               owner.current.session !== native.session)
           )
             throw new Error(
-              'The playing rig changed. Close and reopen the tuner.',
+              'The playing preset changed. Close and reopen the tuner.',
             );
           owner.current = { kind: 'native', session: native.session };
           setSource('native');
@@ -62,7 +62,7 @@ export function GlobalTuner({
               : rows[0];
           if (mixed.phase !== 'running' || !mixed.control || !row?.status.tools)
             throw new Error(
-              'Start a rig with a TONE3000 stage to use its tuner. A standalone input tuner is not available yet.',
+              'Play a preset with a TONE3000 chain to use its tuner. A standalone input tuner is not available yet.',
             );
           if (
             owner.current &&
@@ -70,7 +70,7 @@ export function GlobalTuner({
               owner.current.session !== mixed.control.session)
           )
             throw new Error(
-              'The playing rig changed. Close and reopen the tuner.',
+              'The playing preset changed. Close and reopen the tuner.',
             );
           owner.current = {
             kind: 'mixed',
@@ -108,7 +108,7 @@ export function GlobalTuner({
     if (target.kind === 'native') {
       const state = await playbackState();
       if (state.session !== target.session || state.phase !== 'running')
-        throw new Error('The playing rig changed.');
+        throw new Error('The playing preset changed.');
       const next = await playbackCommand(state, { kind: 'authoring', action });
       setTools(next.authoring?.tools ?? null);
     } else {
@@ -117,7 +117,7 @@ export function GlobalTuner({
         state.phase !== 'running' ||
         state.control?.session !== target.session
       )
-        throw new Error('The playing rig changed.');
+        throw new Error('The playing preset changed.');
       const next = await rigAudioCommand(state, {
         kind: 'authoring',
         command: {

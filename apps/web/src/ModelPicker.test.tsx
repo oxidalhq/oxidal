@@ -99,6 +99,6 @@ it('keeps comparison open and marks a model sounding only after confirmed applic
   );
   expect(screen.getByRole('button', { name: /Clean/ })).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'The playing rig changed',
+    'The playing preset changed',
   );
 });

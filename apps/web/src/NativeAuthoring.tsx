@@ -308,7 +308,7 @@ export function NativeAuthoring({
         </p>
       )}
       {layout && selectedBlock && position >= 0 && (
-        <ToolSection title="This block" scope="Saved with this rig">
+        <ToolSection title="This block" scope="Saved with this preset">
           <div role="group" aria-label="Live chain actions">
             <ToolRow
               title="Position"
@@ -453,7 +453,7 @@ export function NativeAuthoring({
       )}
       {layout && (scope === 'all' || !selectedBlock) && (
         <>
-          <ToolSection title="Routing" scope="Saved with this rig">
+          <ToolSection title="Routing" scope="Saved with this preset">
             <ToolRow
               title="Input"
               value={inputLabels[layout.input_mode ?? 'stereo'].name}
@@ -540,7 +540,7 @@ export function NativeAuthoring({
           ) : status?.settings?.some(
               (setting) => !setting.target.startsWith('block:'),
             ) ? (
-            <ToolSection title="Engine" scope="Saved with this rig">
+            <ToolSection title="Engine" scope="Saved with this preset">
               <p className="tool-row-detail">
                 Applying a change restarts audio briefly.
               </p>

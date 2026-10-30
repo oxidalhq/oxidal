@@ -35,6 +35,9 @@ pub struct RigEntry {
     pub name: String,
     pub native_instances: usize,
     pub lv2_instances: usize,
+    /// Scene names in pad order; empty for a preset without scenes.
+    #[serde(default)]
+    pub scenes: Vec<String>,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -190,12 +193,19 @@ pub async fn list(
             {
                 continue;
             }
+            let scenes = m
+                .scenes()
+                .ok()
+                .flatten()
+                .map(|s| s.scenes.into_iter().map(|scene| scene.name).collect())
+                .unwrap_or_default();
             presets.push(RigEntry {
                 revision,
                 id: m.id,
                 name: m.name,
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
+                scenes,
             });
         }
         let catalog = oxidal_presets::CatalogStore::open(root.clone())?;

@@ -224,7 +224,15 @@ Fold and BOOX in both orientations. Physical boot/device timing remains open.
 
 ## Direct native preset recall
 
-Library preset buttons send `load_preset` through the audio owner, reusing the configured device, format and MIDI setup. Original and owned presets are supported. The owner retains confirmed working controls, models, EQ and captures per preset before switching, and restores them when returning. Missing sources are rejected before stopping audio; failed target startup attempts to restore the previous running session. Initial audio configuration is still required. This path restarts the native worker and is not gapless or a cross-engine handoff.
+Library preset buttons send `load_preset` through the audio owner, reusing the configured device, format and MIDI setup. Original and owned presets are supported. The owner retains confirmed working controls, models, EQ and captures per preset before switching, and restores them when returning. Missing sources are rejected before stopping audio; failed target startup attempts to restore the previous running session. Initial audio configuration is still required. This path restarts the native worker and is not gapless. When a preset with scenes is playing, the interface first stops that engine and waits for the device (see Presets and scenes).
+
+## Presets and scenes
+
+The interface uses two words. A **preset** is anything you load: one TONE3000 chain, or several running in parallel. A **scene** is a variation inside a preset (Clean, Crunch, Heavy), switched by the pads on Rig and never listed with presets. "Rig" is only the page name.
+
+- **One list:** the Rig picker, Perform pads and Library show every preset. Presets with scenes come first and carry their scene count; `GET /api/v1/presets/rigs` returns each entry's `scenes` names in pad order.
+- **One tap:** choosing a preset stops whichever engine holds the interface, waits until it is released, then starts the right one with the unit's audio setup (`apps/web/src/presetChoices.ts`). A preset with scenes that is kept ready switches without stopping.
+- **Gaps:** changing scene never interrupts audio; changing preset briefly does, unless both presets with scenes are kept ready.
 
 ## Unit levels
 

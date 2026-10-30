@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import { CircleNotch } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { rigLibrary, rigAudioState, type RigPage } from './api';
 import {
-  rigLibrary,
-  rigAudioState,
-  rigAudioCommand,
-  playbackState,
-  graphAudioState,
-  type RigPage,
-} from './api';
+  playScenes,
+  readKeepReady,
+  scenesLabel,
+  writeKeepReady,
+} from './presetChoices';
 
-/** Verified library revisions share the same audio configuration and device owner. */
+/**
+ * Presets with scenes in the Library: rows look and play like every other
+ * preset; one tap stops whatever is playing and opens the Rig page.
+ * Keep ready loads chosen presets in the background for gapless switching.
+ * @see docs/audio.md
+ */
 export function SavedRigs({
   connected,
   onOpenRig,
@@ -24,30 +29,12 @@ export function SavedRigs({
   const [items, setItems] = useState<RigPage['presets']>([]);
   const [next, setNext] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [prepared, setPrepared] = useState<string[]>(() => {
-    try {
-      const saved: unknown = JSON.parse(
-        localStorage.getItem('oxidal.prepared-rigs') ?? '[]',
-      );
-      return Array.isArray(saved)
-        ? saved.filter(
-            (v): v is string =>
-              typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
-          )
-        : [];
-    } catch {
-      return [];
-    }
-  });
+  const [prepared, setPrepared] = useState<string[]>(readKeepReady);
   const [choosing, setChoosing] = useState(false);
-  useEffect(() => {
-    try {
-      localStorage.setItem('oxidal.prepared-rigs', JSON.stringify(prepared));
-    } catch {
-      /* browser storage unavailable */
-    }
-  }, [prepared]);
+  useEffect(() => writeKeepReady(prepared), [prepared]);
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
@@ -61,84 +48,34 @@ export function SavedRigs({
       .catch((cause: unknown) => {
         if (alive.current) setError(String(cause));
       });
+    void rigAudioState()
+      .then((rig) => {
+        if (alive.current && rig.phase === 'running')
+          setPlaying(rig.configured?.revision ?? null);
+      })
+      .catch(() => {});
     return () => {
       alive.current = false;
     };
   }, [refresh]);
   async function play(revision: string) {
     setBusy(true);
+    setLoadingId(revision);
     setError('');
     try {
-      const [rig, native, graph] = await Promise.all([
-        rigAudioState(),
-        playbackState(),
-        graphAudioState(),
-      ]);
-      if (rig.phase === 'running' && rig.control && rig.configured) {
-        if (rig.configured.revision === revision) {
-          onOpenRig();
-          return;
-        }
-        const ready = rig.control.prepared?.find(
-          (p) => p.revision === revision && !p.error,
-        );
-        if (ready) {
-          await rigAudioCommand(rig, {
-            kind: 'switch',
-            command: {
-              session: rig.control.session,
-              expected_revision: rig.control.revision,
-              revision,
-              fade_frames: Math.max(
-                2,
-                Math.round(rig.configured.stream.input.sample_rate / 100),
-              ),
-            },
-          });
-          if (alive.current) onOpenRig();
-          return;
-        }
-      }
-      if ([rig, native, graph].some((s) => s.device_owned))
-        throw new Error('Stop the current audio before opening another rig.');
-      const stream =
-        rig.configured?.stream ??
-        native.configured?.stream ??
-        graph.configured?.stream;
-      if (!stream)
-        throw new Error(
-          'Choose the input, output and buffer in Settings → Audio first.',
-        );
-      await rigAudioCommand(rig, {
-        kind: 'start',
-        settings: {
-          revision,
-          stream,
-          recall: null,
-          prepared: [...new Set(prepared)]
-            .filter((id) => id !== revision)
-            .map((id) => ({ revision: id, recall: null })),
-        },
-      });
+      await playScenes(revision);
       if (alive.current) {
-        if (prepared.length) {
-          const complete = [...new Set([...prepared, revision])];
-          setPrepared(complete);
-          try {
-            localStorage.setItem(
-              'oxidal.prepared-rigs',
-              JSON.stringify(complete),
-            );
-          } catch {
-            /* storage unavailable */
-          }
-        }
+        // Starting may have added it to the ready set.
+        setPrepared(readKeepReady());
         onOpenRig();
       }
     } catch (cause) {
       if (alive.current) setError(String(cause));
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) {
+        setBusy(false);
+        setLoadingId(null);
+      }
     }
   }
   async function more() {
@@ -167,71 +104,84 @@ export function SavedRigs({
   );
   if (!items.length && !error) return null;
   return (
-    <section className="space-y-3" aria-label="Saved rigs">
+    <section className="library-scenes" aria-label="Presets with scenes">
       <div className="section-heading">
-        <h2>Rigs</h2>
+        <h2>With scenes</h2>
         <Button
-          variant="outline"
+          variant="ghost"
           aria-pressed={choosing}
           disabled={busy}
           onClick={() => setChoosing((v) => !v)}
         >
-          Prepare set{prepared.length ? ` · ${prepared.length}` : ''}
+          Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
         </Button>
       </div>
       {choosing && (
         <p className="caption">
-          Ready rigs use extra DSP and memory while audio runs.
+          Ready presets stay loaded while audio runs, so switching between them
+          has no gap. Each one uses extra processing and memory.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      {shown.map((p) => (
-        <div
-          key={p.revision}
-          className="section-heading border-b border-border pb-2"
-        >
-          <div className="min-w-0">
-            <h3 className="break-words">{p.name}</h3>
-            <p className="caption">
-              {p.native_instances} TONE3000 · {p.lv2_instances} effects
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {choosing && (
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 px-2">
-                <input
-                  type="checkbox"
-                  className="size-5 accent-primary"
-                  aria-label={`Keep ${p.name} ready`}
-                  checked={prepared.includes(p.revision)}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setPrepared((old) =>
-                      event.target.checked
-                        ? [...new Set([...old, p.revision])]
-                        : old.filter((id) => id !== p.revision),
-                    )
-                  }
-                />
-                Ready
-              </label>
-            )}
-            <Button
-              variant="outline"
-              disabled={!connected || busy}
-              aria-label={`Play ${p.name}`}
-              onClick={() => void play(p.revision)}
-            >
-              Play
-            </Button>
-          </div>
-        </div>
-      ))}
+      <ul className="preset-library">
+        {shown.map((p) => {
+          const active = playing === p.revision;
+          const scenes = p.scenes ?? [];
+          return (
+            <li key={p.revision} className="library-row">
+              <button
+                type="button"
+                className="library-load"
+                disabled={!connected || busy}
+                onClick={() => void play(p.revision)}
+                aria-label={`Load ${p.name}`}
+                aria-pressed={active}
+              >
+                <span className="library-name">{p.name}</span>
+                <span className="library-meta">
+                  {loadingId === p.revision ? (
+                    <>
+                      <CircleNotch aria-hidden="true" /> Loading…
+                    </>
+                  ) : (
+                    <>
+                      {active && (
+                        <span className="library-playing">Playing</span>
+                      )}
+                      {[scenesLabel(scenes), scenes.join(', ')]
+                        .filter(Boolean)
+                        .join(': ') || `${p.native_instances} parallel chains`}
+                    </>
+                  )}
+                </span>
+              </button>
+              {choosing && (
+                <label className="library-ready">
+                  <input
+                    type="checkbox"
+                    aria-label={`Keep ${p.name} ready`}
+                    checked={prepared.includes(p.revision)}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setPrepared((old) =>
+                        event.target.checked
+                          ? [...new Set([...old, p.revision])]
+                          : old.filter((id) => id !== p.revision),
+                      )
+                    }
+                  />
+                  Ready
+                </label>
+              )}
+            </li>
+          );
+        })}
+      </ul>
       {query.trim() && !shown.length && (
         <p role="status" className="caption">
           {next
-            ? 'No matches in loaded rigs. Load more to search the next page.'
-            : 'No hybrid rigs match this name.'}
+            ? 'No matches yet. Load more to search further.'
+            : 'No presets with scenes match this name.'}
         </p>
       )}
       {next && (

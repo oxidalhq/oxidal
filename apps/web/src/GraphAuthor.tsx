@@ -62,8 +62,8 @@ export function GraphAuthor({
     (liveOnly || state?.phase === 'running'
       ? (state?.configured?.name ??
         library.find((item) => item.id === state?.saved_copy)?.preset.name ??
-        'New rig')
-      : 'New rig');
+        'New preset')
+      : 'New preset');
   const [catalog, setCatalog] = useState<Lv2Plugin[]>([]);
   const [picker, setPicker] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -226,7 +226,7 @@ export function GraphAuthor({
       } else {
         if (next.device_owned)
           throw new Error(
-            'Stop the current audio session before creating another rig',
+            'Stop the current audio session before creating another preset',
           );
         next = await playbackCommand(next, {
           kind: 'create',
@@ -422,7 +422,7 @@ export function GraphAuthor({
               disabled={disabled}
               onClick={() => {
                 setDraft({ rig: emptyRig, bindings: [] });
-                setName('New rig');
+                setName('New preset');
               }}
             >
               <Eraser aria-hidden="true" /> Clear draft
@@ -575,7 +575,7 @@ export function GraphAuthor({
                 });
             }}
           >
-            Audition rig
+            Audition preset
           </Button>
           {configured && (
             <Button
@@ -601,7 +601,7 @@ export function GraphAuthor({
       )}
       {!liveOnly && library.length > 0 && (
         <div className="space-y-2" aria-label="Saved effects rigs">
-          <h3>Saved rigs</h3>
+          <h3>Saved presets</h3>
           <div className="action-row">
             {library.map((item) => (
               <Button

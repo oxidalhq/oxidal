@@ -14,6 +14,7 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
+import { playScenes, tone3000Key, type PresetChoice } from './presetChoices';
 import {
   assertAuditionOwner,
   movedBlockOrder,
@@ -248,17 +249,24 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
-  async function recall(id: string, owned: boolean) {
+  async function recall(choice: PresetChoice) {
     if (!state || sending.current || adjustment.current || eqEditing) return;
     sending.current = true;
     generation.current += 1;
     setBusy(true);
     setError('');
     try {
+      if (choice.kind === 'scenes') {
+        // The scenes engine takes over the interface; the Rig page follows it.
+        await playScenes(choice.revision);
+        const next = await playbackState();
+        if (alive.current) setState(next);
+        return;
+      }
       const next = await playbackCommand(state, {
         kind: 'load_preset',
-        preset_id: id,
-        owned,
+        preset_id: choice.id,
+        owned: choice.owned,
       });
       if (alive.current) {
         setState(next);
@@ -728,7 +736,7 @@ export function LiveRig({
             if (enabled)
               void apply(enabled.target, enabled.value === 1 ? 0 : 1);
           }}
-          onRecall={(id, owned) => void recall(id, owned)}
+          onRecall={(choice) => void recall(choice)}
           onEdit={() => setPerformance(false)}
           knobs={knobStrip}
         />
@@ -742,9 +750,14 @@ export function LiveRig({
     >
       <div className="rig-performance-header">
         <RigPresetSelector
-          state={state}
+          current={{
+            key: tone3000Key(state),
+            name: state.preset_name,
+            modified: state.modified,
+            refresh: state.saved_copy,
+          }}
           disabled={disabled || !!draft || !!picker}
-          onSelect={(id, owned) => void recall(id, owned)}
+          onSelect={(choice) => void recall(choice)}
         />
         {/* Save and the preset actions form one split button. */}
         <div className="preset-save-group" role="group" aria-label="Save">

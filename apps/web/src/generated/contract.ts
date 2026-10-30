@@ -1952,6 +1952,10 @@ export interface RigEntry {
   name: string;
   native_instances: number;
   revision: string;
+  /**
+   * Scene names in pad order; empty for a preset without scenes.
+   */
+  scenes?: string[];
 }
 export interface RigNativeSource {
   preset: Inspection;

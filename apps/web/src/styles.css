@@ -2358,8 +2358,9 @@ textarea {
 }
 .mixed-routing-lines path {
   fill: none;
-  stroke: var(--muted-foreground);
-  stroke-width: 2;
+  stroke: var(--wire);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
 }
 .mixed-routing-node {
   position: absolute;
@@ -2379,12 +2380,15 @@ textarea {
 
 .rig-performance-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
 }
+/* The preset name keeps a readable width; buttons that do not fit beside it
+   wrap to their own row on phones. */
 .rig-performance-header .preset-picker {
-  flex: 1;
+  flex: 1 1 12rem;
   min-width: 0;
 }
 .rig-workspace {

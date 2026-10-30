@@ -97,10 +97,13 @@ async function routeProviderModels(
 
 /** Exercise the real paged library instead of assuming the saved hash sorts first. */
 async function playSavedRig(page: Page, name: string) {
-  const library = page.getByRole('region', { name: 'Saved rigs', exact: true });
+  const library = page.getByRole('region', {
+    name: 'Presets with scenes',
+    exact: true,
+  });
   await expect(library).toBeVisible();
   const play = library.getByRole('button', {
-    name: `Play ${name}`,
+    name: `Load ${name}`,
     exact: true,
   });
   while ((await play.count()) === 0) {
@@ -109,11 +112,10 @@ async function playSavedRig(page: Page, name: string) {
       exact: true,
     });
     await expect(more).toBeVisible();
-    const before = await library.getByRole('heading', { level: 3 }).count();
+    const rows = library.getByRole('button', { name: /^Load / });
+    const before = await rows.count();
     await more.click();
-    await expect
-      .poll(() => library.getByRole('heading', { level: 3 }).count())
-      .toBeGreaterThan(before);
+    await expect.poll(() => rows.count()).toBeGreaterThan(before);
   }
   await play.click();
 }
@@ -457,7 +459,7 @@ test('native preset upload, durable library, exact download and rejected replace
     .fill('no-matching-rig-unique');
   await expect(rows).toHaveCount(0);
   await expect(
-    page.getByText('No TONE3000 presets match this name.'),
+    page.getByText('No single-chain presets match this name.'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear preset search' }).click();
   await expect(rows).toHaveCount(2);
@@ -2076,7 +2078,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     editor.getByRole('button', { name: 'Add effect', exact: true }),
   ).toBeEnabled();
   await expect(editor.getByLabel('Preset name', { exact: true })).toHaveValue(
-    'New rig',
+    'New preset',
   );
   await editor.getByLabel('Preset name', { exact: true }).fill(name);
   await editor.getByRole('button', { name: 'Add effect', exact: true }).click();
@@ -2121,7 +2123,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await page.setViewportSize(viewport);
   await select.click();
   await editor
-    .getByRole('button', { name: 'Audition rig', exact: true })
+    .getByRole('button', { name: 'Audition preset', exact: true })
     .click();
   await expect(
     editor.getByRole('button', { name: 'Save preset', exact: true }),
@@ -2262,7 +2264,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await page.getByRole('button', { name: 'New preset', exact: true }).click();
   await editor.getByRole('button', { name, exact: true }).click();
   await editor
-    .getByRole('button', { name: 'Audition rig', exact: true })
+    .getByRole('button', { name: 'Audition preset', exact: true })
     .click();
   await expect
     .poll(async () => (await read()).native_values[0]?.value)
@@ -2689,7 +2691,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
   await expect(
-    audioSettings.getByRole('heading', { name: 'Rig audio' }),
+    audioSettings.getByRole('heading', { name: 'Presets with scenes' }),
   ).toBeVisible();
   await audioSettings
     .getByText('Current device & buffers', { exact: true })
@@ -2784,11 +2786,11 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect.poll(async () => (await get()).phase).toBe('stopped');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   const savedLibrary = page.getByRole('region', {
-    name: 'Saved rigs',
+    name: 'Presets with scenes',
     exact: true,
   });
   await savedLibrary
-    .getByRole('button', { name: 'Prepare set', exact: true })
+    .getByRole('button', { name: 'Keep ready', exact: true })
     .click();
   const ready = savedLibrary.getByRole('checkbox', {
     name: `Keep ${manifest.name} ready`,
@@ -3177,7 +3179,7 @@ for (const layout of ['serial', 'scenes'] as const) {
       }),
     ).toBeVisible();
     if (layout === 'scenes') {
-      const scenes = rig.getByRole('group', { name: 'Rig scenes' });
+      const scenes = rig.getByRole('group', { name: 'Scenes' });
       await expect(
         scenes.getByRole('button', { name: /^Scene \d+: Clean$/ }),
       ).toHaveAttribute('aria-pressed', 'true');

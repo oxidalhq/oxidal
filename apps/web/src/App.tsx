@@ -367,7 +367,7 @@ function InstrumentApp() {
               <span className="eyebrow">
                 {view === 'rig'
                   ? audioRunning
-                    ? 'Sounding rig'
+                    ? 'Playing'
                     : developmentSimulator
                       ? 'Development simulator'
                       : 'Rig'
@@ -385,7 +385,7 @@ function InstrumentApp() {
                     graphName ??
                     mixedName ??
                     (!developmentSimulator
-                      ? 'Your rig'
+                      ? 'No preset playing'
                       : !state
                         ? 'Connecting'
                         : state.preset === 'custom'

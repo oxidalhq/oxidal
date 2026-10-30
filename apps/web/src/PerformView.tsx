@@ -5,6 +5,7 @@ import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
 import { RigPresetSelector } from './RigPresetSelector';
+import { tone3000Key, type PresetChoice } from './presetChoices';
 import './PerformView.css';
 
 const FLOOR_DB = -60;
@@ -102,7 +103,7 @@ export function PerformView({
   lanes: RigLaneVM[];
   disabled: boolean;
   onToggle: (blockId: string) => void;
-  onRecall: (id: string, owned: boolean) => void;
+  onRecall: (choice: PresetChoice) => void;
   onEdit: () => void;
   /** Performance knob strip, rendered by the rig that owns the controls. */
   knobs?: React.ReactNode;
@@ -314,7 +315,7 @@ export function PerformView({
               {state.phase === 'running' ? 'Playing' : 'Not playing'}
             </span>
             <strong className="perform-now-name">
-              {state.preset_name ?? 'Current rig'}
+              {state.preset_name ?? 'Unsaved preset'}
             </strong>
             <span className="perform-now-sub">
               {state.modified ? (
@@ -358,7 +359,12 @@ export function PerformView({
           )}
           <div className="perform-section">
             <RigPresetSelector
-              state={state}
+              current={{
+                key: tone3000Key(state),
+                name: state.preset_name,
+                modified: state.modified,
+                refresh: state.saved_copy,
+              }}
               disabled={disabled}
               pads
               onSelect={onRecall}

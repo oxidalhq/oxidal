@@ -7,14 +7,18 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
-import { nativeState, presetLibrary, type AudioState } from './api';
+import { nativeState, presetLibrary, rigLibrary } from './api';
 import {
   assertAuditionOwner,
   controlGroup,
   confirmedControlDisplay,
   movedBlockOrder,
 } from './rigControls';
-vi.mock('./api', () => ({ nativeState: vi.fn(), presetLibrary: vi.fn() }));
+vi.mock('./api', () => ({
+  nativeState: vi.fn(),
+  presetLibrary: vi.fn(),
+  rigLibrary: vi.fn(),
+}));
 // jsdom has no modal dialog; the picker list opens in one.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.open = true;
@@ -26,11 +30,14 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
-const state = {
-  configured: { preset_id: 'a', owned: false, draft: false },
-  preset_name: 'Amp A',
-} as AudioState;
+const state = { key: 'original:a', name: 'Amp A', modified: false };
+const tone = (id: string, owned: boolean) =>
+  expect.objectContaining({ kind: 'tone3000', id, owned });
 function library() {
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [],
+    native_profile: 'tone3000-plugin:test',
+  });
   vi.mocked(presetLibrary).mockResolvedValue([
     { sha256: 'a', name: 'Amp A' },
     { sha256: 'b', name: 'Amp B' },
@@ -43,7 +50,7 @@ it('selects original and owned identities without optimistically changing the so
   library();
   const select = vi.fn();
   const view = render(
-    <RigPresetSelector state={state} disabled={false} onSelect={select} />,
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
   const picker = screen.getByRole('button', {
     name: 'Playing preset: Amp A',
@@ -60,7 +67,7 @@ it('selects original and owned identities without optimistically changing the so
     screen.getByText(/Unsaved edits stay with each preset/),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'My A' }));
-  expect(select).toHaveBeenCalledWith('a', true);
+  expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName('Playing preset: Amp A');
   fireEvent.click(picker);
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a preset' }), {
@@ -70,12 +77,18 @@ it('selects original and owned identities without optimistically changing the so
     screen.queryByRole('button', { name: 'My A' }),
   ).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
-  expect(select).toHaveBeenLastCalledWith('b', false);
-  view.rerender(<RigPresetSelector state={state} disabled onSelect={select} />);
+  expect(select).toHaveBeenLastCalledWith(tone('b', false));
+  view.rerender(
+    <RigPresetSelector current={state} disabled onSelect={select} />,
+  );
   expect(picker).toBeDisabled();
 });
 it('keeps the current rig visible when the library fails, and permits retry', async () => {
   vi.mocked(presetLibrary).mockRejectedValue(new Error('offline'));
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [],
+    native_profile: 'tone3000-plugin:test',
+  });
   vi.mocked(nativeState).mockResolvedValue({
     owned: [],
     block_controls: [],
@@ -89,14 +102,16 @@ it('keeps the current rig visible when the library fails, and permits retry', as
     state_captures: 0,
   });
   render(
-    <RigPresetSelector state={state} disabled={false} onSelect={() => {}} />,
+    <RigPresetSelector current={state} disabled={false} onSelect={() => {}} />,
   );
-  await screen.findByText('Original presets unavailable');
+  await screen.findByText('Some presets are unavailable (originals)');
   const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
   library();
   fireEvent.click(screen.getByRole('button', { name: 'Retry presets' }));
   await waitFor(() =>
-    expect(screen.queryByText('Original presets unavailable')).toBeNull(),
+    expect(
+      screen.queryByText('Some presets are unavailable (originals)'),
+    ).toBeNull(),
   );
   fireEvent.click(picker);
   expect(screen.getByRole('button', { name: 'Amp B' })).toBeEnabled();
@@ -134,13 +149,18 @@ it('uses the same authoritative recall from performance pads and preserves owned
   library();
   const select = vi.fn();
   render(
-    <RigPresetSelector state={state} disabled={false} onSelect={select} pads />,
+    <RigPresetSelector
+      current={state}
+      disabled={false}
+      onSelect={select}
+      pads
+    />,
   );
   const playing = await screen.findByRole('button', { name: /Amp A.*Playing/ });
   expect(playing).toBeDisabled();
   expect(playing).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByRole('button', { name: /My A.*My copy/ }));
-  expect(select).toHaveBeenCalledWith('a', true);
+  expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(playing).toHaveAttribute('aria-pressed', 'true');
   // Fewer than eight presets need no bank paging.
   expect(
@@ -148,11 +168,11 @@ it('uses the same authoritative recall from performance pads and preserves owned
   ).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: /Amp B.*Next/ })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Next preset: Amp B' }));
-  expect(select).toHaveBeenLastCalledWith('b', false);
+  expect(select).toHaveBeenLastCalledWith(tone('b', false));
   fireEvent.click(
     screen.getByRole('button', { name: 'Previous preset: My A' }),
   );
-  expect(select).toHaveBeenLastCalledWith('a', true);
+  expect(select).toHaveBeenLastCalledWith(tone('a', true));
 });
 
 it('opens gig pads on the playing bank and keeps playing identity during initial loading', async () => {
@@ -166,20 +186,20 @@ it('opens gig pads on the playing bank and keeps playing identity during initial
   vi.mocked(nativeState).mockResolvedValue({ owned: [] } as unknown as Awaited<
     ReturnType<typeof nativeState>
   >);
-  const playing = {
-    ...state,
-    configured: { ...state.configured!, preset_id: '10' },
-    preset_name: 'Tone 10',
-  };
+  const playing = { key: 'original:10', name: 'Tone 10', modified: false };
   const view = render(
-    <RigPresetSelector state={playing} disabled={false} onSelect={() => {}} />,
+    <RigPresetSelector
+      current={playing}
+      disabled={false}
+      onSelect={() => {}}
+    />,
   );
   expect(
     screen.getByRole('button', { name: 'Playing preset: Tone 10' }),
   ).toBeInTheDocument();
   view.rerender(
     <RigPresetSelector
-      state={playing}
+      current={playing}
       disabled={false}
       onSelect={() => {}}
       pads
@@ -232,26 +252,61 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
   vi.mocked(nativeState).mockRejectedValue(new Error('worker offline'));
   const select = vi.fn();
   render(
-    <RigPresetSelector state={state} disabled={false} onSelect={select} />,
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
-  await screen.findByText('Saved copies unavailable');
+  await screen.findByText('Some presets are unavailable (saved copies)');
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
-  expect(select).toHaveBeenCalledWith('b', false);
+  expect(select).toHaveBeenCalledWith(tone('b', false));
 });
 it('keeps saved copies selectable when originals cannot be read', async () => {
   library();
   vi.mocked(presetLibrary).mockRejectedValue(new Error('storage unavailable'));
   const select = vi.fn();
   render(
-    <RigPresetSelector state={state} disabled={false} onSelect={select} />,
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
   );
-  await screen.findByText('Original presets unavailable');
+  await screen.findByText('Some presets are unavailable (originals)');
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
   fireEvent.click(screen.getByRole('button', { name: 'My A' }));
-  expect(select).toHaveBeenCalledWith('a', true);
+  expect(select).toHaveBeenCalledWith(tone('a', true));
+});
+
+it('lists presets with scenes first, tagged by scene count, and plays them as one choice', async () => {
+  library();
+  const revision = 'f'.repeat(64);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [
+      {
+        revision,
+        id: 'clean-to-heavy',
+        name: 'Clean to heavy',
+        native_instances: 3,
+        lv2_instances: 0,
+        scenes: ['Clean', 'Crunch', 'Heavy'],
+      },
+    ],
+    native_profile: 'tone3000-plugin:test',
+  });
+  const select = vi.fn();
+  render(
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
+  );
+  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  await waitFor(() => expect(picker).toBeEnabled());
+  fireEvent.click(picker);
+  const groups = screen
+    .getAllByRole('region')
+    .map((g) => g.getAttribute('aria-label'));
+  expect(groups).toEqual(['With scenes', 'My copies', 'Originals']);
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Clean to heavy\s*3 scenes$/ }),
+  );
+  expect(select).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'scenes', revision }),
+  );
 });

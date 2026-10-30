@@ -258,8 +258,8 @@ export function ModelPicker({
                 : 'Audition file'}
             </Button>
             <p className="caption">
-              No sign-in needed. Save the sounding rig to keep its model and IR
-              bytes offline.
+              No sign-in needed. Save the playing preset to keep its model and
+              IR bytes offline.
             </p>
             <div
               aria-label="Local model files"
@@ -501,7 +501,7 @@ export function ModelPicker({
         {(comparison?.blocked || error || comparison?.error) && (
           <p role="alert">
             {comparison?.blocked
-              ? 'The playing rig changed. Close and reopen the model browser.'
+              ? 'The playing preset changed. Close and reopen the model browser.'
               : error || comparison?.error}
           </p>
         )}

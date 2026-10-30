@@ -65,11 +65,13 @@ export function RigTopology({
               const x = from.x + width,
                 y = from.y + height / 2,
                 endY = to.y + height / 2;
-              const bend = (x + to.x) / 2;
+              // Right-angle wires turn in the gap before the target column, so
+              // links fanning out of (or into) one node share a single bar.
+              const bend = to.x - gapX / 2;
               return (
                 <path
                   key={`${link.from}:${link.to}`}
-                  d={`M ${x} ${y} C ${bend} ${y}, ${bend} ${endY}, ${to.x} ${endY}`}
+                  d={`M ${x} ${y} H ${bend} V ${endY} H ${to.x}`}
                 />
               );
             })}

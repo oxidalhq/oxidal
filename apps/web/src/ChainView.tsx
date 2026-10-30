@@ -15,8 +15,11 @@ export function ChainView({
   disabled,
   label,
   appearance,
+  parallel = false,
 }: {
   lanes: RigLaneVM[];
+  /** Lanes are branches of one signal: one input splits to all, one output sums them. */
+  parallel?: boolean;
   /** Chain appearance preference, exposed for styling and tests. */
   appearance?: string;
   selected?: string;
@@ -24,6 +27,61 @@ export function ChainView({
   disabled?: boolean;
   label: string;
 }) {
+  const tiles = (lane: RigLaneVM) => (
+    <div
+      className="chain-blocks"
+      role="region"
+      aria-label={`${lane.id} chain blocks`}
+      tabIndex={0}
+    >
+      {lane.blocks.map((block) => (
+        <RigTile
+          key={block.id}
+          block={block}
+          selected={selected === block.id}
+          disabled={disabled}
+          onSelect={() => onSelect(block.id)}
+        />
+      ))}
+      {!lane.blocks.length && (
+        <span className="chain-empty">Direct signal</span>
+      )}
+    </div>
+  );
+  if (parallel && lanes.length > 1)
+    return (
+      <div
+        className="chain-view chain-parallel"
+        aria-label={label}
+        data-chain-view={appearance}
+      >
+        <span className="chain-port">IN</span>
+        <div className="chain-parallel-lanes">
+          {lanes.map((lane) => (
+            <div
+              key={lane.id}
+              className="chain-lane chain-branch"
+              data-dim={lane.dim || undefined}
+              aria-label={`${lane.id} signal chain`}
+            >
+              <span
+                className="chain-bus"
+                data-side="split"
+                aria-hidden="true"
+              />
+              <span className="chain-port chain-branch-number">
+                {lane.input}
+              </span>
+              {tiles(lane)}
+              <span className="chain-bus" data-side="sum" aria-hidden="true" />
+            </div>
+          ))}
+        </div>
+        <span className="chain-port">
+          OUT <ArrowRight aria-hidden="true" />
+        </span>
+      </div>
+    );
   return (
     <div className="chain-view" aria-label={label} data-chain-view={appearance}>
       {lanes.map((lane) => (

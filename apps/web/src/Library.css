@@ -60,8 +60,24 @@
   column-gap: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
-.library-row > :not(.library-load):not(a) {
+.library-row > :not(.library-load):not(a):not(.library-ready) {
   grid-column: 1 / -1;
+}
+.library-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--touch-target);
+  padding: 0 0.5rem;
+  font-size: 0.8125rem;
+}
+.library-ready input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--foreground);
+}
+.library-scenes {
+  margin-bottom: 1.5rem;
 }
 .library-load {
   display: grid;

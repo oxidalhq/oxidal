@@ -7,28 +7,44 @@ import {
 } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import './PresetPicker.css';
-import { nativeState, presetLibrary, type AudioState } from './api';
 import { Button } from './components/ui/button';
+import {
+  choiceKey as key,
+  loadPresetChoices,
+  scenesLabel,
+  type PresetChoice as Choice,
+} from './presetChoices';
 
-type Choice = { id: string; name: string; owned: boolean };
-const key = (item: { id: string; owned: boolean }) =>
-  `${item.owned ? 'copy' : 'original'}:${item.id}`;
+const origin = (item: Choice) =>
+  item.kind === 'scenes'
+    ? scenesLabel(item.scenes) || 'Parallel chains'
+    : item.owned
+      ? 'My copy'
+      : 'Original';
 
-/** One preset picker: the playing name opens a searchable list; a row recalls it.
+/** One preset picker for every engine: the playing name opens a searchable list
+ * of all presets, those with scenes first; a row plays it. Scenes are switched
+ * by the pads under it, never from this list.
  * Edits stay with each preset (verified B4), so recall needs no guard prompt.
- * Immediate native recall uses the same authoritative owner as Library.
  * @see docs/audio.md
  */
 export function RigPresetSelector({
-  state,
+  current: playing,
   disabled,
   onSelect,
   pads = false,
 }: {
   pads?: boolean;
-  state: AudioState;
+  /** The playing preset: its list key ('' for a draft), name and edit state. */
+  current: {
+    key: string;
+    name: string | null | undefined;
+    modified: boolean;
+    /** Changes when the list may have changed, such as after a save. */
+    refresh?: unknown;
+  };
   disabled: boolean;
-  onSelect: (id: string, owned: boolean) => void;
+  onSelect: (choice: Choice) => void;
 }) {
   const [bank, setBank] = useState<number | null>(null);
   const [items, setItems] = useState<Choice[]>([]);
@@ -39,34 +55,11 @@ export function RigPresetSelector({
   const [query, setQuery] = useState('');
   useEffect(() => {
     let active = true;
-    void Promise.allSettled([presetLibrary(), nativeState()])
-      .then(([originals, native]) => {
+    void loadPresetChoices()
+      .then((loaded) => {
         if (!active) return;
-        setItems([
-          ...(native.status === 'fulfilled' ? native.value.owned : []).map(
-            (p) => ({
-              id: p.id,
-              name: p.preset.name,
-              owned: true,
-            }),
-          ),
-          ...(originals.status === 'fulfilled' ? originals.value : []).map(
-            (p) => ({
-              id: p.sha256,
-              name: p.name,
-              owned: false,
-            }),
-          ),
-        ]);
-        setError(
-          originals.status === 'rejected' && native.status === 'rejected'
-            ? 'Preset list unavailable'
-            : originals.status === 'rejected'
-              ? 'Original presets unavailable'
-              : native.status === 'rejected'
-                ? 'Saved copies unavailable'
-                : '',
-        );
+        setItems(loaded.items);
+        setError(loaded.error);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -74,18 +67,15 @@ export function RigPresetSelector({
     return () => {
       active = false;
     };
-  }, [refresh, state.saved_copy]);
-  const selected =
-    state.configured && !state.configured.draft
-      ? key({ id: state.configured.preset_id, owned: state.configured.owned })
-      : '';
+  }, [refresh, playing.refresh]);
+  const selected = playing.key;
   const index = items.findIndex((p) => key(p) === selected);
   const currentBank = Math.min(
     Math.max(0, Math.ceil(items.length / 8) - 1),
     bank ?? Math.max(0, Math.floor(index / 8)),
   );
   function choose(item: Choice | undefined) {
-    if (item && !disabled && !loading) onSelect(item.id, item.owned);
+    if (item && !disabled && !loading) onSelect(item);
   }
   if (pads) {
     const previous = index > 0 ? items[index - 1] : undefined;
@@ -104,7 +94,7 @@ export function RigPresetSelector({
           {items
             .slice(currentBank * 8, currentBank * 8 + 8)
             .map((item, offset) => {
-              const playing = key(item) === selected;
+              const sounding = key(item) === selected;
               const upcoming = !!next && key(item) === key(next);
               return (
                 <button
@@ -112,8 +102,8 @@ export function RigPresetSelector({
                   key={key(item)}
                   className="preset-pad"
                   data-next={upcoming || undefined}
-                  aria-pressed={playing}
-                  disabled={disabled || loading || playing}
+                  aria-pressed={sounding}
+                  disabled={disabled || loading || sounding}
                   onClick={() => choose(item)}
                 >
                   <span className="preset-pad-number">
@@ -122,13 +112,7 @@ export function RigPresetSelector({
                   <span className="preset-pad-text">
                     <strong>{item.name}</strong>
                     <span className="preset-pad-origin">
-                      {playing
-                        ? 'Playing'
-                        : upcoming
-                          ? 'Next'
-                          : item.owned
-                            ? 'My copy'
-                            : 'Original'}
+                      {sounding ? 'Playing' : upcoming ? 'Next' : origin(item)}
                     </span>
                   </span>
                 </button>
@@ -199,14 +183,16 @@ export function RigPresetSelector({
           <p>No saved presets. Add one from Library.</p>
         )}
         <p className="caption">
-          Recalling a whole preset briefly interrupts audio.
+          Changing preset briefly interrupts audio; changing scene never does.
         </p>
       </div>
     );
   }
   const current = items[index];
   const name =
-    state.preset_name ?? (loading ? 'Loading presets…' : 'Current rig');
+    playing.name ??
+    current?.name ??
+    (loading ? 'Loading presets…' : 'Unsaved preset');
   const found = query.trim().toLowerCase();
   return (
     <div className="preset-picker" aria-label="Preset navigation">
@@ -225,7 +211,7 @@ export function RigPresetSelector({
         <span className="preset-picker-text">
           <span className="preset-picker-title">
             <span className="preset-picker-label">{name}</span>
-            {state.modified && (
+            {playing.modified && (
               <span
                 className="preset-modified"
                 role="img"
@@ -235,13 +221,13 @@ export function RigPresetSelector({
             )}
           </span>
           <span className="preset-picker-meta">
-            {state.modified ? (
+            {playing.modified ? (
               <span className="preset-picker-edited">edited, not saved</span>
             ) : (
               'saved'
             )}
             {' · '}
-            {current ? (current.owned ? 'My copy' : 'Original') : 'Current rig'}
+            {current ? origin(current) : 'not in the list'}
             {index >= 0 && ` · ${index + 1} of ${items.length}`}
           </span>
         </span>
@@ -278,11 +264,15 @@ export function RigPresetSelector({
           <p className="caption">
             Unsaved edits stay with each preset. Reload saved discards them.
           </p>
-          {['Saved copies', 'Originals'].map((label, group) => {
+          {(
+            [
+              ['With scenes', (p: Choice) => p.kind === 'scenes'],
+              ['My copies', (p: Choice) => p.kind === 'tone3000' && p.owned],
+              ['Originals', (p: Choice) => p.kind === 'tone3000' && !p.owned],
+            ] as const
+          ).map(([label, inGroup]) => {
             const rows = items.filter(
-              (p) =>
-                p.owned === (group === 0) &&
-                p.name.toLowerCase().includes(found),
+              (p) => inGroup(p) && p.name.toLowerCase().includes(found),
             );
             return (
               rows.length > 0 && (
@@ -306,8 +296,14 @@ export function RigPresetSelector({
                       }}
                     >
                       <span>{p.name}</span>
-                      {key(p) === selected && (
+                      {key(p) === selected ? (
                         <span className="preset-picker-playing">Playing</span>
+                      ) : (
+                        p.kind === 'scenes' && (
+                          <span className="preset-picker-scenes">
+                            {scenesLabel(p.scenes) || 'Parallel'}
+                          </span>
+                        )
                       )}
                     </button>
                   ))}

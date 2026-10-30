@@ -4,7 +4,6 @@ import {
   importPreset,
   presetLibrary,
   playbackState,
-  playbackCommand,
   nativeState,
   type AudioState,
   type Preset,
@@ -15,6 +14,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
+import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
 import './Library.css';
 
@@ -82,12 +82,7 @@ export function Library({
     setLoadingId(id);
     setError('');
     try {
-      const current = await playbackState();
-      const next = await playbackCommand(current, {
-        kind: 'load_preset',
-        preset_id: id,
-        owned: isOwned,
-      });
+      const next = await playTone3000(id, isOwned);
       setPlaying(next);
       onOpenRig();
     } catch (cause) {
@@ -281,41 +276,17 @@ export function Library({
               onChanged={() => setRefresh((v) => v + 1)}
             />
           )}
+          <p className="caption">
+            Tap a preset to play it with your current audio setup. Changing
+            preset briefly interrupts audio; scenes switch without a gap on Rig.
+            Edits are kept when you return.
+          </p>
           <SavedRigs
             connected={connected}
             onOpenRig={onOpenRig}
             refresh={refresh}
             query={query}
           />
-          <h2 className="sr-only">Native preset library</h2>
-          <details className="library-import">
-            <summary>Import preset</summary>
-            <p>
-              Keep your TONE3000 originals here. Importing does not change the
-              current rig. Originals are kept unchanged.
-            </p>
-            <div className="form-grid">
-              <label className="field">
-                TONE3000 preset file
-                <input
-                  type="file"
-                  accept=".t3kpreset"
-                  disabled={busy || !connected}
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <Button
-                disabled={!file || busy || !connected}
-                onClick={() => void upload()}
-              >
-                Import original
-              </Button>
-            </div>
-            <p className="caption">
-              Up to 32 MiB per file. Original bytes are preserved; importing the
-              same file twice keeps one copy.
-            </p>
-          </details>
           {error && (
             <p role="alert" className="error">
               {error}
@@ -334,16 +305,15 @@ export function Library({
           )}
           <p role="status">{message}</p>
           {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
-          <p className="caption">
-            Tap a rig to play. Your current audio setup is reused; edits are
-            kept when you return.
-          </p>
+          <div className="section-heading">
+            <h2>Single chain</h2>
+          </div>
           {query.trim() &&
             !busy &&
             !owned.some((p) => matches(p.name)) &&
             !presets.some((p) => matches(p.name)) && (
               <p role="status" className="caption">
-                No TONE3000 presets match this name.
+                No single-chain presets match this name.
               </p>
             )}
           <ul className="preset-library">
@@ -387,6 +357,34 @@ export function Library({
                 </li>
               ))}
           </ul>
+          <details className="library-import">
+            <summary>Import preset</summary>
+            <p>
+              Keep your TONE3000 originals here. Importing does not change the
+              current rig. Originals are kept unchanged.
+            </p>
+            <div className="form-grid">
+              <label className="field">
+                TONE3000 preset file
+                <input
+                  type="file"
+                  accept=".t3kpreset"
+                  disabled={busy || !connected}
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <Button
+                disabled={!file || busy || !connected}
+                onClick={() => void upload()}
+              >
+                Import original
+              </Button>
+            </div>
+            <p className="caption">
+              Up to 32 MiB per file. Original bytes are preserved; importing the
+              same file twice keeps one copy.
+            </p>
+          </details>
         </>
       ) : (
         <NativeEditor presets={presets} connected={connected} />

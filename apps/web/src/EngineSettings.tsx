@@ -105,8 +105,8 @@ export function EngineSettings({ connected }: { connected: boolean }) {
         </>
       ) : (
         <p className="tool-row-detail">
-          Start a TONE3000 rig to change the running engine. The device defaults
-          below apply whenever audio starts.
+          Play a TONE3000 preset to change the running engine. The device
+          defaults below apply whenever audio starts.
         </p>
       )}
       {error && <p role="alert">{error}</p>}

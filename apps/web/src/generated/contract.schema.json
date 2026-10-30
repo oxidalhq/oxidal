@@ -6659,6 +6659,14 @@
         },
         "revision": {
           "type": "string"
+        },
+        "scenes": {
+          "description": "Scene names in pad order; empty for a preset without scenes.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false,
