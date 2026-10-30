@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AudioProbe, StartAudio } from './api';
-import { bufferMs } from './bufferTiming';
+import { BUFFER_SIZES, bufferMs } from './bufferTiming';
 import { Button } from './components/ui/button';
 
 type Stream = StartAudio['stream'];
@@ -41,7 +41,6 @@ export function AudioReconfigure({
         Number.isInteger(side.period_frames) &&
         side.period_frames >= 16 &&
         side.period_frames <= 2048 &&
-        (side.period_frames & (side.period_frames - 1)) === 0 &&
         Number.isInteger(side.periods) &&
         side.periods >= 2 &&
         side.periods <= 8,
@@ -94,14 +93,16 @@ export function AudioReconfigure({
             value={draft.input.period_frames}
             onChange={(e) => shared('period_frames', Number(e.target.value))}
           >
-            {[16, 32, 64, 128, 256, 512, 1024, 2048].map((frames) => (
-              <option key={frames} value={frames}>
-                {frames}
-                {draft.input.sample_rate > 0
-                  ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
-                  : ''}
-              </option>
-            ))}
+            {[...new Set([...BUFFER_SIZES, initial.input.period_frames])]
+              .sort((a, b) => a - b)
+              .map((frames) => (
+                <option key={frames} value={frames}>
+                  {frames}
+                  {draft.input.sample_rate > 0
+                    ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
+                    : ''}
+                </option>
+              ))}
           </select>
         </label>
         <label className="field">
@@ -177,8 +178,8 @@ export function AudioReconfigure({
       </p>
       {changed && !valid && (
         <p role="alert">
-          Use matching devices, a power-of-two buffer (16–2048), and valid rate
-          and channel numbers.
+          Use matching devices, a buffer of 16–2048 samples, and valid rate and
+          channel numbers.
         </p>
       )}
       <div className="action-row">

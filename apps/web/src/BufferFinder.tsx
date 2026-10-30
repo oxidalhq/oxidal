@@ -1,29 +1,37 @@
 import { useRef, useState } from 'react';
 import type { StartAudio } from './api';
 import { Button } from './components/ui/button';
-import { bufferMs } from './bufferTiming';
+import { BUFFER_SIZES, bufferMs } from './bufferTiming';
 import { useMonitorReadings } from './monitorFeed';
 
 type Stream = StartAudio['stream'];
+type Buffer = { frames: number; periods: number };
 
-const FLOOR = 32;
+const MIN_PERIODS = 2;
 const START_MS = 15000;
 const LISTEN_MS = 20000;
 
 const ms = (n: number) => `${n.toFixed(1)} ms`;
-function withFrames(stream: Stream, frames: number): Stream {
+const label = (b: Buffer) => `${b.frames} × ${b.periods}`;
+function withBuffer(stream: Stream, b: Buffer): Stream {
   return {
     ...stream,
-    input: { ...stream.input, period_frames: frames },
-    output: { ...stream.output, period_frames: frames },
+    input: { ...stream.input, period_frames: b.frames, periods: b.periods },
+    output: { ...stream.output, period_frames: b.frames, periods: b.periods },
   };
+}
+/** Next smaller size the list offers, or null at the floor. */
+function smaller(frames: number) {
+  return [...BUFFER_SIZES].reverse().find((size) => size < frames) ?? null;
 }
 
 type Run = {
   base: Stream;
-  good: number;
+  good: Buffer;
+  /** First shrink the period size, then the number of periods at the best size. */
+  phase: 'frames' | 'periods';
   trial: {
-    frames: number;
+    buffer: Buffer;
     since: number | null;
     xruns: number;
     deadline: number;
@@ -34,7 +42,9 @@ type Run = {
 
 /**
  * Guided search for the smallest buffer that runs without dropouts on this rig.
- * Halves the buffer, listens for xruns, and settles on the last clean size.
+ * Steps the period size down through the sizes interfaces commonly accept (48 is
+ * the usual 1 ms USB floor), then tries fewer periods at the best size. Each step
+ * listens for xruns and the search keeps the last clean setting.
  * @see docs/audio.md
  */
 export function BufferFinder({
@@ -56,12 +66,12 @@ export function BufferFinder({
     setState(next);
   }
 
-  function trial(next: Run, frames: number, note?: string) {
-    void apply(withFrames(next.base, frames));
+  function trial(next: Run, buffer: Buffer, note?: string) {
+    void apply(withBuffer(next.base, buffer));
     setRun({
       ...next,
       trial: {
-        frames,
+        buffer,
         since: null,
         xruns: 0,
         deadline: performance.now() + START_MS,
@@ -70,15 +80,31 @@ export function BufferFinder({
     });
   }
   function settle(next: Run, note: string) {
-    if (next.good !== next.trial?.frames)
-      void apply(withFrames(next.base, next.good));
-    const at = withFrames(next.base, next.good).input;
+    const t = next.trial?.buffer;
+    if (!t || t.frames !== next.good.frames || t.periods !== next.good.periods)
+      void apply(withBuffer(next.base, next.good));
+    const at = withBuffer(next.base, next.good).input;
     setRun({
       ...next,
       trial: null,
       log: [...next.log, note],
-      result: `Lowest stable buffer: ${next.good} samples × ${at.periods} (${ms(bufferMs(at))}).`,
+      result: `Lowest stable buffer: ${label(next.good)} (${ms(bufferMs(at))}).`,
     });
+  }
+  /** After the period size bottoms out, try fewer periods at the best size. */
+  function towardFewerPeriods(next: Run, note: string) {
+    if (next.good.periods > MIN_PERIODS)
+      trial(
+        { ...next, phase: 'periods' },
+        { frames: next.good.frames, periods: next.good.periods - 1 },
+        note,
+      );
+    else settle(next, note);
+  }
+  function failed(r: Run, note: string) {
+    // The failing setting is undone by the next trial or by settle.
+    if (r.phase === 'frames') towardFewerPeriods(r, note);
+    else settle(r, note);
   }
 
   useMonitorReadings(1000, (feed) => {
@@ -88,13 +114,14 @@ export function BufferFinder({
     const snap = feed.snapshot;
     const now = performance.now();
     const live =
-      snap?.stream?.input.period_frames === t.frames &&
+      snap?.stream?.input.period_frames === t.buffer.frames &&
+      snap.stream.input.periods === t.buffer.periods &&
       [snap.audio_phase, snap.rig_phase, snap.graph_phase].includes('running');
     if (!live) {
       if (now > t.deadline)
-        settle(
+        failed(
           r,
-          `${t.frames} samples: the interface refused it or audio did not start.`,
+          `${label(t.buffer)}: the interface refused it or audio did not start.`,
         );
       return;
     }
@@ -104,33 +131,41 @@ export function BufferFinder({
       return;
     }
     if (xruns > t.xruns) {
-      settle(
+      failed(
         r,
-        `${t.frames} samples: ${xruns - t.xruns} dropout${xruns - t.xruns === 1 ? '' : 's'}.`,
+        `${label(t.buffer)}: ${xruns - t.xruns} dropout${xruns - t.xruns === 1 ? '' : 's'}.`,
       );
       return;
     }
     if (now - t.since < LISTEN_MS) return;
-    const passed = { ...r, good: t.frames };
-    const note = `${t.frames} samples: clean for ${LISTEN_MS / 1000} s.`;
-    if (t.frames / 2 < FLOOR) settle(passed, note);
-    else trial(passed, t.frames / 2, note);
+    const passed = { ...r, good: t.buffer };
+    const note = `${label(t.buffer)}: clean for ${LISTEN_MS / 1000} s.`;
+    const next = r.phase === 'frames' ? smaller(t.buffer.frames) : null;
+    if (next != null)
+      trial(passed, { frames: next, periods: t.buffer.periods }, note);
+    else if (r.phase === 'frames') towardFewerPeriods(passed, note);
+    else if (t.buffer.periods > MIN_PERIODS)
+      trial(passed, { ...t.buffer, periods: t.buffer.periods - 1 }, note);
+    else settle(passed, note);
   });
 
   const testing = !!run?.trial;
-  const start = withFrames(stream, stream.input.period_frames);
+  const now: Buffer = {
+    frames: stream.input.period_frames,
+    periods: stream.input.periods,
+  };
+  const first = smaller(now.frames);
   return (
     <div className="control-stack" aria-label="Find lowest stable buffer">
       <p className="caption">
-        Buffer now: {stream.input.period_frames} samples ×{' '}
-        {stream.input.periods} at {stream.input.sample_rate} Hz ={' '}
-        {ms(bufferMs(stream.input))}. Smaller is snappier under your fingers but
-        needs more processing headroom.
+        Buffer now: {now.frames} samples × {now.periods} at{' '}
+        {stream.input.sample_rate} Hz = {ms(bufferMs(stream.input))}. Smaller is
+        snappier under your fingers but needs more processing headroom.
       </p>
       {testing ? (
         <>
           <p role="status">
-            Testing {run.trial!.frames} samples
+            Testing {label(run.trial!.buffer)}
             {run.trial!.since == null
               ? ' · starting audio…'
               : ' · listening for dropouts…'}
@@ -140,7 +175,10 @@ export function BufferFinder({
             onClick={() => {
               const r = current.current!;
               settle(
-                { ...r, trial: { ...r.trial!, frames: -1 } },
+                {
+                  ...r,
+                  trial: { ...r.trial!, buffer: { frames: -1, periods: -1 } },
+                },
                 'Stopped by you.',
               );
             }}
@@ -152,20 +190,22 @@ export function BufferFinder({
         <Button
           variant="outline"
           disabled={
-            disabled || !running || start.input.period_frames / 2 < FLOOR
+            disabled ||
+            !running ||
+            (first == null && now.periods <= MIN_PERIODS)
           }
           onClick={() => {
-            const base = stream;
-            trial(
-              {
-                base,
-                good: base.input.period_frames,
-                trial: null,
-                log: [],
-                result: null,
-              },
-              base.input.period_frames / 2,
-            );
+            const base: Run = {
+              base: stream,
+              good: now,
+              phase: first == null ? 'periods' : 'frames',
+              trial: null,
+              log: [],
+              result: null,
+            };
+            if (first == null)
+              trial(base, { frames: now.frames, periods: now.periods - 1 });
+            else trial(base, { frames: first, periods: now.periods });
           }}
         >
           Find lowest stable buffer
@@ -173,9 +213,10 @@ export function BufferFinder({
       )}
       {!testing && (
         <p className="caption">
-          Restarts audio several times, about 20 seconds per step, then keeps
-          the smallest buffer with no dropouts. Load your heaviest preset first.
-          You don&apos;t need to play: processing load is the same in silence.
+          Restarts audio several times, about 20 seconds per step: first smaller
+          sizes, then fewer periods. Keeps the smallest setting with no
+          dropouts. Load your heaviest preset first. You don&apos;t need to
+          play: processing load is the same in silence.
         </p>
       )}
       {run && run.log.length > 0 && (
