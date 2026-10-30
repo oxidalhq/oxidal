@@ -118,6 +118,11 @@ export function useMonitorFeed(everyMs: number): MonitorReading {
   );
 }
 
+/** Fetch now instead of waiting for the next tick, e.g. when a view resumes. */
+export function refreshMonitorFeed() {
+  if (intervals.size > 0) void refresh();
+}
+
 /** Receive each shared reading as it arrives, for views that accumulate history. */
 export function useMonitorReadings(
   everyMs: number,
@@ -131,6 +136,8 @@ export function useMonitorReadings(
   useEffect(() => {
     const listener = () => latest.current(reading);
     listeners.add(listener);
+    // A view that mounts mid-stream starts from the newest reading, not a blank.
+    if (reading.at != null) listener();
     return () => {
       listeners.delete(listener);
     };

@@ -14,7 +14,11 @@ import {
   YAxis,
 } from 'recharts';
 import type { Monitoring as Readings } from './api';
-import { useMonitorReadings } from './monitorFeed';
+import {
+  refreshMonitorFeed,
+  useMonitorReadings,
+  type MonitorReading,
+} from './monitorFeed';
 import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
 type Point = {
@@ -106,9 +110,8 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
     frames: number;
   } | null>(null);
   const every = slow || displayMode === 'epaper' ? 5000 : 1000;
-  const accepted = useRef(0);
-  useMonitorReadings(every, (feed) => {
-    if (frozen) return;
+  const accepted = useRef(-Infinity);
+  function accept(feed: MonitorReading) {
     if (feed.disconnected && feed.link == null) {
       setError('Disconnected · readings are stale');
       return;
@@ -156,6 +159,9 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
         },
       ]);
     }
+  }
+  useMonitorReadings(every, (feed) => {
+    if (!frozen) accept(feed);
   });
   const stale =
     !!error ||
@@ -192,7 +198,14 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
             variant="ghost"
             aria-label={frozen ? 'Resume readings' : 'Freeze readings'}
             aria-pressed={frozen}
-            onClick={() => setFrozen((v) => !v)}
+            onClick={() => {
+              // Resuming asks the shared feed for a fresh reading at once.
+              if (frozen) {
+                accepted.current = -Infinity;
+                refreshMonitorFeed();
+              }
+              setFrozen((v) => !v);
+            }}
           >
             {frozen ? 'Resume' : 'Freeze'}
           </Button>
