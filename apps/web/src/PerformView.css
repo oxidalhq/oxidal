@@ -1,0 +1,394 @@
+/* Perform: edge meters around the live surface. Values come from theme.css. */
+.perform {
+  display: grid;
+  gap: 0.5rem;
+}
+.perform-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--touch-target);
+}
+.perform-bar h2 {
+  margin: 0 auto 0 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.perform-edit {
+  min-height: var(--touch-target);
+  padding: 0 1rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--foreground);
+  font: 600 0.875rem var(--font-sans);
+}
+.perform-body {
+  position: relative;
+  min-height: calc(100dvh - 9rem);
+}
+.perform-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+/* Edge meter: L/R bars, held peak, -6 dBFS mark, clip cap. Rails never hide. */
+/* Thin rails laid over the page gutters: they take no layout width. */
+.edge-meter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  width: 0.5rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.edge-meter[data-showing] {
+  opacity: 1;
+}
+/* E-paper cannot animate: rails stay drawn and refresh slowly. */
+:root[data-display='epaper'] .edge-meter {
+  opacity: 1;
+  transition: none;
+}
+.edge-meter[data-side='in'] {
+  left: calc(-1 * var(--page-space) + 2px);
+}
+.edge-meter[data-side='out'] {
+  right: calc(-1 * var(--page-space) + 2px);
+}
+.edge-meter-bars {
+  flex: 1;
+  display: flex;
+  gap: 2px;
+}
+.edge-meter-bar {
+  position: relative;
+  width: 3px;
+  background: var(--muted);
+  outline: 1px solid var(--border);
+}
+.edge-meter-bar::before {
+  /* -6 dBFS: 10% below the top on a -60..0 scale. */
+  content: '';
+  position: absolute;
+  inset: 10% -1px auto;
+  border-top: 1px solid var(--muted-foreground);
+}
+.edge-meter-bar i {
+  position: absolute;
+  inset: auto 0 0;
+  background: var(--foreground);
+  -webkit-mask: repeating-linear-gradient(
+    to top,
+    #000 0 3px,
+    transparent 3px 4px
+  );
+  mask: repeating-linear-gradient(to top, #000 0 3px, transparent 3px 4px);
+}
+.edge-meter-bar b {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  background: var(--foreground);
+}
+.edge-meter-bar[data-clip]::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.4375rem;
+  background: var(--foreground);
+}
+:root[data-display='epaper'] .edge-meter-bar {
+  background: var(--background);
+  outline-color: var(--foreground);
+}
+
+/* Live stats: three per row on phones, six across when wide. */
+.perform-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--foreground);
+}
+.perform-stat {
+  display: grid;
+  align-content: start;
+  gap: 0.0625rem;
+  min-width: 0;
+  padding: 0.375rem 0.5rem 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+.perform-stat:nth-child(3n) {
+  border-right: 0;
+}
+.perform-stat-label {
+  color: var(--muted-foreground);
+  font: 500 0.6875rem var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.perform-stat-value {
+  font: 600 1.25rem/1.15 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.perform-stat-value small {
+  margin-left: 0.125rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.perform-stat[data-warn] .perform-stat-value::after {
+  content: ' ▲';
+  font-size: 0.75rem;
+  vertical-align: 0.15em;
+}
+.perform-stat-detail {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+@media (min-width: 700px) {
+  .perform-stats {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .perform-stat:nth-child(3n) {
+    border-right: 1px solid var(--border);
+  }
+  .perform-stat:last-child {
+    border-right: 0;
+  }
+}
+
+.perform-now {
+  display: grid;
+  gap: 0.125rem;
+}
+.perform-now-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font: 500 0.75rem var(--font-mono);
+}
+.perform-now-state::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.perform-now-name {
+  overflow: hidden;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.perform-now-sub {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+.perform-edited {
+  color: var(--brand);
+}
+
+.perform-section h3,
+.preset-pads h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.perform-section h3 span,
+.preset-pads h3 span {
+  color: var(--muted-foreground);
+  font: 500 0.75rem var(--font-mono);
+}
+
+.perform-stomps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.375rem;
+}
+.perform-stomp {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-height: 3.5rem;
+  padding: 0.375rem 1.5rem 0.375rem 0.625rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+.perform-stomp .chain-led {
+  top: 0.5rem;
+  right: 0.5rem;
+}
+.perform-stomp-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.perform-stomp-meta {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.perform-stomp[data-on='false'] {
+  border-color: var(--wire);
+  color: var(--muted-foreground);
+}
+:root[data-display='epaper'] .perform-stomp[data-on='false'] {
+  border-style: dashed;
+  border-color: var(--foreground);
+}
+
+/* Preset pads: playing inverted, next framed; named steps in the thumb zone. */
+.preset-pads {
+  display: grid;
+  gap: 0.5rem;
+}
+.preset-pad-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.375rem;
+}
+@media (min-width: 700px) {
+  .preset-pad-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.preset-pad {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: center;
+  min-height: 3.5rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+.preset-pad-number {
+  color: var(--muted-foreground);
+  font: 600 0.8125rem var(--font-mono);
+}
+.preset-pad-text {
+  display: grid;
+  min-width: 0;
+}
+.preset-pad-text strong {
+  overflow: hidden;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preset-pad-origin {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+.preset-pad[aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+.preset-pad[aria-pressed='true'] .preset-pad-number,
+.preset-pad[aria-pressed='true'] .preset-pad-origin {
+  color: inherit;
+}
+.preset-pad[aria-pressed='true'] .preset-pad-origin::before {
+  content: '';
+  display: inline-block;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin-right: 0.3125rem;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.preset-pad[data-next] {
+  outline: 2px solid var(--foreground);
+  outline-offset: -3px;
+}
+.preset-pad:disabled:not([aria-pressed='true']) {
+  opacity: 0.55;
+}
+.preset-bank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font: 500 0.75rem var(--font-mono);
+}
+.preset-bank button {
+  display: grid;
+  place-items: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--foreground);
+}
+.preset-step {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.375rem;
+}
+.preset-step button {
+  display: grid;
+  min-width: 0;
+  min-height: 4rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  align-content: center;
+}
+.preset-step button:last-child {
+  text-align: right;
+}
+.preset-step span {
+  color: var(--muted-foreground);
+  font: 500 0.75rem var(--font-mono);
+}
+.preset-step strong {
+  overflow: hidden;
+  font-size: 0.9375rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.preset-step button:disabled {
+  opacity: 0.45;
+}
+:root[data-display='sunlight'] .perform-stomp,
+:root[data-display='sunlight'] .preset-pad,
+:root[data-display='sunlight'] .preset-step button {
+  border-width: 2px;
+}

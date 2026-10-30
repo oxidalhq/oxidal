@@ -1,7 +1,8 @@
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle } from './ChainView';
+import { PerformView } from './PerformView';
 import './RigControls.css';
-import { blockKind } from './rigChain';
+import { blockKind, type RigLaneVM } from './rigChain';
 import { useWorkspaceState } from './workspaceMemory';
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
@@ -9,7 +10,6 @@ import {
   ArrowRight,
   Plus,
   DotsThree,
-  SquaresFour,
   ArrowLeft,
   X,
 } from '@phosphor-icons/react';
@@ -551,27 +551,78 @@ export function LiveRig({
     ? 'right'
     : 'left';
   const orderedBlocks = state.authoring?.layout?.[selectedLane] ?? [];
+  const chainLanes: RigLaneVM[] = (['left', 'right'] as const).flatMap(
+    (lane) => {
+      const layout = state.authoring?.layout;
+      const laneGroups = layout
+        ? layout[lane].flatMap((b) =>
+            groups.filter((c) => c.target === `block:${b.id}:enabled`),
+          )
+        : lane === 'left'
+          ? groups
+          : [];
+      if (lane === 'right' && !laneGroups.length && !layout?.stereo) return [];
+      return [
+        {
+          id: lane,
+          input: layout?.stereo ? (lane === 'left' ? 'IN L' : 'IN R') : 'IN',
+          blocks: laneGroups.map((c) => {
+            const id = c.target.slice(6, -8);
+            const model = state.models?.find((m) => m.target === id);
+            const gear = model
+              ? ''
+              : ((artwork &&
+                artwork.id === artworkId &&
+                artwork.owned === artworkOwned
+                  ? artwork.items
+                  : []
+                ).find((item) => item.block_id === id)?.gear ?? '');
+            const showArtwork =
+              chainView === 'artwork' &&
+              !!state.configured &&
+              !state.configured.draft;
+            return {
+              id,
+              label: blockName(c.label),
+              kind: blockKind(gear),
+              on: c.value === 1,
+              face: !showArtwork ? (
+                <GearIcon gear={gear} />
+              ) : model ? (
+                <ArtworkDeck tile model id={model.asset} />
+              ) : (
+                <ArtworkDeck
+                  tile
+                  id={state.configured!.preset_id}
+                  owned={state.configured!.owned}
+                  blockId={id}
+                />
+              ),
+            };
+          }),
+        },
+      ];
+    },
+  );
   if (performance)
     return (
-      <section
-        className="instrument-surface live-rig space-y-3"
-        aria-label="Gig view"
-      >
-        <div className="chain-heading">
-          <h2>Gig view</h2>
-          <Button variant="ghost" onClick={() => setPerformance(false)}>
-            <SquaresFour aria-hidden="true" />
-            Chain view
-          </Button>
-        </div>
-        <RigPresetSelector
+      <>
+        <PerformView
           state={state}
+          lanes={chainLanes}
           disabled={disabled || !!draft || !!picker}
-          pads
-          onSelect={(id, owned) => void recall(id, owned)}
+          onToggle={(id) => {
+            const enabled = groups.find(
+              (c) => c.target === `block:${id}:enabled`,
+            );
+            if (enabled)
+              void apply(enabled.target, enabled.value === 1 ? 0 : 1);
+          }}
+          onRecall={(id, owned) => void recall(id, owned)}
+          onEdit={() => setPerformance(false)}
         />
         {error && <p role="alert">{error}</p>}
-      </section>
+      </>
     );
   return (
     <section
@@ -778,62 +829,7 @@ export function LiveRig({
               setDraft(null);
               revealInspector();
             }}
-            lanes={(['left', 'right'] as const).flatMap((lane) => {
-              const layout = state.authoring?.layout;
-              const laneGroups = layout
-                ? layout[lane].flatMap((b) =>
-                    groups.filter((c) => c.target === `block:${b.id}:enabled`),
-                  )
-                : lane === 'left'
-                  ? groups
-                  : [];
-              if (lane === 'right' && !laneGroups.length && !layout?.stereo)
-                return [];
-              return [
-                {
-                  id: lane,
-                  input: layout?.stereo
-                    ? lane === 'left'
-                      ? 'IN L'
-                      : 'IN R'
-                    : 'IN',
-                  blocks: laneGroups.map((c) => {
-                    const id = c.target.slice(6, -8);
-                    const model = state.models?.find((m) => m.target === id);
-                    const gear = model
-                      ? ''
-                      : ((artwork &&
-                        artwork.id === artworkId &&
-                        artwork.owned === artworkOwned
-                          ? artwork.items
-                          : []
-                        ).find((item) => item.block_id === id)?.gear ?? '');
-                    const showArtwork =
-                      chainView === 'artwork' &&
-                      !!state.configured &&
-                      !state.configured.draft;
-                    return {
-                      id,
-                      label: blockName(c.label),
-                      kind: blockKind(gear),
-                      on: c.value === 1,
-                      face: !showArtwork ? (
-                        <GearIcon gear={gear} />
-                      ) : model ? (
-                        <ArtworkDeck tile model id={model.asset} />
-                      ) : (
-                        <ArtworkDeck
-                          tile
-                          id={state.configured!.preset_id}
-                          owned={state.configured!.owned}
-                          blockId={id}
-                        />
-                      ),
-                    };
-                  }),
-                },
-              ];
-            })}
+            lanes={chainLanes}
           />
           {insertion && (
             <AdjustmentDialog

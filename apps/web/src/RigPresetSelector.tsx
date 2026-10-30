@@ -87,65 +87,98 @@ export function RigPresetSelector({
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item.id, item.owned);
   }
-  if (pads)
+  if (pads) {
+    const previous = index > 0 ? items[index - 1] : undefined;
+    const next = index >= 0 ? items[index + 1] : undefined;
     return (
-      <div className="space-y-3" aria-label="Preset pads">
-        <div className="performance-now">
-          <span className="eyebrow">Playing</span>
-          <h2>{state.preset_name ?? 'Current rig'}</h2>
+      <div className="preset-pads" aria-label="Preset pads">
+        <h3>
+          Presets
           <span>
-            {disabled
-              ? 'Please wait…'
-              : state.modified
-                ? 'Unsaved edits'
-                : 'Saved'}
+            {items.length
+              ? `${currentBank * 8 + 1}–${Math.min(items.length, currentBank * 8 + 8)} of ${items.length}`
+              : ''}
           </span>
-        </div>
+        </h3>
         <div className="preset-pad-grid">
           {items
             .slice(currentBank * 8, currentBank * 8 + 8)
-            .map((item, index) => (
-              <Button
-                key={key(item)}
-                variant={key(item) === selected ? 'secondary' : 'outline'}
-                aria-pressed={key(item) === selected}
-                disabled={disabled || loading || key(item) === selected}
-                onClick={() => choose(item)}
-              >
-                <span className="preset-pad-number">
-                  {String(currentBank * 8 + index + 1).padStart(2, '0')}
-                </span>
-                <strong>{item.name}</strong>
-                <span className="preset-pad-origin">
-                  {key(item) === selected
-                    ? 'Playing'
-                    : item.owned
-                      ? 'Saved copy'
-                      : 'Original'}
-                </span>
-              </Button>
-            ))}
+            .map((item, offset) => {
+              const playing = key(item) === selected;
+              const upcoming = !!next && key(item) === key(next);
+              return (
+                <button
+                  type="button"
+                  key={key(item)}
+                  className="preset-pad"
+                  data-next={upcoming || undefined}
+                  aria-pressed={playing}
+                  disabled={disabled || loading || playing}
+                  onClick={() => choose(item)}
+                >
+                  <span className="preset-pad-number">
+                    {currentBank * 8 + offset + 1}
+                  </span>
+                  <span className="preset-pad-text">
+                    <strong>{item.name}</strong>
+                    <span className="preset-pad-origin">
+                      {playing
+                        ? 'Playing'
+                        : upcoming
+                          ? 'Next'
+                          : item.owned
+                            ? 'My copy'
+                            : 'Original'}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
         </div>
-        <div className="action-row">
-          <Button
-            variant="ghost"
-            disabled={currentBank === 0 || disabled}
-            onClick={() => setBank(currentBank - 1)}
+        {items.length > 8 && (
+          <div className="preset-bank">
+            <button
+              type="button"
+              aria-label="Previous bank"
+              disabled={currentBank === 0 || disabled}
+              onClick={() => setBank(currentBank - 1)}
+            >
+              <CaretLeft aria-hidden="true" />
+            </button>
+            <span>
+              {currentBank + 1} / {Math.ceil(items.length / 8)}
+            </span>
+            <button
+              type="button"
+              aria-label="Next bank"
+              disabled={(currentBank + 1) * 8 >= items.length || disabled}
+              onClick={() => setBank(currentBank + 1)}
+            >
+              <CaretRight aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        <div className="preset-step">
+          <button
+            type="button"
+            aria-label={
+              previous ? `Previous preset: ${previous.name}` : 'Previous preset'
+            }
+            disabled={disabled || loading || !previous}
+            onClick={() => choose(previous)}
           >
-            <CaretLeft aria-hidden="true" />
-            Previous bank
-          </Button>
-          <span className="caption">
-            {currentBank + 1} / {Math.max(1, Math.ceil(items.length / 8))}
-          </span>
-          <Button
-            variant="ghost"
-            disabled={(currentBank + 1) * 8 >= items.length || disabled}
-            onClick={() => setBank(currentBank + 1)}
+            <span>‹ Previous</span>
+            <strong>{previous?.name ?? '—'}</strong>
+          </button>
+          <button
+            type="button"
+            aria-label={next ? `Next preset: ${next.name}` : 'Next preset'}
+            disabled={disabled || loading || !next}
+            onClick={() => choose(next)}
           >
-            Next bank
-            <CaretRight aria-hidden="true" />
-          </Button>
+            <span>Next ›</span>
+            <strong>{next?.name ?? '—'}</strong>
+          </button>
         </div>
         {loading && <p role="status">Loading presets…</p>}
         {error && (
@@ -166,11 +199,11 @@ export function RigPresetSelector({
           <p>No saved presets. Add one from Library.</p>
         )}
         <p className="caption">
-          Tap to play. Whole-preset recall briefly interrupts audio; this is not
-          scene switching.
+          Recalling a whole preset briefly interrupts audio.
         </p>
       </div>
     );
+  }
   const current = items[index];
   const name =
     state.preset_name ?? (loading ? 'Loading presets…' : 'Current rig');

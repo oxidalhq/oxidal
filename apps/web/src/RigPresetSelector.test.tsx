@@ -139,10 +139,20 @@ it('uses the same authoritative recall from performance pads and preserves owned
   const playing = await screen.findByRole('button', { name: /Amp A.*Playing/ });
   expect(playing).toBeDisabled();
   expect(playing).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /My A.*Saved copy/ }));
+  fireEvent.click(screen.getByRole('button', { name: /My A.*My copy/ }));
   expect(select).toHaveBeenCalledWith('a', true);
   expect(playing).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByRole('button', { name: 'Next bank' })).toBeDisabled();
+  // Fewer than eight presets need no bank paging.
+  expect(
+    screen.queryByRole('button', { name: 'Next bank' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Amp B.*Next/ })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Next preset: Amp B' }));
+  expect(select).toHaveBeenLastCalledWith('b', false);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Previous preset: My A' }),
+  );
+  expect(select).toHaveBeenLastCalledWith('a', true);
 });
 
 it('opens gig pads on the playing bank and keeps playing identity during initial loading', async () => {
