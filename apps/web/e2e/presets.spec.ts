@@ -359,9 +359,8 @@ test('rig controls follow the actual session without example effects', async ({
       { target: 'slot-right', position: { lane: 1, index: 2 } },
     ],
   };
-  await expect(
-    rig.getByRole('button', { name: 'Add NAM', exact: true }),
-  ).toBeVisible();
+  await expect(rig.getByRole('button', { name: 'Add block' })).toBeVisible();
+  await rig.getByRole('button', { name: 'Add block' }).click();
   await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
   const positions = page.getByRole('dialog', { name: 'Add NAM · position' });
   await expect(
@@ -1723,6 +1722,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       )
       .toBe('applied');
     await expect(sounding.locator('.rig-tile')).toHaveCount(1);
+    await sounding.getByRole('button', { name: 'Add block' }).click();
     await sounding
       .getByRole('button', { name: 'Add NAM', exact: true })
       .click();
@@ -1741,6 +1741,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       )
       .toBe(2);
     await expect(sounding.locator('.rig-tile')).toHaveCount(2);
+    await sounding.getByRole('button', { name: 'Add block' }).click();
     await sounding.getByRole('button', { name: 'Add IR', exact: true }).click();
     await sounding
       .getByLabel('Available insertion positions')
@@ -1779,7 +1780,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     ] as const) {
       await page.setViewportSize(size);
       await expect(
-        sounding.getByRole('button', { name: 'Add NAM', exact: true }),
+        sounding.getByRole('button', { name: 'Add block' }),
       ).toBeVisible();
       expect(
         await page.evaluate(
@@ -2609,6 +2610,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   );
   const replacement = (await get()).control.models;
   expect(replacement[0].assignments).toHaveLength(1);
+  await rig.getByRole('button', { name: 'Add block' }).click();
   await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Add NAM · position' })
@@ -2632,6 +2634,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
   expect((await get()).control.models[0].assignments).toHaveLength(2);
+  await rig.getByRole('button', { name: 'Add block' }).click();
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Add IR · position' })
@@ -2654,9 +2657,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect
     .poll(async () => (await get()).control.model_change?.progress.phase)
     .toBe('applied');
-  await expect(
-    rig.getByRole('button', { name: 'Add IR', exact: true }),
-  ).toBeEnabled();
+  await expect(rig.getByRole('button', { name: 'Add block' })).toBeEnabled();
   const modelSaved = (await get()).control.models;
   expect(modelSaved[0].assignments).toHaveLength(3);
   await expect.poll(value).toBe(changed);
@@ -4215,6 +4216,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await rig.getByRole('button', { name: 'Stop analysis', exact: true }).click();
   expect((await get()).control.controls).toEqual(beforeAnalysis);
   await rig.getByText('Block spectrum', { exact: true }).click();
+  await rig.getByRole('button', { name: 'Add block' }).click();
   await rig.getByRole('button', { name: 'Add IR', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Add IR · position' })

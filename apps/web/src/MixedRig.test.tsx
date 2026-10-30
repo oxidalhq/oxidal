@@ -187,7 +187,8 @@ it('offers both hybrid insertion lanes and carries the chosen position to the pi
       ],
     },
   ] as NonNullable<typeof state.control>['slots'];
-  fireEvent.click(await screen.findByRole('button', { name: 'Add NAM' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Add block' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add NAM' }));
   expect(
     screen.getByRole('button', { name: 'Left chain · position 1' }),
   ).toBeEnabled();

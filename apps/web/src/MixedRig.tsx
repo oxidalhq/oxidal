@@ -1,3 +1,4 @@
+import { AddBlockChooser } from './AddBlockChooser';
 import {
   assertAuditionOwner,
   confirmedControlDisplay,
@@ -82,6 +83,7 @@ export function MixedRig({
     format?: 'nam' | 'ir';
     allowedFormat?: 'nam' | 'ir';
   } | null>(null);
+  const [adding, setAdding] = useState(false);
   const [insertion, setInsertion] = useState<{
     opening: RigAudioState;
     node: string;
@@ -798,19 +800,25 @@ export function MixedRig({
               Change model
             </Button>
           )}
-          {slots.length > 0 &&
-            (['nam', 'ir'] as const).map((format) => (
-              <Button
-                key={format}
-                variant="outline"
-                disabled={disabled || !!edit}
-                onClick={() =>
-                  setInsertion({ opening: state, node: selected.id, format })
-                }
-              >
-                Add {format.toUpperCase()}
-              </Button>
-            ))}
+          {slots.length > 0 && (
+            <Button
+              variant="outline"
+              aria-label="Add block"
+              disabled={disabled || !!edit}
+              onClick={() => setAdding(true)}
+            >
+              Add
+            </Button>
+          )}
+          {adding && selected && (
+            <AddBlockChooser
+              onCancel={() => setAdding(false)}
+              onChoose={(format) => {
+                setAdding(false);
+                setInsertion({ opening: state, node: selected.id, format });
+              }}
+            />
+          )}
         </div>
       )}
       {running && selectedModel && (

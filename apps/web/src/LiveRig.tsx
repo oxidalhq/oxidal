@@ -34,9 +34,11 @@ import {
   type AudioState,
   type AudioAction,
 } from './api';
+import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
+import { DragFader } from './DragFader';
 import { EditQueue } from './editQueue';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
@@ -108,6 +110,7 @@ export function LiveRig({
   } | null>(null);
   const [performance, setPerformance] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [selection, setSelection] = useWorkspaceState('native-selection', {
     session: '',
     target: 'outputLevel',
@@ -141,6 +144,8 @@ export function LiveRig({
   } | null>(null);
   const adjustment = useRef<EditQueue<AudioState> | null>(null);
   const latestValue = useRef(0);
+  // Set by a fader drag so the row's trailing click does not open the dialog.
+  const dragged = useRef(false);
   const alive = useRef(false);
   const sending = useRef(false);
   const generation = useRef(0);
@@ -360,7 +365,10 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
-  function openAdjustment(control: AudioState['controls'][number]) {
+  function openAdjustment(
+    control: AudioState['controls'][number],
+    inline = false,
+  ) {
     if (!state || sending.current || adjustment.current) return;
     const opening = control.value;
     let cursor = state;
@@ -372,7 +380,8 @@ export function LiveRig({
       session: state.session,
       revision: state.revision,
     });
-    setAdjusting(true);
+    // Dragging a row's fader adjusts in place; tapping the row opens the dialog.
+    if (!inline) setAdjusting(true);
     setError('');
     const token = crypto.randomUUID();
     generation.current += 1;
@@ -715,19 +724,17 @@ export function LiveRig({
         <div className="rig-chain-column">
           <div className="chain-bar">
             <h3>Chain</h3>
-            {!!state.slots?.length &&
-              (['nam', 'ir'] as const).map((format) => (
-                <Button
-                  key={format}
-                  variant="ghost"
-                  aria-label={format === 'nam' ? 'Add NAM' : 'Add IR'}
-                  disabled={disabled || !!draft}
-                  onClick={() => setInsertion({ opening: state, format })}
-                >
-                  <Plus aria-hidden="true" />
-                  {format === 'nam' ? 'NAM' : 'IR'}
-                </Button>
-              ))}
+            {!!state.slots?.length && (
+              <Button
+                variant="ghost"
+                aria-label="Add block"
+                disabled={disabled || !!draft}
+                onClick={() => setAdding(true)}
+              >
+                <Plus aria-hidden="true" />
+                Add
+              </Button>
+            )}
             <Button
               variant="ghost"
               aria-label="Undo change"
@@ -747,6 +754,15 @@ export function LiveRig({
               Redo
             </Button>
           </div>
+          {adding && (
+            <AddBlockChooser
+              onCancel={() => setAdding(false)}
+              onChoose={(format) => {
+                setAdding(false);
+                setInsertion({ opening: state, format });
+              }}
+            />
+          )}
           {actionsOpen && (
             <AdjustmentDialog
               title="Preset actions"
@@ -1191,6 +1207,10 @@ export function LiveRig({
                   aria-pressed={item.toggle ? item.value === 1 : undefined}
                   aria-label={`Adjust sounding ${item.label}`}
                   onClick={() => {
+                    if (dragged.current) {
+                      dragged.current = false;
+                      return;
+                    }
                     setTarget(item.target);
                     setDraft(null);
                     if (item.toggle)
@@ -1203,10 +1223,27 @@ export function LiveRig({
                   </span>
                   <strong className="value-row-value">{item.display}</strong>
                   {!item.toggle && (
-                    <span className="value-row-fader" aria-hidden="true">
-                      <i style={{ width: `${item.value * 100}%` }} />
-                      <b style={{ left: `${item.value * 100}%` }} />
-                    </span>
+                    <DragFader
+                      value={
+                        draft?.target === item.target ? draft.value : item.value
+                      }
+                      dragging={draft?.target === item.target && !adjusting}
+                      disabled={disabled}
+                      onBegin={(value) => {
+                        dragged.current = true;
+                        setTarget(item.target);
+                        openAdjustment(item, true);
+                        latestValue.current = value;
+                        setDraft((old) => (old ? { ...old, value } : old));
+                        adjustment.current?.preview(value);
+                      }}
+                      onMove={(value) => {
+                        latestValue.current = value;
+                        setDraft((old) => (old ? { ...old, value } : old));
+                        adjustment.current?.preview(value);
+                      }}
+                      onEnd={(cancel) => void finishAdjustment(cancel)}
+                    />
                   )}
                 </button>
               ))}
