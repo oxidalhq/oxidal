@@ -1,6 +1,7 @@
 import { Plus, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
 import { ChainView, LedToggle } from './ChainView';
 import { GearIcon } from './GearIcon';
+import { blockKind } from './rigChain';
 import { RigComposer } from './RigComposer';
 import { lv2Effect, type DraftEffect } from './rigDraft';
 import { rigAudioState } from './api';
@@ -444,14 +445,16 @@ export function GraphAuthor({
             blocks: effects.map((node) => {
               const binding = active?.bindings.find((b) => b.node === node.id);
               const plugin = catalog.find((p) => p.uri === binding?.uri);
+              const title =
+                plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect';
+              const hint = `${title} ${binding?.uri ?? ''}`;
               return {
                 id: node.id,
-                label:
-                  plugin?.name ?? binding?.uri.split(/[/#]/).pop() ?? 'Effect',
-                kind: 'lv2' as const,
+                label: title,
+                kind: blockKind('', hint),
                 // LV2 hosting exposes one rig-wide bypass, not per-block bypass.
                 on: !state?.control?.bypassed,
-                face: <GearIcon gear="" />,
+                face: <GearIcon gear="" name={hint} />,
               };
             }),
           },

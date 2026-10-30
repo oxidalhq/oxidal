@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
+import { glyphFor, glyphs } from './blockGlyphs';
 
 /**
  * Engine-neutral chain view model shared by native, hybrid and LV2 rigs.
  * @see docs/interface.md
  */
 /** LED category shared with footswitch LEDs; never used as a fill. */
-export type BlockKind = 'amp' | 'pedal' | 'cab' | 'time' | 'lv2' | 'other';
+export type BlockKind =
+  'amp' | 'pedal' | 'cab' | 'time' | 'mod' | 'lv2' | 'other';
 
 export interface RigBlockVM {
   id: string;
@@ -22,19 +24,8 @@ export interface RigLaneVM {
   blocks: RigBlockVM[];
 }
 
-const gearKinds: Record<string, BlockKind> = {
-  amp: 'amp',
-  'amp-cab': 'amp',
-  'full-rig': 'amp',
-  cab: 'cab',
-  ir: 'cab',
-  pedal: 'pedal',
-  outboard: 'time',
-  space: 'time',
-};
-
-export function blockKind(gear: string, format?: string): BlockKind {
+/** LED family follows the block's glyph, so an LV2 delay lights like a delay. */
+export function blockKind(gear: string, name = '', format?: string): BlockKind {
   if (format === 'ir') return 'cab';
-  if (format === 'lv2') return 'lv2';
-  return gearKinds[gear] ?? 'other';
+  return glyphs[glyphFor(gear, name)].kind;
 }

@@ -557,16 +557,9 @@ export function MixedRig({
         : n.kind === 'lv2'
           ? (plugin?.pluginUri.split(/[/#]/).pop() ?? 'Effect')
           : 'Mix');
-    const gear =
-      role === 'amp'
-        ? 'amp'
-        : role === 'cab'
-          ? 'cab'
-          : n.kind === 'lv2'
-            ? 'pedal'
-            : n.kind === 'merge'
-              ? 'full-rig'
-              : '';
+    const gear = role === 'amp' ? 'amp' : role === 'cab' ? 'cab' : '';
+    // LV2 effects and mix points are named by plugin URI/label, not a gear type.
+    const hint = `${label} ${plugin?.pluginUri ?? ''} ${n.kind === 'merge' ? 'mix' : ''}`;
     return {
       branch,
       bypass,
@@ -574,10 +567,10 @@ export function MixedRig({
       block: {
         id: n.id,
         label,
-        kind: n.kind === 'lv2' ? ('lv2' as const) : blockKind(gear),
+        kind: blockKind(gear, hint),
         // A bypass control value of 1 means bypassed; branches report enabled.
         on: branch ? branch.enabled : bypass?.value !== 1,
-        face: <GearIcon gear={gear} />,
+        face: <GearIcon gear={gear} name={hint} />,
       },
     };
   };

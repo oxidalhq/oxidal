@@ -141,6 +141,9 @@
 [data-kind='lv2'] {
   --led: var(--led-lv2);
 }
+[data-kind='mod'] {
+  --led: var(--led-mod);
+}
 [data-on='false'] .chain-led,
 .led-toggle[aria-pressed='false'] .chain-led,
 .led-toggle[aria-checked='false'] .chain-led {

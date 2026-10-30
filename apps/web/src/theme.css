@@ -38,6 +38,7 @@
   --led-cab: #7d7a70;
   --led-time: #2f6fb0;
   --led-lv2: #23807a;
+  --led-mod: #7a5ea8;
 
   /* The ink faceplate (header) and the readout panel. */
   --enclosure: #1b1a17;
@@ -118,6 +119,7 @@
   --led-cab: #8f8b80;
   --led-time: #5d8fc8;
   --led-lv2: #45a198;
+  --led-mod: #9d86c9;
   --enclosure: #0c0c0b;
   --enclosure-foreground: #ece9e2;
   --enclosure-border: #36342f;
@@ -140,6 +142,7 @@
   --led-cab: #4d4d4d;
   --led-time: #0b4f99;
   --led-lv2: #00625b;
+  --led-mod: #5a3d8c;
   --enclosure: #000000;
   --enclosure-foreground: #ffffff;
   --enclosure-border: #000000;
@@ -162,6 +165,7 @@
   --led-cab: #000000;
   --led-time: #000000;
   --led-lv2: #000000;
+  --led-mod: #000000;
   --enclosure: #000000;
   --enclosure-foreground: #ffffff;
   --enclosure-border: #000000;
