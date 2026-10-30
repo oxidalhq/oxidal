@@ -156,9 +156,10 @@ impl PluginCatalog {
                 || plugin.name.len() > 4096
                 || plugin.uri.contains(char::is_control)
                 || plugin.name.contains(char::is_control)
-                || [&plugin.category, &plugin.author]
-                    .iter()
-                    .any(|t| t.as_ref().is_some_and(|t| t.len() > 256 || t.contains(char::is_control)))
+                || [&plugin.category, &plugin.author].iter().any(|t| {
+                    t.as_ref()
+                        .is_some_and(|t| t.len() > 256 || t.contains(char::is_control))
+                })
                 || !uris.insert(&plugin.uri)
                 || plugin.ports.len() > 128
                 || plugin.unsupported.as_ref().is_some_and(|s| s.len() > 4096)

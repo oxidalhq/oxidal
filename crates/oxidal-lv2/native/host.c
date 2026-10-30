@@ -57,11 +57,24 @@ const char* ox_lv2_name(const LilvPlugin* p) {
     memcpy(name, text, strlen(text) + 1);
     lilv_node_free(n); return name;
 }
-// The plugin's class label ("Delay", "Reverb"); Lilv owns it, so it is borrowed.
-const char* ox_lv2_class(const LilvPlugin* p) {
-    const LilvPluginClass* c = lilv_plugin_get_class(p);
-    const LilvNode* label = c ? lilv_plugin_class_get_label(c) : NULL;
-    return label ? lilv_node_as_string(label) : NULL;
+// The plugin's most specific lv2core class URI ("...#DelayPlugin"), read from its
+// own rdf:type so it works without lv2core class data installed.
+const char* ox_lv2_class(void* world, const LilvPlugin* p) {
+    static _Thread_local char found[256];
+    static const char core[] = "http://lv2plug.in/ns/lv2core#";
+    LilvNode* type = lilv_new_uri(world, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
+    LilvNodes* types = type ? lilv_plugin_get_value(p, type) : NULL;
+    const char* result = NULL;
+    LILV_FOREACH(nodes, i, types) {
+        const LilvNode* n = lilv_nodes_get(types, i);
+        const char* uri = lilv_node_is_uri(n) ? lilv_node_as_uri(n) : NULL;
+        if (uri && !strncmp(uri, core, sizeof(core) - 1) && strcmp(uri + sizeof(core) - 1, "Plugin")
+            && strlen(uri) < sizeof(found)) {
+            memcpy(found, uri, strlen(uri) + 1); result = found; break;
+        }
+    }
+    lilv_nodes_free(types); lilv_node_free(type);
+    return result;
 }
 // The author's name is an owned node, copied like the plugin name.
 const char* ox_lv2_author(const LilvPlugin* p) {

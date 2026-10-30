@@ -15,7 +15,7 @@ unsafe extern "C" {
     fn ox_lv2_plugin(w: *mut c_void, index: u32) -> *const c_void;
     fn ox_lv2_uri(p: *const c_void) -> *const c_char;
     fn ox_lv2_name(p: *const c_void) -> *const c_char;
-    fn ox_lv2_class(p: *const c_void) -> *const c_char;
+    fn ox_lv2_class(w: *mut c_void, p: *const c_void) -> *const c_char;
     fn ox_lv2_author(p: *const c_void) -> *const c_char;
     fn ox_lv2_ports(p: *const c_void) -> u32;
     fn ox_lv2_symbol(p: *const c_void, index: u32) -> *const c_char;
@@ -53,6 +53,21 @@ unsafe extern "C" {
         body: *mut *const c_void,
     ) -> i32;
     fn ox_lv2_run(h: *mut c_void, l: *mut f32, r: *mut f32, frames: u32) -> i32;
+}
+/// "http://lv2plug.in/ns/lv2core#DelayPlugin" → "Delay", named as lv2core labels it.
+fn class_label(uri: &str) -> Option<String> {
+    let name = uri
+        .strip_prefix("http://lv2plug.in/ns/lv2core#")?
+        .strip_suffix("Plugin")?;
+    let label = match name {
+        "" => return None,
+        "EQ" => "Equaliser",
+        "ParaEQ" => "Parametric",
+        "MultiEQ" => "Multiband",
+        "Pitch" => "Pitch Shifter",
+        other => other,
+    };
+    Some(label.to_owned())
 }
 fn text(p: *const c_char) -> Result<String, String> {
     if p.is_null() {
@@ -170,9 +185,9 @@ impl World {
         // SAFETY: p borrows this live world; immediately copy the native name.
         let name = unsafe { text(ox_lv2_name(p)) }.unwrap_or_else(|_| uri.clone());
         // SAFETY: as above; both strings are copied before the next metadata call.
-        let category = unsafe { text(ox_lv2_class(p)) }
+        let category = unsafe { text(ox_lv2_class(self.0.0.as_ptr(), p)) }
             .ok()
-            .filter(|c| !c.is_empty() && c != "Plugin");
+            .and_then(|uri| class_label(&uri));
         let author = unsafe { text(ox_lv2_author(p)) }.ok();
         if !(1..=128).contains(&count) {
             return Ok(PluginInfo {
@@ -656,5 +671,17 @@ impl Plugin {
         } else {
             Ok(())
         }
+    }
+}
+#[cfg(test)]
+mod class_tests {
+    #[test]
+    fn lv2core_classes_read_as_player_labels() {
+        let core = |c: &str| super::class_label(&format!("http://lv2plug.in/ns/lv2core#{c}"));
+        assert_eq!(core("DelayPlugin").as_deref(), Some("Delay"));
+        assert_eq!(core("EQPlugin").as_deref(), Some("Equaliser"));
+        assert_eq!(core("PitchPlugin").as_deref(), Some("Pitch Shifter"));
+        assert_eq!(core("Plugin"), None);
+        assert_eq!(super::class_label("http://example.org/DelayPlugin"), None);
     }
 }
