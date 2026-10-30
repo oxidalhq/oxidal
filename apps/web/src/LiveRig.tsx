@@ -39,6 +39,7 @@ import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
 import { DragFader } from './DragFader';
+import { LevelMatch } from './LevelMatch';
 import { MasterLevel } from './MasterLevel';
 import { EditQueue } from './editQueue';
 
@@ -112,6 +113,7 @@ export function LiveRig({
   const [performance, setPerformance] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [matching, setMatching] = useState(false);
   const [selection, setSelection] = useWorkspaceState('native-selection', {
     session: '',
     target: 'outputLevel',
@@ -765,6 +767,19 @@ export function LiveRig({
               }}
             />
           )}
+          {matching && (
+            <AdjustmentDialog
+              title="Match preset level"
+              onCancel={() => setMatching(false)}
+            >
+              <LevelMatch
+                output={state.controls.find((c) => c.target === 'outputLevel')}
+                disabled={disabled || busy}
+                onApply={(value) => apply('outputLevel', value)}
+                onClose={() => setMatching(false)}
+              />
+            </AdjustmentDialog>
+          )}
           {actionsOpen && (
             <AdjustmentDialog
               title="Preset actions"
@@ -800,6 +815,24 @@ export function LiveRig({
                   }}
                 >
                   Perform view
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    disabled ||
+                    !!draft ||
+                    state.phase !== 'running' ||
+                    !state.controls.some((c) => c.target === 'outputLevel')
+                  }
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setMatching(true);
+                  }}
+                >
+                  Match level…
+                  <span className="caption">
+                    Play for eight seconds to level this preset with the others
+                  </span>
                 </button>
               </div>
               <div

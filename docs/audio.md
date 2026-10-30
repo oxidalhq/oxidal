@@ -243,3 +243,13 @@ Guitars with different pickups hit the rig at different levels, which changes bo
 - **Switch:** Perform shows one button per guitar once two exist. MIDI and footswitch selection wait for physical MIDI.
 - **Store and API:** `guitars.json` in the preset directory, never in presets. `GET`/`POST /api/v1/guitars` (up to 16 guitars, names of 1–40 characters). Saving computes the active guitar's trim, applies it to a running engine and stores it in the unit levels.
 - **Not yet:** per-guitar gate thresholds and tone tilt. The gate lives inside each engine today.
+
+## Preset level matching
+
+TONE3000 blocks already normalise each capture (Normalize on), but a whole preset's loudness still depends on block gains, EQ and IRs. **Preset actions → Match level…** evens out presets:
+
+1. Play the way you would on stage for eight seconds. Readings count only while the raw input peaks above −50 dBFS.
+2. Oxidal averages the output RMS as power (not dB) and removes the master Level, so the fader position never skews the match.
+3. It proposes the preset's own Output level so the preset averages −18 dBFS. Apply commits it like any edit; Save keeps it in the preset.
+
+Output level covers ±24 dB; a preset beyond that is set as close as it goes and says so. Hybrid and effects rigs have no rig-wide output control yet, so matching is TONE3000-only for now. The order of gain staging is: interface gain set once → guitar profile → capture normalise → preset match → Level.
