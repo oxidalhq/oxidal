@@ -11,10 +11,9 @@ namespace oxidal_hold {
 inline constexpr const char* MonoUri = "urn:oxidal:plugin:hold#mono";
 inline constexpr const char* StereoUri = "urn:oxidal:plugin:hold#stereo";
 enum Port : uint32_t { Hold, Attack, Release, Level, Dry, InputL, OutputL, InputR, OutputR, PortCount };
-/** Analysis/synthesis frame: about 43 ms at 48 kHz, enough for a chord. */
-inline constexpr uint32_t FrameSize = 2048;
+/** Analysis/synthesis frame: about 85 ms at 48 kHz, long enough to separate
+ * the harmonics of a low guitar string, short enough to be the last note. */
+inline constexpr uint32_t FrameSize = 4096;
 inline constexpr uint32_t Hop = FrameSize / 4;
-/** Frames averaged into the held spectrum, so one transient does not dominate. */
-inline constexpr uint32_t CaptureFrames = 4;
 }
 LV2_SYMBOL_EXPORT const LV2_Descriptor* lv2_descriptor(uint32_t index);

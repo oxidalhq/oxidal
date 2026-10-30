@@ -54,32 +54,28 @@ private:
 
 /** One channel: recent input, the held spectrum and the running resynthesis. */
 struct Channel {
-    Channel(uint32_t n, uint32_t seed)
-        : history(n + (CaptureFrames - 1) * (n / 4)), magnitude(n / 2 + 1), overlap(n), ready(n / 4), random(seed) {}
+    explicit Channel(uint32_t n)
+        : history(n + n / 4), magnitude(n / 2 + 1), phase(n / 2 + 1), advance(n / 2 + 1), overlap(n), ready(n / 4) {}
     std::vector<float> history;  // ring of the latest input
     uint32_t write = 0;
     std::vector<float> magnitude;
+    std::vector<float> phase;    // phase of each bin in the held frame
+    std::vector<float> advance;  // phase each bin turns through per hop
     std::vector<float> overlap;  // overlap-add of synthesised frames
     std::vector<float> ready;    // the next hop of held sound
-    uint32_t random;
-    float next() noexcept {  // xorshift32 in [0, 1)
-        random ^= random << 13;
-        random ^= random >> 17;
-        random ^= random << 5;
-        return float(random >> 8) / float(1u << 24);
-    }
 };
 
-/** Hold: on the rising edge, average the spectrum of the last few frames; while
- * held, resynthesise it every hop with fresh random phases (a seamless drone,
- * never an audible loop) and fade it in and out. Everything is allocated here.
+/** Hold: on the rising edge, read the spectrum of the newest frame and how fast
+ * each bin's phase was turning; while held, keep turning every bin at that rate
+ * and resynthesise each hop, so a held note stays the same note, in the same
+ * place in the stereo image. Fades in and out; everything is allocated here.
  * @see docs/native-hold.md
  */
 class Instance {
 public:
     Instance(double rate, uint32_t channels)
-        : rate(rate), channels(channels), n(frameFor(rate)), hop(n / 4), fft(n), window(n), scratch(n),
-          lanes{Channel(n, 0x9e3779b9u), Channel(n, 0x7f4a7c15u)} {
+        : rate(rate), channels(channels), n(frameFor(rate)), hop(n / 4), fft(n), window(n), scratch(n), earlier(n),
+          lanes{Channel(n), Channel(n)} {
         for (uint32_t i = 0; i < n; ++i) window[i] = 0.5f - 0.5f * std::cos(2 * Pi * float(i) / float(n));
     }
     std::array<float*, PortCount> ports{};
@@ -133,35 +129,47 @@ private:
         const float value = in ? in[i] : 0.0f;
         return std::isfinite(value) ? value : 0.0f;
     }
-    /** Averages the magnitude spectra of the last few overlapping frames. */
+    /** Reads the newest frame and the one a hop before it: the magnitudes are
+     * held, and the phase each bin turned through between them is how far it
+     * keeps turning, so a held note stays one steady note. */
     void capture() noexcept {
         for (uint32_t ch = 0; ch < channels; ++ch) {
             auto& lane = lanes[ch];
-            std::fill(lane.magnitude.begin(), lane.magnitude.end(), 0.0f);
             // A new hold starts clean: nothing of the previous one overlaps it.
             std::fill(lane.overlap.begin(), lane.overlap.end(), 0.0f);
             const auto size = uint32_t(lane.history.size());
-            for (uint32_t frame = 0; frame < CaptureFrames; ++frame) {
-                // Oldest sample of this frame, counting back from the newest input.
+            for (uint32_t frame = 0; frame < 2; ++frame) {
                 const uint32_t start = (lane.write + size - n - frame * hop) % size;
-                for (uint32_t i = 0; i < n; ++i) scratch[i] = Complex(lane.history[(start + i) % size] * window[i], 0);
-                fft.run(scratch.data(), false);
-                for (uint32_t k = 0; k <= n / 2; ++k) lane.magnitude[k] += std::abs(scratch[k]) / CaptureFrames;
+                std::vector<Complex>& target = frame ? earlier : scratch;
+                for (uint32_t i = 0; i < n; ++i) target[i] = Complex(lane.history[(start + i) % size] * window[i], 0);
+                fft.run(target.data(), false);
+            }
+            for (uint32_t k = 0; k <= n / 2; ++k) {
+                lane.magnitude[k] = std::abs(scratch[k]);
+                lane.phase[k] = std::arg(scratch[k]);
+                const float expected = 2 * Pi * float(k) * float(hop) / float(n);
+                float turned = std::arg(scratch[k]) - std::arg(earlier[k]) - expected;
+                turned -= 2 * Pi * std::round(turned / (2 * Pi));
+                lane.advance[k] = expected + turned;
             }
         }
         position = hop;
     }
-    /** One hop of held sound: the held magnitudes with fresh random phases. */
+    /** One hop of held sound: the held magnitudes, each bin's phase turned on by its own rate. */
     void synthesise() noexcept {
-        // Hann analysis and synthesis at a quarter-frame hop overlap to 1.5;
-        // with the 1/N inverse transform, 4/3 restores the captured loudness.
-        const float scale = 4.0f / 3.0f / float(n);
+        // A steady sinusoid of amplitude A has bin magnitude A·N/4 under a Hann
+        // window; the inverse turns it into A/2, the synthesis window and the
+        // quarter-frame overlap-add (sum of w² = 1.5) make that 0.75·A, and
+        // 2/3 brings it back to A.
+        const float scale = 2.0f / 3.0f / float(n);
         for (uint32_t ch = 0; ch < channels; ++ch) {
             auto& lane = lanes[ch];
             scratch[0] = Complex(lane.magnitude[0], 0);
             scratch[n / 2] = Complex(lane.magnitude[n / 2], 0);
             for (uint32_t k = 1; k < n / 2; ++k) {
-                scratch[k] = std::polar(lane.magnitude[k], 2 * Pi * lane.next());
+                lane.phase[k] += lane.advance[k];
+                lane.phase[k] -= 2 * Pi * std::round(lane.phase[k] / (2 * Pi));
+                scratch[k] = std::polar(lane.magnitude[k], lane.phase[k]);
                 scratch[n - k] = std::conj(scratch[k]);
             }
             fft.run(scratch.data(), true);
@@ -178,6 +186,7 @@ private:
     Fft fft;
     std::vector<float> window;
     std::vector<Complex> scratch;
+    std::vector<Complex> earlier;  // the frame a hop before `scratch`'s capture
     std::array<Channel, 2> lanes;
     float gain = 0;
     bool held = false;

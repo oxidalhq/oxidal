@@ -91,7 +91,7 @@ void holdSustainsTheCapturedToneAfterTheInputStops(double rate) {
     const size_t settled = size_t(rate * 0.5);
     const double inputRms = amplitude / std::sqrt(2.0);
     const double heldDb = 20 * std::log10(rms(held, settled) / inputRms);
-    check(std::abs(heldDb) < 3.0, "Held level is not within 3 dB of the captured tone");
+    check(std::abs(heldDb) < 1.0, "Held level is not within 1 dB of the captured tone");
     check(tone(held, frequency, rate, settled) > 50 * tone(held, frequency * 1.5, rate, settled),
           "Held sound is not the captured pitch");
     // Release: fades to silence within the release time and a frame.
@@ -104,15 +104,76 @@ void holdSustainsTheCapturedToneAfterTheInputStops(double rate) {
 
 void stereoSidesHoldOnTheirOwn() {
     Fixture f(true);
-    f.render(24000, [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 330 * i / 48000.0)); });
+    // Left and right play different notes; each side must hold its own.
+    auto left = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 330 * i / 48000.0)); };
+    auto right = [](uint32_t i) { return float(0.3 * std::sin(2 * M_PI * 440 * i / 48000.0)); };
+    for (uint32_t done = 0; done < 24000; done += 64) {
+        for (uint32_t i = 0; i < 64; ++i) f.in[0].assign(64, 0), f.in[1].assign(64, 0);
+        for (uint32_t i = 0; i < 64; ++i) f.in[0][i] = left(done + i), f.in[1][i] = right(done + i);
+        f.out[0].assign(64, 0);
+        f.out[1].assign(64, 0);
+        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
+        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
+        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
+        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
+        f.descriptor->run(f.instance, 64);
+    }
     f.controls[Hold] = 1;
-    auto left = f.render(48000, [](uint32_t) { return 0.0f; }, 0);
-    const auto right = f.out[1];
-    check(rms(left, 24000) > 0.05, "Stereo left is not held");
-    // Independent phases: the sides differ, a wider drone than mono.
-    double difference = 0;
-    for (size_t i = 0; i < right.size(); ++i) difference += std::abs(left[left.size() - right.size() + i] - right[i]);
-    check(difference > 0, "Stereo sides are identical");
+    std::vector<float> heldL, heldR;
+    for (uint32_t done = 0; done < 96000; done += 64) {
+        f.in[0].assign(64, 0);
+        f.in[1].assign(64, 0);
+        f.out[0].assign(64, 0);
+        f.out[1].assign(64, 0);
+        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
+        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
+        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
+        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
+        f.descriptor->run(f.instance, 64);
+        heldL.insert(heldL.end(), f.out[0].begin(), f.out[0].end());
+        heldR.insert(heldR.end(), f.out[1].begin(), f.out[1].end());
+    }
+    const size_t settled = 24000;
+    check(rms(heldL, settled) > 0.1 && rms(heldR, settled) > 0.1, "Stereo sides are not both held");
+    check(tone(heldL, 330, 48000, settled) > 50 * tone(heldL, 440, 48000, settled), "Left did not keep its own note");
+    check(tone(heldR, 440, 48000, settled) > 50 * tone(heldR, 330, 48000, settled), "Right did not keep its own note");
+}
+
+/** What was playing, not a wash: a harmonic stack keeps its lines and valleys, and
+ * identical sides stay identical, so a mono source does not turn into a wide pad. */
+void holdKeepsHarmonicsAndTheStereoImage() {
+    Fixture f(true);
+    const double fundamental = 110;
+    auto stack = [&](uint32_t i) {
+        double x = 0;
+        for (int h = 1; h <= 10; ++h) x += std::sin(2 * M_PI * fundamental * h * i / 48000.0 + h) / h;
+        return float(0.15 * x);
+    };
+    std::vector<float> heldL, heldR;
+    for (uint32_t done = 0; done < 24000 + 96000; done += 64) {
+        if (done >= 24000) f.controls[Hold] = 1;
+        for (uint32_t i = 0; i < 64; ++i) f.in[0].assign(64, 0), f.in[1].assign(64, 0);
+        for (uint32_t i = 0; i < 64; ++i) f.in[0][i] = f.in[1][i] = done < 24000 ? stack(done + i) : 0.0f;
+        f.out[0].assign(64, 0);
+        f.out[1].assign(64, 0);
+        f.descriptor->connect_port(f.instance, InputL, f.in[0].data());
+        f.descriptor->connect_port(f.instance, OutputL, f.out[0].data());
+        f.descriptor->connect_port(f.instance, InputR, f.in[1].data());
+        f.descriptor->connect_port(f.instance, OutputR, f.out[1].data());
+        f.descriptor->run(f.instance, 64);
+        heldL.insert(heldL.end(), f.out[0].begin(), f.out[0].end());
+        heldR.insert(heldR.end(), f.out[1].begin(), f.out[1].end());
+    }
+    const size_t settled = 24000 + 24000;
+    double lines = 0, valleys = 0;
+    for (int h = 1; h <= 8; ++h) {
+        lines += tone(heldL, fundamental * h, 48000, settled);
+        valleys += tone(heldL, fundamental * (h + 0.5), 48000, settled);
+    }
+    check(lines > 100 * valleys, "Held sound lost the harmonic structure of the note");
+    double ab = 0, aa = 0, bb = 0;
+    for (size_t i = settled; i < heldL.size(); ++i) ab += heldL[i] * heldR[i], aa += heldL[i] * heldL[i], bb += heldR[i] * heldR[i];
+    check(ab / std::sqrt(aa * bb) > 0.95, "Identical sides were decorrelated by the hold");
 }
 
 void invalidInputAndControlsAreSafe() {
@@ -136,6 +197,7 @@ int main() {
         holdSustainsTheCapturedToneAfterTheInputStops(48000);
         holdSustainsTheCapturedToneAfterTheInputStops(96000);
         stereoSidesHoldOnTheirOwn();
+        holdKeepsHarmonicsAndTheStereoImage();
         invalidInputAndControlsAreSafe();
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << "\n";
