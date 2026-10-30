@@ -57,6 +57,23 @@ const char* ox_lv2_name(const LilvPlugin* p) {
     memcpy(name, text, strlen(text) + 1);
     lilv_node_free(n); return name;
 }
+// The plugin's class label ("Delay", "Reverb"); Lilv owns it, so it is borrowed.
+const char* ox_lv2_class(const LilvPlugin* p) {
+    const LilvPluginClass* c = lilv_plugin_get_class(p);
+    const LilvNode* label = c ? lilv_plugin_class_get_label(c) : NULL;
+    return label ? lilv_node_as_string(label) : NULL;
+}
+// The author's name is an owned node, copied like the plugin name.
+const char* ox_lv2_author(const LilvPlugin* p) {
+    static _Thread_local char author[4097];
+    LilvNode* n = lilv_plugin_get_author_name(p);
+    const char* text = n ? lilv_node_as_string(n) : NULL;
+    if (!text || !*text || strlen(text) >= sizeof(author)) {
+        lilv_node_free(n); return NULL;
+    }
+    memcpy(author, text, strlen(text) + 1);
+    lilv_node_free(n); return author;
+}
 uint32_t ox_lv2_ports(const LilvPlugin* p) { return lilv_plugin_get_num_ports(p); }
 const char* ox_lv2_symbol(const LilvPlugin* p, uint32_t index) {
     const LilvPort* port = lilv_plugin_get_port_by_index(p, index);

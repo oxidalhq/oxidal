@@ -1545,6 +1545,14 @@ export interface PluginCatalog {
   sample_rate: number;
 }
 export interface PluginInfo {
+  /**
+   * The declared author or maker, used to group effects by source.
+   */
+  author?: string | null;
+  /**
+   * The LV2 class label, such as "Delay" or "Reverb", when one is declared.
+   */
+  category?: string | null;
   name: string;
   ports: Port[];
   unsupported?: string | null;

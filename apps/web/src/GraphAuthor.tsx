@@ -166,7 +166,7 @@ export function GraphAuthor({
     setScanning(true);
     setError('');
     try {
-      const plugins = await installedLv2(sampleRate, controller.signal);
+      const plugins = await installedLv2(sampleRate);
       if (alive.current && scan.current === controller) setCatalog(plugins);
     } catch (cause) {
       if (!controller.signal.aborted && alive.current) setError(String(cause));
@@ -277,7 +277,7 @@ export function GraphAuthor({
   useEffect(() => {
     if (!running) return;
     const controller = new AbortController();
-    void installedLv2(sampleRate, controller.signal)
+    void installedLv2(sampleRate)
       .then((plugins) => {
         if (!controller.signal.aborted) setCatalog(plugins);
       })

@@ -91,7 +91,7 @@ export function RigComposer({
               native.configured?.stream ??
               graph.configured?.stream
             )?.input.sample_rate ?? 48000;
-          const plugins = await installedLv2(rate, controller.signal);
+          const plugins = await installedLv2(rate);
           if (!controller.signal.aborted) setCatalog(plugins);
         }
       } catch (cause) {

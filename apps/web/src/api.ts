@@ -515,16 +515,21 @@ export async function graphLibrary(): Promise<SavedGraph[]> {
     throw new Error('Incompatible graph library');
   return body;
 }
-export async function installedLv2(
-  sampleRate: number,
-  signal?: AbortSignal,
-): Promise<Lv2Plugin[]> {
-  const body = await presetResponse(
-    await fetch(`/api/v1/plugins/lv2?sample_rate=${sampleRate}`, { signal }),
-  );
-  if (!lv2CatalogValidator(body) || body.sample_rate !== sampleRate)
-    throw new Error('Incompatible effects catalog');
-  return body.plugins;
+/** One scan at a time: callers asking together share the same answer. */
+const lv2Scans = new Map<number, Promise<Lv2Plugin[]>>();
+export function installedLv2(sampleRate: number): Promise<Lv2Plugin[]> {
+  const pending = lv2Scans.get(sampleRate);
+  if (pending) return pending;
+  const scan = (async () => {
+    const body = await presetResponse(
+      await fetch(`/api/v1/plugins/lv2?sample_rate=${sampleRate}`),
+    );
+    if (!lv2CatalogValidator(body) || body.sample_rate !== sampleRate)
+      throw new Error('Incompatible effects catalog');
+    return body.plugins;
+  })().finally(() => lv2Scans.delete(sampleRate));
+  lv2Scans.set(sampleRate, scan);
+  return scan;
 }
 
 export type RigAudioState = Contract['rig_audio_state'];

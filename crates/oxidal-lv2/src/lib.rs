@@ -80,6 +80,12 @@ impl Port {
 pub struct PluginInfo {
     pub name: String,
     pub uri: String,
+    /// The LV2 class label, such as "Delay" or "Reverb", when one is declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// The declared author or maker, used to group effects by source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
     pub ports: Vec<Port>,
     pub unsupported: Option<String>,
 }
@@ -150,6 +156,9 @@ impl PluginCatalog {
                 || plugin.name.len() > 4096
                 || plugin.uri.contains(char::is_control)
                 || plugin.name.contains(char::is_control)
+                || [&plugin.category, &plugin.author]
+                    .iter()
+                    .any(|t| t.as_ref().is_some_and(|t| t.len() > 256 || t.contains(char::is_control)))
                 || !uris.insert(&plugin.uri)
                 || plugin.ports.len() > 128
                 || plugin.unsupported.as_ref().is_some_and(|s| s.len() > 4096)

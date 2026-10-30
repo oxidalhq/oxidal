@@ -5724,6 +5724,20 @@
     "PluginInfo": {
       "type": "object",
       "properties": {
+        "author": {
+          "description": "The declared author or maker, used to group effects by source.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "description": "The LV2 class label, such as \"Delay\" or \"Reverb\", when one is declared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },

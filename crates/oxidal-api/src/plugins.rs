@@ -27,7 +27,13 @@ pub async fn catalog(
             "LV2 discovery is unavailable",
         );
     };
-    let Ok(permit) = shared.catalog_work.clone().try_acquire_owned() else {
+    // A second caller waits for the scan in progress instead of failing.
+    let Ok(Ok(permit)) = tokio::time::timeout(
+        Duration::from_secs(12),
+        shared.catalog_work.clone().acquire_owned(),
+    )
+    .await
+    else {
         return failure(StatusCode::CONFLICT, "LV2 discovery already in progress");
     };
     // The task owns both child and permit if the browser disconnects. Always reap
