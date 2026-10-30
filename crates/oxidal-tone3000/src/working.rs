@@ -321,6 +321,54 @@ pub struct Authoring {
     finished_gestures: VecDeque<(String, String)>,
     tools: oxidal_audio::tools::State,
     measurement: Option<tools::Baseline>,
+    /// Background persistence for knob adjustments, started on first use.
+    writer: Option<HistoryWriter>,
+}
+/// Writes adjustment checkpoints off the realtime audio thread. Content-addressed
+/// history writes hash, verify and fsync state files: about 100 ms on an SD card.
+#[derive(Debug)]
+struct HistoryWriter {
+    jobs: std::sync::mpsc::Sender<HistoryJob>,
+    receipts: std::sync::mpsc::Receiver<Result<String, String>>,
+    in_flight: usize,
+}
+#[derive(Debug)]
+struct HistoryJob {
+    root: PathBuf,
+    source: String,
+    current: State,
+    undo: Vec<State>,
+    redo: Vec<State>,
+}
+impl HistoryWriter {
+    fn start() -> Option<Self> {
+        let (jobs, queue) = std::sync::mpsc::channel::<HistoryJob>();
+        let (done, receipts) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("oxidal-history".into())
+            .spawn(move || {
+                // Started from the audio thread: never compete with it.
+                oxidal_audio::realtime::leave();
+                for job in queue {
+                    let result = write_history(
+                        &job.root,
+                        &job.source,
+                        &job.current,
+                        job.undo.iter().collect(),
+                        job.redo.iter().collect(),
+                    );
+                    if done.send(result).is_err() {
+                        break;
+                    }
+                }
+            })
+            .ok()?;
+        Some(Self {
+            jobs,
+            receipts,
+            in_flight: 0,
+        })
+    }
 }
 impl Authoring {
     pub fn new(root: &Path, settings: &StartAudio) -> Self {
@@ -358,10 +406,99 @@ impl Authoring {
             finished_gestures: VecDeque::new(),
             tools: Default::default(),
             measurement: None,
+            writer: None,
         }
     }
     pub fn working_receipt(&self) -> Option<&str> {
         self.working.as_deref()
+    }
+    /// Adopt finished background checkpoints. Call before reading the receipt
+    /// for a request, so a late receipt is not mistaken for that request's edit.
+    pub fn collect_receipts(&mut self) {
+        let Some(writer) = self.writer.as_mut() else {
+            return;
+        };
+        while let Ok(result) = writer.receipts.try_recv() {
+            writer.in_flight = writer.in_flight.saturating_sub(1);
+            match result {
+                Ok(receipt) => self.working = Some(receipt),
+                Err(error) => {
+                    self.history_error = Some(
+                        format!("Adjustment history not saved: {error}")
+                            .chars()
+                            .filter(|c| !c.is_control())
+                            .take(240)
+                            .collect(),
+                    )
+                }
+            }
+        }
+    }
+    /// Wait for background checkpoints before a synchronous one, so an older
+    /// receipt can never replace a newer one.
+    fn settle_writes(&mut self) {
+        while self.writer.as_ref().is_some_and(|w| w.in_flight > 0) {
+            let writer = self.writer.as_mut().unwrap();
+            match writer.receipts.recv() {
+                Ok(result) => {
+                    writer.in_flight -= 1;
+                    match result {
+                        Ok(receipt) => self.working = Some(receipt),
+                        Err(error) => self.history_error = Some(error),
+                    }
+                }
+                Err(_) => {
+                    self.writer = None;
+                }
+            }
+        }
+    }
+    /// Queue an adjustment checkpoint; falls back to writing now if the
+    /// background writer cannot start.
+    fn checkpoint_later(&mut self, after: State, before: &State) -> Result<(), String> {
+        if self.writer.is_none() {
+            self.writer = HistoryWriter::start();
+        }
+        let mut undo: Vec<State> = self.undo.iter().cloned().collect();
+        if after != *before {
+            undo.push(before.clone());
+        }
+        let job = HistoryJob {
+            root: self.root.clone(),
+            source: self.source.clone(),
+            current: after,
+            undo,
+            redo: vec![],
+        };
+        match self.writer.as_mut() {
+            Some(writer) => match writer.jobs.send(job) {
+                Ok(()) => {
+                    writer.in_flight += 1;
+                    Ok(())
+                }
+                Err(std::sync::mpsc::SendError(job)) => {
+                    self.writer = None;
+                    self.working = Some(write_history(
+                        &job.root,
+                        &job.source,
+                        &job.current,
+                        job.undo.iter().collect(),
+                        vec![],
+                    )?);
+                    Ok(())
+                }
+            },
+            None => {
+                self.working = Some(write_history(
+                    &job.root,
+                    &job.source,
+                    &job.current,
+                    job.undo.iter().collect(),
+                    vec![],
+                )?);
+                Ok(())
+            }
+        }
     }
     pub fn failed(&self) -> bool {
         self.failed
@@ -555,6 +692,7 @@ impl Authoring {
         };
         let before = engine.capture().map_err(|e| e.to_string())?;
         let latency = engine.latency_samples().map_err(|e| e.to_string())?;
+        self.settle_writes();
         let result = (|| -> Result<(State, String), String> {
             match &action {
                 AuthoringAction::RefreshMetadata { block_id, tone } => {
@@ -710,6 +848,7 @@ impl Authoring {
         if self.failed || self.gesture_pending() || self.measurement_pending() {
             return Err("Finish the active native edit before checkpointing models".into());
         }
+        self.settle_writes();
         let result = (|| -> Result<(State, String), String> {
             self.snapshot(engine)?;
             let after = engine.capture().map_err(|e| e.to_string())?;

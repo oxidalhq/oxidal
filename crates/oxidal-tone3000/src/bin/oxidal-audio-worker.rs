@@ -280,6 +280,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             command: oxidal_audio::tools::Command::Poll
                         }
                     ) && authoring.poll_is_quiet();
+                    // Adopt background checkpoints first: their receipts are not this request's edit.
+                    authoring.collect_receipts();
                     let before_working = authoring.working_receipt().map(str::to_owned);
                     let result = if quiet_poll && let Some(status) = last_status.clone() {
                         Ok(status)

@@ -126,6 +126,7 @@ impl Authoring {
                                     return Err("Invalid native utility readback".into());
                                 }
                                 let after = engine.capture().map_err(|e| e.to_string())?;
+                                self.settle_writes();
                                 let receipt = self.checkpoint(&after, &baseline.state, None)?;
                                 Ok((after, receipt))
                             })();

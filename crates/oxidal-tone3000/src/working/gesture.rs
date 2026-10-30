@@ -11,13 +11,12 @@ enum Target {
     },
 }
 impl Target {
-    fn resolve(engine: &mut Engine, target: &str) -> Result<Self, String> {
-        if engine
-            .live_controls()
-            .map_err(|e| e.to_string())?
-            .iter()
-            .any(|p| p.target == target)
-        {
+    fn resolve(
+        engine: &mut Engine,
+        target: &str,
+        controls: &[oxidal_audio::lifecycle::LiveControl],
+    ) -> Result<Self, String> {
+        if controls.iter().any(|p| p.target == target) {
             return Ok(Self::Scalar);
         }
         let Some(encoded) = target.strip_prefix("eq:") else {
@@ -113,9 +112,19 @@ impl Authoring {
     fn cancel_gesture(&mut self, engine: &mut Engine) -> Result<(), String> {
         let pending = self.gesture.take().ok_or("No active native adjustment")?;
         let rollback = match pending.target {
-            Target::Scalar => engine
-                .apply_live_snapshot(&pending.controls)
-                .map_err(|e| e.to_string()),
+            // Only the adjusted control moved: put just that one back.
+            Target::Scalar => match pending
+                .controls
+                .iter()
+                .find(|c| c.target == pending.owner.target)
+            {
+                Some(original) => engine
+                    .set_live_control(&original.target, original.value)
+                    .map_err(|e| e.to_string()),
+                None => engine
+                    .apply_live_snapshot(&pending.controls)
+                    .map_err(|e| e.to_string()),
+            },
             Target::Eq { .. } => (|| -> Result<(), String> {
                 let current = engine.eq_snapshot().map_err(|e| e.to_string())?;
                 for row in &pending.eq {
@@ -154,18 +163,13 @@ impl Authoring {
         };
         let current = engine.capture().map_err(|e| e.to_string())?;
         if current != pending.before {
-            let receipt = match self.checkpoint(&current, &pending.before, None) {
-                Ok(r) => r,
-                Err(e) => {
-                    self.cancel_gesture(engine)?;
-                    return Err(e);
-                }
-            };
+            // Knob adjustments persist in the background: the write takes about
+            // 100 ms on an SD card and must never stall the audio thread.
             let pending = self.gesture.take().unwrap();
+            self.checkpoint_later(current, &pending.before)?;
             self.undo.push_back(pending.before);
             self.redo.clear();
             self.history_error = None;
-            self.working = Some(receipt);
             self.remember_finished(pending.owner);
             self.trim_history();
         } else {
@@ -211,11 +215,12 @@ impl Authoring {
                 return Err("Adjustment already finished".into());
             }
             let controls = engine.live_controls().map_err(|e| e.to_string())?;
-            let target = Target::resolve(engine, &owner.target)?;
+            let target = Target::resolve(engine, &owner.target, &controls)?;
             let eq = engine.eq_snapshot().map_err(|e| e.to_string())?;
+            let before = engine.capture().map_err(|e| e.to_string())?;
             self.gesture = Some(Pending {
                 owner,
-                before: engine.capture().map_err(|e| e.to_string())?,
+                before,
                 controls,
                 target,
                 eq,
