@@ -2,6 +2,16 @@ import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
 import { SceneChange } from './SceneChange';
+import { SlotChooser } from './SlotChooser';
+import { lv2Effect } from './rigDraft';
+import {
+  buildLanes,
+  insertBlock,
+  moveBlock,
+  readLanes,
+  removeBlock,
+  type Lanes,
+} from './rigEdit';
 import { BoostControl } from './BoostControl';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
@@ -9,6 +19,7 @@ import {
   choiceKey,
   discardsSceneEdits,
   playChoice,
+  playScenes,
   type PresetChoice,
 } from './presetChoices';
 import {
@@ -24,6 +35,9 @@ import {
   FloppyDisk,
   Play,
   Stop,
+  CaretLeft,
+  CaretRight,
+  Trash,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
@@ -46,6 +60,10 @@ import { controlDisplay, controlLabel, lv2Control } from './lv2Control';
 import {
   rigAudioState,
   presetArtwork,
+  installedLv2,
+  libraryCatalog,
+  publishRig,
+  rigLibrary,
   rigAudioCommand,
   rigDocument,
   type RigAudioState,
@@ -58,6 +76,8 @@ const key = (c: RigControl) => JSON.stringify(c.target);
 /** Actual mixed readback only; an edited document never masquerades as sounding. */
 /** A tile id unique across scene lanes: the branch node, then its block. */
 const laneBlockId = (node: string, block: string) => `${node}::${block}`;
+/** The node part of an end-of-lane + tile. */
+const END = 'end';
 
 export function MixedRig({
   connected,
@@ -339,6 +359,60 @@ export function MixedRig({
     } finally {
       if (alive.current) setSwitching(false);
     }
+  }
+  const [editing, setEditing] = useState(false);
+  /** Rebuilds this preset with a change to its blocks, plays the new version
+   * and hides the one it replaces, so the library keeps one preset. */
+  async function editChain(change: (lanes: Lanes) => Lanes) {
+    const opened = document?.revision === revision ? document : null;
+    if (!opened || editing) return;
+    setEditing(true);
+    setError('');
+    try {
+      const rate =
+        current.current?.configured?.stream.input.sample_rate ?? 48000;
+      const live: Record<string, Record<string, number>> = {};
+      for (const c of current.current?.control?.controls ?? [])
+        if (c.target.kind === 'lv2')
+          (live[c.target.node] ??= {})[c.target.symbol] = c.value;
+      const next = change(readLanes(opened, await installedLv2(rate), live));
+      const [library, catalog] = await Promise.all([
+        rigLibrary(),
+        libraryCatalog(),
+      ]);
+      const listed = catalog.items.find(
+        (i) => i.kind === 'rig' && i.id === opened.revision,
+      );
+      const published = await publishRig(
+        buildLanes(
+          opened.manifest.id,
+          listed?.name ?? opened.manifest.name,
+          next,
+          library.native_profile,
+        ),
+      );
+      await playScenes(published.revision);
+      if (listed) {
+        const latest = await libraryCatalog();
+        await libraryCatalog({
+          expected_revision: latest.revision,
+          entry_kind: 'rig',
+          id: opened.revision,
+          action: { kind: 'visibility', archived: true },
+        });
+      }
+    } catch (cause) {
+      if (alive.current) setError(String(cause));
+    } finally {
+      if (alive.current) setEditing(false);
+    }
+  }
+  /** One place left or right within the block's lane. */
+  function shift(id: string, step: -1 | 1) {
+    return editChain((lanes) => {
+      const lane = lanes.find((l) => l.some((b) => b.id === id)) ?? [];
+      return moveBlock(lanes, id, lane.findIndex((b) => b.id === id) + step);
+    });
   }
   async function switchPrepared(revision: string) {
     const cursor = current.current;
@@ -733,20 +807,37 @@ export function MixedRig({
   const effectLanes: RigLaneVM[] = (chainIds ?? []).map((ids, index) => ({
     id: chainIds!.length > 1 ? `Lane ${index + 1}` : 'Chain',
     input: chainIds!.length > 1 ? String(index + 1) : 'IN',
-    blocks: ids.flatMap((id) => {
-      const n = nodes.find((node) => node.id === id);
-      if (!n) return [];
-      if (n.kind === 'tone3000') return nativeTiles(n);
-      return [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
-    }),
+    blocks: ids
+      .flatMap((id) => {
+        const n = nodes.find((node) => node.id === id);
+        if (!n) return [];
+        if (n.kind === 'tone3000') return nativeTiles(n);
+        return [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
+      })
+      .concat({
+        // Always a + after the last block, for an effect at the end.
+        id: laneBlockId(END, String(index)),
+        label: 'Add',
+        kind: blockKind('', ''),
+        on: false,
+        face: null,
+        empty: true,
+      }),
   }));
   const lanedNodes = new Set([
     ...sceneBranches.map((n) => n.id),
     ...chainNodes,
+    // Mono adapters belong to their effect's tile, never a tile of their own.
+    ...(chainIds ? nodes.filter((n) => /-(mono|stereo)$/.test(n.id)) : []).map(
+      (n) => n.id,
+    ),
   ]);
   const inLane = !!selected && lanedNodes.has(selected.id);
+  const editable = effectLanes.length > 0;
   /** A lane tile's node, and its block for a TONE3000 node ('' for an effect). */
   const laneTarget = (laneBlock: string) => {
+    if (laneBlock.startsWith(laneBlockId(END, '')))
+      return { node: END, block: laneBlock.slice(laneBlockId(END, '').length) };
     const node = nodes.find((n) => laneBlock.startsWith(laneBlockId(n.id, '')));
     return node
       ? {
@@ -1165,7 +1256,49 @@ export function MixedRig({
           {modelChange.progress.error}
         </p>
       )}
-      {laneSlot && (
+      {laneSlot && effectLanes.length > 0 && state.configured && (
+        <SlotChooser
+          sampleRate={state.configured.stream.input.sample_rate}
+          presetName={matching?.manifest.name ?? 'this preset'}
+          modified={!!changed}
+          allowEffects
+          modelsAllowed={laneSlot.node !== END}
+          placement="here"
+          onCancel={() => setLaneSlot(null)}
+          onModel={(format) => {
+            setPicker({
+              opening: state,
+              node: laneSlot.node,
+              target: laneSlot.target,
+              name: 'Empty slot',
+              insert: true,
+              format,
+            });
+            setLaneSlot(null);
+          }}
+          onEffect={(plugin) => {
+            const slot = laneSlot;
+            setLaneSlot(null);
+            void editChain((lanes) => {
+              const effect = lv2Effect(plugin);
+              if (slot.node === END)
+                return insertBlock(
+                  lanes,
+                  Number(slot.target),
+                  Infinity,
+                  effect,
+                );
+              // An empty slot inside a TONE3000 chain: the effect goes after it.
+              const lane = lanes.findIndex((l) =>
+                l.some((b) => b.id === slot.node),
+              );
+              const at = lanes[lane]!.findIndex((b) => b.id === slot.node);
+              return insertBlock(lanes, lane, at + 1, effect);
+            });
+          }}
+        />
+      )}
+      {laneSlot && !effectLanes.length && (
         <AddBlockChooser
           onCancel={() => setLaneSlot(null)}
           onChoose={(format) => {
@@ -1329,6 +1462,37 @@ export function MixedRig({
         (selectedView.branch || selectedView.bypass) && (
           <div className="selected-node" aria-label="Selected block">
             <h3 className="min-w-0 flex-1 break-words">{selectedView.label}</h3>
+            {editable && selected.kind === 'lv2' && (
+              <div className="action-row" role="group" aria-label="Arrange">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Move ${selectedView.label} left`}
+                  disabled={disabled || !!edit || editing}
+                  onClick={() => void shift(selected.id, -1)}
+                >
+                  <CaretLeft aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Move ${selectedView.label} right`}
+                  disabled={disabled || !!edit || editing}
+                  onClick={() => void shift(selected.id, 1)}
+                >
+                  <CaretRight aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={disabled || !!edit || editing}
+                  onClick={() =>
+                    void editChain((lanes) => removeBlock(lanes, selected.id))
+                  }
+                >
+                  <Trash aria-hidden="true" /> Remove
+                </Button>
+              </div>
+            )}
             {selectedView.branch ? (
               <LedToggle
                 on={selectedView.branch.enabled}

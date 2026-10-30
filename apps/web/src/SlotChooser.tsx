@@ -17,6 +17,8 @@ export function SlotChooser({
   presetName,
   modified,
   allowEffects,
+  modelsAllowed = true,
+  placement,
   onModel,
   onEffect,
   onCancel,
@@ -26,11 +28,17 @@ export function SlotChooser({
   /** Unsaved edits are not carried into a new preset with effects. */
   modified: boolean;
   allowEffects: boolean;
+  /** False at the end of a lane: only an effect fits there. */
+  modelsAllowed?: boolean;
+  /** 'here' adds an effect at this slot, with no before/after/split step. */
+  placement?: 'here';
   onModel: (format: 'nam' | 'ir') => void;
   onEffect: (plugin: Lv2Plugin, placement: Placement) => void;
   onCancel: () => void;
 }) {
-  const [step, setStep] = useState<'kind' | 'effect' | 'place'>('kind');
+  const [step, setStep] = useState<'kind' | 'effect' | 'place'>(
+    modelsAllowed ? 'kind' : 'effect',
+  );
   const [plugins, setPlugins] = useState<Lv2Plugin[] | null>(null);
   const [plugin, setPlugin] = useState<Lv2Plugin | null>(null);
   const [query, setQuery] = useState('');
@@ -132,6 +140,10 @@ export function SlotChooser({
                   type="button"
                   disabled={!!p.unsupported}
                   onClick={() => {
+                    if (placement === 'here') {
+                      onEffect(p, 'after');
+                      return;
+                    }
                     setPlugin(p);
                     setStep('place');
                   }}
