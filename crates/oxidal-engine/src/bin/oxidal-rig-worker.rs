@@ -1,6 +1,8 @@
 //! One main-thread native/LV2 owner; EOF terminates PCM. Export runs separately.
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // First, so the engine's own DSP threads started below inherit it.
+    eprintln!("Hybrid audio {}", oxidal_audio::realtime::enter());
     use std::io::Write;
     let result = run();
     if let Err(error) = &result
@@ -94,6 +96,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let reader_stop = stop.clone();
     let (commands, received) = mpsc::sync_channel::<WorkerRequest>(1);
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         let mut input = std::io::stdin().lock();
         while let Ok(bytes) = frame(&mut input) {
             let Ok(request) = serde_json::from_slice(&bytes) else {
@@ -108,6 +111,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (responses, output) = mpsc::sync_channel::<WorkerReply>(1);
     let writer_stop = stop.clone();
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             let mut stdout = std::io::stdout().lock();
             while let Ok(response) = output.recv() {

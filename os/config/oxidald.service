@@ -9,6 +9,11 @@ DynamicUser=yes
 SupplementaryGroups=audio oxidal-control
 StateDirectory=oxidal
 WorkingDirectory=/var/lib/oxidal
+# Realtime audio, as PiPedal: workers run their audio thread at SCHED_RR 90 with
+# locked memory, and the CPU stays at full clock while Oxidal runs.
+LimitRTPRIO=95
+LimitMEMLOCK=infinity
+ExecStartPre=+/bin/sh -c 'for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > "$g" || true; done'
 ExecStart=/opt/oxidal/bin/oxidald
 Environment=OXIDAL_ADDR=127.0.0.1:3210
 Environment=OXIDAL_SIMULATOR=0

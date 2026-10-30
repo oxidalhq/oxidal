@@ -847,6 +847,7 @@ name = "oxidal-audio"
 version = "0.1.0"
 dependencies = [
  "alsa",
+ "libc",
  "schemars",
  "serde",
  "serde_json",

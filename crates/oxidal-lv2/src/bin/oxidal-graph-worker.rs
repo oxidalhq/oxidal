@@ -1,6 +1,8 @@
 //! Experimental single-owner graph process. EOF stops playback. IPC queues are bounded.
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // First, so the engine's own DSP threads started below inherit it.
+    eprintln!("Effects audio {}", oxidal_audio::realtime::enter());
     use oxidal_audio::stream::{Duplex, Step};
     use oxidal_lv2::{PreparedGraph, World, protocol::*};
     use std::{
@@ -78,6 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader_stop = stop.clone();
     let (commands, received) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         let mut input = std::io::stdin().lock();
         while let Ok(bytes) = frame(&mut input) {
             let Ok(request) = serde_json::from_slice::<WorkerRequest>(&bytes) else {
@@ -92,6 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (responses, output) = mpsc::sync_channel::<WorkerReply>(1);
     let writer_stop = stop.clone();
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         let result = (|| -> Result<(), Box<dyn std::error::Error>> {
             let mut stdout = std::io::stdout().lock();
             while let Ok(response) = output.recv() {

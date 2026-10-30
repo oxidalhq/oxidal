@@ -5,6 +5,8 @@ use oxidal_audio::lifecycle::PLAYBACK_FRAME_BYTES;
 use oxidal_tone3000::model_preparation as models;
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // First, so the engine's own DSP threads started below inherit it.
+    eprintln!("Saved preset audio {}", oxidal_audio::realtime::enter());
     use oxidal_audio::{
         lifecycle::{PlaybackEvent, PlaybackStart, WorkerRequest},
         stream::{Duplex, Step},
@@ -43,6 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader_stop = stop.clone();
     let (command_send, commands) = std::sync::mpsc::sync_channel::<WorkerRequest>(1);
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         let mut input = std::io::stdin().lock();
         loop {
             let mut bytes = vec![];
@@ -128,6 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A bounded writer isolates JSON/pipe backpressure from processing. Overflow drops
     // intermediate views; cumulative clipping counts survive the next delivered snapshot.
     std::thread::spawn(move || {
+        oxidal_audio::realtime::leave();
         while let Ok(snapshot) = meter_recv.recv() {
             let mut output = std::io::stdout().lock();
             let Ok(mut bytes) = serde_json::to_vec(&snapshot) else {
