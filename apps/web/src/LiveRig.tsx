@@ -1313,6 +1313,8 @@ export function LiveRig({
       {state.authoring && (
         <NativeAuthoring
           historyControls={false}
+          scope="split"
+          settingsScope="unit"
           status={state.authoring}
           selectedBlock={selectedBlock}
           disabled={unavailable || !!draft}

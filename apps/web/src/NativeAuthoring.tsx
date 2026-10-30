@@ -1,13 +1,50 @@
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { NativeTools } from './NativeTools';
+import { ToolRow, ToolSection } from './ToolRow';
 import { useEffect, useRef, useState } from 'react';
 import { tone3000Tone, type AudioState, type AudioAction } from './api';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
+const inputLabels = {
+  stereo: {
+    name: 'Stereo',
+    detail:
+      'The left input feeds the left chain and the right input the right.',
+  },
+  left: {
+    name: 'Left only',
+    detail: 'Only the left input feeds the rig; the right input is ignored.',
+  },
+  right: {
+    name: 'Right only',
+    detail: 'Only the right input feeds the rig; the left input is ignored.',
+  },
+  dual: {
+    name: 'Dual mono',
+    detail: 'Each input runs through its own copy of a mono chain.',
+  },
+} as const;
+const settingHelp: Record<string, string> = {
+  targetLoudness:
+    'Loudness the models are normalised to, so different captures sit at a similar level.',
+  calibrateInput:
+    'Matches the input level to the reference the captures expect from your interface.',
+  inputCalibrationLevel:
+    'Reference input level used when input calibration is on.',
+  osEnabled:
+    'Runs the models at a higher internal rate to reduce aliasing. Uses more DSP.',
+  osFactor: 'How much higher the internal rate is. Higher costs more DSP.',
+  pitchEnabled: 'Turns on the pitch engine used by Pitch shift. Off saves DSP.',
+  pitchWindow:
+    'Analysis window for the pitch engine. Longer tracks low notes better but adds latency.',
+};
+
 export function NativeAuthoring({
   status,
   historyControls = true,
+  scope = 'all',
+  settingsScope = 'rig',
   selectedBlock,
   disabled,
   busy,
@@ -16,6 +53,10 @@ export function NativeAuthoring({
   author,
 }: {
   historyControls?: boolean;
+  /** `split`: block tools when a block is selected, rig setup otherwise. */
+  scope?: 'split' | 'all';
+  /** Where engine settings live: this unit (native) or this rig (hybrid node). */
+  settingsScope?: 'unit' | 'rig';
   status: NonNullable<AudioState['authoring']>;
   selectedBlock?: string;
   disabled: boolean;
@@ -33,6 +74,7 @@ export function NativeAuthoring({
     revision: number;
   } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirm, setConfirm] = useState<'remove' | 'reset' | null>(null);
   const [metadataError, setMetadataError] = useState('');
   const metadataRequest = useRef<AbortController | null>(null);
   const metadataCursor = useRef({ session, revision, selectedBlock });
@@ -76,6 +118,8 @@ export function NativeAuthoring({
   const position = laneBlocks.findIndex(
     (b) => b.id === selectedBlock && !b.insert,
   );
+  // Insertion slots are positions, not blocks the player sees.
+  const placed = laneBlocks.filter((b) => !b.insert);
   const variants = laneBlocks[position]?.variants ?? [];
   const activeVariant = variants.findIndex(
     (model) => model.id === laneBlocks[position]?.active_model,
@@ -147,7 +191,6 @@ export function NativeAuthoring({
           </Button>
         </div>
       )}
-      <NativeTools status={status} disabled={disabled} author={author} />
       {selectedBlock && position >= 0 && laneBlocks[position]?.tone_id && (
         <div className="space-y-2">
           <Button
@@ -251,130 +294,62 @@ export function NativeAuthoring({
           )}
         </details>
       )}
-      {layout && (
-        <details>
-          <summary>Chain actions</summary>
-          {status.history_error && (
-            <p role="status" className="caption" title={status.history_error}>
-              Undo history unavailable
-            </p>
-          )}
-          <div
-            className="action-row"
-            role="group"
-            aria-label="Live chain actions"
+      {historyControls && (
+        <div className="tool-row-actions">
+          <Button
+            variant="outline"
+            disabled={editingDisabled || !status?.can_undo}
+            onClick={() => void author({ kind: 'undo' })}
           >
-            {historyControls && (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={editingDisabled || !status?.can_undo}
-                  onClick={() => void author({ kind: 'undo' })}
-                >
-                  Undo change
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={editingDisabled || !status?.can_redo}
-                  onClick={() => void author({ kind: 'redo' })}
-                >
-                  Redo change
-                </Button>
-              </>
-            )}
-            <Button
-              variant="outline"
-              disabled={editingDisabled}
-              onClick={() =>
-                void author({
-                  kind: 'edit',
-                  edit: { kind: 'stereo', enabled: !layout.stereo },
-                })
+            Undo change
+          </Button>
+          <Button
+            variant="outline"
+            disabled={editingDisabled || !status?.can_redo}
+            onClick={() => void author({ kind: 'redo' })}
+          >
+            Redo change
+          </Button>
+        </div>
+      )}
+      {status.history_error && (
+        <p role="status" className="caption" title={status.history_error}>
+          Undo history unavailable
+        </p>
+      )}
+      {layout && selectedBlock && position >= 0 && (
+        <ToolSection title="This block" scope="Saved with this rig">
+          <div role="group" aria-label="Live chain actions">
+            <ToolRow
+              title="Position"
+              value={`${lane === 'left' ? 'Left' : 'Right'} ${placed.findIndex((b) => b.id === selectedBlock) + 1} of ${placed.length}`}
+              detail={
+                layout.stereo
+                  ? 'Move it earlier or later in its chain, or over to the other chain.'
+                  : 'Move it earlier or later in the chain.'
               }
             >
-              {layout.stereo ? 'Use mono chain' : 'Use stereo chains'}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={editingDisabled || !layout.stereo}
-              onClick={() =>
-                void author({ kind: 'edit', edit: { kind: 'swap' } })
-              }
-            >
-              Swap left/right
-            </Button>
-            <Button
-              variant="outline"
-              disabled={editingDisabled}
-              onClick={() =>
-                void author({ kind: 'edit', edit: { kind: 'reset' } })
-              }
-            >
-              Reset chain
-            </Button>
-            <Button
-              variant="outline"
-              disabled={editingDisabled || !status.can_paste}
-              onClick={() =>
-                void author({
-                  kind: 'edit',
-                  edit: {
-                    kind: 'paste',
-                    lane,
-                    index: position >= 0 ? position + 1 : laneBlocks.length,
-                  },
-                })
-              }
-            >
-              Paste block
-            </Button>
-            {(['stereo', 'left', 'right', 'dual'] as const).map((mode) => (
-              <Button
-                key={mode}
-                variant="outline"
-                disabled={editingDisabled}
-                aria-pressed={(layout.input_mode ?? 'stereo') === mode}
-                onClick={() =>
-                  void author({ kind: 'edit', edit: { kind: 'input', mode } })
-                }
-              >
-                {mode === 'dual'
-                  ? 'Dual mono'
-                  : `${mode.charAt(0).toUpperCase()}${mode.slice(1)} input`}
-              </Button>
-            ))}
-            {selectedBlock && position >= 0 && (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={editingDisabled}
-                  onClick={() =>
-                    void author({ kind: 'copy', block_id: selectedBlock })
-                  }
-                >
-                  Copy block
-                </Button>
-
-                {historyControls && (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled={editingDisabled || position === 0}
-                      onClick={() => reorder(-1)}
-                    >
-                      Earlier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={
-                        editingDisabled || position === laneBlocks.length - 1
-                      }
-                      onClick={() => reorder(1)}
-                    >
-                      Later
-                    </Button>
-                  </>
-                )}
+              {historyControls && (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={editingDisabled || position === 0}
+                    onClick={() => reorder(-1)}
+                  >
+                    Earlier
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      editingDisabled || position === laneBlocks.length - 1
+                    }
+                    onClick={() => reorder(1)}
+                  >
+                    Later
+                  </Button>
+                </>
+              )}
+              {layout.stereo && (
                 <Button
                   variant="outline"
                   disabled={editingDisabled}
@@ -382,82 +357,262 @@ export function NativeAuthoring({
                     void author({
                       kind: 'edit',
                       edit: {
-                        kind: 'duplicate',
+                        kind: 'move',
                         block_id: selectedBlock,
-                        lane,
-                        index: position + 1,
+                        lane: lane === 'left' ? 'right' : 'left',
+                        index: 0,
                       },
                     })
                   }
                 >
-                  Duplicate block
+                  Move to {lane === 'left' ? 'right' : 'left'} chain
                 </Button>
-                {layout.stereo && (
-                  <Button
-                    variant="outline"
-                    disabled={editingDisabled}
-                    onClick={() =>
-                      void author({
-                        kind: 'edit',
-                        edit: {
-                          kind: 'move',
-                          block_id: selectedBlock,
-                          lane: lane === 'left' ? 'right' : 'left',
-                          index: 0,
-                        },
-                      })
-                    }
-                  >
-                    Move to {lane === 'left' ? 'right' : 'left'} chain
-                  </Button>
-                )}
+              )}
+            </ToolRow>
+            <ToolRow
+              title="Copies"
+              detail="Duplicate adds a copy right after this block. Copy keeps it on this device so you can paste it into any rig."
+            >
+              <Button
+                variant="outline"
+                disabled={editingDisabled}
+                onClick={() =>
+                  void author({
+                    kind: 'edit',
+                    edit: {
+                      kind: 'duplicate',
+                      block_id: selectedBlock,
+                      lane,
+                      index: position + 1,
+                    },
+                  })
+                }
+              >
+                Duplicate block
+              </Button>
+              <Button
+                variant="outline"
+                disabled={editingDisabled}
+                onClick={() =>
+                  void author({ kind: 'copy', block_id: selectedBlock })
+                }
+              >
+                Copy block
+              </Button>
+              {status.can_paste && (
                 <Button
                   variant="outline"
+                  aria-label="Paste block"
                   disabled={editingDisabled}
                   onClick={() =>
-                    void author({ kind: 'remove', block_id: selectedBlock })
-                  }
-                >
-                  Remove block
-                </Button>
-              </>
-            )}
-          </div>
-        </details>
-      )}
-      {!!status?.settings?.length && (
-        <details>
-          <summary>DSP settings</summary>
-          <div
-            className="action-row"
-            role="group"
-            aria-label="Prepared DSP settings"
-          >
-            {status.settings
-              .filter(
-                (setting) =>
-                  !setting.target.startsWith('block:') ||
-                  setting.target === `block:${selectedBlock}:slimSize`,
-              )
-              .map((setting) => (
-                <Button
-                  key={setting.target}
-                  variant="outline"
-                  disabled={editingDisabled}
-                  onClick={() =>
-                    setSettingDraft({
-                      control: setting,
-                      value: setting.value,
-                      session: session,
-                      revision: revision,
+                    void author({
+                      kind: 'edit',
+                      edit: { kind: 'paste', lane, index: position + 1 },
                     })
                   }
                 >
-                  {setting.label} · {setting.display}
+                  Paste after this
+                </Button>
+              )}
+            </ToolRow>
+            {status.settings
+              ?.filter(
+                (setting) =>
+                  setting.target === `block:${selectedBlock}:slimSize`,
+              )
+              .map((setting) => (
+                <ToolRow
+                  inline
+                  key={setting.target}
+                  title="Model size"
+                  value={setting.display}
+                  detail="Lite uses less DSP; Full runs the complete model. Changing it restarts audio briefly."
+                >
+                  <Button
+                    variant="outline"
+                    aria-label={`${setting.label} · ${setting.display}`}
+                    disabled={editingDisabled}
+                    onClick={() =>
+                      setSettingDraft({
+                        control: setting,
+                        value: setting.value,
+                        session,
+                        revision,
+                      })
+                    }
+                  >
+                    Change…
+                  </Button>
+                </ToolRow>
+              ))}
+            <ToolRow
+              inline
+              title="Remove"
+              detail="Takes this block out of the chain. Undo brings it back."
+            >
+              <Button
+                variant="outline"
+                disabled={editingDisabled}
+                onClick={() => setConfirm('remove')}
+              >
+                Remove block
+              </Button>
+            </ToolRow>
+          </div>
+        </ToolSection>
+      )}
+      {layout && (scope === 'all' || !selectedBlock) && (
+        <>
+          <ToolSection title="Routing" scope="Saved with this rig">
+            <ToolRow
+              title="Input"
+              value={inputLabels[layout.input_mode ?? 'stereo'].name}
+              detail={inputLabels[layout.input_mode ?? 'stereo'].detail}
+            >
+              {(['stereo', 'left', 'right', 'dual'] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  variant="outline"
+                  disabled={editingDisabled}
+                  aria-pressed={(layout.input_mode ?? 'stereo') === mode}
+                  onClick={() =>
+                    void author({ kind: 'edit', edit: { kind: 'input', mode } })
+                  }
+                >
+                  {mode === 'dual'
+                    ? 'Dual mono'
+                    : `${mode.charAt(0).toUpperCase()}${mode.slice(1)} input`}
                 </Button>
               ))}
+            </ToolRow>
+            <ToolRow
+              title="Chains"
+              value={layout.stereo ? 'Stereo (left + right)' : 'Mono'}
+              detail={
+                layout.stereo
+                  ? 'Two chains run side by side, one per output side. Swap exchanges them.'
+                  : 'One chain feeds both outputs.'
+              }
+            >
+              <Button
+                variant="outline"
+                disabled={editingDisabled}
+                onClick={() =>
+                  void author({
+                    kind: 'edit',
+                    edit: { kind: 'stereo', enabled: !layout.stereo },
+                  })
+                }
+              >
+                {layout.stereo ? 'Use mono chain' : 'Use stereo chains'}
+              </Button>
+              {layout.stereo && (
+                <Button
+                  variant="outline"
+                  disabled={editingDisabled}
+                  onClick={() =>
+                    void author({ kind: 'edit', edit: { kind: 'swap' } })
+                  }
+                >
+                  Swap left/right
+                </Button>
+              )}
+            </ToolRow>
+            <ToolRow
+              inline
+              title="Start over"
+              detail="Clears every block from this rig's chain. Undo brings them back; the saved preset is untouched until you Save."
+            >
+              <Button
+                variant="outline"
+                disabled={editingDisabled}
+                onClick={() => setConfirm('reset')}
+              >
+                Reset chain
+              </Button>
+            </ToolRow>
+          </ToolSection>
+          <NativeTools status={status} disabled={disabled} author={author} />
+          {!!status?.settings?.some(
+            (setting) => !setting.target.startsWith('block:'),
+          ) && (
+            <ToolSection
+              title="Engine"
+              scope={
+                settingsScope === 'unit'
+                  ? 'This unit · kept across presets, not saved in them'
+                  : 'Saved with this rig'
+              }
+            >
+              <p className="tool-row-detail">
+                Applying a change restarts audio briefly.
+                {settingsScope === 'unit' &&
+                  ' New starts use Settings → Audio → Native device defaults.'}
+              </p>
+              <div role="group" aria-label="Prepared DSP settings">
+                {status.settings
+                  .filter((setting) => !setting.target.startsWith('block:'))
+                  .map((setting) => (
+                    <ToolRow
+                      inline
+                      key={setting.target}
+                      title={setting.label}
+                      value={setting.display}
+                      detail={
+                        settingHelp[setting.target] ?? 'Native engine setting.'
+                      }
+                    >
+                      <Button
+                        variant="outline"
+                        aria-label={`${setting.label} · ${setting.display}`}
+                        disabled={editingDisabled}
+                        onClick={() =>
+                          setSettingDraft({
+                            control: setting,
+                            value: setting.value,
+                            session,
+                            revision,
+                          })
+                        }
+                      >
+                        Change…
+                      </Button>
+                    </ToolRow>
+                  ))}
+              </div>
+            </ToolSection>
+          )}
+        </>
+      )}
+      {confirm && (
+        <AdjustmentDialog
+          title={
+            confirm === 'remove' ? 'Remove this block?' : 'Reset the chain?'
+          }
+          onCancel={() => setConfirm(null)}
+        >
+          <p>
+            {confirm === 'remove'
+              ? 'The block leaves the chain now. Undo brings it back.'
+              : 'Every block leaves this rig’s chain now. Undo brings them back.'}
+          </p>
+          <div className="action-row">
+            <Button
+              disabled={editingDisabled}
+              onClick={() => {
+                setConfirm(null);
+                if (confirm === 'remove' && selectedBlock)
+                  void author({ kind: 'remove', block_id: selectedBlock });
+                else void author({ kind: 'edit', edit: { kind: 'reset' } });
+              }}
+            >
+              {confirm === 'remove' ? 'Remove' : 'Reset chain'}
+            </Button>
+            <Button variant="outline" onClick={() => setConfirm(null)}>
+              Keep
+            </Button>
           </div>
-        </details>
+        </AdjustmentDialog>
       )}
       {settingDraft && (
         <AdjustmentDialog

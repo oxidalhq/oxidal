@@ -2385,7 +2385,6 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button', { name: 'Select model 1', exact: true })
     .click();
   const layoutBefore = (await get()).control.authoring[0].status.layout;
-  await rig.getByText('Chain actions', { exact: true }).click();
   const nativeGain = (await get()).control.controls.find(
     (c: { target: { kind: string; node: string; parameter?: string } }) =>
       c.target.kind === 'native' &&
@@ -2471,7 +2470,6 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('dialog')
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
-  await rig.getByText('Chain matching', { exact: true }).click();
   await expect(rig.getByLabel('Tuner reading')).toHaveCount(0);
   await rig
     .getByRole('button', { name: 'Use stereo chains', exact: true })
@@ -2515,7 +2513,6 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
-  await rig.getByText('DSP settings', { exact: true }).click();
   const modelSize = (await get()).control.authoring[0].status.settings.find(
     (setting: { target: string }) => setting.target.endsWith(':slimSize'),
   );
@@ -2567,7 +2564,6 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .click();
   await expect.poll(async () => (await get()).control.eq).not.toEqual(eqBefore);
   const eqEdited = (await get()).control.eq;
-  await rig.getByText('Chain actions', { exact: true }).click();
   await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect.poll(async () => (await get()).control.eq).toEqual(eqBefore);
   await rig.getByRole('button', { name: 'Redo change', exact: true }).click();
@@ -3956,10 +3952,6 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       )
       .toBeUndefined();
     await sounding.getByText('MIDI controls', { exact: true }).click();
-    await sounding
-      .locator('summary')
-      .filter({ hasText: /^Chain actions$/ })
-      .click();
     const actions = sounding.getByRole('group', { name: 'Live chain actions' });
     await actions
       .getByRole('button', { name: 'Duplicate block', exact: true })
@@ -3979,9 +3971,9 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       .getByRole('button', { name: 'Redo change', exact: true })
       .click();
     await expect.poll(count).toBe(2);
+    // Engine settings belong to the whole rig: leave the selected block first.
     await sounding
-      .locator('summary')
-      .filter({ hasText: /^DSP settings$/ })
+      .getByRole('button', { name: 'Show rig controls', exact: true })
       .click();
     const settings = sounding.getByRole('group', {
       name: 'Prepared DSP settings',
@@ -4170,7 +4162,6 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await page.reload();
   await expect(rig).toBeVisible();
   await rig.locator('[data-node="tone"]').getByRole('button').first().click();
-  await rig.getByText('Chain actions', { exact: true }).click();
   await rig.getByRole('button', { name: 'Undo change', exact: true }).click();
   await expect
     .poll(async () => (await get()).control.controls)
@@ -4179,7 +4170,6 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await expect
     .poll(async () => (await get()).control.controls)
     .toEqual(appliedNam.controls);
-  await rig.getByText('Chain actions', { exact: true }).click();
   await rig
     .getByRole('button', { name: 'Select model 1', exact: true })
     .click();

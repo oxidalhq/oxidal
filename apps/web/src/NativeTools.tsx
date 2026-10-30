@@ -1,6 +1,9 @@
 import type { AudioAction, AudioState } from './api';
 import { Button } from './components/ui/button';
+import { ToolRow, ToolSection } from './ToolRow';
 type Status = NonNullable<AudioState['authoring']>;
+
+/** Stereo chain matching: temporary solo monitoring plus measured balance/alignment. */
 export function NativeTools({
   status,
   disabled,
@@ -13,30 +16,40 @@ export function NativeTools({
   ) => Promise<void>;
 }) {
   const tools = status.tools;
-  if (!tools) return null;
+  if (!tools || !status.layout.stereo) return null;
   const measuring =
     tools.balance.state === 'listening' ||
     tools.alignment.state === 'listening';
   const solo = tools.solo ?? 'none';
   const soloing = solo !== 'none';
+  const result = (kind: 'balance' | 'alignment') => {
+    const m = tools[kind];
+    if (m.state === 'idle') return 'Not measured';
+    if (m.state === 'listening')
+      return kind === 'balance' ? 'Listening…' : 'Measuring…';
+    if (m.state === 'timeout') return 'No reliable measurement';
+    return kind === 'balance'
+      ? `${m.matchedDb?.toFixed(1) ?? '0.0'} dB`
+      : `${m.matchedMs?.toFixed(2) ?? '0.00'} ms${m.polarityFlipped ? ' · flipped' : ''}`;
+  };
   return (
-    <details>
-      <summary>
-        Chain matching
-        {soloing && <span> · {solo === 'left' ? 'Left' : 'Right'} solo</span>}
-      </summary>
-      <div className="space-y-3 py-2">
-        <div className="action-row" role="group" aria-label="Chain monitoring">
+    <ToolSection
+      title="Matching"
+      scope="Results are saved with this rig"
+      label="Chain matching"
+    >
+      <ToolRow
+        title="Listen to"
+        value={soloing ? `${solo === 'left' ? 'Left' : 'Right'} only` : 'Both'}
+        detail="Temporary: hear one chain on its own while you compare. Not saved."
+      >
+        <div role="group" aria-label="Chain monitoring" className="contents">
           {(['none', 'left', 'right'] as const).map((side) => (
             <Button
               key={side}
-              variant={solo === side ? 'secondary' : 'outline'}
+              variant="outline"
               aria-pressed={solo === side}
-              disabled={
-                disabled ||
-                measuring ||
-                (side !== 'none' && !status.layout.stereo)
-              }
+              disabled={disabled || measuring}
               onClick={() =>
                 void author({
                   kind: 'utility',
@@ -48,72 +61,65 @@ export function NativeTools({
             </Button>
           ))}
         </div>
-        <div className="action-row">
+      </ToolRow>
+      <ToolRow
+        title="Level balance"
+        value={result('balance')}
+        detail="Play through both chains; Match levels sets the output balance so left and right sound equally loud. Undo reverts it."
+      >
+        <Button
+          variant="outline"
+          disabled={disabled || measuring || soloing}
+          onClick={() =>
+            void author({ kind: 'utility', command: { kind: 'balance' } })
+          }
+        >
+          Match levels
+        </Button>
+      </ToolRow>
+      <ToolRow
+        title="Timing and polarity"
+        value={result('alignment')}
+        detail="Measures the delay and polarity between the chains and corrects them. Audio mutes briefly while it measures."
+      >
+        <Button
+          variant="outline"
+          disabled={disabled || measuring || soloing}
+          onClick={() =>
+            void author({ kind: 'utility', command: { kind: 'align' } })
+          }
+        >
+          Align chains · brief mute
+        </Button>
+        {measuring && (
           <Button
-            variant="outline"
-            disabled={disabled || measuring || soloing || !status.layout.stereo}
+            disabled={disabled}
             onClick={() =>
-              void author({ kind: 'utility', command: { kind: 'balance' } })
+              void author({ kind: 'utility', command: { kind: 'cancel' } })
             }
           >
-            Match levels
+            Cancel measurement
           </Button>
-          <Button
-            variant="outline"
-            disabled={disabled || measuring || soloing || !status.layout.stereo}
-            onClick={() =>
-              void author({ kind: 'utility', command: { kind: 'align' } })
-            }
-          >
-            Align chains · brief mute
-          </Button>
-          {measuring && (
-            <Button
-              disabled={disabled}
-              onClick={() =>
-                void author({ kind: 'utility', command: { kind: 'cancel' } })
-              }
-            >
-              Cancel measurement
-            </Button>
-          )}
-        </div>
-        {(['balance', 'alignment'] as const).map((kind) => {
-          const m = tools[kind];
-          if (m.state === 'idle') return null;
-          return (
-            <div
+        )}
+      </ToolRow>
+      {(['balance', 'alignment'] as const).map(
+        (kind) =>
+          tools[kind].state === 'listening' && (
+            <progress
               key={kind}
-              className="flex flex-wrap items-center gap-2 text-sm"
-              role="status"
-            >
-              <strong>
-                {kind === 'balance' ? 'Level match' : 'Alignment'}
-              </strong>
-              <span>
-                {m.state === 'listening'
-                  ? kind === 'balance'
-                    ? 'Play through both chains…'
-                    : 'Measuring…'
-                  : m.state === 'timeout'
-                    ? 'No reliable measurement'
-                    : kind === 'balance'
-                      ? `${m.matchedDb?.toFixed(1) ?? '0.0'} dB matched`
-                      : `${m.matchedMs?.toFixed(2) ?? '0.00'} ms${m.polarityFlipped ? ' · polarity corrected' : ''}`}
-              </span>
-              {m.state === 'listening' && (
-                <progress
-                  max={1}
-                  value={m.progress}
-                  aria-label={`${kind} progress`}
-                  className="h-2 w-32 accent-primary"
-                />
-              )}
-            </div>
-          );
-        })}
-        {tools.error && <p role="alert">{tools.error}</p>}
-      </div>
-    </details>
+              max={1}
+              value={tools[kind].progress}
+              aria-label={`${kind} progress`}
+              className="h-2 w-full accent-primary"
+            />
+          ),
+      )}
+      {soloing && (
+        <p className="tool-status" role="status">
+          Solo is on: matching is paused until you listen to both chains.
+        </p>
+      )}
+      {tools.error && <p role="alert">{tools.error}</p>}
+    </ToolSection>
   );
 }
