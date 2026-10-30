@@ -9,7 +9,7 @@ import { NativeAuthoring } from './NativeAuthoring';
 import {
   ArrowRight,
   Plus,
-  DotsThree,
+  CaretDown,
   ArrowLeft,
   X,
 } from '@phosphor-icons/react';
@@ -746,29 +746,33 @@ export function LiveRig({
           disabled={disabled || !!draft || !!picker}
           onSelect={(id, owned) => void recall(id, owned)}
         />
-        <Button
-          className="preset-save"
-          aria-label="Save copy"
-          title="Save a copy for offline use"
-          variant={state.modified ? 'default' : 'outline'}
-          disabled={disabled || !!draft || !!picker}
-          onClick={() => {
-            setCopyName(state.preset_name ?? 'My preset');
-            setSaveOpening(state);
-          }}
-        >
-          Save
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Preset actions"
-          className="preset-actions"
-          disabled={disabled || !!draft || !!picker}
-          onClick={() => setActionsOpen(true)}
-        >
-          <DotsThree aria-hidden="true" />
-        </Button>
+        {/* Save and the preset actions form one split button. */}
+        <div className="preset-save-group" role="group" aria-label="Save">
+          <Button
+            className="preset-save"
+            aria-label="Save copy"
+            title="Save a copy for offline use"
+            variant={state.modified ? 'default' : 'outline'}
+            disabled={disabled || !!draft || !!picker}
+            onClick={() => {
+              setCopyName(state.preset_name ?? 'My preset');
+              setSaveOpening(state);
+            }}
+          >
+            Save
+          </Button>
+          <Button
+            variant={state.modified ? 'default' : 'outline'}
+            aria-label="Preset actions"
+            aria-haspopup="dialog"
+            title="Revert, Perform, Match level and appearance"
+            className="preset-actions"
+            disabled={disabled || !!draft || !!picker}
+            onClick={() => setActionsOpen(true)}
+          >
+            <CaretDown aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       {knobStrip}
       <MasterLevel />

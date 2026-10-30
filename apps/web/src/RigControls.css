@@ -126,8 +126,21 @@
   border-width: 2px;
 }
 
-.preset-actions.oxidal-button {
-  color: var(--foreground);
+/* Save | ⌄ split button: one outline, a hairline between the halves. */
+.preset-save-group {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.preset-save-group .preset-save {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.preset-save-group .preset-actions {
+  min-width: 2.25rem;
+  padding-inline: 0.5rem;
+  border-left: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 /* Compact value cell for dense grids (EQ band fields): label over readout. */
