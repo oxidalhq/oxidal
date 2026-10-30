@@ -1,0 +1,124 @@
+/* Rig chain bar, preset actions and value rows. Values come from theme.css. */
+.chain-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem;
+  min-height: var(--touch-target);
+}
+.chain-bar h3 {
+  margin: 0 auto 0 0;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.menu-list {
+  display: grid;
+  border-top: 1px solid var(--foreground);
+}
+.menu-list > button {
+  display: grid;
+  gap: 0.125rem;
+  min-height: var(--touch-target);
+  padding: 0.625rem 0.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--foreground);
+  font: 500 0.9375rem var(--font-sans);
+  text-align: left;
+}
+.menu-list > button:disabled {
+  color: var(--muted-foreground);
+}
+.menu-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.menu-choice > span {
+  margin-right: auto;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+.menu-choice [aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+/* Each value is a row: name, tabular readout and a fader showing position. */
+.live-parameter-grid {
+  display: grid;
+  border-top: 1px solid var(--foreground);
+}
+.value-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  min-height: var(--touch-target);
+  padding: 0.625rem 0 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+}
+.value-row-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+.value-row-value {
+  font: 500 1.25rem/1.1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.value-row-fader {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 1.25rem;
+}
+.value-row-fader::before {
+  content: '';
+  position: absolute;
+  inset: 0.5625rem 0 auto;
+  border-top: 2px solid var(--border);
+}
+.value-row-fader i {
+  position: absolute;
+  top: 0.5rem;
+  left: 0;
+  height: 4px;
+  background: var(--foreground);
+}
+.value-row-fader b {
+  position: absolute;
+  top: 0.125rem;
+  width: 0.625rem;
+  height: 1.125rem;
+  margin-left: -0.3125rem;
+  border: 1.5px solid var(--foreground);
+  border-radius: 2px;
+  background: var(--card);
+}
+.value-row[data-toggle] {
+  align-items: center;
+}
+.value-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.value-row:disabled {
+  opacity: 0.55;
+}
+:root[data-display='sunlight'] .value-row-fader::before {
+  border-top-width: 3px;
+  border-color: var(--foreground);
+}
+:root[data-display='sunlight'] .value-row-fader b {
+  border-width: 2px;
+}

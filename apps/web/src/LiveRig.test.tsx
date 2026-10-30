@@ -120,6 +120,7 @@ it('keeps bypass in the block detail, opens a single model inspector and retains
     'aria-pressed',
     'true',
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Preset actions' }));
   fireEvent.click(screen.getByRole('button', { name: 'Model artwork' }));
   expect(localStorage.getItem('oxidal-chain-view')).toBe('artwork');
   expect(playbackCommand).not.toHaveBeenCalled();
@@ -130,7 +131,10 @@ it('requires explicit discard and starts saved bytes using the stop reply cursor
     .mockResolvedValueOnce(stopped)
     .mockResolvedValueOnce({ ...opening, modified: false, revision: 12 });
   show();
-  fireEvent.click(await screen.findByRole('button', { name: 'Reload saved' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Preset actions' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Reload saved' }));
   expect(playbackCommand).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole('button', { name: 'Discard edits and reload' }),
@@ -145,7 +149,10 @@ it('requires explicit discard and starts saved bytes using the stop reply cursor
 it('never starts or retries after a failed stop', async () => {
   vi.mocked(playbackCommand).mockRejectedValue(new Error('Session changed'));
   show();
-  fireEvent.click(await screen.findByRole('button', { name: 'Reload saved' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Preset actions' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Reload saved' }));
   fireEvent.click(
     screen.getByRole('button', { name: 'Discard edits and reload' }),
   );

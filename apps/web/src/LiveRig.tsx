@@ -1,8 +1,8 @@
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle } from './ChainView';
+import './RigControls.css';
 import { blockKind } from './rigChain';
 import { useWorkspaceState } from './workspaceMemory';
-import { ButtonGroup } from './components/ui/button-group';
 import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
@@ -12,13 +12,10 @@ import {
   MusicNotes,
   ArrowsSplit,
   Plus,
-  Swap,
+  DotsThree,
   SquaresFour,
-  ArrowCounterClockwise,
-  ArrowClockwise,
+  Swap,
   ArrowLeft,
-  ImageSquare,
-  List,
   X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
@@ -115,6 +112,7 @@ export function LiveRig({
     format: 'nam' | 'ir';
   } | null>(null);
   const [performance, setPerformance] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [selection, setSelection] = useWorkspaceState('native-selection', {
     session: '',
     target: 'outputLevel',
@@ -604,6 +602,15 @@ export function LiveRig({
         >
           Save
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Preset actions"
+          disabled={disabled || !!draft || !!picker}
+          onClick={() => setActionsOpen(true)}
+        >
+          <DotsThree aria-hidden="true" />
+        </Button>
       </div>
       <span
         role="status"
@@ -623,76 +630,108 @@ export function LiveRig({
       )}
       <div className="rig-workspace" data-inspecting={!!selectedBlock}>
         <div className="rig-chain-column">
-          <div className="chain-toolbar">
-            <ButtonGroup aria-label="Chain appearance">
-              {(
-                [
-                  ['compact', 'Connected icons', List],
-                  ['artwork', 'Model artwork', ImageSquare],
-                ] as const
-              ).map(([view, label, Icon]) => (
+          <div className="chain-bar">
+            <h3>Chain</h3>
+            {!!state.slots?.length &&
+              (['nam', 'ir'] as const).map((format) => (
                 <Button
-                  key={view}
-                  size="icon"
-                  variant={chainView === view ? 'secondary' : 'ghost'}
-                  aria-label={label}
-                  aria-pressed={chainView === view}
-                  onClick={() => {
-                    setChainView(view);
-                    try {
-                      localStorage.setItem('oxidal-chain-view', view);
-                    } catch {
-                      /* Optional preference. */
-                    }
-                  }}
+                  key={format}
+                  variant="ghost"
+                  disabled={disabled || !!draft}
+                  onClick={() => setInsertion({ opening: state, format })}
                 >
-                  <Icon aria-hidden="true" />
+                  <Plus aria-hidden="true" />
+                  {format === 'nam' ? 'Add NAM' : 'Add IR'}
                 </Button>
               ))}
-            </ButtonGroup>
-            <ButtonGroup aria-label="Tone history">
-              <Button
-                variant="ghost"
-                aria-label="Undo change"
-                title="Undo change"
-                disabled={disabled || !!draft || !state.authoring?.can_undo}
-                onClick={() => void author({ kind: 'undo' })}
-              >
-                <ArrowCounterClockwise aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                aria-label="Redo change"
-                title="Redo change"
-                disabled={disabled || !!draft || !state.authoring?.can_redo}
-                onClick={() => void author({ kind: 'redo' })}
-              >
-                <ArrowClockwise aria-hidden="true" />
-              </Button>
-            </ButtonGroup>
             <Button
               variant="ghost"
-              aria-label="Reload saved"
-              title="Revert to saved preset"
-              disabled={
-                disabled ||
-                !!draft ||
-                !state.modified ||
-                !state.configured ||
-                state.configured.draft
-              }
-              onClick={() => setRestoreOpening(state)}
+              aria-label="Undo change"
+              title="Undo the last chain edit"
+              disabled={disabled || !!draft || !state.authoring?.can_undo}
+              onClick={() => void author({ kind: 'undo' })}
             >
-              Revert
+              Undo
             </Button>
             <Button
               variant="ghost"
-              disabled={disabled || !!draft || !!picker}
-              onClick={() => setPerformance(true)}
+              aria-label="Redo change"
+              title="Redo the last undone chain edit"
+              disabled={disabled || !!draft || !state.authoring?.can_redo}
+              onClick={() => void author({ kind: 'redo' })}
             >
-              <SquaresFour aria-hidden="true" /> Perform
+              Redo
             </Button>
           </div>
+          {actionsOpen && (
+            <AdjustmentDialog
+              title="Preset actions"
+              onCancel={() => setActionsOpen(false)}
+            >
+              <div className="menu-list">
+                <button
+                  type="button"
+                  aria-label="Reload saved"
+                  disabled={
+                    disabled ||
+                    !!draft ||
+                    !state.modified ||
+                    !state.configured ||
+                    state.configured.draft
+                  }
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setRestoreOpening(state);
+                  }}
+                >
+                  Revert to saved…
+                  <span className="caption">
+                    Discards edits since the last save
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={disabled || !!draft || !!picker}
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setPerformance(true);
+                  }}
+                >
+                  Perform view
+                </button>
+              </div>
+              <div
+                className="menu-choice"
+                role="group"
+                aria-label="Chain appearance"
+              >
+                <span>Chain appearance</span>
+                {(
+                  [
+                    ['compact', 'Connected icons', 'Icons'],
+                    ['artwork', 'Model artwork', 'Artwork'],
+                  ] as const
+                ).map(([view, label, text]) => (
+                  <Button
+                    key={view}
+                    variant="outline"
+                    aria-label={label}
+                    aria-pressed={chainView === view}
+                    onClick={() => {
+                      setChainView(view);
+                      try {
+                        localStorage.setItem('oxidal-chain-view', view);
+                      } catch {
+                        /* Optional preference. */
+                      }
+                    }}
+                  >
+                    {text}
+                  </Button>
+                ))}
+              </div>
+            </AdjustmentDialog>
+          )}
           {restoreOpening && (
             <AdjustmentDialog
               title="Reload saved preset?"
@@ -799,21 +838,6 @@ export function LiveRig({
               ];
             })}
           />
-          {!!state.slots?.length && (
-            <div className="action-row">
-              {(['nam', 'ir'] as const).map((format) => (
-                <Button
-                  key={format}
-                  variant="outline"
-                  disabled={disabled || !!draft}
-                  onClick={() => setInsertion({ opening: state, format })}
-                >
-                  <Plus aria-hidden="true" />
-                  {format === 'nam' ? 'Add NAM' : 'Add IR'}
-                </Button>
-              ))}
-            </div>
-          )}
           {insertion && (
             <AdjustmentDialog
               title={`Add ${insertion.format.toUpperCase()} · position`}
@@ -1133,7 +1157,8 @@ export function LiveRig({
               .map((item) => (
                 <button
                   type="button"
-                  className="live-value-trigger"
+                  className="live-value-trigger value-row"
+                  data-toggle={item.toggle || undefined}
                   key={item.target}
                   disabled={disabled}
                   aria-haspopup={item.toggle ? undefined : 'dialog'}
@@ -1147,8 +1172,16 @@ export function LiveRig({
                     else openAdjustment(item);
                   }}
                 >
-                  <span>{shortControlLabel(item.label)}</span>
-                  <strong>{item.display}</strong>
+                  <span className="value-row-label">
+                    {shortControlLabel(item.label)}
+                  </span>
+                  <strong className="value-row-value">{item.display}</strong>
+                  {!item.toggle && (
+                    <span className="value-row-fader" aria-hidden="true">
+                      <i style={{ width: `${item.value * 100}%` }} />
+                      <b style={{ left: `${item.value * 100}%` }} />
+                    </span>
+                  )}
                 </button>
               ))}
           </div>

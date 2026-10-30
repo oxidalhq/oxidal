@@ -295,7 +295,13 @@ test('rig controls follow the actual session without example effects', async ({
   await expect(rig.getByRole('group', { name: 'Block position' })).toHaveCount(
     0,
   );
-  await rig.getByRole('button', { name: 'Model artwork', exact: true }).click();
+  await rig
+    .getByRole('button', { name: 'Preset actions', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Model artwork', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await expect(rig.locator('.chain-view')).toHaveAttribute(
     'data-chain-view',
     'artwork',
@@ -306,8 +312,12 @@ test('rig controls follow the actual session without example effects', async ({
     fullPage: true,
   });
   await rig
+    .getByRole('button', { name: 'Preset actions', exact: true })
+    .click();
+  await page
     .getByRole('button', { name: 'Connected icons', exact: true })
     .click();
+  await page.getByRole('button', { name: 'Close dialog', exact: true }).click();
   await expect(rig.locator('.chain-view')).toHaveAttribute(
     'data-chain-view',
     'compact',
