@@ -262,7 +262,8 @@ export function RigPresetSelector({
             onChange={(e) => setQuery(e.target.value)}
           />
           <p className="caption">
-            Unsaved edits stay with each preset. Reload saved discards them.
+            Unsaved edits stay with each preset. Presets with scenes keep them
+            until you open another preset with scenes.
           </p>
           {(
             [

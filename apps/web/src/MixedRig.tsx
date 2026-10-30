@@ -2,7 +2,12 @@ import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
 import { RigPresetSelector } from './RigPresetSelector';
-import { choiceKey, playChoice, type PresetChoice } from './presetChoices';
+import {
+  choiceKey,
+  discardsSceneEdits,
+  playChoice,
+  type PresetChoice,
+} from './presetChoices';
 import {
   assertAuditionOwner,
   confirmedControlDisplay,
@@ -99,6 +104,8 @@ export function MixedRig({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [switching, setSwitching] = useState(false);
+  // A scenes preset waiting on the player: opening it drops unsaved edits here.
+  const [discarding, setDiscarding] = useState<PresetChoice | null>(null);
   const [eqBusy, setEqBusy] = useState(false);
   const [nativeSelection, setNativeSelection] = useState<{
     node: string;
@@ -267,7 +274,20 @@ export function MixedRig({
     }
   }
   /** Any preset from the picker: scene presets stay here, TONE3000 ones hand over. */
-  async function choose(choice: PresetChoice) {
+  async function choose(choice: PresetChoice, confirmed = false) {
+    const control = current.current?.control;
+    if (
+      !confirmed &&
+      discardsSceneEdits(choice, {
+        revision,
+        modified: !!changed,
+        ready: control?.prepared?.map((p) => p.revision),
+      })
+    ) {
+      setDiscarding(choice);
+      return;
+    }
+    setDiscarding(null);
     setSwitching(true);
     setError('');
     try {
@@ -688,6 +708,27 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {discarding && (
+        <AdjustmentDialog
+          title="Discard unsaved changes?"
+          onCancel={() => setDiscarding(null)}
+        >
+          <p>
+            {matching?.manifest.name ?? 'This preset'} has unsaved changes.
+            Opening {discarding.name} discards them, because only one preset
+            with scenes keeps its edits at a time. Keep both ready to switch
+            without losing either.
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setDiscarding(null)}>
+              Keep editing
+            </Button>
+            <Button onClick={() => void choose(discarding, true)}>
+              Discard and open
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
       {(state.phase !== 'running' || switching) && (
         <p role="status" className="caption">
           {switching

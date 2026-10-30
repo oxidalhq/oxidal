@@ -165,7 +165,10 @@ export async function playTone3000(id: string, owned: boolean) {
   });
 }
 
-/** Plays a preset with scenes: a gapless switch when it is kept ready. */
+/**
+ * Plays a preset with scenes: a gapless switch when it is kept ready, a resume
+ * with its unsaved edits when it was the last one playing, else a fresh start.
+ */
 export async function playScenes(revision: string) {
   const rig = await rigAudioState();
   if (rig.phase === 'running' && rig.control && rig.configured) {
@@ -189,6 +192,12 @@ export async function playScenes(revision: string) {
       return;
     }
   }
+  if (rig.configured?.revision === revision && rig.phase !== 'running') {
+    // Resuming keeps the unsaved edits the daemon holds for this preset.
+    await freeInterface(null);
+    await rigAudioCommand(await rigAudioState(), { kind: 'restart' });
+    return;
+  }
   const stream = await freeInterface(null);
   if (!stream)
     throw new Error(
@@ -208,6 +217,19 @@ export async function playScenes(revision: string) {
   });
   // A started preset joins the ready set, so switching back stays gapless.
   if (keep.length) writeKeepReady([...new Set([...keep, revision])]);
+}
+
+/** Whether opening `choice` discards unsaved edits to the playing scenes preset. */
+export function discardsSceneEdits(
+  choice: PresetChoice,
+  playing: { revision?: string; modified?: boolean; ready?: string[] },
+) {
+  return (
+    choice.kind === 'scenes' &&
+    !!playing.modified &&
+    choice.revision !== playing.revision &&
+    !(playing.ready ?? []).includes(choice.revision)
+  );
 }
 
 export function playChoice(choice: PresetChoice) {
