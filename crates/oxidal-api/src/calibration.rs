@@ -200,8 +200,15 @@ impl Store {
 /// Something to measure: a TONE3000 preset, or one scene of a preset with scenes.
 #[derive(Debug, Clone)]
 enum Target {
-    Tone3000 { id: String, owned: bool },
-    Scene { revision: String, scene: String },
+    Tone3000 {
+        id: String,
+        owned: bool,
+    },
+    /// A preset with effects or scenes; `scene` is none for one without scenes.
+    Scene {
+        revision: String,
+        scene: Option<String>,
+    },
 }
 #[derive(Debug, Clone)]
 struct Item {
@@ -268,13 +275,26 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
             .get("urn:oxidal:authoring")
             .and_then(|a| a.get("draft"))
             == Some(&serde_json::Value::Bool(true));
-        let Some(scenes) = manifest.scenes().ok().flatten().filter(|_| !draft) else {
+        if draft {
             continue;
-        };
+        }
         let preset = catalog
             .label(LibraryKind::Rig, &revision, &manifest.name)
             .map_err(text)?
             .to_owned();
+        let Some(scenes) = manifest.scenes().ok().flatten() else {
+            // A preset with effects and no scenes is measured as a whole.
+            items.push(Item {
+                key: format!("scenes:{}", manifest.id),
+                name: preset,
+                content: revision.clone(),
+                target: Target::Scene {
+                    revision: revision.clone(),
+                    scene: None,
+                },
+            });
+            continue;
+        };
         for scene in scenes.scenes {
             items.push(Item {
                 key: crate::boosts::key_scene(&manifest.id, &scene.id),
@@ -282,7 +302,7 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
                 content: revision.clone(),
                 target: Target::Scene {
                     revision: revision.clone(),
-                    scene: scene.id,
+                    scene: Some(scene.id),
                 },
             });
         }
@@ -389,7 +409,7 @@ async fn play_tone3000(
 async fn play_scene(
     shared: &Shared,
     revision: &str,
-    scene: &str,
+    scene: Option<&str>,
     stream: &oxidal_audio::StreamConfig,
 ) -> Result<(), String> {
     let s = shared.rig_playback.snapshot();
@@ -427,7 +447,10 @@ async fn play_scene(
         )
         .await?;
     }
-    select_scene(shared, scene).await
+    match scene {
+        Some(scene) => select_scene(shared, scene).await,
+        None => Ok(()),
+    }
 }
 async fn select_scene(shared: &Shared, scene: &str) -> Result<(), String> {
     let s = shared.rig_playback.snapshot();
@@ -670,7 +693,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
                     play_tone3000(shared, id, *owned, &stream).await?
                 }
                 Target::Scene { revision, scene } => {
-                    play_scene(shared, revision, scene, &stream).await?
+                    play_scene(shared, revision, scene.as_deref(), &stream).await?
                 }
             }
             measure(shared, peak_db).await
