@@ -196,8 +196,12 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         Err(e) => return Err(format!("Cannot read mapping file: {e}")),
     }
     let (events, _) = watch::channel(control.snapshot());
-    let ui = ServeDir::new(&config.ui_dir)
-        .not_found_service(ServeFile::new(config.ui_dir.join("index.html")));
+    let ui = Router::new()
+        .fallback_service(
+            ServeDir::new(&config.ui_dir)
+                .not_found_service(ServeFile::new(config.ui_dir.join("index.html"))),
+        )
+        .layer(middleware::from_fn(ui_cache));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
     let boot = Arc::new(audio_boot::Policy::new(
         config.preset_dir.join("boot-audio.json"),
@@ -349,6 +353,26 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             .with_state(shared),
         stopped,
     ))
+}
+
+/// Hashed bundles never change, so they may be cached forever; the page and
+/// every app route must revalidate so a deployed UI replaces the old bundle.
+async fn ui_cache(request: Request, next: Next) -> Response {
+    let immutable = request.uri().path().starts_with("/assets/");
+    let mut response = next.run(request).await;
+    // Client routes are served the page through ServeDir's 404 fallback.
+    if response.status().is_success() || (!immutable && response.status() == StatusCode::NOT_FOUND)
+    {
+        response.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static(if immutable {
+                "public, max-age=31536000, immutable"
+            } else {
+                "no-cache"
+            }),
+        );
+    }
+    response
 }
 
 async fn local_origin(request: Request, next: Next) -> Response {

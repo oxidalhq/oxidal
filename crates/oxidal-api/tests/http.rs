@@ -33,6 +33,62 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     (url, task, path)
 }
 #[tokio::test]
+async fn ui_page_revalidates_while_hashed_assets_stay_immutable() {
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-ui-cache-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(root.join("ui/assets")).unwrap();
+    std::fs::write(root.join("ui/index.html"), "<!doctype html>").unwrap();
+    std::fs::write(root.join("ui/assets/index-abc123.js"), "export {}").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let app = router(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        ui_dir: root.join("ui"),
+    })
+    .unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let cache = |path: &'static str| {
+        let url = url.clone();
+        async move {
+            let response = reqwest::get(format!("{url}{path}")).await.unwrap();
+            // Client routes keep ServeDir's existing 404-with-page fallback.
+            assert!(
+                response.status().is_success() || path == "/rig",
+                "{path}: {}",
+                response.status()
+            );
+            response
+                .headers()
+                .get("cache-control")
+                .map(|v| v.to_str().unwrap().to_owned())
+        }
+    };
+    assert_eq!(cache("/").await.as_deref(), Some("no-cache"));
+    assert_eq!(cache("/index.html").await.as_deref(), Some("no-cache"));
+    // Client routes fall back to the page and must revalidate too.
+    assert_eq!(cache("/rig").await.as_deref(), Some("no-cache"));
+    assert_eq!(
+        cache("/assets/index-abc123.js").await.as_deref(),
+        Some("public, max-age=31536000, immutable")
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(root);
+}
+#[tokio::test]
 async fn real_service_rejects_bad_input_and_syncs_midi_web() {
     let (url, task, _) = start(true).await;
     let client = reqwest::Client::new();
