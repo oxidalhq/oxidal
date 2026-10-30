@@ -85,7 +85,8 @@ impl Boosts {
         playing
             .iter()
             .filter_map(|k| self.boosts.get(k))
-            .sum::<f32>()
+            // An empty f32 sum is −0.0; add +0.0 so nothing reads as "−0".
+            .fold(0.0f32, |sum, db| sum + db)
             .clamp(lo, hi)
     }
 }
@@ -282,7 +283,7 @@ mod tests {
             boosts.total(&["scenes:q".into(), "scenes:q#solo".into()]),
             12.0
         );
-        assert_eq!(boosts.total(&[]), 0.0);
+        assert!(boosts.total(&[]).is_sign_positive());
         let mut bad = boosts.clone();
         bad.boosts.insert("scenes:r".into(), 13.0);
         assert!(bad.validate().is_err());
