@@ -249,7 +249,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut announced = false;
         let mut switch_reply = false;
         let mut pump = Instant::now();
+        let mut reported = Instant::now();
         while !stop.load(Ordering::Acquire) {
+            if reported.elapsed() >= Duration::from_secs(2) {
+                // Evidence for dropouts: how long audio waited behind this thread.
+                let waited = shared.take_render_wait();
+                if waited > Duration::from_millis(1) {
+                    eprintln!(
+                        "Render waited up to {:.1} ms for the rig lock",
+                        waited.as_secs_f64() * 1000.0
+                    );
+                }
+                reported = Instant::now();
+            }
             if let Ok(slot) = failure.lock()
                 && let Some(error) = slot.clone()
             {
@@ -257,7 +269,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let primed = ready.load(Ordering::Acquire);
             if primed && !announced {
-                let control = snapshot(&shared.lock(), &midi.status);
+                let control = snapshot(&shared.lock("announce"), &midi.status);
                 responses.send(WorkerReply {
                     control,
                     telemetry: latest(),
@@ -268,7 +280,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
             if primed {
-                let mut rig = shared.lock();
+                let mut rig = shared.lock("midi poll");
                 if !rig.switching() {
                     midi.poll(|settings, message| rig.active_mut().midi_message(settings, message));
                 }
@@ -276,15 +288,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             if pump.elapsed() >= Duration::from_millis(10) {
                 // JUCE dispatch waits up to 1 ms: run it outside the rig lock so
                 // the render thread never waits for it.
-                let dispatcher = shared.lock().dispatcher();
+                let dispatcher = shared.lock("dispatcher").dispatcher();
                 if let Some(dispatcher) = dispatcher {
                     dispatcher.pump().map_err(|e| e.to_string())?;
                 }
-                shared.lock().tick()?;
+                shared.lock("tick").tick()?;
                 pump = Instant::now();
             }
-            if switch_reply && !shared.lock().switching() {
-                let mut rig = shared.lock();
+            if switch_reply && !shared.lock("switch check").switching() {
+                let mut rig = shared.lock("switch reply");
                 let error = rig.take_switch_error();
                 let control = snapshot(&rig, &midi.status);
                 drop(rig);
@@ -303,14 +315,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let Ok(request) = received.recv_timeout(Duration::from_millis(2)) else {
                 continue;
             };
-            let mut rig = shared.lock();
+            let what = match &request {
+                WorkerRequest::HostUtility { .. } => "host utility",
+                WorkerRequest::Status => "status",
+                WorkerRequest::Authoring { .. } => "authoring",
+                WorkerRequest::Midi { .. } => "midi settings",
+                WorkerRequest::Control { .. } => "control",
+                WorkerRequest::Scene { .. } => "scene",
+                WorkerRequest::Branch { .. } => "branch",
+                WorkerRequest::Eq { .. } => "eq",
+                WorkerRequest::Model { .. } => "model",
+                WorkerRequest::Switch { .. } => "switch",
+            };
+            let mut rig = shared.lock(what);
             let error = match request {
                 WorkerRequest::HostUtility { command } => {
                     drop(rig);
                     host_send.send(command)?;
                     // The render thread applies it between blocks.
                     std::thread::sleep(Duration::from_millis(5));
-                    rig = shared.lock();
+                    rig = shared.lock("host utility");
                     None
                 }
                 WorkerRequest::Status => None,
