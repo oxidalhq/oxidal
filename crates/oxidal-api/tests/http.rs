@@ -1385,6 +1385,54 @@ async fn unit_levels_are_validated_durable_and_outside_presets() {
 }
 
 #[tokio::test]
+async fn boosts_are_stored_per_preset_and_scene_and_validated() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let boosts = format!("{url}/boosts");
+    let empty: Value = client
+        .get(&boosts)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        empty,
+        json!({"boosts": {}, "playing": [], "applied_db": 0.0})
+    );
+    let set = |key: &str, db: f64| {
+        client
+            .post(&boosts)
+            .json(&json!({"key": key, "boost_db": db}))
+            .send()
+    };
+    let saved: Value = set("scenes:clean-to-heavy#solo", 3.2)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    // Stored in 0.5 dB steps; nothing plays, so nothing is applied.
+    assert_eq!(saved["boosts"], json!({"scenes:clean-to-heavy#solo": 3.0}));
+    assert_eq!(saved["applied_db"], 0.0);
+    for (key, db) in [("scenes:a", 12.5), ("other:a", 1.0), ("scenes:", 1.0)] {
+        assert_eq!(set(key, db).await.unwrap().status(), 422);
+    }
+    let cleared: Value = set("scenes:clean-to-heavy#solo", 0.0)
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cleared["boosts"], json!({}));
+    let root = path.with_extension("presets");
+    assert!(root.join("boosts.json").is_file());
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn guitar_profiles_set_the_unit_input_trim() {
     let (url, task, path) = start(false).await;
     let client = reqwest::Client::new();

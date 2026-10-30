@@ -31,6 +31,12 @@
     "audio_state": {
       "$ref": "#/$defs/AudioState"
     },
+    "boost_update": {
+      "$ref": "#/$defs/BoostUpdate"
+    },
+    "boosts": {
+      "$ref": "#/$defs/BoostState"
+    },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
@@ -212,6 +218,8 @@
     "audio_devices",
     "unit_levels",
     "guitars",
+    "boosts",
+    "boost_update",
     "midi_devices",
     "audio_probe",
     "audio_probe_result",
@@ -1723,6 +1731,54 @@
           "type": "string",
           "const": "native"
         }
+      ]
+    },
+    "BoostState": {
+      "type": "object",
+      "properties": {
+        "applied_db": {
+          "description": "Their sum as applied at the output, clamped to −12…+12 dB.",
+          "type": "number",
+          "format": "float"
+        },
+        "boosts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "float"
+          }
+        },
+        "playing": {
+          "description": "Keys of what is playing: the preset, then its scene when it has one.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "boosts",
+        "playing",
+        "applied_db"
+      ]
+    },
+    "BoostUpdate": {
+      "description": "Sets one boost; 0 dB removes it.",
+      "type": "object",
+      "properties": {
+        "boost_db": {
+          "type": "number",
+          "format": "float"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "boost_db"
       ]
     },
     "BranchBinding": {
@@ -3670,6 +3726,11 @@
       "description": "Unit-wide gain staging around every rig: guitar input trim before the rig,\nmaster output level after it. Never stored in presets.",
       "type": "object",
       "properties": {
+        "boost_db": {
+          "description": "Boost of the playing preset and scene in dB (−12 to +12), added to the\noutput level. Set by the daemon from the boost store, never by a view.",
+          "type": "number",
+          "format": "float"
+        },
         "gate_db": {
           "description": "Noise gate threshold after the trim, in dBFS (−96 to −20); none plays\nungated. Set from the active guitar's measured noise floor.",
           "type": [

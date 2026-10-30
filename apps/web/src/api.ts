@@ -703,6 +703,33 @@ export async function guitarProfiles(
   return body;
 }
 
+export type BoostState = Contract['boosts'];
+const boostsValidator = ajv.compile<BoostState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/BoostState',
+});
+/** Preset and scene boosts; setting one applies it at once if it is playing. */
+export async function boosts(
+  update?: Contract['boost_update'],
+  signal?: AbortSignal,
+): Promise<BoostState | null> {
+  const response = await fetch(
+    '/api/v1/boosts',
+    update
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!boostsValidator(body)) throw new Error('Incompatible boosts');
+  return body;
+}
+
 export type LocalModel = Contract['local_model'];
 export type LocalModelPage = Contract['local_model_page'];
 const localModelValidator = ajv.compile<LocalModel>({

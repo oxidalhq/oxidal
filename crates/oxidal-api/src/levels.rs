@@ -113,7 +113,11 @@ pub(super) async fn update(
     let Ok(Json(levels)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid levels");
     };
-    let levels = shared.guitars.current().own(levels);
+    // Trim and gate belong to the guitar, boost to the playing preset.
+    let levels = HostLevels {
+        boost_db: shared.levels.current().boost_db,
+        ..shared.guitars.current().own(levels)
+    };
     if let Err(e) = levels.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }

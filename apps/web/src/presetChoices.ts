@@ -37,6 +37,14 @@ export const tone3000Key = (state: AudioState | null | undefined) =>
       })
     : '';
 
+/** Boost keys the daemon matches against what is playing (see boosts.rs). */
+export const boostKey = {
+  tone3000: (id: string, owned: boolean) =>
+    `tone3000:${owned ? 'copy' : 'original'}:${id}`,
+  scenes: (presetId: string) => `scenes:${presetId}`,
+  scene: (presetId: string, sceneId: string) => `scenes:${presetId}#${sceneId}`,
+};
+
 export const scenesLabel = (scenes: string[]) =>
   scenes.length > 1 ? `${scenes.length} scenes` : '';
 

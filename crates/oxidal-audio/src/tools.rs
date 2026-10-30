@@ -140,20 +140,29 @@ pub struct HostLevels {
     /// ungated. Set from the active guitar's measured noise floor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate_db: Option<f32>,
+    /// Boost of the playing preset and scene in dB (−12 to +12), added to the
+    /// output level. Set by the daemon from the boost store, never by a view.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub boost_db: f32,
+}
+fn is_zero(value: &f32) -> bool {
+    *value == 0.0
 }
 impl HostLevels {
     pub const INPUT_RANGE: (f32, f32) = (-24.0, 24.0);
     pub const OUTPUT_RANGE: (f32, f32) = (-60.0, 12.0);
     pub const GATE_RANGE: (f32, f32) = (-96.0, -20.0);
+    pub const BOOST_RANGE: (f32, f32) = (-12.0, 12.0);
     pub fn validate(&self) -> Result<(), String> {
         let within = |v: f32, (lo, hi): (f32, f32)| v.is_finite() && (lo..=hi).contains(&v);
         if within(self.input_trim_db, Self::INPUT_RANGE)
             && within(self.output_level_db, Self::OUTPUT_RANGE)
             && self.gate_db.is_none_or(|g| within(g, Self::GATE_RANGE))
+            && within(self.boost_db, Self::BOOST_RANGE)
         {
             Ok(())
         } else {
-            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS".into())
+            Err("Levels must be finite: input trim −24 to +24 dB, output −60 to +12 dB, gate −96 to −20 dBFS, boost −12 to +12 dB".into())
         }
     }
     fn input_gain(&self) -> f32 {
@@ -163,7 +172,7 @@ impl HostLevels {
         if self.output_level_db <= Self::OUTPUT_RANGE.0 {
             0.0
         } else {
-            10f32.powf(self.output_level_db / 20.0)
+            10f32.powf((self.output_level_db + self.boost_db) / 20.0)
         }
     }
 }
@@ -442,6 +451,7 @@ mod host_tests {
                 output_level_db: 0.0,
                 mono: false,
                 gate_db: None,
+                boost_db: 0.0,
             },
         );
         let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
@@ -453,6 +463,7 @@ mod host_tests {
                 output_level_db: -60.0,
                 mono: false,
                 gate_db: None,
+                boost_db: 0.0,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
@@ -474,6 +485,7 @@ mod host_tests {
                 output_level_db: 0.0,
                 mono: false,
                 gate_db: None,
+                boost_db: 0.0,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
@@ -483,6 +495,7 @@ mod host_tests {
                 output_level_db: 0.0,
                 mono: false,
                 gate_db: None,
+                boost_db: 0.0,
             }
             .validate()
             .is_err()
@@ -493,6 +506,7 @@ mod host_tests {
                 output_level_db: 12.5,
                 mono: false,
                 gate_db: None,
+                boost_db: 0.0,
             }
             .validate()
             .is_err()
@@ -550,6 +564,35 @@ mod host_tests {
         assert!(
             HostLevels {
                 gate_db: Some(-10.0),
+                ..HostLevels::default()
+            }
+            .validate()
+            .is_err()
+        );
+    }
+    #[test]
+    fn boost_adds_to_the_output_level_but_never_unmutes_it() {
+        let mut signal = HostSignal::new(
+            48000,
+            true,
+            HostLevels {
+                output_level_db: -6.0,
+                boost_db: 6.0,
+                ..HostLevels::default()
+            },
+        );
+        let (mut l, mut r) = ([0.5; 8], [0.5; 8]);
+        signal.output(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| (v - 0.5).abs() < 1e-4));
+        let muted = HostLevels {
+            output_level_db: -60.0,
+            boost_db: 12.0,
+            ..HostLevels::default()
+        };
+        assert_eq!(muted.output_gain(), 0.0);
+        assert!(
+            HostLevels {
+                boost_db: 12.5,
                 ..HostLevels::default()
             }
             .validate()

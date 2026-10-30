@@ -1,8 +1,10 @@
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
+import { BoostControl } from './BoostControl';
 import { RigPresetSelector } from './RigPresetSelector';
 import {
+  boostKey,
   choiceKey,
   discardsSceneEdits,
   playChoice,
@@ -621,6 +623,7 @@ export function MixedRig({
   // Scenes rigs: each branch is a whole native preset. Draw it as a chain lane
   // of its own blocks, in scene order, with the sounding scene's lane bright.
   const sceneList = state.control?.scenes?.scenes ?? [];
+  const soundingScene = sceneList.find((s) => s.id === state.control?.scene);
   const sceneBranches = sceneList.length
     ? nodes.filter((n) => n.kind === 'tone3000').slice(0, sceneList.length)
     : [];
@@ -740,7 +743,31 @@ export function MixedRig({
                 : 'Audio stopped'}
         </p>
       )}
-      <MasterLevel />
+      <MasterLevel
+        extra={
+          matching && (
+            <BoostControl
+              targets={[
+                {
+                  key: boostKey.scenes(matching.manifest.id),
+                  label: matching.manifest.name,
+                },
+                ...(soundingScene
+                  ? [
+                      {
+                        key: boostKey.scene(
+                          matching.manifest.id,
+                          soundingScene.id,
+                        ),
+                        label: `Scene · ${soundingScene.name}`,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )
+        }
+      />
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
           scenes={state.control.scenes.scenes}

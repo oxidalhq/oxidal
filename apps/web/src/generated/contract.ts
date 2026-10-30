@@ -671,6 +671,8 @@ export interface Contract {
   audio_probe: AudioProbe;
   audio_probe_result: AudioProbeResult;
   audio_state: AudioState;
+  boost_update: BoostUpdate;
+  boosts: BoostState;
   capabilities: Capabilities;
   command: Command;
   control_audit: AuditHistory;
@@ -755,6 +757,11 @@ export interface AudioCommand {
  */
 export interface HostLevels {
   /**
+   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * output level. Set by the daemon from the boost store, never by a view.
+   */
+  boost_db?: number;
+  /**
    * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
    * ungated. Set from the active guitar's measured noise floor.
    */
@@ -838,6 +845,11 @@ export interface AudioProbe {
  * master output level after it. Never stored in presets.
  */
 export interface HostLevels1 {
+  /**
+   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * output level. Set by the daemon from the boost store, never by a view.
+   */
+  boost_db?: number;
   /**
    * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
    * ungated. Set from the active guitar's measured noise floor.
@@ -1070,6 +1082,26 @@ export interface ModelProgress {
 export interface NativeSlot {
   position: SlotPosition;
   target: string;
+}
+/**
+ * Sets one boost; 0 dB removes it.
+ */
+export interface BoostUpdate {
+  boost_db: number;
+  key: string;
+}
+export interface BoostState {
+  /**
+   * Their sum as applied at the output, clamped to −12…+12 dB.
+   */
+  applied_db: number;
+  boosts: {
+    [k: string]: number;
+  };
+  /**
+   * Keys of what is playing: the preset, then its scene when it has one.
+   */
+  playing: string[];
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.
@@ -1319,6 +1351,11 @@ export interface HostState {
  * master output level after it. Never stored in presets.
  */
 export interface HostLevels2 {
+  /**
+   * Boost of the playing preset and scene in dB (−12 to +12), added to the
+   * output level. Set by the daemon from the boost store, never by a view.
+   */
+  boost_db?: number;
   /**
    * Noise gate threshold after the trim, in dBFS (−96 to −20); none plays
    * ungated. Set from the active guitar's measured noise floor.

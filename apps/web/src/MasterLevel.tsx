@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { unitLevels, type UnitLevels } from './api';
 import {
   LEVEL_MAX,
@@ -17,7 +17,14 @@ const STEPS = 1000;
  * request is in flight only the newest value waits, so dragging never queues up.
  * @see docs/audio.md
  */
-export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
+export function MasterLevel({
+  disabled = false,
+  extra,
+}: {
+  disabled?: boolean;
+  /** A control that belongs beside Level, such as the playing preset's boost. */
+  extra?: ReactNode;
+}) {
   const [levels, setLevels] = useState<UnitLevels | null>(null);
   const [supported, setSupported] = useState(true);
   const [error, setError] = useState('');
@@ -89,7 +96,11 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
     ) : null;
   const db = levels?.output_level_db ?? 0;
   return (
-    <div className="master-level" data-off={db <= LEVEL_MIN || undefined}>
+    <div
+      className="master-level"
+      data-off={db <= LEVEL_MIN || undefined}
+      data-extra={extra ? true : undefined}
+    >
       <label htmlFor="master-level">Level</label>
       <input
         id="master-level"
@@ -138,6 +149,7 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
       >
         Mono
       </button>
+      {extra}
       {error && (
         <p className="master-level-error" role="alert">
           {error}

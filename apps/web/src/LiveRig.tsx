@@ -14,7 +14,13 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
-import { playScenes, tone3000Key, type PresetChoice } from './presetChoices';
+import { BoostControl } from './BoostControl';
+import {
+  boostKey,
+  playScenes,
+  tone3000Key,
+  type PresetChoice,
+} from './presetChoices';
 import {
   assertAuditionOwner,
   movedBlockOrder,
@@ -788,7 +794,24 @@ export function LiveRig({
         </div>
       </div>
       {knobStrip}
-      <MasterLevel />
+      <MasterLevel
+        extra={
+          state.configured &&
+          !state.configured.draft && (
+            <BoostControl
+              targets={[
+                {
+                  key: boostKey.tone3000(
+                    state.configured.preset_id,
+                    state.configured.owned,
+                  ),
+                  label: state.preset_name ?? 'This preset',
+                },
+              ]}
+            />
+          )
+        }
+      />
       <span
         role="status"
         data-testid="live-status"

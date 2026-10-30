@@ -9,6 +9,35 @@
   padding: 0.25rem 0;
   border-bottom: 1px solid var(--border);
 }
+.master-level[data-extra] {
+  grid-template-columns: auto minmax(0, 1fr) 4.75rem auto auto;
+}
+/* Phones: the boost takes its own line so the fader keeps its width. */
+@media (max-width: 480px) {
+  .master-level[data-extra] {
+    grid-template-columns: auto minmax(0, 1fr) 4.75rem auto;
+  }
+  .master-level[data-extra] > .boost-button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+.boost-value {
+  font: 500 0.875rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.boost-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.boost-label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .master-level label {
   font-size: 0.875rem;
   font-weight: 600;

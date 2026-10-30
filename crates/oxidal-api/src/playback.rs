@@ -1864,8 +1864,14 @@ pub(super) async fn command(
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_audio_command");
     };
-    match shared.playback.dispatch(command).await {
-        Ok(state) => Json(state).into_response(),
+    let result = shared.playback.dispatch(command).await;
+    if result.is_ok() {
+        // A preset or scene change brings its own boost.
+        crate::boosts::follow(&shared).await;
+    }
+    match result {
+        // Applying a boost advances the revision: answer with the state after it.
+        Ok(_) => Json(shared.playback.snapshot()).into_response(),
         Err(error) => failure(StatusCode::CONFLICT, &error),
     }
 }

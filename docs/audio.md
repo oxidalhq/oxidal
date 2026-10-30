@@ -242,6 +242,14 @@ Two unit-wide gains wrap every engine (saved preset, hybrid and effects): an inp
 - **API:** `GET /api/v1/levels` returns `{input_trim_db, output_level_db}`. `POST` validates the range (422 outside it, 400 for unknown fields), sends the levels to whichever engine is running through its host-utility command, then stores them. A stopped unit just stores them for the next start.
 - **UI:** the Level fader sits under the preset picker on Rig (TONE3000 and hybrid), on Perform and in Settings → Audio. Its taper gives the lower quarter to −60 to −30 dB and the rest to −30 to +12 dB, in 0.5 dB steps. Arrow keys move 1 dB. While a request is in flight only the newest value waits. A daemon without levels hides the fader.
 
+## Boost
+
+A boost is deliberate extra level for a solo preset or scene, on top of the evened-out level: −12 to +12 dB in 0.5 dB steps. It is set from the **Boost** button beside Level on Rig, with one row for the preset and, for a preset with scenes, one for the sounding scene; they add up.
+
+- **Store and API:** `boosts.json` in the preset directory, never inside presets, so originals stay untouched. Keys: `tone3000:original:<sha256>`, `tone3000:copy:<id>`, `scenes:<preset id>` and `scenes:<preset id>#<scene id>` (the preset id is stable across saved revisions). `GET /api/v1/boosts` returns the boosts, the playing keys and the applied total; `POST {key, boost_db}` sets one (0 removes it).
+- **Applying:** after every confirmed TONE3000 or scenes command (preset load, start, switch, scene), the daemon works out what is playing and sends the total as `boost_db` in the unit levels. The host output applies Level + boost through the same 10 ms glide, so a scene change and its boost land together without a click. Commands answer with the state after the boost, so views never hold a stale revision.
+- **Ownership:** views cannot set `boost_db` through `POST /api/v1/levels`; the daemon keeps the playing preset's value.
+
 ## Guitar profiles
 
 Guitars with different pickups hit the rig at different levels, which changes both loudness and how hard a capture is driven. Each guitar profile stores a plain input trim (`trim_db`, −24 to +24 dB in 0.5 dB steps) applied before every rig when that guitar is chosen, for example +4 dB for a guitar with quieter pickups.
