@@ -41,6 +41,10 @@ struct Engine {
   oxidal::SplitState split;
   std::unique_ptr<OxidalModelPreparation> preparation;
   std::thread::id owner = std::this_thread::get_id();
+  // One realtime audio thread may render while the owner (JUCE message thread)
+  // keeps every other call, as in a plugin host: the processor guards its chain
+  // with chainMutex and keeps parameters atomic. Only process() is allowed here.
+  std::atomic<std::thread::id> audioThread{};
   explicit Engine(int frames) : audio(2, frames) {}
   ~Engine() { preparation.reset(); processor.releaseResources(); }
 };
@@ -48,6 +52,15 @@ Engine& engine(void* ptr) {
   if (!ptr) throw std::runtime_error("null engine");
   auto& e = *static_cast<Engine*>(ptr);
   if (e.owner != std::this_thread::get_id()) throw std::runtime_error("wrong owner thread");
+  return e;
+}
+// Owner, or the one bound audio thread: render calls only.
+Engine& renderer(void* ptr) {
+  if (!ptr) throw std::runtime_error("null engine");
+  auto& e = *static_cast<Engine*>(ptr);
+  const auto caller = std::this_thread::get_id();
+  if (e.owner != caller && e.audioThread.load(std::memory_order_acquire) != caller)
+    throw std::runtime_error("wrong render thread");
   return e;
 }
 template<class F> int guard(F&& fn) noexcept {
@@ -252,9 +265,25 @@ EXPORT int oxidal_t3k_set_block(void* ptr, const char* id, const char* parameter
     if (!e.processor.setBlockParam(id, name, value)) throw std::runtime_error("block control rejected");
   });
 }
+// Called once on the realtime audio thread before it renders. Unbind from the
+// owner only after that thread has stopped.
+EXPORT int oxidal_t3k_bind_audio_thread(void* ptr) noexcept {
+  return guard([&] {
+    if (!ptr) throw std::runtime_error("null engine");
+    auto& e = *static_cast<Engine*>(ptr);
+    const auto caller = std::this_thread::get_id();
+    if (caller == e.owner) throw std::runtime_error("audio thread must differ from the owner");
+    std::thread::id none{};
+    if (!e.audioThread.compare_exchange_strong(none, caller) && none != caller)
+      throw std::runtime_error("another audio thread is bound");
+  });
+}
+EXPORT int oxidal_t3k_unbind_audio_thread(void* ptr) noexcept {
+  return guard([&] { engine(ptr).audioThread.store(std::thread::id{}, std::memory_order_release); });
+}
 EXPORT int oxidal_t3k_process(void* ptr, float* left, float* right, size_t frames) noexcept {
   return guard([&] {
-    auto& e = engine(ptr);
+    auto& e = renderer(ptr);
     if (!left || !right || frames == 0 || frames > static_cast<size_t>(e.audio.getNumSamples()))
       throw std::runtime_error("invalid audio buffer");
     for (size_t i = 0; i < frames; ++i)

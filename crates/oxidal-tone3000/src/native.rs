@@ -161,6 +161,8 @@ unsafe extern "C" {
         right: *mut f32,
         frames: usize,
     ) -> i32;
+    fn oxidal_t3k_bind_audio_thread(engine: *mut c_void) -> i32;
+    fn oxidal_t3k_unbind_audio_thread(engine: *mut c_void) -> i32;
     fn oxidal_t3k_capture(
         engine: *mut c_void,
         out: *mut u8,
@@ -250,6 +252,40 @@ pub struct Engine {
     role: ProcessingRole,
     owner: PhantomData<Rc<()>>,
     json_buffer: Vec<u8>,
+}
+/// Render-only access for one realtime audio thread. The bridge admits only
+/// `process` from the thread that binds it; every other call stays on the
+/// owner. This matches the plugin-host contract the TONE3000 processor is built
+/// for: chain edits hold `chainMutex` briefly, parameters are atomic.
+#[derive(Debug)]
+pub struct AudioPort {
+    ptr: NonNull<c_void>,
+    frames: usize,
+}
+// SAFETY: the port renders only, from the single thread it binds; the bridge
+// rejects any other caller. `Engine::audio_port` requires the owner to stop that
+// thread before the engine is dropped.
+unsafe impl Send for AudioPort {}
+impl AudioPort {
+    /// Call once on the audio thread before its first `process`.
+    pub fn bind(&self) -> Result<()> {
+        // SAFETY: live handle; the bridge records the calling thread.
+        checked(unsafe { oxidal_t3k_bind_audio_thread(self.ptr.as_ptr()) })
+    }
+    pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) -> Result<()> {
+        if left.is_empty() || left.len() != right.len() || left.len() > self.frames {
+            return Err(NativeError("invalid stereo buffer lengths".into()));
+        }
+        // SAFETY: exclusive slices are disjoint, equal-length and bounded by native allocation.
+        checked(unsafe {
+            oxidal_t3k_process(
+                self.ptr.as_ptr(),
+                left.as_mut_ptr(),
+                right.as_mut_ptr(),
+                left.len(),
+            )
+        })
+    }
 }
 impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -917,6 +953,22 @@ impl Engine {
         let id = string(id)?;
         // SAFETY: handle and NUL-terminated id outlive call; bridge checks parameter identity.
         checked(unsafe { oxidal_t3k_set(self.ptr.as_ptr(), id.as_ptr(), value) })
+    }
+    /// Render-only handle for a dedicated realtime audio thread.
+    ///
+    /// # Safety
+    /// The port must not be used once this engine is dropped: stop and join the
+    /// audio thread, then call `release_audio_thread`, before dropping the engine.
+    pub unsafe fn audio_port(&self) -> AudioPort {
+        AudioPort {
+            ptr: self.ptr,
+            frames: self.frames,
+        }
+    }
+    /// Forget the audio thread after it has stopped; the owner renders again.
+    pub fn release_audio_thread(&mut self) -> Result<()> {
+        // SAFETY: owner-only call on a live handle.
+        checked(unsafe { oxidal_t3k_unbind_audio_thread(self.ptr.as_ptr()) })
     }
     pub fn process(&mut self, left: &mut [f32], right: &mut [f32]) -> Result<()> {
         if left.is_empty() || left.len() != right.len() || left.len() > self.frames {

@@ -9,7 +9,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Saved preset audio {}", oxidal_audio::realtime::enter());
     use oxidal_audio::{
         lifecycle::{PlaybackEvent, PlaybackStart, WorkerRequest},
-        stream::{Duplex, Step},
         structure::AuthoringAction,
     };
     use oxidal_tone3000::Engine;
@@ -118,16 +117,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let null = std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").is_ok_and(|v| v == "1");
     #[cfg(not(feature = "audio-qualification"))]
     let null = false;
-    let mut stream = {
-        #[cfg(feature = "audio-qualification")]
-        if null {
-            Duplex::qualification_null(settings.stream.clone())?
-        } else {
-            Duplex::open(settings.stream.clone())?
-        }
-        #[cfg(not(feature = "audio-qualification"))]
-        Duplex::open(settings.stream.clone())?
-    };
     let (meter_send, meter_recv) = std::sync::mpsc::sync_channel::<PlaybackEvent>(2);
     // A bounded writer isolates JSON/pipe backpressure from processing. Overflow drops
     // intermediate views; cumulative clipping counts survive the next delivered snapshot.
@@ -148,277 +137,314 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     });
-    let mut last_meter = Instant::now();
-    let mut blocks = 0;
-    let mut last_block = Instant::now();
-    // Requests run between audio blocks on this realtime thread. Rebuilding the
-    // control catalog, slots and EQ through the native engine is the costly part,
-    // so replies reuse the last readback unless the request can change it.
+    // Request replies reuse the last readback unless the request can change it:
+    // rebuilding the catalog, slots and EQ through the native engine is costly.
     let mut readback: Option<Readback> = None;
     let mut last_status: Option<oxidal_audio::structure::AuthoringStatus> = None;
     let period = Duration::from_secs_f64(
         f64::from(settings.stream.input.period_frames)
             / f64::from(settings.stream.input.sample_rate),
     );
-    while !stop.load(Ordering::Acquire) {
-        if stream.step(|l, r| engine.process(l, r).map_err(|e| e.to_string()))? == Step::Processed {
-            last_block = Instant::now();
-            if blocks < settings.stream.output.periods - 1 {
-                blocks += 1;
-                if blocks == settings.stream.output.periods - 1 {
-                    meter_send.try_send(PlaybackEvent::Ready {
+    // Realtime handoff: a dedicated audio thread owns the ALSA stream and only
+    // renders; this owner thread (JUCE's message thread) serves every request,
+    // MIDI and readback, so control work can never delay a block.
+    // SAFETY: the scope below joins the audio thread before `engine` is dropped,
+    // and the owner releases the binding after that join.
+    let port = unsafe { engine.audio_port() };
+    let (host_send, host_recv) =
+        std::sync::mpsc::sync_channel::<oxidal_audio::tools::HostUtility>(1);
+    let (note_send, notes) = std::sync::mpsc::sync_channel::<AudioNote>(4);
+    let stream_config = settings.stream.clone();
+    let periods = settings.stream.output.periods;
+    let audio_stop = stop.clone();
+    let audio_meters = meter_send.clone();
+    let result = std::thread::scope(|scope| -> Result<(), Box<dyn std::error::Error>> {
+        let audio = scope.spawn(move || {
+            let outcome = render(
+                port,
+                stream_config,
+                null,
+                periods,
+                &audio_stop,
+                &audio_meters,
+                &host_recv,
+                &note_send,
+            );
+            if let Err(error) = &outcome {
+                let _ = note_send.try_send(AudioNote::Failed(error.clone()));
+            }
+            audio_stop.store(true, Ordering::Release);
+            outcome
+        });
+        // Any early return below stops the audio thread before the scope joins it.
+        let _stop_audio = StopOnDrop(stop.clone());
+        oxidal_audio::realtime::leave();
+        let mut primed = false;
+        while !stop.load(Ordering::Acquire) {
+            match notes.try_recv() {
+                Ok(AudioNote::Primed) => {
+                    meter_send.send(PlaybackEvent::Ready {
                         preset_name: preset_name.clone(),
                         authoring: Some(authoring.snapshot(&mut engine)?),
                         controls: engine.live_controls()?,
                         slots: engine.slots()?,
                         eq: engine.eq_snapshot()?,
                     })?;
+                    primed = true;
                 }
+                Ok(AudioNote::Failed(error)) => return Err(error.into()),
+                Ok(AudioNote::Host(_)) | Err(_) => {}
             }
-            if blocks >= settings.stream.output.periods - 1
-                && last_meter.elapsed() >= Duration::from_millis(200)
+            if !primed {
+                std::thread::sleep(Duration::from_millis(2));
+                continue;
+            }
             {
-                let _ = meter_send.try_send(PlaybackEvent::Meter {
-                    snapshot: stream.telemetry(),
+                let blocked = models.pending()
+                    || authoring.measurement_pending()
+                    || authoring.gesture_pending();
+                let mut moved = false;
+                midi.poll(|settings, message| {
+                    moved = true;
+                    oxidal_tone3000::midi::dispatch(&mut engine, settings, message, blocked)
                 });
-                last_meter = Instant::now();
-            }
-            // ALSA null has no clock; pace only that explicit software fixture.
-            if null {
-                std::thread::sleep(Duration::from_secs_f64(
-                    settings.stream.input.period_frames as f64
-                        / settings.stream.input.sample_rate as f64,
-                ));
-            }
-        } else if last_block.elapsed() > Duration::from_secs(2) {
-            return Err("Audio device made no progress for two seconds".into());
-        }
-        if blocks >= settings.stream.output.periods - 1 {
-            let blocked =
-                models.pending() || authoring.measurement_pending() || authoring.gesture_pending();
-            let mut moved = false;
-            midi.poll(|settings, message| {
-                moved = true;
-                oxidal_tone3000::midi::dispatch(&mut engine, settings, message, blocked)
-            });
-            // A MIDI CC can move any control: the next reply reads them again.
-            if moved {
-                readback = None;
-            }
-        }
-        if blocks >= settings.stream.output.periods - 1
-            && let Ok(request) = commands.try_recv()
-        {
-            // Serialization, catalog readback and native control work can allocate.
-            // Kept out of the DSP closure; physical deadline qualification remains required.
-            let started = Instant::now();
-            let kind = request_kind(&request);
-            let event = match request {
-                WorkerRequest::HostUtility(request) => {
-                    stream.host_utility(request.host_utility);
-                    PlaybackEvent::HostUtility {
-                        serial: request.serial,
-                        telemetry: stream.telemetry(),
-                    }
+                // A MIDI CC can move any control: the next reply reads them again.
+                if moved {
+                    readback = None;
                 }
-                WorkerRequest::Midi(request) => {
-                    let configure = matches!(
-                        &request.midi,
-                        oxidal_audio::lifecycle::MidiOperation::Configure { .. }
-                    );
-                    let error = match request.midi {
-                        oxidal_audio::lifecycle::MidiOperation::Poll => None,
-                        oxidal_audio::lifecycle::MidiOperation::Configure { settings } => {
-                            let controls = engine.live_controls()?;
-                            match settings
-                                .as_ref()
-                                .map(|s| s.validate_native(&controls))
-                                .transpose()
+            }
+            let request = match commands.recv_timeout(Duration::from_millis(2)) {
+                Ok(request) => request,
+                Err(_) => continue,
+            };
+            {
+                let started = Instant::now();
+                let kind = request_kind(&request);
+                let event = match request {
+                    WorkerRequest::HostUtility(request) => {
+                        // The stream lives on the audio thread: it applies the change
+                        // between blocks and answers with its telemetry.
+                        host_send.send(request.host_utility)?;
+                        let telemetry = loop {
+                            match notes.recv_timeout(Duration::from_secs(1)) {
+                                Ok(AudioNote::Host(telemetry)) => break telemetry,
+                                Ok(AudioNote::Failed(error)) => return Err(error.into()),
+                                Ok(AudioNote::Primed) => continue,
+                                Err(_) => return Err("Audio thread did not answer".into()),
+                            }
+                        };
+                        PlaybackEvent::HostUtility {
+                            serial: request.serial,
+                            telemetry,
+                        }
+                    }
+                    WorkerRequest::Midi(request) => {
+                        let configure = matches!(
+                            &request.midi,
+                            oxidal_audio::lifecycle::MidiOperation::Configure { .. }
+                        );
+                        let error = match request.midi {
+                            oxidal_audio::lifecycle::MidiOperation::Poll => None,
+                            oxidal_audio::lifecycle::MidiOperation::Configure { settings } => {
+                                let controls = engine.live_controls()?;
+                                match settings
+                                    .as_ref()
+                                    .map(|s| s.validate_native(&controls))
+                                    .transpose()
+                                {
+                                    Ok(_) => {
+                                        midi.configure(settings);
+                                        None
+                                    }
+                                    Err(error) => Some(error),
+                                }
+                            }
+                        };
+                        // Idle connection polls do not rebuild a potentially dense catalog.
+                        let controls = if configure || midi.status.events != midi_readback_events {
+                            Some(engine.live_controls()?)
+                        } else {
+                            None
+                        };
+                        midi_readback_events = midi.status.events;
+                        PlaybackEvent::Midi {
+                            serial: request.serial,
+                            status: midi.status.clone(),
+                            controls,
+                            error,
+                        }
+                    }
+                    WorkerRequest::Authoring(request) => {
+                        let mutating = request.authoring.changes_tone();
+                        // A finishing measurement or an expiring gesture writes controls
+                        // even during a poll, so only a quiet poll may reuse the readback.
+                        let quiet = !authoring.measurement_pending();
+                        let gesture_before = authoring.gesture_pending();
+                        // Polls and inspections read; previews move only control values.
+                        let reads_only = quiet
+                            && matches!(
+                                request.authoring,
+                                AuthoringAction::Inspect
+                                    | AuthoringAction::Utility {
+                                        command: oxidal_audio::tools::Command::Poll
+                                    }
+                            );
+                        // Adjustments move one control or EQ value, never the chain's slots.
+                        let values_only =
+                            matches!(request.authoring, AuthoringAction::Gesture { .. });
+                        let quiet_poll = matches!(
+                            request.authoring,
+                            AuthoringAction::Utility {
+                                command: oxidal_audio::tools::Command::Poll
+                            }
+                        ) && authoring.poll_is_quiet();
+                        // Adopt background checkpoints first: their receipts are not this request's edit.
+                        authoring.collect_receipts();
+                        let before_working = authoring.working_receipt().map(str::to_owned);
+                        let result = if quiet_poll && let Some(status) = last_status.clone() {
+                            Ok(status)
+                        } else if models.pending() {
+                            Err("Finish model preparation before changing the chain".into())
+                        } else {
+                            authoring.command(&mut engine, request.authoring)
+                        };
+                        if authoring.failed() {
+                            return Err("Native authoring rollback failed; worker stopped".into());
+                        }
+                        let (status, error) = match result {
+                            Ok(status) => {
+                                if mutating || status.working != before_working {
+                                    models = models::Models::default();
+                                }
+                                (status, None)
+                            }
+                            Err(error) => (authoring.snapshot(&mut engine)?, Some(error)),
+                        };
+                        let current = match readback.take() {
+                            Some(cached)
+                                if (quiet_poll || reads_only)
+                                    && !mutating
+                                    && authoring.gesture_pending() == gesture_before =>
                             {
-                                Ok(_) => {
-                                    midi.configure(settings);
+                                cached
+                            }
+                            Some(mut cached) if values_only => {
+                                cached.controls = engine.live_controls()?;
+                                cached.eq = engine.eq_snapshot()?;
+                                cached
+                            }
+                            _ => Readback::read(&mut engine)?,
+                        };
+                        last_status = Some(status.clone());
+                        let event = PlaybackEvent::Authored {
+                            serial: request.serial,
+                            authoring: status,
+                            controls: current.controls.clone(),
+                            slots: current.slots.clone(),
+                            eq: current.eq.clone(),
+                            error,
+                        };
+                        readback = Some(current);
+                        event
+                    }
+                    WorkerRequest::Eq(request) => {
+                        readback = None;
+                        let error = if models.pending()
+                            || authoring.measurement_pending()
+                            || authoring.gesture_pending()
+                        {
+                            Some("Finish model preparation before adjusting EQ".into())
+                        } else {
+                            engine
+                                .set_eq(&request.block_id, &request.eq)
+                                .err()
+                                .map(|e| e.to_string())
+                        };
+                        PlaybackEvent::Eq {
+                            serial: request.serial,
+                            eq: engine.eq_snapshot()?,
+                            error,
+                        }
+                    }
+
+                    WorkerRequest::Control(request) => {
+                        readback = None;
+                        let error = if models.pending()
+                            || authoring.measurement_pending()
+                            || authoring.gesture_pending()
+                        {
+                            Some(
+                                "Model preparation is pending; cancel before adjusting controls"
+                                    .into(),
+                            )
+                        } else {
+                            engine
+                                .set_live_control(&request.target, request.value)
+                                .err()
+                                .map(|e| e.to_string())
+                        };
+                        PlaybackEvent::Control {
+                            serial: request.serial,
+                            controls: engine.live_controls()?,
+                            error,
+                        }
+                    }
+                    WorkerRequest::Model(request) => {
+                        readback = None;
+                        let result =
+                            if authoring.measurement_pending() || authoring.gesture_pending() {
+                                Err("Cancel measurement before loading models".into())
+                            } else {
+                                models.operation(&mut engine, &root, request.model, request.serial)
+                            };
+                        let (mut progress, error) = match result {
+                            Ok(p) => (p, None),
+                            Err(e) => (None, Some(e)),
+                        };
+                        let status = if let Some(before) = models.take_applied_history() {
+                            match authoring.record_external(&mut engine, before) {
+                                Ok(status) => Some(status),
+                                Err(error) => {
+                                    if authoring.failed() {
+                                        return Err(error.into());
+                                    }
+                                    progress = models.reject_history(error);
                                     None
                                 }
-                                Err(error) => Some(error),
                             }
+                        } else {
+                            None
+                        };
+                        PlaybackEvent::Model {
+                            authoring: status,
+                            serial: request.serial,
+                            progress,
+                            controls: engine.live_controls()?,
+                            slots: engine.slots()?,
+                            eq: engine.eq_snapshot()?,
+                            error,
                         }
-                    };
-                    // Idle connection polls do not rebuild a potentially dense catalog.
-                    let controls = if configure || midi.status.events != midi_readback_events {
-                        Some(engine.live_controls()?)
-                    } else {
-                        None
-                    };
-                    midi_readback_events = midi.status.events;
-                    PlaybackEvent::Midi {
-                        serial: request.serial,
-                        status: midi.status.clone(),
-                        controls,
-                        error,
                     }
+                };
+                let took = started.elapsed();
+                if took > period * 8 {
+                    eprintln!(
+                        "Slow {kind} request: {:.2} ms (audio renders on its own thread)",
+                        took.as_secs_f64() * 1000.0
+                    );
                 }
-                WorkerRequest::Authoring(request) => {
-                    let mutating = request.authoring.changes_tone();
-                    // A finishing measurement or an expiring gesture writes controls
-                    // even during a poll, so only a quiet poll may reuse the readback.
-                    let quiet = !authoring.measurement_pending();
-                    let gesture_before = authoring.gesture_pending();
-                    // Polls and inspections read; previews move only control values.
-                    let reads_only = quiet
-                        && matches!(
-                            request.authoring,
-                            AuthoringAction::Inspect
-                                | AuthoringAction::Utility {
-                                    command: oxidal_audio::tools::Command::Poll
-                                }
-                        );
-                    // Adjustments move one control or EQ value, never the chain's slots.
-                    let values_only = matches!(request.authoring, AuthoringAction::Gesture { .. });
-                    let quiet_poll = matches!(
-                        request.authoring,
-                        AuthoringAction::Utility {
-                            command: oxidal_audio::tools::Command::Poll
-                        }
-                    ) && authoring.poll_is_quiet();
-                    // Adopt background checkpoints first: their receipts are not this request's edit.
-                    authoring.collect_receipts();
-                    let before_working = authoring.working_receipt().map(str::to_owned);
-                    let result = if quiet_poll && let Some(status) = last_status.clone() {
-                        Ok(status)
-                    } else if models.pending() {
-                        Err("Finish model preparation before changing the chain".into())
-                    } else {
-                        authoring.command(&mut engine, request.authoring)
-                    };
-                    if authoring.failed() {
-                        return Err("Native authoring rollback failed; worker stopped".into());
-                    }
-                    let (status, error) = match result {
-                        Ok(status) => {
-                            if mutating || status.working != before_working {
-                                models = models::Models::default();
-                            }
-                            (status, None)
-                        }
-                        Err(error) => (authoring.snapshot(&mut engine)?, Some(error)),
-                    };
-                    let current = match readback.take() {
-                        Some(cached)
-                            if (quiet_poll || reads_only)
-                                && !mutating
-                                && authoring.gesture_pending() == gesture_before =>
-                        {
-                            cached
-                        }
-                        Some(mut cached) if values_only => {
-                            cached.controls = engine.live_controls()?;
-                            cached.eq = engine.eq_snapshot()?;
-                            cached
-                        }
-                        _ => Readback::read(&mut engine)?,
-                    };
-                    last_status = Some(status.clone());
-                    let event = PlaybackEvent::Authored {
-                        serial: request.serial,
-                        authoring: status,
-                        controls: current.controls.clone(),
-                        slots: current.slots.clone(),
-                        eq: current.eq.clone(),
-                        error,
-                    };
-                    readback = Some(current);
-                    event
-                }
-                WorkerRequest::Eq(request) => {
-                    readback = None;
-                    let error = if models.pending()
-                        || authoring.measurement_pending()
-                        || authoring.gesture_pending()
-                    {
-                        Some("Finish model preparation before adjusting EQ".into())
-                    } else {
-                        engine
-                            .set_eq(&request.block_id, &request.eq)
-                            .err()
-                            .map(|e| e.to_string())
-                    };
-                    PlaybackEvent::Eq {
-                        serial: request.serial,
-                        eq: engine.eq_snapshot()?,
-                        error,
-                    }
-                }
-
-                WorkerRequest::Control(request) => {
-                    readback = None;
-                    let error = if models.pending()
-                        || authoring.measurement_pending()
-                        || authoring.gesture_pending()
-                    {
-                        Some(
-                            "Model preparation is pending; cancel before adjusting controls".into(),
-                        )
-                    } else {
-                        engine
-                            .set_live_control(&request.target, request.value)
-                            .err()
-                            .map(|e| e.to_string())
-                    };
-                    PlaybackEvent::Control {
-                        serial: request.serial,
-                        controls: engine.live_controls()?,
-                        error,
-                    }
-                }
-                WorkerRequest::Model(request) => {
-                    readback = None;
-                    let result = if authoring.measurement_pending() || authoring.gesture_pending() {
-                        Err("Cancel measurement before loading models".into())
-                    } else {
-                        models.operation(&mut engine, &root, request.model, request.serial)
-                    };
-                    let (mut progress, error) = match result {
-                        Ok(p) => (p, None),
-                        Err(e) => (None, Some(e)),
-                    };
-                    let status = if let Some(before) = models.take_applied_history() {
-                        match authoring.record_external(&mut engine, before) {
-                            Ok(status) => Some(status),
-                            Err(error) => {
-                                if authoring.failed() {
-                                    return Err(error.into());
-                                }
-                                progress = models.reject_history(error);
-                                None
-                            }
-                        }
-                    } else {
-                        None
-                    };
-                    PlaybackEvent::Model {
-                        authoring: status,
-                        serial: request.serial,
-                        progress,
-                        controls: engine.live_controls()?,
-                        slots: engine.slots()?,
-                        eq: engine.eq_snapshot()?,
-                        error,
-                    }
-                }
-            };
-            let took = started.elapsed();
-            if took > period {
-                eprintln!(
-                    "Slow {kind} request on the audio thread: {:.2} ms (period {:.2} ms)",
-                    took.as_secs_f64() * 1000.0,
-                    period.as_secs_f64() * 1000.0
-                );
+                meter_send.send(event)?;
             }
-            meter_send.try_send(event)?;
         }
-    }
-    drop(stream); // PCM is released before native state destruction and process exit.
-    Ok(())
+        stop.store(true, Ordering::Release);
+        audio
+            .join()
+            .map_err(|_| "Audio thread panicked")?
+            .map_err(Into::into)
+    });
+    // The audio thread has been joined and its PCM released.
+    engine.release_audio_thread()?;
+    result
 }
 #[cfg(not(target_os = "linux"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -587,4 +613,90 @@ fn request_kind(request: &oxidal_audio::lifecycle::WorkerRequest) -> &'static st
         WorkerRequest::Control(_) => "control",
         WorkerRequest::Model(_) => "model",
     }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+enum AudioNote {
+    /// The playback queue is full: the owner announces Ready.
+    Primed,
+    /// Telemetry after a host utility change.
+    Host(oxidal_audio::meter::Snapshot),
+    Failed(String),
+}
+#[cfg(target_os = "linux")]
+#[derive(Debug)]
+struct StopOnDrop(std::sync::Arc<std::sync::atomic::AtomicBool>);
+#[cfg(target_os = "linux")]
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+/// The realtime audio thread: owns the duplex stream and renders through the
+/// bound port. Nothing here touches the engine's control or state API.
+#[cfg(target_os = "linux")]
+#[allow(clippy::too_many_arguments)]
+fn render(
+    mut port: oxidal_tone3000::AudioPort,
+    config: oxidal_audio::StreamConfig,
+    null: bool,
+    periods: u32,
+    stop: &std::sync::atomic::AtomicBool,
+    meters: &std::sync::mpsc::SyncSender<oxidal_audio::lifecycle::PlaybackEvent>,
+    host: &std::sync::mpsc::Receiver<oxidal_audio::tools::HostUtility>,
+    notes: &std::sync::mpsc::SyncSender<AudioNote>,
+) -> Result<(), String> {
+    use oxidal_audio::stream::{Duplex, Step};
+    use std::{
+        sync::atomic::Ordering,
+        time::{Duration, Instant},
+    };
+    port.bind().map_err(|e| e.to_string())?;
+    let mut stream = {
+        #[cfg(feature = "audio-qualification")]
+        if null {
+            Duplex::qualification_null(config.clone())?
+        } else {
+            Duplex::open(config.clone())?
+        }
+        #[cfg(not(feature = "audio-qualification"))]
+        Duplex::open(config.clone())?
+    };
+    let mut blocks = 0;
+    let mut last_meter = Instant::now();
+    let mut last_block = Instant::now();
+    while !stop.load(Ordering::Acquire) {
+        if stream.step(|l, r| port.process(l, r).map_err(|e| e.to_string()))? == Step::Processed {
+            last_block = Instant::now();
+            if blocks < periods - 1 {
+                blocks += 1;
+                if blocks == periods - 1 {
+                    notes
+                        .send(AudioNote::Primed)
+                        .map_err(|_| "Worker owner stopped".to_string())?;
+                }
+            }
+            if blocks >= periods - 1 && last_meter.elapsed() >= Duration::from_millis(200) {
+                let _ = meters.try_send(oxidal_audio::lifecycle::PlaybackEvent::Meter {
+                    snapshot: stream.telemetry(),
+                });
+                last_meter = Instant::now();
+            }
+            // ALSA null has no clock; pace only that explicit software fixture.
+            if null {
+                std::thread::sleep(Duration::from_secs_f64(
+                    f64::from(config.input.period_frames) / f64::from(config.input.sample_rate),
+                ));
+            }
+        } else if last_block.elapsed() > Duration::from_secs(2) {
+            return Err("Audio device made no progress for two seconds".into());
+        }
+        if let Ok(command) = host.try_recv() {
+            stream.host_utility(command);
+            let _ = notes.try_send(AudioNote::Host(stream.telemetry()));
+        }
+    }
+    drop(stream); // PCM is released before the owner releases the engine.
+    Ok(())
 }
