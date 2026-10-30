@@ -113,6 +113,7 @@ export function EngineSettings({ connected }: { connected: boolean }) {
       {editing && state && (
         <SettingDialog
           control={editing.control}
+          detail={settingHelp[editing.control.target]}
           step={state.authoring?.setting_steps?.[editing.control.target]}
           busy={busy}
           stale={

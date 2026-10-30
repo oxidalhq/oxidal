@@ -165,7 +165,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                 aria-label="Network setup mode"
               >
                 <Button
-                  variant={mode === 'join' ? 'default' : 'outline'}
+                  variant="outline"
                   aria-pressed={mode === 'join'}
                   onClick={() => {
                     if (mode !== 'join') {
@@ -180,7 +180,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   Join Wi-Fi
                 </Button>
                 <Button
-                  variant={mode === 'hotspot' ? 'default' : 'outline'}
+                  variant="outline"
                   aria-pressed={mode === 'hotspot'}
                   onClick={() => {
                     if (mode !== 'hotspot') {
@@ -210,7 +210,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   {state.networks.map((n) => (
                     <Button
                       key={`${n.ssid}-${n.security}`}
-                      variant={ssid === n.ssid ? 'secondary' : 'outline'}
+                      variant="outline"
                       aria-pressed={ssid === n.ssid}
                       disabled={
                         busy || !connected || !n.security || n.security === '--'

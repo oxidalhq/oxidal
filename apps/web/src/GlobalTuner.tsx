@@ -202,6 +202,7 @@ export function GlobalTuner({
             : `${cents > 0 ? '+' : ''}${cents} cents · ${reading!.frequency.toFixed(1)} Hz`}
         </p>
         <Button
+          variant="outline"
           disabled={!ready || busy}
           onClick={() => void toggle()}
           aria-pressed={!!tools?.tuner_enabled}

@@ -194,7 +194,7 @@ export function TouchAdjust({
         </Button>
 
         <Button
-          variant={fine ? 'default' : 'outline'}
+          variant="outline"
           aria-pressed={fine}
           disabled={disabled}
           onClick={() => {

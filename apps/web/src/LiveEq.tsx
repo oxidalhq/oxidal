@@ -178,7 +178,7 @@ export function LiveEq<S extends EqSession>({
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="mr-auto">EQ</h3>
         <Button
-          variant={row.eq.enabled ? 'secondary' : 'outline'}
+          variant="outline"
           aria-pressed={row.eq.enabled}
           disabled={locked || !!draft}
           onClick={() =>
@@ -208,7 +208,7 @@ export function LiveEq<S extends EqSession>({
           <Button
             key={name}
             className="min-w-0 px-1"
-            variant={index === i ? 'secondary' : 'ghost'}
+            variant="ghost"
             aria-label={`EQ band ${name}`}
             aria-pressed={index === i}
             disabled={locked || !!draft}
@@ -226,7 +226,7 @@ export function LiveEq<S extends EqSession>({
           ).map((type) => (
             <Button
               key={type}
-              variant={band.type === type ? 'secondary' : 'outline'}
+              variant="outline"
               aria-pressed={band.type === type}
               disabled={locked || !!draft}
               onClick={() =>

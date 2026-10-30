@@ -612,6 +612,7 @@ export function NativeAuthoring({
       {settingDraft && (
         <SettingDialog
           control={settingDraft.control}
+          detail={settingHelp[settingDraft.control.target]}
           step={status?.setting_steps?.[settingDraft.control.target]}
           busy={busy}
           stale={

@@ -20,7 +20,7 @@ export function HostAudioControls({
     >
       <div className="action-row">
         <Button
-          variant={hear ? 'secondary' : 'outline'}
+          variant="outline"
           disabled={disabled}
           aria-pressed={hear}
           onClick={() => void send({ kind: 'hear_yourself', enabled: !hear })}

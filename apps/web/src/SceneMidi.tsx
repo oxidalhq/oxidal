@@ -309,7 +309,7 @@ export function MidiControls({
                   className="space-y-2 rounded-md border border-border p-2"
                 >
                   <Button
-                    variant={binding ? 'secondary' : 'outline'}
+                    variant="outline"
                     aria-pressed={!!binding}
                     aria-label={`Map branch ${branch.name}`}
                     disabled={disabled}

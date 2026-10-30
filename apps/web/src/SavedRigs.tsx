@@ -171,7 +171,7 @@ export function SavedRigs({
       <div className="section-heading">
         <h2>Rigs</h2>
         <Button
-          variant={choosing ? 'secondary' : 'outline'}
+          variant="outline"
           aria-pressed={choosing}
           disabled={busy}
           onClick={() => setChoosing((v) => !v)}

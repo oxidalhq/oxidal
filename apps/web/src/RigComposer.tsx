@@ -226,7 +226,7 @@ export function RigComposer({
       </div>
       <div className="action-row" role="group" aria-label="Rig layout">
         <Button
-          variant={layout === 'serial' ? 'secondary' : 'ghost'}
+          variant="ghost"
           aria-pressed={layout === 'serial'}
           disabled={busy}
           onClick={() => setLayout('serial')}
@@ -234,7 +234,7 @@ export function RigComposer({
           Serial chain
         </Button>
         <Button
-          variant={layout === 'scenes' ? 'secondary' : 'ghost'}
+          variant="ghost"
           aria-pressed={layout === 'scenes'}
           disabled={
             busy || effects.some((e) => e.kind === 'native' && !!e.stage)

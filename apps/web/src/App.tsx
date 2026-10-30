@@ -425,7 +425,7 @@ function InstrumentApp() {
                   </label>
                   <Button
                     className="bypass-switch"
-                    variant={state.bypassed ? 'default' : 'outline'}
+                    variant="outline"
                     disabled={!connected}
                     aria-pressed={state.bypassed}
                     onClick={() =>
@@ -513,7 +513,7 @@ function InstrumentApp() {
                       </div>
                       <div className="segmented" aria-label="Routing mode">
                         <Button
-                          variant={!parallel ? 'default' : 'outline'}
+                          variant="outline"
                           aria-pressed={!parallel}
                           disabled={!connected}
                           onClick={() => void routing(false)}
@@ -521,7 +521,7 @@ function InstrumentApp() {
                           Serial
                         </Button>
                         <Button
-                          variant={parallel ? 'default' : 'outline'}
+                          variant="outline"
                           aria-pressed={parallel}
                           disabled={!connected}
                           onClick={() => void routing(true)}
@@ -660,7 +660,7 @@ function InstrumentApp() {
                             : 'Enter fullscreen'}
                         </Button>
                         <Button
-                          variant={screen.keepAwake ? 'secondary' : 'outline'}
+                          variant="outline"
                           aria-pressed={screen.keepAwake}
                           disabled={!screen.wakeSupported}
                           onClick={() => screen.setKeepAwake(!screen.keepAwake)}

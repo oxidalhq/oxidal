@@ -117,7 +117,7 @@ export function DebugConsole() {
             {copying ? 'Collecting logs…' : 'Copy logs'}
           </Button>
           <Button
-            variant={following ? 'secondary' : 'outline'}
+            variant="outline"
             aria-pressed={following}
             onClick={() => setFollowing((v) => !v)}
           >

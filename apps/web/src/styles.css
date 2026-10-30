@@ -2457,3 +2457,17 @@ textarea {
   background: var(--brand);
   box-shadow: none;
 }
+
+/* Selection is ink inversion; oxide is only for committing actions (Save, Apply). */
+.oxidal-button[data-variant='outline'][aria-pressed='true'],
+.oxidal-button[data-variant='outline'][aria-checked='true'] {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+.oxidal-button[data-variant='ghost'][aria-pressed='true'] {
+  border-radius: 0;
+  color: var(--foreground);
+  font-weight: 650;
+  box-shadow: inset 0 -2px 0 var(--foreground);
+}

@@ -214,7 +214,7 @@ export function ModelPicker({
         </p>
         <div className="action-row" role="group" aria-label="Model source">
           <Button
-            variant={source === 'tone3000' ? 'secondary' : 'ghost'}
+            variant="ghost"
             aria-pressed={source === 'tone3000'}
             disabled={locked}
             onClick={() => setSource('tone3000')}
@@ -222,7 +222,7 @@ export function ModelPicker({
             <CloudArrowDown aria-hidden="true" /> TONE3000
           </Button>
           <Button
-            variant={source === 'local' ? 'secondary' : 'ghost'}
+            variant="ghost"
             aria-pressed={source === 'local'}
             disabled={locked}
             onClick={() => setSource('local')}
@@ -249,6 +249,7 @@ export function ModelPicker({
               onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
             />
             <Button
+              variant="outline"
               disabled={files.length === 0 || locked}
               onClick={() => void auditionLocal()}
             >
@@ -323,7 +324,7 @@ export function ModelPicker({
                   ).map((kind) => (
                     <Button
                       key={kind}
-                      variant={format === kind ? 'secondary' : 'ghost'}
+                      variant="ghost"
                       aria-pressed={format === kind}
                       disabled={locked}
                       onClick={() => setFormat(kind)}
@@ -368,7 +369,7 @@ export function ModelPicker({
                         onChange={(e) => setSearch(e.target.value)}
                       />
                     </label>
-                    <Button type="submit" disabled={locked}>
+                    <Button type="submit" variant="outline" disabled={locked}>
                       <MagnifyingGlass aria-hidden="true" /> Search
                     </Button>
                   </form>
@@ -423,7 +424,7 @@ export function ModelPicker({
                       <Button
                         key={m.id}
                         aria-pressed={playing}
-                        variant={playing ? 'secondary' : 'outline'}
+                        variant="outline"
                         className="h-auto min-h-11 w-full justify-between gap-3 py-3 text-left whitespace-normal"
                         disabled={locked}
                         onClick={() => void audition(m.id)}

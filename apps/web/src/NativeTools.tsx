@@ -93,6 +93,7 @@ export function NativeTools({
         </Button>
         {measuring && (
           <Button
+            variant="outline"
             disabled={disabled}
             onClick={() =>
               void author({ kind: 'utility', command: { kind: 'cancel' } })

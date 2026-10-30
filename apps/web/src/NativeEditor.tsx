@@ -348,7 +348,7 @@ export function NativeEditor({
           {['Tone', 'Gate', 'Stereo', 'Pitch'].map((group) => (
             <Button
               key={group}
-              variant={controlGroup === group ? 'secondary' : 'ghost'}
+              variant="ghost"
               aria-pressed={controlGroup === group}
               disabled={blocked || !!state.edit}
               onClick={() => setControlGroup(group)}
@@ -551,6 +551,7 @@ export function NativeEditor({
               Done
             </Button>
             <Button
+              variant="outline"
               disabled={blocked || !ours}
               onClick={() => void finish(true)}
             >
@@ -576,6 +577,7 @@ export function NativeEditor({
         </Button>
         {blockControl && (
           <Button
+            variant="outline"
             disabled={blocked || !!state?.edit}
             onClick={() =>
               void send({

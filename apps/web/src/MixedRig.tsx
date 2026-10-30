@@ -641,9 +641,7 @@ export function MixedRig({
             <Button
               key={scene.id}
               className="h-auto min-h-12 max-w-full min-w-20 whitespace-normal"
-              variant={
-                state.control?.scene === scene.id ? 'default' : 'outline'
-              }
+              variant="outline"
               aria-pressed={state.control?.scene === scene.id}
               disabled={disabled || !!edit}
               onClick={() => {
@@ -749,7 +747,7 @@ export function MixedRig({
             .map(([target, title, Icon]) => (
               <Button
                 key={target}
-                variant={nativeTarget === target ? 'secondary' : 'ghost'}
+                variant="ghost"
                 aria-pressed={nativeTarget === target}
                 disabled={disabled || !!edit}
                 onClick={() =>
@@ -772,9 +770,7 @@ export function MixedRig({
             return (
               <Button
                 key={block.block_id}
-                variant={
-                  nativeTarget === block.block_id ? 'secondary' : 'outline'
-                }
+                variant="outline"
                 aria-label={`Select model ${index + 1}`}
                 aria-pressed={nativeTarget === block.block_id}
                 disabled={disabled || !!edit}
