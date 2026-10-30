@@ -9,22 +9,14 @@ import {
   type AudioState,
   type Preset,
 } from './api';
-import {
-  Play,
-  SpeakerHigh,
-  CircleNotch,
-  DownloadSimple,
-  MagnifyingGlass,
-  List,
-  ImageSquare,
-  X,
-} from '@phosphor-icons/react';
+import { CircleNotch, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
 import { Button } from './components/ui/button';
+import './Library.css';
 
 /** Immutable native originals; playback has its own explicitly started session.
  * @see docs/presets/format.md
@@ -108,32 +100,36 @@ export function Library({
       setLoadingId(null);
     }
   }
-  function loadButton(id: string, name: string, isOwned = false) {
+  function loadButton(id: string, name: string, isOwned = false, detail = '') {
     const active =
       playing?.phase === 'running' &&
       playing.configured?.preset_id === id &&
       playing.configured.owned === isOwned;
     return (
-      <Button
-        className="preset-load"
-        variant={active ? 'secondary' : 'outline'}
+      <button
+        type="button"
+        className="library-load"
         disabled={!connected || loadingId !== null}
         onClick={() => void play(id, isOwned)}
         aria-label={`Load ${name}`}
         aria-pressed={active}
       >
-        {loadingId === id ? (
-          <CircleNotch aria-hidden="true" />
-        ) : active ? (
-          <SpeakerHigh weight="fill" aria-hidden="true" />
-        ) : (
-          <Play weight="fill" aria-hidden="true" />
-        )}
-        <span>{name}</span>
-        <small>
-          {loadingId === id ? 'Loading…' : active ? 'Playing' : 'Load rig'}
-        </small>
-      </Button>
+        <span className="library-name">{name}</span>
+        <span className="library-meta">
+          {loadingId === id ? (
+            <>
+              <CircleNotch aria-hidden="true" /> Loading…
+            </>
+          ) : (
+            <>
+              {active && <span className="library-playing">Playing</span>}
+              {[isOwned ? 'My copy' : 'Original', detail]
+                .filter(Boolean)
+                .join(' · ')}
+            </>
+          )}
+        </span>
+      </button>
     );
   }
   useEffect(() => {
@@ -181,23 +177,23 @@ export function Library({
   }
   return (
     <section className="instrument-surface" aria-label="Preset library">
-      <nav className="settings-nav" aria-label="Library sections">
+      <nav className="text-tabs" aria-label="Library sections">
         <Button
-          variant={page === 'browse' ? 'secondary' : 'ghost'}
+          variant="ghost"
           aria-current={page === 'browse' ? 'page' : undefined}
           onClick={() => setPage('browse')}
         >
           Browse
         </Button>
         <Button
-          variant={page === 'author' ? 'secondary' : 'ghost'}
+          variant="ghost"
           aria-current={page === 'author' ? 'page' : undefined}
           onClick={() => setPage('author')}
         >
           Author
         </Button>
         <Button
-          variant={page === 'new' ? 'secondary' : 'ghost'}
+          variant="ghost"
           aria-current={page === 'new' ? 'page' : undefined}
           onClick={() => setPage('new')}
         >
@@ -235,47 +231,50 @@ export function Library({
               </Button>
             )}
           </div>
-          <div
-            className="mb-3 flex flex-wrap items-center gap-2"
-            role="group"
-            aria-label="Library view"
-          >
-            <Button
-              variant={!showArtwork ? 'secondary' : 'ghost'}
-              aria-pressed={!showArtwork}
-              onClick={() => {
-                setShowArtwork(false);
-                try {
-                  localStorage.setItem('oxidal-library-artwork', 'false');
-                } catch {
-                  /* storage unavailable */
-                }
-              }}
+          <div className="library-bar">
+            <div
+              className="library-toolbar"
+              role="group"
+              aria-label="Library view"
             >
-              <List aria-hidden="true" /> List
-            </Button>
+              <Button
+                variant="ghost"
+                aria-pressed={!showArtwork}
+                onClick={() => {
+                  setShowArtwork(false);
+                  try {
+                    localStorage.setItem('oxidal-library-artwork', 'false');
+                  } catch {
+                    /* storage unavailable */
+                  }
+                }}
+              >
+                List
+              </Button>
+              <Button
+                variant="ghost"
+                aria-pressed={showArtwork}
+                onClick={() => {
+                  setShowArtwork(true);
+                  try {
+                    localStorage.setItem('oxidal-library-artwork', 'true');
+                  } catch {
+                    /* storage unavailable */
+                  }
+                }}
+              >
+                Artwork
+              </Button>
+            </div>
             <Button
-              variant={showArtwork ? 'secondary' : 'ghost'}
-              aria-pressed={showArtwork}
-              onClick={() => {
-                setShowArtwork(true);
-                try {
-                  localStorage.setItem('oxidal-library-artwork', 'true');
-                } catch {
-                  /* storage unavailable */
-                }
-              }}
+              className="library-manage"
+              variant="outline"
+              aria-expanded={manage}
+              onClick={() => setManage((v) => !v)}
             >
-              <ImageSquare aria-hidden="true" /> Artwork
+              Manage library
             </Button>
           </div>
-          <Button
-            variant={manage ? 'secondary' : 'outline'}
-            aria-expanded={manage}
-            onClick={() => setManage((v) => !v)}
-          >
-            Manage library
-          </Button>
           {manage && (
             <LibraryManagement
               connected={connected}
@@ -324,7 +323,7 @@ export function Library({
           )}
           {copiesError && (
             <div className="space-y-2">
-              <p role="alert">{copiesError}</p>
+              <p role="status">{copiesError}</p>
               <Button
                 variant="outline"
                 onClick={() => setRefresh((value) => value + 1)}
@@ -351,7 +350,7 @@ export function Library({
             {owned
               .filter((p) => matches(p.name))
               .map((p) => (
-                <li key={`owned-${p.id}`}>
+                <li key={`owned-${p.id}`} className="library-row">
                   {loadButton(p.id, p.name, true)}
                   {showArtwork && <ArtworkDeck id={p.id} owned />}
                   <a
@@ -359,32 +358,31 @@ export function Library({
                     download
                     aria-label={`Download saved copy ${p.name}`}
                   >
-                    <DownloadSimple aria-hidden="true" /> Download saved copy
+                    Download
                   </a>
                 </li>
               ))}
             {presets
               .filter((p) => matches(p.name))
               .map((preset) => (
-                <li key={preset.sha256} data-testid={`preset-${preset.sha256}`}>
-                  {loadButton(preset.sha256, preset.name)}
+                <li
+                  key={preset.sha256}
+                  className="library-row"
+                  data-testid={`preset-${preset.sha256}`}
+                >
+                  {loadButton(
+                    preset.sha256,
+                    preset.name,
+                    false,
+                    `${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
+                  )}
                   {showArtwork && <ArtworkDeck id={preset.sha256} />}
-                  <details>
-                    <summary>File details</summary>
-                    <p>
-                      {preset.framing === 'legacy'
-                        ? 'Legacy format'
-                        : 'Current format'}{' '}
-                      · {preset.parameter_count} parameters ·{' '}
-                      {preset.block_count} chain entries
-                    </p>
-                  </details>
                   <a
                     href={`/api/v1/presets/${preset.sha256}/original`}
                     download
                     aria-label={`Download original ${preset.name}`}
                   >
-                    <DownloadSimple aria-hidden="true" /> Download original
+                    Download
                   </a>
                 </li>
               ))}

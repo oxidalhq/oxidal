@@ -451,7 +451,8 @@ test('native preset upload, durable library, exact download and rejected replace
     page.getByRole('button', { name: 'Import original', exact: true }),
   ).toBeEnabled();
   await expect(rows).toHaveCount(2);
-  const current = rows.filter({ hasText: 'Current format' });
+  // Rows mark only the exception (legacy format); the current-format row has no tag.
+  const current = rows.filter({ hasNotText: 'legacy format' });
   await page
     .getByRole('searchbox', { name: 'Search presets' })
     .fill('no-matching-rig-unique');

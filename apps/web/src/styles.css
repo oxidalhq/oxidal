@@ -583,25 +583,6 @@ summary:focus-visible {
   height: 16px;
 }
 
-.preset-library {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 1rem;
-}
-.preset-library li {
-  padding: 1rem 0;
-  border-top: 1px solid var(--border);
-  overflow-wrap: anywhere;
-}
-.preset-library h3 {
-  margin: 0;
-}
-.preset-library a {
-  display: inline-block;
-  padding: 0.75rem 0;
-  text-decoration: underline;
-}
 input[type='file'] {
   max-width: 100%;
 }
@@ -1949,49 +1930,9 @@ textarea {
   height: 1.125rem;
   flex-shrink: 0;
 }
-.preset-library {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
-  gap: var(--control-gap);
-}
-.preset-library li {
-  border: 1px solid var(--border);
-  border-radius: var(--panel-radius);
-  padding: 0.75rem;
-  background: var(--card);
-  min-width: 0;
-}
-.preset-load {
-  width: 100%;
-  text-align: left;
-  justify-content: flex-start;
-  min-height: 4rem;
-}
-.preset-load > span {
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-.preset-load > small {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.preset-load[aria-pressed='true'] {
-  border-color: var(--control-accent);
-  border-left-width: 4px;
-}
-.library-import {
-  margin-block: 0.75rem;
-}
 
 :root[data-display='epaper'] .oxidal-button {
   box-shadow: none;
-}
-.preset-library a[download] {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-height: 44px;
 }
 
 .rig-preset-error {
