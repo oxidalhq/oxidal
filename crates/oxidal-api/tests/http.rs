@@ -1358,7 +1358,7 @@ async fn unit_levels_are_validated_durable_and_outside_presets() {
     };
     assert_eq!(
         get_levels().await,
-        json!({"input_trim_db": 0.0, "output_level_db": 0.0})
+        json!({"input_trim_db": 0.0, "output_level_db": 0.0, "mono": false})
     );
     for invalid in [
         json!({"input_trim_db": 30.0, "output_level_db": 0.0}),
@@ -1370,7 +1370,7 @@ async fn unit_levels_are_validated_durable_and_outside_presets() {
     let unknown = json!({"input_trim_db": 0.0, "output_level_db": 0.0, "eq": 1});
     let response = client.post(&endpoint).json(&unknown).send().await.unwrap();
     assert_eq!(response.status(), 400);
-    let wanted = json!({"input_trim_db": -4.5, "output_level_db": -12.0});
+    let wanted = json!({"input_trim_db": -4.5, "output_level_db": -12.0, "mono": true});
     let response = client.post(&endpoint).json(&wanted).send().await.unwrap();
     assert_eq!(response.status(), 200);
     assert_eq!(get_levels().await, wanted);

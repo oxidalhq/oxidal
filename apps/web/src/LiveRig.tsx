@@ -572,6 +572,12 @@ export function LiveRig({
     state.controls.find((c) => c.target === target) ?? state.controls[0];
   const selectedTarget = control?.target ?? '';
   const activeDraft = draft?.target === control?.target ? draft : null;
+  // The adjust dialog follows the edit itself, so a knob can open it without
+  // changing which block is selected.
+  const adjusted = state.controls.find((c) => c.target === draft?.target);
+  const draftStale =
+    !!draft &&
+    (draft.session !== state.session || draft.revision !== state.revision);
   const stale =
     !!activeDraft &&
     (activeDraft.session !== state.session ||
@@ -623,43 +629,22 @@ export function LiveRig({
   ];
   const knobStrip = knobs.some((k) => k.item) ? (
     <div className="knob-strip" role="group" aria-label="Performance knobs">
-      {knobs.map(({ label, item, hint }) => {
-        const shown =
-          item && draft?.target === item.target ? draft.value : item?.value;
-        return (
-          <div
-            key={label}
-            className="knob-cell"
-            data-inactive={!item || !!hint || undefined}
-            title={item?.label}
-          >
-            <span className="knob-label">{label}</span>
-            <strong className="knob-value">{item ? item.display : '—'}</strong>
-            {item ? (
-              <DragFader
-                value={shown ?? 0}
-                dragging={draft?.target === item.target && !adjusting}
-                disabled={disabled}
-                onBegin={(value) => {
-                  openAdjustment(item, true);
-                  latestValue.current = value;
-                  setDraft((old) => (old ? { ...old, value } : old));
-                  adjustment.current?.preview(value);
-                }}
-                onMove={(value) => {
-                  latestValue.current = value;
-                  setDraft((old) => (old ? { ...old, value } : old));
-                  adjustment.current?.preview(value);
-                }}
-                onEnd={(cancel) => void finishAdjustment(cancel)}
-              />
-            ) : (
-              <span className="knob-hint">{hint}</span>
-            )}
-            {item && hint && <span className="knob-hint">{hint}</span>}
-          </div>
-        );
-      })}
+      {knobs.map(({ label, item, hint }) => (
+        <button
+          key={label}
+          type="button"
+          className="knob-cell"
+          data-inactive={!item || !!hint || undefined}
+          aria-haspopup="dialog"
+          aria-label={`Adjust ${label}${item ? `, ${item.display}` : ''}`}
+          title={item ? item.label : hint}
+          disabled={disabled || !item}
+          onClick={() => item && openAdjustment(item)}
+        >
+          <span className="knob-label">{label}</span>
+          <strong className="knob-value">{item ? item.display : '—'}</strong>
+        </button>
+      ))}
     </div>
   ) : null;
   const selectedLane = state.authoring?.layout?.right.some(
@@ -1416,9 +1401,9 @@ export function LiveRig({
       <output className="sr-only" data-testid="live-readback">
         Confirmed: {control?.display ?? '—'}
       </output>
-      {adjusting && control && control.target === target && (
+      {adjusting && adjusted && (
         <AdjustmentDialog
-          title={control.label}
+          title={adjusted.label}
           onCancel={() => {
             if (!busy) void finishAdjustment(true);
           }}
@@ -1431,14 +1416,14 @@ export function LiveRig({
           <TouchAdjust
             label="sounding value"
             commitHint="Changes sound immediately. Done keeps edits; Cancel restores the opening value."
-            value={activeDraft?.value ?? control.value}
-            baseline={activeDraft?.baseline ?? control.value}
+            value={draft?.value ?? adjusted.value}
+            baseline={draft?.baseline ?? adjusted.value}
             min={0}
             max={1}
             step={0.01}
-            disabled={disabled || stale}
+            disabled={disabled || draftStale}
             format={(v) =>
-              confirmedControlDisplay(control.display, v !== control.value)
+              confirmedControlDisplay(adjusted.display, v !== adjusted.value)
             }
             onChange={(value) => {
               latestValue.current = value;
@@ -1448,7 +1433,7 @@ export function LiveRig({
           />
           <div className="editor-actions">
             <Button
-              disabled={disabled || stale}
+              disabled={disabled || draftStale}
               onClick={() => void finishAdjustment(false)}
             >
               Done
@@ -1461,9 +1446,9 @@ export function LiveRig({
               Cancel
             </Button>
           </div>
-          {stale && (
+          {draftStale && (
             <p role="alert">
-              Sounding session changed. Cancel and reopen this control.
+              Sounding session changed. Cancel and reopen this adjusted.
             </p>
           )}
         </AdjustmentDialog>

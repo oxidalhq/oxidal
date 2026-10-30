@@ -71,13 +71,22 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
   function change(db: number) {
     const now = latest.current;
     if (!now || db === now.output_level_db) return;
-    const next = { ...now, output_level_db: db };
+    update({ ...now, output_level_db: db });
+  }
+  function update(next: UnitLevels) {
     latest.current = next;
     setLevels(next);
     void send(next);
   }
 
   if (!supported) return null;
+  // Render once loaded so the row never flashes in and out on older daemons.
+  if (!levels)
+    return error ? (
+      <p className="master-level-error" role="alert">
+        {error}
+      </p>
+    ) : null;
   const db = levels?.output_level_db ?? 0;
   return (
     <div className="master-level" data-off={db <= LEVEL_MIN || undefined}>
@@ -116,6 +125,19 @@ export function MasterLevel({ disabled = false }: { disabled?: boolean }) {
       <output htmlFor="master-level" aria-live="off">
         {levels ? formatLevel(db) : '—'}
       </output>
+      <button
+        type="button"
+        className="master-mono"
+        aria-pressed={levels?.mono ?? false}
+        disabled={disabled || !levels}
+        title="Sum left and right: check how the rig sounds on a mono PA, or leave on for mono output"
+        onClick={() => {
+          const now = latest.current;
+          if (now) update({ ...now, mono: !now.mono });
+        }}
+      >
+        Mono
+      </button>
       {error && (
         <p className="master-level-error" role="alert">
           {error}

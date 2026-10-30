@@ -2,7 +2,7 @@
    Master level: one ink fader, label left, readout right. Same look as value rows. */
 .master-level {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 4.75rem;
+  grid-template-columns: auto minmax(0, 1fr) 4.75rem auto;
   align-items: center;
   gap: 0.75rem;
   min-height: var(--touch-target);
@@ -70,4 +70,23 @@
 }
 :root[data-display='sunlight'] .ink-range::-webkit-slider-thumb {
   border-width: 2px;
+}
+
+.master-mono {
+  min-height: 2rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--foreground);
+  border-radius: 4px;
+  background: none;
+  color: var(--foreground);
+  font: 600 0.75rem/1 var(--font-sans, inherit);
+  letter-spacing: 0.02em;
+}
+/* Selection is ink inversion, never oxide. */
+.master-mono[aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+.master-mono:disabled {
+  opacity: 0.55;
 }

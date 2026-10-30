@@ -759,6 +759,11 @@ export interface HostLevels {
    */
   input_trim_db: number;
   /**
+   * Sum left and right to both outputs: for mono PAs and for checking that a
+   * wide rig survives mono without thinning out.
+   */
+  mono?: boolean;
+  /**
    * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
    */
   output_level_db: number;
@@ -832,6 +837,11 @@ export interface HostLevels1 {
    * Input trim in dB, applied before the rig (−24 to +24).
    */
   input_trim_db: number;
+  /**
+   * Sum left and right to both outputs: for mono PAs and for checking that a
+   * wide rig survives mono without thinning out.
+   */
+  mono?: boolean;
   /**
    * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
    */
@@ -1303,6 +1313,11 @@ export interface HostLevels2 {
    * Input trim in dB, applied before the rig (−24 to +24).
    */
   input_trim_db: number;
+  /**
+   * Sum left and right to both outputs: for mono PAs and for checking that a
+   * wide rig survives mono without thinning out.
+   */
+  mono?: boolean;
   /**
    * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
    */

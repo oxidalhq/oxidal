@@ -31,7 +31,7 @@ it('maps the fader so the playing range gets most of the travel', () => {
 it('shows the unit level and sends only the newest value while one is in flight', async () => {
   let release: () => void = () => {};
   vi.mocked(unitLevels).mockImplementation(async (update) => {
-    if (!update) return { input_trim_db: 0, output_level_db: -6 };
+    if (!update) return { input_trim_db: 0, output_level_db: -6, mono: false };
     if (update.output_level_db === -5)
       await new Promise<void>((resolve) => {
         release = resolve;
@@ -59,4 +59,22 @@ it('hides itself on a daemon without unit levels', async () => {
   const view = render(<MasterLevel />);
   await act(async () => {});
   expect(view.container).toBeEmptyDOMElement();
+});
+
+it('switches mono output without touching the level', async () => {
+  vi.mocked(unitLevels).mockImplementation(
+    async (update) =>
+      update ?? { input_trim_db: 0, output_level_db: -6, mono: false },
+  );
+  render(<MasterLevel />);
+  const mono = await screen.findByRole('button', { name: 'Mono' });
+  await act(async () => {});
+  fireEvent.click(mono);
+  await act(async () => {});
+  expect(mono).toHaveAttribute('aria-pressed', 'true');
+  expect(vi.mocked(unitLevels)).toHaveBeenLastCalledWith({
+    input_trim_db: 0,
+    output_level_db: -6,
+    mono: true,
+  });
 });

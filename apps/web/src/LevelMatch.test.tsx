@@ -37,6 +37,7 @@ beforeEach(() => {
   vi.mocked(unitLevels).mockResolvedValue({
     input_trim_db: 0,
     output_level_db: -6,
+    mono: false,
   });
 });
 afterEach(() => {

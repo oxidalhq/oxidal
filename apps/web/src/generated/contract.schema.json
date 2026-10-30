@@ -3661,6 +3661,11 @@
           "type": "number",
           "format": "float"
         },
+        "mono": {
+          "description": "Sum left and right to both outputs: for mono PAs and for checking that a\nwide rig survives mono without thinning out.",
+          "type": "boolean",
+          "default": false
+        },
         "output_level_db": {
           "description": "Master output level in dB, applied after the rig (−60 to +12; −60 is silent).",
           "type": "number",
@@ -3683,6 +3688,7 @@
           "$ref": "#/$defs/HostLevels",
           "default": {
             "input_trim_db": 0,
+            "mono": false,
             "output_level_db": 0
           }
         },
@@ -7648,6 +7654,7 @@
           "$ref": "#/$defs/HostLevels",
           "default": {
             "input_trim_db": 0,
+            "mono": false,
             "output_level_db": 0
           }
         },

@@ -253,3 +253,9 @@ TONE3000 blocks already normalise each capture (Normalize on), but a whole prese
 3. It proposes the preset's own Output level so the preset averages −18 dBFS. Apply commits it like any edit; Save keeps it in the preset.
 
 Output level covers ±24 dB; a preset beyond that is set as close as it goes and says so. Hybrid and effects rigs have no rig-wide output control yet, so matching is TONE3000-only for now. The order of gain staging is: interface gain set once → guitar profile → capture normalise → preset match → Level.
+
+## Mono output and performance knobs
+
+**Mono** beside Level sums left and right after the Level, as a mono PA would. Use it to check that a wide rig (Spread, Alignment, panned chains) does not thin out or cancel in mono, or leave it on for a mono rig. It is stored with the unit levels (`mono` in `unit-levels.json`), so it survives presets and restarts. A warning for rigs that lose level in mono needs a measured correlation and is not built yet.
+
+The Rig and Perform views show five performance knobs above the chain for TONE3000 rigs: Gain (rig Input level), Bass, Mid and Treble (the rig tone stack, marked inactive while Tone stack is off) and Amount (the selected block's mix). Tap a knob to adjust it in the slider dialog, where the value is large enough to read on a phone. These five save with the preset; Level and Mono below them are unit-wide.

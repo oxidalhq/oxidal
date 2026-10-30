@@ -132,6 +132,10 @@ pub struct HostLevels {
     pub input_trim_db: f32,
     /// Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
     pub output_level_db: f32,
+    /// Sum left and right to both outputs: for mono PAs and for checking that a
+    /// wide rig survives mono without thinning out.
+    #[serde(default)]
+    pub mono: bool,
 }
 impl HostLevels {
     pub const INPUT_RANGE: (f32, f32) = (-24.0, 24.0);
@@ -263,6 +267,13 @@ impl HostSignal {
     pub fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
         self.test_tone(left, right);
         self.output_gain.apply(left, right);
+        if self.levels.mono {
+            for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                let sum = (*l + *r) * 0.5;
+                *l = sum;
+                *r = sum;
+            }
+        }
     }
     fn test_tone(&mut self, left: &mut [f32], right: &mut [f32]) {
         if !self.test_active {
@@ -344,6 +355,7 @@ mod host_tests {
             HostLevels {
                 input_trim_db: -6.0,
                 output_level_db: 0.0,
+                mono: false,
             },
         );
         let (mut l, mut r) = ([1.0; 64], [1.0; 64]);
@@ -353,6 +365,7 @@ mod host_tests {
             levels: HostLevels {
                 input_trim_db: -6.0,
                 output_level_db: -60.0,
+                mono: false,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
@@ -372,13 +385,15 @@ mod host_tests {
             levels: HostLevels {
                 input_trim_db: f32::NAN,
                 output_level_db: 0.0,
+                mono: false,
             },
         });
         assert_eq!(signal.state().levels.output_level_db, -60.0);
         assert!(
             HostLevels {
                 input_trim_db: 25.0,
-                output_level_db: 0.0
+                output_level_db: 0.0,
+                mono: false,
             }
             .validate()
             .is_err()
@@ -386,10 +401,28 @@ mod host_tests {
         assert!(
             HostLevels {
                 input_trim_db: 0.0,
-                output_level_db: 12.5
+                output_level_db: 12.5,
+                mono: false,
             }
             .validate()
             .is_err()
         );
+    }
+    #[test]
+    fn mono_sums_both_sides_and_cancels_opposite_polarity() {
+        let mut signal = HostSignal::new(
+            48000,
+            true,
+            HostLevels {
+                mono: true,
+                ..HostLevels::default()
+            },
+        );
+        let (mut l, mut r) = ([0.8; 8], [0.2; 8]);
+        signal.output(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| (v - 0.5).abs() < 1e-6));
+        let (mut l, mut r) = ([0.5; 8], [-0.5; 8]);
+        signal.output(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| v.abs() < 1e-6));
     }
 }
