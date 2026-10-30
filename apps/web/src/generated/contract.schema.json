@@ -3539,6 +3539,12 @@
             "null"
           ],
           "format": "float"
+        },
+        "trim_db": {
+          "description": "Input trim for this guitar in dB (−24 to +24), applied before every rig.",
+          "type": "number",
+          "format": "float",
+          "default": 0
         }
       },
       "additionalProperties": false,
@@ -3556,11 +3562,6 @@
             "null"
           ]
         },
-        "character": {
-          "description": "0 matches every guitar exactly; 1 keeps each guitar's natural output.",
-          "type": "number",
-          "format": "float"
-        },
         "guitars": {
           "type": "array",
           "items": {
@@ -3568,7 +3569,7 @@
           }
         },
         "reference": {
-          "description": "The guitar presets were set up with; it plays with no trim.",
+          "description": "The guitar presets were set up with: Measure matches others to its strum.",
           "type": [
             "string",
             "null"
@@ -3577,8 +3578,7 @@
       },
       "additionalProperties": false,
       "required": [
-        "guitars",
-        "character"
+        "guitars"
       ]
     },
     "History": {

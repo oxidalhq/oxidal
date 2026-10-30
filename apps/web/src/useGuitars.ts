@@ -32,21 +32,15 @@ export function useGuitars() {
   return { profiles, error, busy, save };
 }
 
-/** Input trim the daemon will apply for the active guitar (mirrors guitars.rs). */
+/** Trim the daemon applies for the active guitar (mirrors guitars.rs). */
 export function trimFor(profiles: GuitarProfiles) {
-  const peak = (id: string | null | undefined) =>
-    profiles.guitars.find((g) => g.id === id)?.peak_dbfs ?? null;
-  const reference = peak(profiles.reference);
-  const active = peak(profiles.active);
-  if (reference == null || active == null) return 0;
-  const trim = (reference - active) * (1 - profiles.character);
-  return Math.min(24, Math.max(-24, Math.round(trim * 2) / 2));
+  return profiles.guitars.find((g) => g.id === profiles.active)?.trim_db ?? 0;
 }
 
 /** Gate threshold the daemon will apply for the active guitar (mirrors guitars.rs). */
 export function gateFor(profiles: GuitarProfiles) {
   const guitar = profiles.guitars.find((g) => g.id === profiles.active);
   if (!guitar?.gate || guitar.noise_dbfs == null) return null;
-  const gate = Math.round(guitar.noise_dbfs + trimFor(profiles) + 6);
+  const gate = Math.round(guitar.noise_dbfs + (guitar.trim_db ?? 0) + 6);
   return Math.min(-20, Math.max(-96, gate));
 }

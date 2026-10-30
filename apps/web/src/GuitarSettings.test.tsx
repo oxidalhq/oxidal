@@ -26,7 +26,7 @@ class Events extends EventTarget {
 let saved: GuitarProfiles;
 beforeEach(() => {
   vi.stubGlobal('EventSource', Events);
-  saved = { guitars: [], reference: null, active: null, character: 0 };
+  saved = { guitars: [], reference: null, active: null };
   vi.mocked(guitarProfiles).mockImplementation(async (update) => {
     if (update) saved = update;
     return saved;
@@ -41,29 +41,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('mirrors the daemon trim: gap to the reference, scaled by character', () => {
+it('mirrors the daemon: the active guitar trim, and its gate above trimmed noise', () => {
   const profiles: GuitarProfiles = {
     guitars: [
-      { id: 'jiva', name: 'Jiva', peak_dbfs: -8 },
-      { id: 'st', name: 'Steinberger', peak_dbfs: -14.3 },
-    ],
-    reference: 'jiva',
-    active: 'st',
-    character: 0,
-  };
-  expect(trimFor(profiles)).toBe(6.5);
-  expect(trimFor({ ...profiles, character: 0.5 })).toBe(3);
-  expect(trimFor({ ...profiles, active: 'jiva' })).toBe(0);
-  expect(trimFor({ ...profiles, reference: null })).toBe(0);
-});
-
-it('mirrors the daemon gate: trimmed noise plus 6 dB, only when on', () => {
-  const profiles: GuitarProfiles = {
-    guitars: [
-      { id: 'jiva', name: 'Jiva', peak_dbfs: -8 },
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 },
       {
         id: 'st',
         name: 'Steinberger',
+        trim_db: 4,
         peak_dbfs: -14,
         noise_dbfs: -70,
         gate: true,
@@ -71,9 +56,10 @@ it('mirrors the daemon gate: trimmed noise plus 6 dB, only when on', () => {
     ],
     reference: 'jiva',
     active: 'st',
-    character: 0,
   };
-  expect(gateFor(profiles)).toBe(-58);
+  expect(trimFor(profiles)).toBe(4);
+  expect(trimFor({ ...profiles, active: null })).toBe(0);
+  expect(gateFor(profiles)).toBe(-60);
   expect(gateFor({ ...profiles, active: 'jiva' })).toBeNull();
   expect(
     gateFor({
@@ -83,51 +69,82 @@ it('mirrors the daemon gate: trimmed noise plus 6 dB, only when on', () => {
   ).toBeNull();
 });
 
-it('measures muted-string noise, turns the gate on and refuses playing', async () => {
+it('sets a trim by hand in 0.5 dB steps and resets it', async () => {
+  saved = {
+    guitars: [{ id: 'st', name: 'Steinberger', trim_db: 0, peak_dbfs: null }],
+    reference: null,
+    active: 'st',
+  };
+  render(<GuitarSettings />);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('button', { name: 'Trim' }));
+  const dialog = within(screen.getByRole('dialog'));
+  for (let i = 0; i < 8; i++) {
+    fireEvent.click(dialog.getByRole('button', { name: 'Trim up 0.5 dB' }));
+    await act(async () => {});
+  }
+  expect(saved.guitars[0]!.trim_db).toBe(4);
+  expect(dialog.getByText('+4.0 dB')).toBeInTheDocument();
+  fireEvent.click(dialog.getByRole('button', { name: 'Reset to 0 dB' }));
+  await act(async () => {});
+  expect(saved.guitars[0]!.trim_db).toBe(0);
+});
+
+it('matches a measured strum to the first guitar and gates muted-string noise', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'performance'] });
   saved = {
-    guitars: [{ id: 'st', name: 'Steinberger', peak_dbfs: -14 }],
-    reference: 'st',
+    guitars: [
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 },
+      { id: 'st', name: 'Steinberger', trim_db: 0, peak_dbfs: null },
+    ],
+    reference: 'jiva',
     active: 'st',
-    character: 0,
   };
-  let peak = -71.2;
+  let peak = -12.2;
   vi.mocked(monitoring).mockImplementation(
     async () =>
-      ({
-        sequence: 1,
-        audio: { input: [{ peak_dbfs: peak }] },
-      }) as never,
+      ({ sequence: 1, audio: { input: [{ peak_dbfs: peak }] } }) as never,
   );
+  const wait = async () => {
+    for (let i = 0; i < 8; i++)
+      await act(async () => vi.advanceTimersByTimeAsync(1000));
+  };
   try {
     render(<GuitarSettings />);
     await act(async () => {});
-    expect(screen.getByRole('button', { name: 'Gate' })).toBeDisabled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Trim' })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Measure strum' }));
+    expect(screen.getByText('Strum hard…')).toBeInTheDocument();
+    await wait();
+    // −8 reference, −12.2 here: +4.2 rounds to +4.0.
+    expect(saved.guitars[1]).toMatchObject({ trim_db: 4, peak_dbfs: -12.2 });
+    expect(
+      screen.getByText(/Matched to Jiva: trim \+4\.0 dB/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Gate' })[1]!);
+    peak = -71.2;
     fireEvent.click(screen.getByRole('button', { name: 'Measure noise' }));
-    expect(screen.getByText('Strings muted…')).toBeInTheDocument();
-    for (let i = 0; i < 8; i++)
-      await act(async () => vi.advanceTimersByTimeAsync(1000));
-    expect(saved.guitars[0]).toMatchObject({ noise_dbfs: -71.2, gate: true });
-    expect(screen.getByRole('button', { name: 'Gate' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByText(/gate -65 dBFS/)).toBeInTheDocument();
+    await wait();
+    expect(saved.guitars[1]).toMatchObject({ noise_dbfs: -71.2, gate: true });
+    // −71.2 noise, +4 trim, +6 margin.
+    expect(
+      within(screen.getByRole('dialog')).getByText(/opens at -61 dBFS/),
+    ).toBeInTheDocument();
     peak = -12;
     fireEvent.click(screen.getByRole('button', { name: 'Measure noise' }));
-    for (let i = 0; i < 8; i++)
-      await act(async () => vi.advanceTimersByTimeAsync(1000));
+    await wait();
     expect(screen.getByText(/louder than hiss/)).toBeInTheDocument();
-    expect(saved.guitars[0]!.noise_dbfs).toBe(-71.2);
-    fireEvent.click(screen.getByRole('button', { name: 'Gate' }));
+    expect(saved.guitars[1]!.noise_dbfs).toBe(-71.2);
+    fireEvent.click(screen.getByRole('button', { name: 'Gate on' }));
     await act(async () => {});
-    expect(saved.guitars[0]!.gate).toBe(false);
+    expect(saved.guitars[1]!.gate).toBe(false);
   } finally {
     vi.useRealTimers();
   }
 });
 
-it('adds a guitar, makes it the one playing, and switches between guitars', async () => {
+it('adds, switches and renames guitars', async () => {
   render(<GuitarSettings />);
   await act(async () => {});
   for (const name of ['Ibanez Jiva', 'Steinberger']) {
@@ -142,12 +159,11 @@ it('adds a guitar, makes it the one playing, and switches between guitars', asyn
     );
     await act(async () => {});
   }
-  expect(saved.guitars.map((g) => g.name)).toEqual([
-    'Ibanez Jiva',
-    'Steinberger',
+  expect(saved.guitars.map((g) => [g.name, g.trim_db])).toEqual([
+    ['Ibanez Jiva', 0],
+    ['Steinberger', 0],
   ]);
   expect(saved.active).toBe(saved.guitars[0]!.id);
-  expect(screen.getAllByText('Not measured')).toHaveLength(2);
   fireEvent.click(screen.getAllByRole('button', { name: 'Play this' })[0]!);
   await act(async () => {});
   expect(saved.active).toBe(saved.guitars[1]!.id);

@@ -1401,12 +1401,11 @@ async fn guitar_profiles_set_the_unit_input_trim() {
     let profiles = json!({
         "guitars": [
             {"id": "jiva", "name": "Ibanez Jiva", "peak_dbfs": -8.0},
-            {"id": "steinberger", "name": "Steinberger", "peak_dbfs": -14.0,
-             "noise_dbfs": -70.0, "gate": true}
+            {"id": "steinberger", "name": "Steinberger", "trim_db": 6.0,
+             "peak_dbfs": -14.0, "noise_dbfs": -70.0, "gate": true}
         ],
         "reference": "jiva",
-        "active": "steinberger",
-        "character": 0.0
+        "active": "steinberger"
     });
     let response = client.post(&guitars).json(&profiles).send().await.unwrap();
     assert_eq!(response.status(), 200);

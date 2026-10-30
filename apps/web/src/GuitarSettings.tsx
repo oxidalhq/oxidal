@@ -1,37 +1,45 @@
 import { useRef, useState } from 'react';
 import type { GuitarProfiles } from './api';
-import { Plus } from '@phosphor-icons/react';
+import { Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import './MasterLevel.css';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
-import { gateFor, trimFor, useGuitars } from './useGuitars';
+import { gateFor, useGuitars } from './useGuitars';
+
+type Guitar = GuitarProfiles['guitars'][number];
 
 const LISTEN_MS = 6000;
 const SILENT_DB = -60;
 /** Muted strings louder than this are playing, not hiss. */
 const NOISE_CEILING_DB = -30;
+const TRIM = { min: -24, max: 24, step: 0.5 };
 
 const db = (n: number) =>
   `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dB`;
+const clampTrim = (n: number) =>
+  Math.min(TRIM.max, Math.max(TRIM.min, Math.round(n * 2) / 2));
 
 /**
- * Guitar profiles: measure each guitar's loudest strum once, then switching
- * guitars evens out pickup output before the rig. Measuring its muted hiss sets
- * a noise gate just above it. Unit-wide, never in presets.
+ * Guitar profiles: a trim per guitar so every guitar reaches the rig at the
+ * same level, and a noise gate set just above its own hiss. The trim is a plain
+ * number; Measure strum only suggests it. Unit-wide, never in presets.
  * @see docs/audio.md
  */
 export function GuitarSettings() {
   const { profiles, error, busy, save } = useGuitars();
-  // Add (id null) or rename one guitar in a dialog.
   const [naming, setNaming] = useState<{
     id: string | null;
     value: string;
   } | null>(null);
+  // One guitar's trim or gate dialog.
+  const [editing, setEditing] = useState<{
+    id: string;
+    kind: 'trim' | 'gate';
+  } | null>(null);
   const [listening, setListening] = useState<{
     id: string;
-    /** Loudest strum, or the hiss and hum with the strings muted. */
     kind: 'strum' | 'noise';
     until: number;
     peak: number;
@@ -41,6 +49,10 @@ export function GuitarSettings() {
   function listen(next: typeof listening) {
     current.current = next;
     setListening(next);
+  }
+  function start(id: string, kind: 'strum' | 'noise') {
+    setNote('');
+    listen({ id, kind, until: performance.now() + LISTEN_MS, peak: -120 });
   }
 
   useMonitorReadings(1000, (feed) => {
@@ -53,11 +65,20 @@ export function GuitarSettings() {
       return;
     }
     listen(null);
+    const measured = Math.round(peak * 10) / 10;
+    const update = (change: Partial<Guitar>, next?: Partial<GuitarProfiles>) =>
+      void save({
+        ...profiles,
+        ...next,
+        guitars: profiles.guitars.map((g) =>
+          g.id === run.id ? { ...g, ...change } : g,
+        ),
+      });
+    if (!feed.snapshot?.audio) {
+      setNote('No input. Start audio and measure again.');
+      return;
+    }
     if (run.kind === 'noise') {
-      if (!feed.snapshot?.audio) {
-        setNote('No input. Start audio and measure again.');
-        return;
-      }
       if (peak > NOISE_CEILING_DB) {
         setNote(
           'That was louder than hiss. Mute the strings with your hand, keep the volume up and measure again.',
@@ -65,41 +86,49 @@ export function GuitarSettings() {
         return;
       }
       setNote('');
-      void save({
-        ...profiles,
-        guitars: profiles.guitars.map((g) =>
-          g.id === run.id
-            ? { ...g, noise_dbfs: Math.round(peak * 10) / 10, gate: true }
-            : g,
-        ),
-      });
+      update({ noise_dbfs: measured, gate: true });
       return;
     }
-    if (!feed.snapshot?.audio || peak <= SILENT_DB) {
+    if (peak <= SILENT_DB) {
       setNote(
         'No guitar heard. Start audio, turn the guitar up and strum hard.',
       );
       return;
     }
-    // Leave headroom warnings to the player: near 0 dBFS the interface clips.
-    setNote(
-      peak > -1
-        ? 'Measured, but the input is close to clipping: turn the interface gain down a little and measure again.'
-        : '',
+    const reference = profiles.guitars.find(
+      (g) => g.id === profiles.reference && g.id !== run.id,
     );
-    void save({
-      ...profiles,
-      guitars: profiles.guitars.map((g) =>
-        g.id === run.id ? { ...g, peak_dbfs: Math.round(peak * 10) / 10 } : g,
-      ),
-      reference: profiles.reference ?? run.id,
-    });
+    const clip =
+      peak > -1
+        ? ' The input is close to clipping: turn the interface gain down a little.'
+        : '';
+    if (reference?.peak_dbfs == null) {
+      // The first guitar measured sets the level the others match.
+      setNote(
+        `Measured. Other guitars you measure will match this one.${clip}`,
+      );
+      update({ peak_dbfs: measured }, { reference: run.id });
+      return;
+    }
+    const trim = clampTrim(
+      reference.peak_dbfs + (reference.trim_db ?? 0) - peak,
+    );
+    setNote(`Matched to ${reference.name}: trim ${db(trim)}.${clip}`);
+    update({ peak_dbfs: measured, trim_db: trim });
   });
 
   if (profiles === 'unsupported') return null;
   if (profiles == null) return error ? <p role="alert">{error}</p> : null;
   const edit = (next: Partial<GuitarProfiles>) =>
     void save({ ...profiles, ...next });
+  const change = (id: string, next: Partial<Guitar>) =>
+    edit({
+      guitars: profiles.guitars.map((g) =>
+        g.id === id ? { ...g, ...next } : g,
+      ),
+    });
+  const open = profiles.guitars.find((g) => g.id === editing?.id);
+  const openTrim = open?.trim_db ?? 0;
   return (
     <ToolSection
       title="Profiles"
@@ -107,47 +136,26 @@ export function GuitarSettings() {
       label="Guitar profiles"
     >
       <p className="caption">
-        Measure each guitar once with its volume knob fully up and your loudest
-        stage strum. Switching guitars then brings each one to the level of your
-        reference guitar, so presets sound the same on all of them. Set the
-        interface gain once for your hottest guitar and leave it.
-      </p>
-      <p className="caption">
-        Measure noise with the volume up and the strings muted by your hand. The
-        guitar&apos;s gate then opens just above its own hiss, so single coils
-        and quiet humbuckers each get the threshold they need.
+        Give each guitar a trim so they all hit your presets at the same level:
+        a guitar with quieter pickups gets a few dB more. Set it by ear, or let
+        Measure strum match it to your first guitar. The gate opens just above
+        each guitar&apos;s own hiss.
       </p>
       {profiles.guitars.map((g) => {
         const active = profiles.active === g.id;
-        const reference = profiles.reference === g.id;
-        const trim = trimFor({ ...profiles, active: g.id });
         const gate = gateFor({ ...profiles, active: g.id });
-        const levels = [
-          g.peak_dbfs == null
-            ? 'Plays untrimmed until measured.'
-            : `Loudest strum ${g.peak_dbfs.toFixed(1)} dBFS.`,
-          g.noise_dbfs == null
-            ? 'Ungated.'
-            : `Noise ${g.noise_dbfs.toFixed(1)} dBFS · gate ${
-                gate == null ? 'off' : `${gate.toFixed(0)} dBFS`
-              }.`,
-        ];
         return (
           <ToolRow
             key={g.id}
             title={g.name}
-            value={
-              listening?.id === g.id
-                ? listening.kind === 'noise'
-                  ? 'Strings muted…'
-                  : 'Strum hard…'
-                : g.peak_dbfs == null
-                  ? 'Not measured'
-                  : reference
-                    ? 'Reference'
-                    : `Trim ${db(trim)}`
+            value={`Trim ${db(g.trim_db ?? 0)}`}
+            detail={
+              g.noise_dbfs == null
+                ? 'Gate not set up.'
+                : gate == null
+                  ? 'Gate off.'
+                  : `Gate opens at ${gate} dBFS.`
             }
-            detail={levels.join(' ')}
           >
             <Button
               variant="outline"
@@ -159,55 +167,17 @@ export function GuitarSettings() {
             </Button>
             <Button
               variant="outline"
-              disabled={busy || !!listening}
-              onClick={() => {
-                setNote('');
-                listen({
-                  id: g.id,
-                  kind: 'strum',
-                  until: performance.now() + LISTEN_MS,
-                  peak: -120,
-                });
-              }}
+              disabled={busy}
+              onClick={() => setEditing({ id: g.id, kind: 'trim' })}
             >
-              Measure
+              Trim
             </Button>
             <Button
               variant="outline"
-              disabled={busy || !!listening}
-              onClick={() => {
-                setNote('');
-                listen({
-                  id: g.id,
-                  kind: 'noise',
-                  until: performance.now() + LISTEN_MS,
-                  peak: -120,
-                });
-              }}
-            >
-              Measure noise
-            </Button>
-            <Button
-              variant="ghost"
-              aria-pressed={!!g.gate && g.noise_dbfs != null}
-              disabled={busy || g.noise_dbfs == null}
-              onClick={() =>
-                edit({
-                  guitars: profiles.guitars.map((x) =>
-                    x.id === g.id ? { ...x, gate: !x.gate } : x,
-                  ),
-                })
-              }
+              disabled={busy}
+              onClick={() => setEditing({ id: g.id, kind: 'gate' })}
             >
               Gate
-            </Button>
-            <Button
-              variant="ghost"
-              aria-pressed={reference}
-              disabled={busy || g.peak_dbfs == null}
-              onClick={() => edit({ reference: g.id })}
-            >
-              Reference
             </Button>
             <Button
               variant="ghost"
@@ -223,7 +193,8 @@ export function GuitarSettings() {
                 edit({
                   guitars: profiles.guitars.filter((x) => x.id !== g.id),
                   active: active ? null : profiles.active,
-                  reference: reference ? null : profiles.reference,
+                  reference:
+                    profiles.reference === g.id ? null : profiles.reference,
                 })
               }
             >
@@ -232,25 +203,7 @@ export function GuitarSettings() {
           </ToolRow>
         );
       })}
-      {note && <p role="status">{note}</p>}
-      <ToolRow
-        title="Character"
-        value={`${Math.round(profiles.character * 100)}%`}
-        detail="0% matches every guitar exactly. Higher keeps more of each guitar's own output, so a hot guitar still drives the amp harder."
-      >
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          aria-label="Guitar character"
-          className="ink-range ink-range-wide"
-          style={{ '--level': profiles.character } as React.CSSProperties}
-          value={Math.round(profiles.character * 100)}
-          disabled={busy}
-          onChange={(e) => edit({ character: Number(e.target.value) / 100 })}
-        />
-      </ToolRow>
+      {note && !editing && <p role="status">{note}</p>}
       {profiles.guitars.length < 16 && (
         <div className="action-row">
           <Button
@@ -262,6 +215,134 @@ export function GuitarSettings() {
             Add guitar
           </Button>
         </div>
+      )}
+      {open && editing?.kind === 'trim' && (
+        <AdjustmentDialog
+          title={`${open.name} trim`}
+          onCancel={() => setEditing(null)}
+        >
+          <div className="control-stack">
+            <div className="guitar-trim">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Trim down 0.5 dB"
+                disabled={busy || openTrim <= TRIM.min}
+                onClick={() =>
+                  change(open.id, {
+                    trim_db: clampTrim(openTrim - TRIM.step),
+                  })
+                }
+              >
+                <Minus aria-hidden="true" />
+              </Button>
+              <output aria-live="polite">{db(openTrim)}</output>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Trim up 0.5 dB"
+                disabled={busy || openTrim >= TRIM.max}
+                onClick={() =>
+                  change(open.id, {
+                    trim_db: clampTrim(openTrim + TRIM.step),
+                  })
+                }
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+            </div>
+            <input
+              type="range"
+              min={TRIM.min}
+              max={TRIM.max}
+              step={TRIM.step}
+              aria-label={`${open.name} trim`}
+              className="ink-range ink-range-wide"
+              style={
+                {
+                  '--level': (openTrim - TRIM.min) / (TRIM.max - TRIM.min),
+                } as React.CSSProperties
+              }
+              value={openTrim}
+              disabled={busy}
+              onChange={(e) =>
+                change(open.id, { trim_db: clampTrim(Number(e.target.value)) })
+              }
+            />
+            <p className="caption">
+              {profiles.active === open.id
+                ? 'Changes apply as you play.'
+                : 'Choose Play this to hear changes.'}{' '}
+              Quieter pickups need more trim; hotter ones less.
+            </p>
+            <div className="action-row">
+              <Button
+                variant="outline"
+                disabled={busy || !!listening}
+                onClick={() => start(open.id, 'strum')}
+              >
+                {listening?.id === open.id && listening.kind === 'strum'
+                  ? 'Strum hard…'
+                  : 'Measure strum'}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy || openTrim === 0}
+                onClick={() => change(open.id, { trim_db: 0 })}
+              >
+                Reset to 0 dB
+              </Button>
+            </div>
+            <p className="caption">
+              Measure strum: volume fully up, six seconds of your loudest stage
+              strum. It matches this guitar to the first one you measured.
+            </p>
+            {note && <p role="status">{note}</p>}
+          </div>
+        </AdjustmentDialog>
+      )}
+      {open && editing?.kind === 'gate' && (
+        <AdjustmentDialog
+          title={`${open.name} gate`}
+          onCancel={() => setEditing(null)}
+        >
+          <div className="control-stack">
+            <p role="status">
+              {open.noise_dbfs == null
+                ? 'Not set up: measure the noise first.'
+                : `Noise ${open.noise_dbfs.toFixed(1)} dBFS · gate ${
+                    open.gate
+                      ? `opens at ${gateFor({ ...profiles, active: open.id })} dBFS`
+                      : 'off'
+                  }`}
+            </p>
+            <div className="action-row">
+              <Button
+                variant="outline"
+                disabled={busy || !!listening}
+                onClick={() => start(open.id, 'noise')}
+              >
+                {listening?.id === open.id && listening.kind === 'noise'
+                  ? 'Strings muted…'
+                  : 'Measure noise'}
+              </Button>
+              <Button
+                variant="outline"
+                aria-pressed={!!open.gate && open.noise_dbfs != null}
+                disabled={busy || open.noise_dbfs == null}
+                onClick={() => change(open.id, { gate: !open.gate })}
+              >
+                {open.gate ? 'Gate on' : 'Gate off'}
+              </Button>
+            </div>
+            <p className="caption">
+              Volume up, strings muted by your hand, on the noisiest pickup
+              (usually a single coil). The gate then opens 6 dB above that hiss
+              and stays quiet in every position.
+            </p>
+            {note && <p role="status">{note}</p>}
+          </div>
+        </AdjustmentDialog>
       )}
       {naming && (
         <AdjustmentDialog
@@ -275,11 +356,7 @@ export function GuitarSettings() {
               const trimmed = naming.value.trim().slice(0, 40);
               if (!trimmed) return;
               if (naming.id) {
-                edit({
-                  guitars: profiles.guitars.map((g) =>
-                    g.id === naming.id ? { ...g, name: trimmed } : g,
-                  ),
-                });
+                change(naming.id, { name: trimmed });
               } else {
                 const id = `${
                   trimmed
@@ -290,7 +367,7 @@ export function GuitarSettings() {
                 edit({
                   guitars: [
                     ...profiles.guitars,
-                    { id, name: trimmed, peak_dbfs: null },
+                    { id, name: trimmed, trim_db: 0, peak_dbfs: null },
                   ],
                   active: profiles.active ?? id,
                 });
@@ -303,7 +380,7 @@ export function GuitarSettings() {
               <input
                 autoFocus
                 maxLength={40}
-                placeholder="For example: Ibanez Jiva"
+                placeholder="For example: Ibanez Jiva or Jericho · neck"
                 value={naming.value}
                 onChange={(e) =>
                   setNaming({ ...naming, value: e.target.value })

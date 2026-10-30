@@ -1,5 +1,6 @@
-//! Guitar profiles: one measured input level and noise floor per instrument,
-//! so every guitar reaches the rig at the same level and only as quiet as it can. Unit-wide, never stored in presets.
+//! Guitar profiles: one input trim and noise gate per instrument, so every
+//! guitar reaches the rig at the same level and only as quiet as it can.
+//! The trim is a plain number; measuring a strum only suggests it. Unit-wide, never stored in presets.
 use crate::{Shared, failure};
 use axum::{
     Json,
@@ -20,6 +21,9 @@ const GATE_MARGIN_DB: f32 = 6.0;
 pub struct Guitar {
     pub id: String,
     pub name: String,
+    /// Input trim for this guitar in dB (−24 to +24), applied before every rig.
+    #[serde(default)]
+    pub trim_db: f32,
     /// Peak of the player's loudest stage strum, before any trim, in dBFS.
     pub peak_dbfs: Option<f32>,
     /// Peak hiss and hum with the strings muted, before any trim, in dBFS.
@@ -34,11 +38,9 @@ pub struct Guitar {
 #[serde(deny_unknown_fields)]
 pub struct Guitars {
     pub guitars: Vec<Guitar>,
-    /// The guitar presets were set up with; it plays with no trim.
+    /// The guitar presets were set up with: Measure matches others to its strum.
     pub reference: Option<String>,
     pub active: Option<String>,
-    /// 0 matches every guitar exactly; 1 keeps each guitar's natural output.
-    pub character: f32,
 }
 
 impl Guitars {
@@ -48,9 +50,8 @@ impl Guitars {
                 .is_none_or(|id| self.guitars.iter().any(|g| &g.id == id))
         };
         let mut ids = std::collections::HashSet::new();
+        let (lo, hi) = HostLevels::INPUT_RANGE;
         if self.guitars.len() > MAX_GUITARS
-            || !self.character.is_finite()
-            || !(0.0..=1.0).contains(&self.character)
             || !known(&self.reference)
             || !known(&self.active)
             || !self.guitars.iter().all(|g| {
@@ -59,32 +60,24 @@ impl Guitars {
                     && g.id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
                     && (1..=40).contains(&g.name.chars().count())
                     && !g.name.chars().any(char::is_control)
+                    && g.trim_db.is_finite()
+                    && (lo..=hi).contains(&g.trim_db)
                     && [g.peak_dbfs, g.noise_dbfs]
                         .iter()
                         .flatten()
                         .all(|p| p.is_finite() && (-120.0..=0.0).contains(p))
             })
         {
-            return Err("Up to 16 guitars with unique ids, names of 1–40 characters, levels −120 to 0 dBFS and character 0–1".into());
+            return Err("Up to 16 guitars with unique ids, names of 1–40 characters, trims −24 to +24 dB and levels −120 to 0 dBFS".into());
         }
         Ok(())
     }
-    /// Input trim for the active guitar: the gap to the reference guitar's
-    /// peak, scaled down by character. Unmeasured guitars play untrimmed.
+    /// Input trim for the active guitar; none chosen plays untrimmed.
     pub fn trim_db(&self) -> f32 {
-        let peak = |id: &Option<String>| {
-            id.as_ref()
-                .and_then(|id| self.guitars.iter().find(|g| &g.id == id))
-                .and_then(|g| g.peak_dbfs)
-        };
-        match (peak(&self.reference), peak(&self.active)) {
-            (Some(reference), Some(active)) => {
-                let (lo, hi) = HostLevels::INPUT_RANGE;
-                let trim = (reference - active) * (1.0 - self.character);
-                ((trim * 2.0).round() / 2.0).clamp(lo, hi)
-            }
-            _ => 0.0,
-        }
+        self.active
+            .as_ref()
+            .and_then(|id| self.guitars.iter().find(|g| &g.id == id))
+            .map_or(0.0, |g| g.trim_db)
     }
     /// Levels with the fields this store owns: the active guitar's trim, and
     /// its gate. A view holding older levels can never undo a guitar switch.
@@ -116,6 +109,42 @@ impl Guitars {
     }
 }
 
+/// Profiles saved before trims were stored per guitar carry a reference peak
+/// and a character amount instead; turn them into the trims they produced.
+fn migrate(mut value: serde_json::Value) -> Option<Guitars> {
+    let object = value.as_object_mut()?;
+    let character = object
+        .remove("character")
+        .and_then(|c| c.as_f64())
+        .unwrap_or(0.0) as f32;
+    let reference = object
+        .get("reference")
+        .and_then(|r| r.as_str())
+        .map(str::to_owned);
+    let peak = |g: &serde_json::Value| g.get("peak_dbfs").and_then(|p| p.as_f64());
+    let guitars = object.get_mut("guitars")?.as_array_mut()?;
+    let reference_peak = guitars
+        .iter()
+        .find(|g| g.get("id").and_then(|i| i.as_str()) == reference.as_deref())
+        .and_then(peak);
+    for guitar in guitars.iter_mut() {
+        if guitar.get("trim_db").is_some() {
+            continue;
+        }
+        let trim = match (reference_peak, peak(guitar)) {
+            (Some(r), Some(p)) => {
+                let (lo, hi) = HostLevels::INPUT_RANGE;
+                (((r - p) as f32 * (1.0 - character) * 2.0).round() / 2.0).clamp(lo, hi)
+            }
+            _ => 0.0,
+        };
+        guitar
+            .as_object_mut()?
+            .insert("trim_db".into(), trim.into());
+    }
+    serde_json::from_value(value).ok()
+}
+
 #[derive(Debug)]
 pub(crate) struct Store {
     path: PathBuf,
@@ -126,7 +155,8 @@ impl Store {
         let value = std::fs::read(&path)
             .ok()
             .filter(|bytes| bytes.len() <= 16384)
-            .and_then(|bytes| serde_json::from_slice::<Guitars>(&bytes).ok())
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(migrate)
             .filter(|g| g.validate().is_ok())
             .unwrap_or_default();
         Self {
@@ -173,7 +203,6 @@ pub(super) async fn update(
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }
     let levels = guitars.own(HostLevels {
-        input_trim_db: guitars.trim_db(),
         ..shared.levels.current()
     });
     if let Err(e) = crate::levels::apply_running(&shared, levels).await {
@@ -196,59 +225,46 @@ pub(super) async fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn guitar(id: &str, peak: Option<f32>) -> Guitar {
+    fn guitar(id: &str, trim_db: f32) -> Guitar {
         Guitar {
             id: id.into(),
             name: id.into(),
-            peak_dbfs: peak,
+            trim_db,
+            peak_dbfs: None,
             noise_dbfs: None,
             gate: false,
         }
     }
-    #[test]
-    fn trim_matches_the_reference_guitar_scaled_by_character() {
-        let mut g = Guitars {
-            guitars: vec![
-                guitar("jiva", Some(-8.0)),
-                guitar("steinberger", Some(-14.3)),
-            ],
-            reference: Some("jiva".into()),
+    fn profiles() -> Guitars {
+        Guitars {
+            guitars: vec![guitar("jiva", 0.0), guitar("steinberger", 4.0)],
+            reference: None,
             active: Some("steinberger".into()),
-            character: 0.0,
-        };
+        }
+    }
+    #[test]
+    fn the_active_guitar_plays_with_its_own_trim() {
+        let mut g = profiles();
         assert!(g.validate().is_ok());
-        assert_eq!(g.trim_db(), 6.5);
-        g.character = 0.5;
-        assert_eq!(g.trim_db(), 3.0);
-        g.character = 1.0;
-        assert_eq!(g.trim_db(), 0.0);
+        assert_eq!(g.trim_db(), 4.0);
         g.active = Some("jiva".into());
         assert_eq!(g.trim_db(), 0.0);
-        g.guitars[1].peak_dbfs = None;
-        g.active = Some("steinberger".into());
+        g.active = None;
         assert_eq!(g.trim_db(), 0.0);
-        g.guitars[1].peak_dbfs = Some(-110.0);
-        g.character = 0.0;
-        assert_eq!(g.trim_db(), 24.0);
+        // Without an active guitar the posted trim stands.
+        let posted = HostLevels {
+            input_trim_db: -3.0,
+            ..HostLevels::default()
+        };
+        assert_eq!(g.own(posted).input_trim_db, -3.0);
     }
     #[test]
     fn gate_sits_above_the_active_guitars_trimmed_noise() {
-        let mut g = Guitars {
-            guitars: vec![
-                guitar("jiva", Some(-8.0)),
-                Guitar {
-                    noise_dbfs: Some(-70.0),
-                    gate: true,
-                    ..guitar("steinberger", Some(-14.0))
-                },
-            ],
-            reference: Some("jiva".into()),
-            active: Some("steinberger".into()),
-            character: 0.0,
-        };
-        assert!(g.validate().is_ok());
-        // −70 noise, +6 trim, +6 margin.
-        assert_eq!(g.gate_db(), Some(-58.0));
+        let mut g = profiles();
+        g.guitars[1].noise_dbfs = Some(-70.0);
+        g.guitars[1].gate = true;
+        // −70 noise, +4 trim, +6 margin.
+        assert_eq!(g.gate_db(), Some(-60.0));
         g.guitars[1].gate = false;
         assert_eq!(g.gate_db(), None);
         g.guitars[1].gate = true;
@@ -261,21 +277,15 @@ mod tests {
     }
     #[test]
     fn rejects_unknown_references_duplicates_and_bad_values() {
-        let base = Guitars {
-            guitars: vec![guitar("a", None)],
-            reference: None,
-            active: Some("a".into()),
-            character: 0.0,
-        };
-        assert!(base.validate().is_ok());
+        let base = profiles();
         let mut bad = base.clone();
-        bad.active = Some("b".into());
+        bad.active = Some("strat".into());
         assert!(bad.validate().is_err());
         let mut bad = base.clone();
-        bad.guitars.push(guitar("a", None));
+        bad.guitars.push(guitar("jiva", 0.0));
         assert!(bad.validate().is_err());
         let mut bad = base.clone();
-        bad.character = 1.5;
+        bad.guitars[0].trim_db = 24.5;
         assert!(bad.validate().is_err());
         let mut bad = base.clone();
         bad.guitars[0].peak_dbfs = Some(3.0);
@@ -283,5 +293,26 @@ mod tests {
         let mut bad = base;
         bad.guitars[0].name = String::new();
         assert!(bad.validate().is_err());
+    }
+    #[test]
+    fn older_profiles_keep_the_trim_they_played_with() {
+        let old = serde_json::json!({
+            "guitars": [
+                {"id": "jiva", "name": "Jiva", "peak_dbfs": -8.0},
+                {"id": "steinberger", "name": "Steinberger", "peak_dbfs": -14.3},
+                {"id": "jericho", "name": "Jericho", "peak_dbfs": null}
+            ],
+            "reference": "jiva",
+            "active": "steinberger",
+            "character": 0.0
+        });
+        let g = migrate(old).unwrap();
+        assert!(g.validate().is_ok());
+        let trims: Vec<f32> = g.guitars.iter().map(|g| g.trim_db).collect();
+        assert_eq!(trims, [0.0, 6.5, 0.0]);
+        assert_eq!(g.trim_db(), 6.5);
+        // Current files pass through unchanged.
+        let current = serde_json::to_value(&g).unwrap();
+        assert_eq!(migrate(current).unwrap(), g);
     }
 }

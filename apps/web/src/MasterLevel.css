@@ -90,3 +90,15 @@
 .master-mono:disabled {
   opacity: 0.55;
 }
+/* Guitar trim: large readout between step buttons. */
+.guitar-trim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+.guitar-trim output {
+  min-width: 6ch;
+  text-align: center;
+  font: 600 1.5rem var(--font-mono);
+}

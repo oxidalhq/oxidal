@@ -1352,13 +1352,9 @@ export interface GraphPreset {
 }
 export interface Guitars {
   active?: string | null;
-  /**
-   * 0 matches every guitar exactly; 1 keeps each guitar's natural output.
-   */
-  character: number;
   guitars: Guitar[];
   /**
-   * The guitar presets were set up with; it plays with no trim.
+   * The guitar presets were set up with: Measure matches others to its strum.
    */
   reference?: string | null;
 }
@@ -1377,6 +1373,10 @@ export interface Guitar {
    * Peak of the player's loudest stage strum, before any trim, in dBFS.
    */
   peak_dbfs?: number | null;
+  /**
+   * Input trim for this guitar in dB (−24 to +24), applied before every rig.
+   */
+  trim_db?: number;
 }
 export interface Library {
   presets: Inspection[];
