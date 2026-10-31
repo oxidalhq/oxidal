@@ -71,8 +71,8 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   ).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Maintenance', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Maintenance', exact: true })
     .click();
   await page.getByText('Rig validation inspector').click();
   await page.getByRole('button', { name: 'Validate rig', exact: true }).click();
@@ -91,8 +91,8 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'MIDI', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
   await page.getByLabel('MIDI value', { exact: true }).fill('127');
   await page.getByRole('button', { name: 'Send MIDI CC' }).click();
@@ -237,8 +237,8 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'MIDI', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
   await page.getByLabel('Target', { exact: true }).selectOption('rig.bypass');
   await page.getByRole('button', { name: 'Learn next MIDI message' }).click();
@@ -280,8 +280,8 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'MIDI', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
   await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
   await expect(page.getByLabel('Target', { exact: true })).toHaveValue(
@@ -660,7 +660,7 @@ test('global tuner is accessible outside preset authoring and survives rotation'
       dialog.getByText(/standalone input tuner is not available/),
     ).toBeVisible();
     await expect(
-      dialog.getByRole('button', { name: 'Start tuner', exact: true }),
+      dialog.getByRole('radio', { name: 'Mute', exact: true }),
     ).toBeDisabled();
     const size = page.viewportSize()!;
     await page.setViewportSize({ width: size.height, height: size.width });

@@ -375,7 +375,10 @@ it('renames from the rig header and refreshes its device label without recalling
   fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
   await waitFor(() =>
     expect(
-      screen.getByRole('button', { name: 'Playing preset: My new label' }),
+      screen.getByRole('button', {
+        name: 'Playing preset: My new label',
+        hidden: true,
+      }),
     ).toBeInTheDocument(),
   );
   expect(select).not.toHaveBeenCalled();

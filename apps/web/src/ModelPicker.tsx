@@ -11,6 +11,8 @@ import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import {
   stageTone3000,
   localModels,
@@ -265,7 +267,7 @@ export function ModelPicker({
       onCancel={close}
       className="model-picker"
     >
-      <div className="space-y-3">
+      <div className="control-stack">
         {intent !== 'download' && (
           <p className="truncate text-sm text-muted-foreground">
             {intent === 'add' ? 'Add to' : 'Replace'} {name}
@@ -439,10 +441,19 @@ export function ModelPicker({
                   </select>
                 </label>
                 <div className="catalog-filters">
-                  <div
-                    className="action-row"
-                    role="group"
+                  <ToggleGroup
+                    type="single"
+                    value={query.gear ?? 'all'}
+                    disabled={locked}
                     aria-label="Gear type"
+                    onValueChange={(value) => {
+                      if (value)
+                        setQuery({
+                          ...query,
+                          gear: value === 'all' ? null : (value as Gear),
+                          page: 1,
+                        });
+                    }}
                   >
                     {(
                       [[null, 'All'], ...GEARS[format]] as [
@@ -450,33 +461,26 @@ export function ModelPicker({
                         string,
                       ][]
                     ).map(([gear, label]) => (
-                      <Button
-                        key={label}
-                        variant="ghost"
-                        aria-pressed={(query.gear ?? null) === gear}
-                        disabled={locked}
-                        onClick={() => setQuery({ ...query, gear, page: 1 })}
-                      >
+                      <ToggleGroupItem key={label} value={gear ?? 'all'}>
                         {label}
-                      </Button>
+                      </ToggleGroupItem>
                     ))}
-                  </div>
-                  <div
-                    className="action-row"
-                    role="group"
+                  </ToggleGroup>
+                  <ToggleGroup
+                    type="single"
+                    value={view}
                     aria-label="Show tones as"
+                    onValueChange={(value) => {
+                      if (value === 'pictures' || value === 'list')
+                        chooseView(value);
+                    }}
                   >
                     {(['pictures', 'list'] as const).map((v) => (
-                      <Button
-                        key={v}
-                        variant="ghost"
-                        aria-pressed={view === v}
-                        onClick={() => chooseView(v)}
-                      >
+                      <ToggleGroupItem key={v} value={v}>
                         {v === 'pictures' ? 'Pictures' : 'List'}
-                      </Button>
+                      </ToggleGroupItem>
                     ))}
-                  </div>
+                  </ToggleGroup>
                 </div>
                 {paginated && (
                   <form
@@ -532,11 +536,13 @@ export function ModelPicker({
               aria-busy={loading || locked}
             >
               {loading ? (
-                <p role="status">Loading…</p>
+                <p className="catalog-empty" role="status">
+                  Loading…
+                </p>
               ) : tone ? (
                 <>
                   {!models?.data.length && (
-                    <p>
+                    <p className="catalog-empty" role="status">
                       {format === 'nam' ? 'No A2 models' : 'No IR files'}{' '}
                       available for this tone.
                     </p>
@@ -581,9 +587,15 @@ export function ModelPicker({
               ) : (
                 <>
                   {!tones?.data.some((t) => t.format === format) && (
-                    <p>
-                      No {format === 'nam' ? 'NAM tones' : 'IRs'} here. Try
-                      another library.
+                    <p className="catalog-empty" role="status">
+                      No {format === 'nam' ? 'NAM tones' : 'IRs'} in{' '}
+                      {query.collection === 'latest'
+                        ? 'the latest feed'
+                        : 'this collection'}
+                      {query.gear ? ' with this filter' : ''}.
+                      {query.collection === 'latest'
+                        ? ' Latest only includes the ten newest tones. Try another collection.'
+                        : ' Try another collection or gear type.'}
                     </p>
                   )}
                   {tones?.data
@@ -657,7 +669,7 @@ export function ModelPicker({
                 : 'Preparing live audition…'}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        <DialogFooter>
           {source === 'tone3000' && total > 1 && (
             <>
               <Button
@@ -679,14 +691,18 @@ export function ModelPicker({
               </Button>
             </>
           )}
-          <Button variant="ghost" disabled={busy === 'assign'} onClick={close}>
+          <Button
+            variant="outline"
+            disabled={busy === 'assign'}
+            onClick={close}
+          >
             {busy === 'download'
               ? source === 'local'
                 ? 'Cancel upload'
                 : 'Cancel download'
               : 'Close'}
           </Button>
-        </div>
+        </DialogFooter>
       </div>
     </AdjustmentDialog>
   );

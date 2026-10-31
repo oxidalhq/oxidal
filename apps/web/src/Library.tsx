@@ -24,6 +24,8 @@ import { SavedRigs } from './SavedRigs';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsKey, detailsMatch } from './presetMetadata';
 import { ModelLibrary } from './ModelLibrary';
@@ -209,345 +211,321 @@ export function Library({
   }
   return (
     <section className="instrument-surface" aria-label="Library">
-      <nav
-        className="text-tabs library-section-tabs"
-        aria-label="Library sections"
+      <Tabs
+        value={page === 'nam' || page === 'ir' ? page : 'browse'}
+        onValueChange={(value) => {
+          if (value === 'browse' || value === 'nam' || value === 'ir')
+            setPage(value);
+        }}
       >
-        <Button
-          variant="ghost"
-          aria-current={page !== 'nam' && page !== 'ir' ? 'page' : undefined}
-          onClick={() => setPage('browse')}
-        >
-          Presets
-        </Button>
-        <Button
-          variant="ghost"
-          aria-label="NAM models"
-          aria-current={page === 'nam' ? 'page' : undefined}
-          onClick={() => setPage('nam')}
-        >
-          NAM models
-        </Button>
-        <Button
-          variant="ghost"
-          aria-current={page === 'ir' ? 'page' : undefined}
-          onClick={() => setPage('ir')}
-        >
-          IRs
-        </Button>
-      </nav>
-      {(page === 'author' || page === 'new') && (
-        <Button variant="ghost" onClick={() => setPage('browse')}>
-          ← Back to presets
-        </Button>
-      )}
-      {page === 'nam' || page === 'ir' ? (
-        <ModelLibrary
-          key={page}
-          format={page}
-          connected={connected}
-          onOpenRig={onOpenRig}
-        />
-      ) : page === 'new' ? (
-        <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
-      ) : page === 'browse' ? (
-        <>
-          <div className="my-3 flex min-w-0 items-center gap-2">
-            <label className="relative min-w-0 flex-1">
-              <span className="sr-only">Search presets</span>
-              <MagnifyingGlass
-                aria-hidden="true"
-                size={18}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                type="search"
-                className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
-                placeholder="Find a preset…"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            {query && (
-              <Button
-                variant="ghost"
-                className="w-11 px-0"
-                aria-label="Clear preset search"
-                onClick={() => setQuery('')}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            )}
-          </div>
-          {categories.length > 0 && (
-            <label className="field mb-3">
-              Category
-              <select
-                aria-label="Category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <TabsList aria-label="Library sections">
+          <TabsTrigger value="browse">Presets</TabsTrigger>
+          <TabsTrigger value="nam">NAM models</TabsTrigger>
+          <TabsTrigger value="ir">IRs</TabsTrigger>
+        </TabsList>
+        <TabsContent value={page === 'nam' || page === 'ir' ? page : 'browse'}>
+          {(page === 'author' || page === 'new') && (
+            <Button variant="ghost" onClick={() => setPage('browse')}>
+              ← Back to presets
+            </Button>
           )}
-          {detailsError && <p role="status">{detailsError}</p>}
-          {preview && (
-            <PresetDetailsDialog
-              entry={preview}
-              editable
-              onChanged={() => setRefresh((v) => v + 1)}
-              onCancel={() => setPreview(null)}
-            />
-          )}
-          <div className="library-bar">
-            <div
-              className="library-toolbar"
-              role="group"
-              aria-label="Library view"
-            >
-              <Button
-                variant="ghost"
-                aria-pressed={!showArtwork}
-                onClick={() => {
-                  setShowArtwork(false);
-                  try {
-                    localStorage.setItem('oxidal-library-artwork', 'false');
-                  } catch {
-                    /* storage unavailable */
-                  }
-                }}
-              >
-                List
-              </Button>
-              <Button
-                variant="ghost"
-                aria-pressed={showArtwork}
-                onClick={() => {
-                  setShowArtwork(true);
-                  try {
-                    localStorage.setItem('oxidal-library-artwork', 'true');
-                  } catch {
-                    /* storage unavailable */
-                  }
-                }}
-              >
-                Artwork
-              </Button>
-            </div>
-            <div className="flex flex-wrap items-center gap-1">
-              <Button variant="ghost" onClick={() => setPage('author')}>
-                Author
-              </Button>
-              <Button variant="ghost" onClick={() => setPage('new')}>
-                New preset
-              </Button>
-              <Button
-                className="library-manage"
-                variant="outline"
-                aria-expanded={manage}
-                onClick={() => setManage((v) => !v)}
-              >
-                Manage library
-              </Button>
-            </div>
-          </div>
-          {manage && (
-            <LibraryManagement
+          {page === 'nam' || page === 'ir' ? (
+            <ModelLibrary
+              key={page}
+              format={page}
               connected={connected}
-              onChanged={() => setRefresh((v) => v + 1)}
+              onOpenRig={onOpenRig}
             />
-          )}
-          <EvenOut connected={connected} />
-          <p className="caption">
-            Tap a preset to play it with your current audio setup. Changing
-            preset briefly interrupts audio; scenes switch without a gap on Rig.
-            Edits are kept when you return.
-          </p>
-          <SavedRigs
-            connected={connected}
-            onOpenRig={onOpenRig}
-            refresh={refresh}
-            query={query}
-            category={category}
-            details={details}
-            origin="mine"
-            title="Mine · scenes and effects"
-            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-          />
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-          {copiesError && (
-            <div className="space-y-2">
-              <p role="status">{copiesError}</p>
-              <Button
-                variant="outline"
-                onClick={() => setRefresh((value) => value + 1)}
-              >
-                Retry saved copies
-              </Button>
-            </div>
-          )}
-          <p role="status">{message}</p>
-          {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
-          <div className="section-heading">
-            <h2>Mine · single chain</h2>
-          </div>
-          {(query.trim() || category) &&
-            !busy &&
-            !owned.some((p) => matches(p.name, 'owned', p.id)) && (
-              <p role="status" className="caption">
-                No Mine single-chain presets match these filters.
-              </p>
-            )}
-          <ul className="preset-library">
-            {owned
-              .filter((p) => matches(p.name, 'owned', p.id))
-              .map((p) => (
-                <li key={`owned-${p.id}`} className="library-row">
-                  {loadButton(p.id, p.name, true)}
+          ) : page === 'new' ? (
+            <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
+          ) : page === 'browse' ? (
+            <>
+              <div className="my-3 flex min-w-0 items-center gap-2">
+                <label className="relative min-w-0 flex-1">
+                  <span className="sr-only">Search presets</span>
+                  <MagnifyingGlass
+                    aria-hidden="true"
+                    size={18}
+                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <input
+                    type="search"
+                    className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
+                    placeholder="Find a preset…"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                  />
+                </label>
+                {query && (
                   <Button
                     variant="ghost"
-                    className="library-midi"
-                    aria-label={`MIDI: ${p.name}`}
-                    disabled={!connected || loadingId !== null}
-                    onClick={() => void play(p.id, true, true)}
+                    className="w-11 px-0"
+                    aria-label="Clear preset search"
+                    onClick={() => setQuery('')}
                   >
-                    <PlugsConnected aria-hidden="true" />
-                    <span className="library-action-label">MIDI</span>
+                    <X aria-hidden="true" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    className="library-details"
-                    aria-label={`Details: ${p.name}`}
-                    onClick={() =>
-                      setPreview({ kind: 'owned', id: p.id, name: p.name })
-                    }
+                )}
+              </div>
+              {categories.length > 0 && (
+                <label className="field mb-3">
+                  Category
+                  <select
+                    aria-label="Category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
                   >
-                    Details
-                  </Button>
-                  {showArtwork && <ArtworkDeck id={p.id} owned />}
-                  <a
-                    href={`/api/v1/presets/owned/${p.id}/download`}
-                    download
-                    aria-label={`Download saved copy ${p.name}`}
-                  >
-                    Download
-                  </a>
-                </li>
-              ))}
-          </ul>
-          <SavedRigs
-            connected={connected}
-            onOpenRig={onOpenRig}
-            refresh={refresh}
-            query={query}
-            category={category}
-            details={details}
-            origin="oxidal_example"
-            title="Oxidal examples"
-            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-          />
-          <div className="section-heading">
-            <h2>TONE3000</h2>
-          </div>
-          {(query.trim() || category) &&
-            !busy &&
-            !presets.some((p) => matches(p.name, 'original', p.sha256)) && (
-              <p role="status" className="caption">
-                No TONE3000 presets match these filters.
-              </p>
-            )}
-          <ul className="preset-library">
-            {presets
-              .filter((p) => matches(p.name, 'original', p.sha256))
-              .map((preset) => (
-                <li
-                  key={preset.sha256}
-                  className="library-row"
-                  data-testid={`preset-${preset.sha256}`}
-                >
-                  {loadButton(
-                    preset.sha256,
-                    preset.name,
-                    false,
-                    `${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
-                  )}
-                  <Button
-                    variant="ghost"
-                    className="library-midi"
-                    aria-label={`MIDI: ${preset.name}`}
-                    disabled={!connected || loadingId !== null}
-                    onClick={() => void play(preset.sha256, false, true)}
-                  >
-                    <PlugsConnected aria-hidden="true" />
-                    <span className="library-action-label">MIDI</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="library-details"
-                    aria-label={`Details: ${preset.name}`}
-                    onClick={() =>
-                      setPreview({
-                        kind: 'original',
-                        id: preset.sha256,
-                        name: preset.name,
-                      })
-                    }
-                  >
-                    Details
-                  </Button>
-                  {showArtwork && <ArtworkDeck id={preset.sha256} />}
-                  <a
-                    href={`/api/v1/presets/${preset.sha256}/original`}
-                    download
-                    aria-label={`Download original ${preset.name}`}
-                  >
-                    Download
-                  </a>
-                </li>
-              ))}
-          </ul>
-          <details className="library-import">
-            <summary>Import preset</summary>
-            <p>
-              Keep your TONE3000 originals here. Importing does not change the
-              current rig. Originals are kept unchanged.
-            </p>
-            <div className="form-grid">
-              <label className="field">
-                TONE3000 preset file
-                <input
-                  type="file"
-                  accept=".t3kpreset"
-                  disabled={busy || !connected}
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                    <option value="">All categories</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {detailsError && <p role="status">{detailsError}</p>}
+              {preview && (
+                <PresetDetailsDialog
+                  entry={preview}
+                  editable
+                  onChanged={() => setRefresh((v) => v + 1)}
+                  onCancel={() => setPreview(null)}
                 />
-              </label>
-              <Button
-                disabled={!file || busy || !connected}
-                onClick={() => void upload()}
-              >
-                Import original
-              </Button>
-            </div>
-            <p className="caption">
-              Up to 32 MiB per file. Original bytes are preserved; importing the
-              same file twice keeps one copy.
-            </p>
-          </details>
-        </>
-      ) : (
-        <NativeEditor presets={presets} connected={connected} />
-      )}
+              )}
+              <div className="library-bar">
+                <ToggleGroup
+                  type="single"
+                  value={showArtwork ? 'artwork' : 'list'}
+                  aria-label="Library view"
+                  onValueChange={(value) => {
+                    if (!value) return;
+                    setShowArtwork(value === 'artwork');
+                    try {
+                      localStorage.setItem(
+                        'oxidal-library-artwork',
+                        String(value === 'artwork'),
+                      );
+                    } catch {
+                      /* storage unavailable */
+                    }
+                  }}
+                >
+                  <ToggleGroupItem value="list">List</ToggleGroupItem>
+                  <ToggleGroupItem value="artwork">Artwork</ToggleGroupItem>
+                </ToggleGroup>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button variant="ghost" onClick={() => setPage('author')}>
+                    Author
+                  </Button>
+                  <Button variant="ghost" onClick={() => setPage('new')}>
+                    New preset
+                  </Button>
+                  <Button
+                    className="library-manage"
+                    variant="outline"
+                    aria-expanded={manage}
+                    onClick={() => setManage((v) => !v)}
+                  >
+                    Manage library
+                  </Button>
+                </div>
+              </div>
+              {manage && (
+                <LibraryManagement
+                  connected={connected}
+                  onChanged={() => setRefresh((v) => v + 1)}
+                />
+              )}
+              <EvenOut connected={connected} />
+              <p className="caption">
+                Tap a preset to play it with your current audio setup. Changing
+                preset briefly interrupts audio; scenes switch without a gap on
+                Rig. Edits are kept when you return.
+              </p>
+              <SavedRigs
+                connected={connected}
+                onOpenRig={onOpenRig}
+                refresh={refresh}
+                query={query}
+                category={category}
+                details={details}
+                origin="mine"
+                title="Mine · scenes and effects"
+                onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+              />
+              {error && (
+                <p role="alert" className="error">
+                  {error}
+                </p>
+              )}
+              {copiesError && (
+                <div className="space-y-2">
+                  <p role="status">{copiesError}</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => setRefresh((value) => value + 1)}
+                  >
+                    Retry saved copies
+                  </Button>
+                </div>
+              )}
+              <p role="status">{message}</p>
+              {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
+              <div className="section-heading">
+                <h2>Mine · single chain</h2>
+              </div>
+              {(query.trim() || category) &&
+                !busy &&
+                !owned.some((p) => matches(p.name, 'owned', p.id)) && (
+                  <p role="status" className="caption">
+                    No Mine single-chain presets match these filters.
+                  </p>
+                )}
+              <ul className="preset-library">
+                {owned
+                  .filter((p) => matches(p.name, 'owned', p.id))
+                  .map((p) => (
+                    <li key={`owned-${p.id}`} className="library-row">
+                      {loadButton(p.id, p.name, true)}
+                      <Button
+                        variant="ghost"
+                        className="library-midi"
+                        aria-label={`MIDI: ${p.name}`}
+                        disabled={!connected || loadingId !== null}
+                        onClick={() => void play(p.id, true, true)}
+                      >
+                        <PlugsConnected aria-hidden="true" />
+                        <span className="library-action-label">MIDI</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="library-details"
+                        aria-label={`Details: ${p.name}`}
+                        onClick={() =>
+                          setPreview({ kind: 'owned', id: p.id, name: p.name })
+                        }
+                      >
+                        Details
+                      </Button>
+                      {showArtwork && <ArtworkDeck id={p.id} owned />}
+                      <a
+                        href={`/api/v1/presets/owned/${p.id}/download`}
+                        download
+                        aria-label={`Download saved copy ${p.name}`}
+                      >
+                        Download
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+              <SavedRigs
+                connected={connected}
+                onOpenRig={onOpenRig}
+                refresh={refresh}
+                query={query}
+                category={category}
+                details={details}
+                origin="oxidal_example"
+                title="Oxidal examples"
+                onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+              />
+              <div className="section-heading">
+                <h2>TONE3000</h2>
+              </div>
+              {(query.trim() || category) &&
+                !busy &&
+                !presets.some((p) => matches(p.name, 'original', p.sha256)) && (
+                  <p role="status" className="caption">
+                    No TONE3000 presets match these filters.
+                  </p>
+                )}
+              <ul className="preset-library">
+                {presets
+                  .filter((p) => matches(p.name, 'original', p.sha256))
+                  .map((preset) => (
+                    <li
+                      key={preset.sha256}
+                      className="library-row"
+                      data-testid={`preset-${preset.sha256}`}
+                    >
+                      {loadButton(
+                        preset.sha256,
+                        preset.name,
+                        false,
+                        `${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
+                      )}
+                      <Button
+                        variant="ghost"
+                        className="library-midi"
+                        aria-label={`MIDI: ${preset.name}`}
+                        disabled={!connected || loadingId !== null}
+                        onClick={() => void play(preset.sha256, false, true)}
+                      >
+                        <PlugsConnected aria-hidden="true" />
+                        <span className="library-action-label">MIDI</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="library-details"
+                        aria-label={`Details: ${preset.name}`}
+                        onClick={() =>
+                          setPreview({
+                            kind: 'original',
+                            id: preset.sha256,
+                            name: preset.name,
+                          })
+                        }
+                      >
+                        Details
+                      </Button>
+                      {showArtwork && <ArtworkDeck id={preset.sha256} />}
+                      <a
+                        href={`/api/v1/presets/${preset.sha256}/original`}
+                        download
+                        aria-label={`Download original ${preset.name}`}
+                      >
+                        Download
+                      </a>
+                    </li>
+                  ))}
+              </ul>
+              <details className="library-import">
+                <summary>Import preset</summary>
+                <p>
+                  Keep your TONE3000 originals here. Importing does not change
+                  the current rig. Originals are kept unchanged.
+                </p>
+                <div className="form-grid">
+                  <label className="field">
+                    TONE3000 preset file
+                    <input
+                      type="file"
+                      accept=".t3kpreset"
+                      disabled={busy || !connected}
+                      onChange={(event) =>
+                        setFile(event.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                  <Button
+                    disabled={!file || busy || !connected}
+                    onClick={() => void upload()}
+                  >
+                    Import original
+                  </Button>
+                </div>
+                <p className="caption">
+                  Up to 32 MiB per file. Original bytes are preserved; importing
+                  the same file twice keeps one copy.
+                </p>
+              </details>
+            </>
+          ) : (
+            <NativeEditor presets={presets} connected={connected} />
+          )}
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

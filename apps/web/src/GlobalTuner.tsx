@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   playbackState,
   playbackCommand,
@@ -8,7 +14,7 @@ import {
   type AudioState,
 } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
-import { Button } from './components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 type Tools = NonNullable<NonNullable<AudioState['authoring']>['tools']>;
 type Owner =
   | { kind: 'native'; session: string }
@@ -25,11 +31,11 @@ export function GlobalTuner({
   const [tools, setTools] = useState<Tools | null>(null);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
-  const [source, setSource] = useState<'native' | 'mixed'>('native');
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(false);
   const owner = useRef<Owner | null>(null);
   const started = useRef(false);
+  const attempted = useRef(false);
   const initialMuted = useRef<boolean | null>(null);
   useEffect(() => {
     let active = true;
@@ -58,7 +64,6 @@ export function GlobalTuner({
             initialMuted.current = outputMuted;
             setMuted(outputMuted);
           }
-          setSource('native');
           setTools(native.authoring.tools);
           setReady(true);
         } else {
@@ -96,7 +101,6 @@ export function GlobalTuner({
             initialMuted.current = outputMuted;
             setMuted(outputMuted);
           }
-          setSource('mixed');
           setTools(row.status.tools);
           setReady(true);
         }
@@ -152,20 +156,25 @@ export function GlobalTuner({
       );
     }
   }
-  async function toggle() {
-    if (busy) return;
+  const autoStart = useEffectEvent(async () => {
+    if (tools?.tuner_enabled) return;
     setBusy(true);
     try {
-      const enabled = !tools?.tuner_enabled;
-      await command(enabled);
-      started.current = enabled;
+      await command(true);
+      started.current = true;
       setError('');
     } catch (cause) {
       setError(String(cause));
     } finally {
       setBusy(false);
     }
-  }
+  });
+  useEffect(() => {
+    if (ready && !attempted.current) {
+      attempted.current = true;
+      void autoStart();
+    }
+  }, [ready]);
   async function monitor(enabled: boolean) {
     const target = owner.current;
     if (!target) throw new Error('No tuner source available.');
@@ -244,77 +253,90 @@ export function GlobalTuner({
       className="tuner-dialog"
       onCancel={() => void close()}
     >
-      <div className="space-y-4">
+      <div className="tuner-layout">
         <div className="tuner-display" data-in-tune={inTune}>
-          <div className="tuner-note" aria-label="Detected note">
-            {note}
-          </div>
           <div
             role="meter"
             aria-label="Tuning cents"
             aria-valuemin={-50}
             aria-valuemax={50}
-            aria-valuenow={shownCents ?? undefined}
+            aria-valuenow={shownCents ?? 0}
             aria-valuetext={
               shownCents === null ? 'No reliable pitch' : `${shownCents} cents`
             }
             className="tuner-strobe"
           >
-            <span className="tuner-strobe-track" style={strobeStyle} />
-            <span className="tuner-strobe-center" />
+            <svg viewBox="0 0 240 240" aria-hidden="true">
+              <circle
+                className="tuner-reference-ring"
+                cx="120"
+                cy="120"
+                r="108"
+                pathLength="120"
+                strokeDasharray="1 4"
+              />
+              <g className="tuner-strobe-track" style={strobeStyle}>
+                <circle
+                  cx="120"
+                  cy="120"
+                  r="94"
+                  pathLength="120"
+                  strokeDasharray="6 4"
+                />
+                <circle
+                  cx="120"
+                  cy="120"
+                  r="82"
+                  pathLength="120"
+                  strokeDasharray="3 7"
+                />
+              </g>
+              <path
+                className="tuner-reference-mark"
+                d="M115 4 L125 4 L120 14 Z"
+              />
+            </svg>
           </div>
-          <div className="tuner-reading" aria-live="polite">
-            <strong>
-              {shownCents === null
-                ? tools?.tuner_enabled
-                  ? 'Play a note'
-                  : 'Ready'
-                : `${shownCents > 0 ? '+' : ''}${shownCents.toFixed(1)} cents`}
-            </strong>
-            <span>
-              {reading && shownCents !== null
-                ? `${reading.frequency.toFixed(2)} Hz`
-                : 'A440 reference'}
+          <div className="tuner-center">
+            <div className="tuner-note" aria-label="Detected note">
+              {note}
+            </div>
+            <div className="tuner-reading" aria-live="polite">
+              <strong>
+                {shownCents === null
+                  ? tools?.tuner_enabled
+                    ? 'Play a note'
+                    : busy
+                      ? 'Starting…'
+                      : 'No input'
+                  : `${shownCents > 0 ? '+' : ''}${shownCents.toFixed(1)} cents`}
+              </strong>
+              <span>
+                {reading && shownCents !== null
+                  ? `${reading.frequency.toFixed(2)} Hz`
+                  : 'A440 reference'}
+              </span>
+            </div>
+            <span className="tuner-lock" aria-hidden={!inTune}>
+              {inTune ? 'IN TUNE' : '±2 cent lock'}
             </span>
           </div>
-          <span className="tuner-lock" aria-hidden={!inTune}>
-            {inTune ? 'IN TUNE' : '±2 cent lock'}
-          </span>
         </div>
-        <Button
-          disabled={!ready || busy}
-          onClick={() => void toggle()}
-          aria-pressed={!!tools?.tuner_enabled}
-        >
-          {tools?.tuner_enabled ? 'Stop tuner' : 'Start tuner'}
-        </Button>
-        <div
-          role="group"
+        <ToggleGroup
+          type="single"
           aria-label="Tuner monitoring"
-          className="grid grid-cols-2 gap-2"
+          value={muted ? 'mute' : 'hear'}
+          disabled={!ready || busy}
+          onValueChange={(value) => {
+            if (value) void setMonitoring(value === 'mute');
+          }}
         >
-          <Button
-            variant="outline"
-            disabled={!ready || busy}
-            aria-pressed={muted}
-            onClick={() => void setMonitoring(true)}
-          >
-            Mute
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!ready || busy}
-            aria-pressed={!muted}
-            onClick={() => void setMonitoring(false)}
-          >
-            Hear sound
-          </Button>
-        </div>
+          <ToggleGroupItem value="mute">Mute</ToggleGroupItem>
+          <ToggleGroupItem value="hear">Hear sound</ToggleGroupItem>
+        </ToggleGroup>
         <p className="caption">
-          A440 · mute is temporary and does not change the saved master level.{' '}
-          {source === 'mixed'
-            ? 'Reads the first available TONE3000 stage.'
-            : 'Reads the current TONE3000 input.'}
+          A440 · Your previous sound monitoring returns when you close the
+          tuner.
         </p>
         {error && <p role="alert">{error}</p>}
       </div>

@@ -25,7 +25,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     ],
     saved: [],
     pending: null,
-    message: 'Network ready',
+    message: '',
   };
   const commands: NetworkCommand[] = [];
   await page.route('**/api/v1/device/network', async (route) => {
@@ -52,13 +52,14 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Connections', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Network', exact: true })
     .click();
   const panel = page.getByRole('region', { name: 'Wi-Fi and hotspot' });
   await expect(
     panel.getByRole('button', { name: /Guest open/ }),
   ).toBeDisabled();
+  await expect(panel.getByText('Reading device network…')).toHaveCount(0);
   await panel.getByText('Automatic hotspot', { exact: true }).click();
   await expect(
     panel.getByRole('combobox', { name: 'Start hotspot', exact: true }),
@@ -82,8 +83,9 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   ).toHaveAttribute('type', 'password');
   await panel.getByRole('button', { name: 'Review network change' }).click();
   expect(commands.filter((c) => c.type === 'join')).toHaveLength(0);
-  await expect(panel.getByText(/The phone may disconnect/)).toBeVisible();
-  await panel.getByRole('button', { name: 'Apply network change' }).click();
+  const review = page.getByRole('dialog');
+  await expect(review.getByText(/The phone may disconnect/)).toBeVisible();
+  await review.getByRole('button', { name: 'Apply network change' }).click();
   expect(commands.find((c) => c.type === 'join')).toMatchObject({
     ssid: 'Studio: Wi-Fi',
     interface: 'wlan0',
@@ -92,8 +94,8 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Connections', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Network', exact: true })
     .click();
   await panel.getByRole('button', { name: 'Keep this connection' }).click();
   await expect(panel.getByRole('status')).toHaveText('Network settings saved');
@@ -103,9 +105,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     'test-only-password',
   );
-  await panel
-    .getByRole('button', { name: 'Edit hotspot', exact: true })
-    .click();
+  await panel.getByRole('radio', { name: 'Edit hotspot', exact: true }).click();
   await expect(panel.getByLabel('New hotspot password')).toBeVisible();
   await expect(panel.getByLabel('Hotspot name', { exact: true })).toHaveValue(
     '',
@@ -121,12 +121,15 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await panel.getByLabel('Home Wi-Fi name').fill('Studio: Wi-Fi');
   await panel.getByRole('button', { name: 'Review hotspot policy' }).click();
   expect(commands.filter((c) => c.type === 'policy')).toHaveLength(0);
-  await panel.getByRole('button', { name: 'Apply hotspot policy' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Apply hotspot policy' })
+    .click();
   await panel.getByRole('button', { name: 'Keep this connection' }).click();
   expect(commands.find((c) => c.type === 'policy')).toMatchObject({
     settings: { mode: 'not_at_home', home_ssid: 'Studio: Wi-Fi' },
   });
-  await page.getByRole('button', { name: 'Device', exact: true }).click();
+  await page.getByRole('tab', { name: 'Device', exact: true }).click();
   const power = page.getByRole('region', { name: 'Device power' });
   await power
     .getByRole('button', { name: 'Restart device', exact: true })

@@ -75,7 +75,10 @@ export function EngineSettings({ connected }: { connected: boolean }) {
                   inline
                   key={setting.target}
                   title={setting.label}
-                  value={setting.display}
+                  value={
+                    formatDefault(setting.target, setting.value) ??
+                    setting.display
+                  }
                   detail={
                     <>
                       {settingHelp[setting.target] ?? 'Engine setting.'}

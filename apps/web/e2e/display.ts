@@ -10,19 +10,19 @@ export async function setDisplayMode(
   const previous = await navigation
     .locator('[aria-current="page"]')
     .innerText();
-  const section = page.getByRole('navigation', { name: 'Settings sections' });
+  const section = page.getByRole('tablist', { name: 'Settings sections' });
   const previousSection =
     previous === 'Settings'
-      ? await section.locator('[aria-current="page"]').innerText()
+      ? await section.locator('[aria-selected="true"]').innerText()
       : null;
   await navigation
     .getByRole('button', { name: 'Settings', exact: true })
     .click();
-  await section.getByRole('button', { name: 'Display', exact: true }).click();
+  await section.getByRole('tab', { name: 'Display', exact: true }).click();
   await page.getByLabel('Display mode').selectOption(mode);
   if (previousSection)
     await section
-      .getByRole('button', { name: previousSection, exact: true })
+      .getByRole('tab', { name: previousSection, exact: true })
       .click();
   else
     await navigation

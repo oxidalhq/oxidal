@@ -24,6 +24,7 @@ import {
   GearSix,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { LiveRig } from './LiveRig';
 const MixedRig = lazy(() =>
   import('./MixedRig').then((m) => ({ default: m.MixedRig })),
@@ -87,6 +88,7 @@ function InstrumentApp() {
   const [settingsSection, setSettingsSection] = useState<
     | 'audio'
     | 'connections'
+    | 'accounts'
     | 'midi'
     | 'effects'
     | 'display'
@@ -95,7 +97,8 @@ function InstrumentApp() {
   >('audio');
   const settingsLabels = {
     audio: 'Audio setup',
-    connections: 'Connections',
+    connections: 'Network',
+    accounts: 'Accounts',
     midi: 'MIDI controls',
     effects: 'Effects',
     display: 'Display',
@@ -646,28 +649,28 @@ function InstrumentApp() {
               )}
             </>
           ) : (
-            <div className="settings-workspace">
-              <nav className="settings-nav" aria-label="Settings sections">
+            <Tabs
+              className="settings-workspace"
+              value={settingsSection}
+              onValueChange={(value) => {
+                if (value in settingsLabels)
+                  setSettingsSection(value as keyof typeof settingsLabels);
+              }}
+            >
+              <TabsList aria-label="Settings sections">
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
                 ).map((section) => (
-                  <Button
-                    key={section}
-                    variant="ghost"
-                    aria-current={
-                      settingsSection === section ? 'page' : undefined
-                    }
-                    onClick={() => setSettingsSection(section)}
-                  >
+                  <TabsTrigger key={section} value={section}>
                     {section === 'audio'
                       ? 'Audio'
                       : section === 'midi'
                         ? 'MIDI'
                         : settingsLabels[section]}
-                  </Button>
+                  </TabsTrigger>
                 ))}
-              </nav>
-              <div className="settings-content">
+              </TabsList>
+              <TabsContent className="settings-content" value={settingsSection}>
                 {settingsSection === 'display' && (
                   <>
                     <section
@@ -758,10 +761,10 @@ function InstrumentApp() {
                   </>
                 )}
                 {settingsSection === 'connections' && (
-                  <>
-                    <NetworkSettings connected={connected} />
-                    <Tone3000Account connected={connected} />
-                  </>
+                  <NetworkSettings connected={connected} />
+                )}
+                {settingsSection === 'accounts' && (
+                  <Tone3000Account connected={connected} />
                 )}
                 {settingsSection === 'audio' && (
                   <AudioSettings connected={connected} />
@@ -1033,8 +1036,8 @@ function InstrumentApp() {
                     </section>
                   </>
                 )}
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           )}
         </main>
       </div>

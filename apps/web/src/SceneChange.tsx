@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { sceneBlends, type SceneBlends } from './api';
-import { Button } from './components/ui/button';
+import { Slider } from './components/ui/slider';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import './MasterLevel.css';
 
 const MAX_SECONDS = 10;
@@ -69,53 +70,51 @@ export function SceneChange({
       {open && (
         <AdjustmentDialog title="Scene change" onCancel={() => setOpen(false)}>
           <div className="control-stack">
-            <div className="action-row" role="group" aria-label="Scene change">
-              <Button
-                variant="outline"
-                aria-pressed={blend === 0}
-                disabled={busy}
-                onClick={() => void set(0)}
-              >
-                Trails
-              </Button>
-              <Button
-                variant="outline"
-                aria-pressed={blend > 0}
-                disabled={busy}
-                onClick={() => void set(saved || 2000)}
-              >
-                Blend
-              </Button>
-            </div>
+            <ToggleGroup
+              type="single"
+              value={blend ? 'blend' : 'trails'}
+              disabled={busy}
+              aria-label="Scene change"
+              onValueChange={(value) => {
+                if (value) {
+                  setDraft(null);
+                  void set(value === 'trails' ? 0 : saved || 2000);
+                }
+              }}
+            >
+              <ToggleGroupItem value="trails">Trails</ToggleGroupItem>
+              <ToggleGroupItem value="blend">Blend</ToggleGroupItem>
+            </ToggleGroup>
             <p className="caption">
               {blend
                 ? 'The whole outgoing scene keeps sounding and fades out while the new one starts.'
                 : 'The outgoing scene stops getting your guitar at once; its delay and reverb ring out over the new scene.'}
             </p>
             {blend > 0 && (
-              <label className="field">
-                Blend time · {seconds(blend)}
-                <input
-                  type="range"
+              <div className="slider-field">
+                <div className="slider-label">
+                  <span>Blend time</span>
+                  <output>{seconds(blend)}</output>
+                </div>
+                <Slider
                   min={0.5}
                   max={MAX_SECONDS}
                   step={0.5}
                   aria-label="Blend time"
-                  className="ink-range ink-range-wide"
-                  style={
-                    {
-                      '--level': (blend / 1000 - 0.5) / (MAX_SECONDS - 0.5),
-                    } as React.CSSProperties
-                  }
-                  value={blend / 1000}
-                  onChange={(e) =>
-                    setDraft(Math.round(Number(e.target.value) * 1000))
-                  }
-                  onPointerUp={commit}
-                  onKeyUp={commit}
+                  disabled={busy}
+                  value={[blend / 1000]}
+                  onValueChange={([value]) => {
+                    if (value != null) setDraft(Math.round(value * 1000));
+                  }}
+                  onValueCommit={([value]) => {
+                    if (value != null) {
+                      setDraft(null);
+                      void set(Math.round(value * 1000));
+                    }
+                  }}
                   onBlur={commit}
                 />
-              </label>
+              </div>
             )}
             {error && <p role="alert">{error}</p>}
           </div>

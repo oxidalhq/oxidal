@@ -94,7 +94,7 @@ async function fits(page: Page) {
         );
     }
     for (const dialog of document.querySelectorAll<HTMLDialogElement>(
-      'dialog[open]',
+      '[role="dialog"]',
     )) {
       const rect = dialog.getBoundingClientRect();
       const bottom =
@@ -248,7 +248,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
         'Maintenance',
       ]) {
         await page
-          .getByRole('navigation', { name: 'Settings sections' })
+          .getByRole('tablist', { name: 'Settings sections' })
           .getByRole('button', { name: section, exact: true })
           .click();
         await fits(page);
@@ -292,8 +292,8 @@ test('device portrait and landscape keep controls accessible and preserve a rota
     await fits(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page
-      .getByRole('navigation', { name: 'Settings sections' })
-      .getByRole('button', { name: 'Display', exact: true })
+      .getByRole('tablist', { name: 'Settings sections' })
+      .getByRole('tab', { name: 'Display', exact: true })
       .click();
     await expect(page.getByLabel('Display mode')).toHaveValue('epaper');
     await setDisplayMode(page, 'default');
@@ -369,7 +369,7 @@ test('stage display modes persist and stay accessible in both orientations', asy
         'Maintenance',
       ]) {
         await page
-          .getByRole('navigation', { name: 'Settings sections' })
+          .getByRole('tablist', { name: 'Settings sections' })
           .getByRole('button', { name: section, exact: true })
           .click();
         await fits(page);
@@ -526,8 +526,8 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
     await page
-      .getByRole('navigation', { name: 'Settings sections' })
-      .getByRole('button', { name: 'Display', exact: true })
+      .getByRole('tablist', { name: 'Settings sections' })
+      .getByRole('tab', { name: 'Display', exact: true })
       .click();
   };
   await showDisplay();

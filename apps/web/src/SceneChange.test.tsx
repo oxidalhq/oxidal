@@ -18,6 +18,14 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
 };
 let stored: Record<string, number>;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   stored = {};
   vi.mocked(sceneBlends).mockImplementation(async (update) => {
     if (update) {
@@ -27,26 +35,33 @@ beforeEach(() => {
     return { blends: { ...stored } };
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it('switches between trails and a blend and saves the time when let go', async () => {
   render(<SceneChange preset="p" />);
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Scene change: trails' }));
   const dialog = within(screen.getByRole('dialog'));
-  fireEvent.click(dialog.getByRole('button', { name: 'Blend' }));
+  fireEvent.click(dialog.getByRole('radio', { name: 'Blend' }));
   await act(async () => {});
   expect(stored).toEqual({ p: 2000 });
   const slider = dialog.getByRole('slider', { name: 'Blend time' });
-  fireEvent.change(slider, { target: { value: '4.5' } });
-  expect(stored).toEqual({ p: 2000 });
-  fireEvent.pointerUp(slider);
-  await act(async () => {});
+  // Keyboard commits use the same Radix slider path as pointer release.
+  for (let index = 0; index < 5; index++) {
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+    await act(async () => {});
+  }
   expect(stored).toEqual({ p: 4500 });
   expect(
-    screen.getByRole('button', { name: 'Scene change: blend 4.5 s' }),
+    screen.getByRole('button', {
+      name: 'Scene change: blend 4.5 s',
+      hidden: true,
+    }),
   ).toBeInTheDocument();
-  fireEvent.click(dialog.getByRole('button', { name: 'Trails' }));
+  fireEvent.click(dialog.getByRole('radio', { name: 'Trails' }));
   await act(async () => {});
   expect(stored).toEqual({});
 });

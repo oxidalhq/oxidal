@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SceneMidi } from './SceneMidi';
+import { midiDevices } from './api';
 import type { RigAudioState } from './api';
 vi.mock('./api', () => ({
   midiDevices: vi.fn(async () => ({
@@ -301,10 +302,62 @@ it('flags duplicate numbers before Apply', async () => {
 it('shows the global set-list program and local-scene precedence', async () => {
   render(<SceneMidi state={state()} disabled={false} onCommand={vi.fn()} />);
   await open();
+  fireEvent.click(await screen.findByText('Preset recall · Program 1'));
   expect(
     await screen.findByText(/Program 1.*Mine set-list position/),
   ).toBeVisible();
   expect(
     screen.getByText(/A Program assigned to a scene below wins/),
   ).toBeVisible();
+});
+
+it('retains the draft and reports a rejected controller update', async () => {
+  let reject!: (reason: Error) => void;
+  const command = vi.fn(
+    () =>
+      new Promise<void>((_, fail) => {
+        reject = fail;
+      }),
+  );
+  render(<SceneMidi state={state()} disabled={false} onCommand={command} />);
+  await open();
+  fireEvent.change(screen.getByLabelText('MIDI channel'), {
+    target: { value: '3' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Apply MIDI' }));
+  expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+  expect(screen.getByRole('dialog')).toBeVisible();
+  reject(new Error('Controller update failed'));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Controller update failed',
+  );
+  expect(screen.getByLabelText('MIDI channel')).toHaveValue('3');
+  expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeEnabled();
+  expect(command).toHaveBeenCalledTimes(1);
+});
+
+it('keeps optional MIDI unconfigured when no controller exists', async () => {
+  vi.mocked(midiDevices).mockResolvedValueOnce({
+    available: true,
+    inputs: [],
+    warnings: [],
+  });
+  const current = state();
+  current.configured!.midi = null;
+  current.control!.midi = {
+    connected: false,
+    events: 0,
+    last: null,
+    error: null,
+  };
+  const command = vi.fn();
+  render(<SceneMidi state={current} disabled={false} onCommand={command} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: /MIDI controls.*Not configured/ }),
+  );
+  expect(await screen.findByText(/No MIDI controller connected/)).toBeVisible();
+  expect(screen.queryByText(/Waiting for controller/)).toBeNull();
+  expect(screen.queryByLabelText('MIDI channel')).toBeNull();
+  expect(command).not.toHaveBeenCalled();
 });

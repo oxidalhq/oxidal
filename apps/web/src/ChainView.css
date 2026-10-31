@@ -211,8 +211,8 @@
 
 .setting-dialog {
   display: grid;
-  gap: 0.75rem;
-  justify-items: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
 }
 .setting-dialog > .action-row {
   margin-top: 0.25rem;

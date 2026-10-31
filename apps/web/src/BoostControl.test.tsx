@@ -54,6 +54,7 @@ it('adds the preset and scene boosts and sets each in 0.5 dB steps', async () =>
   fireEvent.click(dialog.getAllByRole('button', { name: 'Reset' })[0]!);
   await act(async () => {});
   expect(stored).toEqual({ 'scenes:p#solo': 3 });
+  fireEvent.click(dialog.getByRole('button', { name: 'Close dialog' }));
   expect(
     screen.getByRole('button', { name: 'Boost +3.0 dB' }),
   ).toBeInTheDocument();

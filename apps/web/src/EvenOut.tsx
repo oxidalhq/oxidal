@@ -59,6 +59,15 @@ export function EvenOut({ connected }: { connected: boolean }) {
     <section className="even-out" aria-label="Even out all">
       <div className="section-heading">
         <h2>Even out all</h2>
+        {!running && (
+          <Button
+            variant="outline"
+            disabled={!connected}
+            onClick={() => void send('run')}
+          >
+            Even out
+          </Button>
+        )}
         {!running && entries.length > 0 && (
           <Button variant="ghost" onClick={() => setDetails((v) => !v)}>
             {details ? 'Hide levels' : 'Levels'}
@@ -92,38 +101,33 @@ export function EvenOut({ connected }: { connected: boolean }) {
         </>
       ) : (
         <>
-          <p className="caption">
-            {summary} Plays a built-in riff through each new or changed preset
-            and scene for about four seconds, silently, then puts back what you
-            were playing. Boost stays yours on top.
-          </p>
-          <div className="action-row">
-            <Button
-              variant="outline"
-              disabled={!connected}
-              onClick={() => void send('run')}
-            >
-              Even out
-            </Button>
-            {entries.length > 0 && (
-              <>
-                <Button
-                  variant="ghost"
-                  disabled={!connected}
-                  onClick={() => void send('run_all')}
-                >
-                  Measure all again
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={!connected}
-                  onClick={() => void send('reset')}
-                >
-                  Reset
-                </Button>
-              </>
-            )}
-          </div>
+          <p className="caption">{summary}</p>
+          <details className="calibration-help">
+            <summary>How it works</summary>
+            <p className="caption">
+              Plays a built-in riff through each new or changed preset and scene
+              for about four seconds, silently, then puts back what you were
+              playing. Boost stays yours on top.
+            </p>
+          </details>
+          {entries.length > 0 && (
+            <div className="action-row">
+              <Button
+                variant="ghost"
+                disabled={!connected}
+                onClick={() => void send('run_all')}
+              >
+                Measure all again
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!connected}
+                onClick={() => void send('reset')}
+              >
+                Reset
+              </Button>
+            </div>
+          )}
           {progress.total > 0 &&
             !progress.error &&
             !progress.failed?.length && (

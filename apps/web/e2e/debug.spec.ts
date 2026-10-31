@@ -42,8 +42,8 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Maintenance', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Maintenance', exact: true })
     .click();
   const panel = page.getByRole('region', { name: 'Debug console' });
   await panel.getByText('Debug console', { exact: true }).click();
@@ -62,8 +62,8 @@ test('debug requires enablement, executes once, cancels and keeps commands out o
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Maintenance', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Maintenance', exact: true })
     .click();
   await panel.getByText('Debug console', { exact: true }).click();
   await panel
@@ -139,8 +139,8 @@ test('interactive terminal reconnects without replaying input and stays usable a
   async function open() {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page
-      .getByRole('navigation', { name: 'Settings sections' })
-      .getByRole('button', { name: 'Maintenance', exact: true })
+      .getByRole('tablist', { name: 'Settings sections' })
+      .getByRole('tab', { name: 'Maintenance', exact: true })
       .click();
     await page.getByText('Interactive terminal', { exact: true }).click();
   }
@@ -246,8 +246,8 @@ test('administrator terminal is explicit and mode changes never start a shell', 
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Maintenance', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Maintenance', exact: true })
     .click();
   await page.getByText('Interactive terminal', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Web terminal' });

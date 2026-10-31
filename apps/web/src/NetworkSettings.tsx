@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md
@@ -116,9 +117,11 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           {error || readError}
         </p>
       )}
-      <p role="status" className="network-message">
-        {state?.message || 'Reading device network…'}
-      </p>
+      {(!state || state.message) && (
+        <p role="status" className="network-message">
+          {state ? state.message : 'Reading device network…'}
+        </p>
+      )}
       {state?.available && (
         <>
           <div className="network-summary" aria-label="Current connection">
@@ -210,42 +213,29 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
           ) : (
             <>
               <div className="network-toolbar">
-                <div
-                  className="network-mode-tabs"
-                  role="group"
+                <ToggleGroup
+                  type="single"
+                  value={mode}
+                  disabled={busy}
                   aria-label="Network setup mode"
+                  onValueChange={(value) => {
+                    if (
+                      (value === 'join' || value === 'hotspot') &&
+                      value !== mode
+                    ) {
+                      setMode(value);
+                      setSsid('');
+                      setPassword('');
+                      setShowPassword(false);
+                      setReview(false);
+                    }
+                  }}
                 >
-                  <Button
-                    variant="ghost"
-                    aria-pressed={mode === 'join'}
-                    onClick={() => {
-                      if (mode !== 'join') {
-                        setMode('join');
-                        setSsid('');
-                        setPassword('');
-                        setShowPassword(false);
-                        setReview(false);
-                      }
-                    }}
-                  >
-                    Join Wi-Fi
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    aria-pressed={mode === 'hotspot'}
-                    onClick={() => {
-                      if (mode !== 'hotspot') {
-                        setMode('hotspot');
-                        setSsid('');
-                        setPassword('');
-                        setShowPassword(false);
-                        setReview(false);
-                      }
-                    }}
-                  >
+                  <ToggleGroupItem value="join">Join Wi-Fi</ToggleGroupItem>
+                  <ToggleGroupItem value="hotspot">
                     Edit hotspot
-                  </Button>
-                </div>
+                  </ToggleGroupItem>
+                </ToggleGroup>
                 {mode === 'join' && (
                   <Button
                     variant="outline"

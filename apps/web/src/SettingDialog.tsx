@@ -3,6 +3,9 @@ import type { AudioState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { TouchAdjust } from './TouchAdjust';
+import { DialogFooter } from './components/ui/dialog';
+import { formatDefault } from './engineHelp';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import './ChainView.css';
 
 /** Prepared engine/model setting: draft a value, then Apply (audio restarts). */
@@ -25,6 +28,14 @@ export function SettingDialog({
   onApply: (value: number) => Promise<unknown>;
 }) {
   const [value, setValue] = useState(control.value);
+  const choices =
+    control.target === 'osFactor'
+      ? ['2x', '4x', '8x']
+      : control.target === 'pitchWindow'
+        ? ['20 ms', '30 ms', '40 ms', '60 ms']
+        : control.target.endsWith(':slimSize')
+          ? ['Lite', 'Full']
+          : null;
   return (
     <AdjustmentDialog
       title={control.label}
@@ -34,14 +45,30 @@ export function SettingDialog({
     >
       <div className="setting-dialog">
         {detail && <p className="caption">{detail}</p>}
-        {control.toggle ? (
+        {choices ? (
+          <ToggleGroup
+            type="single"
+            aria-label={control.label}
+            value={String(Math.round(value * (choices.length - 1)))}
+            disabled={busy || stale}
+            onValueChange={(choice) => {
+              if (choice) setValue(Number(choice) / (choices.length - 1));
+            }}
+          >
+            {choices.map((label, index) => (
+              <ToggleGroupItem key={label} value={String(index)}>
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        ) : control.toggle ? (
           <button
             type="button"
             role="switch"
             className="led-toggle"
             aria-checked={value === 1}
             aria-label={control.label}
-            disabled={busy}
+            disabled={busy || stale}
             onClick={() => setValue((old) => (old === 1 ? 0 : 1))}
           >
             <span className="chain-led" aria-hidden="true" />
@@ -55,32 +82,33 @@ export function SettingDialog({
             min={0}
             max={1}
             step={step ?? 0.01}
-            disabled={busy}
+            disabled={busy || stale}
             onChange={setValue}
             format={(v) =>
               control.target.endsWith(':slimSize') && (v === 0 || v === 1)
                 ? v === 0
                   ? 'Lite'
                   : 'Full'
-                : `${(v * 100).toFixed(1)}%`
+                : (formatDefault(control.target, v) ??
+                  `${(v * 100).toFixed(1)}% of range`)
             }
             commitHint="Audio restarts when applied."
           />
         )}
-        {control.toggle && (
+        {(control.toggle || choices) && (
           <p className="caption">Audio restarts briefly when applied.</p>
         )}
-        <div className="action-row">
+        <DialogFooter>
+          <Button variant="outline" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
           <Button
             disabled={busy || !Number.isFinite(value) || stale}
             onClick={() => void onApply(value)}
           >
             Apply
           </Button>
-          <Button variant="outline" disabled={busy} onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
+        </DialogFooter>
       </div>
     </AdjustmentDialog>
   );

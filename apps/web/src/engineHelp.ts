@@ -22,11 +22,15 @@ export const settingHelp: Record<string, string> = {
 /** Device-default values are normalized; show them in the units the engine reports. */
 export function formatDefault(target: string, value: number): string | null {
   switch (target) {
+    case 'targetLoudness':
+      return `${(value * 60 - 60).toFixed(1)} LUFS`;
+    case 'pitchWindow':
+      return `${[20, 30, 40, 60][Math.round(value * 3)]} ms`;
     case 'calibrateInput':
     case 'osEnabled':
       return value === 1 ? 'On' : 'Off';
     case 'inputCalibrationLevel':
-      return (value * 120 - 60).toFixed(2);
+      return `${(value * 120 - 60).toFixed(2)} dB`;
     case 'osFactor':
       return value === 0
         ? '2x'

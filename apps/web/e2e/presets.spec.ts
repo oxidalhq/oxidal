@@ -255,13 +255,13 @@ test('rig controls follow the actual session without example effects', async ({
   });
   await expect(selectedControl).toBeInViewport();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Display', exact: true }).click();
+  await page.getByRole('tab', { name: 'Display', exact: true }).click();
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await expect(selectedControl).toBeVisible();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Display', exact: true }),
-  ).toHaveAttribute('aria-current', 'page');
+    page.getByRole('tab', { name: 'Display', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await page.screenshot({
     path: info.outputPath('rig-selected-block.png'),
@@ -1056,7 +1056,7 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
   await page.goto('/');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Playback controls' });
   const clear = panel.getByRole('button', {
     name: 'Clear invalid boot setup',
@@ -1961,7 +1961,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   await expect(image).toHaveCount(0);
   await page
     .getByRole('group', { name: 'Library view' })
-    .getByRole('button', { name: 'Artwork', exact: true })
+    .getByRole('radio', { name: 'Artwork', exact: true })
     .click();
   await expect(image).toBeVisible();
   await expect
@@ -2151,7 +2151,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     .toBe(-35);
   // Audio settings must operate on the sounding effects owner, not native playback.
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
   const playback = page.getByRole('region', { name: 'Playback controls' });
   await expect(
     playback.getByRole('heading', { name: 'Effects audio' }),
@@ -2459,18 +2459,10 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
   await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Start tuner', exact: true })
-    .click();
   await expect(rig.getByLabel('Tuner reading')).toBeVisible();
   await expect
     .poll(async () => (await get()).control.authoring[0].status.tools.tuner)
     .not.toBeNull();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Stop tuner', exact: true })
-    .click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Close dialog', exact: true })
@@ -2937,8 +2929,8 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('button', { name: 'Audio', exact: true })
+    .getByRole('tablist', { name: 'Settings sections' })
+    .getByRole('tab', { name: 'Audio', exact: true })
     .click();
   await expect(
     page
@@ -3993,8 +3985,8 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
     await page
-      .getByRole('navigation', { name: 'Settings sections' })
-      .getByRole('button', { name: 'Audio', exact: true })
+      .getByRole('tablist', { name: 'Settings sections' })
+      .getByRole('tab', { name: 'Audio', exact: true })
       .click();
     const settings = page.getByRole('group', {
       name: 'Prepared DSP settings',
@@ -4290,7 +4282,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   );
   expect((await get()).control.eq).toEqual(edited.eq);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
   const utilities = page.getByRole('region', {
     name: 'Audio monitoring and output test',
     exact: true,
@@ -4309,7 +4301,7 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
   await command({ kind: 'restart' });
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Audio', exact: true }).click();
+  await page.getByRole('tab', { name: 'Audio', exact: true }).click();
   await expect(
     utilities.getByRole('button', {
       name: 'Input monitoring off',
@@ -4795,7 +4787,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   }
   await page.goto('/');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'IRs', exact: true }).click();
+  await page.getByRole('tab', { name: 'IRs', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Search IRs' }).fill(prefix);
   await expect(page.getByRole('heading', { level: 4 })).toHaveCount(64);
   await page.screenshot({
@@ -4813,7 +4805,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   await expect(page.getByRole('navigation', { name: 'IRs pages' })).toHaveCount(
     0,
   );
-  await page.getByRole('button', { name: 'NAM models', exact: true }).click();
+  await page.getByRole('tab', { name: 'NAM models', exact: true }).click();
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await page.screenshot({
     path: `test-results/model-library-import-${info.project.name}.png`,
@@ -4862,7 +4854,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   expect(await (await page.request.get('/api/v1/audio')).json()).toEqual(
     audioBeforePreview,
   );
-  await page.getByRole('button', { name: 'IRs', exact: true }).click();
+  await page.getByRole('tab', { name: 'IRs', exact: true }).click();
   await expect(page.getByRole('searchbox', { name: 'Search IRs' })).toHaveValue(
     `${prefix} 65.wav`,
   );
@@ -4876,7 +4868,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     .toBe(true);
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await expect(
-    page.getByRole('button', { name: 'Presets', exact: true }),
+    page.getByRole('tab', { name: 'Presets', exact: true }),
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page })
     .include('.asset-library')
@@ -4949,7 +4941,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
     ),
   ).toBe(true);
   expect(
-    (await new AxeBuilder({ page }).include('dialog[open]').analyze())
+    (await new AxeBuilder({ page }).include('[role="dialog"]').analyze())
       .violations,
   ).toEqual([]);
   await page.screenshot({

@@ -6,7 +6,7 @@ import { tone3000Tone, type AudioState, type AudioAction } from './api';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { SettingDialog } from './SettingDialog';
-import { settingHelp } from './engineHelp';
+import { formatDefault, settingHelp } from './engineHelp';
 const inputLabels = {
   stereo: {
     name: 'Stereo',
@@ -552,7 +552,10 @@ export function NativeAuthoring({
                       inline
                       key={setting.target}
                       title={setting.label}
-                      value={setting.display}
+                      value={
+                        formatDefault(setting.target, setting.value) ??
+                        setting.display
+                      }
                       detail={
                         settingHelp[setting.target] ?? 'Native engine setting.'
                       }

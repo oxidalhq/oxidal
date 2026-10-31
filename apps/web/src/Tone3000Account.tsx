@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { tone3000Account, type AccountAction, type AccountState } from './api';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
 
 /** Device authorization stays on the daemon; only its public sign-in code reaches this view. */
 export function Tone3000Account({ connected }: { connected: boolean }) {
@@ -88,7 +89,9 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
       aria-labelledby="tone3000-account-heading"
     >
       <h2 id="tone3000-account-heading">TONE3000 account</h2>
-      <p role="status">{state ? labels[state.phase] : 'Loading account…'}</p>
+      <Badge role="status">
+        {state ? labels[state.phase] : 'Loading account…'}
+      </Badge>
       {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
       {state && !waiting && !signedIn && (
         <>

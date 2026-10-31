@@ -80,11 +80,8 @@ it('uses the current native cursor and stops its tuner on close', async () => {
   );
   const close = vi.fn();
   render(<GlobalTuner onClose={close} />);
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Start tuner' })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Start tuner' }));
   await screen.findByText('A4');
+  expect(screen.queryByRole('button', { name: 'Start tuner' })).toBeNull();
   expect(playbackCommand).toHaveBeenCalledWith(native, {
     kind: 'authoring',
     action: { kind: 'utility', command: { kind: 'tuner', enabled: true } },
@@ -101,10 +98,11 @@ it('temporarily mutes after the rig and restores monitoring on close', async () 
   vi.mocked(playbackCommand).mockResolvedValue(native);
   const close = vi.fn();
   render(<GlobalTuner onClose={close} />);
-  const mute = await screen.findByRole('button', { name: 'Mute' });
-  expect(mute).toHaveAttribute('aria-pressed', 'false');
-  expect(screen.getByRole('button', { name: 'Hear sound' })).toHaveAttribute(
-    'aria-pressed',
+  const mute = await screen.findByRole('radio', { name: 'Mute' });
+  await waitFor(() => expect(mute).toBeEnabled());
+  expect(mute).toHaveAttribute('aria-checked', 'false');
+  expect(screen.getByRole('radio', { name: 'Hear sound' })).toHaveAttribute(
+    'aria-checked',
     'true',
   );
   fireEvent.click(mute);
@@ -114,7 +112,7 @@ it('temporarily mutes after the rig and restores monitoring on close', async () 
       command: { kind: 'output_mute', enabled: true },
     }),
   );
-  expect(mute).toHaveAttribute('aria-pressed', 'true');
+  expect(mute).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
   expect(playbackCommand).toHaveBeenLastCalledWith(native, {
@@ -127,10 +125,6 @@ it('rejects a different session before issuing a tuner command', async () => {
     .mockResolvedValueOnce(native)
     .mockResolvedValue({ ...native, session: 'replacement' });
   render(<GlobalTuner onClose={() => {}} />);
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Start tuner' })).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Start tuner' }));
   await screen.findByRole('alert');
   expect(playbackCommand).not.toHaveBeenCalled();
   expect(rigAudioCommand).not.toHaveBeenCalled();
@@ -142,6 +136,6 @@ it('explains unsupported audio rather than starting a different rig', async () =
   >);
   render(<GlobalTuner onClose={() => {}} />);
   await screen.findByRole('alert');
-  expect(screen.getByRole('button', { name: 'Start tuner' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Mute' })).toBeDisabled();
   expect(playbackCommand).not.toHaveBeenCalled();
 });

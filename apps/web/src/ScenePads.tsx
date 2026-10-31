@@ -43,7 +43,12 @@ export function ScenePads({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-      if (document.querySelector('dialog[open]')) return;
+      if (
+        document.querySelector(
+          'dialog[open], [role="dialog"][data-state="open"]',
+        )
+      )
+        return;
       const index = Number(e.key) - 1;
       const { scenes, active, disabled, onSelect } = latest.current;
       const scene = Number.isInteger(index) ? scenes[index] : undefined;

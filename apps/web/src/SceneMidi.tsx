@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
+import { DialogFooter } from './components/ui/dialog';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   consumeMidiAssignmentRequest,
@@ -54,7 +56,7 @@ export function SceneMidi({
 export function MidiControls({
   control,
   configured,
-  disabled,
+  disabled: ownerDisabled,
   preset,
   onApply,
 }: {
@@ -67,7 +69,10 @@ export function MidiControls({
   const [devices, setDevices] = useState<MidiDevices | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showMappings, setShowMappings] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const disabled = ownerDisabled || saving;
   const [error, setError] = useState('');
   const [learning, setLearning] = useState<Learning | null>(null);
   const [presetProgram, setPresetProgram] = useState<{
@@ -137,6 +142,20 @@ export function MidiControls({
 
   const scenes = control?.scenes?.scenes ?? [];
   const branches = control?.branches ?? [];
+  async function apply(settings: Settings | null) {
+    setLearning(null);
+    setError('');
+    setSaving(true);
+    try {
+      await onApply(settings);
+      setDialogOpen(false);
+      initialized.current = false;
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
   async function scan() {
     setLoading(true);
     setError('');
@@ -150,6 +169,7 @@ export function MidiControls({
   }
   function resetDraft() {
     setLearning(null);
+    setShowMappings(!!status?.connected);
     setDraft(
       configured ?? {
         input: '',
@@ -243,7 +263,7 @@ export function MidiControls({
           {configured
             ? status?.connected
               ? 'Connected'
-              : 'Waiting'
+              : 'Disconnected'
             : 'Not configured'}
         </span>
       </Button>
@@ -252,19 +272,30 @@ export function MidiControls({
           title="MIDI assignments"
           className="midi-assignment-dialog"
           onCancel={() => {
+            if (saving) return;
             setLearning(null);
             setDialogOpen(false);
             initialized.current = false;
           }}
         >
-          <div className="space-y-3">
-            {configured && (
-              <p className="caption" role="status">
-                {status?.connected ? 'Connected' : 'Waiting for controller'} ·{' '}
-                {status?.events ?? 0} messages
-              </p>
-            )}
-            {configured && status?.last && (
+          <div className="midi-layout">
+            <div className="midi-status" role="status">
+              <Badge>
+                {configured
+                  ? status?.connected
+                    ? 'Connected'
+                    : 'Disconnected'
+                  : 'Not configured'}
+              </Badge>
+              <span className="caption">
+                {configured
+                  ? status?.connected
+                    ? `${status.events} messages received`
+                    : 'Saved controller is unavailable. Mappings are kept.'
+                  : 'MIDI is optional. Connect a controller to set it up.'}
+              </span>
+            </div>
+            {configured && status?.connected && status?.last && (
               <output className="midi-message" aria-label="Last MIDI message">
                 Channel {status.last.channel} ·{' '}
                 {status.last.kind === 'program'
@@ -273,8 +304,10 @@ export function MidiControls({
               </output>
             )}
             {currentPresetProgram != null && (
-              <section className="space-y-1 rounded-md bg-muted/50 px-3 py-2">
-                <strong>Preset recall</strong>
+              <details className="midi-recall">
+                <summary>
+                  Preset recall · Program {currentPresetProgram + 1}
+                </summary>
                 <p className="caption">
                   {currentPresetProgram < 128
                     ? `Program ${currentPresetProgram + 1}`
@@ -285,7 +318,7 @@ export function MidiControls({
                   A Program assigned to a scene below wins inside this preset.
                   CC 0 and 32 are reserved for Bank Select.
                 </p>
-              </section>
+              </details>
             )}
             {!scenes.length && (
               <p className="caption">
@@ -293,12 +326,12 @@ export function MidiControls({
                 in a scene rig.
               </p>
             )}
-            {status?.error && (
+            {status?.error && status.connected && (
               <p role="status" className="caption">
                 {status.error}
               </p>
             )}
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="midi-device-row flex flex-wrap items-end gap-2">
               <label className="field min-w-0 flex-1">
                 MIDI input
                 <select
@@ -331,228 +364,408 @@ export function MidiControls({
                 {loading ? 'Scanning…' : 'Scan MIDI'}
               </Button>
             </div>
-            <label className="field">
-              MIDI channel
-              <select
-                aria-label="MIDI channel"
-                disabled={disabled}
-                value={draft?.channel ?? 1}
-                onChange={(e) =>
-                  setDraft(
-                    (old) => old && { ...old, channel: Number(e.target.value) },
-                  )
-                }
-              >
-                <option value={0}>All channels</option>
-                {Array.from({ length: 16 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {i + 1}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {draft?.bindings.map((binding, index) => (
-              <div
-                className="space-y-2 rounded-md border border-border p-2"
-                key={binding.scene}
-              >
-                <strong>
-                  {scenes.find((s) => s.id === binding.scene)?.name ??
-                    binding.scene}
-                </strong>
-                <div className="grid grid-cols-2 items-end gap-2">
-                  <label className="field min-w-0">
-                    Message
-                    <select
-                      aria-label={`MIDI trigger ${index + 1}`}
-                      value={binding.controller == null ? 'program' : 'control'}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        setDraft(
-                          (old) =>
-                            old && {
-                              ...old,
-                              bindings: old.bindings.map((b, i) =>
-                                i === index
-                                  ? {
-                                      ...b,
-                                      program:
-                                        e.target.value === 'program'
-                                          ? index
-                                          : null,
-                                      controller:
-                                        e.target.value === 'control'
-                                          ? index
-                                          : null,
-                                    }
-                                  : b,
-                              ),
-                            },
-                        )
-                      }
-                    >
-                      <option value="program">Program</option>
-                      <option value="control">CC press</option>
-                    </select>
-                  </label>
-                  <label className="field min-w-0">
-                    {binding.controller == null
-                      ? 'Program (1–128)'
-                      : 'CC (0–127)'}
-                    <input
-                      type="number"
-                      aria-label={`MIDI number ${index + 1}`}
-                      min={binding.controller == null ? 1 : 0}
-                      max={binding.controller == null ? 128 : 127}
-                      disabled={disabled}
-                      value={binding.controller ?? (binding.program ?? 0) + 1}
-                      onChange={(e) =>
-                        setDraft(
-                          (old) =>
-                            old && {
-                              ...old,
-                              bindings: old.bindings.map((b, i) =>
-                                i === index
-                                  ? {
-                                      ...b,
-                                      program:
-                                        b.controller == null
-                                          ? Number(e.target.value) - 1
-                                          : null,
-                                      controller:
-                                        b.controller == null
-                                          ? null
-                                          : Number(e.target.value),
-                                    }
-                                  : b,
-                              ),
-                            },
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="action-row">
-                  <Button
-                    variant="outline"
-                    disabled={
-                      disabled ||
-                      !status?.connected ||
-                      savedInput !== draft.input
-                    }
-                    onClick={() =>
-                      setLearning(
-                        learning?.kind === 'scene' && learning.index === index
-                          ? null
-                          : {
-                              kind: 'scene',
-                              index,
-                              after: status?.events ?? 0,
-                            },
+            {devices &&
+              !devices.inputs.length &&
+              !loading &&
+              !error &&
+              !configured && (
+                <p className="caption">
+                  No MIDI controller connected. You can use every audio feature
+                  without one.
+                </p>
+              )}
+            {!!draft?.input && (
+              <>
+                <label className="field midi-channel">
+                  MIDI channel
+                  <select
+                    aria-label="MIDI channel"
+                    disabled={disabled}
+                    value={draft?.channel ?? 1}
+                    onChange={(e) =>
+                      setDraft(
+                        (old) =>
+                          old && { ...old, channel: Number(e.target.value) },
                       )
                     }
                   >
-                    {learning?.kind === 'scene' && learning.index === index
-                      ? 'Cancel learn'
-                      : 'Learn message'}
-                  </Button>
-                  {learning?.kind === 'scene' && learning.index === index && (
-                    <span role="status" className="caption">
-                      Press a footswitch or send Program Change
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {!!branches.length && (
-              <fieldset className="space-y-2">
-                <legend className="font-semibold">Independent branches</legend>
-                {branches.map((branch, index) => {
-                  const binding = draft?.branch_bindings?.find(
-                    (b) => b.branch === branch.id,
-                  );
-                  const change = (
-                    patch: Partial<
-                      NonNullable<Settings['branch_bindings']>[number]
-                    >,
-                  ) =>
-                    setDraft(
-                      (old) =>
-                        old && {
-                          ...old,
-                          branch_bindings: (old.branch_bindings ?? []).map(
-                            (b) =>
-                              b.branch === branch.id ? { ...b, ...patch } : b,
-                          ),
-                        },
-                    );
-                  return (
-                    <div
-                      key={branch.id}
-                      className="space-y-2 rounded-md border border-border p-2"
-                    >
-                      <Button
-                        variant="outline"
-                        aria-pressed={!!binding}
-                        aria-label={`Map branch ${branch.name}`}
-                        disabled={disabled}
-                        onClick={() =>
+                    <option value={0}>All channels</option>
+                    {Array.from({ length: 16 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <details
+                  className="midi-assignments"
+                  open={showMappings}
+                  onToggle={(event) =>
+                    setShowMappings(event.currentTarget.open)
+                  }
+                >
+                  <summary>Assignments</summary>
+                  {draft?.bindings.map((binding, index) => (
+                    <div className="midi-mapping" key={binding.scene}>
+                      <strong>
+                        {scenes.find((s) => s.id === binding.scene)?.name ??
+                          binding.scene}
+                      </strong>
+                      <div className="grid grid-cols-2 items-end gap-2">
+                        <label className="field min-w-0">
+                          Message
+                          <select
+                            aria-label={`MIDI trigger ${index + 1}`}
+                            value={
+                              binding.controller == null ? 'program' : 'control'
+                            }
+                            disabled={disabled}
+                            onChange={(e) =>
+                              setDraft(
+                                (old) =>
+                                  old && {
+                                    ...old,
+                                    bindings: old.bindings.map((b, i) =>
+                                      i === index
+                                        ? {
+                                            ...b,
+                                            program:
+                                              e.target.value === 'program'
+                                                ? index
+                                                : null,
+                                            controller:
+                                              e.target.value === 'control'
+                                                ? index
+                                                : null,
+                                          }
+                                        : b,
+                                    ),
+                                  },
+                              )
+                            }
+                          >
+                            <option value="program">Program</option>
+                            <option value="control">CC press</option>
+                          </select>
+                        </label>
+                        <label className="field min-w-0">
+                          {binding.controller == null
+                            ? 'Program (1–128)'
+                            : 'CC (0–127)'}
+                          <input
+                            type="number"
+                            aria-label={`MIDI number ${index + 1}`}
+                            min={binding.controller == null ? 1 : 0}
+                            max={binding.controller == null ? 128 : 127}
+                            disabled={disabled}
+                            value={
+                              binding.controller ?? (binding.program ?? 0) + 1
+                            }
+                            onChange={(e) =>
+                              setDraft(
+                                (old) =>
+                                  old && {
+                                    ...old,
+                                    bindings: old.bindings.map((b, i) =>
+                                      i === index
+                                        ? {
+                                            ...b,
+                                            program:
+                                              b.controller == null
+                                                ? Number(e.target.value) - 1
+                                                : null,
+                                            controller:
+                                              b.controller == null
+                                                ? null
+                                                : Number(e.target.value),
+                                          }
+                                        : b,
+                                    ),
+                                  },
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="action-row">
+                        <Button
+                          variant="outline"
+                          disabled={
+                            disabled ||
+                            !status?.connected ||
+                            savedInput !== draft.input
+                          }
+                          onClick={() =>
+                            setLearning(
+                              learning?.kind === 'scene' &&
+                                learning.index === index
+                                ? null
+                                : {
+                                    kind: 'scene',
+                                    index,
+                                    after: status?.events ?? 0,
+                                  },
+                            )
+                          }
+                        >
+                          {learning?.kind === 'scene' &&
+                          learning.index === index
+                            ? 'Cancel learn'
+                            : 'Learn message'}
+                        </Button>
+                        {learning?.kind === 'scene' &&
+                          learning.index === index && (
+                            <span role="status" className="caption">
+                              Press a footswitch or send Program Change
+                            </span>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                  {!!branches.length && (
+                    <fieldset className="space-y-2">
+                      <legend className="font-semibold">
+                        Independent branches
+                      </legend>
+                      {branches.map((branch, index) => {
+                        const binding = draft?.branch_bindings?.find(
+                          (b) => b.branch === branch.id,
+                        );
+                        const change = (
+                          patch: Partial<
+                            NonNullable<Settings['branch_bindings']>[number]
+                          >,
+                        ) =>
                           setDraft(
                             (old) =>
                               old && {
                                 ...old,
-                                branch_bindings: binding
-                                  ? (old.branch_bindings ?? []).filter(
-                                      (b) => b.branch !== branch.id,
-                                    )
-                                  : [
-                                      ...(old.branch_bindings ?? []),
-                                      {
-                                        branch: branch.id,
-                                        controller: 64 + index,
-                                        mode: 'toggle',
-                                      },
-                                    ],
+                                branch_bindings: (
+                                  old.branch_bindings ?? []
+                                ).map((b) =>
+                                  b.branch === branch.id
+                                    ? { ...b, ...patch }
+                                    : b,
+                                ),
                               },
-                          )
-                        }
-                      >
-                        {branch.name} · {binding ? 'Mapped' : 'Map CC'}
-                      </Button>
-                      {binding && (
-                        <>
+                          );
+                        return (
+                          <div key={branch.id} className="midi-mapping">
+                            <Button
+                              variant="ghost"
+                              className="midi-branch-toggle"
+                              aria-pressed={!!binding}
+                              aria-label={`Map branch ${branch.name}`}
+                              disabled={disabled}
+                              onClick={() =>
+                                setDraft(
+                                  (old) =>
+                                    old && {
+                                      ...old,
+                                      branch_bindings: binding
+                                        ? (old.branch_bindings ?? []).filter(
+                                            (b) => b.branch !== branch.id,
+                                          )
+                                        : [
+                                            ...(old.branch_bindings ?? []),
+                                            {
+                                              branch: branch.id,
+                                              controller: 64 + index,
+                                              mode: 'toggle',
+                                            },
+                                          ],
+                                    },
+                                )
+                              }
+                            >
+                              {branch.name} · {binding ? 'Mapped' : 'Map CC'}
+                            </Button>
+                            {binding && (
+                              <>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <label className="field min-w-0">
+                                    CC
+                                    <input
+                                      type="number"
+                                      aria-label={`Branch ${branch.name} CC`}
+                                      min={0}
+                                      max={127}
+                                      value={binding.controller}
+                                      disabled={disabled}
+                                      onChange={(event) =>
+                                        change({
+                                          controller: Number(
+                                            event.target.value,
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <label className="field min-w-0">
+                                    Behavior
+                                    <select
+                                      aria-label={`Branch ${branch.name} behavior`}
+                                      value={binding.mode}
+                                      disabled={disabled}
+                                      onChange={(event) =>
+                                        change({
+                                          mode: event.target.value as
+                                            'gate' | 'toggle',
+                                        })
+                                      }
+                                    >
+                                      <option value="toggle">Toggle</option>
+                                      <option value="gate">CC on/off</option>
+                                    </select>
+                                  </label>
+                                </div>
+                                <div className="action-row">
+                                  <Button
+                                    variant="outline"
+                                    disabled={
+                                      disabled ||
+                                      !status?.connected ||
+                                      savedInput !== draft?.input
+                                    }
+                                    onClick={() =>
+                                      setLearning(
+                                        learning?.kind === 'branch' &&
+                                          learning.branch === branch.id
+                                          ? null
+                                          : {
+                                              kind: 'branch',
+                                              branch: branch.id,
+                                              after: status?.events ?? 0,
+                                            },
+                                      )
+                                    }
+                                  >
+                                    {learning?.kind === 'branch' &&
+                                    learning.branch === branch.id
+                                      ? 'Cancel learn'
+                                      : 'Learn CC'}
+                                  </Button>
+                                  {learning?.kind === 'branch' &&
+                                    learning.branch === branch.id && (
+                                      <span role="status" className="caption">
+                                        Press the branch footswitch
+                                      </span>
+                                    )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </fieldset>
+                  )}
+                  <fieldset className="space-y-2">
+                    <legend className="font-semibold">Parameters</legend>
+                    {(draft?.parameter_bindings ?? []).map((binding, index) => {
+                      const control = controls.find(
+                        (c) =>
+                          JSON.stringify(c.target) ===
+                          JSON.stringify(binding.target),
+                      );
+                      const change = (
+                        patch: Partial<
+                          NonNullable<Settings['parameter_bindings']>[number]
+                        >,
+                      ) =>
+                        setDraft(
+                          (old) =>
+                            old && {
+                              ...old,
+                              parameter_bindings: (
+                                old.parameter_bindings ?? []
+                              ).map((b, i) =>
+                                i === index ? { ...b, ...patch } : b,
+                              ),
+                            },
+                        );
+                      return (
+                        <div
+                          key={index}
+                          className="space-y-2 rounded-md border border-border p-2"
+                        >
+                          <label className="field min-w-0">
+                            Control
+                            <select
+                              aria-label={`MIDI parameter ${index + 1}`}
+                              value={JSON.stringify(binding.target)}
+                              disabled={disabled}
+                              onChange={(event) => {
+                                const selected = controls.find(
+                                  (c) =>
+                                    JSON.stringify(c.target) ===
+                                    event.target.value,
+                                );
+                                if (selected)
+                                  change({
+                                    target: selected.target,
+                                    mode: 'absolute',
+                                  });
+                              }}
+                            >
+                              {!control && (
+                                <option value={JSON.stringify(binding.target)}>
+                                  Unavailable control
+                                </option>
+                              )}
+                              {controls.map((c) => (
+                                <option
+                                  key={JSON.stringify(c.target)}
+                                  value={JSON.stringify(c.target)}
+                                >
+                                  {c.target.node} · {c.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <div className="grid grid-cols-2 gap-2">
                             <label className="field min-w-0">
                               CC
                               <input
+                                aria-label={`Parameter CC ${index + 1}`}
                                 type="number"
-                                aria-label={`Branch ${branch.name} CC`}
                                 min={0}
                                 max={127}
                                 value={binding.controller}
                                 disabled={disabled}
-                                onChange={(event) =>
-                                  change({
-                                    controller: Number(event.target.value),
-                                  })
+                                onChange={(e) =>
+                                  change({ controller: Number(e.target.value) })
                                 }
                               />
                             </label>
                             <label className="field min-w-0">
                               Behavior
                               <select
-                                aria-label={`Branch ${branch.name} behavior`}
-                                value={binding.mode}
+                                aria-label={`Parameter behavior ${index + 1}`}
+                                value={binding.mode ?? 'absolute'}
                                 disabled={disabled}
-                                onChange={(event) =>
+                                onChange={(e) =>
                                   change({
-                                    mode: event.target.value as
-                                      'gate' | 'toggle',
+                                    mode: e.target.value as NonNullable<
+                                      typeof binding.mode
+                                    >,
                                   })
                                 }
                               >
-                                <option value="toggle">Toggle</option>
-                                <option value="gate">CC on/off</option>
+                                <option value="absolute">Absolute</option>
+                                {control?.toggle ? (
+                                  <option value="toggle">
+                                    Toggle on press
+                                  </option>
+                                ) : (
+                                  <>
+                                    <option value="relative_twos_complement">
+                                      Encoder: two’s complement
+                                    </option>
+                                    <option value="relative_offset64">
+                                      Encoder: offset 64
+                                    </option>
+                                  </>
+                                )}
                               </select>
                             </label>
                           </div>
@@ -566,239 +779,100 @@ export function MidiControls({
                               }
                               onClick={() =>
                                 setLearning(
-                                  learning?.kind === 'branch' &&
-                                    learning.branch === branch.id
+                                  learning?.kind === 'parameter' &&
+                                    learning.index === index
                                     ? null
                                     : {
-                                        kind: 'branch',
-                                        branch: branch.id,
+                                        kind: 'parameter',
+                                        index,
                                         after: status?.events ?? 0,
                                       },
                                 )
                               }
                             >
-                              {learning?.kind === 'branch' &&
-                              learning.branch === branch.id
+                              {learning?.kind === 'parameter' &&
+                              learning.index === index
                                 ? 'Cancel learn'
-                                : 'Learn CC'}
+                                : `Learn CC ${index + 1}`}
                             </Button>
-                            {learning?.kind === 'branch' &&
-                              learning.branch === branch.id && (
+                            {learning?.kind === 'parameter' &&
+                              learning.index === index && (
                                 <span role="status" className="caption">
-                                  Press the branch footswitch
+                                  Move a controller knob
                                 </span>
                               )}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </fieldset>
-            )}
-            <fieldset className="space-y-2">
-              <legend className="font-semibold">Parameters</legend>
-              {(draft?.parameter_bindings ?? []).map((binding, index) => {
-                const control = controls.find(
-                  (c) =>
-                    JSON.stringify(c.target) === JSON.stringify(binding.target),
-                );
-                const change = (
-                  patch: Partial<
-                    NonNullable<Settings['parameter_bindings']>[number]
-                  >,
-                ) =>
-                  setDraft(
-                    (old) =>
-                      old && {
-                        ...old,
-                        parameter_bindings: (old.parameter_bindings ?? []).map(
-                          (b, i) => (i === index ? { ...b, ...patch } : b),
-                        ),
-                      },
-                  );
-                return (
-                  <div
-                    key={index}
-                    className="space-y-2 rounded-md border border-border p-2"
-                  >
-                    <label className="field min-w-0">
-                      Control
-                      <select
-                        aria-label={`MIDI parameter ${index + 1}`}
-                        value={JSON.stringify(binding.target)}
-                        disabled={disabled}
-                        onChange={(event) => {
-                          const selected = controls.find(
-                            (c) =>
-                              JSON.stringify(c.target) === event.target.value,
-                          );
-                          if (selected)
-                            change({
-                              target: selected.target,
-                              mode: 'absolute',
-                            });
-                        }}
-                      >
-                        {!control && (
-                          <option value={JSON.stringify(binding.target)}>
-                            Unavailable control
-                          </option>
-                        )}
-                        {controls.map((c) => (
-                          <option
-                            key={JSON.stringify(c.target)}
-                            value={JSON.stringify(c.target)}
-                          >
-                            {c.target.node} · {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="field min-w-0">
-                        CC
-                        <input
-                          aria-label={`Parameter CC ${index + 1}`}
-                          type="number"
-                          min={0}
-                          max={127}
-                          value={binding.controller}
-                          disabled={disabled}
-                          onChange={(e) =>
-                            change({ controller: Number(e.target.value) })
-                          }
-                        />
-                      </label>
-                      <label className="field min-w-0">
-                        Behavior
-                        <select
-                          aria-label={`Parameter behavior ${index + 1}`}
-                          value={binding.mode ?? 'absolute'}
-                          disabled={disabled}
-                          onChange={(e) =>
-                            change({
-                              mode: e.target.value as NonNullable<
-                                typeof binding.mode
-                              >,
-                            })
-                          }
-                        >
-                          <option value="absolute">Absolute</option>
-                          {control?.toggle ? (
-                            <option value="toggle">Toggle on press</option>
-                          ) : (
-                            <>
-                              <option value="relative_twos_complement">
-                                Encoder: two’s complement
-                              </option>
-                              <option value="relative_offset64">
-                                Encoder: offset 64
-                              </option>
-                            </>
+                          {control && (
+                            <output className="caption">
+                              {control.display || String(control.value)}
+                            </output>
                           )}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="action-row">
-                      <Button
-                        variant="outline"
-                        disabled={
-                          disabled ||
-                          !status?.connected ||
-                          savedInput !== draft?.input
-                        }
-                        onClick={() =>
-                          setLearning(
-                            learning?.kind === 'parameter' &&
-                              learning.index === index
-                              ? null
-                              : {
-                                  kind: 'parameter',
-                                  index,
-                                  after: status?.events ?? 0,
-                                },
-                          )
-                        }
-                      >
-                        {learning?.kind === 'parameter' &&
-                        learning.index === index
-                          ? 'Cancel learn'
-                          : `Learn CC ${index + 1}`}
-                      </Button>
-                      {learning?.kind === 'parameter' &&
-                        learning.index === index && (
-                          <span role="status" className="caption">
-                            Move a controller knob
-                          </span>
-                        )}
-                    </div>
-                    {control && (
-                      <output className="caption">
-                        {control.display || String(control.value)}
-                      </output>
-                    )}
+                          <Button
+                            variant="outline"
+                            disabled={disabled}
+                            onClick={() => {
+                              setLearning(null);
+                              setDraft(
+                                (old) =>
+                                  old && {
+                                    ...old,
+                                    parameter_bindings: (
+                                      old.parameter_bindings ?? []
+                                    ).filter((_, i) => i !== index),
+                                  },
+                              );
+                            }}
+                          >
+                            Remove mapping {index + 1}
+                          </Button>
+                        </div>
+                      );
+                    })}
                     <Button
                       variant="outline"
-                      disabled={disabled}
-                      onClick={() => {
-                        setLearning(null);
-                        setDraft(
-                          (old) =>
-                            old && {
-                              ...old,
-                              parameter_bindings: (
-                                old.parameter_bindings ?? []
-                              ).filter((_, i) => i !== index),
-                            },
-                        );
-                      }}
+                      disabled={
+                        disabled ||
+                        !draft ||
+                        !controls.length ||
+                        (draft.parameter_bindings?.length ?? 0) >= 128
+                      }
+                      onClick={() =>
+                        setDraft((old) => {
+                          if (!old || !controls[0]) return old;
+                          const used = new Set([
+                            ...old.bindings.map((b) => b.controller),
+                            ...(old.branch_bindings ?? []).map(
+                              (b) => b.controller,
+                            ),
+                            ...(old.parameter_bindings ?? []).map(
+                              (b) => b.controller,
+                            ),
+                          ]);
+                          const controller = Array.from(
+                            { length: 128 },
+                            (_, i) => i,
+                          ).find((cc) => !used.has(cc));
+                          if (controller == null) return old;
+                          return {
+                            ...old,
+                            parameter_bindings: [
+                              ...(old.parameter_bindings ?? []),
+                              {
+                                target: controls[0].target,
+                                controller,
+                                mode: 'absolute',
+                              },
+                            ],
+                          };
+                        })
+                      }
                     >
-                      Remove mapping {index + 1}
+                      Add parameter mapping
                     </Button>
-                  </div>
-                );
-              })}
-              <Button
-                variant="outline"
-                disabled={
-                  disabled ||
-                  !draft ||
-                  !controls.length ||
-                  (draft.parameter_bindings?.length ?? 0) >= 128
-                }
-                onClick={() =>
-                  setDraft((old) => {
-                    if (!old || !controls[0]) return old;
-                    const used = new Set([
-                      ...old.bindings.map((b) => b.controller),
-                      ...(old.branch_bindings ?? []).map((b) => b.controller),
-                      ...(old.parameter_bindings ?? []).map(
-                        (b) => b.controller,
-                      ),
-                    ]);
-                    const controller = Array.from(
-                      { length: 128 },
-                      (_, i) => i,
-                    ).find((cc) => !used.has(cc));
-                    if (controller == null) return old;
-                    return {
-                      ...old,
-                      parameter_bindings: [
-                        ...(old.parameter_bindings ?? []),
-                        {
-                          target: controls[0].target,
-                          controller,
-                          mode: 'absolute',
-                        },
-                      ],
-                    };
-                  })
-                }
-              >
-                Add parameter mapping
-              </Button>
-            </fieldset>
+                  </fieldset>
+                </details>
+              </>
+            )}
             {!!conflicts.length && (
               <div
                 role="alert"
@@ -812,42 +886,52 @@ export function MidiControls({
                 ))}
               </div>
             )}
-            <div className="action-row">
-              <Button
-                disabled={disabled || !!conflicts.length || !draft?.input}
-                onClick={() =>
-                  void onApply(draft).then(() => {
-                    setDialogOpen(false);
-                    initialized.current = false;
-                  })
-                }
-              >
-                Apply MIDI
-              </Button>
+            <DialogFooter>
+              {!!draft?.input && (
+                <Button
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={resetDraft}
+                >
+                  <ArrowCounterClockwise size={18} aria-hidden="true" />
+                  Reset edits
+                </Button>
+              )}
+              {configured && (
+                <Button
+                  variant="ghost"
+                  disabled={disabled || !configured}
+                  onClick={() => void apply(null)}
+                >
+                  Disable controller
+                </Button>
+              )}
               <Button
                 variant="outline"
                 disabled={disabled}
-                onClick={resetDraft}
+                onClick={() => {
+                  setLearning(null);
+                  setDialogOpen(false);
+                  initialized.current = false;
+                }}
               >
-                <ArrowCounterClockwise size={18} aria-hidden="true" />
-                Reset edits
+                {draft?.input ? 'Cancel' : 'Close'}
               </Button>
-              <Button
-                variant="outline"
-                disabled={disabled || !configured}
-                onClick={() =>
-                  void onApply(null).then(() => {
-                    setDialogOpen(false);
-                    initialized.current = false;
-                  })
-                }
-              >
-                Disable controller
-              </Button>
-            </div>
-            {devices && !devices.inputs.length && !loading && !error && (
-              <p className="caption">No MIDI inputs detected.</p>
-            )}
+              {!!draft?.input && (
+                <Button
+                  disabled={
+                    disabled ||
+                    !!conflicts.length ||
+                    !draft?.input ||
+                    !devices?.inputs.some((input) => input.id === draft.input)
+                  }
+                  onClick={() => void apply(draft)}
+                >
+                  Apply MIDI
+                </Button>
+              )}
+            </DialogFooter>
+            {saving && <p role="status">Saving controller settings…</p>}
             {error && <p role="alert">{error}</p>}
           </div>
         </AdjustmentDialog>
