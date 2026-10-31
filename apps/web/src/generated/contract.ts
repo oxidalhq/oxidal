@@ -75,6 +75,10 @@ export type AudioAction =
       name: string;
     }
   | {
+      keep: boolean;
+      kind: "resolve_copy";
+    }
+  | {
       action: AuthoringAction;
       kind: "authoring";
     };
@@ -625,6 +629,7 @@ export type PortableTails = "cut" | "preserve";
 export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-state" | "lv2-asset";
 export type PortablePartitionInput = "left" | "right";
 export type PortableProcessingRole = "whole" | "amp" | "cab";
+export type LibraryOrigin = "tone3000" | "oxidal_example" | "mine";
 export type ResourceSource =
   | {
       kind: "original";
@@ -967,6 +972,11 @@ export interface AudioState {
    */
   controls: LiveControl[];
   /**
+   * A first edit promoted a read-only original into Mine. Keep or Discard
+   * resolves this prompt; the immutable source is never modified.
+   */
+  copy_on_edit?: CopyOnEdit | null;
+  /**
    * Remains true until the worker is reaped, including failed shutdowns.
    */
   device_owned: boolean;
@@ -1072,6 +1082,11 @@ export interface TunerReading {
   confidence: number;
   frequency: number;
   level: number;
+}
+export interface CopyOnEdit {
+  copy_id: string;
+  source_id: string;
+  source_name: string;
 }
 /**
  * Exact per-block EQ readback, retained independently of scalar controls.
@@ -1521,6 +1536,7 @@ export interface LibraryItem {
   id: string;
   kind: LibraryKind;
   name: string;
+  origin?: "tone3000" | "oxidal_example" | "mine";
   source_name: string;
 }
 export interface LibraryUpdate {
@@ -2194,6 +2210,7 @@ export interface RigEntry {
   lv2_instances: number;
   name: string;
   native_instances: number;
+  origin: LibraryOrigin;
   revision: string;
   /**
    * Scene names in pad order; empty for a preset without scenes.
@@ -2215,6 +2232,11 @@ export interface RigPublish {
   resources: {
     [k: string]: ResourceSource;
   };
+  /**
+   * Existing rig whose description, categories and copy credit follow this
+   * immutable revision. The source itself is never changed.
+   */
+  source?: LibraryReference | null;
 }
 /**
  * Sets one preset's blend; 0 returns it to trails.

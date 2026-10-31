@@ -10,6 +10,36 @@ use std::{
     path::PathBuf,
 };
 
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum LibraryOrigin {
+    Tone3000,
+    OxidalExample,
+    #[default]
+    Mine,
+}
+impl LibraryOrigin {
+    /// Portable rigs are Mine unless their authoring extension explicitly marks
+    /// a read-only Oxidal example or a provider reference.
+    pub fn from_manifest(manifest: &crate::manifest::Manifest) -> Result<Self> {
+        let Some(value) = manifest
+            .extensions
+            .get("urn:oxidal:authoring")
+            .and_then(|extension| extension.get("origin"))
+        else {
+            return Ok(Self::Mine);
+        };
+        match value.as_str() {
+            Some("tone3000") => Ok(Self::Tone3000),
+            Some("oxidal_example") => Ok(Self::OxidalExample),
+            Some("mine") => Ok(Self::Mine),
+            _ => Err(Error::Invalid("Invalid preset origin")),
+        }
+    }
+}
+
 fn default_group(kind: LibraryKind) -> u8 {
     match kind {
         LibraryKind::Rig => 0,
@@ -56,6 +86,8 @@ pub struct LibraryItem {
     pub id: String,
     pub name: String,
     pub source_name: String,
+    #[serde(default)]
+    pub origin: LibraryOrigin,
     pub archived: bool,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -301,11 +333,22 @@ impl CatalogStore {
                 if !self.visible(request.entry_kind, &request.id)? {
                     return Err(Error::Invalid("Restore a preset before moving it"));
                 }
+                let moving = catalog
+                    .items
+                    .iter()
+                    .find(|item| item.kind == request.entry_kind && item.id == request.id)
+                    .expect("entry checked");
+                if moving.origin != LibraryOrigin::Mine {
+                    return Err(Error::Invalid(
+                        "Only presets in Mine belong to the set list",
+                    ));
+                }
                 let visible = catalog
                     .items
                     .iter()
                     .filter(|i| {
                         !i.archived
+                            && i.origin == LibraryOrigin::Mine
                             && (i.kind == LibraryKind::Graph)
                                 == (request.entry_kind == LibraryKind::Graph)
                     })
@@ -339,14 +382,25 @@ impl CatalogStore {
                 if !self.visible(request.entry_kind, &request.id)? {
                     return Err(Error::Invalid("Restore a preset before moving it"));
                 }
+                let moving = catalog
+                    .items
+                    .iter()
+                    .find(|item| item.kind == request.entry_kind && item.id == request.id)
+                    .expect("entry checked");
+                if moving.origin != LibraryOrigin::Mine {
+                    return Err(Error::Invalid(
+                        "Only presets in Mine belong to the set list",
+                    ));
+                }
                 let before = before
                     .map(|entry| {
-                        if !catalog
-                            .items
-                            .iter()
-                            .any(|i| i.kind == entry.kind && i.id == entry.id && !i.archived)
-                            || (entry.kind == LibraryKind::Graph)
-                                != (request.entry_kind == LibraryKind::Graph)
+                        if !catalog.items.iter().any(|i| {
+                            i.kind == entry.kind
+                                && i.id == entry.id
+                                && !i.archived
+                                && i.origin == LibraryOrigin::Mine
+                        }) || (entry.kind == LibraryKind::Graph)
+                            != (request.entry_kind == LibraryKind::Graph)
                         {
                             return Err(Error::Invalid("Drop target is unavailable"));
                         }
@@ -440,6 +494,7 @@ mod tests {
             id: id.repeat(64),
             name: name.into(),
             source_name: name.into(),
+            origin: LibraryOrigin::Mine,
             archived: false,
         };
         let mut rows = vec![
@@ -548,6 +603,7 @@ mod tests {
                 id: "a".repeat(64),
                 name: "Copy".into(),
                 source_name: "Copy".into(),
+                origin: LibraryOrigin::Mine,
                 archived: false,
             },
             LibraryItem {
@@ -555,6 +611,7 @@ mod tests {
                 id: "b".repeat(64),
                 name: "Draft".into(),
                 source_name: "Draft".into(),
+                origin: LibraryOrigin::Mine,
                 archived: false,
             },
         ];
@@ -599,6 +656,7 @@ mod tests {
                 id: "a".repeat(64),
                 name: "A".into(),
                 source_name: "A".into(),
+                origin: LibraryOrigin::Mine,
                 archived: false,
             },
             LibraryItem {
@@ -606,6 +664,7 @@ mod tests {
                 id: "b".repeat(64),
                 name: "B".into(),
                 source_name: "B".into(),
+                origin: LibraryOrigin::Mine,
                 archived: false,
             },
         ];
@@ -674,6 +733,60 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn provider_and_example_entries_never_join_or_reorder_the_mine_set_list() {
+        let root = std::env::temp_dir().join(format!("oxidal-origin-order-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let row = |id: &str, origin| LibraryItem {
+            kind: LibraryKind::Rig,
+            id: id.repeat(64),
+            name: id.into(),
+            source_name: id.into(),
+            origin,
+            archived: false,
+        };
+        let rows = vec![
+            row("a", LibraryOrigin::Tone3000),
+            row("b", LibraryOrigin::Mine),
+            row("c", LibraryOrigin::OxidalExample),
+            row("d", LibraryOrigin::Mine),
+        ];
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let initial = store.view(rows.clone()).unwrap();
+        for index in [0, 2] {
+            let error = store
+                .update(
+                    rows.clone(),
+                    LibraryUpdate {
+                        expected_revision: initial.revision.clone(),
+                        entry_kind: LibraryKind::Rig,
+                        id: rows[index].id.clone(),
+                        action: LibraryAction::Move { up: false },
+                    },
+                )
+                .unwrap_err();
+            assert!(error.to_string().contains("Only presets in Mine"));
+        }
+        let moved = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: initial.revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: rows[3].id.clone(),
+                    action: LibraryAction::Move { up: true },
+                },
+            )
+            .unwrap();
+        let mine = moved
+            .items
+            .iter()
+            .filter(|item| item.origin == LibraryOrigin::Mine)
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(mine, [rows[3].id.as_str(), rows[1].id.as_str()]);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn rejected_names_paths_and_failed_storage_do_not_publish() {
         let root =
             std::env::temp_dir().join(format!("oxidal-catalog-failure-{}", std::process::id()));
@@ -684,6 +797,7 @@ mod tests {
             id: "a".repeat(64),
             name: "A".into(),
             source_name: "A".into(),
+            origin: LibraryOrigin::Mine,
             archived: false,
         }];
         let mut store = CatalogStore::open(root.clone()).unwrap();

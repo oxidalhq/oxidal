@@ -5,6 +5,13 @@ remains in Presets. Browsing and importing files never starts playback or change
 the current sound; model selection for a playing block remains a separate action
 in Rig.
 
+Presets are grouped by origin: immutable TONE3000 downloads, immutable Oxidal
+examples and Mine. Only Mine is the device set list used by Perform, Previous,
+Next and MIDI program order. A first sonic edit to either immutable group creates
+and starts a Mine copy, retains description/categories with copy credit, and asks
+the player to Keep or Discard it. Discard returns to the source before removing
+the new copy. Legacy portable rigs without an explicit origin are Mine.
+
 NAM models and IRs include both TONE3000 downloads and files added by the user.
 The existing verified `audition-models` store retains these files independently
 of saved presets. A native preset embeds its model bytes; a mixed bundle embeds

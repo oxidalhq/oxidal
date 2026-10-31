@@ -20,7 +20,11 @@ import {
  * it is an implementation detail; choosing one stops the other first.
  * @see docs/audio.md
  */
-export type PresetChoice = { details?: PresetDetails } & (
+type PresetOrigin = 'tone3000' | 'oxidal_example' | 'mine';
+export type PresetChoice = {
+  details?: PresetDetails;
+  origin: PresetOrigin;
+} & (
   | { kind: 'tone3000'; id: string; owned: boolean; name: string }
   | { kind: 'scenes'; revision: string; name: string; scenes: string[] }
 );
@@ -38,6 +42,7 @@ export const tone3000Key = (state: AudioState | null | undefined) =>
         id: state.configured.preset_id,
         owned: state.configured.owned,
         name: '',
+        origin: state.configured.owned ? 'mine' : 'tone3000',
       })
     : '';
 
@@ -71,6 +76,7 @@ export async function loadPresetChoices(): Promise<{
         revision: p.revision,
         name: p.name,
         scenes: p.scenes ?? [],
+        origin: p.origin,
       }),
     ),
     ...(native.status === 'fulfilled' ? native.value.owned : []).map(
@@ -79,6 +85,7 @@ export async function loadPresetChoices(): Promise<{
         id: p.id,
         name: p.preset.name,
         owned: true,
+        origin: 'mine',
       }),
     ),
     ...(originals.status === 'fulfilled' ? originals.value : []).map(
@@ -87,6 +94,7 @@ export async function loadPresetChoices(): Promise<{
         id: p.sha256,
         name: p.name,
         owned: false,
+        origin: 'tone3000',
       }),
     ),
   ];
@@ -104,7 +112,12 @@ export async function loadPresetChoices(): Promise<{
     for (let i = items.length - 1; i >= 0; i--) {
       const row = listed.get(identity(items[i]!));
       if (row?.item.archived) items.splice(i, 1);
-      else if (row) items[i] = { ...items[i]!, name: row.item.name };
+      else if (row)
+        items[i] = {
+          ...items[i]!,
+          name: row.item.name,
+          origin: row.item.origin ?? items[i]!.origin,
+        };
     }
     items.sort(
       (a, b) =>

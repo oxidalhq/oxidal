@@ -907,6 +907,23 @@
         {
           "type": "object",
           "properties": {
+            "keep": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "resolve_copy"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "keep"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "action": {
               "$ref": "#/$defs/AuthoringAction"
             },
@@ -1112,6 +1129,18 @@
           "items": {
             "$ref": "#/$defs/LiveControl"
           }
+        },
+        "copy_on_edit": {
+          "description": "A first edit promoted a read-only original into Mine. Keep or Discard\nresolves this prompt; the immutable source is never modified.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyOnEdit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "device_owned": {
           "description": "Remains true until the worker is reaped, including failed shutdowns.",
@@ -2652,6 +2681,26 @@
       "required": [
         "source",
         "name"
+      ]
+    },
+    "CopyOnEdit": {
+      "type": "object",
+      "properties": {
+        "copy_id": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "source_name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "copy_id",
+        "source_id",
+        "source_name"
       ]
     },
     "Creator": {
@@ -4394,6 +4443,10 @@
         "name": {
           "type": "string"
         },
+        "origin": {
+          "$ref": "#/$defs/LibraryOrigin",
+          "default": "mine"
+        },
         "source_name": {
           "type": "string"
         }
@@ -4414,6 +4467,14 @@
         "owned",
         "graph",
         "rig"
+      ]
+    },
+    "LibraryOrigin": {
+      "type": "string",
+      "enum": [
+        "tone3000",
+        "oxidal_example",
+        "mine"
       ]
     },
     "LibraryReference": {
@@ -7393,6 +7454,9 @@
           "format": "uint",
           "minimum": 0
         },
+        "origin": {
+          "$ref": "#/$defs/LibraryOrigin"
+        },
         "revision": {
           "type": "string"
         },
@@ -7410,6 +7474,7 @@
         "revision",
         "id",
         "name",
+        "origin",
         "native_instances",
         "lv2_instances"
       ]
@@ -7468,6 +7533,18 @@
           "additionalProperties": {
             "$ref": "#/$defs/ResourceSource"
           }
+        },
+        "source": {
+          "description": "Existing rig whose description, categories and copy credit follow this\nimmutable revision. The source itself is never changed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibraryReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,

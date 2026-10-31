@@ -8,11 +8,16 @@ import {
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MixedRig } from './MixedRig';
 import { setPerform } from './performState';
+import { playScenes } from './presetChoices';
 import { rigAudioState, rigAudioCommand, rigDocument } from './api';
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
   rigDocument: vi.fn(),
+}));
+vi.mock('./presetChoices', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./presetChoices')>()),
+  playScenes: vi.fn(),
 }));
 // The picker has its own tests; here it only needs to render.
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
@@ -33,6 +38,7 @@ vi.mock('./AssetArtwork', () => ({
 vi.mock('./LiveEq', () => ({ LiveEq: () => null }));
 vi.mock('./SceneMidi', () => ({ SceneMidi: () => null }));
 beforeEach(() => {
+  sessionStorage.clear();
   Object.defineProperties(HTMLDialogElement.prototype, {
     showModal: {
       configurable: true,
@@ -51,11 +57,12 @@ beforeEach(() => {
 afterEach(() => {
   setPerform({ on: false, mode: 'play' });
   cleanup();
+  sessionStorage.clear();
   vi.resetAllMocks();
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
 });
-function setup() {
+function setup(origin: 'mine' | 'oxidal_example' = 'mine') {
   const controls = [
     ['outputLevel', 'Output', '0 dB', false],
     ['gateEnabled', 'Gate enabled', 'Off', true],
@@ -91,7 +98,8 @@ function setup() {
     revision: 'rig',
     manifest: {
       name: 'Test rig',
-      extensions: {},
+      extensions:
+        origin === 'mine' ? {} : { 'urn:oxidal:authoring': { origin } },
       tone3000: { instances: [{ id: 'native' }] },
       oxidal: {
         lv2: [],
@@ -326,4 +334,49 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
   expect(
     await screen.findByRole('button', { name: 'Perform view' }),
   ).toBeVisible();
+});
+
+it('copies a read-only example on its first confirmed control edit', async () => {
+  const state = setup('oxidal_example');
+  const edited = {
+    ...state,
+    revision: 3,
+    control: { ...state.control!, revision: 4, modified: true },
+  };
+  const copy = 'c'.repeat(64);
+  const saved = {
+    ...edited,
+    revision: 4,
+    save: {
+      source_session: 'audio',
+      source_control_revision: 4,
+      running: false,
+      saved_revision: copy,
+      error: null,
+    },
+  };
+  const copied = {
+    ...saved,
+    revision: 5,
+    configured: { revision: copy },
+    control: { ...state.control!, source_revision: copy, modified: false },
+  };
+  vi.mocked(rigAudioCommand)
+    .mockResolvedValueOnce(edited)
+    .mockResolvedValueOnce(saved);
+  vi.mocked(rigAudioState).mockResolvedValue(
+    copied as Awaited<ReturnType<typeof rigAudioState>>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Gate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Adjust Gate enabled' }));
+  expect(await screen.findByText('Editing a copy of Test rig')).toBeVisible();
+  expect(rigAudioCommand).toHaveBeenNthCalledWith(2, edited, {
+    kind: 'save',
+    name: 'Test rig',
+  });
+  expect(playScenes).toHaveBeenCalledWith(copy);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep copy' }));
+  expect(
+    screen.queryByText('Editing a copy of Test rig'),
+  ).not.toBeInTheDocument();
 });

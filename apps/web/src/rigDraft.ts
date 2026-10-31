@@ -271,7 +271,11 @@ export function rigBuilder(
     });
     link(last[0], 'out', 0);
     link(last[1], 'out', 1);
-    manifest.extensions['urn:oxidal:authoring'] = { labels, draft };
+    manifest.extensions['urn:oxidal:authoring'] = {
+      labels,
+      draft,
+      origin: 'mine',
+    };
     return { manifest_json: JSON.stringify(manifest), resources: sources };
   }
   const input: Stereo = [

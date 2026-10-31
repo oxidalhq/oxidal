@@ -93,11 +93,20 @@ impl Owner {
             self.state.modified = false;
             self.state.preset_name = None;
             self.state.saved_copy = None;
+            self.state.copy_on_edit = None;
             self.publish(AudioPhase::Stopped, None);
         } else if entry.kind == oxidal_presets::LibraryKind::Owned
             && self.state.saved_copy.as_deref() == Some(&entry.id)
         {
             self.state.saved_copy = None;
+            if self
+                .state
+                .copy_on_edit
+                .as_ref()
+                .is_some_and(|copy| copy.copy_id == entry.id)
+            {
+                self.state.copy_on_edit = None;
+            }
             self.publish(self.state.phase, self.state.error.clone());
         }
         Ok(())
@@ -807,18 +816,25 @@ impl Owner {
                 .configured
                 .as_ref()
                 .is_some_and(|s| s.midi.is_some())
-            && let Err(error) = self
+        {
+            match self
                 .midi(oxidal_audio::lifecycle::MidiOperation::Poll)
                 .await
-        {
-            self.publish(
-                if self.worker.is_some() {
-                    AudioPhase::Running
-                } else {
-                    AudioPhase::Failed
-                },
-                Some(error),
-            );
+            {
+                Ok(()) => {
+                    if let Err(error) = self.promote_original_edit().await {
+                        self.publish(AudioPhase::Running, Some(error));
+                    }
+                }
+                Err(error) => self.publish(
+                    if self.worker.is_some() {
+                        AudioPhase::Running
+                    } else {
+                        AudioPhase::Failed
+                    },
+                    Some(error),
+                ),
+            }
         }
     }
     async fn set_control(&mut self, target: String, value: f32) -> Result<(), String> {
@@ -1131,14 +1147,20 @@ impl Owner {
         } else {
             ModelOperation::Poll
         };
-        if let Err(error) = self.model_command(operation).await
-            && self.state.phase == AudioPhase::Running
-        {
-            if let Some(p) = &mut self.state.model_change {
-                p.phase = ModelPhase::Failed;
-                p.error = Some(error.clone());
+        match self.model_command(operation).await {
+            Ok(_) => {
+                if let Err(error) = self.promote_original_edit().await {
+                    self.publish(AudioPhase::Running, Some(error));
+                }
             }
-            self.publish(AudioPhase::Running, Some(error));
+            Err(error) if self.state.phase == AudioPhase::Running => {
+                if let Some(p) = &mut self.state.model_change {
+                    p.phase = ModelPhase::Failed;
+                    p.error = Some(error.clone());
+                }
+                self.publish(AudioPhase::Running, Some(error));
+            }
+            Err(_) => {}
         }
     }
     async fn create(&mut self, stream: oxidal_audio::StreamConfig, name: String) -> Reply {
@@ -1315,7 +1337,13 @@ impl Owner {
         self.publish(self.state.phase, self.state.error.clone());
         Ok(self.state.clone())
     }
-    async fn load_preset(&mut self, preset_id: String, owned: bool) -> Reply {
+    async fn load_preset(
+        &mut self,
+        preset_id: String,
+        owned: bool,
+        retain_previous: bool,
+        restore_target: bool,
+    ) -> Reply {
         if self.model_pending() {
             return Err("Finish model audition before loading another rig".into());
         }
@@ -1351,7 +1379,11 @@ impl Owner {
         let previous_controls = self.resume_controls.clone();
         let previous_models = self.state.models.clone();
         let previous_eq = self.resume_eq.clone();
-        let candidate = Recovery::read(&path(&proposed))?;
+        let candidate = if restore_target {
+            Recovery::read(&path(&proposed))?
+        } else {
+            None
+        };
         if let Some(saved) = &candidate {
             if saved.settings.preset_id != proposed.preset_id
                 || saved.settings.owned != owned
@@ -1362,13 +1394,15 @@ impl Owner {
             proposed.working = saved.settings.working.clone();
         }
         // Retain edits without a save/discard dialog or overwriting the original preset.
-        Recovery::new(
-            previous.clone(),
-            previous_controls.clone(),
-            previous_models.clone(),
-            previous_eq.clone(),
-        )
-        .write(&path(&previous))?;
+        if retain_previous {
+            Recovery::new(
+                previous.clone(),
+                previous_controls.clone(),
+                previous_models.clone(),
+                previous_eq.clone(),
+            )
+            .write(&path(&previous))?;
+        }
         let was_running = self.state.phase == AudioPhase::Running;
         self.publish(AudioPhase::Stopping, None);
         if let Err(error) = self.release().await {
@@ -1399,7 +1433,13 @@ impl Owner {
             }
         }
         match result {
-            Ok(()) => Ok(self.state.clone()),
+            Ok(()) => {
+                if retain_previous {
+                    self.state.copy_on_edit = None;
+                    self.publish(AudioPhase::Running, None);
+                }
+                Ok(self.state.clone())
+            }
             Err(error) => {
                 if was_running {
                     match self
@@ -1425,6 +1465,57 @@ impl Owner {
                 Err(error)
             }
         }
+    }
+    async fn promote_original_edit(&mut self) -> Result<(), String> {
+        let Some(source) = self.state.configured.clone() else {
+            return Ok(());
+        };
+        if source.owned || source.draft || !self.state.modified || self.state.copy_on_edit.is_some()
+        {
+            return Ok(());
+        }
+        let source_name = self
+            .state
+            .preset_name
+            .clone()
+            .unwrap_or_else(|| "My preset".into());
+        let mut name = source_name.clone();
+        while name.len() > 100 {
+            name.pop();
+        }
+        let name = name.trim();
+        let name = if oxidal_audio::lifecycle::valid_preset_name(name) {
+            name.to_owned()
+        } else {
+            "My preset".into()
+        };
+        // A provider preset is immutable. Do not leave its transient edits in
+        // the per-preset recovery store where a later recall could revive them.
+        match std::fs::remove_file(self.rig_session_path(&source)) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("Cannot clear source recovery: {error}")),
+        }
+        self.save_copy(name).await?;
+        let copy_id = self
+            .state
+            .saved_copy
+            .clone()
+            .ok_or("Saved copy identity missing")?;
+        self.load_preset(copy_id.clone(), true, false, false)
+            .await?;
+        self.state.copy_on_edit = Some(oxidal_audio::lifecycle::CopyOnEdit {
+            copy_id: copy_id.clone(),
+            source_id: source.preset_id,
+            source_name,
+        });
+        self.state.saved_copy = Some(copy_id);
+        // Publish the Mine identity as the crash-recovery target immediately;
+        // no later timer may put the immutable source back into recovery.
+        self.recovery_due = Some(std::time::Instant::now());
+        self.checkpoint();
+        self.publish(AudioPhase::Running, None);
+        Ok(())
     }
     async fn reconfigure(&mut self, stream: oxidal_audio::StreamConfig) -> Reply {
         // Validate before releasing audio. Device support is established by worker readiness.
@@ -1566,13 +1657,17 @@ impl Owner {
                 return Ok(self.state.clone());
             }
             AudioAction::LoadPreset { preset_id, owned } => {
-                return self.load_preset(preset_id, owned).await;
+                return self.load_preset(preset_id, owned, true, true).await;
             }
             AudioAction::Create { stream, name } => return self.create(stream, name).await,
             AudioAction::Authoring {
                 action: AuthoringAction::Parameter { parameter, value },
             } => return self.prepare_parameter(parameter, value).await,
-            AudioAction::Authoring { action } => return self.authoring_command(action).await,
+            AudioAction::Authoring { action } => {
+                self.authoring_command(action).await?;
+                self.promote_original_edit().await?;
+                return Ok(self.state.clone());
+            }
             // A failed export must not mark the independently running audio failed.
             AudioAction::ReplaceModel { mut assignment } => {
                 if self.state.phase != AudioPhase::Running
@@ -1619,6 +1714,23 @@ impl Owner {
                 return self.model_command(ModelOperation::Cancel).await;
             }
             AudioAction::SaveCopy { name } => return self.save_copy(name).await,
+            AudioAction::ResolveCopy { keep } => {
+                let copy = self
+                    .state
+                    .copy_on_edit
+                    .clone()
+                    .ok_or("There is no automatic copy to resolve")?;
+                if keep {
+                    self.state.copy_on_edit = None;
+                    self.publish(self.state.phase, None);
+                } else {
+                    self.load_preset(copy.source_id, false, false, false)
+                        .await?;
+                    self.state.copy_on_edit = None;
+                    self.publish(AudioPhase::Running, None);
+                }
+                return Ok(self.state.clone());
+            }
             AudioAction::Reconfigure { stream } => return self.reconfigure(stream).await,
             AudioAction::SetEq { block_id, edit } => {
                 if self.state.phase != AudioPhase::Running {
@@ -1663,6 +1775,7 @@ impl Owner {
                         "Audio already owns the device; stop before applying changes".into(),
                     );
                 }
+                self.state.copy_on_edit = None;
                 self.start(settings, None, vec![], None).await
             }
             AudioAction::Resume => {
@@ -1740,6 +1853,7 @@ impl Owner {
             self.publish(AudioPhase::Failed, Some(error.clone()));
             return Err(error);
         }
+        self.promote_original_edit().await?;
         Ok(self.state.clone())
     }
     fn check_exit(&mut self) {
@@ -1796,6 +1910,7 @@ impl Playback {
             modified: false,
             preset_name: None,
             saved_copy: None,
+            copy_on_edit: None,
             models: recovery
                 .as_ref()
                 .map(|r| r.models.clone())

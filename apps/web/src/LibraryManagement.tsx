@@ -11,6 +11,9 @@ import { Button } from './components/ui/button';
 import { PresetManagement } from './PresetManagement';
 import { useSetListDrag } from './useSetListDrag';
 
+const originOf = (item: LibraryCatalog['items'][number]) =>
+  item.origin ?? (item.kind === 'original' ? 'tone3000' : 'mine');
+
 export function LibraryManagement({
   connected,
   onChanged,
@@ -78,8 +81,12 @@ export function LibraryManagement({
     }
   }
   const visible = catalog?.items.filter((i) => i.archived === removed) ?? [];
-  const performance = visible.filter((i) => i.kind !== 'graph');
-  const effects = visible.filter((i) => i.kind === 'graph');
+  const performance = visible.filter(
+    (i) => i.kind !== 'graph' && originOf(i) === 'mine',
+  );
+  const effects = visible.filter(
+    (i) => i.kind === 'graph' && originOf(i) === 'mine',
+  );
   return (
     <section className="space-y-3" aria-label="Manage library">
       <h2>Set list</h2>
@@ -102,7 +109,12 @@ export function LibraryManagement({
         data-dragging={drag.dragging || undefined}
       >
         {visible.map((item) => {
-          const group = item.kind === 'graph' ? effects : performance;
+          const group =
+            originOf(item) === 'mine'
+              ? item.kind === 'graph'
+                ? effects
+                : performance
+              : [item];
           const index = group.findIndex(
             (i) => i.kind === item.kind && i.id === item.id,
           );
@@ -111,7 +123,9 @@ export function LibraryManagement({
               key={`${item.kind}:${item.id}:${item.name}`}
               item={item}
               position={
-                item.kind !== 'graph' && !removed ? index + 1 : undefined
+                originOf(item) === 'mine' && item.kind !== 'graph' && !removed
+                  ? index + 1
+                  : undefined
               }
               disabled={busy || !connected}
               first={index === 0}
@@ -164,6 +178,7 @@ function LibraryRow({
   onEdit: (action: LibraryUpdate['action']) => void;
   onChanged: () => void;
 }) {
+  const origin = originOf(item);
   return (
     <div
       className="set-list-row border-b border-border py-3"
@@ -173,7 +188,7 @@ function LibraryRow({
       data-moving={drag.dragging === `${item.kind}:${item.id}` || undefined}
     >
       <div className="set-list-title flex items-center gap-3">
-        {!item.archived && item.kind !== 'graph' && (
+        {!item.archived && item.kind !== 'graph' && origin === 'mine' && (
           <Button
             variant="ghost"
             className="set-list-handle"
@@ -202,18 +217,20 @@ function LibraryRow({
                 {position} ·{' '}
               </span>
             )}
-            {item.kind === 'original'
-              ? 'Imported tone'
-              : item.kind === 'owned'
-                ? 'Saved tone'
-                : item.kind === 'rig'
-                  ? 'Preset with scenes'
-                  : 'Effects draft · Author'}
+            {origin === 'tone3000'
+              ? 'TONE3000 · read-only original'
+              : origin === 'oxidal_example'
+                ? 'Oxidal example · read-only original'
+                : item.kind === 'owned'
+                  ? 'Mine · saved tone'
+                  : item.kind === 'rig'
+                    ? 'Mine · scenes and effects'
+                    : 'Mine · effects draft · Author'}
           </p>
         </div>
       </div>
       <div className="action-row set-list-actions">
-        {!item.archived && (
+        {!item.archived && origin === 'mine' && (
           <>
             <Button
               variant="ghost"

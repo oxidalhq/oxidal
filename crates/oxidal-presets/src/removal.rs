@@ -893,11 +893,12 @@ impl RemovalStore {
     }
     fn entries(&self) -> Result<Vec<Entry>> {
         let mut entries = Vec::new();
-        let item = |kind, id: String, name: String| LibraryItem {
+        let item = |kind, id: String, name: String, origin| LibraryItem {
             kind,
             id,
             name: name.clone(),
             source_name: name,
+            origin,
             archived: false,
         };
         let originals = Store::new(self.root.clone());
@@ -907,7 +908,12 @@ impl RemovalStore {
                 path: self.root.join(format!("{}.t3kpreset", p.sha256)),
                 digests: embedded_digests(&bytes).ok(),
                 embedded: u64::from(p.embedded_bytes),
-                item: item(LibraryKind::Original, p.sha256, p.name),
+                item: item(
+                    LibraryKind::Original,
+                    p.sha256,
+                    p.name,
+                    crate::LibraryOrigin::Tone3000,
+                ),
             });
         }
         let owned = OwnedStore::new(self.root.join("owned"));
@@ -917,7 +923,12 @@ impl RemovalStore {
                 path: self.root.join("owned").join(&p.id),
                 digests: embedded_digests(&bytes).ok(),
                 embedded: u64::from(p.preset.embedded_bytes),
-                item: item(LibraryKind::Owned, p.id, p.preset.name),
+                item: item(
+                    LibraryKind::Owned,
+                    p.id,
+                    p.preset.name,
+                    crate::LibraryOrigin::Mine,
+                ),
             });
         }
         for p in GraphStore::new(self.root.join("graphs")).list()? {
@@ -925,7 +936,12 @@ impl RemovalStore {
                 path: self.root.join("graphs").join(format!("{}.json", p.id)),
                 digests: Some(BTreeSet::new()),
                 embedded: 0,
-                item: item(LibraryKind::Graph, p.id, p.preset.name),
+                item: item(
+                    LibraryKind::Graph,
+                    p.id,
+                    p.preset.name,
+                    crate::LibraryOrigin::Mine,
+                ),
             });
         }
         let bundles = BundleStore::new(self.root.join("bundles"));
@@ -963,11 +979,12 @@ impl RemovalStore {
                 }
                 embedded += resource.bytes;
             }
+            let origin = crate::LibraryOrigin::from_manifest(&manifest)?;
             entries.push(Entry {
                 path: self.root.join("bundles").join(&id),
                 digests: complete.then_some(digests),
                 embedded,
-                item: item(LibraryKind::Rig, id, manifest.name),
+                item: item(LibraryKind::Rig, id, manifest.name, origin),
             });
         }
         let catalog = CatalogStore::open(self.root.clone())?

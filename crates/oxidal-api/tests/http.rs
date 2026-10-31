@@ -1333,9 +1333,31 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     let native: Value = r.json().await.unwrap();
     let from_native =
         json!({"payload":{"kind":"bundle","revision":native["revision"],"resource":"payload"}});
-    m["name"] = json!("Renamed copy");
-    let changed: Value = publish(&c, &url, &m, from_native.clone())
+    let details = get(&c, &url, "presets/details").await;
+    let described = c
+        .post(format!("{url}/presets/details"))
+        .json(&json!({
+            "expected_revision": details["revision"],
+            "entry_kind": "rig",
+            "id": native["revision"],
+            "description": "Reference sound",
+            "categories": ["Rock"]
+        }))
+        .send()
         .await
+        .unwrap();
+    assert!(described.status().is_success());
+    m["name"] = json!("Renamed copy");
+    let changed: Value = c
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({
+            "manifest_json": m.to_string(),
+            "resources": from_native.clone(),
+            "source": {"kind":"rig", "id":native["revision"]}
+        }))
+        .send()
+        .await
+        .unwrap()
         .json()
         .await
         .unwrap();
@@ -1348,6 +1370,18 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     let b = store.read(changed["revision"].as_str().unwrap()).unwrap();
     assert_eq!(b.resource("payload").unwrap(), bytes);
     assert!(store.read(native["revision"].as_str().unwrap()).is_ok());
+    let inherited = get(&c, &url, "presets/details").await;
+    let inherited = inherited["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["entry"]["id"] == changed["revision"])
+        .unwrap();
+    assert_eq!(inherited["details"]["description"], "Reference sound");
+    assert_eq!(
+        inherited["details"]["copied_from"]["source"]["id"],
+        native["revision"]
+    );
     m["resources"][0]["sha256"] = json!("a".repeat(64));
     assert_eq!(publish(&c, &url, &m, from_native).await.status(), 422);
     assert_eq!(get(&c, &url, "rig-audio").await, before);

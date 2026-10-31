@@ -79,9 +79,7 @@ it('selects original and owned identities without optimistically changing the so
   expect(
     screen.getByRole('button', { name: /^Amp A\s*Playing$/ }),
   ).toHaveAttribute('aria-pressed', 'true');
-  expect(
-    screen.getByText(/Unsaved edits stay with each preset/),
-  ).toBeInTheDocument();
+  expect(screen.getByText(/Mine is your set list/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /^My A\s*My copy$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName('Playing preset: Amp A');
@@ -92,7 +90,7 @@ it('selects original and owned identities without optimistically changing the so
   expect(
     screen.queryByRole('button', { name: /^My A\s*My copy$/ }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*Original$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }));
   expect(select).toHaveBeenLastCalledWith(tone('b', false));
   view.rerender(
     <RigPresetSelector current={state} disabled onSelect={select} />,
@@ -131,7 +129,7 @@ it('keeps the current rig visible when the library fails, and permits retry', as
   );
   fireEvent.click(picker);
   expect(
-    screen.getByRole('button', { name: /^Amp B\s*Original$/ }),
+    screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }),
   ).toBeEnabled();
 });
 it('groups imaging separately and never substitutes normalized percentages for physical readback', () => {
@@ -165,46 +163,50 @@ it('reorders actual chain models without dropping or moving insertion slots', ()
 
 it('uses the same authoritative recall from performance pads and preserves owned identity', async () => {
   library();
+  vi.mocked(nativeState).mockResolvedValue({
+    owned: [
+      { id: 'a', preset: { name: 'My A' } },
+      { id: 'b', preset: { name: 'My B' } },
+    ],
+  } as Awaited<ReturnType<typeof nativeState>>);
   const select = vi.fn();
   render(
     <RigPresetSelector
-      current={state}
+      current={{ key: 'copy:a', name: 'My A', modified: false }}
       disabled={false}
       onSelect={select}
       pads
     />,
   );
-  const playing = await screen.findByRole('button', { name: /Amp A.*Playing/ });
+  const playing = await screen.findByRole('button', { name: /My A.*Playing/ });
   expect(playing).toBeDisabled();
   expect(playing).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /My A.*My copy/ }));
-  expect(select).toHaveBeenCalledWith(tone('a', true));
+  fireEvent.click(screen.getByRole('button', { name: /My B.*Next/ }));
+  expect(select).toHaveBeenCalledWith(tone('b', true));
   expect(playing).toHaveAttribute('aria-pressed', 'true');
   // Fewer than eight presets need no bank paging.
   expect(
     screen.queryByRole('button', { name: 'Next bank' }),
   ).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Amp B.*Next/ })).toBeEnabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Next preset: Amp B' }));
-  expect(select).toHaveBeenLastCalledWith(tone('b', false));
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Previous preset: My A' }),
-  );
-  expect(select).toHaveBeenLastCalledWith(tone('a', true));
+  fireEvent.click(screen.getByRole('button', { name: 'Next preset: My B' }));
+  expect(select).toHaveBeenLastCalledWith(tone('b', true));
 });
 
-it('opens gig pads on the playing bank and keeps playing identity during initial loading', async () => {
+it('opens Mine gig pads on the playing bank and keeps playing identity during initial loading', async () => {
   library();
+  vi.mocked(nativeState).mockResolvedValue({
+    owned: Array.from({ length: 12 }, (_, i) => ({
+      id: String(i),
+      preset: { name: `Tone ${i}` },
+    })),
+  } as unknown as Awaited<ReturnType<typeof nativeState>>);
   vi.mocked(presetLibrary).mockResolvedValue(
     Array.from({ length: 12 }, (_, i) => ({
       sha256: String(i),
-      name: `Tone ${i}`,
+      name: `Original ${i}`,
     })) as Awaited<ReturnType<typeof presetLibrary>>,
   );
-  vi.mocked(nativeState).mockResolvedValue({ owned: [] } as unknown as Awaited<
-    ReturnType<typeof nativeState>
-  >);
-  const playing = { key: 'original:10', name: 'Tone 10', modified: false };
+  const playing = { key: 'copy:10', name: 'Tone 10', modified: false };
   const view = render(
     <RigPresetSelector
       current={playing}
@@ -276,7 +278,7 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*Original$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }));
   expect(select).toHaveBeenCalledWith(tone('b', false));
 });
 it('keeps saved copies selectable when originals cannot be read', async () => {
@@ -303,6 +305,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
         revision,
         id: 'clean-to-heavy',
         name: 'Clean to heavy',
+        origin: 'mine',
         native_instances: 3,
         lv2_instances: 0,
         scenes: ['Clean', 'Crunch', 'Heavy'],
@@ -320,7 +323,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   const groups = screen
     .getAllByRole('region')
     .map((g) => g.getAttribute('aria-label'));
-  expect(groups).toEqual(['Set list']);
+  expect(groups).toEqual(['Mine', 'TONE3000']);
   fireEvent.click(
     screen.getByRole('button', { name: /^Clean to heavy\s*3 scenes$/ }),
   );

@@ -71,6 +71,8 @@ import {
   rigLibrary,
   rigAudioCommand,
   rigDocument,
+  removalPreview,
+  removePreset,
   type RigAudioState,
   type RigAudioAction,
   type RigControl,
@@ -154,6 +156,35 @@ export function MixedRig({
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
   const [saveOpening, setSaveOpening] = useState<RigAudioState | null>(null);
+  const [copyOnEdit, setCopyOnEdit] = useState<{
+    copy: string;
+    source: string;
+    sourceName: string;
+  } | null>(() => {
+    try {
+      const saved: unknown = JSON.parse(
+        sessionStorage.getItem('oxidal.mixed.copy-on-edit') ?? 'null',
+      );
+      return saved &&
+        typeof saved === 'object' &&
+        'copy' in saved &&
+        typeof saved.copy === 'string' &&
+        'source' in saved &&
+        typeof saved.source === 'string' &&
+        'sourceName' in saved &&
+        typeof saved.sourceName === 'string'
+        ? {
+            copy: saved.copy,
+            source: saved.source,
+            sourceName: saved.sourceName,
+          }
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  const promoting = useRef(false);
+  const resolvingCopy = useRef(false);
   const [edit, setEdit] = useState<{
     control: RigControl;
     value: number;
@@ -233,6 +264,30 @@ export function MixedRig({
     };
   }, [revision]);
   const matching = document?.revision === revision ? document : null;
+  const sourceOrigin = (() => {
+    const value = matching?.manifest.extensions['urn:oxidal:authoring']?.origin;
+    return value === 'tone3000' || value === 'oxidal_example' ? value : 'mine';
+  })();
+  useEffect(() => {
+    if (copyOnEdit)
+      sessionStorage.setItem(
+        'oxidal.mixed.copy-on-edit',
+        JSON.stringify(copyOnEdit),
+      );
+    else sessionStorage.removeItem('oxidal.mixed.copy-on-edit');
+  }, [copyOnEdit]);
+  useEffect(() => {
+    if (
+      !resolvingCopy.current &&
+      revision &&
+      copyOnEdit &&
+      revision !== copyOnEdit.copy
+    )
+      setCopyOnEdit(null);
+  }, [revision, copyOnEdit]);
+  useEffect(() => {
+    if (copyOnEdit) setPerform({ on: false });
+  }, [copyOnEdit]);
   // Each TONE3000 block's type (amp, cab, pedal…) for its icon, by node and
   // block id, read from the artwork of the preset the node was made from.
   const [gears, setGears] = useState<Record<string, Record<string, string>>>(
@@ -274,6 +329,50 @@ export function MixedRig({
       !!state?.configured && state.phase !== 'unavailable' && !otherPlaying,
     );
   }, [state?.configured, state?.phase, otherPlaying, onPresent]);
+  async function promoteMixedEdit(after: RigAudioState) {
+    const source = matching;
+    if (
+      !source ||
+      sourceOrigin === 'mine' ||
+      copyOnEdit ||
+      promoting.current ||
+      !after.control?.modified
+    )
+      return;
+    promoting.current = true;
+    try {
+      const copyName =
+        Array.from(source.manifest.name).slice(0, 100).join('').trim() ||
+        'My preset';
+      let cursor = await rigAudioCommand(after, {
+        kind: 'save',
+        name: copyName,
+      });
+      accept(cursor);
+      const until = performance.now() + 65_000;
+      while (cursor.save?.running) {
+        if (performance.now() > until)
+          throw new Error(
+            'Automatic copy timed out; check Mine before retrying.',
+          );
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        cursor = await rigAudioState();
+        accept(cursor);
+      }
+      if (cursor.save?.error) throw new Error(cursor.save.error);
+      const copy = cursor.save?.saved_revision;
+      if (!copy) throw new Error('Automatic copy did not return a revision.');
+      await playScenes(copy);
+      accept(await rigAudioState());
+      setCopyOnEdit({
+        copy,
+        source: source.revision,
+        sourceName: source.manifest.name,
+      });
+    } finally {
+      promoting.current = false;
+    }
+  }
   async function command(action: RigAudioAction) {
     if (!current.current || sending.current) return;
     generation.current++;
@@ -281,6 +380,7 @@ export function MixedRig({
     setBusy(true);
     setError('');
     try {
+      let next: RigAudioState;
       if (
         action.kind === 'control' &&
         action.command.target.kind === 'native' &&
@@ -308,27 +408,31 @@ export function MixedRig({
             },
           },
         });
-        accept(
-          await rigAudioCommand(cursor, {
-            kind: 'authoring',
-            command: {
-              session: cursor.control!.session,
-              expected_revision: cursor.control!.revision,
-              node: target.node,
-              action: {
-                kind: 'gesture',
-                edit: {
-                  phase: 'commit',
-                  owner: 'mixed-toggle',
-                  token,
-                  sequence: 1,
-                  value: action.command.value,
-                },
+        next = await rigAudioCommand(cursor, {
+          kind: 'authoring',
+          command: {
+            session: cursor.control!.session,
+            expected_revision: cursor.control!.revision,
+            node: target.node,
+            action: {
+              kind: 'gesture',
+              edit: {
+                phase: 'commit',
+                owner: 'mixed-toggle',
+                token,
+                sequence: 1,
+                value: action.command.value,
               },
             },
-          }),
-        );
-      } else accept(await rigAudioCommand(current.current, action));
+          },
+        });
+        accept(next);
+      } else {
+        next = await rigAudioCommand(current.current, action);
+        accept(next);
+      }
+      if (['authoring', 'control', 'eq', 'model'].includes(action.kind))
+        await promoteMixedEdit(next);
       return true;
     } catch (cause) {
       setError(String(cause));
@@ -407,17 +511,30 @@ export function MixedRig({
         const listed = catalog.items.find(
           (i) => i.kind === 'rig' && i.id === opened.revision,
         );
-        const published = await publishRig(
-          make({
-            opened,
-            plugins,
-            live,
-            name: listed?.name ?? opened.manifest.name,
-            profile: library.native_profile,
-          }),
-        );
+        const origin = listed?.origin ?? sourceOrigin;
+        const request = make({
+          opened,
+          plugins,
+          live,
+          name: listed?.name ?? opened.manifest.name,
+          profile: library.native_profile,
+        });
+        const manifest = JSON.parse(
+          request.manifest_json,
+        ) as RigDocument['manifest'];
+        if (origin !== 'mine') {
+          manifest.id = crypto.randomUUID();
+          manifest.extensions['urn:oxidal:authoring'] = {
+            ...(manifest.extensions['urn:oxidal:authoring'] ?? {}),
+            origin: 'mine',
+          };
+          request.manifest_json = JSON.stringify(manifest);
+        }
+        request.source = { kind: 'rig', id: opened.revision };
+        const published = await publishRig(request);
         await playScenes(published.revision);
-        if (listed) {
+        accept(await rigAudioState());
+        if (listed && origin === 'mine') {
           const latest = await libraryCatalog();
           await libraryCatalog({
             expected_revision: latest.revision,
@@ -426,6 +543,12 @@ export function MixedRig({
             action: { kind: 'visibility', archived: true },
           });
         }
+        if (origin !== 'mine')
+          setCopyOnEdit({
+            copy: published.revision,
+            source: opened.revision,
+            sourceName: listed?.name ?? opened.manifest.name,
+          });
       } catch (cause) {
         if (alive.current) setError(String(cause));
       } finally {
@@ -559,7 +682,10 @@ export function MixedRig({
     setBusy(true);
     try {
       if (cancel) await pending.cancel();
-      else await pending.finish(latest.current);
+      else {
+        await pending.finish(latest.current);
+        if (current.current) await promoteMixedEdit(current.current);
+      }
     } catch (e) {
       if (alive.current) setError(String(e));
     } finally {
@@ -650,7 +776,7 @@ export function MixedRig({
       row.status.tools?.balance.state === 'listening' ||
       row.status.tools?.alignment.state === 'listening',
   );
-  const disabled = unavailable || !!measuring;
+  const disabled = unavailable || !!measuring || !matching;
   const nativeModels = state.control?.slots?.find(
     (s) => s.node === selected?.id,
   );
@@ -729,6 +855,43 @@ export function MixedRig({
     }
     if (await command({ kind: 'save', name: name.trim() }))
       setSaveOpening(null);
+  }
+  async function resolveMixedCopy(keep: boolean) {
+    const copy = copyOnEdit;
+    if (!copy || busy) return;
+    if (keep) {
+      setCopyOnEdit(null);
+      return;
+    }
+    setBusy(true);
+    resolvingCopy.current = true;
+    setError('');
+    try {
+      await playScenes(copy.source);
+      accept(await rigAudioState());
+      const preview = await removalPreview({
+        entry_kind: 'rig',
+        id: copy.copy,
+      });
+      if (preview.blocked)
+        throw new Error(
+          `The automatic copy could not be discarded: ${preview.blocked}`,
+        );
+      await removePreset({
+        entry_kind: 'rig',
+        id: copy.copy,
+        expected_preview: preview.token,
+        delete_models: false,
+      });
+      setCopyOnEdit(null);
+    } catch (cause) {
+      setError(
+        `The original is playing, but the copy remains in Mine: ${String(cause)}`,
+      );
+    } finally {
+      resolvingCopy.current = false;
+      if (alive.current) setBusy(false);
+    }
   }
   const scale = edit
     ? lv2Control({
@@ -1058,13 +1221,21 @@ export function MixedRig({
                       revision,
                       name: '',
                       scenes: [],
+                      origin: sourceOrigin,
                     })
                   : '',
                 name: matching?.manifest.name,
                 modified: !!changed,
                 refresh: revision,
               }}
-              disabled={disabled || busy || switching || !!edit || !!picker}
+              disabled={
+                disabled ||
+                busy ||
+                switching ||
+                !!edit ||
+                !!picker ||
+                !!copyOnEdit
+              }
               pads
               all
               onSelect={(choice) => void choose(choice)}
@@ -1080,13 +1251,21 @@ export function MixedRig({
         <RigPresetSelector
           current={{
             key: revision
-              ? choiceKey({ kind: 'scenes', revision, name: '', scenes: [] })
+              ? choiceKey({
+                  kind: 'scenes',
+                  revision,
+                  name: '',
+                  scenes: [],
+                  origin: sourceOrigin,
+                })
               : '',
             name: matching?.manifest.name,
             modified: !!changed,
             refresh: revision,
           }}
-          disabled={disabled || busy || switching || !!edit || !!picker}
+          disabled={
+            disabled || busy || switching || !!edit || !!picker || !!copyOnEdit
+          }
           onSelect={(choice) => void choose(choice)}
         />
         <Button
@@ -1141,6 +1320,30 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {copyOnEdit && (
+        <div
+          className="rounded-md border border-border bg-card p-3"
+          role="status"
+        >
+          <strong>Editing a copy of {copyOnEdit.sourceName}</strong>
+          <p className="caption">
+            Your first change created this preset in Mine. The original is
+            unchanged.
+          </p>
+          <div className="action-row">
+            <Button disabled={busy} onClick={() => void resolveMixedCopy(true)}>
+              Keep copy
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void resolveMixedCopy(false)}
+            >
+              Discard copy
+            </Button>
+          </div>
+        </div>
+      )}
       {unsaved && (
         <AdjustmentDialog
           title="Keep your edits?"

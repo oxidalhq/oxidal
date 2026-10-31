@@ -325,7 +325,12 @@ identical L/R outputs. Stereo effects keep both ports. The composer never duplic
 a mono processor behind the user's back or implies that its output retains stereo.
 It does not yet author parallel routing; imported port graphs retain their topology.
 
-The optional `urn:oxidal:authoring` metadata holds node labels and a boolean `draft`.
+The optional `urn:oxidal:authoring` metadata holds node labels, a boolean `draft`
+and `origin`: `mine`, `tone3000` or `oxidal_example`. A missing origin means Mine;
+other values are invalid. TONE3000 and Oxidal-example rigs are immutable library
+sources. Their first confirmed control or structural edit publishes a distinct
+Mine identity and revision, starts that copy and leaves the source visible and
+unchanged. Mine-to-Mine structural replacements retain their logical identity.
 Audition revisions are immutable and addressable but hidden from saved-library pages
 when `draft` is exactly true. The isolated Save worker removes that marker while
 retaining labels and unrelated metadata. Play does not represent an audition as a

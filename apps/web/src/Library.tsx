@@ -369,6 +369,8 @@ export function Library({
             query={query}
             category={category}
             details={details}
+            origin="mine"
+            title="Mine · scenes and effects"
             onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
           />
           {error && (
@@ -390,14 +392,13 @@ export function Library({
           <p role="status">{message}</p>
           {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
           <div className="section-heading">
-            <h2>Single chain</h2>
+            <h2>Mine · single chain</h2>
           </div>
           {(query.trim() || category) &&
             !busy &&
-            !owned.some((p) => matches(p.name, 'owned', p.id)) &&
-            !presets.some((p) => matches(p.name, 'original', p.sha256)) && (
+            !owned.some((p) => matches(p.name, 'owned', p.id)) && (
               <p role="status" className="caption">
-                No single-chain presets match these filters.
+                No Mine single-chain presets match these filters.
               </p>
             )}
           <ul className="preset-library">
@@ -426,6 +427,29 @@ export function Library({
                   </a>
                 </li>
               ))}
+          </ul>
+          <SavedRigs
+            connected={connected}
+            onOpenRig={onOpenRig}
+            refresh={refresh}
+            query={query}
+            category={category}
+            details={details}
+            origin="oxidal_example"
+            title="Oxidal examples"
+            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+          />
+          <div className="section-heading">
+            <h2>TONE3000</h2>
+          </div>
+          {(query.trim() || category) &&
+            !busy &&
+            !presets.some((p) => matches(p.name, 'original', p.sha256)) && (
+              <p role="status" className="caption">
+                No TONE3000 presets match these filters.
+              </p>
+            )}
+          <ul className="preset-library">
             {presets
               .filter((p) => matches(p.name, 'original', p.sha256))
               .map((preset) => (

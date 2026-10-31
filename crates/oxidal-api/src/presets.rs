@@ -154,25 +154,26 @@ pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
 
 /// Library metadata is separate from immutable native/graph/bundle contents.
 fn catalog_items(root: &std::path::Path) -> Result<Vec<oxidal_presets::LibraryItem>, Error> {
-    use oxidal_presets::{LibraryItem as Item, LibraryKind as Kind};
+    use oxidal_presets::{LibraryItem as Item, LibraryKind as Kind, LibraryOrigin as Origin};
     let mut items = Vec::new();
-    let mut push = |kind, id, name: String| {
+    let mut push = |kind, id, name: String, origin| {
         items.push(Item {
             kind,
             id,
             name: name.clone(),
             source_name: name,
+            origin,
             archived: false,
         })
     };
     for p in Store::new(root.into()).list()?.presets {
-        push(Kind::Original, p.sha256, p.name);
+        push(Kind::Original, p.sha256, p.name, Origin::Tone3000);
     }
     for p in oxidal_presets::OwnedStore::new(root.join("owned")).list()? {
-        push(Kind::Owned, p.id, p.preset.name);
+        push(Kind::Owned, p.id, p.preset.name, Origin::Mine);
     }
     for p in oxidal_presets::GraphStore::new(root.join("graphs")).list()? {
-        push(Kind::Graph, p.id, p.preset.name);
+        push(Kind::Graph, p.id, p.preset.name, Origin::Mine);
     }
     let bundles = oxidal_presets::BundleStore::new(root.join("bundles"));
     for id in bundles.list()? {
@@ -183,7 +184,8 @@ fn catalog_items(root: &std::path::Path) -> Result<Vec<oxidal_presets::LibraryIt
             .and_then(|v| v.get("draft"))
             != Some(&serde_json::Value::Bool(true))
         {
-            push(Kind::Rig, id, manifest.name);
+            let origin = Origin::from_manifest(&manifest)?;
+            push(Kind::Rig, id, manifest.name, origin);
         }
     }
     Ok(items)

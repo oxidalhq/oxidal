@@ -18,12 +18,14 @@ import {
   type PresetChoice as Choice,
 } from './presetChoices';
 
-const origin = (item: Choice) =>
-  item.kind === 'scenes'
-    ? scenesLabel(item.scenes) || 'With effects'
-    : item.owned
-      ? 'My copy'
-      : 'Original';
+const originLabel = (item: Choice) =>
+  item.origin === 'mine'
+    ? item.kind === 'scenes'
+      ? scenesLabel(item.scenes) || 'With effects'
+      : 'My copy'
+    : item.origin === 'oxidal_example'
+      ? 'Oxidal example'
+      : 'TONE3000';
 
 /** One preset picker for every engine: the playing name opens a searchable list
  * of all presets, those with scenes first; a row plays it. Scenes are switched
@@ -76,18 +78,21 @@ export function RigPresetSelector({
     };
   }, [refresh, playing.refresh]);
   const selected = playing.key;
-  const index = items.findIndex((p) => key(p) === selected);
-  const size = all ? Math.max(items.length, 8) : 8;
+  const pickerItems = pads
+    ? items.filter((item) => item.origin === 'mine')
+    : items;
+  const index = pickerItems.findIndex((p) => key(p) === selected);
+  const size = all ? Math.max(pickerItems.length, 8) : 8;
   const currentBank = Math.min(
-    Math.max(0, Math.ceil(items.length / size) - 1),
+    Math.max(0, Math.ceil(pickerItems.length / size) - 1),
     bank ?? Math.max(0, Math.floor(index / size)),
   );
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item);
   }
   if (pads) {
-    const previous = index > 0 ? items[index - 1] : undefined;
-    const next = index >= 0 ? items[index + 1] : undefined;
+    const previous = index > 0 ? pickerItems[index - 1] : undefined;
+    const next = index >= 0 ? pickerItems[index + 1] : undefined;
     const steps = (
       <div className="preset-step">
         <button
@@ -117,14 +122,14 @@ export function RigPresetSelector({
         <h3>
           Presets
           <span>
-            {items.length
-              ? `${currentBank * size + 1}–${Math.min(items.length, currentBank * size + size)} of ${items.length}`
+            {pickerItems.length
+              ? `${currentBank * size + 1}–${Math.min(pickerItems.length, currentBank * size + size)} of ${pickerItems.length}`
               : ''}
           </span>
         </h3>
         {all && steps}
         <div className="preset-pad-grid">
-          {items
+          {pickerItems
             .slice(currentBank * size, currentBank * size + size)
             .map((item, offset) => {
               const sounding = key(item) === selected;
@@ -145,14 +150,18 @@ export function RigPresetSelector({
                   <span className="preset-pad-text">
                     <strong>{item.name}</strong>
                     <span className="preset-pad-origin">
-                      {sounding ? 'Playing' : upcoming ? 'Next' : origin(item)}
+                      {sounding
+                        ? 'Playing'
+                        : upcoming
+                          ? 'Next'
+                          : originLabel(item)}
                     </span>
                   </span>
                 </button>
               );
             })}
         </div>
-        {items.length > size && (
+        {pickerItems.length > size && (
           <div className="preset-bank">
             <button
               type="button"
@@ -163,12 +172,14 @@ export function RigPresetSelector({
               <CaretLeft aria-hidden="true" />
             </button>
             <span>
-              {currentBank + 1} / {Math.ceil(items.length / size)}
+              {currentBank + 1} / {Math.ceil(pickerItems.length / size)}
             </span>
             <button
               type="button"
               aria-label="Next bank"
-              disabled={(currentBank + 1) * size >= items.length || disabled}
+              disabled={
+                (currentBank + 1) * size >= pickerItems.length || disabled
+              }
               onClick={() => setBank(currentBank + 1)}
             >
               <CaretRight aria-hidden="true" />
@@ -191,8 +202,10 @@ export function RigPresetSelector({
             </Button>
           </div>
         )}
-        {!loading && !error && !items.length && (
-          <p>No saved presets. Add one from Library.</p>
+        {!loading && !error && !pickerItems.length && (
+          <p>
+            No presets in Mine yet. Edit an original or add one from Library.
+          </p>
         )}
         <p className="caption">
           Changing preset briefly interrupts audio; changing scene never does.
@@ -200,12 +213,26 @@ export function RigPresetSelector({
       </div>
     );
   }
-  const current = items[index];
+  const current = pickerItems[index];
   const name =
     current?.name ??
     playing.name ??
     (loading ? 'Loading presets…' : 'Unsaved preset');
   const found = query.trim().toLowerCase();
+  const foundItems = items.filter((item) =>
+    detailsMatch(item.name, item.details, found),
+  );
+  const groups = (
+    [
+      ['mine', 'Mine'],
+      ['oxidal_example', 'Oxidal examples'],
+      ['tone3000', 'TONE3000'],
+    ] as const
+  ).map(([origin, label]) => ({
+    origin,
+    label,
+    items: foundItems.filter((item) => item.origin === origin),
+  }));
   return (
     <div className="preset-picker" aria-label="Preset navigation">
       <button
@@ -239,8 +266,8 @@ export function RigPresetSelector({
               'saved'
             )}
             {' · '}
-            {current ? origin(current) : 'not in the list'}
-            {index >= 0 && ` · ${index + 1} of ${items.length}`}
+            {current ? originLabel(current) : 'not in the list'}
+            {index >= 0 && ` · ${index + 1} of ${pickerItems.length}`}
           </span>
         </span>
         <CaretDown aria-hidden="true" />
@@ -306,52 +333,58 @@ export function RigPresetSelector({
             onChange={(e) => setQuery(e.target.value)}
           />
           <p className="caption">
-            Unsaved edits stay with each preset. Presets with scenes keep them
-            until you open another preset with scenes.
+            Mine is your set list. Editing a TONE3000 preset or Oxidal example
+            makes a copy in Mine; the original stays unchanged.
           </p>
-          <section className="preset-picker-group" aria-label="Set list">
-            <h3>Set list</h3>
-            {items
-              .filter((p) => detailsMatch(p.name, p.details, found))
-              .map((p) => (
-                <div key={key(p)} className="preset-picker-entry">
-                  <button
-                    type="button"
-                    className="preset-picker-row"
-                    data-preset={key(p)}
-                    aria-pressed={key(p) === selected}
-                    disabled={disabled || loading}
-                    onClick={() => {
-                      setOpen(false);
-                      if (key(p) !== selected) choose(p);
-                    }}
-                  >
-                    <span>{p.name}</span>
-                    <span
-                      className={
-                        key(p) === selected
-                          ? 'preset-picker-playing'
-                          : 'preset-picker-scenes'
-                      }
-                    >
-                      {key(p) === selected ? 'Playing' : origin(p)}
-                    </span>
-                  </button>
-                  <Button
-                    variant="ghost"
-                    className="shrink-0 px-2"
-                    aria-label={`Details: ${p.name}`}
-                    onClick={() => setPreview(p)}
-                  >
-                    Details
-                  </Button>
-                </div>
-              ))}
-          </section>
-          {!loading &&
-            !items.some((p) => detailsMatch(p.name, p.details, found)) && (
-              <p role="status">No presets match.</p>
-            )}
+          {groups.map(
+            (group) =>
+              group.items.length > 0 && (
+                <section
+                  key={group.origin}
+                  className="preset-picker-group"
+                  aria-label={group.label}
+                >
+                  <h3>{group.label}</h3>
+                  {group.items.map((p) => (
+                    <div key={key(p)} className="preset-picker-entry">
+                      <button
+                        type="button"
+                        className="preset-picker-row"
+                        data-preset={key(p)}
+                        aria-pressed={key(p) === selected}
+                        disabled={disabled || loading}
+                        onClick={() => {
+                          setOpen(false);
+                          if (key(p) !== selected) choose(p);
+                        }}
+                      >
+                        <span>{p.name}</span>
+                        <span
+                          className={
+                            key(p) === selected
+                              ? 'preset-picker-playing'
+                              : 'preset-picker-scenes'
+                          }
+                        >
+                          {key(p) === selected ? 'Playing' : originLabel(p)}
+                        </span>
+                      </button>
+                      <Button
+                        variant="ghost"
+                        className="shrink-0 px-2"
+                        aria-label={`Details: ${p.name}`}
+                        onClick={() => setPreview(p)}
+                      >
+                        Details
+                      </Button>
+                    </div>
+                  ))}
+                </section>
+              ),
+          )}
+          {!loading && !foundItems.length && (
+            <p role="status">No presets match.</p>
+          )}
         </AdjustmentDialog>
       )}
     </div>

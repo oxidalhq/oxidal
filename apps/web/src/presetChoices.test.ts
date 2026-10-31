@@ -46,6 +46,7 @@ const scenes = (revision: string): PresetChoice => ({
   revision,
   name: revision,
   scenes: [],
+  origin: 'mine',
 });
 
 it('asks before another scenes preset replaces unsaved edits, unless it is kept ready', () => {
@@ -58,7 +59,13 @@ it('asks before another scenes preset replaces unsaved edits, unless it is kept 
   );
   expect(
     discardsSceneEdits(
-      { kind: 'tone3000', id: 'x', owned: false, name: 'x' },
+      {
+        kind: 'tone3000',
+        id: 'x',
+        owned: false,
+        name: 'x',
+        origin: 'tone3000',
+      },
       playing,
     ),
   ).toBe(false);

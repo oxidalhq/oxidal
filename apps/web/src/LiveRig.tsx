@@ -49,6 +49,8 @@ import {
   rigLibrary,
   rigNativeSources,
   type Lv2Plugin,
+  removalPreview,
+  removePreset,
 } from './api';
 import { AddBlockChooser } from './AddBlockChooser';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -128,6 +130,9 @@ export function LiveRig({
   } | null>(null);
   const { on: performance } = usePerform();
   const setPerformance = (on: boolean) => setPerform({ on });
+  useEffect(() => {
+    if (state?.copy_on_edit) setPerform({ on: false });
+  }, [state?.copy_on_edit]);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   // An empty slot the player tapped, and a preset with effects being made.
@@ -566,6 +571,53 @@ export function LiveRig({
       if (alive.current) setBusy(false);
     }
   }
+  async function resolveAutomaticCopy(keep: boolean) {
+    const opening = state;
+    const copy = opening?.copy_on_edit;
+    if (!opening || !copy || sending.current) return;
+    generation.current += 1;
+    sending.current = true;
+    setBusy(true);
+    setError('');
+    let sourceRestored = false;
+    try {
+      const next = await playbackCommand(opening, {
+        kind: 'resolve_copy',
+        keep,
+      });
+      sourceRestored = !keep;
+      if (alive.current) setState(next);
+      if (!keep) {
+        const preview = await removalPreview({
+          entry_kind: 'owned',
+          id: copy.copy_id,
+        });
+        if (preview.blocked)
+          throw new Error(
+            `The automatic copy could not be discarded: ${preview.blocked}`,
+          );
+        await removePreset({
+          entry_kind: 'owned',
+          id: copy.copy_id,
+          expected_preview: preview.token,
+          delete_models: false,
+        });
+      }
+    } catch (cause) {
+      if (alive.current) {
+        setError(
+          sourceRestored
+            ? `The original is playing, but the copy remains in Mine: ${String(cause)}`
+            : String(cause),
+        );
+        const next = await playbackState().catch(() => null);
+        if (next) setState(next);
+      }
+    } finally {
+      sending.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }
   if (state?.phase !== 'running') {
     if (hideInactive) return null;
     return (
@@ -846,7 +898,7 @@ export function LiveRig({
             modified: state.modified,
             refresh: state.saved_copy,
           }}
-          disabled={disabled || !!draft || !!picker}
+          disabled={disabled || !!draft || !!picker || !!state.copy_on_edit}
           onSelect={(choice) => void recall(choice)}
         />
         {/* Save and the preset actions form one split button. */}
@@ -877,6 +929,33 @@ export function LiveRig({
           </Button>
         </div>
       </div>
+      {state.copy_on_edit && (
+        <div
+          className="rounded-md border border-border bg-card p-3"
+          role="status"
+        >
+          <strong>Editing a copy of {state.copy_on_edit.source_name}</strong>
+          <p className="caption">
+            Your first change created this preset in Mine. The TONE3000 original
+            is unchanged.
+          </p>
+          <div className="action-row">
+            <Button
+              disabled={busy}
+              onClick={() => void resolveAutomaticCopy(true)}
+            >
+              Keep copy
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void resolveAutomaticCopy(false)}
+            >
+              Discard copy
+            </Button>
+          </div>
+        </div>
+      )}
       {knobStrip}
       <MasterLevel
         extra={

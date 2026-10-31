@@ -3,11 +3,52 @@
 use crate::{Processor, Session, protocol::*};
 use oxidal_lv2::World;
 use oxidal_presets::{
-    Bundle, BundleStore,
-    manifest::{Origin, Resource, ResourceKind},
+    Bundle, BundleStore, LibraryOrigin,
+    manifest::{Manifest, Origin, Resource, ResourceKind},
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+
+fn make_owned(manifest: &mut Manifest, seed: &[u8]) -> Result<(), String> {
+    let source_origin = LibraryOrigin::from_manifest(manifest).map_err(|e| e.to_string())?;
+    let authoring = manifest
+        .extensions
+        .entry("urn:oxidal:authoring".into())
+        .or_default();
+    authoring.remove("draft");
+    if source_origin == LibraryOrigin::Mine {
+        return Ok(());
+    }
+    let mut digest = Sha256::new();
+    digest.update(manifest.id.as_bytes());
+    digest.update(seed);
+    let hash = digest.finalize();
+    let mut bytes = [0; 16];
+    bytes.copy_from_slice(&hash[..16]);
+    bytes[6] = (bytes[6] & 0x0f) | 0x50;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    manifest.id = format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0],
+        bytes[1],
+        bytes[2],
+        bytes[3],
+        bytes[4],
+        bytes[5],
+        bytes[6],
+        bytes[7],
+        bytes[8],
+        bytes[9],
+        bytes[10],
+        bytes[11],
+        bytes[12],
+        bytes[13],
+        bytes[14],
+        bytes[15]
+    );
+    authoring.insert("origin".into(), serde_json::Value::String("mine".into()));
+    Ok(())
+}
 
 pub fn save_revision(
     store: &BundleStore,
@@ -68,9 +109,9 @@ fn save_with_assets(
     let confirmed = session.snapshot();
     let mut manifest = original.manifest().clone();
     manifest.name = request.name.clone();
-    if let Some(authoring) = manifest.extensions.get_mut("urn:oxidal:authoring") {
-        authoring.remove("draft");
-    }
+    let mut identity_seed = request.settings.revision.as_bytes().to_vec();
+    identity_seed.extend(serde_json::to_vec(&request.recall).map_err(|e| e.to_string())?);
+    make_owned(&mut manifest, &identity_seed)?;
     let mut resources: BTreeMap<String, Vec<u8>> = manifest
         .resources
         .iter()
@@ -461,4 +502,35 @@ pub fn prepare_native_setting(
     }
     session.prepare_native_setting(&request.node, request.parameter, request.value, root)?;
     Ok(session.snapshot().recall())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn immutable_origin_becomes_a_distinct_mine_identity() {
+        let mut value: serde_json::Value =
+            serde_json::from_str(include_str!("../../../docs/presets/examples/lv2-only.json"))
+                .unwrap();
+        value["extensions"]["urn:oxidal:authoring"] =
+            serde_json::json!({"origin":"oxidal_example", "draft":true});
+        let mut manifest = Manifest::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let source_id = manifest.id.clone();
+        make_owned(&mut manifest, b"confirmed sound").unwrap();
+        assert_ne!(manifest.id, source_id);
+        assert_eq!(
+            LibraryOrigin::from_manifest(&manifest).unwrap(),
+            LibraryOrigin::Mine
+        );
+        assert!(
+            manifest.extensions["urn:oxidal:authoring"]
+                .get("draft")
+                .is_none()
+        );
+
+        let mine_id = manifest.id.clone();
+        make_owned(&mut manifest, b"later edit").unwrap();
+        assert_eq!(manifest.id, mine_id);
+    }
 }

@@ -29,12 +29,16 @@ export function SavedRigs({
   category = '',
   details = {},
   onDetails,
+  origin = 'mine',
+  title = 'Mine',
 }: {
   refresh?: number;
   query?: string;
   category?: string;
   details?: Record<string, PresetDetails>;
   onDetails?: (id: string, name: string) => void;
+  origin?: RigPage['presets'][number]['origin'];
+  title?: string;
   connected: boolean;
   onOpenRig: () => void;
 }) {
@@ -111,24 +115,27 @@ export function SavedRigs({
       if (alive.current) setBusy(false);
     }
   }
-  const shown = items.filter((item) =>
+  const originItems = items.filter((item) => item.origin === origin);
+  const shown = originItems.filter((item) =>
     detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
-  if (!items.length && !error) return null;
+  if (!originItems.length && !error) return null;
   return (
     <section className="library-scenes" aria-label="Presets with scenes">
       <div className="section-heading">
-        <h2>Scenes and effects</h2>
-        <Button
-          variant="ghost"
-          aria-pressed={choosing}
-          disabled={busy}
-          onClick={() => setChoosing((v) => !v)}
-        >
-          Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
-        </Button>
+        <h2>{title}</h2>
+        {origin === 'mine' && (
+          <Button
+            variant="ghost"
+            aria-pressed={choosing}
+            disabled={busy}
+            onClick={() => setChoosing((v) => !v)}
+          >
+            Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
+          </Button>
+        )}
       </div>
-      {choosing && (
+      {origin === 'mine' && choosing && (
         <p className="caption">
           Ready presets stay loaded while audio runs, so switching between them
           has no gap. Each one uses extra processing and memory.
@@ -177,7 +184,7 @@ export function SavedRigs({
                   Details
                 </Button>
               )}
-              {choosing && (
+              {origin === 'mine' && choosing && (
                 <label className="library-ready">
                   <input
                     type="checkbox"

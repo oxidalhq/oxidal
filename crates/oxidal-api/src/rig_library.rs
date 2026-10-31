@@ -33,6 +33,7 @@ pub struct RigEntry {
     pub revision: String,
     pub id: String,
     pub name: String,
+    pub origin: oxidal_presets::LibraryOrigin,
     pub native_instances: usize,
     pub lv2_instances: usize,
     /// Scene names in pad order; empty for a preset without scenes.
@@ -112,6 +113,10 @@ pub struct RigPublish {
     pub manifest_json: String,
     /// Each declared resource maps to an existing verified local payload.
     pub resources: BTreeMap<String, ResourceSource>,
+    /// Existing rig whose description, categories and copy credit follow this
+    /// immutable revision. The source itself is never changed.
+    #[serde(default)]
+    pub source: Option<oxidal_presets::LibraryReference>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -201,10 +206,12 @@ pub async fn list(
                 .flatten()
                 .map(|s| s.scenes.into_iter().map(|scene| scene.name).collect())
                 .unwrap_or_default();
+            let origin = oxidal_presets::LibraryOrigin::from_manifest(&m)?;
             presets.push(RigEntry {
                 revision,
                 id: m.id,
                 name: m.name,
+                origin,
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
                 scenes,
@@ -271,6 +278,12 @@ pub async fn publish(
     job(shared, false, move |root| {
         let manifest = Manifest::parse(request.manifest_json.as_bytes())?;
         manifest.check_required_extensions()?;
+        if let Some(source) = &request.source {
+            if source.kind != oxidal_presets::LibraryKind::Rig {
+                return Err(Error::Invalid("A rig copy must name a rig source"));
+            }
+            BundleStore::new(root.join("bundles")).manifest(&source.id)?;
+        }
         if manifest.resources.len() != request.resources.len() {
             return Err(Error::Invalid("Resource bindings must match the manifest"));
         }
@@ -353,6 +366,15 @@ pub async fn publish(
         }
         let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
         let revision = store.save(&bundle)?;
+        if let Some(source) = request.source {
+            oxidal_presets::DetailsStore::new(root).inherit(
+                oxidal_presets::LibraryReference {
+                    kind: oxidal_presets::LibraryKind::Rig,
+                    id: revision.clone(),
+                },
+                source,
+            )?;
+        }
         Ok(RigDocument { revision, manifest })
     })
     .await

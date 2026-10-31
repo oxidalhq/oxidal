@@ -86,6 +86,7 @@ impl Manifest {
         self.semantics()?;
         self.scenes()?;
         self.native_settings()?;
+        crate::LibraryOrigin::from_manifest(self)?;
         Ok(())
     }
     pub fn encode(&self) -> Result<Vec<u8>> {

@@ -82,6 +82,13 @@ pub enum AudioPhase {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+pub struct CopyOnEdit {
+    pub copy_id: String,
+    pub source_id: String,
+    pub source_name: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct AudioState {
     #[serde(default)]
     pub midi: crate::midi::Status,
@@ -106,6 +113,10 @@ pub struct AudioState {
     pub preset_name: Option<String>,
     /// Last copy saved from this exact control revision; restart still uses configured.
     pub saved_copy: Option<String>,
+    /// A first edit promoted a read-only original into Mine. Keep or Discard
+    /// resolves this prompt; the immutable source is never modified.
+    #[serde(default)]
+    pub copy_on_edit: Option<CopyOnEdit>,
     #[serde(default)]
     pub models: Vec<ModelAssignment>,
     #[serde(default)]
@@ -162,6 +173,9 @@ pub enum AudioAction {
     },
     SaveCopy {
         name: String,
+    },
+    ResolveCopy {
+        keep: bool,
     },
     Authoring {
         action: crate::structure::AuthoringAction,

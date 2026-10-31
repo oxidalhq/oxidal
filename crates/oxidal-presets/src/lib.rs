@@ -7,7 +7,8 @@ pub use details::{
 };
 mod catalog;
 pub use catalog::{
-    CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryUpdate,
+    CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryOrigin,
+    LibraryUpdate,
 };
 mod bundle;
 mod graph;

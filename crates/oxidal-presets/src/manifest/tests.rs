@@ -65,6 +65,25 @@ fn documented_schema_and_rust_share_conformance_vectors() {
         }
     }
 }
+
+#[test]
+fn authoring_origin_defaults_to_mine_and_rejects_unknown_values() {
+    let legacy = Manifest::parse(&serde_json::to_vec(&fixture("mixed-delay")).unwrap()).unwrap();
+    assert_eq!(
+        crate::LibraryOrigin::from_manifest(&legacy).unwrap(),
+        crate::LibraryOrigin::Mine
+    );
+    let mut example = fixture("mixed-delay");
+    example["extensions"]["urn:oxidal:authoring"] = json!({"origin":"oxidal_example"});
+    let example = Manifest::parse(&serde_json::to_vec(&example).unwrap()).unwrap();
+    assert_eq!(
+        crate::LibraryOrigin::from_manifest(&example).unwrap(),
+        crate::LibraryOrigin::OxidalExample
+    );
+    let mut invalid = fixture("mixed-delay");
+    invalid["extensions"]["urn:oxidal:authoring"] = json!({"origin":"third_party"});
+    assert!(Manifest::parse(&serde_json::to_vec(&invalid).unwrap()).is_err());
+}
 #[test]
 fn strict_json_rejects_duplicate_escaped_nested_keys_and_trailing_values() {
     let source = serde_json::to_string(&fixture("pure-edited")).unwrap();

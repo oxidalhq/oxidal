@@ -13,12 +13,16 @@ import {
   presetArtwork,
   playbackCommand,
   playbackState,
+  removalPreview,
+  removePreset,
   type AudioState,
 } from './api';
 vi.mock('./api', () => ({
   presetArtwork: vi.fn(),
   playbackCommand: vi.fn(),
   playbackState: vi.fn(),
+  removalPreview: vi.fn(),
+  removePreset: vi.fn(),
 }));
 vi.mock('./RigPresetSelector', () => ({ RigPresetSelector: () => null }));
 vi.mock('./GuitarSettings', () => ({
@@ -246,4 +250,84 @@ it('keeps an adjustment usable when beginning it advances the session revision',
     expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled(),
   );
   expect(dialog).not.toHaveTextContent('Sounding session changed');
+});
+
+it('keeps an automatic Mine copy without touching the immutable source', async () => {
+  const copied = {
+    ...opening,
+    configured: { ...opening.configured, preset_id: 'copy-id' },
+    copy_on_edit: {
+      copy_id: 'copy-id',
+      source_id: 'source-id',
+      source_name: 'Provider tone',
+    },
+  } as AudioState;
+  vi.mocked(playbackState).mockResolvedValue(copied);
+  vi.mocked(playbackCommand).mockResolvedValue({
+    ...copied,
+    copy_on_edit: null,
+  });
+  show();
+  expect(
+    await screen.findByText('Editing a copy of Provider tone'),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Keep copy' }));
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(copied, {
+      kind: 'resolve_copy',
+      keep: true,
+    }),
+  );
+  expect(removalPreview).not.toHaveBeenCalled();
+  expect(removePreset).not.toHaveBeenCalled();
+});
+
+it('returns to the source before permanently discarding an automatic copy', async () => {
+  const copied = {
+    ...opening,
+    configured: { ...opening.configured, preset_id: 'copy-id' },
+    copy_on_edit: {
+      copy_id: 'copy-id',
+      source_id: 'source-id',
+      source_name: 'Provider tone',
+    },
+  } as AudioState;
+  const source = {
+    ...opening,
+    revision: 11,
+    modified: false,
+    configured: {
+      ...opening.configured,
+      preset_id: 'source-id',
+      owned: false,
+    },
+    copy_on_edit: null,
+  } as AudioState;
+  vi.mocked(playbackState).mockResolvedValue(copied);
+  vi.mocked(playbackCommand).mockResolvedValue(source);
+  vi.mocked(removalPreview).mockResolvedValue({
+    blocked: null,
+    token: 'sealed-preview',
+  } as Awaited<ReturnType<typeof removalPreview>>);
+  vi.mocked(removePreset).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof removePreset>>,
+  );
+  show();
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard copy' }));
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(copied, {
+      kind: 'resolve_copy',
+      keep: false,
+    }),
+  );
+  expect(removalPreview).toHaveBeenCalledWith({
+    entry_kind: 'owned',
+    id: 'copy-id',
+  });
+  expect(removePreset).toHaveBeenCalledWith({
+    entry_kind: 'owned',
+    id: 'copy-id',
+    expected_preview: 'sealed-preview',
+    delete_models: false,
+  });
 });

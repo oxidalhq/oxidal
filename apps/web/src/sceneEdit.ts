@@ -50,6 +50,10 @@ function clone(
 ): Manifest {
   const manifest: Manifest = JSON.parse(JSON.stringify(document.manifest));
   if (name) manifest.name = name.trim();
+  manifest.extensions['urn:oxidal:authoring'] = {
+    ...(manifest.extensions['urn:oxidal:authoring'] ?? {}),
+    origin: 'mine',
+  };
   for (const effect of manifest.oxidal?.lv2 ?? [])
     Object.assign(effect.controls, live[effect.id]);
   return manifest;

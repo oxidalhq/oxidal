@@ -83,6 +83,7 @@ struct Export {
     child: Child,
     started: Instant,
     name: String,
+    source: String,
 }
 struct Owner {
     levels: Arc<crate::levels::Levels>,
@@ -610,6 +611,7 @@ impl Owner {
             child,
             started: Instant::now(),
             name,
+            source: request.settings.revision.clone(),
         });
         self.state.save = Some(SaveState {
             source_session: control.session.clone(),
@@ -693,14 +695,31 @@ impl Owner {
             }
             let root = self.root.clone();
             let expected = export.name.clone();
+            let source = export.source.clone();
             let revision = id.clone();
             tokio::task::spawn_blocking(move || {
+                let details_root = root
+                    .parent()
+                    .ok_or("Missing preset store parent")?
+                    .to_path_buf();
                 let bundle = oxidal_presets::BundleStore::new(root)
                     .read(&revision)
                     .map_err(|e| e.to_string())?;
                 if bundle.manifest().name != expected {
                     return Err("Saved name differs".to_owned());
                 }
+                oxidal_presets::DetailsStore::new(details_root)
+                    .inherit(
+                        oxidal_presets::LibraryReference {
+                            kind: oxidal_presets::LibraryKind::Rig,
+                            id: revision,
+                        },
+                        oxidal_presets::LibraryReference {
+                            kind: oxidal_presets::LibraryKind::Rig,
+                            id: source,
+                        },
+                    )
+                    .map_err(|e| e.to_string())?;
                 Ok(())
             })
             .await
