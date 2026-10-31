@@ -40,7 +40,9 @@
       "swh-lv2",
       "python3",
       "tzdata",
-      "libnss-systemd"
+      "libnss-systemd",
+      "cloud-guest-utils",
+      "e2fsprogs"
     ],
     "enabled_services": [
       "oxidald.service",
@@ -52,10 +54,13 @@
       "oxidal-device.service",
       "oxidal-debug.service",
       "oxidal-terminal.service",
-      "oxidal-admin-terminal.service"
+      "oxidal-admin-terminal.service",
+      "oxidal-grow-data.service"
     ],
     "default_target": "multi-user.target",
     "wifi_country": "NZ",
-    "image_bytes": 8589934592
+    "image_bytes": 8589934592,
+    "root_partition_bytes": 5368709120,
+    "data_partition_label": "OXIDAL_DATA"
   }
 }

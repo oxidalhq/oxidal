@@ -12,6 +12,55 @@ import urllib.request
 
 @unittest.skipUnless(os.environ.get('OXIDAL_TEST_INSTALLED') == '1', 'Run by the disposable image builder')
 class InstalledTests(unittest.TestCase):
+    def test_writable_data_layout(self):
+        marker = Path('/usr/share/oxidal/storage-layout-v1')
+        self.assertTrue(marker.is_file())
+        source = subprocess.check_output(
+            ['findmnt', '-n', '-o', 'SOURCE', '--target', '/var/lib'], text=True
+        ).strip()
+        device = subprocess.check_output(['readlink', '-f', source], text=True).strip()
+        self.assertEqual(
+            subprocess.check_output(['lsblk', '-dn', '-o', 'LABEL', device], text=True).strip(),
+            'OXIDAL_DATA',
+        )
+        self.assertEqual(
+            subprocess.check_output(['lsblk', '-dn', '-o', 'PARTN', device], text=True).strip(),
+            '3',
+        )
+        self.assertEqual(
+            subprocess.check_output(
+                ['findmnt', '-n', '-o', 'FSTYPE', '--target', '/var/lib'], text=True
+            ).strip(),
+            'ext4',
+        )
+        profile_mount = subprocess.check_output(
+            [
+                'findmnt',
+                '-n',
+                '-o',
+                'TARGET',
+                '--target',
+                '/etc/NetworkManager/system-connections',
+            ],
+            text=True,
+        ).strip()
+        self.assertEqual(profile_mount, '/etc/NetworkManager/system-connections')
+        for target in ('/tmp', '/var/tmp'):
+            self.assertEqual(
+                subprocess.check_output(
+                    ['findmnt', '-n', '-o', 'FSTYPE', '--target', target], text=True
+                ).strip(),
+                'tmpfs',
+            )
+        self.assertIn(
+            'Storage=volatile',
+            Path('/etc/systemd/journald.conf.d/oxidal-volatile.conf').read_text(),
+        )
+        probe = Path('/var/lib/oxidal-layout-probe')
+        probe.write_text('writable data\n')
+        self.assertEqual(probe.read_text(), 'writable data\n')
+        probe.unlink()
+
     def test_firmware_mount_and_optional_boot_branding(self):
         # Kernel package hooks and splash rebuilds must reach the real FAT partition.
         subprocess.run(['mountpoint', '-q', '/boot/firmware'], check=True)

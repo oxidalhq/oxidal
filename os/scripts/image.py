@@ -21,6 +21,25 @@ def run(*args):
     subprocess.run(args, check=True, env={**os.environ, 'LIBGUESTFS_BACKEND': 'direct'})
 
 
+def capture(*args):
+    return subprocess.check_output(
+        args, text=True, env={**os.environ, 'LIBGUESTFS_BACKEND': 'direct'}
+    )
+
+
+def require_partition_layout(image):
+    """Refuse to format unless resize produced the fixed boot/root/data layout."""
+    partitions = capture(
+        'guestfish', '--ro', '-a', str(image), 'run', ':', 'list-partitions'
+    ).splitlines()
+    expected = ['/dev/sda1', '/dev/sda2', '/dev/sda3']
+    if partitions != expected:
+        raise ValueError(
+            'Expected exactly the boot, root and data partitions after resize; '
+            f'found {partitions!r}'
+        )
+
+
 def regular(path):
     path = Path(path).absolute()
     if path.is_symlink() or any(p.is_symlink() for p in path.parents) or not path.is_file():
@@ -45,19 +64,31 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
     with tempfile.TemporaryDirectory(prefix='oxidal-image-', dir=destination.parent) as temporary:
         work = Path(temporary)
         raw = work / 'base.img'
-        with raw.open('xb') as output:
-            subprocess.run(['xz', '-dc', str(base)], stdout=output, check=True)
-        with destination.open('xb') as output:
-            os.fchmod(output.fileno(), 0o600)
-            output.truncate(8 * 1024**3)
-        run('virt-resize', '--expand', '/dev/sda2', str(raw), str(destination))
+        with raw.open('xb') as stream:
+            subprocess.run(['xz', '-dc', str(base)], stdout=stream, check=True)
+        profile = provision.manifest()['appliance']
+        with destination.open('xb') as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.truncate(profile['image_bytes'])
+        root_size = profile['root_partition_bytes'] // 1024**2
+        run(
+            'virt-resize', '--format', 'raw', '--output-format', 'raw',
+            '--resize', f'/dev/sda2={root_size}M', str(raw), str(destination),
+        )
+        require_partition_layout(destination)
+        data_uuid = capture(
+            'guestfish', '-a', str(destination), 'run', ':',
+            'mkfs', 'ext4', '/dev/sda3', ':',
+            'set-label', '/dev/sda3', profile['data_partition_label'], ':',
+            'vfs-uuid', '/dev/sda3',
+        ).strip()
         # Older guestfs cannot resolve this base's PARTUUID firmware entry. Use the
         # existing FAT UUID instead, before package hooks write kernel/initramfs files.
         fstab = work / 'fstab'
-        firmware_uuid, root_uuid = subprocess.check_output([
+        firmware_uuid, root_uuid = capture(
             'guestfish', '--ro', '-a', str(destination), '-i', 'vfs-uuid', '/dev/sda1',
             ':', 'vfs-uuid', '/dev/sda2', ':', 'download', '/etc/fstab', str(fstab),
-        ], text=True, env={**os.environ, 'LIBGUESTFS_BACKEND': 'direct'}).splitlines()
+        ).splitlines()
         fstab.write_text(provision.firmware_fstab(fstab.read_text(), firmware_uuid, root_uuid))
         run('guestfish', '-a', str(destination), '-i', 'upload', str(fstab), '/etc/fstab')
         root = work / 'overlay'
@@ -65,6 +96,11 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         (root / 'etc/os-release').write_text('ID=debian\nVERSION_CODENAME=trixie\n')
         (root / '.oxidal-disposable-root').touch()
         provision.provision(root, True, bundle, access, True)
+        for relative, contents in provision.storage_layout_files().items():
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
+            target.chmod(0o755 if relative == 'usr/local/sbin/oxidal-grow-data' else 0o644)
         if development_presets:
             seed = work / 'development-seed'
             run(str(Path(bundle).resolve() / 'bin/oxidal-preset-seed'), '--development-only', str(Path(development_presets).resolve()), str(seed))
@@ -82,7 +118,6 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         with tarfile.open(overlay, 'w') as archive:
             for file in sorted(root.rglob('*')):
                 archive.add(file, arcname=str(file.relative_to(root)), recursive=False)
-        profile = provision.manifest()['appliance']
         packages = profile['runtime_packages'] + (['plymouth', 'plymouth-themes'] if boot_splash else [])
         if boot_splash and not (root / 'usr/share/plymouth/themes/oxidal/boot-splash.png').is_file():
             raise ValueError('Boot splash requires branded web assets in the bundle')
@@ -101,14 +136,32 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             'run-command systemctl mask systemd-networkd.service systemd-networkd-wait-online.service',
             'run-command systemctl set-default multi-user.target',
             "run-command sed -i 's/^LOGIN_TIMEOUT[[:space:]].*/LOGIN_TIMEOUT 180/' /etc/login.defs",
-            'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service /etc/systemd/system/oxidal-debug.service /etc/systemd/system/oxidal-terminal.service /etc/systemd/system/oxidal-admin-terminal.service',
+            'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service /etc/systemd/system/oxidal-debug.service /etc/systemd/system/oxidal-terminal.service /etc/systemd/system/oxidal-admin-terminal.service /etc/systemd/system/oxidal-grow-data.service',
             'run-command nginx -t',
             *(['run-command plymouth-set-default-theme -R oxidal',
                "run-command sed -i '1s/$/ splash plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt"] if boot_splash else []),
             'run-command dpkg-query -W > /usr/share/oxidal/installed-packages.txt',
-            'run-command OXIDAL_TEST_INSTALLED=1 python3 -m unittest discover -s /opt/oxidal/qualification -v > /usr/share/oxidal/installed-tests.log 2>&1',
         ]) + '\n')
         run('virt-customize', '-a', str(destination), '--upload', f'{overlay}:/tmp/oxidal-overlay.tar', '--upload', f'{access}/recovery.shadow:/tmp/oxidal-recovery.shadow', '--commands-from-file', str(commands))
+
+        # Seed the writable partition only after package installation has completed,
+        # then make it authoritative for state on the next boot.
+        var_lib = work / 'var-lib.tar'
+        connections = work / 'network-connections.tar'
+        run('guestfish', '--ro', '-a', str(destination), '-m', '/dev/sda2',
+            'tar-out', '/var/lib', str(var_lib), 'numericowner:true', 'xattrs:true', 'acls:true')
+        run('guestfish', '--ro', '-a', str(destination), '-m', '/dev/sda2',
+            'tar-out', '/etc/NetworkManager/system-connections', str(connections),
+            'numericowner:true', 'xattrs:true', 'acls:true')
+        run('guestfish', '-a', str(destination), '-m', '/dev/sda3',
+            'mkdir-p', '/oxidal-system-connections', ':',
+            'tar-in', str(var_lib), '/', 'xattrs:true', 'acls:true', ':',
+            'tar-in', str(connections), '/oxidal-system-connections', 'xattrs:true', 'acls:true')
+        fstab.write_text(provision.storage_fstab(fstab.read_text(), data_uuid))
+        run('guestfish', '-a', str(destination), '-m', '/dev/sda2',
+            'upload', str(fstab), '/etc/fstab')
+        run('virt-customize', '-a', str(destination), '--run-command',
+            'mount -a && OXIDAL_TEST_INSTALLED=1 python3 -m unittest discover -s /opt/oxidal/qualification -v > /usr/share/oxidal/installed-tests.log 2>&1')
         # Export evidence from the finished filesystem, not the staging tree.
         evidence = destination.with_suffix('.evidence')
         evidence.mkdir()
@@ -121,7 +174,8 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         'schema': 1, 'image_sha256': digest.hexdigest(), 'base': provision.manifest()['image'],
         'bundle_manifest': payload, 'installed_qualification': 'passed',
         'hardware_qualified': False, 'physical_sd_written': False, 'boot_splash': boot_splash,
-        'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid, 'root_uuid': root_uuid,
+        'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid,
+        'root_uuid': root_uuid, 'data_uuid': data_uuid,
         'first_boot': 'Connect to the generated hotspot or wired LAN; trust the supplied CA; open https://oxidal.local.',
         'pending_hardware': ['Pi boot', 'Wi-Fi radio/hotspot', 'physical audio and latency', 'thermal and power-loss testing'],
     }

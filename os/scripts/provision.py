@@ -28,6 +28,11 @@ def manifest():
         raise ValueError('Image must use a versioned official URL')
     if data['services']['enable'] or not data['requires_fresh_sd_card']:
         raise ValueError('PoC only stages services onto a fresh disposable root')
+    appliance = data['appliance']
+    if (appliance['image_bytes'] != 8 * 1024**3
+            or appliance['root_partition_bytes'] != 5 * 1024**3
+            or appliance['data_partition_label'] != 'OXIDAL_DATA'):
+        raise ValueError('Unsupported appliance storage layout')
     return data
 
 
@@ -103,6 +108,49 @@ def firmware_fstab(text, uuid, root_uuid):
     if count != 1:
         raise ValueError('Expected exactly one root mount in the pinned base')
     return result
+
+
+def storage_fstab(text, data_uuid):
+    """Mount persistent state and bounded volatile temporary files."""
+    if not re.fullmatch(r'[A-Fa-f0-9]{8}(?:-[A-Fa-f0-9]{4}){3}-[A-Fa-f0-9]{12}', data_uuid):
+        raise ValueError('Invalid data filesystem UUID')
+    entries = {
+        '/var/lib': f'UUID={data_uuid} /var/lib ext4 defaults,noatime 0 2',
+        '/etc/NetworkManager/system-connections': (
+            '/var/lib/oxidal-system-connections '
+            '/etc/NetworkManager/system-connections none bind 0 0'
+        ),
+        '/tmp': 'tmpfs /tmp tmpfs nosuid,nodev,size=256M,mode=1777 0 0',
+        '/var/tmp': 'tmpfs /var/tmp tmpfs nosuid,nodev,size=128M,mode=1777 0 0',
+    }
+    lines = text.rstrip('\n').splitlines()
+    if all(line in lines for line in entries.values()):
+        return text if text.endswith('\n') else text + '\n'
+    for target, expected in entries.items():
+        collisions = [
+            line for line in lines
+            if line.strip() and not line.lstrip().startswith('#')
+            and len(line.split()) >= 2 and line.split()[1] == target
+        ]
+        if collisions and expected not in collisions:
+            raise ValueError(f'Expected no existing {target} mount')
+    return '\n'.join([*lines, *(line for line in entries.values() if line not in lines)]) + '\n'
+
+
+def storage_layout_files():
+    """Files used only by the partitioned appliance image, never a normal install."""
+    return {
+        'etc/systemd/system/oxidal-grow-data.service': (
+            HERE / 'config/oxidal-grow-data.service'
+        ).read_bytes(),
+        'etc/systemd/journald.conf.d/oxidal-volatile.conf': (
+            HERE / 'config/oxidal-journal.conf'
+        ).read_bytes(),
+        'usr/local/sbin/oxidal-grow-data': (HERE / 'config/oxidal-grow-data').read_bytes(),
+        'usr/share/oxidal/storage-layout-v1': (
+            b'var-lib data partition; NetworkManager profile bind\n'
+        ),
+    }
 
 
 def create_access(path):

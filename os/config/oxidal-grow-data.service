@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the Oxidal writable data partition
+After=local-fs.target
+Before=NetworkManager.service oxidal-device.service oxidald.service
+ConditionPathIsMountPoint=/var/lib
+ConditionPathExists=/usr/share/oxidal/storage-layout-v1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/oxidal-grow-data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+#!/bin/sh
+# Grow the last, explicitly labelled Oxidal data partition after a larger card is first booted.
+set -eu
+
+source=$(findmnt -n -o SOURCE --target /var/lib)
+device=$(readlink -f "$source")
+label=$(lsblk -dn -o LABEL "$device")
+partition=$(lsblk -dn -o PARTN "$device")
+parent=$(lsblk -dn -o PKNAME "$device")
+
+test "$label" = OXIDAL_DATA
+test "$partition" = 3
+test -n "$parent"
+disk=/dev/$parent
+
+result=
+if result=$(growpart "$disk" "$partition" 2>&1); then
+  :
+else
+  status=$?
+  if [ "$status" -ne 1 ] || ! printf '%s\n' "$result" | grep -q '^NOCHANGE:'; then
+    printf '%s\n' "$result" >&2
+    exit "$status"
+  fi
+fi
+resize2fs "$device"

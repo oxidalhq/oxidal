@@ -20,6 +20,29 @@ class ProvisionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 provision.firmware_fstab(text, uuid, root_uuid)
 
+    def test_storage_fstab_is_fixed_idempotent_and_rejects_collisions(self):
+        original = 'UUID=boot /boot/firmware vfat defaults 0 2\nUUID=root / ext4 defaults 0 1\n'
+        data_uuid = '11111111-2222-3333-4444-555555555555'
+        updated = provision.storage_fstab(original, data_uuid)
+        self.assertIn(f'UUID={data_uuid} /var/lib ext4 defaults,noatime 0 2', updated)
+        self.assertIn(
+            '/var/lib/oxidal-system-connections /etc/NetworkManager/system-connections none bind 0 0',
+            updated,
+        )
+        self.assertIn('tmpfs /tmp tmpfs nosuid,nodev,size=256M,mode=1777 0 0', updated)
+        self.assertIn('tmpfs /var/tmp tmpfs nosuid,nodev,size=128M,mode=1777 0 0', updated)
+        self.assertEqual(provision.storage_fstab(updated, data_uuid), updated)
+        with self.assertRaisesRegex(ValueError, 'UUID'):
+            provision.storage_fstab(original, '../invalid')
+        for collision in (
+            '/dev/sda3 /var/lib ext4 defaults 0 2\n',
+            '/source /etc/NetworkManager/system-connections none bind 0 0\n',
+            'tmpfs /tmp tmpfs defaults 0 0\n',
+            'tmpfs /var/tmp tmpfs defaults 0 0\n',
+        ):
+            with self.assertRaises(ValueError):
+                provision.storage_fstab(original + collision, data_uuid)
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='os-')
         self.addCleanup(self.directory.cleanup)
@@ -96,6 +119,8 @@ class ApplianceTests(ProvisionTests):
         self.assertIn('NoNewPrivileges=yes', helper)
         self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         self.assertIn('Environment=OXIDAL_RIG_WORKER=/opt/oxidal/bin/oxidal-rig-worker', (self.root / 'etc/systemd/system/oxidald.service').read_text())
+        self.assertFalse((self.root / 'usr/share/oxidal/storage-layout-v1').exists())
+        self.assertFalse((self.root / 'etc/systemd/system/oxidal-grow-data.service').exists())
         terminal = (self.root / 'etc/systemd/system/oxidal-terminal.service').read_text()
         self.assertIn('User=oxidal-debug', terminal)
         self.assertIn('NoNewPrivileges=yes', terminal)
@@ -109,6 +134,26 @@ class ApplianceTests(ProvisionTests):
         (self.bundle / 'bin/oxidald').write_bytes(b'corrupted')
         with self.assertRaisesRegex(ValueError, 'checksum'):
             provision.provision(self.root, True, self.bundle)
+
+    def test_appliance_storage_files_are_explicit_and_not_part_of_regular_install(self):
+        files = provision.storage_layout_files()
+        self.assertEqual(
+            set(files),
+            {
+                'etc/systemd/system/oxidal-grow-data.service',
+                'etc/systemd/journald.conf.d/oxidal-volatile.conf',
+                'usr/local/sbin/oxidal-grow-data',
+                'usr/share/oxidal/storage-layout-v1',
+            },
+        )
+        self.assertIn(b'OXIDAL_DATA', files['usr/local/sbin/oxidal-grow-data'])
+        unit = files['etc/systemd/system/oxidal-grow-data.service']
+        self.assertIn(b'Before=NetworkManager.service oxidal-device.service oxidald.service', unit)
+        self.assertIn(b'ConditionPathIsMountPoint=/var/lib', unit)
+        self.assertIn(
+            b'Storage=volatile',
+            files['etc/systemd/journald.conf.d/oxidal-volatile.conf'],
+        )
 
     def test_bundle_symlinks_architecture_and_traversal_rejected(self):
         import json
