@@ -135,6 +135,9 @@ pub enum AudioAction {
     Midi {
         settings: Option<crate::midi::Settings>,
     },
+    MidiTest {
+        message: crate::midi::Message,
+    },
     Create {
         stream: StreamConfig,
         name: String,
@@ -486,6 +489,9 @@ pub enum MidiOperation {
         settings: Option<crate::midi::Settings>,
     },
     Poll,
+    Test {
+        message: crate::midi::Message,
+    },
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

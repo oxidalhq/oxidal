@@ -88,6 +88,18 @@ pub struct MidiMap {
     pub entries: Vec<MidiMapEntry>,
 }
 
+/// Optimistic whole-map replacement used by the management screen and imports.
+/// The revision is deliberately separate from the portable JSON payload so an
+/// exported map cannot overwrite changes made after it was downloaded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiMapUpdate {
+    pub expected_revision: String,
+    pub input: Option<String>,
+    pub channel: u8,
+    pub entries: Vec<MidiMapEntry>,
+}
+
 fn identity(key: &str) -> Result<LibraryReference> {
     let (kind, id) = key
         .split_once(':')
@@ -316,6 +328,60 @@ impl MidiMapStore {
         self.snapshot()
     }
 
+    pub fn replace(&self, update: MidiMapUpdate) -> Result<MidiMap> {
+        if update.entries.len() > 4096 || update.channel > 16 {
+            return Err(Error::Invalid("Unsupported or oversized MIDI map"));
+        }
+        let lock = self.lock()?;
+        let current = self.read()?;
+        if revision(&current)? != update.expected_revision {
+            return Err(Error::Conflict("MIDI map changed; refresh before editing"));
+        }
+        let mut entries = BTreeMap::new();
+        for entry in update.entries {
+            let key = entry.entry.kind.key(&entry.entry.id)?;
+            let mapping = PresetMap {
+                bindings: entry.bindings,
+                branch_bindings: entry.branch_bindings,
+                parameter_bindings: entry.parameter_bindings,
+            };
+            if mapping.empty() {
+                continue;
+            }
+            let input = update
+                .input
+                .clone()
+                .unwrap_or_else(|| "hw:Stored,0,0".into());
+            mapping
+                .settings(input, update.channel)
+                .validate()
+                .map_err(|_| Error::Invalid("Invalid stored MIDI mapping"))?;
+            if entries.insert(key, mapping).is_some() {
+                return Err(Error::Invalid("Duplicate MIDI preset mapping"));
+            }
+        }
+        if let Some(input) = &update.input {
+            Settings {
+                input: input.clone(),
+                channel: update.channel,
+                bindings: vec![],
+                branch_bindings: vec![],
+                parameter_bindings: vec![],
+            }
+            .validate()
+            .map_err(|_| Error::Invalid("Invalid MIDI map device"))?;
+        }
+        let book = Book {
+            schema: 1,
+            input: update.input,
+            channel: update.channel,
+            entries,
+        };
+        self.write(&book)?;
+        drop(lock);
+        self.snapshot()
+    }
+
     pub fn disable(&self) -> Result<MidiMap> {
         let _lock = self.lock()?;
         let mut book = self.read()?;
@@ -411,6 +477,59 @@ mod tests {
         store.disable().unwrap();
         assert!(store.settings(Some(&entry('a'))).unwrap().is_none());
         assert_eq!(store.snapshot().unwrap().entries.len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn whole_map_replace_is_validated_and_revision_bound() {
+        let root = root("replace");
+        let store = MidiMapStore::new(root.clone());
+        let initial = store.snapshot().unwrap();
+        let updated = store
+            .replace(MidiMapUpdate {
+                expected_revision: initial.revision.clone(),
+                input: Some("hw:Controller,0,0".into()),
+                channel: 3,
+                entries: vec![MidiMapEntry {
+                    entry: entry('a'),
+                    bindings: settings(11).bindings,
+                    branch_bindings: vec![],
+                    parameter_bindings: vec![],
+                }],
+            })
+            .unwrap();
+        assert_ne!(updated.revision, initial.revision);
+        assert_eq!(updated.channel, 3);
+        assert_eq!(updated.entries[0].bindings[0].program, Some(11));
+
+        let stale = store.replace(MidiMapUpdate {
+            expected_revision: initial.revision,
+            input: None,
+            channel: 1,
+            entries: vec![],
+        });
+        assert!(matches!(stale, Err(Error::Conflict(_))));
+
+        let duplicate = store.replace(MidiMapUpdate {
+            expected_revision: updated.revision,
+            input: Some("hw:Controller,0,0".into()),
+            channel: 1,
+            entries: vec![
+                MidiMapEntry {
+                    entry: entry('b'),
+                    bindings: settings(1).bindings,
+                    branch_bindings: vec![],
+                    parameter_bindings: vec![],
+                },
+                MidiMapEntry {
+                    entry: entry('b'),
+                    bindings: settings(2).bindings,
+                    branch_bindings: vec![],
+                    parameter_bindings: vec![],
+                },
+            ],
+        });
+        assert!(matches!(duplicate, Err(Error::Invalid(_))));
         fs::remove_dir_all(root).unwrap();
     }
 

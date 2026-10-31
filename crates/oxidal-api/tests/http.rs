@@ -112,6 +112,65 @@ async fn midi_map_starts_disabled_and_is_never_cached() {
 }
 
 #[tokio::test]
+async fn midi_map_import_is_revision_bound_and_strictly_validated() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let initial: Value = client
+        .get(format!("{url}/midi/map"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let entry = "a".repeat(64);
+    let update = json!({
+        "expected_revision": initial["revision"],
+        "input": "hw:Controller,0,0",
+        "channel": 2,
+        "entries": [{
+            "entry": {"kind": "rig", "id": entry},
+            "bindings": [{"scene": "lead", "program": 4, "controller": null}],
+            "branch_bindings": [],
+            "parameter_bindings": []
+        }]
+    });
+    let response = client
+        .post(format!("{url}/midi/map"))
+        .json(&update)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let imported: Value = response.json().await.unwrap();
+    assert_eq!(imported["input"], "hw:Controller,0,0");
+    assert_eq!(imported["entries"][0]["bindings"][0]["program"], 4);
+
+    let stale = client
+        .post(format!("{url}/midi/map"))
+        .json(&update)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), 409);
+    let invalid = client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": imported["revision"],
+            "input": "not-an-alsa-device",
+            "channel": 2,
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), 422);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn ui_page_revalidates_while_hashed_assets_stay_immutable() {
     let root = std::env::temp_dir().join(format!(
         "oxidal-ui-cache-{}-{}",

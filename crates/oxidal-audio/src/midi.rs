@@ -773,6 +773,18 @@ impl Connection {
     pub fn configure(&mut self, settings: Option<Settings>) {
         *self = Self::new(settings);
     }
+    pub fn test(
+        &self,
+        message: Message,
+        mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
+    ) -> Result<bool, String> {
+        receive(
+            self.settings
+                .as_ref()
+                .ok_or("MIDI is not configured for the playing preset")?,
+            message,
+        )
+    }
     pub fn poll(&mut self, mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>) {
         let Some(settings) = &self.settings else {
             return;

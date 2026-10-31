@@ -170,6 +170,25 @@ async fn recall(shared: &Arc<Shared>, slot: usize) -> Result<(), String> {
         .into_iter()
         .nth(slot)
         .ok_or("MIDI Program is outside the Mine set list")?;
+    recall_target(shared, target).await
+}
+
+pub(crate) async fn recall_entry(
+    shared: &Arc<Shared>,
+    entry: &oxidal_presets::LibraryReference,
+) -> Result<(), String> {
+    let target = set_list(shared)
+        .await?
+        .into_iter()
+        .find(|item| item.kind == entry.kind && item.id == entry.id)
+        .ok_or("Preset is not in the active Mine set list")?;
+    recall_target(shared, target).await
+}
+
+async fn recall_target(
+    shared: &Arc<Shared>,
+    target: oxidal_presets::LibraryItem,
+) -> Result<(), String> {
     let stream = stream(shared).ok_or("Choose an audio interface before MIDI recall")?;
     match target.kind {
         LibraryKind::Owned => {

@@ -100,6 +100,12 @@
     "midi_map": {
       "$ref": "#/$defs/MidiMap"
     },
+    "midi_map_update": {
+      "$ref": "#/$defs/MidiMapUpdate"
+    },
+    "midi_test": {
+      "$ref": "#/$defs/MidiTest"
+    },
     "model_page": {
       "$ref": "#/$defs/Page2"
     },
@@ -259,6 +265,8 @@
     "calibration_command",
     "midi_devices",
     "midi_map",
+    "midi_map_update",
+    "midi_test",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -676,6 +684,23 @@
           "additionalProperties": false,
           "required": [
             "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi_test"
+            },
+            "message": {
+              "$ref": "#/$defs/Message"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "message"
           ]
         },
         {
@@ -5067,6 +5092,39 @@
         "parameter_bindings"
       ]
     },
+    "MidiMapUpdate": {
+      "description": "Optimistic whole-map replacement used by the management screen and imports.\nThe revision is deliberately separate from the portable JSON payload so an\nexported map cannot overwrite changes made after it was downloaded.",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MidiMapEntry"
+          }
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "channel",
+        "entries"
+      ]
+    },
     "MidiMapping": {
       "description": "Versioned MIDI mapping. Feedback uses a separate output route, never an input route.\n@see docs/architecture.md",
       "type": "object",
@@ -5133,6 +5191,29 @@
       "enum": [
         "absolute",
         "relative_twos_complement"
+      ]
+    },
+    "MidiTest": {
+      "type": "object",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "message": {
+          "description": "None tests global preset recall. A message tests the playing preset's map.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Message"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entry"
       ]
     },
     "Mode": {
@@ -7361,6 +7442,23 @@
           "additionalProperties": false,
           "required": [
             "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi_test"
+            },
+            "message": {
+              "$ref": "#/$defs/Message"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "message"
           ]
         },
         {

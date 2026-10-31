@@ -322,6 +322,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Status => "status",
                 WorkerRequest::Authoring { .. } => "authoring",
                 WorkerRequest::Midi { .. } => "midi settings",
+                WorkerRequest::MidiTest { .. } => "midi test",
                 WorkerRequest::Control { .. } => "control",
                 WorkerRequest::Scene { .. } => "scene",
                 WorkerRequest::Branch { .. } => "branch",
@@ -351,6 +352,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         None
                     }
                 },
+                WorkerRequest::MidiTest { message } => midi
+                    .test(message, |settings, message| {
+                        rig.active_mut().midi_message(settings, message)
+                    })
+                    .and_then(|mapped| {
+                        mapped.then_some(()).ok_or_else(|| {
+                            "This message is not mapped in the playing preset".into()
+                        })
+                    })
+                    .err(),
                 WorkerRequest::Control { command } => rig.active_mut().apply(command).err(),
                 WorkerRequest::Scene { command } => rig.active_mut().select_scene(command).err(),
                 WorkerRequest::Branch { command } => rig.active_mut().set_branch(command).err(),

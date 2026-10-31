@@ -1698,6 +1698,11 @@ impl Owner {
                 self.publish(AudioPhase::Running, None);
                 return Ok(self.state.clone());
             }
+            AudioAction::MidiTest { message } => {
+                self.midi(oxidal_audio::lifecycle::MidiOperation::Test { message })
+                    .await?;
+                return Ok(self.state.clone());
+            }
             AudioAction::LoadPreset { preset_id, owned } => {
                 return self.load_preset(preset_id, owned, true, true).await;
             }

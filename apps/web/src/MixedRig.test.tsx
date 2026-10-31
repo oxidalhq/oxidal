@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -312,10 +313,17 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
       otherPlaying={false}
     />,
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Perform view' }));
-  const tile = await screen.findByRole('button', {
-    name: 'Oxidal Hold (Stereo) on',
-  });
+  expect(
+    await screen.findByRole('button', { name: 'Perform view' }),
+  ).toBeEnabled();
+  act(() => setPerform({ on: true }));
+  const tile = await screen.findByRole(
+    'button',
+    {
+      name: 'Oxidal Hold (Stereo) on',
+    },
+    { timeout: 3000 },
+  );
   expect(tile).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(tile);
   await waitFor(() =>

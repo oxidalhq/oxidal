@@ -243,8 +243,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             &request.midi,
                             oxidal_audio::lifecycle::MidiOperation::Configure { .. }
                         );
+                        let test = matches!(
+                            &request.midi,
+                            oxidal_audio::lifecycle::MidiOperation::Test { .. }
+                        );
                         let error = match request.midi {
                             oxidal_audio::lifecycle::MidiOperation::Poll => None,
+                            oxidal_audio::lifecycle::MidiOperation::Test { message } => {
+                                let blocked = models.pending()
+                                    || authoring.measurement_pending()
+                                    || authoring.gesture_pending();
+                                midi.test(message, |settings, message| {
+                                    oxidal_tone3000::midi::dispatch(
+                                        &mut engine,
+                                        settings,
+                                        message,
+                                        blocked,
+                                    )
+                                })
+                                .and_then(|mapped| {
+                                    mapped.then_some(()).ok_or_else(|| {
+                                        "This message is not mapped in the playing preset".into()
+                                    })
+                                })
+                                .err()
+                            }
                             oxidal_audio::lifecycle::MidiOperation::Configure { settings } => {
                                 let controls = engine.live_controls()?;
                                 match settings
@@ -261,11 +284,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         };
                         // Idle connection polls do not rebuild a potentially dense catalog.
-                        let controls = if configure || midi.status.events != midi_readback_events {
-                            Some(engine.live_controls()?)
-                        } else {
-                            None
-                        };
+                        let controls =
+                            if configure || test || midi.status.events != midi_readback_events {
+                                Some(engine.live_controls()?)
+                            } else {
+                                None
+                            };
                         midi_readback_events = midi.status.events;
                         PlaybackEvent::Midi {
                             serial: request.serial,

@@ -640,6 +640,26 @@ export async function midiMap(): Promise<MidiMap> {
   if (!midiMapValidator(body)) throw new Error('Incompatible MIDI map');
   return body;
 }
+export type MidiMapUpdate = Contract['midi_map_update'];
+export async function updateMidiMap(update: MidiMapUpdate): Promise<MidiMap> {
+  const body = await presetResponse(
+    await fetch('/api/v1/midi/map', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    }),
+  );
+  if (!midiMapValidator(body)) throw new Error('Incompatible MIDI map');
+  return body;
+}
+export async function testMidi(request: Contract['midi_test']): Promise<void> {
+  const response = await fetch('/api/v1/midi/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) await presetResponse(response);
+}
 
 export type NativeDefaults = Contract['native_defaults'];
 const nativeDefaultsValidator = ajv.compile<NativeDefaults>({

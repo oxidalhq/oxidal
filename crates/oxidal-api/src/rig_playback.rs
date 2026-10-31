@@ -998,6 +998,23 @@ impl Owner {
                 self.schedule_recovery();
                 self.changed();
             }
+            RigAudioAction::MidiTest { message } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::MidiTest { message }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
+                }
+                self.changed();
+            }
             RigAudioAction::Scene { command } => {
                 if self.state.phase != AudioPhase::Running {
                     return Err("Mixed audio is not running".into());

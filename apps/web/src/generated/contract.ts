@@ -22,6 +22,10 @@ export type AudioAction =
       settings?: Settings2 | null;
     }
   | {
+      kind: "midi_test";
+      message: Message;
+    }
+  | {
       kind: "create";
       name: string;
       stream: StreamConfig;
@@ -129,6 +133,18 @@ export type Target =
       kind: "merge";
       node: string;
       port: number;
+    };
+export type Message =
+  | {
+      channel: number;
+      kind: "program";
+      program: number;
+    }
+  | {
+      channel: number;
+      controller: number;
+      kind: "control";
+      value: number;
     };
 export type Direction = "capture" | "playback";
 export type SampleFormat = "s16" | "s24" | "s24_packed" | "s32" | "float";
@@ -296,18 +312,6 @@ export type StructureEdit =
 export type ChainLane = "left" | "right";
 export type InputMode = "stereo" | "left" | "right" | "dual";
 export type Phase = "idle" | "listening" | "done" | "timeout";
-export type Message =
-  | {
-      channel: number;
-      kind: "program";
-      program: number;
-    }
-  | {
-      channel: number;
-      controller: number;
-      kind: "control";
-      value: number;
-    };
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
@@ -607,6 +611,10 @@ export type RigAudioAction =
       settings?: Settings2 | null;
     }
   | {
+      kind: "midi_test";
+      message: Message;
+    }
+  | {
       command: ModelCommand;
       kind: "model";
     }
@@ -716,6 +724,8 @@ export interface Contract {
   lv2_catalog: PluginCatalog;
   midi_devices: Devices;
   midi_map: MidiMap;
+  midi_map_update: MidiMapUpdate;
+  midi_test: MidiTest;
   model_page: Page2;
   model_query: ModelQuery;
   monitoring: Monitoring;
@@ -1680,6 +1690,24 @@ export interface MidiMapEntry {
   branch_bindings: BranchBinding[];
   entry: LibraryReference;
   parameter_bindings: ParameterBinding[];
+}
+/**
+ * Optimistic whole-map replacement used by the management screen and imports.
+ * The revision is deliberately separate from the portable JSON payload so an
+ * exported map cannot overwrite changes made after it was downloaded.
+ */
+export interface MidiMapUpdate {
+  channel: number;
+  entries: MidiMapEntry[];
+  expected_revision: string;
+  input?: string | null;
+}
+export interface MidiTest {
+  entry: LibraryReference;
+  /**
+   * None tests global preset recall. A message tests the playing preset's map.
+   */
+  message?: Message | null;
 }
 export interface Page2 {
   data: Model[];

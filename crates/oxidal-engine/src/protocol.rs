@@ -348,6 +348,9 @@ pub enum WorkerRequest {
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,
     },
+    MidiTest {
+        message: oxidal_audio::midi::Message,
+    },
     Model {
         command: ModelCommand,
     },
@@ -452,6 +455,9 @@ pub enum RigAudioAction {
     },
     Midi {
         settings: Option<oxidal_audio::midi::Settings>,
+    },
+    MidiTest {
+        message: oxidal_audio::midi::Message,
     },
     Model {
         command: ModelCommand,

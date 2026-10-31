@@ -34,6 +34,9 @@ vi.mock('./SceneMidi', () => ({
     </button>
   ),
 }));
+vi.mock('./MidiMapScreen', () => ({
+  MidiMapScreen: () => <div>Whole MIDI map</div>,
+}));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
