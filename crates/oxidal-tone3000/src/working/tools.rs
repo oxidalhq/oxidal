@@ -8,6 +8,43 @@ pub(super) struct Baseline {
     alignment: bool,
 }
 impl Authoring {
+    /// Tuner-only commands can update their existing status without rebuilding
+    /// the full native catalog. Mixed rigs call this while holding the render
+    /// lock, so keep the common live-tuner path to one bounded utility read.
+    pub fn lightweight_tuner_command(
+        &mut self,
+        engine: &mut Engine,
+        command: Command,
+    ) -> Result<Option<oxidal_audio::tools::State>, String> {
+        if self.measurement.is_some()
+            || self.tools.spectrum.is_some()
+            || self.gesture_pending()
+            || !matches!(command, Command::Tuner { .. } | Command::Poll)
+        {
+            return Ok(None);
+        }
+        self.tools.error = None;
+        match command {
+            Command::Tuner { enabled } => {
+                engine
+                    .utility(if enabled { 1 } else { 2 })
+                    .map_err(|e| e.to_string())?;
+                self.tools.tuner_enabled = enabled;
+                if !enabled {
+                    self.tools.tuner = None;
+                }
+            }
+            Command::Poll if self.tools.tuner_enabled => {
+                self.tools.tuner = Some(
+                    serde_json::from_value(engine.utility(0).map_err(|e| e.to_string())?)
+                        .map_err(|e| e.to_string())?,
+                );
+            }
+            Command::Poll => {}
+            _ => unreachable!(),
+        }
+        Ok(Some(self.tools.clone()))
+    }
     pub fn measurement_pending(&self) -> bool {
         self.measurement.is_some()
     }

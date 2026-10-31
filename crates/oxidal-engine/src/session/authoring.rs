@@ -47,6 +47,26 @@ impl Session {
             .or_insert_with(|| {
                 oxidal_tone3000::working::Authoring::for_source(root, source, receipt)
             });
+        let tuner_command = match &command.action {
+            oxidal_audio::structure::AuthoringAction::Utility {
+                command:
+                    utility @ (oxidal_audio::tools::Command::Tuner { .. }
+                    | oxidal_audio::tools::Command::Poll),
+            } => Some(*utility),
+            _ => None,
+        };
+        if let Some(utility) = tuner_command
+            && let Some(tools) = owner.lightweight_tuner_command(engine, utility)?
+        {
+            let row = self
+                .state
+                .authoring
+                .iter_mut()
+                .find(|row| row.node == command.node)
+                .ok_or("Missing native authoring status")?;
+            row.status.tools = tools;
+            return Ok(());
+        }
         let mutating = command.action.changes_tone();
         let utility_poll = matches!(
             command.action,
