@@ -16,7 +16,10 @@ import json, subprocess, time, urllib.request
 from pathlib import Path
 
 def get(path):
-    with urllib.request.urlopen('http://127.0.0.1:3210' + path, timeout=3) as reply:
+    # Device commands have their own bounded 25-second IPC deadline. A loaded
+    # TCG guest must not impose a shorter HTTP deadline on that same operation.
+    timeout = 45 if path.startswith('/api/v1/device/') else 3
+    with urllib.request.urlopen('http://127.0.0.1:3210' + path, timeout=timeout) as reply:
         return json.loads(reply.read())
 
 qualified = False
@@ -333,7 +336,10 @@ class BootTests(unittest.TestCase):
             with log.open('wb') as output:
                 process = subprocess.Popen(['qemu-system-aarch64', '-machine', 'virt', '-cpu', 'cortex-a72', '-m', '1536', '-smp', '2', '-nographic', '-no-reboot', '-kernel', str(kernel), '-initrd', str(initrd), '-append', 'root=/dev/vda2 rw console=ttyAMA0 systemd.show_status=1', '-drive', f'file={overlay},format=qcow2,if=virtio', '-device', 'virtio-rng-pci'], stdout=output, stderr=subprocess.STDOUT)
                 try:
-                    process.wait(timeout=240)
+                    # Private development images additionally migrate and hash
+                    # the retained library. This is functional qualification,
+                    # not a physical Pi startup-time benchmark.
+                    process.wait(timeout=600)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
