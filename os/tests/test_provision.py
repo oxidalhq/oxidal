@@ -123,7 +123,7 @@ class ApplianceTests(ProvisionTests):
         self.assertIn(b'O X I D A L', (self.root / 'etc/issue.d/90-oxidal.issue').read_bytes())
         helper = (self.root / 'etc/systemd/system/oxidal-device.service').read_text()
         self.assertIn('RestrictAddressFamilies=AF_UNIX', helper)
-        self.assertIn('NoNewPrivileges=yes', helper)
+        self.assertNotIn('NoNewPrivileges=', helper)
         self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         self.assertIn('Environment=OXIDAL_RIG_WORKER=/opt/oxidal/bin/oxidal-rig-worker', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         self.assertFalse((self.root / 'usr/share/oxidal/storage-layout-v1').exists())

@@ -14,7 +14,6 @@ ExecStart=/opt/oxidal/bin/oxidal-device-service
 Restart=on-failure
 RestartSec=3
 UMask=0077
-NoNewPrivileges=yes
 ProtectSystem=false
 ProtectHome=yes
 PrivateTmp=yes

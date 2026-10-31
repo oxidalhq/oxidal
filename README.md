@@ -68,6 +68,6 @@ After `pnpm native:check` builds and verifies the pinned native backend on macOS
 
 Linux builds expose **Settings → Audio → Audio devices** for real ALSA discovery and exact configuration probes. The appliance also includes experimental saved-preset playback with audio-only Start/Stop/Restart; physical audio remains unqualified. See [audio devices and lifecycle](docs/audio.md).
 
-The appliance’s [device service](docs/device-service.md) supplies web Wi-Fi/hotspot setup with rollback and separate system power controls. [Monitoring](docs/monitoring.md) shows real worker levels, processing history and available Linux host readings. The optional [web debug console](docs/debug-console.md) runs bounded commands as a separate unprivileged account after explicit enablement.
+The appliance’s [device service](docs/device-service.md) supplies web Wi-Fi/hotspot setup with rollback, fixed effect-package actions and separate system power controls. Its deliberate package-manager privilege exception and retained safeguards are documented in the [OS README](os/README.md#effect-installation-and-helper-hardening). [Monitoring](docs/monitoring.md) shows real worker levels, processing history and available Linux host readings. The optional [web debug console](docs/debug-console.md) runs bounded commands as a separate unprivileged account after explicit enablement.
 
 The interface keeps Rig, Library, Monitor and Settings as stable destinations. Settings separates Audio, Connections, MIDI, Display and Maintenance. See [interface theme and navigation](docs/interface.md).
