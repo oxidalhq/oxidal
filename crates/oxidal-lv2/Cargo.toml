@@ -27,3 +27,8 @@ all = "warn"
 name = "oxidal-graph-worker"
 path = "src/bin/oxidal-graph-worker.rs"
 required-features = ["worker"]
+
+[[bin]]
+name = "oxidal-plugin-check"
+path = "src/bin/oxidal-plugin-check.rs"
+required-features = ["native"]

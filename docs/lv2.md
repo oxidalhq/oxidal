@@ -186,6 +186,44 @@ limits and verify the fixture catalog is still returned without an audio-policy 
 One scan can run at a time. Responses are limited to 4 MiB and discovery to ten seconds;
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
+
+### Offline pack smoke checks
+
+On Linux with `liblilv-dev`, `lv2-dev` and `pkg-config`, build the independent
+test tool with `cargo build --locked --release -p oxidal-lv2 --features native --bin oxidal-plugin-check`.
+It opens no ALSA device, changes no preset and requests no real-time policy.
+Run it at low priority while the instrument is in use:
+
+```sh
+nice -n 19 target/release/oxidal-plugin-check --pack installed --sample-rate 48000 --frames 48 > installed.json
+python3 scripts/plugin-pack-check.py --worker target/release/oxidal-plugin-check --output pack-reports
+```
+
+The second command uses Debian package ownership to scope discovery to each
+installed candidate pack. It never installs packages. Use repeated `--pack swh`
+or other listed pack names to select a subset. Reports include exact package
+versions; absent packs are `not_installed`, not empty successful tests. The first
+command instead covers everything on the operator's `LV2_PATH`. `--bundle` can
+select one trusted local bundle for a focused diagnostic.
+
+Each metadata-admitted plugin runs in a separate child with defaults and a
+deterministic stereo chord/noise fixture for one second, rounded up to whole
+blocks. Declared mono effects use independent left/right instances. Reported
+latency is prepared before processing; no latency compensation is needed for
+this isolated smoke test. Instantiation, processing and destruction must finish
+before the child writes its result. Children that crash or exceed the default
+ten-second deadline are reported independently; timed-out children are killed
+and reaped. Plugin stdout/stderr cannot block the result pipe.
+
+Results distinguish `usable`, `rejected` (metadata), `failed` (instantiation or
+processing with a reason), `silent`, `non_finite`, `crashed` and `timed_out`.
+“Usable” means finite, non-silent output in this default smoke test. Silence may
+mean a required model/message/control is absent. Neither result establishes
+correct sound, all-control compatibility, asset/state portability or real-time
+performance on a particular device. Preserve platform, package versions, rate,
+block size and exact reports when qualifying a pack. Fixture integration tests
+verify actual audio and metadata rejection; supervisor tests verify crash and
+timeout containment.
 The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
 rescanning while the graph worker continues processing. The browser uses this catalog in New preset; persistent mixed-native/LV2 rigs remain separate work.
 
