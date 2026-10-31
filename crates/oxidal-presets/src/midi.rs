@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::PathBuf,
@@ -56,6 +56,8 @@ struct Book {
     schema: u8,
     input: Option<String>,
     channel: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    template: Option<MidiTemplate>,
     entries: BTreeMap<String, PresetMap>,
 }
 
@@ -65,8 +67,34 @@ impl Default for Book {
             schema: 1,
             input: None,
             channel: 1,
+            template: None,
             entries: BTreeMap::new(),
         }
+    }
+}
+
+/// Unit default for controllers whose buttons emit consecutive CC messages.
+/// Program Change remains reserved for the Mine set-list; these buttons select
+/// scenes inside the recalled preset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiTemplate {
+    pub scene_buttons: u8,
+    pub first_controller: u8,
+}
+
+impl MidiTemplate {
+    fn validate(self) -> Result<()> {
+        if !matches!(self.scene_buttons, 4 | 8)
+            || self.first_controller >= 128
+            || u16::from(self.first_controller) + u16::from(self.scene_buttons) > 128
+            || (u16::from(self.first_controller)
+                ..u16::from(self.first_controller) + u16::from(self.scene_buttons))
+                .any(|controller| matches!(controller, 0 | 32))
+        {
+            return Err(Error::Invalid("Invalid MIDI controller template"));
+        }
+        Ok(())
     }
 }
 
@@ -85,6 +113,8 @@ pub struct MidiMap {
     pub revision: String,
     pub input: Option<String>,
     pub channel: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<MidiTemplate>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -97,6 +127,8 @@ pub struct MidiMapUpdate {
     pub expected_revision: String,
     pub input: Option<String>,
     pub channel: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<MidiTemplate>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -156,6 +188,9 @@ impl MidiMapStore {
             .map_err(|_| Error::Invalid("MIDI map could not be read"))?;
         if book.schema != 1 || book.channel > 16 || book.entries.len() > 4096 {
             return Err(Error::Invalid("Unsupported or oversized MIDI map"));
+        }
+        if let Some(template) = book.template {
+            template.validate()?;
         }
         if let Some(input) = &book.input {
             Settings {
@@ -245,6 +280,7 @@ impl MidiMapStore {
             revision,
             input: book.input,
             channel: book.channel,
+            template: book.template,
             entries,
         })
     }
@@ -332,6 +368,9 @@ impl MidiMapStore {
         if update.entries.len() > 4096 || update.channel > 16 {
             return Err(Error::Invalid("Unsupported or oversized MIDI map"));
         }
+        if let Some(template) = update.template {
+            template.validate()?;
+        }
         let lock = self.lock()?;
         let current = self.read()?;
         if revision(&current)? != update.expected_revision {
@@ -375,6 +414,7 @@ impl MidiMapStore {
             schema: 1,
             input: update.input,
             channel: update.channel,
+            template: update.template,
             entries,
         };
         self.write(&book)?;
@@ -388,6 +428,79 @@ impl MidiMapStore {
         book.input = None;
         self.write(&book)?;
         self.snapshot()
+    }
+
+    fn template_map(template: MidiTemplate, scenes: &[String]) -> Result<PresetMap> {
+        template.validate()?;
+        let mut unique = BTreeSet::new();
+        if scenes.len() > 1024
+            || scenes
+                .iter()
+                .any(|scene| scene.is_empty() || !unique.insert(scene))
+        {
+            return Err(Error::Invalid("Invalid MIDI template scene list"));
+        }
+        Ok(PresetMap {
+            bindings: scenes
+                .iter()
+                .take(usize::from(template.scene_buttons))
+                .enumerate()
+                .map(|(index, scene)| Binding {
+                    scene: scene.clone(),
+                    program: None,
+                    controller: Some(template.first_controller + index as u8),
+                })
+                .collect(),
+            branch_bindings: vec![],
+            parameter_bindings: vec![],
+        })
+    }
+
+    /// Replace one preset's local assignments with the current unit template.
+    pub fn apply_template(
+        &self,
+        expected_revision: &str,
+        entry: LibraryReference,
+        scenes: &[String],
+    ) -> Result<MidiMap> {
+        let key = entry.kind.key(&entry.id)?;
+        let lock = self.lock()?;
+        let mut book = self.read()?;
+        if revision(&book)? != expected_revision {
+            return Err(Error::Conflict("MIDI map changed; refresh before editing"));
+        }
+        let template = book
+            .template
+            .ok_or(Error::Invalid("Choose a MIDI controller template first"))?;
+        let mapping = Self::template_map(template, scenes)?;
+        if mapping.empty() {
+            book.entries.remove(&key);
+        } else {
+            book.entries.insert(key, mapping);
+        }
+        self.write(&book)?;
+        drop(lock);
+        self.snapshot()
+    }
+
+    /// Give a newly published scene preset the unit template once. Retrying a
+    /// publication never overwrites an explicit map the musician already made.
+    pub fn inherit_template(&self, entry: LibraryReference, scenes: &[String]) -> Result<()> {
+        let key = entry.kind.key(&entry.id)?;
+        let _lock = self.lock()?;
+        let mut book = self.read()?;
+        if book.entries.contains_key(&key) {
+            return Ok(());
+        }
+        let Some(template) = book.template else {
+            return Ok(());
+        };
+        let mapping = Self::template_map(template, scenes)?;
+        if !mapping.empty() {
+            book.entries.insert(key, mapping);
+            self.write(&book)?;
+        }
+        Ok(())
     }
 
     pub fn forget(&self, kind: LibraryKind, id: &str) -> Result<()> {
@@ -490,6 +603,7 @@ mod tests {
                 expected_revision: initial.revision.clone(),
                 input: Some("hw:Controller,0,0".into()),
                 channel: 3,
+                template: None,
                 entries: vec![MidiMapEntry {
                     entry: entry('a'),
                     bindings: settings(11).bindings,
@@ -506,6 +620,7 @@ mod tests {
             expected_revision: initial.revision,
             input: None,
             channel: 1,
+            template: None,
             entries: vec![],
         });
         assert!(matches!(stale, Err(Error::Conflict(_))));
@@ -514,6 +629,7 @@ mod tests {
             expected_revision: updated.revision,
             input: Some("hw:Controller,0,0".into()),
             channel: 1,
+            template: None,
             entries: vec![
                 MidiMapEntry {
                     entry: entry('b'),
@@ -530,6 +646,73 @@ mod tests {
             ],
         });
         assert!(matches!(duplicate, Err(Error::Invalid(_))));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scene_template_applies_and_new_presets_inherit_once() {
+        let root = root("template");
+        let store = MidiMapStore::new(root.clone());
+        let initial = store.snapshot().unwrap();
+        let configured = store
+            .replace(MidiMapUpdate {
+                expected_revision: initial.revision,
+                input: Some("hw:Controller,0,0".into()),
+                channel: 1,
+                template: Some(MidiTemplate {
+                    scene_buttons: 4,
+                    first_controller: 40,
+                }),
+                entries: vec![],
+            })
+            .unwrap();
+        let scenes = vec![
+            "clean".into(),
+            "crunch".into(),
+            "lead".into(),
+            "ambient".into(),
+            "extra".into(),
+        ];
+        let first = entry('a');
+        let applied = store
+            .apply_template(&configured.revision, first.clone(), &scenes)
+            .unwrap();
+        assert_eq!(applied.entries[0].bindings.len(), 4);
+        assert_eq!(applied.entries[0].bindings[0].controller, Some(40));
+        assert_eq!(applied.entries[0].bindings[3].scene, "ambient");
+
+        let second = entry('b');
+        store
+            .inherit_template(second.clone(), &scenes[..2])
+            .unwrap();
+        assert_eq!(
+            store
+                .settings(Some(&second))
+                .unwrap()
+                .unwrap()
+                .bindings
+                .len(),
+            2
+        );
+        let manual = settings(9);
+        store.configure(second.clone(), manual.clone()).unwrap();
+        store.inherit_template(second.clone(), &scenes).unwrap();
+        assert_eq!(
+            store.settings(Some(&second)).unwrap().unwrap().bindings,
+            manual.bindings
+        );
+
+        let bad = store.replace(MidiMapUpdate {
+            expected_revision: store.snapshot().unwrap().revision,
+            input: None,
+            channel: 1,
+            template: Some(MidiTemplate {
+                scene_buttons: 8,
+                first_controller: 28,
+            }),
+            entries: vec![],
+        });
+        assert!(matches!(bad, Err(Error::Invalid(_))));
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -652,6 +652,19 @@ export async function updateMidiMap(update: MidiMapUpdate): Promise<MidiMap> {
   if (!midiMapValidator(body)) throw new Error('Incompatible MIDI map');
   return body;
 }
+export async function applyMidiTemplate(
+  request: Contract['midi_template_apply'],
+): Promise<MidiMap> {
+  const body = await presetResponse(
+    await fetch('/api/v1/midi/template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+  if (!midiMapValidator(body)) throw new Error('Incompatible MIDI map');
+  return body;
+}
 export async function testMidi(request: Contract['midi_test']): Promise<void> {
   const response = await fetch('/api/v1/midi/test', {
     method: 'POST',

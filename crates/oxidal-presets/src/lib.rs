@@ -22,7 +22,7 @@ pub use nam_info::NamInfo;
 mod wav_info;
 pub use wav_info::WavInfo;
 mod native;
-pub use midi::{MidiMap, MidiMapEntry, MidiMapStore, MidiMapUpdate};
+pub use midi::{MidiMap, MidiMapEntry, MidiMapStore, MidiMapUpdate, MidiTemplate};
 pub use model::{LocalAssetPage, ModelAsset, ModelStore};
 mod owned;
 mod removal;

@@ -103,6 +103,9 @@
     "midi_map_update": {
       "$ref": "#/$defs/MidiMapUpdate"
     },
+    "midi_template_apply": {
+      "$ref": "#/$defs/MidiTemplateApply"
+    },
     "midi_test": {
       "$ref": "#/$defs/MidiTest"
     },
@@ -266,6 +269,7 @@
     "midi_devices",
     "midi_map",
     "midi_map_update",
+    "midi_template_apply",
     "midi_test",
     "audio_probe",
     "audio_probe_result",
@@ -5050,6 +5054,16 @@
         },
         "revision": {
           "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidiTemplate"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -5115,6 +5129,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "template": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidiTemplate"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
@@ -5191,6 +5215,45 @@
       "enum": [
         "absolute",
         "relative_twos_complement"
+      ]
+    },
+    "MidiTemplate": {
+      "description": "Unit default for controllers whose buttons emit consecutive CC messages.\nProgram Change remains reserved for the Mine set-list; these buttons select\nscenes inside the recalled preset.",
+      "type": "object",
+      "properties": {
+        "first_controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "scene_buttons": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "scene_buttons",
+        "first_controller"
+      ]
+    },
+    "MidiTemplateApply": {
+      "type": "object",
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "expected_revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "entry"
       ]
     },
     "MidiTest": {

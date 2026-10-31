@@ -313,9 +313,8 @@ it('performs a preset with effects: a Hold tile engages the hold, other tiles sw
       otherPlaying={false}
     />,
   );
-  expect(
-    await screen.findByRole('button', { name: 'Perform view' }),
-  ).toBeEnabled();
+  const perform = await screen.findByRole('button', { name: 'Perform view' });
+  await waitFor(() => expect(perform).toBeEnabled());
   act(() => setPerform({ on: true }));
   const tile = await screen.findByRole(
     'button',

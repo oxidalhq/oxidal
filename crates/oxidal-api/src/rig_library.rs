@@ -367,12 +367,28 @@ pub async fn publish(
         let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
         let revision = store.save(&bundle)?;
         if let Some(source) = request.source {
-            oxidal_presets::DetailsStore::new(root).inherit(
+            oxidal_presets::DetailsStore::new(root.clone()).inherit(
                 oxidal_presets::LibraryReference {
                     kind: oxidal_presets::LibraryKind::Rig,
                     id: revision.clone(),
                 },
                 source,
+            )?;
+        }
+        if oxidal_presets::LibraryOrigin::from_manifest(&manifest)?
+            == oxidal_presets::LibraryOrigin::Mine
+            && let Some(scenes) = manifest.scenes()?
+        {
+            oxidal_presets::MidiMapStore::new(root).inherit_template(
+                oxidal_presets::LibraryReference {
+                    kind: oxidal_presets::LibraryKind::Rig,
+                    id: revision.clone(),
+                },
+                &scenes
+                    .scenes
+                    .into_iter()
+                    .map(|scene| scene.id)
+                    .collect::<Vec<_>>(),
             )?;
         }
         Ok(RigDocument { revision, manifest })

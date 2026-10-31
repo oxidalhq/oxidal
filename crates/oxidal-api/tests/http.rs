@@ -165,6 +165,131 @@ async fn midi_map_import_is_revision_bound_and_strictly_validated() {
         .await
         .unwrap();
     assert_eq!(invalid.status(), 422);
+    let invalid_template = client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": imported["revision"],
+            "input": null,
+            "channel": 1,
+            "template": {"scene_buttons": 8, "first_controller": 28},
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(invalid_template.status(), 422);
+    let wrong_template_target = client
+        .post(format!("{url}/midi/template"))
+        .json(&json!({
+            "expected_revision": imported["revision"],
+            "entry": {"kind": "owned", "id": entry}
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(wrong_template_target.status(), 422);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
+async fn new_scene_rigs_inherit_the_unit_midi_template() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let initial: Value = client
+        .get(format!("{url}/midi/map"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let configured: Value = client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": initial["revision"],
+            "input": null,
+            "channel": 1,
+            "template": {"scene_buttons": 4, "first_controller": 40},
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let manifest = json!({
+        "format": "oxidal.preset",
+        "formatVersion": 1,
+        "id": "21915afb-b95b-4b74-a88c-537f06d3594a",
+        "name": "Template rig",
+        "tone3000": {"instances": []},
+        "oxidal": {
+            "graph": {
+                "nodes": [
+                    {"id":"in","kind":"input","audioInputs":0,"audioOutputs":1},
+                    {"id":"scene-gain","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[1.0]},
+                    {"id":"out","kind":"output","audioInputs":1,"audioOutputs":0}
+                ],
+                "edges": [
+                    {"from":{"node":"in","port":0},"to":{"node":"scene-gain","port":0}},
+                    {"from":{"node":"scene-gain","port":0},"to":{"node":"out","port":0}}
+                ]
+            },
+            "lv2": [],
+            "recall": {"tails":"cut"}
+        },
+        "resources": [],
+        "extensions": {
+            "urn:oxidal:gain:1": {},
+            "urn:oxidal:scenes:1": {
+                "fade_ms": 10,
+                "scenes": [
+                    {"id":"clean","name":"Clean","gains":[{"node":"scene-gain","port":0,"value":1.0}]},
+                    {"id":"lead","name":"Lead","gains":[{"node":"scene-gain","port":0,"value":0.0}]}
+                ]
+            }
+        },
+        "requiredExtensions": ["urn:oxidal:gain:1", "urn:oxidal:scenes:1"]
+    });
+    let published = client
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({"manifest_json":manifest.to_string(),"resources":{}}))
+        .send()
+        .await
+        .unwrap();
+    let status = published.status();
+    let body = published.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let published: Value = serde_json::from_str(&body).unwrap();
+    let inherited: Value = client
+        .get(format!("{url}/midi/map"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        inherited["entries"][0]["entry"]["id"],
+        published["revision"]
+    );
+    assert_eq!(inherited["entries"][0]["bindings"][0]["scene"], "clean");
+    assert_eq!(inherited["entries"][0]["bindings"][0]["controller"], 40);
+    assert_eq!(inherited["entries"][0]["bindings"][1]["scene"], "lead");
+    let reapplied = client
+        .post(format!("{url}/midi/template"))
+        .json(&json!({
+            "expected_revision": inherited["revision"],
+            "entry": {"kind":"rig","id":published["revision"]}
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reapplied.status(), 200);
+    assert_ne!(configured["revision"], inherited["revision"]);
     task.abort();
     let _ = std::fs::remove_file(&mapping);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));

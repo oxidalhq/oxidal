@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
+  CopySimple,
   DownloadSimple,
+  MagicWand,
   MagnifyingGlass,
   Play,
+  Trash,
   UploadSimple,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import {
   libraryCatalog,
+  applyMidiTemplate,
   midiDevices,
   midiMap,
   testMidi,
@@ -43,6 +47,7 @@ type ImportFile = {
   version: 1;
   input: string | null;
   channel: number;
+  template?: MidiMap['template'];
   entries: MidiMap['entries'];
 };
 
@@ -135,6 +140,12 @@ export function MidiMapScreen({
   const [error, setError] = useState('');
   const [learning, setLearning] = useState<Learning | null>(null);
   const [pendingImport, setPendingImport] = useState<ImportFile | null>(null);
+  const [templateButtons, setTemplateButtons] = useState(0);
+  const [templateController, setTemplateController] = useState(40);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [copyTo, setCopyTo] = useState('');
+  const [pendingClear, setPendingClear] = useState('');
+  const [pendingTemplate, setPendingTemplate] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const current = activeEntry(native, mixed);
   const status =
@@ -151,6 +162,8 @@ export function MidiMapScreen({
       .then(([nextMap, nextCatalog, nextDevices]) => {
         if (!active) return;
         setMap(nextMap);
+        setTemplateButtons(nextMap.template?.scene_buttons ?? 0);
+        setTemplateController(nextMap.template?.first_controller ?? 40);
         setCatalog(nextCatalog);
         setDevices(nextDevices);
       })
@@ -163,7 +176,7 @@ export function MidiMapScreen({
   }, []);
 
   async function replaceMap(
-    content: Pick<MidiMap, 'input' | 'channel' | 'entries'>,
+    content: Pick<MidiMap, 'input' | 'channel' | 'template' | 'entries'>,
   ) {
     if (!map || busy) return;
     setBusy(true);
@@ -173,6 +186,7 @@ export function MidiMapScreen({
         expected_revision: map.revision,
         input: content.input,
         channel: content.channel,
+        template: content.template,
         entries: content.entries,
       });
       setMap(updated);
@@ -180,6 +194,25 @@ export function MidiMapScreen({
     } catch (cause) {
       setError(String(cause));
       throw cause;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyTemplateToPreset(entry: EntryRef) {
+    if (!map || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await applyMidiTemplate({
+        expected_revision: map.revision,
+        entry,
+      });
+      setMap(updated);
+      setPendingTemplate('');
+      await onMapApplied(updated);
+    } catch (cause) {
+      setError(String(cause));
     } finally {
       setBusy(false);
     }
@@ -277,6 +310,60 @@ export function MidiMapScreen({
     }
     return uses;
   }, [groups]);
+
+  async function saveTemplate() {
+    if (!map) return;
+    await replaceMap({
+      ...map,
+      template:
+        templateButtons === 0
+          ? null
+          : {
+              scene_buttons: templateButtons,
+              first_controller: templateController,
+            },
+    }).catch(() => undefined);
+  }
+
+  async function copyMappings() {
+    if (!map || !copyFrom || !copyTo || copyFrom === copyTo) return;
+    const source = map.entries.find((entry) => keyOf(entry.entry) === copyFrom);
+    const target = groups.find((group) => keyOf(group.entry) === copyTo);
+    if (!source || !target) return;
+    const copied: MapEntry = {
+      entry: target.entry,
+      bindings: source.bindings.map((binding) => ({ ...binding })),
+      branch_bindings: source.branch_bindings.map((binding) => ({
+        ...binding,
+      })),
+      parameter_bindings: source.parameter_bindings.map((binding) => ({
+        ...binding,
+        target: { ...binding.target },
+      })),
+    };
+    const entries = map.entries.filter(
+      (entry) => !sameEntry(entry.entry, target.entry),
+    );
+    entries.push(copied);
+    await replaceMap({ ...map, entries })
+      .then(() => {
+        setCopyFrom('');
+        setCopyTo('');
+      })
+      .catch(() => undefined);
+  }
+
+  async function clearMappings(entry: EntryRef) {
+    if (!map) return;
+    await replaceMap({
+      ...map,
+      entries: map.entries.filter(
+        (candidate) => !sameEntry(candidate.entry, entry),
+      ),
+    })
+      .then(() => setPendingClear(''))
+      .catch(() => undefined);
+  }
 
   async function movePreset(entry: EntryRef, program: number) {
     if (!catalog) return;
@@ -435,6 +522,7 @@ export function MidiMapScreen({
       version: 1,
       input: map.input ?? null,
       channel: map.channel,
+      template: map.template ?? null,
       entries: map.entries,
     };
     const url = URL.createObjectURL(
@@ -451,6 +539,16 @@ export function MidiMapScreen({
     return <p className="caption">{error || 'Reading controller map…'}</p>;
   }
   const canLearn = connected && !!map.input && !!status?.connected && !busy;
+  const templateChanged =
+    templateButtons !== (map.template?.scene_buttons ?? 0) ||
+    (templateButtons > 0 &&
+      templateController !== (map.template?.first_controller ?? 40));
+  const templateInvalid =
+    templateButtons > 0 &&
+    (templateController < 1 ||
+      templateController + templateButtons > 128 ||
+      (templateController <= 32 && templateController + templateButtons > 32));
+  const copySources = groups.filter((group) => group.map);
   return (
     <div className="space-y-4">
       {error && <p role="alert">{error}</p>}
@@ -530,6 +628,122 @@ export function MidiMapScreen({
           {status?.error && <p className="caption mt-1">{status.error}</p>}
         </div>
       </div>
+
+      <details
+        className="rounded-lg border border-border bg-card"
+        aria-label="MIDI mapping helpers"
+      >
+        <summary className="cursor-pointer px-3 py-3">
+          <span className="ml-1 flex min-w-0 flex-1 flex-col pr-2">
+            <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <strong>Mapping helpers</strong>
+              <span className="caption">
+                {map.template
+                  ? `${map.template.scene_buttons} buttons · CC ${map.template.first_controller}–${map.template.first_controller + map.template.scene_buttons - 1}`
+                  : 'No unit template'}
+              </span>
+            </span>
+            <span className="caption mt-1 flex max-w-2xl">
+              A unit template maps consecutive CC buttons to scenes. New Mine
+              scene presets inherit it automatically.
+            </span>
+          </span>
+        </summary>
+        <div className="space-y-3 px-3 pb-3">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
+            <label className="field min-w-0">
+              Scene template
+              <select
+                aria-label="Scene button template"
+                value={templateButtons}
+                disabled={busy || !connected}
+                onChange={(event) =>
+                  setTemplateButtons(Number(event.target.value))
+                }
+              >
+                <option value={0}>None</option>
+                <option value={4}>4 buttons</option>
+                <option value={8}>8 buttons</option>
+              </select>
+            </label>
+            <label className="field">
+              First CC
+              <input
+                aria-label="First template CC"
+                type="number"
+                min={1}
+                max={127}
+                value={templateController}
+                disabled={!templateButtons || busy || !connected}
+                onChange={(event) =>
+                  setTemplateController(Number(event.target.value))
+                }
+              />
+            </label>
+            <Button
+              variant="outline"
+              disabled={
+                !templateChanged || templateInvalid || busy || !connected
+              }
+              onClick={() => void saveTemplate()}
+            >
+              <MagicWand size={18} aria-hidden="true" /> Save template
+            </Button>
+          </div>
+          {templateInvalid && (
+            <p className="text-sm text-destructive" role="alert">
+              Use CC 1–127 without crossing reserved Bank Select CC 32.
+            </p>
+          )}
+          <div className="grid gap-2 border-t border-border/70 pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <label className="field min-w-0">
+              Copy from
+              <select
+                aria-label="Copy MIDI mappings from"
+                value={copyFrom}
+                disabled={busy || !connected || copySources.length === 0}
+                onChange={(event) => setCopyFrom(event.target.value)}
+              >
+                <option value="">Choose mapped preset</option>
+                {copySources.map((group) => (
+                  <option key={keyOf(group.entry)} value={keyOf(group.entry)}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field min-w-0">
+              Copy to
+              <select
+                aria-label="Copy MIDI mappings to"
+                value={copyTo}
+                disabled={busy || !connected || !copyFrom}
+                onChange={(event) => setCopyTo(event.target.value)}
+              >
+                <option value="">Choose destination</option>
+                {groups
+                  .filter((group) => keyOf(group.entry) !== copyFrom)
+                  .map((group) => (
+                    <option key={keyOf(group.entry)} value={keyOf(group.entry)}>
+                      {group.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <Button
+              variant="outline"
+              disabled={!copyFrom || !copyTo || busy || !connected}
+              onClick={() => void copyMappings()}
+            >
+              <CopySimple size={18} aria-hidden="true" /> Copy mappings
+            </Button>
+          </div>
+          <p className="caption">
+            Copy keeps exact scene, block and control targets; use it between
+            copies of the same rig. Use the scene template for different rigs.
+          </p>
+        </div>
+      </details>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto_auto] sm:items-center">
         <label className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[12rem]">
@@ -775,18 +989,83 @@ export function MidiMapScreen({
                     </p>
                   )}
                 </div>
-                {group.slot >= 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {learnButton(
-                      { kind: 'preset' },
-                      `${group.name} preset recall`,
-                    )}
-                    {testButton(
-                      { kind: 'preset' },
-                      `${group.name} preset recall`,
-                    )}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-1">
+                  {group.entry.kind === 'rig' && map.template && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        className="min-h-9 px-2 py-1"
+                        disabled={busy || !connected}
+                        onClick={() => {
+                          if (
+                            rowCount > 0 &&
+                            pendingTemplate !== keyOf(group.entry)
+                          ) {
+                            setPendingTemplate(keyOf(group.entry));
+                          } else {
+                            void applyTemplateToPreset(group.entry);
+                          }
+                        }}
+                      >
+                        <MagicWand size={16} aria-hidden="true" />{' '}
+                        {pendingTemplate === keyOf(group.entry)
+                          ? 'Replace mappings'
+                          : 'Apply template'}
+                      </Button>
+                      {pendingTemplate === keyOf(group.entry) && (
+                        <Button
+                          variant="ghost"
+                          className="min-h-9 px-2 py-1"
+                          onClick={() => setPendingTemplate('')}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {local &&
+                    rowCount > 0 &&
+                    (pendingClear === keyOf(group.entry) ? (
+                      <>
+                        <Button
+                          variant="destructive"
+                          className="min-h-9 px-2 py-1"
+                          disabled={busy || !connected}
+                          onClick={() => void clearMappings(group.entry)}
+                        >
+                          Clear mappings
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="min-h-9 px-2 py-1"
+                          onClick={() => setPendingClear('')}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        className="min-h-9 px-2 py-1 text-destructive"
+                        disabled={busy || !connected}
+                        onClick={() => setPendingClear(keyOf(group.entry))}
+                      >
+                        <Trash size={16} aria-hidden="true" /> Clear
+                      </Button>
+                    ))}
+                  {group.slot >= 0 && (
+                    <>
+                      {learnButton(
+                        { kind: 'preset' },
+                        `${group.name} preset recall`,
+                      )}
+                      {testButton(
+                        { kind: 'preset' },
+                        `${group.name} preset recall`,
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
               {local && rowCount > 0 && (
                 <ul className="m-0 list-none p-0">

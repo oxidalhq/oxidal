@@ -121,6 +121,7 @@ pub struct Contract {
     pub midi_devices: oxidal_audio::midi::Devices,
     pub midi_map: oxidal_presets::MidiMap,
     pub midi_map_update: oxidal_presets::MidiMapUpdate,
+    pub midi_template_apply: midi_map::MidiTemplateApply,
     pub midi_test: midi_map::MidiTest,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
@@ -392,6 +393,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/audio/devices", get(audio::devices))
         .route("/midi/devices", get(audio::midi_devices))
         .route("/midi/map", get(midi_map::state).post(midi_map::replace))
+        .route("/midi/template", post(midi_map::apply_template))
         .route("/midi/test", post(midi_map::test))
         .route("/audio/probe", post(audio::probe))
         .route(

@@ -8,6 +8,7 @@ import {
 import { afterEach, expect, it, vi } from 'vitest';
 import { MidiMapScreen } from './MidiMapScreen';
 import {
+  applyMidiTemplate,
   libraryCatalog,
   midiDevices,
   midiMap,
@@ -20,6 +21,7 @@ import {
 } from './api';
 
 vi.mock('./api', () => ({
+  applyMidiTemplate: vi.fn(),
   libraryCatalog: vi.fn(),
   midiDevices: vi.fn(),
   midiMap: vi.fn(),
@@ -93,9 +95,17 @@ function arrange() {
     inputs: [{ id: 'hw:Controller,0,0', name: 'Controller' }],
     warnings: [],
   });
-  vi.mocked(updateMidiMap).mockResolvedValue({
-    ...map,
+  vi.mocked(updateMidiMap).mockImplementation(async (update) => ({
     revision: 'map-2',
+    input: update.input,
+    channel: update.channel,
+    template: update.template,
+    entries: update.entries,
+  }));
+  vi.mocked(applyMidiTemplate).mockResolvedValue({
+    ...map,
+    revision: 'map-3',
+    template: { scene_buttons: 4, first_controller: 40 },
   });
   vi.mocked(testMidi).mockResolvedValue();
 }
@@ -115,7 +125,9 @@ it('shows the whole hierarchy, live message, number search and precedence confli
       onMapApplied={vi.fn()}
     />,
   );
-  expect(await screen.findByText('Stage Rig')).toBeVisible();
+  expect(
+    await screen.findByRole('heading', { name: 'Stage Rig' }),
+  ).toBeVisible();
   expect(screen.getAllByText('Scene · Lead')[0]).toBeVisible();
   expect(screen.getAllByText('Switch · Hold')[0]).toBeVisible();
   expect(screen.getByLabelText('Last MIDI message')).toHaveTextContent(
@@ -126,8 +138,10 @@ it('shows the whole hierarchy, live message, number search and precedence confli
   fireEvent.change(screen.getByPlaceholderText('Find preset, Program or CC…'), {
     target: { value: 'CC 20' },
   });
-  expect(screen.getByText('Stage Rig')).toBeVisible();
-  expect(screen.queryByText('Clean Amp')).not.toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Stage Rig' })).toBeVisible();
+  expect(
+    screen.queryByRole('heading', { name: 'Clean Amp' }),
+  ).not.toBeInTheDocument();
 });
 
 it('learns a fresh message on a row and tests through the hardware-free path', async () => {
@@ -167,7 +181,85 @@ it('learns a fresh message on a row and tests through the hardware-free path', a
   await waitFor(() =>
     expect(testMidi).toHaveBeenCalledWith({
       entry: { kind: 'rig', id: id('a') },
-      message: { kind: 'program', channel: 2, program: 0 },
+      message: {
+        kind: 'control',
+        channel: 2,
+        controller: 42,
+        value: 127,
+      },
     }),
+  );
+});
+
+it('saves and applies a scene-button template without hardware', async () => {
+  arrange();
+  render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText('Scene button template'), {
+    target: { value: '4' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save template' }));
+  await waitFor(() =>
+    expect(updateMidiMap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: { scene_buttons: 4, first_controller: 40 },
+      }),
+    ),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Apply template' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Replace mappings' }));
+  await waitFor(() =>
+    expect(applyMidiTemplate).toHaveBeenCalledWith({
+      expected_revision: 'map-2',
+      entry: { kind: 'rig', id: id('a') },
+    }),
+  );
+});
+
+it('copies and preview-confirms clearing a preset map', async () => {
+  arrange();
+  render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText('Copy MIDI mappings from'), {
+    target: { value: `rig:${id('a')}` },
+  });
+  fireEvent.change(screen.getByLabelText('Copy MIDI mappings to'), {
+    target: { value: `owned:${id('b')}` },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Copy mappings' }));
+  await waitFor(() =>
+    expect(updateMidiMap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            entry: { kind: 'owned', id: id('b') },
+          }),
+        ]),
+      }),
+    ),
+  );
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'Clear' })[0]!);
+  expect(screen.getByRole('button', { name: 'Clear mappings' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear mappings' }));
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(updateMidiMap).mock.calls[1]![0].entries).not.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ entry: { kind: 'rig', id: id('a') } }),
+    ]),
   );
 });

@@ -725,6 +725,7 @@ export interface Contract {
   midi_devices: Devices;
   midi_map: MidiMap;
   midi_map_update: MidiMapUpdate;
+  midi_template_apply: MidiTemplateApply;
   midi_test: MidiTest;
   model_page: Page2;
   model_query: ModelQuery;
@@ -1684,12 +1685,22 @@ export interface MidiMap {
   entries: MidiMapEntry[];
   input?: string | null;
   revision: string;
+  template?: MidiTemplate | null;
 }
 export interface MidiMapEntry {
   bindings: Binding2[];
   branch_bindings: BranchBinding[];
   entry: LibraryReference;
   parameter_bindings: ParameterBinding[];
+}
+/**
+ * Unit default for controllers whose buttons emit consecutive CC messages.
+ * Program Change remains reserved for the Mine set-list; these buttons select
+ * scenes inside the recalled preset.
+ */
+export interface MidiTemplate {
+  first_controller: number;
+  scene_buttons: number;
 }
 /**
  * Optimistic whole-map replacement used by the management screen and imports.
@@ -1701,6 +1712,11 @@ export interface MidiMapUpdate {
   entries: MidiMapEntry[];
   expected_revision: string;
   input?: string | null;
+  template?: MidiTemplate | null;
+}
+export interface MidiTemplateApply {
+  entry: LibraryReference;
+  expected_revision: string;
 }
 export interface MidiTest {
   entry: LibraryReference;

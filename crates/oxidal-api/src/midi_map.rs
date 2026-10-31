@@ -16,6 +16,13 @@ pub struct MidiTest {
     pub message: Option<oxidal_audio::midi::Message>,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiTemplateApply {
+    pub expected_revision: String,
+    pub entry: oxidal_presets::LibraryReference,
+}
+
 pub(super) async fn state(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
     match shared.midi_map.snapshot() {
         Ok(map) => ([(header::CACHE_CONTROL, "no-store")], Json(map)).into_response(),
@@ -35,6 +42,71 @@ pub(super) async fn replace(
         Err(error) => return crate::failure(error.status(), "Invalid MIDI map").into_response(),
     };
     match shared.midi_map.replace(update) {
+        Ok(map) => ([(header::CACHE_CONTROL, "no-store")], Json(map)).into_response(),
+        Err(oxidal_presets::Error::Conflict(message)) => {
+            crate::failure(StatusCode::CONFLICT, message).into_response()
+        }
+        Err(oxidal_presets::Error::Invalid(message)) => {
+            crate::failure(StatusCode::UNPROCESSABLE_ENTITY, message).into_response()
+        }
+        Err(error) => {
+            crate::failure(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()).into_response()
+        }
+    }
+}
+
+pub(super) async fn apply_template(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<MidiTemplateApply>, JsonRejection>,
+) -> impl IntoResponse {
+    let request = match body {
+        Ok(Json(request)) => request,
+        Err(error) => {
+            return crate::failure(error.status(), "Invalid MIDI template request").into_response();
+        }
+    };
+    if request.entry.kind != oxidal_presets::LibraryKind::Rig {
+        return crate::failure(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Scene templates apply to presets with scenes",
+        )
+        .into_response();
+    }
+    let manifest = match oxidal_presets::BundleStore::new(shared.config.preset_dir.join("bundles"))
+        .manifest(&request.entry.id)
+    {
+        Ok(manifest) => manifest,
+        Err(oxidal_presets::Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return crate::failure(StatusCode::NOT_FOUND, "Preset is no longer available")
+                .into_response();
+        }
+        Err(error) => {
+            return crate::failure(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+                .into_response();
+        }
+    };
+    let scenes = match manifest.scenes() {
+        Ok(Some(scenes)) => scenes
+            .scenes
+            .into_iter()
+            .map(|scene| scene.id)
+            .collect::<Vec<_>>(),
+        Ok(None) => {
+            return crate::failure(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "This preset has no scenes to map",
+            )
+            .into_response();
+        }
+        Err(error) => {
+            return crate::failure(StatusCode::UNPROCESSABLE_ENTITY, &error.to_string())
+                .into_response();
+        }
+    };
+    match shared
+        .midi_map
+        .apply_template(&request.expected_revision, request.entry, &scenes)
+    {
         Ok(map) => ([(header::CACHE_CONTROL, "no-store")], Json(map)).into_response(),
         Err(oxidal_presets::Error::Conflict(message)) => {
             crate::failure(StatusCode::CONFLICT, message).into_response()
