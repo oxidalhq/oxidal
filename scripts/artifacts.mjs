@@ -133,6 +133,24 @@ if (appliance) {
     join(staging, 'lv2/oxidal-hold.lv2'),
     { recursive: true },
   );
+  const pitchBuild = join(root, '.local/pitch-appliance');
+  const nativeSource = join(root, '.local/tone3000/source');
+  run('cmake', [
+    '-S',
+    'native/pitch',
+    '-B',
+    pitchBuild,
+    '-DCMAKE_BUILD_TYPE=Release',
+    `-DOXIDAL_PITCH_TONE3000_SOURCE=${nativeSource}`,
+    `-DOXIDAL_PITCH_JUCE_SOURCE=${join(nativeSource, 'libs/juce')}`,
+  ]);
+  run('cmake', ['--build', pitchBuild, '--parallel', '2']);
+  run('ctest', ['--test-dir', pitchBuild, '--output-on-failure']);
+  cpSync(
+    join(pitchBuild, 'oxidal-pitch.lv2'),
+    join(staging, 'lv2/oxidal-pitch.lv2'),
+    { recursive: true },
+  );
   mkdirSync(join(staging, 'licenses'), { recursive: true });
   copyFileSync(
     join(root, 'native/tone3000/NOTICE-split.md'),

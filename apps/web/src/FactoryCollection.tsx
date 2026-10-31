@@ -63,6 +63,15 @@ function CollectionDialog({
     Partial<Record<FactoryRole, RigNativeSource>>
   >({});
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const visibleRecipes = factoryRecipes
+    .filter((recipe) =>
+      [recipe.name, ...recipe.categories, recipe.description]
+        .join(' ')
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [ids] = useState(() =>
@@ -195,15 +204,30 @@ function CollectionDialog({
         ) : (
           <>
             <p className="caption">
-              Twelve starting points with four scenes each. Ambient, Hold and
-              synth recipes use effects only; the others use NAM voices you
-              choose.
+              {factoryRecipes.length} starting points with four scenes each.
+              Effect-only recipes work without NAM captures; others use voices
+              you choose.
             </p>
             {!profile && !error && (
               <p role="status">Reading installed effects…</p>
             )}
+            <label className="flex">
+              <span className="sr-only">Find a factory sound</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Find a sound or genre…"
+                className="h-11 w-full min-w-0 rounded-md border border-input bg-card px-3"
+              />
+            </label>
+            {visibleRecipes.length === 0 && (
+              <p role="status" className="py-4 text-muted-foreground">
+                No matching sounds. Try another name or genre.
+              </p>
+            )}
             <ul className="divide-y divide-border">
-              {factoryRecipes.map((recipe) => (
+              {visibleRecipes.map((recipe) => (
                 <li
                   key={recipe.id}
                   className="flex items-center justify-between gap-4 py-3"

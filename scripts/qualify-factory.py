@@ -4,6 +4,7 @@ Replaces the playing rig temporarily; a built-in riff is measured with output mu
 Restores the supplied owner snapshot on every normal/error exit. Never writes boot state.
 """
 import argparse
+import copy
 import json
 import time
 import urllib.request
@@ -61,8 +62,11 @@ try:
     for item in items:
         record = dict(item, scenes=[])
         try:
-            state = start(dict(revision=item['revision'], stream=original['configured']['stream'],
+            test_stream = copy.deepcopy(original['configured']['stream'])
+            test_stream['hear_yourself'] = False
+            state = start(dict(revision=item['revision'], stream=test_stream,
                                recall=None, prepared=[], midi=None))
+            action({'kind': 'host_utility', 'command': {'kind': 'output_mute', 'enabled': True}})
             for scene in state['control']['scenes']['scenes']:
                 current = request()['control']
                 action({'kind': 'scene', 'command': {'session': current['session'],

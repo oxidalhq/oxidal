@@ -24,8 +24,8 @@ const source: RigNativeSource = {
   source: { kind: 'original', preset: 'a'.repeat(64) },
 };
 const validate = new Ajv({ strict: false }).compile(schema);
-it('builds twelve portable four-scene instruments from the installed public plugin metadata', () => {
-  expect(factoryRecipes).toHaveLength(12);
+it('builds thirty-two portable four-scene instruments from the installed public plugin metadata', () => {
+  expect(factoryRecipes).toHaveLength(32);
   for (const recipe of factoryRecipes) {
     const request = buildFactoryRecipe(
       recipe,

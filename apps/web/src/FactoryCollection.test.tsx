@@ -56,3 +56,26 @@ it('requires an explicit saved NAM source before enabling a native recipe', asyn
   expect(screen.getByRole('combobox')).toHaveValue('');
   expect(screen.getByRole('button', { name: 'Build preset' })).toBeDisabled();
 });
+
+it('finds the expanded bank by genre and retains the search after visiting a recipe', async () => {
+  const user = userEvent.setup();
+  render(<FactoryCollection connected onChanged={() => {}} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
+  );
+  const search = screen.getByRole('searchbox', {
+    name: 'Find a factory sound',
+  });
+  await user.type(search, 'shoegaze');
+  const explore = screen.getByRole('button', { name: 'Explore Soft Ruin' });
+  await waitFor(() => expect(explore).toBeEnabled());
+  expect(
+    screen.queryByRole('button', { name: 'Explore Clear Current' }),
+  ).not.toBeInTheDocument();
+  await user.click(explore);
+  await user.click(screen.getByRole('button', { name: 'Back' }));
+  expect(screen.getByRole('searchbox')).toHaveValue('shoegaze');
+  await user.clear(screen.getByRole('searchbox'));
+  await user.type(screen.getByRole('searchbox'), 'unmatched-query');
+  expect(screen.getByRole('status')).toHaveTextContent('No matching sounds');
+});

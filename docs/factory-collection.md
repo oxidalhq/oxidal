@@ -1,6 +1,6 @@
 # Factory collection
 
-Library → **Explore Oxidal sounds** assembles twelve original starting points,
+Library → **Explore Oxidal sounds** assembles 32 original starting points,
 with four scenes each, from installed effects and explicitly selected local NAM
 presets. It adds an immutable Oxidal example without changing the playing sound.
 Editing an example creates an owned copy. These are version-1 recipes, not a
@@ -21,18 +21,31 @@ claim that every genre or arbitrary capture is already auditioned and balanced.
 | S01 | Reed Circuit  | Synth texture: monophonic tracking and resonant filtering |
 | X03 | Two Horizons  | Two NAM voices: clean / crunch / combined / lead          |
 
+The expanded bank adds Interlace (clean interlocking echoes), Dust Road (roots),
+Coastline (slap/tremolo), Hot Wire (punk/hard rock), Chrome Night (wide clean/lead),
+Long Arc (fuzz/rotary), Low Gravity (detuned heavy), Ash Field (doom), Glass and Teeth
+(clean/heavy contrasts), Foundation (supportive bass), Elastic (envelope bass),
+Substation (dub/sub), Soft Ruin (shoegaze), Orbit (interlocking delays), Rotor Choir
+(octave/rotary), Glass Steps (reverse/pitched textures), Low Lantern (sub voice),
+Small Hours (tape), Broken Radio (degraded/ring textures), and Held Light (pitched
+sustain). Search names, genres and descriptions inside the collection browser.
+
+Fixed echo controls are not tempo-synchronized. Coastline uses a room rather than
+claiming a spring algorithm. Sub/tracker recipes require clear single notes; pitch
+voices add algorithmic delay. Hold capture/release remains explicit in its blocks.
+These limitations are in the individual descriptions, not hidden by genre names.
+
 ## Assets and dependencies
 
 The image contains the recipe settings, **not** third-party NAM/IR payloads or
-private development presets. Nine recipes require local saved NAM voices; A01,
-A04 and S01 use effects only. A selected native source contributes its **whole
+private development presets. Twenty-two recipes require local saved NAM voices; all four A recipes, all four S recipes, X02 and X04 use effects only. A selected native source contributes its **whole
 saved chain**, including its cabinets and settings. Choose an appropriate
 amp-and-cab source; this is not an automatic extraction of one amp from a complex
 preset. Different captures change gain, timbre and processing cost substantially.
 Automatic TONE3000 capture selection/download is a separate unfinished workflow.
 
 Recipes pin plugin URIs, complete control defaults and explicit parameter values.
-Required packs are Guitarix, Invada, MDA and Oxidal Hold. New appliance builds install these packs and bundle the tested Hold effect; existing installations can install the external packs through Settings → Effects. Missing dependencies are
+Required packs are Guitarix, Invada, MDA and SWH, plus Oxidal Hold and Pitch. New appliance builds install these packs and bundle the tested Hold and Pitch effects; existing installations can install the external packs through Settings → Effects. Missing dependencies are
 shown before Build. The initial reverbs are GxReverb-Stereo and GxZita_rev1-Stereo.
 Dragonfly's Atom ports require explicit portable state in the mixed loader; it is
 not silently admitted through the scalar recipe builder. Same-name URI substitutes,
