@@ -274,7 +274,7 @@ export function RigPresetSelector({
           onCancel={() => setPreview(null)}
         />
       )}
-      {open && (
+      {open && !preview && (
         <AdjustmentDialog
           title="Switch preset"
           className="preset-picker-dialog"

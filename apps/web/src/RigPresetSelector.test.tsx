@@ -413,5 +413,12 @@ it('searches descriptions and opens preset details without recalling it', async 
   const detail = await screen.findByRole('button', { name: 'Details: Amp B' });
   fireEvent.click(detail);
   await screen.findByText('Use a neck pickup');
+  expect(
+    screen.queryByRole('dialog', { name: 'Switch preset' }),
+  ).not.toBeInTheDocument();
   expect(select).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+  expect(
+    screen.getByRole('dialog', { name: 'Switch preset' }),
+  ).toBeInTheDocument();
 });
