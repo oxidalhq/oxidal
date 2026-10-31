@@ -18,9 +18,16 @@ pub use wav_info::WavInfo;
 mod native;
 pub use model::{LocalAssetPage, ModelAsset, ModelStore};
 mod owned;
+mod removal;
 pub use owned::{OwnedPreset, OwnedStore};
+pub use removal::{
+    LibraryReference, ModelRemoval, PendingRemoval, RemovalPreview, RemovalReferences,
+    RemovalRequest, RemovalResult, RemovalStore,
+};
 mod store;
-pub use native::{ArtworkSource, Framing, Inspection, MAX_FILE_BYTES, artwork, inspect};
+pub use native::{
+    ArtworkSource, Framing, Inspection, MAX_FILE_BYTES, artwork, embedded_digests, inspect,
+};
 pub use store::{Library, Store};
 
 #[derive(Debug)]

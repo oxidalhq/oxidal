@@ -307,3 +307,30 @@ Library → Manage library exposes these actions separately from performance
 controls. Metadata supports up to 4096 changed labels/order/removal references
 within a 1 MiB file. This storage bound is not a limit on simultaneous NAM
 instances. Preset payload stores retain their existing admission limits.
+
+### Permanent-removal storage foundation
+
+The preset crate also provides preview-bound removal transactions. This is an
+internal storage primitive; no HTTP route or user control invokes it yet. A caller
+must serialize all library publication and playback preparation, supply complete
+current source/model references, and clear a deleted stopped source from its
+in-memory playback owner before committing. This primitive alone does not provide
+those runtime guarantees.
+
+A preview addresses one library kind and immutable ID. Separate NAM/IR assets are
+kept by default. Optional cleanup matches embedded binary hashes or remembered
+model assignments and retains files referenced by other saved entries, remembered
+sessions, collections or current audio. Unknown dependency inventories disable
+optional cleanup. Native binary identities are inspected separately from normal
+library reads, without rewriting native bytes or interpreting their DSP behavior.
+
+Canonical payloads and matching remembered sessions/checkpoints are renamed into
+a same-filesystem transaction directory before unlinking. Its atomically replaced,
+synced journal distinguishes an unfinished staging operation from committed
+cleanup. `RemovalStore::recover` must run before constructing playback owners or
+accepting writes: unfinished transactions restore their entries; committed ones
+finish preference and file cleanup. Ambiguous paths, symlinks and collisions fail
+visibly and retain the journal/data. Recovery and deletion assume private,
+application-owned storage, not concurrent external writers. Unit fixtures exercise
+interrupted processes and cleanup errors; they do not establish physical
+power-loss durability on the appliance filesystem.

@@ -2,6 +2,16 @@ use oxidal_presets::{Framing, inspect};
 const CURRENT: &[u8] = include_bytes!("fixtures/authored-current.t3kpreset");
 const LEGACY: &[u8] = include_bytes!("fixtures/authored-legacy.t3kpreset");
 #[test]
+fn embedded_identity_uses_exact_blob_bytes_across_both_framings() {
+    use sha2::{Digest, Sha256};
+    let expected = format!("{:x}", Sha256::digest([0, 1, 127, 128, 255]));
+    for bytes in [CURRENT, LEGACY] {
+        let digests = oxidal_presets::embedded_digests(bytes).unwrap();
+        assert_eq!(digests, [expected.clone()].into());
+        assert!(oxidal_presets::embedded_digests(&bytes[..bytes.len() - 1]).is_err());
+    }
+}
+#[test]
 fn independent_juce_fixtures_decode_and_keep_distinct_originals() {
     let current = inspect(CURRENT).unwrap();
     let legacy = inspect(LEGACY).unwrap();

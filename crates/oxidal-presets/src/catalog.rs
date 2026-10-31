@@ -86,6 +86,15 @@ pub struct CatalogStore {
     positions: BTreeMap<String, usize>,
 }
 impl CatalogStore {
+    /// Remove only the deleted entry's display preferences; no logical-ID fanout.
+    pub fn forget(&mut self, kind: LibraryKind, id: &str) -> Result<()> {
+        let key = kind.key(id)?;
+        let mut candidate = self.preferences.clone();
+        candidate.labels.remove(&key);
+        candidate.archived.remove(&key);
+        candidate.order.retain(|k| k != &key);
+        self.persist(candidate)
+    }
     pub fn open(root: PathBuf) -> Result<Self> {
         let path = root.join("library.json");
         let preferences = match fs::symlink_metadata(&path) {
@@ -249,6 +258,10 @@ impl CatalogStore {
         {
             return Err(Error::Invalid("Library preferences exceed limit"));
         }
+        self.persist(candidate)?;
+        self.view(catalog.items)
+    }
+    fn persist(&mut self, candidate: Preferences) -> Result<()> {
         let bytes = serde_json::to_vec(&candidate)
             .map_err(|_| Error::Invalid("Invalid library preferences"))?;
         fs::create_dir_all(&self.root)?;
@@ -284,7 +297,7 @@ impl CatalogStore {
             .collect();
         self.preferences = candidate;
         self.revision = format!("{:x}", Sha256::digest(bytes));
-        self.view(catalog.items)
+        Ok(())
     }
 }
 

@@ -69,6 +69,8 @@ struct Reader<'a> {
     offset: usize,
     items: usize,
     embedded: usize,
+    hash_binary: bool,
+    digests: BTreeSet<String>,
 }
 impl<'a> Reader<'a> {
     fn take(&mut self, size: usize) -> Result<&'a [u8]> {
@@ -135,6 +137,8 @@ impl<'a> Reader<'a> {
             offset: 1,
             items: self.items,
             embedded: self.embedded,
+            hash_binary: self.hash_binary,
+            digests: BTreeSet::new(),
         };
         let result = match payload[0] {
             1 => Value::Integer(i32::from_le_bytes(value.take(4)?.try_into().unwrap()) as i64),
@@ -159,6 +163,11 @@ impl<'a> Reader<'a> {
                 Value::Array
             }
             8 => {
+                if value.hash_binary {
+                    value
+                        .digests
+                        .insert(format!("{:x}", Sha256::digest(&payload[1..])));
+                }
                 value.embedded += length - 1;
                 value.offset = length;
                 Value::Binary(length - 1)
@@ -173,6 +182,7 @@ impl<'a> Reader<'a> {
         }
         self.items = value.items;
         self.embedded = value.embedded;
+        self.digests.extend(value.digests);
         Ok(result)
     }
     fn tree(&mut self, depth: usize) -> Result<Tree<'a>> {
@@ -213,17 +223,35 @@ impl<'a> Reader<'a> {
     }
 }
 fn parse(bytes: &[u8]) -> Result<(Tree<'_>, usize)> {
+    let (tree, embedded, _) = scan(bytes, false)?;
+    Ok((tree, embedded))
+}
+fn scan(bytes: &[u8], hash_binary: bool) -> Result<(Tree<'_>, usize, BTreeSet<String>)> {
     let mut reader = Reader {
         bytes,
         offset: 0,
         items: 0,
         embedded: 0,
+        hash_binary,
+        digests: BTreeSet::new(),
     };
     let tree = reader.tree(0)?;
     if reader.offset != bytes.len() {
         return Err(Error::Invalid("Trailing native data"));
     }
-    Ok((tree, reader.embedded))
+    Ok((tree, reader.embedded, reader.digests))
+}
+
+/// Verified embedded byte identities for dependency-safe library cleanup. This
+/// is deliberately separate from ordinary inspection, which never hashes blobs.
+pub fn embedded_digests(bytes: &[u8]) -> Result<BTreeSet<String>> {
+    inspect(bytes)?;
+    let offset = if &bytes[..4] == b"T3KB" {
+        4
+    } else {
+        8 + u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize
+    };
+    Ok(scan(&bytes[offset..], true)?.2)
 }
 fn unique_child<'a, 'b>(tree: &'b Tree<'a>, kind: &str) -> Result<&'b Tree<'a>> {
     let mut children = tree.children.iter().filter(|c| c.kind == kind);
