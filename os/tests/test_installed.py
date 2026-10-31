@@ -12,6 +12,24 @@ import urllib.request
 
 @unittest.skipUnless(os.environ.get('OXIDAL_TEST_INSTALLED') == '1', 'Run by the disposable image builder')
 class InstalledTests(unittest.TestCase):
+    def test_image_profile(self):
+        profile = json.loads(Path('/usr/share/oxidal/image-profile.json').read_text())
+        self.assertIn(profile['name'], ('appliance', 'development'))
+        for unit in profile['masked_units']:
+            result = subprocess.run(
+                ['systemctl', 'is-enabled', unit], text=True, capture_output=True
+            )
+            self.assertEqual(result.stdout.strip(), 'masked', (unit, result.stdout, result.stderr))
+        for package in profile['diagnostic_packages']:
+            subprocess.run(
+                ['dpkg-query', '-W', '-f=${db:Status-Status}', package],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+        if profile['name'] == 'appliance':
+            self.assertEqual(profile['diagnostic_packages'], [])
+
     def test_writable_data_layout(self):
         marker = Path('/usr/share/oxidal/storage-layout-v1')
         self.assertTrue(marker.is_file())

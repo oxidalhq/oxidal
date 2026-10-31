@@ -77,6 +77,13 @@ class ProvisionTests(unittest.TestCase):
         image.write_bytes(b'not-an-image')
         with self.assertRaises(ValueError): provision.verify_image(image)
         self.assertEqual(provision.manifest()['architecture'], 'arm64')
+        profiles = provision.manifest()['appliance']['profiles']
+        self.assertEqual(set(profiles), {'appliance', 'development'})
+        self.assertEqual(profiles['appliance']['diagnostic_packages'], [])
+        self.assertIn('strace', profiles['development']['diagnostic_packages'])
+        for profile in profiles.values():
+            self.assertIn('apt-daily.timer', profile['masked_units'])
+            self.assertIn('apt-daily-upgrade.timer', profile['masked_units'])
 
 class ApplianceTests(ProvisionTests):
     def setUp(self):

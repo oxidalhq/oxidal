@@ -47,7 +47,8 @@ def regular(path):
     return path
 
 
-def build(base, bundle, access, destination, boot_splash=False, development_presets=None):
+def build(base, bundle, access, destination, boot_splash=False, development_presets=None,
+          profile_name='appliance'):
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64', 'arm64'):
         raise ValueError('Build this Pi image on native ARM64 Linux, including an ARM64 Linux container')
     base = regular(base)
@@ -66,11 +67,14 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         raw = work / 'base.img'
         with raw.open('xb') as stream:
             subprocess.run(['xz', '-dc', str(base)], stdout=stream, check=True)
-        profile = provision.manifest()['appliance']
+        appliance = provision.manifest()['appliance']
+        if profile_name not in appliance['profiles']:
+            raise ValueError('Unknown image profile')
+        image_profile = appliance['profiles'][profile_name]
         with destination.open('xb') as stream:
             os.fchmod(stream.fileno(), 0o600)
-            stream.truncate(profile['image_bytes'])
-        root_size = profile['root_partition_bytes'] // 1024**2
+            stream.truncate(appliance['image_bytes'])
+        root_size = appliance['root_partition_bytes'] // 1024**2
         run(
             'virt-resize', '--format', 'raw', '--output-format', 'raw',
             '--resize', f'/dev/sda2={root_size}M', str(raw), str(destination),
@@ -79,7 +83,7 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         data_uuid = capture(
             'guestfish', '-a', str(destination), 'run', ':',
             'mkfs', 'ext4', '/dev/sda3', ':',
-            'set-label', '/dev/sda3', profile['data_partition_label'], ':',
+            'set-label', '/dev/sda3', appliance['data_partition_label'], ':',
             'vfs-uuid', '/dev/sda3',
         ).strip()
         # Older guestfs cannot resolve this base's PARTUUID firmware entry. Use the
@@ -101,6 +105,11 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(contents)
             target.chmod(0o755 if relative == 'usr/local/sbin/oxidal-grow-data' else 0o644)
+        (root / 'usr/share/oxidal/image-profile.json').write_text(json.dumps({
+            'name': profile_name,
+            'diagnostic_packages': image_profile['diagnostic_packages'],
+            'masked_units': image_profile['masked_units'],
+        }, indent=2) + '\n')
         if development_presets:
             seed = work / 'development-seed'
             run(str(Path(bundle).resolve() / 'bin/oxidal-preset-seed'), '--development-only', str(Path(development_presets).resolve()), str(seed))
@@ -118,7 +127,8 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         with tarfile.open(overlay, 'w') as archive:
             for file in sorted(root.rglob('*')):
                 archive.add(file, arcname=str(file.relative_to(root)), recursive=False)
-        packages = profile['runtime_packages'] + (['plymouth', 'plymouth-themes'] if boot_splash else [])
+        packages = (appliance['runtime_packages'] + image_profile['diagnostic_packages']
+                    + (['plymouth', 'plymouth-themes'] if boot_splash else []))
         if boot_splash and not (root / 'usr/share/plymouth/themes/oxidal/boot-splash.png').is_file():
             raise ValueError('Boot splash requires branded web assets in the bundle')
         commands = work / 'customize.txt'
@@ -132,8 +142,11 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             'run-command getent passwd oxidal-debug >/dev/null || useradd --system --no-create-home --home-dir /run/oxidal-debug --shell /usr/sbin/nologin --gid oxidal-control oxidal-debug',
             'run-command IFS=: read -r name hash < /tmp/oxidal-recovery.shadow; /usr/lib/userconf-pi/userconf "$name" "$hash" && rm /tmp/oxidal-recovery.shadow',
 
-            'run-command systemctl enable ' + ' '.join(profile['enabled_services']),
-            'run-command systemctl mask systemd-networkd.service systemd-networkd-wait-online.service',
+            'run-command systemctl enable ' + ' '.join(appliance['enabled_services']),
+            'run-command systemctl mask ' + ' '.join([
+                'systemd-networkd.service', 'systemd-networkd-wait-online.service',
+                *image_profile['masked_units'],
+            ]),
             'run-command systemctl set-default multi-user.target',
             "run-command sed -i 's/^LOGIN_TIMEOUT[[:space:]].*/LOGIN_TIMEOUT 180/' /etc/login.defs",
             'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service /etc/systemd/system/oxidal-debug.service /etc/systemd/system/oxidal-terminal.service /etc/systemd/system/oxidal-admin-terminal.service /etc/systemd/system/oxidal-grow-data.service',
@@ -174,6 +187,7 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         'schema': 1, 'image_sha256': digest.hexdigest(), 'base': provision.manifest()['image'],
         'bundle_manifest': payload, 'installed_qualification': 'passed',
         'hardware_qualified': False, 'physical_sd_written': False, 'boot_splash': boot_splash,
+        'image_profile': profile_name, 'masked_units': image_profile['masked_units'],
         'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid,
         'root_uuid': root_uuid, 'data_uuid': data_uuid,
         'first_boot': 'Connect to the generated hotspot or wired LAN; trust the supplied CA; open https://oxidal.local.',
@@ -192,5 +206,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--boot-splash', action='store_true', help='Enable the Oxidal Plymouth boot splash; console diagnostics remain available')
     parser.add_argument('--development-presets', help='Opt-in private development seed from a local native-preset directory; never for distribution')
+    parser.add_argument('--profile', choices=('appliance', 'development'), default='appliance')
     args = parser.parse_args()
-    print(json.dumps(build(args.base, args.bundle, args.access, args.output, args.boot_splash, args.development_presets), indent=2))
+    print(json.dumps(build(args.base, args.bundle, args.access, args.output, args.boot_splash, args.development_presets, args.profile), indent=2))

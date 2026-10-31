@@ -33,6 +33,20 @@ def manifest():
             or appliance['root_partition_bytes'] != 5 * 1024**3
             or appliance['data_partition_label'] != 'OXIDAL_DATA'):
         raise ValueError('Unsupported appliance storage layout')
+    profiles = appliance['profiles']
+    if set(profiles) != {'appliance', 'development'}:
+        raise ValueError('Expected appliance and development image profiles')
+    for name, profile in profiles.items():
+        if set(profile) != {'diagnostic_packages', 'masked_units'}:
+            raise ValueError(f'Invalid {name} image profile')
+        values = [*profile['diagnostic_packages'], *profile['masked_units']]
+        if any(not re.fullmatch(r'[A-Za-z0-9.+@_-]+', value) for value in values):
+            raise ValueError(f'Invalid {name} image profile entry')
+    if profiles['appliance']['diagnostic_packages']:
+        raise ValueError('Appliance profile must not add diagnostic packages')
+    for timer in ('apt-daily.timer', 'apt-daily-upgrade.timer'):
+        if any(timer not in profile['masked_units'] for profile in profiles.values()):
+            raise ValueError('Automatic apt timers must be masked in every image profile')
     return data
 
 

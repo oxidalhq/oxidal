@@ -16,9 +16,7 @@
     "policy": "The staging-only recipe makes no package changes. Appliance image assembly installs the explicit runtime list below and captures exact installed versions; no package removal."
   },
   "services": {
-    "stage": [
-      "oxidald.service"
-    ],
+    "stage": ["oxidald.service"],
     "enable": [],
     "disable": []
   },
@@ -61,6 +59,33 @@
     "wifi_country": "NZ",
     "image_bytes": 8589934592,
     "root_partition_bytes": 5368709120,
-    "data_partition_label": "OXIDAL_DATA"
+    "data_partition_label": "OXIDAL_DATA",
+    "profiles": {
+      "appliance": {
+        "diagnostic_packages": [],
+        "masked_units": [
+          "apt-daily.timer",
+          "apt-daily-upgrade.timer",
+          "bluetooth.service",
+          "cron.service",
+          "e2scrub_all.timer",
+          "fstrim.timer",
+          "logrotate.timer",
+          "man-db.timer",
+          "proc-sys-fs-binfmt_misc.automount",
+          "rpi-zram-writeback.timer"
+        ]
+      },
+      "development": {
+        "diagnostic_packages": [
+          "alsa-utils",
+          "htop",
+          "lilv-utils",
+          "lsof",
+          "strace"
+        ],
+        "masked_units": ["apt-daily.timer", "apt-daily-upgrade.timer"]
+      }
+    }
   }
 }
