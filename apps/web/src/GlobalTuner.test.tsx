@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { GlobalTuner } from './GlobalTuner';
 import {
@@ -13,6 +13,7 @@ import {
   playbackCommand,
   rigAudioState,
   rigAudioCommand,
+  monitoring,
   type AudioState,
 } from './api';
 vi.mock('./api', () => ({
@@ -20,6 +21,7 @@ vi.mock('./api', () => ({
   playbackCommand: vi.fn(),
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
+  monitoring: vi.fn(),
 }));
 vi.mock('./AdjustmentDialog', () => ({
   AdjustmentDialog: ({
@@ -46,6 +48,16 @@ const native = {
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+});
+beforeEach(() => {
+  vi.mocked(monitoring).mockResolvedValue({
+    audio_phase: 'running',
+    graph_phase: 'stopped',
+    rig_phase: 'stopped',
+    sequence: 1,
+    host: {},
+    audio: { monitoring: { output_muted: false } },
+  } as Awaited<ReturnType<typeof monitoring>>);
 });
 it('uses the current native cursor and stops its tuner on close', async () => {
   vi.mocked(playbackState).mockResolvedValue(native);
@@ -82,6 +94,32 @@ it('uses the current native cursor and stops its tuner on close', async () => {
   expect(playbackCommand).toHaveBeenLastCalledWith(native, {
     kind: 'authoring',
     action: { kind: 'utility', command: { kind: 'tuner', enabled: false } },
+  });
+});
+it('temporarily mutes after the rig and restores monitoring on close', async () => {
+  vi.mocked(playbackState).mockResolvedValue(native);
+  vi.mocked(playbackCommand).mockResolvedValue(native);
+  const close = vi.fn();
+  render(<GlobalTuner onClose={close} />);
+  const mute = await screen.findByRole('button', { name: 'Mute' });
+  expect(mute).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.getByRole('button', { name: 'Hear sound' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  fireEvent.click(mute);
+  await waitFor(() =>
+    expect(playbackCommand).toHaveBeenCalledWith(native, {
+      kind: 'host_utility',
+      command: { kind: 'output_mute', enabled: true },
+    }),
+  );
+  expect(mute).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(playbackCommand).toHaveBeenLastCalledWith(native, {
+    kind: 'host_utility',
+    command: { kind: 'output_mute', enabled: false },
   });
 });
 it('rejects a different session before issuing a tuner command', async () => {

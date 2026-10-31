@@ -121,6 +121,11 @@ pub enum HostUtility {
     HearYourself {
         enabled: bool,
     },
+    /// Temporary post-rig mute for tuning or other monitoring views. Unlike
+    /// master level, this is never persisted and never removes input from DSP.
+    OutputMute {
+        enabled: bool,
+    },
     TestTone,
     StopTestTone,
     Levels {
@@ -196,6 +201,8 @@ pub const fn hear_yourself_default() -> bool {
 #[serde(deny_unknown_fields)]
 pub struct HostState {
     pub hear_yourself: bool,
+    #[serde(default)]
+    pub output_muted: bool,
     pub test_tone_active: bool,
     #[serde(default)]
     pub levels: HostLevels,
@@ -206,12 +213,14 @@ pub struct HostState {
 #[derive(Debug)]
 pub struct HostSignal {
     hear: bool,
+    output_muted: bool,
     rate: u32,
     test_frame: u32,
     test_active: bool,
     levels: HostLevels,
     input_gain: Glide,
     output_gain: Glide,
+    monitor_gain: Glide,
     gate: Gate,
     reference: crate::reference::Reference,
 }
@@ -329,12 +338,14 @@ impl HostSignal {
     pub fn new(rate: u32, hear: bool, levels: HostLevels) -> Self {
         Self {
             hear,
+            output_muted: false,
             rate,
             test_frame: 0,
             test_active: false,
             levels,
             input_gain: Glide::new(rate, levels.input_gain()),
             output_gain: Glide::new(rate, levels.output_gain()),
+            monitor_gain: Glide::new(rate, 1.0),
             gate: Gate::new(rate, levels.gate_db),
             reference: crate::reference::Reference::new(rate),
         }
@@ -342,6 +353,10 @@ impl HostSignal {
     pub fn command(&mut self, command: HostUtility) {
         match command {
             HostUtility::HearYourself { enabled } => self.hear = enabled,
+            HostUtility::OutputMute { enabled } => {
+                self.output_muted = enabled;
+                self.monitor_gain.target = if enabled { 0.0 } else { 1.0 };
+            }
             HostUtility::TestTone => {
                 if !self.test_active {
                     self.test_frame = 0;
@@ -370,6 +385,7 @@ impl HostSignal {
     pub fn state(&self) -> HostState {
         HostState {
             hear_yourself: self.hear,
+            output_muted: self.output_muted,
             test_tone_active: self.test_active,
             levels: self.levels,
             reference: self.reference.reading(),
@@ -406,6 +422,7 @@ impl HostSignal {
                 *r = sum;
             }
         }
+        self.monitor_gain.apply(left, right);
     }
     fn test_tone(&mut self, left: &mut [f32], right: &mut [f32]) {
         if !self.test_active {
@@ -437,6 +454,34 @@ impl HostSignal {
 #[cfg(test)]
 mod host_tests {
     use super::*;
+    #[test]
+    fn temporary_output_mute_keeps_input_available_and_fades_without_changing_levels() {
+        let levels = HostLevels {
+            output_level_db: -3.0,
+            ..HostLevels::default()
+        };
+        let mut signal = HostSignal::new(48000, true, levels);
+        signal.command(HostUtility::OutputMute { enabled: true });
+        let (mut left, mut right) = ([0.25; 128], [0.25; 128]);
+        signal.input(&mut left, &mut right);
+        assert_eq!(left, [0.25; 128], "tuner input remains available");
+        for _ in 0..40 {
+            left.fill(0.25);
+            right.fill(0.25);
+            signal.output(&mut left, &mut right);
+        }
+        assert!(left[127].abs() < 0.0001);
+        assert!(signal.state().output_muted);
+        assert_eq!(signal.state().levels, levels);
+        signal.command(HostUtility::OutputMute { enabled: false });
+        for _ in 0..40 {
+            left.fill(0.25);
+            right.fill(0.25);
+            signal.output(&mut left, &mut right);
+        }
+        assert!(left[127] > 0.17);
+        assert!(!signal.state().output_muted);
+    }
     #[test]
     fn input_monitor_and_output_test_are_independent_bounded_and_sample_clocked() {
         for rate in [44100, 48000, 96000] {

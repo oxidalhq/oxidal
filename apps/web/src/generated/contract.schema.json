@@ -4090,6 +4090,10 @@
             "output_level_db": 0
           }
         },
+        "output_muted": {
+          "type": "boolean",
+          "default": false
+        },
         "reference": {
           "description": "The calibration measurement while the reference riff plays.",
           "anyOf": [
@@ -4123,6 +4127,24 @@
             "kind": {
               "type": "string",
               "const": "hear_yourself"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
+          ]
+        },
+        {
+          "description": "Temporary post-rig mute for tuning or other monitoring views. Unlike\nmaster level, this is never persisted and never removes input from DSP.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "output_mute"
             }
           },
           "additionalProperties": false,

@@ -91,6 +91,10 @@ export type HostUtility =
       kind: "hear_yourself";
     }
   | {
+      enabled: boolean;
+      kind: "output_mute";
+    }
+  | {
       kind: "test_tone";
     }
   | {
@@ -1422,6 +1426,7 @@ export interface Channel {
 export interface HostState {
   hear_yourself: boolean;
   levels?: HostLevels2;
+  output_muted?: boolean;
   /**
    * The calibration measurement while the reference riff plays.
    */

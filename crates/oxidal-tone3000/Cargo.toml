@@ -30,6 +30,10 @@ all = "warn"
 name = "qualify"
 required-features = ["native"]
 
+[[example]]
+name = "qualify_tuner"
+required-features = ["native"]
+
 [[bin]]
 name = "oxidal-native-worker"
 required-features = ["native"]
