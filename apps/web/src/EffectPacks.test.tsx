@@ -18,6 +18,13 @@ vi.mock('./api', () => ({
   effectPacks: vi.fn(),
 }));
 
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.removeAttribute('open');
+};
+
 const inventory: EffectPacksState = {
   available: true,
   audio_running: false,
@@ -80,7 +87,7 @@ it('shows only the curated inventory and starts a device-owned install', async (
   );
 });
 
-it('refuses changes while audio plays and confirms removal inline', async () => {
+it('refuses changes while audio plays and confirms removal in a dialog', async () => {
   vi.mocked(effectPacks).mockResolvedValue(inventory);
   vi.mocked(changeEffectPack).mockResolvedValue({
     ...inventory,
@@ -94,7 +101,10 @@ it('refuses changes while audio plays and confirms removal inline', async () => 
   const remove = screen.getByRole('button', { name: 'Remove' });
   fireEvent.click(remove);
   expect(changeEffectPack).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm remove' }));
+  expect(
+    screen.getByRole('dialog', { name: 'Remove SWH?' }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove effects' }));
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('swh', 'remove'),
   );

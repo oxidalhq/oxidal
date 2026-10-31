@@ -629,10 +629,7 @@ export function MidiMapScreen({
         </div>
       </div>
 
-      <details
-        className="rounded-lg border border-border bg-card"
-        aria-label="MIDI mapping helpers"
-      >
+      <details className="midi-helpers" aria-label="MIDI mapping helpers">
         <summary className="cursor-pointer px-3 py-3">
           <span className="ml-1 flex min-w-0 flex-1 flex-col pr-2">
             <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -829,7 +826,7 @@ export function MidiMapScreen({
         </section>
       )}
 
-      <div className="space-y-2" aria-label="Complete MIDI map">
+      <div className="midi-preset-list" aria-label="Complete MIDI map">
         {visibleGroups.map((group) => {
           const isCurrent = sameEntry(current, group.entry);
           const local = group.map;
@@ -948,10 +945,7 @@ export function MidiMapScreen({
             </li>
           );
           return (
-            <section
-              key={keyOf(group.entry)}
-              className="overflow-hidden rounded-lg border border-border bg-card"
-            >
+            <section key={keyOf(group.entry)} className="midi-preset-group">
               <div className="flex flex-wrap items-start justify-between gap-2 px-3 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

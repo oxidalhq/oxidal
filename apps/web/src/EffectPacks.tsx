@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import {
   changeEffectPack,
@@ -76,17 +77,15 @@ export function EffectPacks({
 
   const playing = audioRunning || Boolean(state?.audio_running);
   const locked = Boolean(state?.job) || busy !== null;
+  const removal = state?.packs.find((pack) => pack.id === confirmRemove);
 
   return (
-    <section className="panel space-y-4" aria-label="Effects">
-      <div>
-        <h2>Effects</h2>
-        <p className="caption mt-1 max-w-2xl">
-          Add qualified effect collections to this unit. The usable count comes
-          from Oxidal’s audio harness; unsupported plugins stay out of the
-          effect chooser.
-        </p>
-      </div>
+    <section className="panel effect-packs" aria-label="Effects">
+      <h2 className="sr-only">Effects</h2>
+      <p className="caption effect-packs-intro">
+        Qualified collections available to the effect chooser. Unsupported
+        plugins stay hidden.
+      </p>
 
       {playing && (
         <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
@@ -116,17 +115,13 @@ export function EffectPacks({
 
       {!state && !error && <p>Reading installed effects…</p>}
       {state && (
-        <ul className="divide-y divide-border/60" aria-label="Curated packs">
+        <ul className="effect-pack-list" aria-label="Curated packs">
           {state.packs.map((pack) => {
-            const awaitingRemove = confirmRemove === pack.id;
             const active = state.job?.pack === pack.id || busy === pack.id;
             return (
-              <li
-                key={pack.id}
-                className="grid gap-3 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <li key={pack.id} className="effect-pack-row">
+                <div className="effect-pack-copy">
+                  <div className="effect-pack-title">
                     <strong>{pack.name}</strong>
                     <a
                       className="tone-details-link text-xs"
@@ -136,49 +131,33 @@ export function EffectPacks({
                     >
                       Website <ArrowSquareOut aria-hidden="true" />
                     </a>
-                    <span className="caption">
+                    <span className="effect-pack-state">
                       {pack.installed
                         ? `Installed${pack.version ? ` · ${pack.version}` : ''}`
                         : 'Not installed'}
                     </span>
                   </div>
-                  <p className="caption mt-1">
+                  <p className="caption effect-pack-meta">
                     {pack.usable_plugins} usable effects · about {pack.size_mib}{' '}
                     MiB · {pack.qualification}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
+                <div className="effect-pack-action">
                   {pack.installed ? (
-                    <>
-                      <Button
-                        variant={awaitingRemove ? 'destructive' : 'outline'}
-                        disabled={
-                          !connected ||
-                          !state.available ||
-                          !state.storage_writable ||
-                          playing ||
-                          locked
-                        }
-                        onClick={() => {
-                          if (awaitingRemove) void change(pack.id, 'remove');
-                          else setConfirmRemove(pack.id);
-                        }}
-                      >
-                        {active
-                          ? 'Working…'
-                          : awaitingRemove
-                            ? 'Confirm remove'
-                            : 'Remove'}
-                      </Button>
-                      {awaitingRemove && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => setConfirmRemove(null)}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                    </>
+                    <Button
+                      variant="ghost"
+                      className="text-destructive"
+                      disabled={
+                        !connected ||
+                        !state.available ||
+                        !state.storage_writable ||
+                        playing ||
+                        locked
+                      }
+                      onClick={() => setConfirmRemove(pack.id)}
+                    >
+                      {active ? 'Working…' : 'Remove'}
+                    </Button>
                   ) : (
                     <Button
                       variant="outline"
@@ -199,6 +178,39 @@ export function EffectPacks({
             );
           })}
         </ul>
+      )}
+      {removal && (
+        <AdjustmentDialog
+          title={`Remove ${removal.name}?`}
+          onCancel={() => {
+            if (!busy) setConfirmRemove(null);
+          }}
+        >
+          <p>
+            This removes the effect collection from the unit. Presets that use
+            one of its effects will need the collection installed again before
+            they can play completely.
+          </p>
+          <p className="caption">
+            Local presets and their settings are not deleted.
+          </p>
+          <div className="dialog-actions">
+            <Button
+              variant="ghost"
+              disabled={busy !== null}
+              onClick={() => setConfirmRemove(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy !== null}
+              onClick={() => void change(removal.id, 'remove')}
+            >
+              Remove effects
+            </Button>
+          </div>
+        </AdjustmentDialog>
       )}
     </section>
   );

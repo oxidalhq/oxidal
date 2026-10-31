@@ -2533,6 +2533,92 @@ textarea {
   }
 }
 
+/* Effect providers are one inventory, not a stack of independent cards. The
+   destructive action stays quiet until its confirmation dialog is open. */
+.effect-packs-intro {
+  max-width: 42rem;
+  margin: 0 0 1rem;
+}
+.effect-packs > [role='status'],
+.effect-packs > [role='alert'] {
+  margin-block: 0.75rem;
+}
+.effect-pack-list {
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--border);
+  list-style: none;
+}
+.effect-pack-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.effect-pack-row:last-child {
+  border-bottom: 0;
+}
+.effect-pack-copy {
+  min-width: 0;
+}
+.effect-pack-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.625rem;
+}
+.effect-pack-state {
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  background: var(--secondary);
+  font-size: 0.75rem;
+}
+.effect-pack-meta {
+  margin: 0.25rem 0 0;
+}
+.effect-pack-action {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.effect-pack-action > button {
+  min-height: 2.25rem;
+}
+
+/* MIDI presets form a single map. Separators keep rows scannable without the
+   repeated rounded boxes that made each preset look like a separate form. */
+.midi-helpers {
+  border-block: 1px solid var(--border);
+}
+.midi-helpers > summary {
+  min-height: 3.25rem;
+}
+.midi-helpers[open] {
+  padding-bottom: 0.75rem;
+}
+.midi-preset-list {
+  border-block: 1px solid var(--border);
+}
+.midi-preset-group {
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+.midi-preset-group:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .effect-pack-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .effect-pack-action {
+    justify-content: flex-start;
+  }
+}
+
 /* Healthy telemetry is an instrument readout, not a stack of connection badges. */
 .resource-strip {
   grid-template-columns: minmax(0, 1fr) 44px;
