@@ -1,8 +1,6 @@
 //! Experimental single-owner graph process. EOF stops playback. IPC queues are bounded.
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // First, so the engine's own DSP threads started below inherit it.
-    eprintln!("Effects audio {}", oxidal_audio::realtime::enter());
     use oxidal_audio::stream::{Duplex, Step};
     use oxidal_lv2::{PreparedGraph, World, protocol::*};
     use std::{
@@ -74,6 +72,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::io::stdout().lock().write_all(&bytes)?;
         return Ok(());
     }
+    // Only playback locks memory and raises priority. Metadata scans must work
+    // under ordinary login limits and must not compete with the playing worker.
+    // Enter before starting any DSP threads so they inherit the audio policy.
+    eprintln!("Effects audio {}", oxidal_audio::realtime::enter());
     let settings: StartGraph = serde_json::from_slice(&frame(&mut std::io::stdin().lock())?)?;
     settings.validate()?;
     let stop = Arc::new(AtomicBool::new(false));

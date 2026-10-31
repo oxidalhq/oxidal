@@ -180,6 +180,9 @@ features and opaque plugin state still require explicit host support/qualificati
 No browser-supplied bundle path or executable is accepted.
 
 Discovery runs in a disposable process without acquiring PCM or instantiating plugins.
+It uses normal scheduling and does not lock memory; real-time setup belongs only
+to playback. Linux process tests run discovery with zero real-time and memory-lock
+limits and verify the fixture catalog is still returned without an audio-policy warning.
 One scan can run at a time. Responses are limited to 4 MiB and discovery to ten seconds;
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
