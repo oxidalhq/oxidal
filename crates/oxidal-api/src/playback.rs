@@ -57,6 +57,8 @@ impl Drop for Worker {
 struct Owner {
     last_tool_poll: std::time::Instant,
     levels: Arc<crate::levels::Levels>,
+    midi_map: Arc<oxidal_presets::MidiMapStore>,
+    midi_events: mpsc::Sender<crate::midi_recall::Event>,
     boot: Arc<Policy>,
     worker: Option<Worker>,
     executable: Option<PathBuf>,
@@ -210,6 +212,14 @@ impl Owner {
     ) -> Result<(), String> {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
+        let entry = crate::library_removal::native_reference(&settings);
+        self.midi_map
+            .adopt(entry.as_ref(), settings.midi.as_ref())
+            .map_err(|error| error.to_string())?;
+        settings.midi = self
+            .midi_map
+            .settings(entry.as_ref())
+            .map_err(|error| error.to_string())?;
         if !valid_models(&models) || eq.as_ref().is_some_and(|e| !valid_snapshot(e)) {
             return Err("Invalid model assignments".into());
         }
@@ -789,8 +799,17 @@ impl Owner {
             }
             None => false,
         };
+        let previous_events = self.state.midi.events;
         let status_changed = self.state.midi != status;
         self.state.midi = status;
+        if self.state.midi.events > previous_events
+            && let Some(message) = self.state.midi.last
+        {
+            let _ = self.midi_events.try_send(crate::midi_recall::Event {
+                message,
+                local_program: false,
+            });
+        }
         if changed {
             let controls = controls.ok_or("Missing MIDI control readback")?;
             self.resume_controls = Some(controls.clone());
@@ -1643,10 +1662,33 @@ impl Owner {
                 if let Some(settings) = &settings {
                     settings.validate_native(&self.state.controls)?;
                 }
+                let previous = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(|configured| configured.midi.clone());
                 self.midi(oxidal_audio::lifecycle::MidiOperation::Configure {
                     settings: settings.clone(),
                 })
                 .await?;
+                let entry = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(crate::library_removal::native_reference)
+                    .ok_or("Save this preset before assigning MIDI")?;
+                let stored = match settings.clone() {
+                    Some(settings) => self.midi_map.configure(entry, settings),
+                    None => self.midi_map.disable(),
+                };
+                if let Err(error) = stored {
+                    let _ = self
+                        .midi(oxidal_audio::lifecycle::MidiOperation::Configure {
+                            settings: previous,
+                        })
+                        .await;
+                    return Err(error.to_string());
+                }
                 self.state
                     .configured
                     .as_mut()
@@ -1883,6 +1925,8 @@ impl Playback {
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
         library_access: Arc<tokio::sync::RwLock<()>>,
+        midi_map: Arc<oxidal_presets::MidiMapStore>,
+        midi_events: mpsc::Sender<crate::midi_recall::Event>,
     ) -> Result<Self, String> {
         if let Some(path) = &config.audio_worker
             && (!path.is_absolute() || !path.is_file())
@@ -1940,6 +1984,8 @@ impl Playback {
         let mut owner = Owner {
             last_tool_poll: std::time::Instant::now(),
             levels,
+            midi_map,
+            midi_events,
             boot: policy.clone(),
             worker: None,
             executable: config.audio_worker.clone(),

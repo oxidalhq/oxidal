@@ -88,6 +88,29 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
     });
     (url, task, path)
 }
+
+#[tokio::test]
+async fn midi_map_starts_disabled_and_is_never_cached() {
+    let (url, task, mapping) = start(true).await;
+    let response = reqwest::get(format!("{url}/midi/map")).await.unwrap();
+    assert!(response.status().is_success());
+    assert_eq!(
+        response
+            .headers()
+            .get("cache-control")
+            .and_then(|value| value.to_str().ok()),
+        Some("no-store")
+    );
+    let map: Value = response.json().await.unwrap();
+    assert_eq!(map["input"], Value::Null);
+    assert_eq!(map["channel"], 1);
+    assert_eq!(map["entries"], json!([]));
+    assert_eq!(map["revision"].as_str().unwrap().len(), 64);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
 #[tokio::test]
 async fn ui_page_revalidates_while_hashed_assets_stay_immutable() {
     let root = std::env::temp_dir().join(format!(
@@ -473,20 +496,19 @@ async fn native_library_import_preserves_originals_and_never_mutates_the_rig() {
         .await
         .unwrap();
     let initial = catalog["revision"].clone();
-    let moved = catalog["items"][1]["id"].clone();
     for (id, action) in [
         (
             json!(ids[0]),
             json!({"kind":"rename","name":"My library label"}),
         ),
-        (moved.clone(), json!({"kind":"move","up":true})),
         (json!(ids[0]), json!({"kind":"visibility","archived":true})),
     ] {
         let response=client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":id,"action":action})).send().await.unwrap();
-        assert_eq!(response.status(), 200);
-        catalog = response.json().await.unwrap();
+        let status = response.status();
+        let body = response.text().await.unwrap();
+        assert_eq!(status, 200, "{body}");
+        catalog = serde_json::from_str(&body).unwrap();
     }
-    assert_eq!(catalog["items"][0]["id"], moved);
     let hidden: Value = client
         .get(format!("{url}/presets"))
         .send()
@@ -2350,6 +2372,25 @@ async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_othe
         let body: Value = response.json().await.unwrap();
         ids.push(body["sha256"].as_str().unwrap().to_owned());
     }
+    let midi = oxidal_presets::MidiMapStore::new(root.clone());
+    midi.configure(
+        oxidal_presets::LibraryReference {
+            kind: oxidal_presets::LibraryKind::Original,
+            id: ids[0].clone(),
+        },
+        oxidal_audio::midi::Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 2,
+            bindings: vec![oxidal_audio::midi::Binding {
+                scene: "clean".into(),
+                program: Some(7),
+                controller: None,
+            }],
+            branch_bindings: vec![],
+            parameter_bindings: vec![],
+        },
+    )
+    .unwrap();
     let payload = [0, 1, 127, 128, 255];
     let model = ModelStore::new(root.join("audition-models"))
         .stage(
@@ -2442,6 +2483,7 @@ async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_othe
         LEGACY_PRESET
     );
     assert!(root.join("audition-models").join(model).exists());
+    assert!(midi.snapshot().unwrap().entries.is_empty());
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -2536,7 +2578,7 @@ async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_rec
 }
 
 #[tokio::test]
-async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads_unchanged() {
+async fn set_list_rejects_originals_appends_new_files_and_keeps_payloads_unchanged() {
     let (url, task, path) = start(false).await;
     let root = path.with_extension("presets");
     let client = reqwest::Client::new();
@@ -2563,9 +2605,10 @@ async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads
         .unwrap();
     assert_eq!(catalog["items"][0]["kind"], "owned");
     let moved=client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"place","before":{"kind":"owned","id":owned.id}}})).send().await.unwrap();
-    assert_eq!(moved.status(), 200);
-    let moved: Value = moved.json().await.unwrap();
-    assert_eq!(moved["items"][0]["kind"], "original");
+    let status = moved.status();
+    let body = moved.text().await.unwrap();
+    assert_eq!(status, 422, "{body}");
+    assert!(body.contains("Only presets in Mine belong to the set list"));
     let mut bytes = LEGACY_PRESET.to_vec();
     let index = bytes.windows(7).position(|w| w == b"Fixture").unwrap();
     bytes[index..index + 7].copy_from_slice(b"AAA new");
@@ -2591,9 +2634,21 @@ async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads
         added["sha256"]
     );
     let hidden:Value=client.post(&endpoint).json(&json!({"expected_revision":after["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"visibility","archived":true}})).send().await.unwrap().json().await.unwrap();
-    assert_eq!(hidden["items"][0]["archived"], true);
+    assert!(
+        hidden["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["id"] == imported["sha256"] && item["archived"] == true)
+    );
     let restored:Value=client.post(&endpoint).json(&json!({"expected_revision":hidden["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"visibility","archived":false}})).send().await.unwrap().json().await.unwrap();
-    assert_eq!(restored["items"][0]["id"], imported["sha256"]);
+    assert!(
+        restored["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["id"] == imported["sha256"] && item["archived"] == false)
+    );
     assert_eq!(
         std::fs::read(root.join(format!(
             "{}.t3kpreset",
@@ -2612,10 +2667,7 @@ async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads
     let file: Value =
         serde_json::from_slice(&std::fs::read(root.join("library.json")).unwrap()).unwrap();
     assert_eq!(file["order"].as_array().unwrap().len(), 3);
-    assert_eq!(
-        file["order"][0],
-        format!("original:{}", imported["sha256"].as_str().unwrap())
-    );
+    assert_eq!(file["order"][0], format!("owned:{}", owned.id));
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }

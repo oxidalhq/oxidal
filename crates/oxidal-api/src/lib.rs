@@ -12,6 +12,8 @@ mod guitars;
 mod levels;
 mod library_removal;
 mod local_models;
+mod midi_map;
+mod midi_recall;
 mod monitor;
 mod monitor_history;
 mod native_defaults;
@@ -117,6 +119,7 @@ pub struct Contract {
     pub scene_blend_update: blends::BlendUpdate,
     pub calibration_command: calibration::CalibrationCommand,
     pub midi_devices: oxidal_audio::midi::Devices,
+    pub midi_map: oxidal_presets::MidiMap,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
@@ -163,6 +166,7 @@ struct Shared {
     playback: playback::Playback,
     graph_playback: graph_playback::GraphPlayback,
     levels: Arc<levels::Levels>,
+    midi_map: Arc<oxidal_presets::MidiMapStore>,
     guitars: Arc<guitars::Store>,
     boosts: Arc<boosts::Store>,
     blends: Arc<blends::Store>,
@@ -239,6 +243,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let levels = Arc::new(levels::Levels::load(
         config.preset_dir.join("unit-levels.json"),
     ));
+    let midi_map = Arc::new(oxidal_presets::MidiMapStore::new(config.preset_dir.clone()));
+    let (midi_events, midi_event_rx) = tokio::sync::mpsc::channel(32);
     let shared = Arc::new(Shared {
         boot: boot.clone(),
         account: provider::Account::new(
@@ -259,6 +265,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             boot.clone(),
             levels.clone(),
             library_access.clone(),
+            midi_map.clone(),
+            midi_events.clone(),
         )?,
         graph_playback: graph_playback::GraphPlayback::new(
             &config,
@@ -271,8 +279,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             boot,
             levels.clone(),
             library_access.clone(),
+            midi_map.clone(),
+            midi_events,
         )?,
         levels,
+        midi_map,
         library_access,
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         boosts: Arc::new(boosts::Store::load(config.preset_dir.join("boosts.json"))),
@@ -290,6 +301,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     });
     monitor::start(Arc::downgrade(&shared), monitor_updates);
     monitor_history::start(Arc::downgrade(&shared));
+    midi_recall::start(Arc::downgrade(&shared), midi_event_rx);
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -377,6 +389,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/presets/rigs/{revision}", get(rig_library::read))
         .route("/audio/devices", get(audio::devices))
         .route("/midi/devices", get(audio::midi_devices))
+        .route("/midi/map", get(midi_map::state))
         .route("/audio/probe", post(audio::probe))
         .route(
             "/native",

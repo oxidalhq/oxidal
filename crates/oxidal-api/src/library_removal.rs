@@ -224,7 +224,9 @@ pub(super) async fn remove(
                 // The exclusive gate prevents Start/Resume until stale stopped state is cleared.
                 result.cleanup_pending |= shared.playback.forget(entry.clone()).await.is_err();
                 result.cleanup_pending |= shared.rig_playback.forget(entry.clone()).await.is_err();
-                result.cleanup_pending |= shared.graph_playback.forget(entry).await.is_err();
+                result.cleanup_pending |=
+                    shared.graph_playback.forget(entry.clone()).await.is_err();
+                result.cleanup_pending |= shared.midi_map.forget(entry.kind, &entry.id).is_err();
                 result.cleanup_pending |= shared.boot.reload().is_err();
                 Json(result).into_response()
             }

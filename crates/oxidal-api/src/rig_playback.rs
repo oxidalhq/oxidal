@@ -87,6 +87,8 @@ struct Export {
 }
 struct Owner {
     levels: Arc<crate::levels::Levels>,
+    midi_map: Arc<oxidal_presets::MidiMapStore>,
+    midi_events: mpsc::Sender<crate::midi_recall::Event>,
     boot: Arc<Policy>,
     executable: Option<PathBuf>,
     root: PathBuf,
@@ -102,6 +104,29 @@ struct Owner {
     updates: watch::Sender<RigAudioState>,
 }
 impl Owner {
+    fn forward_midi(&self, previous_events: u64) {
+        let Some(control) = &self.state.control else {
+            return;
+        };
+        if control.midi.events <= previous_events {
+            return;
+        }
+        let Some(message) = control.midi.last else {
+            return;
+        };
+        let local_program = matches!(message, oxidal_audio::midi::Message::Program { .. })
+            && self
+                .state
+                .configured
+                .as_ref()
+                .and_then(|configured| configured.midi.as_ref())
+                .is_some_and(|settings| settings.scene(message).is_some());
+        let _ = self.midi_events.try_send(crate::midi_recall::Event {
+            message,
+            local_program,
+        });
+    }
+
     fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
         if entry.kind != oxidal_presets::LibraryKind::Rig {
             return Ok(());
@@ -293,6 +318,17 @@ impl Owner {
     ) -> Result<(), String> {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
+        let entry = oxidal_presets::LibraryReference {
+            kind: oxidal_presets::LibraryKind::Rig,
+            id: settings.revision.clone(),
+        };
+        self.midi_map
+            .adopt(Some(&entry), settings.midi.as_ref())
+            .map_err(|error| error.to_string())?;
+        settings.midi = self
+            .midi_map
+            .settings(Some(&entry))
+            .map_err(|error| error.to_string())?;
         settings.validate()?;
         let bytes = encode(&settings)?;
         if self.worker.is_some() {
@@ -913,6 +949,11 @@ impl Owner {
                 if let Some(settings) = &settings {
                     settings.validate()?;
                 }
+                let previous = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(|configured| configured.midi.clone());
                 let reply = match self
                     .exchange(&WorkerRequest::Midi {
                         settings: settings.clone(),
@@ -928,6 +969,29 @@ impl Owner {
                 }
                 if let Some(error) = error {
                     return Err(error);
+                }
+                let entry = oxidal_presets::LibraryReference {
+                    kind: oxidal_presets::LibraryKind::Rig,
+                    id: self
+                        .state
+                        .configured
+                        .as_ref()
+                        .ok_or("Missing mixed configuration")?
+                        .revision
+                        .clone(),
+                };
+                let stored = match settings.clone() {
+                    Some(settings) => self.midi_map.configure(entry, settings),
+                    None => self.midi_map.disable(),
+                };
+                if let Err(error) = stored {
+                    if let Ok(reply) = self
+                        .exchange(&WorkerRequest::Midi { settings: previous })
+                        .await
+                    {
+                        let _ = self.readback(reply);
+                    }
+                    return Err(error.to_string());
                 }
                 self.state.configured.as_mut().unwrap().midi = settings;
                 self.confirmed = self.state.configured.clone();
@@ -1035,19 +1099,41 @@ impl Owner {
                     return Err(self.fault("Unconfirmed resident switch".into()).await);
                 }
                 let mut settings = old.clone();
-                settings.revision = target;
+                settings.revision = target.clone();
                 settings.prepared[index] = oxidal_engine::protocol::PreparedRecall {
                     revision: old.revision,
                     recall: self.state.control.as_ref().map(|c| c.recall()),
                 };
                 settings.recall = None;
-                settings.midi = None;
+                settings.midi = self
+                    .midi_map
+                    .settings(Some(&oxidal_presets::LibraryReference {
+                        kind: oxidal_presets::LibraryKind::Rig,
+                        id: target.clone(),
+                    }))
+                    .map_err(|error| error.to_string())?;
                 self.state.configured = Some(settings);
                 self.state.control = None;
                 // An isolated export retains its source-session receipt even
                 // while another resident is sounding.
                 if let Err(e) = self.readback(reply) {
                     return Err(self.fault(e).await);
+                }
+                let midi = self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(|configured| configured.midi.clone());
+                let reply = match self.exchange(&WorkerRequest::Midi { settings: midi }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
                 }
             }
             RigAudioAction::Save { name } => self.save(name).await?,
@@ -1082,6 +1168,11 @@ impl Owner {
             } else if self.state.phase == AudioPhase::Starting {
                 self.poll_preparing().await;
             } else {
+                let previous_events = self
+                    .state
+                    .control
+                    .as_ref()
+                    .map_or(0, |control| control.midi.events);
                 let result = match self.exchange(&WorkerRequest::Status).await {
                     Ok(r) if r.error.is_none() => self.readback(r),
                     Ok(_) => Err("Invalid mixed status reply".into()),
@@ -1089,6 +1180,8 @@ impl Owner {
                 };
                 if let Err(e) = result {
                     self.fault(e).await;
+                } else {
+                    self.forward_midi(previous_events);
                 }
             }
         }
@@ -1146,6 +1239,8 @@ impl RigPlayback {
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
         library_access: Arc<tokio::sync::RwLock<()>>,
+        midi_map: Arc<oxidal_presets::MidiMapStore>,
+        midi_events: mpsc::Sender<crate::midi_recall::Event>,
     ) -> Result<Self, String> {
         if config
             .rig_worker
@@ -1193,6 +1288,8 @@ impl RigPlayback {
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let mut owner = Owner {
             levels,
+            midi_map,
+            midi_events,
             boot: policy.clone(),
             executable: config.rig_worker.clone(),
             root: config.preset_dir.join("bundles"),
@@ -1345,6 +1442,8 @@ mod tests {
                 root.join("presets/unit-levels.json"),
             )),
             library_access.clone(),
+            Arc::new(oxidal_presets::MidiMapStore::new(root.join("presets"))),
+            mpsc::channel(1).0,
         )
         .unwrap();
         let probe = oxidal_audio::AudioProbe {

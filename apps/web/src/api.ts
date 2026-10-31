@@ -630,6 +630,17 @@ export async function midiDevices(): Promise<MidiDevices> {
   return body;
 }
 
+export type MidiMap = Contract['midi_map'];
+const midiMapValidator = ajv.compile<MidiMap>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/MidiMap',
+});
+export async function midiMap(): Promise<MidiMap> {
+  const body = await presetResponse(await fetch('/api/v1/midi/map'));
+  if (!midiMapValidator(body)) throw new Error('Incompatible MIDI map');
+  return body;
+}
+
 export type NativeDefaults = Contract['native_defaults'];
 const nativeDefaultsValidator = ajv.compile<NativeDefaults>({
   $defs: schema.$defs,

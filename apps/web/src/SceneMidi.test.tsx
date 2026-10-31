@@ -14,6 +14,23 @@ vi.mock('./api', () => ({
     inputs: [{ id: 'hw:Controller,0,0', name: 'Controller' }],
     warnings: [],
   })),
+  midiMap: vi.fn(async () => ({
+    revision: 'midi-map',
+    input: 'hw:Controller,0,0',
+    channel: 2,
+    entries: [],
+  })),
+  libraryCatalog: vi.fn(async () => ({
+    revision: 'catalog',
+    items: [
+      {
+        kind: 'rig',
+        id: 'a'.repeat(64),
+        origin: 'mine',
+        archived: false,
+      },
+    ],
+  })),
 }));
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = vi.fn(function (
@@ -140,13 +157,13 @@ it('learns only a fresh CC on the selected channel and keeps the first result un
   current.control!.midi = {
     connected: true,
     events: 13,
-    last: { kind: 'control', channel: 2, controller: 32, value: 0 },
+    last: { kind: 'control', channel: 2, controller: 42, value: 0 },
     error: null,
   };
   view.rerender(
     <SceneMidi state={{ ...current }} disabled={false} onCommand={command} />,
   );
-  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(32);
+  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(42);
   current.control!.midi = {
     connected: true,
     events: 14,
@@ -156,7 +173,7 @@ it('learns only a fresh CC on the selected channel and keeps the first result un
   view.rerender(
     <SceneMidi state={{ ...current }} disabled={false} onCommand={command} />,
   );
-  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(32);
+  expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(42);
   expect(command).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Apply MIDI' }));
   expect(command).toHaveBeenCalledWith(
@@ -166,7 +183,7 @@ it('learns only a fresh CC on the selected channel and keeps the first result un
         parameter_bindings: [
           {
             target: { kind: 'lv2', node: 'fx', symbol: 'gain' },
-            controller: 32,
+            controller: 42,
             mode: 'absolute',
           },
         ],
@@ -279,4 +296,15 @@ it('flags duplicate numbers before Apply', async () => {
     'CC 20 is assigned to Control 1 and Control 2',
   );
   expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeDisabled();
+});
+
+it('shows the global set-list program and local-scene precedence', async () => {
+  render(<SceneMidi state={state()} disabled={false} onCommand={vi.fn()} />);
+  await open();
+  expect(
+    await screen.findByText(/Program 1.*Mine set-list position/),
+  ).toBeVisible();
+  expect(
+    screen.getByText(/A Program assigned to a scene below wins/),
+  ).toBeVisible();
 });

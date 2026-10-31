@@ -711,6 +711,7 @@ export interface Contract {
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
   midi_devices: Devices;
+  midi_map: MidiMap;
   model_page: Page2;
   model_query: ModelQuery;
   monitoring: Monitoring;
@@ -1662,6 +1663,18 @@ export interface Devices {
 export interface Endpoint {
   id: string;
   name: string;
+}
+export interface MidiMap {
+  channel: number;
+  entries: MidiMapEntry[];
+  input?: string | null;
+  revision: string;
+}
+export interface MidiMapEntry {
+  bindings: Binding2[];
+  branch_bindings: BranchBinding[];
+  entry: LibraryReference;
+  parameter_bindings: ParameterBinding[];
 }
 export interface Page2 {
   data: Model[];

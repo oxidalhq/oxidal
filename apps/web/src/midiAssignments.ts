@@ -20,7 +20,11 @@ export function midiConflicts(settings: Settings | null) {
   settings.parameter_bindings?.forEach((binding, index) =>
     add(controls, binding.controller, `Control ${index + 1}`),
   );
+  const reserved = [...controls.keys()]
+    .filter((number) => number === 0 || number === 32)
+    .map((number) => `CC ${number} is reserved for Bank Select`);
   return [
+    ...reserved,
     ...[...programs].flatMap(([number, labels]) =>
       labels.length > 1
         ? [`Program ${number + 1} is assigned to ${labels.join(' and ')}`]

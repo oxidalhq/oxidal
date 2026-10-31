@@ -1711,6 +1711,14 @@ export function LiveRig({
       <MidiControls
         configured={state.configured?.midi ?? null}
         disabled={disabled}
+        preset={
+          state.configured && !state.configured.draft && state.configured.owned
+            ? {
+                kind: 'owned' as const,
+                id: state.configured.preset_id,
+              }
+            : undefined
+        }
         onApply={configureMidi}
         control={{
           midi: state.midi,

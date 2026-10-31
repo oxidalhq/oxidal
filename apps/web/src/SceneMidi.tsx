@@ -8,6 +8,8 @@ import {
 } from './midiNavigation';
 import {
   midiDevices,
+  midiMap,
+  libraryCatalog,
   type MidiDevices,
   type RigAudioState,
   type RigAudioAction,
@@ -23,6 +25,7 @@ type Learning =
   | { kind: 'scene'; index: number; after: number }
   | { kind: 'branch'; branch: string; after: number }
   | { kind: 'parameter'; index: number; after: number };
+type PresetIdentity = { kind: 'owned' | 'rig'; id: string };
 
 export function SceneMidi({
   state,
@@ -38,6 +41,11 @@ export function SceneMidi({
       control={state.control ?? null}
       configured={state.configured?.midi ?? null}
       disabled={disabled}
+      preset={
+        state.configured
+          ? { kind: 'rig', id: state.configured.revision }
+          : undefined
+      }
       onApply={(settings) => onCommand({ kind: 'midi', settings })}
     />
   );
@@ -47,11 +55,13 @@ export function MidiControls({
   control,
   configured,
   disabled,
+  preset,
   onApply,
 }: {
   control: MidiView | null;
   configured: Settings | null;
   disabled: boolean;
+  preset?: PresetIdentity;
   onApply: (settings: Settings | null) => Promise<void>;
 }) {
   const [devices, setDevices] = useState<MidiDevices | null>(null);
@@ -60,9 +70,18 @@ export function MidiControls({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [learning, setLearning] = useState<Learning | null>(null);
+  const [presetProgram, setPresetProgram] = useState<{
+    key: string;
+    program: number | null;
+  } | null>(null);
   const initialized = useRef(false);
   const status = control?.midi;
   const savedInput = configured?.input;
+  const presetKind = preset?.kind;
+  const presetId = preset?.id;
+  const presetKey = presetKind && presetId ? `${presetKind}:${presetId}` : null;
+  const currentPresetProgram =
+    presetProgram?.key === presetKey ? presetProgram.program : null;
   // Consume a fresh external snapshot once; clearing the token prevents later
   // telemetry from changing the draft before the musician applies it.
   const message = status?.last;
@@ -184,6 +203,34 @@ export function MidiControls({
       .catch((cause: unknown) => setError(String(cause)))
       .finally(() => setLoading(false));
   }, [configured, control, dialogOpen]);
+  useEffect(() => {
+    if (!dialogOpen || !presetKind || !presetId || !presetKey) return;
+    let current = true;
+    void Promise.all([midiMap(), libraryCatalog()])
+      .then(([map, catalog]) => {
+        const setList = catalog.items.filter(
+          (item) =>
+            !item.archived &&
+            item.origin === 'mine' &&
+            (item.kind === 'owned' || item.kind === 'rig'),
+        );
+        const slot = setList.findIndex(
+          (item) => item.kind === presetKind && item.id === presetId,
+        );
+        if (current) {
+          setPresetProgram({
+            key: presetKey,
+            program: map.input && slot >= 0 ? slot : null,
+          });
+        }
+      })
+      .catch(() => {
+        if (current) setPresetProgram({ key: presetKey, program: null });
+      });
+    return () => {
+      current = false;
+    };
+  }, [dialogOpen, presetId, presetKey, presetKind]);
   const controls = control?.controls ?? [];
   const conflicts = midiConflicts(draft);
   if (!control) return null;
@@ -224,6 +271,21 @@ export function MidiControls({
                   ? `Program ${status.last.program + 1}`
                   : `CC ${status.last.controller} · ${status.last.value}`}
               </output>
+            )}
+            {currentPresetProgram != null && (
+              <section className="space-y-1 rounded-md bg-muted/50 px-3 py-2">
+                <strong>Preset recall</strong>
+                <p className="caption">
+                  {currentPresetProgram < 128
+                    ? `Program ${currentPresetProgram + 1}`
+                    : `Bank ${Math.floor(currentPresetProgram / 128)}, Program ${(currentPresetProgram % 128) + 1}`}{' '}
+                  · Mine set-list position
+                </p>
+                <p className="caption">
+                  A Program assigned to a scene below wins inside this preset.
+                  CC 0 and 32 are reserved for Bank Select.
+                </p>
+              </section>
             )}
             {!scenes.length && (
               <p className="caption">
@@ -752,14 +814,7 @@ export function MidiControls({
             )}
             <div className="action-row">
               <Button
-                disabled={
-                  disabled ||
-                  !!conflicts.length ||
-                  !draft?.input ||
-                  (!draft.bindings.length &&
-                    !draft.branch_bindings?.length &&
-                    !draft.parameter_bindings?.length)
-                }
+                disabled={disabled || !!conflicts.length || !draft?.input}
                 onClick={() =>
                   void onApply(draft).then(() => {
                     setDialogOpen(false);
@@ -787,7 +842,7 @@ export function MidiControls({
                   })
                 }
               >
-                Disable MIDI
+                Disable controller
               </Button>
             </div>
             {devices && !devices.inputs.length && !loading && !error && (

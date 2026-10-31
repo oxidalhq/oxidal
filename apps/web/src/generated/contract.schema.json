@@ -97,6 +97,9 @@
     "midi_devices": {
       "$ref": "#/$defs/Devices"
     },
+    "midi_map": {
+      "$ref": "#/$defs/MidiMap"
+    },
     "model_page": {
       "$ref": "#/$defs/Page2"
     },
@@ -255,6 +258,7 @@
     "scene_blend_update",
     "calibration_command",
     "midi_devices",
+    "midi_map",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -4974,6 +4978,71 @@
         "channel",
         "cc",
         "value"
+      ]
+    },
+    "MidiMap": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MidiMapEntry"
+          }
+        },
+        "input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "channel",
+        "entries"
+      ]
+    },
+    "MidiMapEntry": {
+      "type": "object",
+      "properties": {
+        "bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Binding2"
+          }
+        },
+        "branch_bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BranchBinding"
+          }
+        },
+        "entry": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "parameter_bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ParameterBinding"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entry",
+        "bindings",
+        "branch_bindings",
+        "parameter_bindings"
       ]
     },
     "MidiMapping": {

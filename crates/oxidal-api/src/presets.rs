@@ -153,7 +153,9 @@ pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
 }
 
 /// Library metadata is separate from immutable native/graph/bundle contents.
-fn catalog_items(root: &std::path::Path) -> Result<Vec<oxidal_presets::LibraryItem>, Error> {
+pub(super) fn catalog_items(
+    root: &std::path::Path,
+) -> Result<Vec<oxidal_presets::LibraryItem>, Error> {
     use oxidal_presets::{LibraryItem as Item, LibraryKind as Kind, LibraryOrigin as Origin};
     let mut items = Vec::new();
     let mut push = |kind, id, name: String, origin| {

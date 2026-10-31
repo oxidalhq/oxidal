@@ -52,6 +52,13 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         <MidiControls
           key={`native:${native.session}`}
           configured={native.configured?.midi ?? null}
+          preset={
+            native.configured &&
+            !native.configured.draft &&
+            native.configured.owned
+              ? { kind: 'owned' as const, id: native.configured.preset_id }
+              : undefined
+          }
           disabled={!connected || busy || !!error}
           control={{
             midi: native.midi,
@@ -91,6 +98,11 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         <MidiControls
           key={`mixed:${mixed.session}`}
           configured={mixed.configured?.midi ?? null}
+          preset={
+            mixed.configured
+              ? { kind: 'rig' as const, id: mixed.configured.revision }
+              : undefined
+          }
           control={mixed.control ?? null}
           disabled={!connected || busy || !!error}
           onApply={async (settings) => {

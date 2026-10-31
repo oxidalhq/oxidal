@@ -222,9 +222,6 @@ impl Settings {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
             || parts[1..].iter().any(|p| p.parse::<u16>().is_err())
             || self.channel > 16
-            || (self.bindings.is_empty()
-                && self.branch_bindings.is_empty()
-                && self.parameter_bindings.is_empty())
             || self.bindings.len() > 256
             || self.branch_bindings.len() > 128
             || self.parameter_bindings.len() > 128
@@ -236,7 +233,9 @@ impl Settings {
                 || binding.scene.len() > 64
                 || binding.program.is_some() == binding.controller.is_some()
                 || binding.program.is_some_and(|v| v > 127)
-                || binding.controller.is_some_and(|v| v > 127)
+                || binding
+                    .controller
+                    .is_some_and(|v| v > 127 || matches!(v, 0 | 32))
                 || self.bindings[..index].iter().any(|old| {
                     old.program == binding.program && old.controller == binding.controller
                 })
@@ -248,6 +247,7 @@ impl Settings {
             if binding.branch.is_empty()
                 || binding.branch.len() > 64
                 || binding.controller > 127
+                || matches!(binding.controller, 0 | 32)
                 || self
                     .bindings
                     .iter()
@@ -262,6 +262,7 @@ impl Settings {
         for (index, binding) in self.parameter_bindings.iter().enumerate() {
             if !binding.target.valid()
                 || binding.controller > 127
+                || matches!(binding.controller, 0 | 32)
                 || self
                     .bindings
                     .iter()
@@ -589,6 +590,25 @@ mod tests {
             program: None,
         });
         assert!(settings.validate().is_err());
+    }
+    #[test]
+    fn bank_select_controllers_are_reserved_for_global_preset_recall() {
+        let mut settings = Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 1,
+            bindings: vec![],
+            parameter_bindings: vec![],
+            branch_bindings: vec![BranchBinding {
+                branch: "lead".into(),
+                controller: 0,
+                mode: BranchMode::Toggle,
+            }],
+        };
+        assert!(settings.validate().is_err());
+        settings.branch_bindings[0].controller = 32;
+        assert!(settings.validate().is_err());
+        settings.branch_bindings[0].controller = 31;
+        settings.validate().unwrap();
     }
     #[test]
     fn hardware_hints_normalize_only_the_discovered_card() {
