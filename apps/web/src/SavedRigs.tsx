@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CircleNotch } from '@phosphor-icons/react';
+import { CircleNotch, PlugsConnected } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { detailsMatch } from './presetMetadata';
 import {
@@ -14,6 +14,7 @@ import {
   scenesLabel,
   writeKeepReady,
 } from './presetChoices';
+import { requestMidiAssignments } from './midiNavigation';
 
 /**
  * Presets with scenes in the Library: rows look and play like every other
@@ -74,7 +75,7 @@ export function SavedRigs({
       alive.current = false;
     };
   }, [refresh]);
-  async function play(revision: string) {
+  async function play(revision: string, openMidi = false) {
     setBusy(true);
     setLoadingId(revision);
     setError('');
@@ -83,6 +84,7 @@ export function SavedRigs({
       if (alive.current) {
         // Starting may have added it to the ready set.
         setPrepared(readKeepReady());
+        if (openMidi) requestMidiAssignments();
         onOpenRig();
       }
     } catch (cause) {
@@ -174,6 +176,16 @@ export function SavedRigs({
                   )}
                 </span>
               </button>
+              <Button
+                variant="ghost"
+                className="library-midi"
+                aria-label={`MIDI: ${p.name}`}
+                disabled={!connected || busy}
+                onClick={() => void play(p.revision, true)}
+              >
+                <PlugsConnected aria-hidden="true" />
+                <span className="library-action-label">MIDI</span>
+              </Button>
               {onDetails && (
                 <Button
                   variant="ghost"

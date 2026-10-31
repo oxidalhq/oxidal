@@ -10,7 +10,12 @@ import {
   type AudioState,
   type Preset,
 } from './api';
-import { CircleNotch, MagnifyingGlass, X } from '@phosphor-icons/react';
+import {
+  CircleNotch,
+  MagnifyingGlass,
+  PlugsConnected,
+  X,
+} from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
@@ -22,6 +27,7 @@ import { Button } from './components/ui/button';
 import { PresetDetailsDialog } from './PresetDetails';
 import { detailsKey, detailsMatch } from './presetMetadata';
 import { ModelLibrary } from './ModelLibrary';
+import { requestMidiAssignments } from './midiNavigation';
 import './Library.css';
 
 /** Immutable native originals; playback has its own explicitly started session.
@@ -106,7 +112,7 @@ export function Library({
       active = false;
     };
   }, [refresh]);
-  async function play(id: string, isOwned = false) {
+  async function play(id: string, isOwned = false, openMidi = false) {
     if (loading.current) return;
     loading.current = true;
     setLoadingId(id);
@@ -114,6 +120,7 @@ export function Library({
     try {
       const next = await playTone3000(id, isOwned);
       setPlaying(next);
+      if (openMidi) requestMidiAssignments();
       onOpenRig();
     } catch (cause) {
       setError(String(cause));
@@ -409,6 +416,16 @@ export function Library({
                   {loadButton(p.id, p.name, true)}
                   <Button
                     variant="ghost"
+                    className="library-midi"
+                    aria-label={`MIDI: ${p.name}`}
+                    disabled={!connected || loadingId !== null}
+                    onClick={() => void play(p.id, true, true)}
+                  >
+                    <PlugsConnected aria-hidden="true" />
+                    <span className="library-action-label">MIDI</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
                     className="library-details"
                     aria-label={`Details: ${p.name}`}
                     onClick={() =>
@@ -464,6 +481,16 @@ export function Library({
                     false,
                     `${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
                   )}
+                  <Button
+                    variant="ghost"
+                    className="library-midi"
+                    aria-label={`MIDI: ${preset.name}`}
+                    disabled={!connected || loadingId !== null}
+                    onClick={() => void play(preset.sha256, false, true)}
+                  >
+                    <PlugsConnected aria-hidden="true" />
+                    <span className="library-action-label">MIDI</span>
+                  </Button>
                   <Button
                     variant="ghost"
                     className="library-details"

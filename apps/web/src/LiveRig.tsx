@@ -13,6 +13,7 @@ import {
   Plus,
   CaretDown,
   ArrowLeft,
+  PlugsConnected,
   X,
 } from '@phosphor-icons/react';
 import { RigPresetSelector } from './RigPresetSelector';
@@ -60,6 +61,7 @@ import { DragFader } from './DragFader';
 import { LevelMatch } from './LevelMatch';
 import { MasterLevel } from './MasterLevel';
 import { EditQueue } from './editQueue';
+import { requestMidiAssignments } from './midiNavigation';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
 const blockName = (label: string) =>
@@ -901,6 +903,16 @@ export function LiveRig({
           disabled={disabled || !!draft || !!picker || !!state.copy_on_edit}
           onSelect={(choice) => void recall(choice)}
         />
+        <Button
+          variant="outline"
+          aria-label="MIDI assignments"
+          title="Assign this preset's scenes, switches and controls"
+          disabled={disabled || !!draft || !!picker}
+          onClick={requestMidiAssignments}
+        >
+          <PlugsConnected aria-hidden="true" />
+          <span className="phone-hidden">MIDI</span>
+        </Button>
         {/* Save and the preset actions form one split button. */}
         <div className="preset-save-group" role="group" aria-label="Save">
           <Button

@@ -1729,6 +1729,12 @@ textarea {
 .adjustment-dialog h2:focus {
   outline: none;
 }
+.adjustment-dialog.midi-assignment-dialog {
+  width: min(
+    44rem,
+    calc(100% - max(8px, var(--safe-left)) - max(8px, var(--safe-right)))
+  );
+}
 @media (orientation: landscape) and (max-height: 500px) {
   html {
     scroll-padding-top: 3.5rem;

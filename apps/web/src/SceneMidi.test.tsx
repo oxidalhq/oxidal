@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SceneMidi } from './SceneMidi';
 import type { RigAudioState } from './api';
 vi.mock('./api', () => ({
@@ -15,6 +15,16 @@ vi.mock('./api', () => ({
     warnings: [],
   })),
 }));
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (
+    this: HTMLDialogElement,
+  ) {
+    this.setAttribute('open', '');
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+    this.removeAttribute('open');
+  });
+});
 afterEach(cleanup);
 function state(): RigAudioState {
   const input = {
@@ -91,9 +101,7 @@ function state(): RigAudioState {
   };
 }
 async function open() {
-  const details = screen.getByText('MIDI controls').closest('details')!;
-  details.open = true;
-  fireEvent(details, new Event('toggle'));
+  fireEvent.click(screen.getByRole('button', { name: /MIDI controls/ }));
   await waitFor(() =>
     expect(screen.getByLabelText('Parameter CC 1')).toHaveValue(20),
   );
@@ -207,4 +215,68 @@ it('resets unsubmitted mappings and cancels learning without changing the contro
     screen.queryByRole('button', { name: 'Cancel learn' }),
   ).not.toBeInTheDocument();
   expect(command).not.toHaveBeenCalled();
+});
+
+it('learns Program Change for a scene and CC for an independent switch', async () => {
+  const current = state();
+  current.configured!.midi!.bindings = [
+    { scene: 'clean', program: 0, controller: null },
+  ];
+  current.configured!.midi!.branch_bindings = [
+    { branch: 'boost', controller: 21, mode: 'toggle' },
+  ];
+  current.control!.scenes = {
+    fade_ms: 10,
+    scenes: [{ id: 'clean', name: 'Clean', gains: [] }],
+    branches: [],
+  };
+  current.control!.branches = [
+    { id: 'boost', name: 'Boost', enabled: false, partial: false },
+  ];
+  const view = render(
+    <SceneMidi state={current} disabled={false} onCommand={vi.fn()} />,
+  );
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: 'Learn message' }));
+  current.control!.midi = {
+    connected: true,
+    events: 11,
+    last: { kind: 'program', channel: 2, program: 7 },
+    error: null,
+  };
+  view.rerender(
+    <SceneMidi state={{ ...current }} disabled={false} onCommand={vi.fn()} />,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText('MIDI number 1')).toHaveValue(8),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Learn CC' }));
+  current.control!.midi = {
+    connected: true,
+    events: 12,
+    last: { kind: 'control', channel: 2, controller: 42, value: 127 },
+    error: null,
+  };
+  view.rerender(
+    <SceneMidi state={{ ...current }} disabled={false} onCommand={vi.fn()} />,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText('Branch Boost CC')).toHaveValue(42),
+  );
+});
+
+it('flags duplicate numbers before Apply', async () => {
+  const current = state();
+  current.configured!.midi!.parameter_bindings!.push({
+    target: { kind: 'native', node: 'native', parameter: 'toneBass' },
+    controller: 20,
+    mode: 'absolute',
+  });
+  render(<SceneMidi state={current} disabled={false} onCommand={vi.fn()} />);
+  await open();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'CC 20 is assigned to Control 1 and Control 2',
+  );
+  expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeDisabled();
 });

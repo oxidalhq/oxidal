@@ -55,14 +55,20 @@
 }
 .library-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
   align-items: center;
   column-gap: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
 .library-row
-  > :not(.library-load):not(a):not(.library-ready):not(.library-details) {
+  > :not(.library-load):not(a):not(.library-ready):not(.library-details):not(
+    .library-midi
+  ) {
   grid-column: 1 / -1;
+}
+.library-midi svg {
+  width: 1.125rem;
+  height: 1.125rem;
 }
 .library-ready {
   display: inline-flex;
@@ -142,6 +148,29 @@
   color: var(--muted-foreground);
   font-size: 0.8125rem;
   text-decoration: underline;
+}
+@media (max-width: 480px) {
+  .library-row > .library-load {
+    grid-column: 1 / -1;
+  }
+  .library-row > .library-midi {
+    grid-column: 2;
+  }
+  .library-row > .library-details {
+    grid-column: 3;
+  }
+  .library-row > .library-ready,
+  .library-row > a[download] {
+    grid-column: 4;
+  }
+  .library-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .library-import {
@@ -520,6 +549,5 @@
 }
 
 .library-details {
-  grid-column: 2;
   padding-inline: 0.5rem;
 }

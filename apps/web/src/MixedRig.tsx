@@ -40,6 +40,7 @@ import {
   CaretRight,
   Trash,
   Lightning,
+  PlugsConnected,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
@@ -81,6 +82,7 @@ import {
 } from './api';
 import type { RigPublish } from './generated/contract';
 import { addSceneEffect, branchEffects, removeSceneEffect } from './sceneEdit';
+import { requestMidiAssignments } from './midiNavigation';
 
 const key = (c: RigControl) => JSON.stringify(c.target);
 /** Actual mixed readback only; an edited document never masquerades as sounding. */
@@ -1268,6 +1270,16 @@ export function MixedRig({
           }
           onSelect={(choice) => void choose(choice)}
         />
+        <Button
+          variant="outline"
+          aria-label="MIDI assignments"
+          title="Assign this preset's scenes, switches and controls"
+          disabled={disabled || busy || switching || !!edit || !!picker}
+          onClick={requestMidiAssignments}
+        >
+          <PlugsConnected aria-hidden="true" />
+          <span className="phone-hidden">MIDI</span>
+        </Button>
         <Button
           variant="outline"
           aria-label="Save copy"
