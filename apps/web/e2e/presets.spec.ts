@@ -2969,9 +2969,18 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     `[data-library-kind="rig"][data-library-entry="${managedRevision}"]`,
   );
   const label = `Managed ${info.project.name}`;
-  await row.getByRole('textbox').fill(label);
-  await row.getByRole('button', { name: 'Rename', exact: true }).click();
-  await expect(row.getByRole('textbox')).toHaveValue(label);
+  await row.getByRole('button', { name: /^Preset options:/ }).click();
+  const naming = page.getByRole('dialog', {
+    name: 'Preset options',
+    exact: true,
+  });
+  await naming
+    .getByRole('textbox', { name: 'Name on this device' })
+    .fill(label);
+  await naming.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(
+    row.getByRole('heading', { name: label, exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: `Play ${label}`, exact: true }),
   ).toBeVisible();
@@ -2998,7 +3007,9 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await management
     .getByRole('button', { name: 'Show available', exact: true })
     .click();
-  await expect(row.getByRole('textbox')).toHaveValue(label);
+  await expect(
+    row.getByRole('heading', { name: label, exact: true }),
+  ).toBeVisible();
   const playingAfter = await get();
   expect(playingAfter.phase).toBe('running');
   expect(playingAfter.control.revision).toBe(playingBefore.control.revision);
@@ -4881,4 +4892,87 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   await page.screenshot({
     path: `test-results/model-library-empty-${info.project.name}.png`,
   });
+});
+
+test('device portrait permanent deletion previews a disposable preset and keeps independent files', async ({
+  page,
+  request,
+}, info) => {
+  const bytes = Buffer.from(
+    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
+  );
+  const offset = bytes.indexOf(Buffer.from('Fixture'));
+  expect(offset).toBeGreaterThan(0);
+  bytes.write('DelTest', offset, 'utf8');
+  const imported = await request.post('/api/v1/presets', {
+    data: bytes,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBe(true);
+  const preset = await imported.json();
+  const independent = await request.post(
+    '/api/v1/models/local?name=keep-delete-test.nam',
+    {
+      data: Buffer.from('{"architecture":"Linear","weights":[1,2,3]}'),
+      headers: { 'Content-Type': 'application/octet-stream' },
+    },
+  );
+  expect(independent.ok()).toBe(true);
+  const asset = await independent.json();
+  await page.goto('/#library');
+  await page
+    .getByRole('button', { name: 'Manage library', exact: true })
+    .click();
+  const row = page.locator(
+    `[data-library-kind="original"][data-library-entry="${preset.sha256}"]`,
+  );
+  await row.getByRole('button', { name: /^Preset options:/ }).click();
+  await page
+    .getByRole('button', { name: 'Review deletion', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Delete preset',
+    exact: true,
+  });
+  await expect(
+    dialog.getByText('Separate NAM and IR files stay in Library.'),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Delete permanently', exact: true }),
+  ).toBeEnabled();
+  const before = await request.get(`/api/v1/presets/${preset.sha256}/original`);
+  expect(before.ok()).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    (await new AxeBuilder({ page }).include('dialog[open]').analyze())
+      .violations,
+  ).toEqual([]);
+  await page.screenshot({
+    path: info.outputPath('permanent-delete-preview.png'),
+    fullPage: true,
+  });
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(
+    (await request.get(`/api/v1/presets/${preset.sha256}/original`)).ok(),
+  ).toBe(true);
+  await row.getByRole('button', { name: /^Preset options:/ }).click();
+  await page
+    .getByRole('button', { name: 'Review deletion', exact: true })
+    .click();
+  await dialog
+    .getByRole('button', { name: 'Delete permanently', exact: true })
+    .click();
+  await expect(
+    dialog.getByText('Preset deleted.', { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  const models = await (
+    await request.get('/api/v1/models/local?all=true')
+  ).json();
+  expect(models.data.some((m: { id: string }) => m.id === asset.id)).toBe(true);
 });

@@ -7,7 +7,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
-import { nativeState, presetLibrary, rigLibrary } from './api';
+import { nativeState, presetLibrary, rigLibrary, libraryCatalog } from './api';
 import {
   assertAuditionOwner,
   controlGroup,
@@ -18,6 +18,7 @@ vi.mock('./api', () => ({
   nativeState: vi.fn(),
   presetLibrary: vi.fn(),
   rigLibrary: vi.fn(),
+  libraryCatalog: vi.fn(),
 }));
 // jsdom has no modal dialog; the picker list opens in one.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -309,4 +310,55 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   expect(select).toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'scenes', revision }),
   );
+});
+
+it('renames from the rig header and refreshes its device label without recalling audio', async () => {
+  library();
+  const select = vi.fn();
+  const item = {
+    kind: 'original' as const,
+    id: 'a',
+    name: 'Amp A',
+    source_name: 'Amp A',
+    archived: false,
+  };
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    revision: 'labels-one',
+    items: [item],
+  });
+  render(
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Playing preset: Amp A' }),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Manage current preset: Amp A' }),
+  );
+  const name = await screen.findByRole('textbox', {
+    name: 'Name on this device',
+  });
+  await waitFor(() => expect(name).toBeEnabled());
+  vi.mocked(presetLibrary).mockResolvedValue([
+    { sha256: 'a', name: 'My new label' },
+  ] as Awaited<ReturnType<typeof presetLibrary>>);
+  fireEvent.change(name, { target: { value: 'My new label' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Playing preset: My new label' }),
+    ).toBeInTheDocument(),
+  );
+  expect(select).not.toHaveBeenCalled();
+  expect(libraryCatalog).toHaveBeenCalledWith({
+    expected_revision: 'labels-one',
+    entry_kind: 'original',
+    id: 'a',
+    action: { kind: 'rename', name: 'My new label' },
+  });
 });

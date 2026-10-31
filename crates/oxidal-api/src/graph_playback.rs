@@ -20,6 +20,7 @@ type Reply = Result<GraphAudioState, String>;
 pub(super) struct GraphPlayback {
     boot: Arc<Policy>,
     library_access: Arc<tokio::sync::RwLock<()>>,
+    forget: mpsc::Sender<crate::library_removal::Forget>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(
         GraphAudioCommand,
@@ -72,6 +73,31 @@ struct Owner {
     updates: watch::Sender<GraphAudioState>,
 }
 impl Owner {
+    fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
+        if entry.kind != oxidal_presets::LibraryKind::Graph {
+            return Ok(());
+        }
+        if self
+            .state
+            .configured
+            .as_ref()
+            .is_some_and(|s| s.library_id.as_deref() == Some(&entry.id))
+        {
+            if self.worker.is_some() {
+                return Err("Preset is still in use".into());
+            }
+            self.state.configured = None;
+            self.state.control = None;
+            self.state.telemetry = None;
+            self.state.native_values.clear();
+            self.state.saved_copy = None;
+            self.phase(AudioPhase::Stopped, None);
+        } else if self.state.saved_copy.as_deref() == Some(&entry.id) {
+            self.state.saved_copy = None;
+            self.phase(self.state.phase, self.state.error.clone());
+        }
+        Ok(())
+    }
     fn publish(&mut self) {
         self.state.device_owned = self.worker.is_some();
         self.updates.send_replace(self.state.clone());
@@ -155,6 +181,11 @@ impl Owner {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
         settings.validate()?;
+        if let Some(id) = &settings.library_id {
+            oxidal_presets::GraphStore::new(self.preset_root.clone())
+                .read(id)
+                .map_err(|e| e.to_string())?;
+        }
         if self.worker.is_some() {
             return Err("Stop graph audio before changing its configuration".into());
         }
@@ -350,6 +381,7 @@ impl Owner {
                     previous
                 } else {
                     StartGraph {
+                        library_id: None,
                         name: None,
                         stream,
                         recall: None,
@@ -536,6 +568,7 @@ impl GraphPlayback {
             oneshot::Sender<Reply>,
             tokio::sync::OwnedRwLockReadGuard<()>,
         )>(1);
+        let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let mut owner = Owner {
             levels,
             boot: policy.clone(),
@@ -549,8 +582,11 @@ impl GraphPlayback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         let owner_access = library_access.clone();
+        let boot_access = owner_access
+            .clone()
+            .try_read_owned()
+            .map_err(|_| "Library operation in progress during startup")?;
         tokio::spawn(async move {
-            let boot_access = owner_access.clone().read_owned().await;
             if let Ok(Some(Choice::Effects { settings })) = boot
                 && owner.executable.is_some()
                 && let Err(error) = owner.start(settings).await
@@ -564,11 +600,13 @@ impl GraphPlayback {
                 tokio::select! {
                     biased;
                     _=async {match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
+                    request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     item=receiver.recv()=>match item {Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
                     _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
                 }
             }
             drop(receiver);
+            drop(forgotten);
             let _shutdown_access = owner_access.clone().read_owned().await;
             while owner.worker.is_some() {
                 if owner.release().await.is_err() {
@@ -580,10 +618,21 @@ impl GraphPlayback {
         Ok(Self {
             boot: policy,
             library_access,
+            forget,
             commands,
             state,
             finished,
         })
+    }
+    pub async fn forget(&self, entry: oxidal_presets::LibraryReference) -> Result<(), String> {
+        let (reply, receipt) = oneshot::channel();
+        self.forget
+            .send((entry, reply))
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?;
+        receipt
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?
     }
     pub(super) fn subscribe(&self) -> watch::Receiver<GraphAudioState> {
         self.state.clone()

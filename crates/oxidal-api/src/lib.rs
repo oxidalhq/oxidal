@@ -10,6 +10,7 @@ mod device;
 mod graph_playback;
 mod guitars;
 mod levels;
+mod library_removal;
 mod local_models;
 mod monitor;
 mod monitor_history;
@@ -65,6 +66,9 @@ pub struct ApiError {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub removal_preview: oxidal_presets::RemovalPreview,
+    pub removal_request: oxidal_presets::RemovalRequest,
+    pub removal_result: oxidal_presets::RemovalResult,
     pub local_model: local_models::LocalModel,
     pub local_model_page: local_models::LocalModelPage,
     pub native_defaults: oxidal_tone3000::preferences::Snapshot,
@@ -144,6 +148,7 @@ pub struct Config {
 
 #[derive(Debug)]
 struct Shared {
+    boot: Arc<audio_boot::Policy>,
     account: provider::Account,
     artwork_work: Arc<tokio::sync::Semaphore>,
     bundle_work: Arc<tokio::sync::Semaphore>,
@@ -233,6 +238,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         config.preset_dir.join("unit-levels.json"),
     ));
     let shared = Arc::new(Shared {
+        boot: boot.clone(),
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
             config.shutdown.clone(),
@@ -379,6 +385,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(presets::list)
                 .post(presets::import)
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
+        )
+        .route(
+            "/presets/removal",
+            get(library_removal::preview).post(library_removal::remove),
         )
         .route(
             "/presets/catalog",

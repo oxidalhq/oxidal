@@ -25,6 +25,7 @@ type Reply = Result<RigAudioState, String>;
 pub(super) struct RigPlayback {
     boot: Arc<Policy>,
     library_access: Arc<tokio::sync::RwLock<()>>,
+    forget: mpsc::Sender<crate::library_removal::Forget>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(
         RigAudioCommand,
@@ -100,6 +101,42 @@ struct Owner {
     updates: watch::Sender<RigAudioState>,
 }
 impl Owner {
+    fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
+        if entry.kind != oxidal_presets::LibraryKind::Rig {
+            return Ok(());
+        }
+        if self
+            .state
+            .configured
+            .as_ref()
+            .is_some_and(|s| s.revision == entry.id)
+        {
+            if self.worker.is_some() || self.export.is_some() {
+                return Err("Preset is still in use".into());
+            }
+            self.state.configured = None;
+            self.state.control = None;
+            self.state.telemetry = None;
+            self.state.save = None;
+            self.state.recovery_error = None;
+            self.confirmed = None;
+            self.rollback = None;
+            self.restored_error = None;
+            self.recovery_due = None;
+            self.phase(AudioPhase::Stopped, None);
+        } else if self
+            .state
+            .save
+            .as_ref()
+            .and_then(|s| s.saved_revision.as_deref())
+            == Some(&entry.id)
+        {
+            self.state.save = None;
+            self.state.revision += 1;
+            self.publish();
+        }
+        Ok(())
+    }
     fn model_pending(&self) -> bool {
         self.state
             .control
@@ -1134,6 +1171,7 @@ impl RigPlayback {
             oneshot::Sender<Reply>,
             tokio::sync::OwnedRwLockReadGuard<()>,
         )>(1);
+        let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let mut owner = Owner {
             levels,
             boot: policy.clone(),
@@ -1153,8 +1191,11 @@ impl RigPlayback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         let owner_access = library_access.clone();
+        let boot_access = owner_access
+            .clone()
+            .try_read_owned()
+            .map_err(|_| "Library operation in progress during startup")?;
         tokio::spawn(async move {
-            let boot_access = owner_access.clone().read_owned().await;
             match boot {
                 Ok(Some(Choice::Mixed { settings })) if owner.executable.is_some() => {
                     if let Err(error) = owner.start(settings).await {
@@ -1170,11 +1211,13 @@ impl RigPlayback {
             loop {
                 tokio::select! {biased;
                     _=async{match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
+                    request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     item=receiver.recv()=>match item{Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
                     _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
                 }
             }
             drop(receiver);
+            drop(forgotten);
             let _shutdown_access = owner_access.clone().read_owned().await;
             owner.checkpoint();
             while owner.worker.is_some() || owner.export.is_some() {
@@ -1189,10 +1232,21 @@ impl RigPlayback {
         Ok(Self {
             boot: policy,
             library_access,
+            forget,
             finished,
             commands,
             state,
         })
+    }
+    pub async fn forget(&self, entry: oxidal_presets::LibraryReference) -> Result<(), String> {
+        let (reply, receipt) = oneshot::channel();
+        self.forget
+            .send((entry, reply))
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?;
+        receipt
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?
     }
     pub(super) fn subscribe(&self) -> watch::Receiver<RigAudioState> {
         self.state.clone()
@@ -1324,6 +1378,11 @@ mod tests {
             assert_eq!(starting.phase, AudioPhase::Starting);
             assert!(starting.device_owned);
             assert!(crate::audio::PROBE.try_acquire().is_err());
+            let entry = oxidal_presets::LibraryReference {
+                kind: oxidal_presets::LibraryKind::Rig,
+                id: settings.revision.clone(),
+            };
+            assert!(rig.forget(entry.clone()).await.is_err());
             // The guard covers file operations, never the running PCM lifetime.
             drop(
                 tokio::time::timeout(Duration::from_secs(1), library_access.write())
@@ -1374,6 +1433,13 @@ mod tests {
                     128
                 );
                 assert!(crate::audio::PROBE.try_acquire().is_ok());
+                let exclusive = library_access.write().await;
+                tokio::time::timeout(Duration::from_secs(1), rig.forget(entry))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert!(rig.snapshot().configured.is_none());
+                drop(exclusive);
             } else {
                 shutdown.send_replace(true);
                 let mut done = rig.finished.clone();

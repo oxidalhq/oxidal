@@ -7,6 +7,7 @@ import {
 } from '@phosphor-icons/react';
 import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
 import { Button } from './components/ui/button';
+import { PresetManagement } from './PresetManagement';
 
 export function LibraryManagement({
   connected,
@@ -85,6 +86,16 @@ export function LibraryManagement({
             key={`${item.kind}:${item.id}:${item.name}`}
             item={item}
             disabled={busy || !connected}
+            onChanged={() => {
+              onChanged();
+              void libraryCatalog()
+                .then((c) => {
+                  if (alive.current) setCatalog(c);
+                })
+                .catch((e: unknown) => {
+                  if (alive.current) setError(String(e));
+                });
+            }}
             onEdit={(action) => void edit(item, action)}
           />
         ))}
@@ -100,51 +111,38 @@ function LibraryRow({
   item,
   disabled,
   onEdit,
+  onChanged,
 }: {
   item: LibraryCatalog['items'][number];
   disabled: boolean;
   onEdit: (action: LibraryUpdate['action']) => void;
+  onChanged: () => void;
 }) {
-  const [name, setName] = useState(item.name);
   return (
     <div
       className="space-y-2 border-b border-border py-3"
       data-library-entry={item.id}
       data-library-kind={item.kind}
     >
-      <form
-        className="flex flex-wrap items-end gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onEdit({ kind: 'rename', name });
-        }}
-      >
-        <label className="field min-w-0 flex-1">
-          {item.kind === 'original'
-            ? 'Imported tone'
-            : item.kind === 'owned'
-              ? 'Saved tone'
-              : item.kind === 'rig'
-                ? 'Preset with scenes'
-                : 'Effects preset'}
-          <input
-            aria-label={`Name for ${item.name}`}
-            value={name}
-            maxLength={120}
-            disabled={disabled}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        {name !== item.name && (
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={disabled || !name.trim()}
-          >
-            Rename
-          </Button>
-        )}
-      </form>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="break-words">{item.name}</h3>
+          <p className="caption">
+            {item.kind === 'original'
+              ? 'Imported tone'
+              : item.kind === 'owned'
+                ? 'Saved tone'
+                : item.kind === 'rig'
+                  ? 'Preset with scenes'
+                  : 'Effects preset'}
+          </p>
+        </div>
+        <PresetManagement
+          entry={item}
+          disabled={disabled}
+          onChanged={onChanged}
+        />
+      </div>
       <div className="action-row">
         {!item.archived && (
           <>

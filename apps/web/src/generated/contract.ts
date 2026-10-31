@@ -713,6 +713,9 @@ export interface Contract {
   network_command: Command3;
   network_state: NetworkState;
   preset: Inspection;
+  removal_preview: RemovalPreview;
+  removal_request: RemovalRequest;
+  removal_result: RemovalResult;
   rig: Rig;
   rig_audio_command: RigAudioCommand;
   rig_audio_state: RigAudioState;
@@ -1259,6 +1262,10 @@ export interface GraphAudioCommand {
 }
 export interface StartGraph {
   bindings: Binding[];
+  /**
+   * Immutable library source, retained across working edits and restart.
+   */
+  library_id?: string | null;
   /**
    * Working name belongs to the audible session, not an individual browser view.
    */
@@ -1819,6 +1826,39 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface RemovalPreview {
+  blocked?: string | null;
+  embedded_bytes: number;
+  entry: LibraryItem;
+  model_cleanup_unavailable?: string | null;
+  models: ModelRemoval[];
+  preset_bytes: number;
+  remembered_bytes: number;
+  remembered_files: number;
+  token: string;
+}
+export interface ModelRemoval {
+  bytes: number;
+  format: string;
+  id: string;
+  name: string;
+  protected_by: string[];
+}
+export interface RemovalRequest {
+  delete_models: boolean;
+  entry_kind: LibraryKind;
+  expected_preview: string;
+  id: string;
+}
+export interface RemovalResult {
+  cleanup_pending: boolean;
+  deleted: LibraryReference;
+  model_files_deleted: number;
+}
+export interface LibraryReference {
+  id: string;
+  kind: LibraryKind;
 }
 export interface RigAudioCommand {
   action: RigAudioAction;

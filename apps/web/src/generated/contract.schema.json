@@ -130,6 +130,15 @@
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
+    "removal_preview": {
+      "$ref": "#/$defs/RemovalPreview"
+    },
+    "removal_request": {
+      "$ref": "#/$defs/RemovalRequest"
+    },
+    "removal_result": {
+      "$ref": "#/$defs/RemovalResult"
+    },
     "rig": {
       "$ref": "#/$defs/Rig"
     },
@@ -189,6 +198,9 @@
     }
   },
   "required": [
+    "removal_preview",
+    "removal_request",
+    "removal_result",
     "local_model",
     "local_model_page",
     "native_defaults",
@@ -4291,6 +4303,21 @@
         "rig"
       ]
     },
+    "LibraryReference": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/LibraryKind"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
     "LibraryUpdate": {
       "type": "object",
       "properties": {
@@ -5065,6 +5092,38 @@
       "additionalProperties": false,
       "required": [
         "tone_id"
+      ]
+    },
+    "ModelRemoval": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "format": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "protected_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "format",
+        "bytes",
+        "protected_by"
       ]
     },
     "ModelVariant": {
@@ -6604,6 +6663,109 @@
         "seconds"
       ]
     },
+    "RemovalPreview": {
+      "type": "object",
+      "properties": {
+        "blocked": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "embedded_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "entry": {
+          "$ref": "#/$defs/LibraryItem"
+        },
+        "model_cleanup_unavailable": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ModelRemoval"
+          }
+        },
+        "preset_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "remembered_bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "remembered_files": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry",
+        "token",
+        "preset_bytes",
+        "embedded_bytes",
+        "remembered_files",
+        "remembered_bytes",
+        "models"
+      ]
+    },
+    "RemovalRequest": {
+      "type": "object",
+      "properties": {
+        "delete_models": {
+          "type": "boolean"
+        },
+        "entry_kind": {
+          "$ref": "#/$defs/LibraryKind"
+        },
+        "expected_preview": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entry_kind",
+        "id",
+        "expected_preview",
+        "delete_models"
+      ]
+    },
+    "RemovalResult": {
+      "type": "object",
+      "properties": {
+        "cleanup_pending": {
+          "type": "boolean"
+        },
+        "deleted": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "model_files_deleted": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "deleted",
+        "model_files_deleted",
+        "cleanup_pending"
+      ]
+    },
     "ResourceSource": {
       "oneOf": [
         {
@@ -7892,6 +8054,14 @@
           "items": {
             "$ref": "#/$defs/Binding"
           }
+        },
+        "library_id": {
+          "description": "Immutable library source, retained across working edits and restart.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "name": {
           "description": "Working name belongs to the audible session, not an individual browser view.",

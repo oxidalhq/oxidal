@@ -28,6 +28,7 @@ type Reply = Result<AudioState, String>;
 pub(super) struct Playback {
     boot: Arc<Policy>,
     library_access: Arc<tokio::sync::RwLock<()>>,
+    forget: mpsc::Sender<crate::library_removal::Forget>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(
         AudioCommand,
@@ -69,6 +70,38 @@ struct Owner {
     meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
 impl Owner {
+    fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
+        let matching =
+            self.state.configured.as_ref().is_some_and(|s| {
+                crate::library_removal::native_reference(s).as_ref() == Some(entry)
+            });
+        if matching {
+            if self.worker.is_some() {
+                return Err("Preset is still in use".into());
+            }
+            self.state.configured = None;
+            self.resume_controls = None;
+            self.resume_eq = None;
+            self.recovery_due = None;
+            self.recovery_error = None;
+            self.state.controls.clear();
+            self.state.eq.clear();
+            self.state.models.clear();
+            self.state.model_change = None;
+            self.state.authoring = None;
+            self.state.slots.clear();
+            self.state.modified = false;
+            self.state.preset_name = None;
+            self.state.saved_copy = None;
+            self.publish(AudioPhase::Stopped, None);
+        } else if entry.kind == oxidal_presets::LibraryKind::Owned
+            && self.state.saved_copy.as_deref() == Some(&entry.id)
+        {
+            self.state.saved_copy = None;
+            self.publish(self.state.phase, self.state.error.clone());
+        }
+        Ok(())
+    }
     fn publish(&mut self, phase: AudioPhase, error: Option<String>) {
         self.state.revision += 1;
         self.state.phase = phase;
@@ -1788,6 +1821,7 @@ impl Playback {
             oneshot::Sender<Reply>,
             tokio::sync::OwnedRwLockReadGuard<()>,
         )>(1);
+        let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
         let mut owner = Owner {
             last_tool_poll: std::time::Instant::now(),
             levels,
@@ -1806,8 +1840,11 @@ impl Playback {
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
         let owner_access = library_access.clone();
+        let boot_access = owner_access
+            .clone()
+            .try_read_owned()
+            .map_err(|_| "Library operation in progress during startup")?;
         tokio::spawn(async move {
-            let boot_access = owner_access.clone().read_owned().await;
             match boot {
                 Ok(Some(Choice::Native {
                     settings,
@@ -1828,6 +1865,7 @@ impl Playback {
                 tokio::select! {
                     biased;
                     _ = async { match shutdown.as_mut() { Some(s) => { if !*s.borrow() { let _ = s.changed().await; } }, None => std::future::pending::<()>().await } } => break,
+                    request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     item = receiver.recv() => match item {
                         Some((command, response, _access)) => { let _ = response.send(owner.command(command).await); },
                         None => break,
@@ -1845,6 +1883,7 @@ impl Playback {
                 }
             }
             drop(receiver);
+            drop(forgotten);
             let _shutdown_access = owner_access.clone().read_owned().await;
             owner.checkpoint();
             // Retain the permit if the OS has not reaped a failed/stuck worker yet.
@@ -1858,6 +1897,7 @@ impl Playback {
         Ok(Self {
             boot: policy,
             library_access,
+            forget,
             commands,
             state,
             finished,
@@ -1866,6 +1906,16 @@ impl Playback {
     }
     pub fn telemetry(&self) -> Option<(oxidal_audio::meter::Snapshot, std::time::Instant)> {
         *self.meters.borrow()
+    }
+    pub async fn forget(&self, entry: oxidal_presets::LibraryReference) -> Result<(), String> {
+        let (reply, receipt) = oneshot::channel();
+        self.forget
+            .send((entry, reply))
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?;
+        receipt
+            .await
+            .map_err(|_| "Playback owner stopped".to_owned())?
     }
     pub(super) fn subscribe(&self) -> watch::Receiver<AudioState> {
         self.state.clone()

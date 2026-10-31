@@ -308,14 +308,25 @@ controls. Metadata supports up to 4096 changed labels/order/removal references
 within a 1 MiB file. This storage bound is not a limit on simultaneous NAM
 instances. Preset payload stores retain their existing admission limits.
 
-### Permanent-removal storage foundation
+### Permanent preset deletion
 
-The preset crate also provides preview-bound removal transactions. This is an
-internal storage primitive; no HTTP route or user control invokes it yet. A caller
-must serialize all library publication and playback preparation, supply complete
-current source/model references, and clear a deleted stopped source from its
-in-memory playback owner before committing. This primitive alone does not provide
-those runtime guarantees.
+`GET /api/v1/presets/removal?kind=original&id=<sha256>` previews one immutable
+entry; `POST /api/v1/presets/removal` confirms its kind, ID, preview token and
+explicit `delete_models` choice. Library → Manage library → Preset options and
+Rig's preset-name menu → Manage current preset share rename/deletion dialogs.
+Opening a preview never auditions or stops audio. A stale or uncertain write
+response requires a new preview and an explicit confirmation; it is not retried.
+
+The preset crate supplies storage transactions. The daemon coordinator serializes
+publication and playback preparation, checks current source/model references,
+commits the staged files, then clears the matching stopped owner's in-memory
+Resume state and refreshes its boot policy before releasing exclusive access.
+Playing/preparing sources, prepared alternatives and in-flight mixed exports
+prevent removal. Other owners and unit-wide settings/MIDI/boost mappings remain
+intact. An effects session carries its optional immutable `library_id` through
+working edits and restarts. Legacy sessions without this identity prevent effects
+preset deletion until recalled with an identity; legacy boot choices must be
+cleared or recaptured.
 
 The daemon now runs journal recovery before creating playback owners. A shared
 file-access gate covers accepted native/mixed/effects commands, their periodic
@@ -323,15 +334,16 @@ checkpoint work, offline-editor exchanges and library publication. Its read guar
 travels with the accepted operation, including blocking jobs and abandoned HTTP
 exchanges. Exclusive access can wait for those operations without locking the PCM
 thread. Playback owners skip a periodic file-operation tick while exclusive work
-is pending. The permanent-delete coordinator, stopped-owner invalidation and UI
-are still pending; asynchronous worker preparations/exports also require explicit
-reference checks before that coordinator may commit a transaction.
+is pending. Internal stopped-owner invalidation uses a separate actor channel,
+so it can complete while exclusive file access excludes ordinary commands.
 
 A preview addresses one library kind and immutable ID. Separate NAM/IR assets are
 kept by default. Optional cleanup matches embedded binary hashes or remembered
 model assignments and retains files referenced by other saved entries, remembered
 sessions, collections or current audio. Unknown dependency inventories disable
-optional cleanup. Native binary identities are inspected separately from normal
+optional cleanup. Model metadata review is capped at 32 MiB, collection edges at
+65,536 and associated candidates at 1,024; exceeding these bounds keeps separate
+files and leaves preset-only deletion available. Native binary identities are inspected separately from normal
 library reads, without rewriting native bytes or interpreting their DSP behavior.
 
 Canonical payloads and matching remembered sessions/checkpoints are renamed into

@@ -914,3 +914,43 @@ export async function controlAudit(
   if (!auditValidator(body)) throw new Error('Incompatible control audit');
   return body;
 }
+
+export type RemovalPreview = Contract['removal_preview'];
+export type RemovalRequest = Contract['removal_request'];
+export type RemovalResult = Contract['removal_result'];
+const removalPreviewValidator = ajv.compile<RemovalPreview>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RemovalPreview',
+});
+const removalResultValidator = ajv.compile<RemovalResult>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/RemovalResult',
+});
+export async function removalPreview(
+  entry: Pick<RemovalRequest, 'entry_kind' | 'id'>,
+): Promise<RemovalPreview> {
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/presets/removal?${new URLSearchParams({ kind: entry.entry_kind, id: entry.id })}`,
+    ),
+  );
+  if (!removalPreviewValidator(body))
+    throw new Error('Incompatible deletion preview');
+  return body;
+}
+export async function removePreset(
+  request: RemovalRequest,
+): Promise<RemovalResult> {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/removal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+  if (!removalResultValidator(body))
+    throw new Error(
+      'Deletion outcome could not be read. Refresh Library before retrying.',
+    );
+  return body;
+}

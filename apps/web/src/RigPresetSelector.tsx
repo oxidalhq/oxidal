@@ -6,6 +6,7 @@ import {
   ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { PresetManagement } from './PresetManagement';
 import './PresetPicker.css';
 import { Button } from './components/ui/button';
 import {
@@ -198,8 +199,8 @@ export function RigPresetSelector({
   }
   const current = items[index];
   const name =
-    playing.name ??
     current?.name ??
+    playing.name ??
     (loading ? 'Loading presets…' : 'Unsaved preset');
   const found = query.trim().toLowerCase();
   return (
@@ -261,6 +262,23 @@ export function RigPresetSelector({
           className="preset-picker-dialog"
           onCancel={() => setOpen(false)}
         >
+          {current && (
+            <PresetManagement
+              entry={{
+                kind:
+                  current.kind === 'scenes'
+                    ? 'rig'
+                    : current.owned
+                      ? 'owned'
+                      : 'original',
+                id: current.kind === 'scenes' ? current.revision : current.id,
+                name: current.name,
+              }}
+              disabled={disabled}
+              label="Manage current preset"
+              onChanged={() => setRefresh((v) => v + 1)}
+            />
+          )}
           <input
             type="search"
             className="preset-picker-search"

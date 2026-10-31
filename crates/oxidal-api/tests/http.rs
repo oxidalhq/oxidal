@@ -2296,3 +2296,207 @@ async fn model_artwork_is_source_bound_and_metadata_only() {
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_other_entries() {
+    use oxidal_presets::{ModelAsset, ModelStore};
+    use sha2::{Digest, Sha256};
+    let (url, task, path) = start(false).await;
+    let root = path.with_extension("presets");
+    let client = reqwest::Client::new();
+    let mut ids = Vec::new();
+    for bytes in [CURRENT_PRESET, LEGACY_PRESET] {
+        let response = client
+            .post(format!("{url}/presets"))
+            .body(bytes.to_vec())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 201);
+        let body: Value = response.json().await.unwrap();
+        ids.push(body["sha256"].as_str().unwrap().to_owned());
+    }
+    let payload = [0, 1, 127, 128, 255];
+    let model = ModelStore::new(root.join("audition-models"))
+        .stage(
+            &ModelAsset {
+                schema: 1,
+                tone_id: 1,
+                model_id: 1,
+                title: "Shared fixture".into(),
+                name: "Shared fixture".into(),
+                format: "nam".into(),
+                sha256: format!("{:x}", Sha256::digest(payload)),
+                tone: json!({"id":1}),
+            },
+            &payload,
+        )
+        .unwrap();
+    let preview_url = format!("{url}/presets/removal?kind=original&id={}", ids[0]);
+    let preview: Value = client
+        .get(&preview_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(preview["models"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        preview["models"][0]["protected_by"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let request = json!({"entry_kind":"original","id":ids[0],"expected_preview":preview["token"],"delete_models":true});
+    assert_eq!(
+        client
+            .post(format!("{url}/presets/removal"))
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let mut request = request;
+    request["delete_models"] = false.into();
+    // Any intervening catalog mutation requires a new confirmation.
+    let catalog: Value = client
+        .get(format!("{url}/presets/catalog"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(client.post(format!("{url}/presets/catalog")).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":ids[0],"action":{"kind":"rename","name":"Renamed fixture"}})).send().await.unwrap().status(),200);
+    assert_eq!(
+        client
+            .post(format!("{url}/presets/removal"))
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert!(root.join(format!("{}.t3kpreset", ids[0])).exists());
+    let preview: Value = client
+        .get(&preview_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    request["expected_preview"] = preview["token"].clone();
+    let deleted = client
+        .post(format!("{url}/presets/removal"))
+        .json(&request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 200);
+    let deleted: Value = deleted.json().await.unwrap();
+    assert_eq!(deleted["model_files_deleted"], 0);
+    assert_eq!(deleted["cleanup_pending"], false);
+    assert!(!root.join(format!("{}.t3kpreset", ids[0])).exists());
+    assert_eq!(
+        std::fs::read(root.join(format!("{}.t3kpreset", ids[1]))).unwrap(),
+        LEGACY_PRESET
+    );
+    assert!(root.join("audition-models").join(model).exists());
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_recovery_on_shutdown()
+{
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-delete-resume-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let id = oxidal_presets::Store::new(root.clone())
+        .import(CURRENT_PRESET)
+        .unwrap()
+        .sha256;
+    let input = json!({"endpoint":"hw:CARD=Test,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
+    let mut output = input.clone();
+    output["direction"] = "playback".into();
+    let settings = json!({"preset_id":id,"owned":false,"draft":false,"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]}});
+    let recovery = json!({"schema":1,"settings":settings,"controls":null,"models":[],"eq":null});
+    std::fs::write(
+        root.join("last-audio-session.json"),
+        serde_json::to_vec(&recovery).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(root.join("boot-audio.json"),serde_json::to_vec(&json!({"schema":2,"choice":{"kind":"native","settings":settings,"controls":null,"models":[],"eq":null}})).unwrap()).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = oxidal_api::router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: Some(signal),
+        simulator: false,
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.clone(),
+        ui_dir: root.join("ui"),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let before: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(before["configured"]["preset_id"], id);
+    assert_eq!(before["start_on_boot"], true);
+    let preview: Value = client
+        .get(format!("{url}/presets/removal?kind=original&id={id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(preview["blocked"], Value::Null);
+    assert_eq!(preview["remembered_files"], 2);
+    let result = client.post(format!("{url}/presets/removal")).json(&json!({"entry_kind":"original","id":id,"expected_preview":preview["token"],"delete_models":false})).send().await.unwrap();
+    assert_eq!(result.status(), 200);
+    let result: Value = result.json().await.unwrap();
+    assert_eq!(result["cleanup_pending"], false);
+    let after: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(after["configured"], Value::Null);
+    assert_eq!(after["start_on_boot"], false);
+    shutdown.send_replace(true);
+    tokio::time::timeout(std::time::Duration::from_secs(3), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!root.join("last-audio-session.json").exists());
+    assert!(!root.join("boot-audio.json").exists());
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

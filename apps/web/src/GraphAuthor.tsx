@@ -51,6 +51,7 @@ export function GraphAuthor({
   const [audio, setAudio] = useState<AudioState | null>(null);
   const [library, setLibrary] = useState<SavedGraph[]>([]);
   const [draft, setDraft] = useState<{
+    libraryId?: string;
     rig: GraphSettings['rig'];
     bindings: GraphSettings['bindings'];
     recall?: GraphSettings['recall'];
@@ -567,6 +568,7 @@ export function GraphAuthor({
                   kind: 'start',
                   settings: {
                     name: name.trim(),
+                    library_id: draft.libraryId ?? null,
                     stream,
                     rig: draft.rig,
                     bindings: draft.bindings,
@@ -610,6 +612,7 @@ export function GraphAuthor({
                 disabled={disabled || running}
                 onClick={() => {
                   setDraft({
+                    libraryId: item.id,
                     rig: item.preset.rig,
                     bindings: item.preset.bindings,
                     recall: item.preset.recall,

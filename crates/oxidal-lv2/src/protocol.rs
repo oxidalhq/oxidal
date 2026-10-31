@@ -17,6 +17,9 @@ pub struct Binding {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartGraph {
+    /// Immutable library source, retained across working edits and restart.
+    #[serde(default)]
+    pub library_id: Option<String>,
     /// Working name belongs to the audible session, not an individual browser view.
     #[serde(default)]
     pub name: Option<String>,
@@ -35,6 +38,14 @@ impl StartGraph {
                 || name.contains(char::is_control)
         }) {
             return Err("Invalid effects session name".into());
+        }
+        if self.library_id.as_ref().is_some_and(|id| {
+            id.len() != 64
+                || !id
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        }) {
+            return Err("Invalid effects library identity".into());
         }
         self.stream.validate()?;
         if let Some(recall) = &self.recall {

@@ -402,6 +402,35 @@ mod tests {
         );
         assert!(f.original().exists());
     }
+
+    #[test]
+    fn unverifiable_model_inventory_disables_cleanup_but_keeps_preset_deletion_available() {
+        let f = Fixture::new();
+        let metadata = f
+            .root
+            .join("audition-models")
+            .join(&f.model)
+            .join("metadata.json");
+        fs::write(&metadata, b"invalid model metadata").unwrap();
+        let preview = f
+            .store()
+            .preview(LibraryKind::Original, &f.id, &RemovalReferences::default())
+            .unwrap();
+        assert!(preview.model_cleanup_unavailable.is_some());
+        assert!(preview.models.is_empty());
+        assert!(
+            f.store()
+                .begin(&f.request(true), &RemovalReferences::default())
+                .is_err()
+        );
+        f.store()
+            .begin(&f.request(false), &RemovalReferences::default())
+            .unwrap()
+            .commit()
+            .unwrap();
+        assert!(!f.original().exists());
+        assert_eq!(fs::read(metadata).unwrap(), b"invalid model metadata");
+    }
 }
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct RemovalReferences {
@@ -612,6 +641,25 @@ fn hash(value: &str) -> bool {
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn dependency_label(prefix: &str, name: &str) -> String {
+    let mut characters = name.chars();
+    let short: String = characters.by_ref().take(80).collect();
+    format!(
+        "{prefix}: {short}{}",
+        if characters.next().is_some() {
+            "…"
+        } else {
+            ""
+        }
+    )
+}
+fn protect(references: &mut BTreeSet<String>, label: String) {
+    if references.len() < 8 {
+        references.insert(label);
+    } else {
+        references.insert("Other library references".into());
+    }
+}
 fn file(path: &Path, limit: u64) -> Result<Vec<u8>> {
     let m = fs::symlink_metadata(path)?;
     if !m.is_file() || m.len() > limit {
@@ -666,6 +714,11 @@ fn reference(value: &serde_json::Value) -> Option<LibraryReference> {
             } else {
                 LibraryKind::Original
             },
+            id: id.into(),
+        })
+    } else if let Some(id) = settings["library_id"].as_str().filter(|id| hash(id)) {
+        Some(LibraryReference {
+            kind: LibraryKind::Graph,
             id: id.into(),
         })
     } else {
@@ -957,8 +1010,15 @@ impl RemovalStore {
             }
         }
         let mut sessions = Vec::new();
+        let mut session_bytes = 0;
         for path in paths {
             let bytes = file(&path, 1024 * 1024)?;
+            session_bytes += bytes.len();
+            if session_bytes > 16 * 1024 * 1024 {
+                return Err(Error::Invalid(
+                    "Remembered sessions exceed deletion review capacity",
+                ));
+            }
             let value: serde_json::Value = serde_json::from_slice(&bytes)
                 .map_err(|_| Error::Invalid("A remembered session could not be checked"))?;
             let source = reference(&value);
@@ -1103,9 +1163,29 @@ impl RemovalStore {
         let store = ModelStore::new(self.root.join("audition-models"));
         let mut cursor = None;
         let mut models = BTreeMap::new();
-        loop {
-            let (page, next) = store.page(cursor.as_deref(), true)?;
+        let mut metadata_bytes = 0;
+        let mut inventory_unavailable = None;
+        'inventory: loop {
+            let (page, next) = match store.page(cursor.as_deref(), true) {
+                Ok(page) => page,
+                Err(_) => {
+                    inventory_unavailable = Some(
+                        "Separate model references could not be checked. Keep separate files."
+                            .to_owned(),
+                    );
+                    models.clear();
+                    break;
+                }
+            };
             for (id, asset) in page {
+                metadata_bytes += serde_json::to_vec(&asset)
+                    .map_err(|_| Error::Invalid("Invalid model metadata"))?
+                    .len();
+                if metadata_bytes > 32 * 1024 * 1024 {
+                    inventory_unavailable = Some("Model metadata exceeds bounded cleanup review capacity. Keep separate files.".into());
+                    models.clear();
+                    break 'inventory;
+                }
                 models.insert(id, asset);
             }
             cursor = next;
@@ -1113,17 +1193,28 @@ impl RemovalStore {
                 break;
             }
             if models.len() > 131072 {
-                return Err(Error::Invalid("Model library exceeds review capacity"));
+                inventory_unavailable = Some(
+                    "Model library exceeds bounded cleanup review capacity. Keep separate files."
+                        .into(),
+                );
+                models.clear();
+                break;
             }
         }
-        for (id, asset) in &models {
+        let mut collection_references = 0;
+        'collections: for (id, asset) in &models {
             if let Some(members) = asset.tone["oxidal_collection"].as_array() {
                 for member in members {
+                    collection_references += 1;
+                    if collection_references > 65536 {
+                        inventory_unavailable = Some("Collection references exceed bounded cleanup review capacity. Keep separate files.".into());
+                        break 'collections;
+                    }
                     if let Some(member) = member.as_str() {
-                        model_references
-                            .entry(member.into())
-                            .or_default()
-                            .insert(format!("Collection: {}", asset.title));
+                        protect(
+                            model_references.entry(member.into()).or_default(),
+                            dependency_label("Collection", &asset.title),
+                        );
                     }
                 }
             }
@@ -1134,10 +1225,16 @@ impl RemovalStore {
                     .insert("Current audio session".into());
             }
         }
+        if inventory_unavailable.is_some() {
+            models.clear();
+        }
         let mut candidates = Vec::new();
         let mut model_paths = Vec::new();
-        let unavailable = entries.iter().any(|e| e.digests.is_none()).then(|| {
-            "Some preset model references could not be verified. Keep separate files.".to_owned()
+        let mut unavailable = inventory_unavailable.or_else(|| {
+            entries.iter().any(|e| e.digests.is_none()).then(|| {
+                "Some preset model references could not be verified. Keep separate files."
+                    .to_owned()
+            })
         });
         for (asset_id, asset) in &models {
             let embedded = selected
@@ -1160,9 +1257,13 @@ impl RemovalStore {
                 continue;
             }
             if candidates.len() >= 1024 {
-                return Err(Error::Invalid(
-                    "Too many associated files to review in one deletion",
-                ));
+                unavailable = Some(
+                    "Too many associated files for bounded cleanup review. Keep separate files."
+                        .into(),
+                );
+                candidates.clear();
+                model_paths.clear();
+                break;
             }
             let mut protection = model_references.get(asset_id).cloned().unwrap_or_default();
             for entry in &entries {
@@ -1172,7 +1273,10 @@ impl RemovalStore {
                         .as_ref()
                         .is_some_and(|d| d.contains(&asset.sha256))
                 {
-                    protection.insert(format!("Preset: {}", entry.item.name));
+                    protect(
+                        &mut protection,
+                        dependency_label("Preset", &entry.item.name),
+                    );
                 }
             }
             let path = self.root.join("audition-models").join(asset_id);
@@ -1279,6 +1383,7 @@ impl RemovalStore {
         for (index, path) in pending.paths.iter().enumerate() {
             tree_bytes(path)?;
             fs::rename(path, pending.directory.join(index.to_string()))?;
+            fs::File::open(&pending.directory)?.sync_all()?;
             fs::File::open(
                 path.parent()
                     .ok_or(Error::Invalid("Invalid removal parent"))?,

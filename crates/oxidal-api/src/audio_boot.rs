@@ -170,6 +170,12 @@ impl Policy {
         let choice = Mutex::new(read(&path));
         Self { path, choice }
     }
+    /// Refresh memory after an exclusive library transaction removed its boot record.
+    pub fn reload(&self) -> Result<(), String> {
+        let mut choice = self.choice.lock().map_err(|_| "Boot policy unavailable")?;
+        *choice = read(&self.path);
+        choice.as_ref().map(|_| ()).map_err(Clone::clone)
+    }
     pub fn snapshot(&self) -> Result<Option<Choice>, String> {
         self.choice
             .lock()
