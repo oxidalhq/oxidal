@@ -117,7 +117,9 @@ try:
     type_terminal("stty size; printf 'STATE_%s\n' \"$OXIDAL_SESSION_TEST\"\r")
     output = read_terminal('STATE_retained')
     assert '29 97' in output, output
-    type_terminal("head -c 20000 /dev/zero | base64; sleep 31; printf '\nLONG_%s\n' done\r")
+    # Stay above the 8 KiB regression boundary without allowing a slow
+    # emulated reader to fall behind the terminal's bounded replay window.
+    type_terminal("head -c 9000 /dev/zero | base64; sleep 31; printf '\nLONG_%s\n' done\r")
     output = read_terminal('LONG_done', 45)
     assert len(output) > 8192
     type_terminal('sleep 60\r')
