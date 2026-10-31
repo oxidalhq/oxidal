@@ -61,6 +61,9 @@ try:
     assert get('/api/v1/audio')['phase'] == 'stopped'
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
     assert get('/api/v1/rig-audio')['phase'] == 'stopped'
+    factory = get('/api/v1/presets/rigs')['presets']
+    assert len([p for p in factory if p['origin'] == 'oxidal_example']) == 10
+    assert Path('/var/lib/oxidal/factory-installed.json').is_file()
     # The installed daemon must serve optional development originals unchanged.
     from pathlib import Path
     seed = Path('/usr/share/oxidal/development-presets.json')

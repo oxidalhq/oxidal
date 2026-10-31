@@ -15,6 +15,9 @@ LimitRTPRIO=95
 LimitMEMLOCK=infinity
 ExecStartPre=+/bin/sh -c 'for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > "$g" || true; done'
 ExecStart=/opt/oxidal/bin/oxidald
+# Populate only asset-free examples once. Failure is logged without stopping audio.
+ExecStartPost=-/usr/bin/python3 /opt/oxidal/factory/seed.py
+TimeoutStartSec=180
 Environment=OXIDAL_ADDR=127.0.0.1:3210
 Environment=OXIDAL_SIMULATOR=0
 Environment=OXIDAL_DEBUG_SOCKET=/run/oxidal-debug/control.sock

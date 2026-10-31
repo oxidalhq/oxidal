@@ -95,6 +95,12 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         ).splitlines()
         fstab.write_text(provision.firmware_fstab(fstab.read_text(), firmware_uuid, root_uuid))
         run('guestfish', '-a', str(destination), '-i', 'upload', str(fstab), '/etc/fstab')
+        cmdline = work / 'cmdline.txt'
+        run('guestfish', '--ro', '-a', str(destination), '-i', 'download',
+            '/boot/firmware/cmdline.txt', str(cmdline))
+        cmdline.write_text(provision.unlocked_cmdline(cmdline.read_text()))
+        run('guestfish', '-a', str(destination), '-i', 'upload',
+            str(cmdline), '/boot/firmware/cmdline.txt')
         root = work / 'overlay'
         (root / 'etc').mkdir(parents=True)
         (root / 'etc/os-release').write_text('ID=debian\nVERSION_CODENAME=trixie\n')

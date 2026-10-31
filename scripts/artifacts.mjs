@@ -118,6 +118,16 @@ for (const binary of binaries) {
     );
 }
 if (appliance) {
+  run('node', [
+    '--experimental-strip-types',
+    'scripts/factory-bundles.mjs',
+    '--output',
+    join(staging, 'factory'),
+  ]);
+  copyFileSync(
+    join(root, 'os/scripts/seed_factory.py'),
+    join(staging, 'factory/seed.py'),
+  );
   const holdBuild = join(root, '.local/hold-appliance');
   run('cmake', [
     '-S',

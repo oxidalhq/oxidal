@@ -16,6 +16,30 @@ Keep platform configuration separate from portable runtime logic. A regular Linu
 
 The storage-lock control follows that boundary: ordinary installs and pre-layout images report it unavailable. The appliance profile starts Unlocked. Its labelled third partition mounts at `/var/lib`, with NetworkManager profiles bind-mounted from the same partition; the final partition grows to a larger card only after its label and partition number are verified. Settings may schedule `ro systemd.volatile=state` or `rw` in the fixed firmware command line for the next boot; it never live-remounts the root. See [storage lock](../docs/storage-lock.md).
 
+Image assembly writes explicit `rw oxidal.storage=unlocked` boot flags and removes
+the vendor resize flag, because Oxidal owns the three-partition layout. In Locked
+mode a systemd condition prevents the normal startup remount from overriding the
+kernel's read-only root. Tmpfiles recreates nginx's log directory in volatile
+`/var`; persistent `/var/lib` and the NetworkManager profile bind remain separate.
+The data-grow script reads the partition number from sysfs and verifies both
+partition 3 and `OXIDAL_DATA` before changing its size.
+
+On first daemon startup, `/opt/oxidal/factory/seed.py` installs ten asset-free
+factory examples through the loopback API. Its completion marker is persistent
+under `/var/lib/oxidal`, so later reboots do not restore deleted examples. The
+startup hook is unprivileged and nonfatal; errors are in `journalctl -u oxidald`.
+The installed-image test verifies all ten examples and a repeated no-op run.
+The image never includes private NAM captures or development presets by default.
+
+`os/tests/test_storage_boot.py` exercises the actual next-boot API through
+Unlocked → Locked → Unlocked → Locked on a disposable QEMU overlay. Set
+`OXIDAL_TEST_STORAGE_IMAGE`, `OXIDAL_TEST_BOOT_KERNEL` and
+`OXIDAL_TEST_BOOT_INITRD` as for the boot test below. It enlarges the virtual disk,
+checks data growth and persistent state, attempts actual root writes, and checks
+services and temporary mounts after each boot. It never writes the source image
+or a physical card. This test does not replace Pi firmware, SD power-loss or
+physical USB/Wi-Fi acceptance.
+
 **Current delivery:** `node scripts/artifacts.mjs --appliance` builds a relocatable native Linux bundle containing the daemon, web UI, isolated native editor, saved-preset player, general LV2 graph worker and mixed-rig worker. `scripts/image.py` assembles that ARM64 bundle into a fresh disposable Pi OS image, installs its dependencies, enables boot services, captures the package closure and runs the installed-service qualification before producing checksums. This is an experimental first-boot image, not hardware or live-performance qualification. The ordinary artifact workflow remains a preview build; Linux laptop package lifecycle and Orange Pi images remain separate work.
 
 ## General audio-device support target
@@ -67,7 +91,7 @@ Settings → Effects installs or removes only the fixed Debian package allowlist
 
 The native artifact build uses pinned source/patch hashes. The image build records installed Debian package versions; package repositories are not snapshot-pinned, so image rebuilds are auditable rather than bit-for-bit reproducible. The output includes the image, SHA-256, manifest and installed test/package evidence. No successful readiness report is produced when installation or validation fails. A failed output is a diagnostic artifact, not a candidate to flash; use a new output filename after correcting the failure.
 
-The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the vendor boot partition/kernel, gives the system root 5 GiB and places writable state on a separate ext4 data partition which grows to fill the card at first boot. It uses a headless multi-user boot. No desktop removal or performance tuning is performed. It installs ALSA/Lilv/native dependencies and SWH, Guitarix, Invada and MDA LV2 plugins plus bundled Oxidal Hold for the first factory recipes, enables the unprivileged daemon with audio-group access, and keeps persistent user and package state under the data-backed `/var/lib`. The system journal and the bounded `/tmp` and `/var/tmp` mounts are volatile. It also configures authenticated HTTPS, mDNS, SSH recovery and a WPA-protected 2.4 GHz NetworkManager hotspot on `wlan0` (New Zealand regulatory profile). Ethernet remains available. The appliance disables cloud-init and masks systemd-networkd so it cannot compete with NetworkManager or hold network-online waiting for an unmanaged link. Use the generated credentials; do not add Raspberry Pi Imager OS customizations to this already configured image. Wi-Fi radio behavior, Pi boot and actual sound still require physical verification.
+The image is 8 GiB and expects a fresh card of at least 16 GB. It retains the vendor boot partition/kernel, gives the system root 5 GiB and places writable state on a separate ext4 data partition which grows to fill the card at first boot. It uses a headless multi-user boot. The service selects the performance CPU governor and permits bounded real-time scheduling; automatic apt timers and competing network services are disabled. These baseline settings do not by themselves qualify complex audio deadlines. It installs ALSA/Lilv/native dependencies and SWH, Guitarix, Invada and MDA LV2 plugins plus bundled Oxidal Hold and Pitch for the 32 factory recipes, enables the unprivileged daemon with audio-group access, and keeps persistent user and package state under the data-backed `/var/lib`. The system journal and the bounded `/tmp` and `/var/tmp` mounts are volatile. It also configures authenticated HTTPS, mDNS, SSH recovery and a WPA-protected 2.4 GHz NetworkManager hotspot on `wlan0` (New Zealand regulatory profile). Ethernet remains available. The appliance disables cloud-init and masks systemd-networkd so it cannot compete with NetworkManager or hold network-online waiting for an unmanaged link. Use the generated credentials; do not add Raspberry Pi Imager OS customizations to this already configured image. Wi-Fi radio behavior, Pi boot and actual sound still require physical verification.
 
 ### Phone access and first sound
 

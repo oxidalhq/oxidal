@@ -9,6 +9,17 @@ spec.loader.exec_module(provision)
 
 
 class ProvisionTests(unittest.TestCase):
+    def test_image_declares_unlocked_and_removes_vendor_resize(self):
+        original = 'console=serial0,115200 root=PARTUUID=123-02 rootwait resize\n'
+        result = provision.unlocked_cmdline(original)
+        self.assertEqual(result, 'console=serial0,115200 root=PARTUUID=123-02 rootwait rw oxidal.storage=unlocked\n')
+        self.assertEqual(provision.unlocked_cmdline(result), result)
+        locked = 'root=PARTUUID=123-02 ro systemd.volatile=state oxidal.storage=locked'
+        self.assertEqual(provision.unlocked_cmdline(locked), 'root=PARTUUID=123-02 rw oxidal.storage=unlocked\n')
+        for invalid in ('', 'console=tty1', 'root=a root=b', 'root=a\nreboot', 'root=a\0'):
+            with self.assertRaises(ValueError):
+                provision.unlocked_cmdline(invalid)
+
     def test_firmware_uuid_preserves_root_and_rejects_ambiguous_mounts(self):
         original = 'proc /proc proc defaults 0 0\nPARTUUID=12345678-01 /boot/firmware vfat defaults 0 2\nPARTUUID=12345678-02 / ext4 defaults,noatime 0 1\n'
         root_uuid = '12345678-abcd-0123-abcd-0123456789ab'
@@ -167,6 +178,8 @@ class ApplianceTests(ProvisionTests):
                 'etc/systemd/journald.conf.d/oxidal-volatile.conf',
                 'usr/local/sbin/oxidal-grow-data',
                 'usr/share/oxidal/storage-layout-v1',
+                'etc/systemd/system/systemd-remount-fs.service.d/oxidal-storage.conf',
+                'etc/tmpfiles.d/oxidal-appliance.conf',
             },
         )
         self.assertIn(b'OXIDAL_DATA', files['usr/local/sbin/oxidal-grow-data'])

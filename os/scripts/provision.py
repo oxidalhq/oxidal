@@ -124,6 +124,22 @@ def firmware_fstab(text, uuid, root_uuid):
     return result
 
 
+def unlocked_cmdline(text):
+    """Declare initial writable mode; the fixed three-partition layout owns growth."""
+    if not text.strip() or len(text.encode()) > 4096 or '\0' in text or len(text.strip().splitlines()) != 1:
+        raise ValueError('Invalid firmware command line')
+    tokens = text.split()
+    if sum(token.startswith('root=') for token in tokens) != 1:
+        raise ValueError('Expected one boot root device')
+    tokens = [token for token in tokens
+              if token not in ('ro', 'rw', 'resize')
+              and not token.startswith(('systemd.volatile=', 'oxidal.storage='))]
+    result = ' '.join([*tokens, 'rw', 'oxidal.storage=unlocked']) + '\n'
+    if len(result.encode()) > 4096:
+        raise ValueError('Firmware command line exceeds budget')
+    return result
+
+
 def storage_fstab(text, data_uuid):
     """Mount persistent state and bounded volatile temporary files."""
     if not re.fullmatch(r'[A-Fa-f0-9]{8}(?:-[A-Fa-f0-9]{4}){3}-[A-Fa-f0-9]{12}', data_uuid):
@@ -161,6 +177,12 @@ def storage_layout_files():
             HERE / 'config/oxidal-journal.conf'
         ).read_bytes(),
         'usr/local/sbin/oxidal-grow-data': (HERE / 'config/oxidal-grow-data').read_bytes(),
+        'etc/systemd/system/systemd-remount-fs.service.d/oxidal-storage.conf': (
+            b'[Unit]\nConditionKernelCommandLine=!oxidal.storage=locked\n'
+        ),
+        'etc/tmpfiles.d/oxidal-appliance.conf': (
+            b'd /var/log/nginx 0750 www-data adm -\n'
+        ),
         'usr/share/oxidal/storage-layout-v1': (
             b'var-lib data partition; NetworkManager profile bind\n'
         ),

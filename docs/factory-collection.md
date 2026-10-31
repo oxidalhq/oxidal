@@ -6,6 +6,15 @@ presets. It adds an immutable Oxidal example without changing the playing sound.
 Editing an example creates an owned copy. These are version-1 recipes, not a
 claim that every genre or arbitrary capture is already auditioned and balanced.
 
+Fresh appliance images install the ten effects-only sounds in Library on first
+boot, with four scenes each and no downloads. The remaining 22 are available in
+the collection browser for assembly with the NAM voices you choose. The initial
+seed uses deterministic manifests, verifies installed plugin controls and writes
+a persistent completion marker. A partial run can retry without duplicating
+presets; after completion, deleting an example does not recreate it at reboot.
+It never starts audio or alters existing presets. Seeding errors are logged in
+the daemon's systemd journal without preventing the daemon from running.
+
 | ID  | Instrument    | Role and scene palette                                    |
 | --- | ------------- | --------------------------------------------------------- |
 | C01 | Clear Current | Clean studio voice: dry, compression, width, lead         |
@@ -98,6 +107,12 @@ This validates all recipes and writes requests without publishing. Add `--publis
 to create presets through a loopback API or SSH tunnel (`--api` defaults to
 `http://127.0.0.1:3230`). Existing output IDs are reused on retry. Changing settings
 creates a new immutable revision; old revisions are not silently deleted.
+
+Appliance packaging runs `scripts/factory-bundles.mjs --output <directory>` under
+Node's `--experimental-strip-types` option to generate only the asset-free bank.
+`os/scripts/seed_factory.py` publishes it through the local daemon at startup;
+the installed-image tests use a separate temporary library to check the bank and
+idempotence. The recipe JSON, not a development-library export, is the source.
 
 For a device run, save `GET /api/v1/rig-audio` to `owner-audio.json` **before**
 changing audio. This command temporarily replaces the playing rig, measures four

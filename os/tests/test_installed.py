@@ -83,6 +83,11 @@ class InstalledTests(unittest.TestCase):
         firmware = Path('/boot/firmware')
         command = (firmware / 'cmdline.txt').read_text().split()
         self.assertTrue(any(item.startswith('root=PARTUUID=') for item in command))
+        self.assertIn('rw', command)
+        self.assertIn('oxidal.storage=unlocked', command)
+        self.assertNotIn('ro', command)
+        self.assertNotIn('resize', command)
+        self.assertFalse(any(item.startswith('systemd.volatile=') for item in command))
         self.assertTrue((firmware / 'kernel_2712.img').is_file())
         if 'splash' in command:
             contents = subprocess.check_output(['lsinitramfs', str(firmware / 'initramfs_2712')], text=True)
@@ -140,11 +145,22 @@ class InstalledTests(unittest.TestCase):
                     admitted = {p['uri'] for p in catalog['plugins'] if not p['unsupported']}
                     self.assertTrue({
                         'urn:oxidal:plugin:hold#stereo',
+                        'urn:oxidal:plugin:pitch#stereo',
                         'http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo',
                         'http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo',
                         'http://invadarecords.com/plugins/lv2/filter/hpf/stereo',
                         'http://drobilla.net/plugins/mda/Tracker',
                     }.issubset(admitted), 'Factory effects missing from the installed image')
+
+                    seed_command = ['python3', str(home / 'factory/seed.py'),
+                        '--marker', temporary + '/factory-installed.json']
+                    subprocess.run(seed_command, check=True)
+                    seeded = json.loads(get('/api/v1/presets/rigs'))['presets']
+                    self.assertEqual(len(seeded), 10)
+                    self.assertTrue(all(p['origin'] == 'oxidal_example' and p['native_instances'] == 0
+                        and len(p['scenes']) == 4 for p in seeded))
+                    subprocess.run(seed_command, check=True)
+                    self.assertEqual(json.loads(get('/api/v1/presets/rigs'))['presets'], seeded)
 
                     self.assertNotEqual(health['midi_transport'], 'simulator')
                     self.assertEqual(json.loads(get('/api/v1/audio'))['phase'], 'stopped')
