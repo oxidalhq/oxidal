@@ -954,3 +954,30 @@ export async function removePreset(
     );
   return body;
 }
+
+export type PresetDetails =
+  Contract['preset_details']['entries'][number]['details'];
+export type DetailsCatalog = Contract['preset_details'];
+export type DetailsUpdate = Contract['preset_details_update'];
+const detailsValidator = ajv.compile<DetailsCatalog>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/DetailsCatalog',
+});
+export async function presetDetails(
+  update?: DetailsUpdate,
+): Promise<DetailsCatalog> {
+  const body = await presetResponse(
+    await fetch(
+      '/api/v1/presets/details',
+      update
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(update),
+          }
+        : undefined,
+    ),
+  );
+  if (!detailsValidator(body)) throw new Error('Incompatible preset details');
+  return body;
+}

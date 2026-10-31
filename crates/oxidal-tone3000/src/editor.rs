@@ -30,6 +30,7 @@ const HISTORY_BYTES: usize = 64 * 1024 * 1024;
 #[derive(Debug)]
 pub struct Editor {
     catalog_root: PathBuf,
+    loaded_kind: Option<oxidal_presets::LibraryKind>,
     engine: Engine,
     originals: Store,
     owned: OwnedStore,
@@ -57,6 +58,7 @@ impl Editor {
         );
         Ok(Self {
             catalog_root: root.clone(),
+            loaded_kind: None,
             engine,
             committed,
             originals: Store::new(root.clone()),
@@ -281,6 +283,11 @@ impl Editor {
                     return Err(error);
                 }
                 self.state.source_sha256 = source;
+                self.loaded_kind = Some(if owned {
+                    oxidal_presets::LibraryKind::Owned
+                } else {
+                    oxidal_presets::LibraryKind::Original
+                });
                 self.state.loaded = Some(id);
                 self.state.dirty = false;
                 self.clear_history();
@@ -298,11 +305,25 @@ impl Editor {
                 // session before storage, so a storage failure never changes our committed state.
                 self.rollback()?;
                 let bytes = bytes?;
+                if let (Some(kind), Some(id)) = (self.loaded_kind, self.state.loaded.clone()) {
+                    oxidal_presets::DetailsStore::new(self.catalog_root.clone())
+                        .inherit(
+                            oxidal_presets::LibraryReference {
+                                kind: oxidal_presets::LibraryKind::Owned,
+                                id: oxidal_presets::inspect(&bytes)
+                                    .map_err(|e| e.to_string())?
+                                    .sha256,
+                            },
+                            oxidal_presets::LibraryReference { kind, id },
+                        )
+                        .map_err(|e| e.to_string())?;
+                }
                 let info = match source {
                     Some(source) => self.owned.save(&source, &bytes),
                     None => self.owned.save_created(&bytes),
                 }
                 .map_err(|e| e.to_string())?;
+                self.loaded_kind = Some(oxidal_presets::LibraryKind::Owned);
                 self.state.loaded = Some(info.id);
                 self.state.dirty = false;
                 self.clear_history();

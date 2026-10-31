@@ -5199,3 +5199,98 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     audioBefore,
   );
 });
+
+test('device portrait preset details edit and category search never recall audio', async ({
+  page,
+  request,
+}, info) => {
+  const bytes = Buffer.from(
+    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
+  );
+  bytes.write(
+    info.project.name.slice(0, 7).padEnd(7, 'x'),
+    bytes.indexOf(Buffer.from('Fixture')),
+    'utf8',
+  );
+  const imported = await (
+    await request.post('/api/v1/presets', { data: bytes })
+  ).json();
+  const audioBefore = await (await request.get('/api/v1/audio')).json();
+  const rigBefore = await (await request.get('/api/v1/rig-audio')).json();
+  const commands: string[] = [];
+  page.on('request', (r) => {
+    if (
+      r.method() === 'POST' &&
+      /\/api\/v1\/(audio|rig-audio|graph-audio|native)$/.test(
+        new URL(r.url()).pathname,
+      )
+    )
+      commands.push(r.url());
+  });
+  await page.goto('/#library');
+  await page
+    .getByRole('button', { name: `Details: ${imported.name}`, exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Preset details',
+    exact: true,
+  });
+  await expect(dialog.getByText('No description yet.')).toBeVisible();
+  await dialog
+    .getByRole('button', { name: 'Edit details', exact: true })
+    .click();
+  await dialog
+    .getByLabel('Description', { exact: true })
+    .fill('Warm neck pickup\nA quiet ambient starting point.');
+  await dialog.getByLabel('Categories', { exact: true }).fill('Ambient, Clean');
+  await dialog
+    .getByRole('button', { name: 'Save details', exact: true })
+    .click();
+  await expect(dialog.getByText(/Warm neck pickup/)).toBeVisible();
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .include('dialog')
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath('preset-details.png'),
+    fullPage: true,
+  });
+  await dialog
+    .getByRole('button', { name: 'Close dialog', exact: true })
+    .click();
+  await page
+    .getByRole('searchbox', { name: 'Search presets', exact: true })
+    .fill('neck pickup');
+  await expect(
+    page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
+  ).toBeVisible();
+  await page.getByLabel('Category', { exact: true }).selectOption('Ambient');
+  await expect(
+    page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole('button', { name: `Details: ${imported.name}`, exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Preset details' })
+      .getByText(/Warm neck pickup/),
+  ).toBeVisible();
+  expect(commands).toEqual([]);
+  expect(await (await request.get('/api/v1/audio')).json()).toEqual(
+    audioBefore,
+  );
+  expect(await (await request.get('/api/v1/rig-audio')).json()).toEqual(
+    rigBefore,
+  );
+});

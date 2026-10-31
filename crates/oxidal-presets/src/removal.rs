@@ -1306,9 +1306,18 @@ impl RemovalStore {
         };
         let catalog = CatalogStore::open(self.root.clone())?
             .view(entries.iter().map(|e| e.item.clone()).collect())?;
+        let details_revision = crate::DetailsStore::new(self.root.clone())
+            .snapshot()?
+            .revision;
         preview.token = digest(
-            &serde_json::to_vec(&(&preview, catalog, fingerprints, references))
-                .map_err(|_| Error::Invalid("Could not encode deletion preview"))?,
+            &serde_json::to_vec(&(
+                &preview,
+                catalog,
+                fingerprints,
+                references,
+                details_revision,
+            ))
+            .map_err(|_| Error::Invalid("Could not encode deletion preview"))?,
         );
         Ok(Plan {
             preview,

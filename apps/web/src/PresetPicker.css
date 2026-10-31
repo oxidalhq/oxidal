@@ -127,3 +127,18 @@
   border-radius: 50%;
   background: var(--brand);
 }
+
+.preset-picker-entry {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+.preset-picker-entry .preset-picker-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+.preset-picker-entry .preset-picker-row > span:first-child {
+  overflow-wrap: anywhere;
+}

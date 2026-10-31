@@ -24,6 +24,15 @@ pub struct GraphPreset {
     pub recall: GraphRecall,
 }
 impl GraphPreset {
+    pub fn revision(&self) -> Result<String> {
+        self.validate()?;
+        let bytes =
+            serde_json::to_vec(self).map_err(|_| Error::Invalid("Cannot encode graph preset"))?;
+        if bytes.len() as u64 > LIMIT {
+            return Err(Error::Invalid("Graph preset exceeds 64 KiB"));
+        }
+        Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
     pub fn validate(&self) -> Result<()> {
         if self.version != 1
             || self.name.trim() != self.name
@@ -117,7 +126,7 @@ impl GraphStore {
         if bytes.len() as u64 > LIMIT {
             return Err(Error::Invalid("Graph preset exceeds 64 KiB"));
         }
-        let id = format!("{:x}", Sha256::digest(&bytes));
+        let id = preset.revision()?;
         let path = self.path(&id)?;
         if path.try_exists()? {
             return self.read(&id);

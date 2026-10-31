@@ -467,7 +467,24 @@ impl Owner {
                 };
                 preset.validate().map_err(|e| e.to_string())?;
                 let root = self.preset_root.clone();
+                let source = settings.library_id.clone();
                 let saved = tokio::task::spawn_blocking(move || {
+                    if let Some(id) = source {
+                        use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference};
+                        let parent = root
+                            .parent()
+                            .ok_or(oxidal_presets::Error::Invalid("Invalid graph store"))?;
+                        DetailsStore::new(parent.into()).inherit(
+                            LibraryReference {
+                                kind: LibraryKind::Graph,
+                                id: preset.revision()?,
+                            },
+                            LibraryReference {
+                                kind: LibraryKind::Graph,
+                                id,
+                            },
+                        )?;
+                    }
                     oxidal_presets::GraphStore::new(root).save(preset)
                 })
                 .await

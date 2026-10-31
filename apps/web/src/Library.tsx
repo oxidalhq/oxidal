@@ -5,6 +5,8 @@ import {
   presetLibrary,
   playbackState,
   nativeState,
+  presetDetails,
+  type PresetDetails,
   type AudioState,
   type Preset,
 } from './api';
@@ -17,6 +19,8 @@ import { SavedRigs } from './SavedRigs';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
+import { PresetDetailsDialog } from './PresetDetails';
+import { detailsKey, detailsMatch } from './presetMetadata';
 import { ModelLibrary } from './ModelLibrary';
 import './Library.css';
 
@@ -40,8 +44,19 @@ export function Library({
       return false;
     }
   });
-  const matches = (name: string) =>
-    name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  const [details, setDetails] = useState<Record<string, PresetDetails>>({});
+  const [detailsError, setDetailsError] = useState('');
+  const [category, setCategory] = useState('');
+  const [preview, setPreview] = useState<{
+    kind: 'original' | 'owned' | 'rig';
+    id: string;
+    name: string;
+  } | null>(null);
+  const matches = (name: string, kind: 'original' | 'owned', id: string) =>
+    detailsMatch(name, details[`${kind}:${id}`], query, category);
+  const categories = [
+    ...new Set(Object.values(details).flatMap((d) => d.categories)),
+  ].sort((a, b) => a.localeCompare(b));
   const [page, setPage] = useWorkspaceState<
     'browse' | 'author' | 'new' | 'nam' | 'ir'
   >('library-page', 'browse');
@@ -58,6 +73,20 @@ export function Library({
   const [owned, setOwned] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     let active = true;
+    void presetDetails()
+      .then((c) => {
+        if (active) {
+          setDetails(
+            Object.fromEntries(
+              c.entries.map((e) => [detailsKey(e.entry), e.details]),
+            ),
+          );
+          setDetailsError('');
+        }
+      })
+      .catch(() => {
+        if (active) setDetailsError('Preset details could not be read.');
+      });
     void playbackState()
       .then((s) => {
         if (active) setPlaying(s);
@@ -243,6 +272,32 @@ export function Library({
               </Button>
             )}
           </div>
+          {categories.length > 0 && (
+            <label className="field mb-3">
+              Category
+              <select
+                aria-label="Category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {detailsError && <p role="status">{detailsError}</p>}
+          {preview && (
+            <PresetDetailsDialog
+              entry={preview}
+              editable
+              onChanged={() => setRefresh((v) => v + 1)}
+              onCancel={() => setPreview(null)}
+            />
+          )}
           <div className="library-bar">
             <div
               className="library-toolbar"
@@ -312,6 +367,9 @@ export function Library({
             onOpenRig={onOpenRig}
             refresh={refresh}
             query={query}
+            category={category}
+            details={details}
+            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
           />
           {error && (
             <p role="alert" className="error">
@@ -334,20 +392,30 @@ export function Library({
           <div className="section-heading">
             <h2>Single chain</h2>
           </div>
-          {query.trim() &&
+          {(query.trim() || category) &&
             !busy &&
-            !owned.some((p) => matches(p.name)) &&
-            !presets.some((p) => matches(p.name)) && (
+            !owned.some((p) => matches(p.name, 'owned', p.id)) &&
+            !presets.some((p) => matches(p.name, 'original', p.sha256)) && (
               <p role="status" className="caption">
-                No single-chain presets match this name.
+                No single-chain presets match these filters.
               </p>
             )}
           <ul className="preset-library">
             {owned
-              .filter((p) => matches(p.name))
+              .filter((p) => matches(p.name, 'owned', p.id))
               .map((p) => (
                 <li key={`owned-${p.id}`} className="library-row">
                   {loadButton(p.id, p.name, true)}
+                  <Button
+                    variant="ghost"
+                    className="library-details"
+                    aria-label={`Details: ${p.name}`}
+                    onClick={() =>
+                      setPreview({ kind: 'owned', id: p.id, name: p.name })
+                    }
+                  >
+                    Details
+                  </Button>
                   {showArtwork && <ArtworkDeck id={p.id} owned />}
                   <a
                     href={`/api/v1/presets/owned/${p.id}/download`}
@@ -359,7 +427,7 @@ export function Library({
                 </li>
               ))}
             {presets
-              .filter((p) => matches(p.name))
+              .filter((p) => matches(p.name, 'original', p.sha256))
               .map((preset) => (
                 <li
                   key={preset.sha256}
@@ -372,6 +440,20 @@ export function Library({
                     false,
                     `${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
                   )}
+                  <Button
+                    variant="ghost"
+                    className="library-details"
+                    aria-label={`Details: ${preset.name}`}
+                    onClick={() =>
+                      setPreview({
+                        kind: 'original',
+                        id: preset.sha256,
+                        name: preset.name,
+                      })
+                    }
+                  >
+                    Details
+                  </Button>
                   {showArtwork && <ArtworkDeck id={preset.sha256} />}
                   <a
                     href={`/api/v1/presets/${preset.sha256}/original`}

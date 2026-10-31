@@ -130,6 +130,12 @@
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
+    "preset_details": {
+      "$ref": "#/$defs/DetailsCatalog"
+    },
+    "preset_details_update": {
+      "$ref": "#/$defs/DetailsUpdate"
+    },
     "removal_preview": {
       "$ref": "#/$defs/RemovalPreview"
     },
@@ -252,6 +258,8 @@
     "audio_probe",
     "audio_probe_result",
     "error",
+    "preset_details",
+    "preset_details_update",
     "library_catalog",
     "library_update",
     "library",
@@ -2630,6 +2638,22 @@
         "relative_offset64"
       ]
     },
+    "CopyCredit": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/LibraryReference"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "name"
+      ]
+    },
     "Creator": {
       "type": "object",
       "properties": {
@@ -2645,6 +2669,72 @@
       },
       "required": [
         "username"
+      ]
+    },
+    "DetailsCatalog": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DetailsEntry"
+          }
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "entries"
+      ]
+    },
+    "DetailsEntry": {
+      "type": "object",
+      "properties": {
+        "details": {
+          "$ref": "#/$defs/PresetDetails"
+        },
+        "entry": {
+          "$ref": "#/$defs/LibraryReference"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entry",
+        "details"
+      ]
+    },
+    "DetailsUpdate": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "entry_kind": {
+          "$ref": "#/$defs/LibraryKind"
+        },
+        "expected_revision": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected_revision",
+        "entry_kind",
+        "id",
+        "description",
+        "categories"
       ]
     },
     "Devices": {
@@ -6505,6 +6595,35 @@
         "revision",
         "name",
         "modified"
+      ]
+    },
+    "PresetDetails": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "copied_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyCredit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "description",
+        "categories"
       ]
     },
     "Progress": {

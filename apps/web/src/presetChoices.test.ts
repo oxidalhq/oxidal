@@ -1,10 +1,11 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   graphAudioState,
   nativeState,
   presetLibrary,
   rigLibrary,
   libraryCatalog,
+  presetDetails,
   playbackState,
   rigAudioCommand,
   rigAudioState,
@@ -20,6 +21,7 @@ vi.mock('./api', () => ({
   graphAudioCommand: vi.fn(),
   graphAudioState: vi.fn(),
   nativeState: vi.fn(),
+  presetDetails: vi.fn().mockResolvedValue({ revision: 'empty', entries: [] }),
   libraryCatalog: vi.fn().mockResolvedValue({ revision: 'empty', items: [] }),
   playbackCommand: vi.fn(),
   playbackState: vi.fn(),
@@ -28,6 +30,12 @@ vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigLibrary: vi.fn(),
 }));
+beforeEach(() => {
+  vi.mocked(presetDetails).mockResolvedValue({
+    revision: 'empty',
+    entries: [],
+  });
+});
 afterEach(() => {
   vi.resetAllMocks();
 });

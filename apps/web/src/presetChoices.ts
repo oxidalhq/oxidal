@@ -3,6 +3,8 @@ import {
   graphAudioState,
   nativeState,
   libraryCatalog,
+  presetDetails,
+  type PresetDetails,
   playbackCommand,
   playbackState,
   presetLibrary,
@@ -18,9 +20,10 @@ import {
  * it is an implementation detail; choosing one stops the other first.
  * @see docs/audio.md
  */
-export type PresetChoice =
+export type PresetChoice = { details?: PresetDetails } & (
   | { kind: 'tone3000'; id: string; owned: boolean; name: string }
-  | { kind: 'scenes'; revision: string; name: string; scenes: string[] };
+  | { kind: 'scenes'; revision: string; name: string; scenes: string[] }
+);
 
 export const choiceKey = (c: PresetChoice) =>
   c.kind === 'scenes'
@@ -54,11 +57,12 @@ export async function loadPresetChoices(): Promise<{
   items: PresetChoice[];
   error: string;
 }> {
-  const [originals, native, rigs, catalog] = await Promise.allSettled([
+  const [originals, native, rigs, catalog, details] = await Promise.allSettled([
     presetLibrary(),
     nativeState(),
     rigLibrary(),
     libraryCatalog(),
+    presetDetails(),
   ]);
   const items: PresetChoice[] = [
     ...(rigs.status === 'fulfilled' ? rigs.value.presets : []).map(
@@ -108,20 +112,39 @@ export async function loadPresetChoices(): Promise<{
         (listed.get(identity(b))?.index ?? Infinity),
     );
   }
+  if (details.status === 'fulfilled') {
+    const saved = new Map(
+      details.value.entries.map((e) => [
+        `${e.entry.kind}:${e.entry.id}`,
+        e.details,
+      ]),
+    );
+    for (const item of items) {
+      item.details = saved.get(
+        `${item.kind === 'scenes' ? 'rig' : item.owned ? 'owned' : 'original'}:${item.kind === 'scenes' ? item.revision : item.id}`,
+      );
+    }
+  }
   const failed = [
     originals.status === 'rejected' && 'originals',
     native.status === 'rejected' && 'saved copies',
     rigs.status === 'rejected' && 'presets with scenes',
     catalog.status === 'rejected' && 'set-list order',
   ].filter(Boolean);
+  const metadataWarning =
+    details.status === 'rejected' ? 'Preset details unavailable.' : '';
   return {
     items,
-    error:
+    error: [
+      metadataWarning,
       failed.length === 4
         ? 'Preset list unavailable'
         : failed.length
           ? `Some presets are unavailable (${failed.join(', ')})`
           : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
   };
 }
 

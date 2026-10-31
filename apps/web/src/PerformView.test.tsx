@@ -6,6 +6,7 @@ import {
   monitoring,
   nativeState,
   libraryCatalog,
+  presetDetails,
   presetLibrary,
   rigLibrary,
   type AudioState,
@@ -14,11 +15,16 @@ import {
 vi.mock('./api', () => ({
   monitoring: vi.fn(),
   nativeState: vi.fn(),
+  presetDetails: vi.fn().mockResolvedValue({ revision: 'empty', entries: [] }),
   libraryCatalog: vi.fn().mockResolvedValue({ revision: 'empty', items: [] }),
   presetLibrary: vi.fn(),
   rigLibrary: vi.fn(),
 }));
 beforeEach(() => {
+  vi.mocked(presetDetails).mockResolvedValue({
+    revision: 'empty',
+    entries: [],
+  });
   vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
 });
 afterEach(() => {

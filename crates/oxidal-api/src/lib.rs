@@ -120,6 +120,8 @@ pub struct Contract {
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
+    pub preset_details: oxidal_presets::DetailsCatalog,
+    pub preset_details_update: oxidal_presets::DetailsUpdate,
     pub library_catalog: oxidal_presets::LibraryCatalog,
     pub library_update: oxidal_presets::LibraryUpdate,
     pub library: oxidal_presets::Library,
@@ -393,6 +395,12 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route(
             "/presets/catalog",
             get(presets::catalog).post(presets::manage),
+        )
+        .route(
+            "/presets/details",
+            get(presets::details)
+                .post(presets::edit_details)
+                .layer(DefaultBodyLimit::max(64 * 1024)),
         )
         .route("/presets/{id}/original", get(presets::original))
         .route("/presets/owned/{id}/download", get(presets::owned_download))

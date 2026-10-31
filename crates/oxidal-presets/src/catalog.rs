@@ -30,7 +30,7 @@ pub enum LibraryKind {
     Rig,
 }
 impl LibraryKind {
-    fn key(self, id: &str) -> Result<String> {
+    pub(crate) fn key(self, id: &str) -> Result<String> {
         if id.len() != 64
             || !id
                 .bytes()
@@ -155,7 +155,8 @@ impl CatalogStore {
         candidate.labels.remove(&key);
         candidate.archived.remove(&key);
         candidate.order.retain(|k| k != &key);
-        self.persist(candidate)
+        self.persist(candidate)?;
+        crate::DetailsStore::new(self.root.clone()).forget(kind, id)
     }
     pub fn open(root: PathBuf) -> Result<Self> {
         let path = root.join("library.json");

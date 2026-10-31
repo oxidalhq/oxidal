@@ -240,3 +240,35 @@ pub(super) fn visible_native(
     });
     Ok(result)
 }
+
+/// Descriptions and categories have their own optimistic revision, independent
+/// of names, archive visibility and performance order.
+pub(super) async fn details(State(shared): State<Arc<Shared>>) -> Response {
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |_| {
+        Ok(Json(oxidal_presets::DetailsStore::new(root).snapshot()?).into_response())
+    })
+    .await
+}
+pub(super) async fn edit_details(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<oxidal_presets::DetailsUpdate>, axum::extract::rejection::JsonRejection>,
+) -> Response {
+    let request = match body {
+        Ok(Json(v)) => v,
+        Err(e) => return failure(e.status(), "Invalid preset details"),
+    };
+    let root = shared.config.preset_dir.clone();
+    job(shared, move |_| {
+        if !catalog_items(&root)?
+            .iter()
+            .any(|item| item.kind == request.entry_kind && item.id == request.id)
+        {
+            return Err(Error::Invalid(
+                "Preset no longer exists; refresh the library",
+            ));
+        }
+        Ok(Json(oxidal_presets::DetailsStore::new(root).update(request)?).into_response())
+    })
+    .await
+}

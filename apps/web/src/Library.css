@@ -55,12 +55,13 @@
 }
 .library-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
-.library-row > :not(.library-load):not(a):not(.library-ready) {
+.library-row
+  > :not(.library-load):not(a):not(.library-ready):not(.library-details) {
   grid-column: 1 / -1;
 }
 .library-ready {
@@ -516,4 +517,9 @@
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
+}
+
+.library-details {
+  grid-column: 2;
+  padding-inline: 0.5rem;
 }

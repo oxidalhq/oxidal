@@ -6,6 +6,7 @@ import {
   type LibraryCatalog,
   type RemovalPreview,
 } from './api';
+import { PresetDetailsDialog } from './PresetDetails';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 
@@ -66,6 +67,7 @@ function ManagementDialog({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [details, setDetails] = useState(false);
   useEffect(() => {
     let alive = true;
     void libraryCatalog()
@@ -105,6 +107,15 @@ function ManagementDialog({
       setBusy(false);
     }
   }
+  if (details)
+    return (
+      <PresetDetailsDialog
+        entry={entry}
+        editable
+        onChanged={onChanged}
+        onCancel={() => setDetails(false)}
+      />
+    );
   if (deleting)
     return (
       <DeletePresetDialog
@@ -142,6 +153,19 @@ function ManagementDialog({
             Rename
           </Button>
         </form>
+        <div className="space-y-2 border-t border-border pt-4">
+          <h3>Description and categories</h3>
+          <p className="caption">
+            Add notes and categories to find this preset again.
+          </p>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setDetails(true)}
+          >
+            View details
+          </Button>
+        </div>
         {error && <p role="alert">{error}</p>}
         <div className="space-y-2 border-t border-border pt-4">
           <h3>Permanent deletion</h3>

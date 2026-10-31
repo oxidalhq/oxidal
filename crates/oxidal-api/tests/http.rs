@@ -2585,3 +2585,85 @@ async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads
     task.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn details_are_revision_bound_plain_metadata_and_invalidate_deletion_preview() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let bytes = include_bytes!("../../oxidal-presets/tests/fixtures/authored-current.t3kpreset");
+    let imported: Value = client
+        .post(format!("{url}/presets"))
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = imported["sha256"].as_str().unwrap();
+    let endpoint = format!("{url}/presets/details");
+    let initial: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let preview: Value = client
+        .get(format!("{url}/presets/removal?kind=original&id={id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let edit = json!({"expected_revision":initial["revision"],"entry_kind":"original","id":id,"description":"Warm clean\nUse the neck pickup.","categories":[" Clean ","clean","Ambient"]});
+    let saved = client.post(&endpoint).json(&edit).send().await.unwrap();
+    assert!(saved.status().is_success());
+    let saved: Value = saved.json().await.unwrap();
+    assert_eq!(
+        saved["entries"][0]["details"]["categories"],
+        json!(["Clean", "Ambient"])
+    );
+    assert_eq!(
+        client
+            .post(&endpoint)
+            .json(&edit)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let stale_delete = client.post(format!("{url}/presets/removal")).json(&json!({"entry_kind":"original","id":id,"expected_preview":preview["token"],"delete_models":false})).send().await.unwrap();
+    assert_eq!(stale_delete.status(), 409);
+    let root = path.with_extension("presets");
+    assert_eq!(
+        std::fs::read(root.join(format!("{id}.t3kpreset"))).unwrap(),
+        bytes
+    );
+    let invalid = client.post(&endpoint).json(&json!({"expected_revision":saved["revision"],"entry_kind":"owned","id":"f".repeat(64),"description":"orphan","categories":[]})).send().await.unwrap();
+    assert_eq!(invalid.status(), 422);
+    let preview: Value = client
+        .get(format!("{url}/presets/removal?kind=original&id={id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(client.post(format!("{url}/presets/removal")).json(&json!({"entry_kind":"original","id":id,"expected_preview":preview["token"],"delete_models":false})).send().await.unwrap().status().is_success());
+    let remaining: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(remaining["entries"], json!([]));
+    task.abort();
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_file(path);
+}

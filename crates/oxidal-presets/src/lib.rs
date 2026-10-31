@@ -1,6 +1,10 @@
 //! Bounded native inspection, portable declarations and immutable preset storage.
 //! This is not an audio backend or a declaration of preset playback compatibility.
 //! @see docs/presets/format.md
+mod details;
+pub use details::{
+    CopyCredit, DetailsCatalog, DetailsEntry, DetailsStore, DetailsUpdate, PresetDetails,
+};
 mod catalog;
 pub use catalog::{
     CatalogStore, LibraryAction, LibraryCatalog, LibraryItem, LibraryKind, LibraryUpdate,

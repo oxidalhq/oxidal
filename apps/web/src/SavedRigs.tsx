@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { CircleNotch } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
-import { rigLibrary, rigAudioState, type RigPage } from './api';
+import { detailsMatch } from './presetMetadata';
+import {
+  rigLibrary,
+  rigAudioState,
+  type RigPage,
+  type PresetDetails,
+} from './api';
 import {
   playScenes,
   readKeepReady,
@@ -20,9 +26,15 @@ export function SavedRigs({
   onOpenRig,
   refresh = 0,
   query = '',
+  category = '',
+  details = {},
+  onDetails,
 }: {
   refresh?: number;
   query?: string;
+  category?: string;
+  details?: Record<string, PresetDetails>;
+  onDetails?: (id: string, name: string) => void;
   connected: boolean;
   onOpenRig: () => void;
 }) {
@@ -100,7 +112,7 @@ export function SavedRigs({
     }
   }
   const shown = items.filter((item) =>
-    item.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+    detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
   if (!items.length && !error) return null;
   return (
@@ -155,6 +167,16 @@ export function SavedRigs({
                   )}
                 </span>
               </button>
+              {onDetails && (
+                <Button
+                  variant="ghost"
+                  className="library-details"
+                  aria-label={`Details: ${p.name}`}
+                  onClick={() => onDetails(p.revision, p.name)}
+                >
+                  Details
+                </Button>
+              )}
               {choosing && (
                 <label className="library-ready">
                   <input
@@ -177,11 +199,11 @@ export function SavedRigs({
           );
         })}
       </ul>
-      {query.trim() && !shown.length && (
+      {(query.trim() || category) && !shown.length && (
         <p role="status" className="caption">
           {next
             ? 'No matches yet. Load more to search further.'
-            : 'No presets with scenes match this name.'}
+            : 'No presets with scenes match these filters.'}
         </p>
       )}
       {next && (

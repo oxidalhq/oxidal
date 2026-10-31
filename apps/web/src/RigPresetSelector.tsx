@@ -6,6 +6,8 @@ import {
   ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { PresetDetailsDialog } from './PresetDetails';
+import { detailsMatch } from './presetMetadata';
 import { PresetManagement } from './PresetManagement';
 import './PresetPicker.css';
 import { Button } from './components/ui/button';
@@ -57,6 +59,7 @@ export function RigPresetSelector({
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [preview, setPreview] = useState<Choice | null>(null);
   useEffect(() => {
     let active = true;
     void loadPresetChoices()
@@ -256,6 +259,21 @@ export function RigPresetSelector({
           </Button>
         </div>
       )}
+      {preview && (
+        <PresetDetailsDialog
+          entry={{
+            kind:
+              preview.kind === 'scenes'
+                ? 'rig'
+                : preview.owned
+                  ? 'owned'
+                  : 'original',
+            id: preview.kind === 'scenes' ? preview.revision : preview.id,
+            name: preview.name,
+          }}
+          onCancel={() => setPreview(null)}
+        />
+      )}
       {open && (
         <AdjustmentDialog
           title="Switch preset"
@@ -294,35 +312,44 @@ export function RigPresetSelector({
           <section className="preset-picker-group" aria-label="Set list">
             <h3>Set list</h3>
             {items
-              .filter((p) => p.name.toLowerCase().includes(found))
+              .filter((p) => detailsMatch(p.name, p.details, found))
               .map((p) => (
-                <button
-                  key={key(p)}
-                  type="button"
-                  className="preset-picker-row"
-                  data-preset={key(p)}
-                  aria-pressed={key(p) === selected}
-                  disabled={disabled || loading}
-                  onClick={() => {
-                    setOpen(false);
-                    if (key(p) !== selected) choose(p);
-                  }}
-                >
-                  <span>{p.name}</span>
-                  <span
-                    className={
-                      key(p) === selected
-                        ? 'preset-picker-playing'
-                        : 'preset-picker-scenes'
-                    }
+                <div key={key(p)} className="preset-picker-entry">
+                  <button
+                    type="button"
+                    className="preset-picker-row"
+                    data-preset={key(p)}
+                    aria-pressed={key(p) === selected}
+                    disabled={disabled || loading}
+                    onClick={() => {
+                      setOpen(false);
+                      if (key(p) !== selected) choose(p);
+                    }}
                   >
-                    {key(p) === selected ? 'Playing' : origin(p)}
-                  </span>
-                </button>
+                    <span>{p.name}</span>
+                    <span
+                      className={
+                        key(p) === selected
+                          ? 'preset-picker-playing'
+                          : 'preset-picker-scenes'
+                      }
+                    >
+                      {key(p) === selected ? 'Playing' : origin(p)}
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    className="shrink-0 px-2"
+                    aria-label={`Details: ${p.name}`}
+                    onClick={() => setPreview(p)}
+                  >
+                    Details
+                  </Button>
+                </div>
               ))}
           </section>
           {!loading &&
-            !items.some((p) => p.name.toLowerCase().includes(found)) && (
+            !items.some((p) => detailsMatch(p.name, p.details, found)) && (
               <p role="status">No presets match.</p>
             )}
         </AdjustmentDialog>

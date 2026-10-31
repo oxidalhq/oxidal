@@ -381,6 +381,21 @@ fn save_with_assets(
             }
         }
     }
+    if let Some(root) = model_root {
+        use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference};
+        DetailsStore::new(root.into())
+            .inherit(
+                LibraryReference {
+                    kind: LibraryKind::Rig,
+                    id: bundle.revision().into(),
+                },
+                LibraryReference {
+                    kind: LibraryKind::Rig,
+                    id: request.settings.revision.clone(),
+                },
+            )
+            .map_err(|e| e.to_string())?;
+    }
     store.save(&bundle).map_err(|e| e.to_string())
 }
 fn append(

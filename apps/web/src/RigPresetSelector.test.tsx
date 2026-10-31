@@ -7,7 +7,13 @@ import {
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
-import { nativeState, presetLibrary, rigLibrary, libraryCatalog } from './api';
+import {
+  nativeState,
+  presetLibrary,
+  rigLibrary,
+  libraryCatalog,
+  presetDetails,
+} from './api';
 import {
   assertAuditionOwner,
   controlGroup,
@@ -18,6 +24,7 @@ vi.mock('./api', () => ({
   nativeState: vi.fn(),
   presetLibrary: vi.fn(),
   rigLibrary: vi.fn(),
+  presetDetails: vi.fn().mockResolvedValue({ revision: 'empty', entries: [] }),
   libraryCatalog: vi.fn(),
 }));
 // jsdom has no modal dialog; the picker list opens in one.
@@ -28,6 +35,10 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.open = false;
 };
 beforeEach(() => {
+  vi.mocked(presetDetails).mockResolvedValue({
+    revision: 'empty',
+    entries: [],
+  });
   vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
 });
 afterEach(() => {
@@ -371,4 +382,36 @@ it('renames from the rig header and refreshes its device label without recalling
     id: 'a',
     action: { kind: 'rename', name: 'My new label' },
   });
+});
+
+it('searches descriptions and opens preset details without recalling it', async () => {
+  library();
+  vi.mocked(presetDetails).mockResolvedValue({
+    revision: 'details-one',
+    entries: [
+      {
+        entry: { kind: 'original', id: 'b' },
+        details: {
+          description: 'Use a neck pickup',
+          categories: ['Ambient'],
+          copied_from: null,
+        },
+      },
+    ],
+  });
+  const select = vi.fn();
+  render(
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
+  );
+  const trigger = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  fireEvent.change(
+    await screen.findByRole('searchbox', { name: 'Find a preset' }),
+    { target: { value: 'neck pickup' } },
+  );
+  const detail = await screen.findByRole('button', { name: 'Details: Amp B' });
+  fireEvent.click(detail);
+  await screen.findByText('Use a neck pickup');
+  expect(select).not.toHaveBeenCalled();
 });

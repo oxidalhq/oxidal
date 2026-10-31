@@ -717,6 +717,8 @@ export interface Contract {
   network_command: Command3;
   network_state: NetworkState;
   preset: Inspection;
+  preset_details: DetailsCatalog;
+  preset_details_update: DetailsUpdate;
   removal_preview: RemovalPreview;
   removal_request: RemovalRequest;
   removal_result: RemovalResult;
@@ -1834,6 +1836,30 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface DetailsCatalog {
+  entries: DetailsEntry[];
+  revision: string;
+}
+export interface DetailsEntry {
+  details: PresetDetails;
+  entry: LibraryReference;
+}
+export interface PresetDetails {
+  categories: string[];
+  copied_from?: CopyCredit | null;
+  description: string;
+}
+export interface CopyCredit {
+  name: string;
+  source: LibraryReference;
+}
+export interface DetailsUpdate {
+  categories: string[];
+  description: string;
+  entry_kind: LibraryKind;
+  expected_revision: string;
+  id: string;
 }
 export interface RemovalPreview {
   blocked?: string | null;

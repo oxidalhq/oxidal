@@ -383,3 +383,31 @@ visibly and retain the journal/data. Recovery and deletion assume private,
 application-owned storage, not concurrent external writers. Unit fixtures exercise
 interrupted processes and cleanup errors; they do not establish physical
 power-loss durability on the appliance filesystem.
+
+### Descriptions and categories
+
+`GET /api/v1/presets/details` reads device-local descriptions, categories and
+immediate copy credits. `POST` updates one existing kind/ID using the independent
+metadata revision. It never changes names, order, immutable payloads, DSP state
+or audio ownership. Descriptions are plain text up to 4,000 Unicode characters;
+there are at most 16 categories of 48 characters each, trimmed and deduplicated
+without case distinctions. Presets without metadata remain blank.
+
+Library offers a separate Details action, category filter and description/category
+search. Rig's switcher offers the same read-only details preview; opening it never
+recalls a preset. Editing uses explicit Save/Cancel. A failed or uncertain save
+retains the draft and requires reloading saved details before retrying.
+
+`preset-details.json` lives in the preset data root, keyed by library kind and
+immutable ID. It uses bounded validation, an independent optimistic revision,
+cross-process file locking and synced atomic replacement. Keep this file with the
+preset data root in backups. Copy workers inherit existing source details and
+record immediate source credit before publishing a new payload; an existing
+target's edited details win on retry. A failed payload publication can leave inert
+metadata for its unpublished target; it is not automatically deleted. This does
+not implement copy-on-first-edit ownership or embed notes in native exports.
+
+Permanent deletion includes only the selected entry's metadata. The metadata
+revision participates in deletion preview validation; interrupted committed
+cleanup retries metadata removal through the existing journal. Other presets'
+notes and their historical source credits remain intact.

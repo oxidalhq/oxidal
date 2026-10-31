@@ -511,6 +511,23 @@ fn save_copy() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("Saved control readback differs".into());
     }
+    if !request.settings.draft {
+        use oxidal_presets::{DetailsStore, LibraryKind, LibraryReference, inspect};
+        DetailsStore::new(root).inherit(
+            LibraryReference {
+                kind: LibraryKind::Owned,
+                id: inspect(&bytes)?.sha256,
+            },
+            LibraryReference {
+                kind: if request.settings.owned {
+                    LibraryKind::Owned
+                } else {
+                    LibraryKind::Original
+                },
+                id: request.settings.preset_id.clone(),
+            },
+        )?;
+    }
     let saved = match source {
         Some(source) => owned.save(&source, &bytes)?,
         None => owned.save_created(&bytes)?,
