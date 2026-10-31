@@ -85,7 +85,7 @@ export function ModelPicker({
     error?: string | null;
     blocked?: boolean;
   };
-  intent?: 'add' | 'replace';
+  intent?: 'add' | 'replace' | 'download';
   initialFormat?: 'nam' | 'ir';
   allowedFormat?: 'nam' | 'ir';
   onClose: () => void;
@@ -257,32 +257,40 @@ export function ModelPicker({
   }
   return (
     <AdjustmentDialog
-      title="Choose model"
+      title={
+        intent === 'download'
+          ? `Get ${format === 'nam' ? 'NAM models' : 'IRs'}`
+          : 'Choose model'
+      }
       onCancel={close}
       className="model-picker"
     >
       <div className="space-y-3">
-        <p className="truncate text-sm text-muted-foreground">
-          {intent === 'add' ? 'Add to' : 'Replace'} {name}
-        </p>
-        <div className="action-row" role="group" aria-label="Model source">
-          <Button
-            variant="ghost"
-            aria-pressed={source === 'tone3000'}
-            disabled={locked}
-            onClick={() => setSource('tone3000')}
-          >
-            <CloudArrowDown aria-hidden="true" /> TONE3000
-          </Button>
-          <Button
-            variant="ghost"
-            aria-pressed={source === 'local'}
-            disabled={locked}
-            onClick={() => setSource('local')}
-          >
-            <FolderOpen aria-hidden="true" /> On this unit
-          </Button>
-        </div>
+        {intent !== 'download' && (
+          <p className="truncate text-sm text-muted-foreground">
+            {intent === 'add' ? 'Add to' : 'Replace'} {name}
+          </p>
+        )}
+        {intent !== 'download' && (
+          <div className="action-row" role="group" aria-label="Model source">
+            <Button
+              variant="ghost"
+              aria-pressed={source === 'tone3000'}
+              disabled={locked}
+              onClick={() => setSource('tone3000')}
+            >
+              <CloudArrowDown aria-hidden="true" /> TONE3000
+            </Button>
+            <Button
+              variant="ghost"
+              aria-pressed={source === 'local'}
+              disabled={locked}
+              onClick={() => setSource('local')}
+            >
+              <FolderOpen aria-hidden="true" /> On this unit
+            </Button>
+          </div>
+        )}
         {source === 'local' ? (
           <div className="space-y-3">
             <details className="local-upload">
@@ -389,25 +397,27 @@ export function ModelPicker({
           <>
             {!tone ? (
               <>
-                <div className="action-row" aria-label="Model type">
-                  {(allowedFormat
-                    ? [allowedFormat]
-                    : (['nam', 'ir'] as const)
-                  ).map((kind) => (
-                    <Button
-                      key={kind}
-                      variant="ghost"
-                      aria-pressed={format === kind}
-                      disabled={locked}
-                      onClick={() => {
-                        setFormat(kind);
-                        setQuery({ ...query, gear: null, page: 1 });
-                      }}
-                    >
-                      {kind === 'nam' ? 'NAM' : 'Cab / IR'}
-                    </Button>
-                  ))}
-                </div>
+                {!(intent === 'download' && allowedFormat) && (
+                  <div className="action-row" aria-label="Model type">
+                    {(allowedFormat
+                      ? [allowedFormat]
+                      : (['nam', 'ir'] as const)
+                    ).map((kind) => (
+                      <Button
+                        key={kind}
+                        variant="ghost"
+                        aria-pressed={format === kind}
+                        disabled={locked}
+                        onClick={() => {
+                          setFormat(kind);
+                          setQuery({ ...query, gear: null, page: 1 });
+                        }}
+                      >
+                        {kind === 'nam' ? 'NAM' : 'Cab / IR'}
+                      </Button>
+                    ))}
+                  </div>
+                )}
                 <label className="field">
                   TONE3000 library
                   <select
@@ -553,10 +563,16 @@ export function ModelPicker({
                         <span className="model-audition">
                           {playing ? (
                             <Check aria-hidden="true" />
+                          ) : intent === 'download' ? (
+                            <CloudArrowDown aria-hidden="true" />
                           ) : (
                             <Play aria-hidden="true" />
                           )}{' '}
-                          {playing ? 'Playing' : 'Audition'}
+                          {playing
+                            ? 'Playing'
+                            : intent === 'download'
+                              ? 'Download'
+                              : 'Audition'}
                         </span>
                       </Button>
                     );
@@ -607,8 +623,9 @@ export function ModelPicker({
           </>
         )}
         <p className="caption">
-          Audition changes live sound; closing keeps it. Save a copy in Rig for
-          offline use.
+          {intent === 'download'
+            ? 'Downloads stay in your library for future presets. Downloading does not change the playing sound.'
+            : 'Audition changes live sound; closing keeps it. Save a copy in Rig for offline use.'}
         </p>
         {comparison?.pending && (
           <p role="status">
@@ -632,8 +649,12 @@ export function ModelPicker({
             {busy === 'download'
               ? source === 'local'
                 ? 'Uploading for audition…'
-                : 'Downloading for audition…'
-              : 'Preparing live audition…'}
+                : intent === 'download'
+                  ? 'Downloading to library…'
+                  : 'Downloading for audition…'
+              : intent === 'download'
+                ? 'Adding to library…'
+                : 'Preparing live audition…'}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2">

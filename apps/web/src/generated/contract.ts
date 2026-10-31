@@ -1517,13 +1517,26 @@ export interface LibraryUpdate {
   id: string;
 }
 export interface LocalModel {
+  /**
+   * Actual bounded WAV-header readings; absent for NAM/unsupported headers.
+   */
+  audio?: WavInfo | null;
+  /**
+   * Display-only relative import folder; never used as a storage path.
+   */
+  folder?: string;
   format: string;
   /**
    * The tone's gear type (amp, pedal, cab…), when known.
    */
   gear?: string;
   id: string;
+  nam?: NamInfo | null;
   name: string;
+  /**
+   * Persisted metadata of this downloaded tone, available without an account request.
+   */
+  provider_tone?: Tone | null;
   sha256: string;
   title: string;
   /**
@@ -1531,6 +1544,40 @@ export interface LocalModel {
    * which carries no provider data.
    */
   tone_id?: number;
+}
+export interface WavInfo {
+  bits_per_sample: number;
+  channels: number;
+  duration_ms: number;
+  floating_point: boolean;
+  frames: number;
+  sample_rate: number;
+}
+export interface NamInfo {
+  author?: string | null;
+  gear?: string | null;
+  name?: string | null;
+  source_tone_id?: number | null;
+  source_url?: string | null;
+  trainer?: string | null;
+}
+export interface Tone {
+  a1_models_count?: number;
+  a2_models_count?: number;
+  custom_models_count?: number;
+  format: string;
+  gear: string;
+  id: number;
+  images?: string[] | null;
+  license: string;
+  models_count: number;
+  title: string;
+  url: string;
+  user: Creator;
+}
+export interface Creator {
+  display_name?: string | null;
+  username: string;
 }
 export interface LocalModelPage {
   data: LocalModel[];
@@ -2146,24 +2193,6 @@ export interface Page {
   data: Tone[];
   page?: number;
   total_pages?: number;
-}
-export interface Tone {
-  a1_models_count?: number;
-  a2_models_count?: number;
-  custom_models_count?: number;
-  format: string;
-  gear: string;
-  id: number;
-  images?: string[] | null;
-  license: string;
-  models_count: number;
-  title: string;
-  url: string;
-  user: Creator;
-}
-export interface Creator {
-  display_name?: string | null;
-  username: string;
 }
 export interface ToneQuery {
   collection?: "favorites" | "downloaded" | "created" | "trending" | "latest";

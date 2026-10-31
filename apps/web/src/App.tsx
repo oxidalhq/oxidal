@@ -398,7 +398,7 @@ function InstrumentApp() {
                     : view === 'monitor'
                       ? 'Signal & system'
                       : view === 'library'
-                        ? 'Preset library'
+                        ? 'Library'
                         : settingsLabels[settingsSection]}
               </h1>
             </div>

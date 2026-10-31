@@ -29,6 +29,17 @@ pub struct LocalModel {
     /// The tone's gear type (amp, pedal, cab…), when known.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub gear: String,
+    /// Display-only relative import folder; never used as a storage path.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub folder: String,
+    /// Actual bounded WAV-header readings; absent for NAM/unsupported headers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<oxidal_presets::WavInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nam: Option<oxidal_presets::NamInfo>,
+    /// Persisted metadata of this downloaded tone, available without an account request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_tone: Option<crate::provider::catalog::Tone>,
 }
 fn is_local(tone_id: &u64) -> bool {
     *tone_id == 0
@@ -36,7 +47,15 @@ fn is_local(tone_id: &u64) -> bool {
 impl LocalModel {
     fn new(id: String, asset: ModelAsset) -> Self {
         Self {
+            nam: serde_json::from_value(asset.tone["oxidal_nam"].clone()).ok(),
+            provider_tone: if asset.tone_id > 0 {
+                serde_json::from_value(asset.tone.clone()).ok()
+            } else {
+                None
+            },
+            audio: None,
             id,
+            folder: asset.tone["oxidal_folder"].as_str().unwrap_or("").into(),
             gear: asset
                 .tone
                 .get("gear")
@@ -63,6 +82,7 @@ pub struct LocalModelPage {
 #[serde(deny_unknown_fields)]
 pub struct Upload {
     name: String,
+    folder: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +91,8 @@ pub struct List {
     /// Include models downloaded from TONE3000, not only local files.
     #[serde(default)]
     all: bool,
+    format: Option<String>,
+    query: Option<String>,
 }
 fn error(error: Error) -> Response {
     match error {
@@ -96,7 +118,7 @@ pub(super) async fn upload(
     };
     let root = shared.config.preset_dir.join("audition-models");
     match tokio::task::spawn_blocking(move || {
-        ModelStore::new(root).stage_local(&query.name, &bytes)
+        ModelStore::new(root).stage_local_in_folder(&query.name, query.folder.as_deref(), &bytes)
     })
     .await
     {
@@ -151,21 +173,31 @@ pub(super) async fn list(
     };
     let root = shared.config.preset_dir.join("audition-models");
     match tokio::task::spawn_blocking(move || {
-        ModelStore::new(root).page(query.after.as_deref(), query.all)
+        let store = ModelStore::new(root);
+        let (rows, next) = store.filtered_page(
+            query.after.as_deref(),
+            query.all,
+            query.format.as_deref(),
+            query.query.as_deref().unwrap_or(""),
+        )?;
+        let data = rows
+            .into_iter()
+            .map(|(id, asset)| {
+                let audio = if asset.format == "ir" {
+                    store.wav_info(&id).ok().flatten()
+                } else {
+                    None
+                };
+                let mut model = LocalModel::new(id, asset);
+                model.audio = audio;
+                model
+            })
+            .collect();
+        Ok::<_, Error>(LocalModelPage { data, next })
     })
     .await
     {
-        Ok(Ok((rows, next))) => (
-            [(header::CACHE_CONTROL, "no-store")],
-            Json(LocalModelPage {
-                data: rows
-                    .into_iter()
-                    .map(|(id, asset)| LocalModel::new(id, asset))
-                    .collect(),
-                next,
-            }),
-        )
-            .into_response(),
+        Ok(Ok(page)) => ([(header::CACHE_CONTROL, "no-store")], Json(page)).into_response(),
         Ok(Err(e)) => error(e),
         Err(_) => failure(
             StatusCode::INTERNAL_SERVER_ERROR,

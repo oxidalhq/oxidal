@@ -136,3 +136,52 @@ it('filters tones by gear, shows pictures by default and remembers a list view',
   expect(listed.querySelector('img')).toBeNull();
   localStorage.removeItem('oxidal.picker.view');
 });
+
+it('downloads to the independent library without presenting a live audition', async () => {
+  vi.mocked(tone3000Tones).mockResolvedValue({
+    data: [
+      {
+        id: 42,
+        title: 'Library amp',
+        format: 'nam',
+        gear: 'amp',
+        user: { username: 'author' },
+        license: 't3k',
+        url: '',
+        models_count: 1,
+      },
+    ],
+    total_pages: 1,
+  } as Awaited<ReturnType<typeof tone3000Tones>>);
+  vi.mocked(tone3000Models).mockResolvedValue({
+    data: [{ id: 7, name: 'Library model' }],
+    total_pages: 1,
+  } as Awaited<ReturnType<typeof tone3000Models>>);
+  vi.mocked(stageTone3000).mockResolvedValue({
+    id: 'downloaded-asset',
+  } as Awaited<ReturnType<typeof stageTone3000>>);
+  const stored = vi.fn().mockResolvedValue(undefined);
+  const close = vi.fn();
+  render(
+    <ModelPicker
+      name="NAM models"
+      intent="download"
+      allowedFormat="nam"
+      onClose={close}
+      onAudition={stored}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: /On this unit/ })).toBeNull();
+  expect(
+    screen.getByText(/Downloading does not change the playing sound/),
+  ).toBeVisible();
+  fireEvent.click(await screen.findByRole('button', { name: /Library amp/ }));
+  const button = await screen.findByRole('button', {
+    name: /Library model.*Download/,
+  });
+  expect(button).not.toHaveTextContent('Audition');
+  fireEvent.click(button);
+  await waitFor(() => expect(stored).toHaveBeenCalledWith('downloaded-asset'));
+  expect(stageTone3000).toHaveBeenCalledWith(42, 7, expect.any(AbortSignal));
+  expect(close).toHaveBeenCalledTimes(1);
+});

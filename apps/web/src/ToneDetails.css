@@ -1,0 +1,44 @@
+.tone-details {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.tone-details-picture {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  overflow: hidden;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.tone-details-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tone-details-picture .block-glyph {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.tone-details-text {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  align-content: start;
+}
+.tone-details-text strong {
+  overflow-wrap: anywhere;
+}
+.tone-details-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: var(--touch-target);
+  width: fit-content;
+  font-weight: 600;
+  text-decoration: underline;
+}

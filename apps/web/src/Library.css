@@ -186,3 +186,307 @@
   padding: 0.375rem 0;
   border-bottom: 1px solid var(--border);
 }
+
+/* Shared file libraries keep browsing first and administration contextual. */
+.library-section-tabs {
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.library-section-tabs > .oxidal-button {
+  flex: 0 0 auto;
+  padding-inline: 0.25rem;
+  white-space: nowrap;
+}
+.asset-library {
+  min-width: 0;
+}
+.asset-library .caption {
+  margin: 0;
+}
+.library-search {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+}
+.library-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+.library-search-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.asset-library-search {
+  position: relative;
+  margin: 0;
+}
+.asset-library-search .library-search-input {
+  padding-right: 3rem;
+  font-size: 0.9375rem;
+}
+.asset-library-search .library-search-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.asset-library-search .asset-search-clear {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: var(--touch-target);
+  min-height: var(--touch-target);
+  height: var(--touch-target);
+}
+.asset-library-bar {
+  margin: 0.25rem 0 0.5rem;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+.asset-library-count {
+  flex-shrink: 0;
+  padding-left: 0.5rem;
+  font-size: 0.75rem;
+}
+.asset-library-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.asset-library-actions .oxidal-button {
+  padding-inline: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.asset-library-actions .oxidal-button:first-child {
+  margin-left: -0.5rem;
+}
+.asset-library-actions svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.asset-library-list {
+  min-height: 3rem;
+}
+.asset-library-file {
+  display: grid;
+  gap: 0.125rem;
+  align-content: center;
+  min-height: 3.25rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.asset-library-file h3 {
+  margin: 0;
+}
+.asset-library-meta {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.asset-library-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+}
+.asset-library-empty > svg {
+  color: var(--muted-foreground);
+}
+.asset-library-empty > p:not(.caption) {
+  font-weight: 600;
+}
+.asset-library-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.asset-import-progress {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+.asset-import-progress > .library-bar {
+  margin-bottom: 0.25rem;
+}
+.asset-import-progress [role='status'] {
+  font-size: 0.8125rem;
+}
+/* One accessible clear action rather than a platform-specific duplicate. */
+.library-search-input::-webkit-search-cancel-button,
+.library-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Cabinet identity appears once; each capture opens its original file details. */
+.ir-cabinet + .ir-cabinet {
+  margin-top: 1.5rem;
+}
+.ir-cabinet-heading {
+  padding: 0.625rem 0 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.ir-cabinet-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.ir-cabinet-heading p {
+  margin: 0.125rem 0 0;
+}
+.ir-capture {
+  border-bottom: 1px solid var(--border);
+}
+.ir-capture > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: var(--touch-target);
+  padding: 0.625rem 0;
+  list-style: none;
+  cursor: pointer;
+}
+.ir-capture > summary::-webkit-details-marker {
+  display: none;
+}
+.ir-capture-label {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.ir-capture h4 {
+  margin: 0;
+}
+.ir-file-details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  padding: 0 0 0.75rem;
+  font-size: 0.8125rem;
+}
+.ir-file-details dt {
+  color: var(--muted-foreground);
+}
+.ir-file-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.nam-library-file {
+  position: relative;
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+.nam-library-picture {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  overflow: hidden;
+  background: var(--muted);
+  border-radius: var(--radius);
+}
+.nam-library-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.nam-library-picture svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--muted-foreground);
+}
+.asset-preview-trigger {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.asset-preview-trigger::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.asset-preview-trigger:focus-visible {
+  outline: none;
+}
+.nam-library-file:has(.asset-preview-trigger:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.local-model-details {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.local-model-placeholder {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 5rem;
+  height: 5rem;
+  background: var(--muted);
+  border-radius: var(--radius);
+}
+.local-model-placeholder svg {
+  width: 2rem;
+  height: 2rem;
+  color: var(--muted-foreground);
+}
+.library-audition {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.library-audition h3 {
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+.library-audition .caption {
+  margin: 0;
+}
+
+.library-model-preview .library-meta {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.local-model-details p {
+  overflow-wrap: anywhere;
+}
+
+.ir-capture .library-meta {
+  font-weight: 400;
+}
+
+.library-model-preview .tone-details {
+  grid-template-columns: clamp(5rem, 22vw, 7rem) minmax(0, 1fr);
+  padding: 0;
+  border: 0;
+  gap: 1rem;
+}
+.library-model-preview .tone-details-picture {
+  width: clamp(5rem, 22vw, 7rem);
+  height: clamp(5rem, 22vw, 7rem);
+  border: 0;
+  background: var(--muted);
+}
+.library-model-preview .tone-details-picture img {
+  object-fit: contain;
+}

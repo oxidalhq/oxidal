@@ -60,3 +60,16 @@ it('says details need a connection when TONE3000 cannot be reached', async () =>
     await screen.findByText('Tone details need a TONE3000 connection.'),
   ).toBeInTheDocument();
 });
+
+it('uses downloaded metadata and the unit image cache without a provider metadata request', () => {
+  const saved = tone(1004, 'https://www.tone3000.com/tones/saved');
+  const { container } = render(
+    <ToneDetails toneId={1004} initialTone={saved} />,
+  );
+  expect(screen.getByText('1997 Match Brave 2x12')).toBeVisible();
+  expect(container.querySelector('img')).toHaveAttribute(
+    'src',
+    '/tone-1004.png',
+  );
+  expect(tone3000Tone).not.toHaveBeenCalled();
+});

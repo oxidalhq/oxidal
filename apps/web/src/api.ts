@@ -806,10 +806,15 @@ export async function localModels(
   after: string | null,
   signal: AbortSignal,
   all = false,
+  filter?: { format: 'nam' | 'ir'; query: string },
 ): Promise<LocalModelPage> {
   const params = new URLSearchParams();
   if (after) params.set('after', after);
   if (all) params.set('all', 'true');
+  if (filter) {
+    params.set('format', filter.format);
+    if (filter.query.trim()) params.set('query', filter.query.trim());
+  }
   const query = params.size ? `?${params}` : '';
   const body = await presetResponse(
     await fetch(`/api/v1/models/local${query}`, { signal, cache: 'no-store' }),
@@ -824,16 +829,16 @@ export async function uploadLocalModel(
 ): Promise<LocalModel> {
   if (file.size === 0 || file.size > 32 * 1024 * 1024)
     throw new Error('Choose a file up to 32 MiB.');
+  const params = new URLSearchParams({ name: file.name });
+  const folder = file.webkitRelativePath?.split('/').slice(0, -1).join('/');
+  if (folder) params.set('folder', folder);
   const body = await presetResponse(
-    await fetch(
-      `/api/v1/models/local?${new URLSearchParams({ name: file.name })}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: file,
-        signal,
-      },
-    ),
+    await fetch(`/api/v1/models/local?${params}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+      signal,
+    }),
   );
   if (!localModelValidator(body))
     throw new Error('Incompatible local model receipt');

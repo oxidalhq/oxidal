@@ -199,7 +199,7 @@ test('rig controls follow the actual session without example effects', async ({
     .getByRole('button', { name: 'Browse presets', exact: true })
     .click();
   await expect(
-    page.getByRole('heading', { name: 'Preset library', exact: true }),
+    page.getByRole('heading', { name: 'Library', exact: true }),
   ).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search presets' }).fill('Bogner');
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
@@ -4763,4 +4763,122 @@ test('native preset library keeps originals accessible when saved copies cannot 
   await expect(page.getByText('Saved copies could not be read.')).toHaveCount(
     0,
   );
+});
+
+test('device portrait shared NAM and IR libraries import, search and page independently', async ({
+  page,
+}, info) => {
+  test.setTimeout(90000);
+  const prefix = `IR library ${info.project.name}`;
+  const endpoint = '/api/v1/models/local';
+  for (let i = 0; i < 66; i++) {
+    const response = await page.request.post(
+      `${endpoint}?name=${encodeURIComponent(`${prefix} ${i}.wav`)}`,
+      {
+        data: Buffer.from('RIFF\x04\x00\x00\x00WAVE', 'binary'),
+        headers: { 'Content-Type': 'application/octet-stream' },
+      },
+    );
+    expect(response.status()).toBe(201);
+  }
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'IRs', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Search IRs' }).fill(prefix);
+  await expect(page.getByRole('heading', { level: 4 })).toHaveCount(64);
+  await page.screenshot({
+    path: `test-results/model-library-list-${info.project.name}.png`,
+  });
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 4 })).toHaveCount(2);
+  await page
+    .getByRole('searchbox', { name: 'Search IRs' })
+    .fill(`${prefix} 65.wav`);
+  await expect(page.getByRole('heading', { level: 4 })).toHaveCount(1);
+  await expect(
+    page.getByRole('heading', { name: `${prefix} 65`, exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'IRs pages' })).toHaveCount(
+    0,
+  );
+  await page.getByRole('button', { name: 'NAM models', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
+  await page.screenshot({
+    path: `test-results/model-library-import-${info.project.name}.png`,
+  });
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Choose files', exact: true }).click();
+  await (
+    await chooser
+  ).setFiles({
+    name: `${prefix}.nam`,
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from('{"architecture":"Linear","weights":[1]}'),
+  });
+  await expect(page.getByText(/Import complete: 1 of 1 files/)).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search NAM models' }).fill(prefix);
+  await expect(
+    page.getByRole('button', { name: `Preview ${prefix}`, exact: true }),
+  ).toBeVisible();
+  const audioBeforePreview = await (
+    await page.request.get('/api/v1/audio')
+  ).json();
+  await page
+    .getByRole('button', { name: `Preview ${prefix}`, exact: true })
+    .click();
+  const preview = page.getByRole('dialog', {
+    name: 'Model preview',
+    exact: true,
+  });
+  await expect(preview).toBeVisible();
+  await expect(
+    preview.getByText(/No TONE3000 reference in this file/),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('Start a native or mixed rig to audition this model.'),
+  ).toBeVisible();
+  const previewAccessibility = await new AxeBuilder({ page })
+    .include('.library-model-preview')
+    .analyze();
+  expect(previewAccessibility.violations).toEqual([]);
+  await page.screenshot({
+    path: `test-results/model-library-preview-${info.project.name}.png`,
+  });
+  await preview
+    .getByRole('button', { name: 'Close dialog', exact: true })
+    .click();
+  expect(await (await page.request.get('/api/v1/audio')).json()).toEqual(
+    audioBeforePreview,
+  );
+  await page.getByRole('button', { name: 'IRs', exact: true }).click();
+  await expect(page.getByRole('searchbox', { name: 'Search IRs' })).toHaveValue(
+    `${prefix} 65.wav`,
+  );
+  await expect(page.getByRole('heading', { level: 4 })).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+      ),
+    )
+    .toBe(true);
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  await expect(
+    page.getByRole('button', { name: 'Presets', exact: true }),
+  ).toBeVisible();
+  const accessibility = await new AxeBuilder({ page })
+    .include('.asset-library')
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+  await page.screenshot({
+    path: `test-results/model-library-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await page
+    .getByRole('searchbox', { name: 'Search IRs' })
+    .fill('unmatched-library-query');
+  await expect(page.getByText('No matching files')).toBeVisible();
+  await page.screenshot({
+    path: `test-results/model-library-empty-${info.project.name}.png`,
+  });
 });

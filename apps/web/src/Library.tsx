@@ -17,6 +17,7 @@ import { SavedRigs } from './SavedRigs';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
+import { ModelLibrary } from './ModelLibrary';
 import './Library.css';
 
 /** Immutable native originals; playback has its own explicitly started session.
@@ -41,10 +42,9 @@ export function Library({
   });
   const matches = (name: string) =>
     name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  const [page, setPage] = useWorkspaceState<'browse' | 'author' | 'new'>(
-    'library-page',
-    'browse',
-  );
+  const [page, setPage] = useWorkspaceState<
+    'browse' | 'author' | 'new' | 'nam' | 'ir'
+  >('library-page', 'browse');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);
@@ -172,31 +172,47 @@ export function Library({
     }
   }
   return (
-    <section className="instrument-surface" aria-label="Preset library">
-      <nav className="text-tabs" aria-label="Library sections">
+    <section className="instrument-surface" aria-label="Library">
+      <nav
+        className="text-tabs library-section-tabs"
+        aria-label="Library sections"
+      >
         <Button
           variant="ghost"
-          aria-current={page === 'browse' ? 'page' : undefined}
+          aria-current={page !== 'nam' && page !== 'ir' ? 'page' : undefined}
           onClick={() => setPage('browse')}
         >
-          Browse
+          Presets
         </Button>
         <Button
           variant="ghost"
-          aria-current={page === 'author' ? 'page' : undefined}
-          onClick={() => setPage('author')}
+          aria-label="NAM models"
+          aria-current={page === 'nam' ? 'page' : undefined}
+          onClick={() => setPage('nam')}
         >
-          Author
+          NAM models
         </Button>
         <Button
           variant="ghost"
-          aria-current={page === 'new' ? 'page' : undefined}
-          onClick={() => setPage('new')}
+          aria-current={page === 'ir' ? 'page' : undefined}
+          onClick={() => setPage('ir')}
         >
-          New preset
+          IRs
         </Button>
       </nav>
-      {page === 'new' ? (
+      {(page === 'author' || page === 'new') && (
+        <Button variant="ghost" onClick={() => setPage('browse')}>
+          ← Back to presets
+        </Button>
+      )}
+      {page === 'nam' || page === 'ir' ? (
+        <ModelLibrary
+          key={page}
+          format={page}
+          connected={connected}
+          onOpenRig={onOpenRig}
+        />
+      ) : page === 'new' ? (
         <GraphAuthor connected={connected} onOpenRig={onOpenRig} />
       ) : page === 'browse' ? (
         <>
@@ -262,14 +278,22 @@ export function Library({
                 Artwork
               </Button>
             </div>
-            <Button
-              className="library-manage"
-              variant="outline"
-              aria-expanded={manage}
-              onClick={() => setManage((v) => !v)}
-            >
-              Manage library
-            </Button>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button variant="ghost" onClick={() => setPage('author')}>
+                Author
+              </Button>
+              <Button variant="ghost" onClick={() => setPage('new')}>
+                New preset
+              </Button>
+              <Button
+                className="library-manage"
+                variant="outline"
+                aria-expanded={manage}
+                onClick={() => setManage((v) => !v)}
+              >
+                Manage library
+              </Button>
+            </div>
           </div>
           {manage && (
             <LibraryManagement

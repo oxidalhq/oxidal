@@ -4462,6 +4462,21 @@
     "LocalModel": {
       "type": "object",
       "properties": {
+        "audio": {
+          "description": "Actual bounded WAV-header readings; absent for NAM/unsupported headers.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WavInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "folder": {
+          "description": "Display-only relative import folder; never used as a storage path.",
+          "type": "string"
+        },
         "format": {
           "type": "string"
         },
@@ -4472,8 +4487,29 @@
         "id": {
           "type": "string"
         },
+        "nam": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NamInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "name": {
           "type": "string"
+        },
+        "provider_tone": {
+          "description": "Persisted metadata of this downloaded tone, available without an account request.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tone"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "sha256": {
           "type": "string"
@@ -5127,6 +5163,49 @@
         "graph_phase",
         "rig_phase"
       ]
+    },
+    "NamInfo": {
+      "type": "object",
+      "properties": {
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gear": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_tone_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trainer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
     },
     "NativeDefaultSettings": {
       "type": "object",
@@ -8738,6 +8817,48 @@
       "required": [
         "target",
         "value"
+      ]
+    },
+    "WavInfo": {
+      "type": "object",
+      "properties": {
+        "bits_per_sample": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "channels": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "floating_point": {
+          "type": "boolean"
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sample_rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sample_rate",
+        "channels",
+        "bits_per_sample",
+        "floating_point",
+        "frames",
+        "duration_ms"
       ]
     }
   }

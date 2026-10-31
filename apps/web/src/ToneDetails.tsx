@@ -1,3 +1,4 @@
+import './ToneDetails.css';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { tone3000Tone, toneImage, type TonePage } from './api';
@@ -32,17 +33,31 @@ function toneLink(tone: Pick<Tone, 'id' | 'url'>) {
  * reach TONE3000; the block keeps working without it.
  * @see docs/tone3000-account.md
  */
-export function ToneDetails({ toneId }: { toneId: number }) {
+export function ToneDetails({
+  toneId,
+  initialTone,
+}: {
+  toneId: number;
+  initialTone?: Tone;
+}) {
   // Another block starts afresh instead of showing the last one's details.
-  return <ToneCard key={toneId} toneId={toneId} />;
+  return <ToneCard key={toneId} toneId={toneId} initialTone={initialTone} />;
 }
 
-function ToneCard({ toneId }: { toneId: number }) {
-  const [tone, setTone] = useState<Tone | null>(known.get(toneId) ?? null);
+function ToneCard({
+  toneId,
+  initialTone,
+}: {
+  toneId: number;
+  initialTone?: Tone;
+}) {
+  const [tone, setTone] = useState<Tone | null>(
+    initialTone ?? known.get(toneId) ?? null,
+  );
   const [error, setError] = useState('');
   const [pictureFailed, setPictureFailed] = useState(false);
   useEffect(() => {
-    if (known.has(toneId)) return;
+    if (initialTone || known.has(toneId)) return;
     const abort = new AbortController();
     tone3000Tone(toneId, abort.signal)
       .then((found) => {
@@ -53,7 +68,7 @@ function ToneCard({ toneId }: { toneId: number }) {
         if (!abort.signal.aborted) setError(String(cause));
       });
     return () => abort.abort();
-  }, [toneId]);
+  }, [toneId, initialTone]);
   if (!tone)
     return (
       <p className="caption" role={error ? 'alert' : 'status'}>

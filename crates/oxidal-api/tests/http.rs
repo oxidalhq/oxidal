@@ -1624,6 +1624,106 @@ async fn native_device_defaults_are_durable_validated_and_revision_checked() {
 }
 
 #[tokio::test]
+async fn uploaded_nam_descriptions_and_cached_tone_images_need_no_account() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let model = json!({"architecture":"Linear","metadata":{"name":"Independent amp","modeled_by":"Maker","trainer":"TONE3000","model_id":123}});
+    let uploaded: Value = client
+        .post(format!("{url}/models/local?name=Amp.nam"))
+        .body(serde_json::to_vec(&model).unwrap())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(uploaded["nam"]["name"], "Independent amp");
+    assert_eq!(uploaded["nam"]["author"], "Maker");
+    assert!(uploaded["nam"]["source_tone_id"].is_null());
+    assert!(uploaded.get("provider_tone").is_none());
+    let images = path.with_extension("presets").join("tone-images");
+    std::fs::create_dir_all(&images).unwrap();
+    std::fs::write(images.join("42.img"), b"cached-picture").unwrap();
+    std::fs::write(images.join("42.type"), "image/png").unwrap();
+    let image = client
+        .get(format!("{url}/tone3000/tones/42/image"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(image.status(), 200);
+    assert_eq!(image.bytes().await.unwrap().as_ref(), b"cached-picture");
+    task.abort();
+    let _ = std::fs::remove_dir_all(path.with_extension("presets"));
+}
+
+#[tokio::test]
+async fn ir_listing_reads_actual_wav_header_without_changing_audio() {
+    let (url, task, path) = start(false).await;
+    let client = reqwest::Client::new();
+    let endpoint = format!("{url}/models/local");
+    let before: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let mut wav = b"RIFF".to_vec();
+    wav.extend(324u32.to_le_bytes());
+    wav.extend(b"WAVEfmt ");
+    wav.extend(16u32.to_le_bytes());
+    wav.extend(1u16.to_le_bytes());
+    wav.extend(1u16.to_le_bytes());
+    wav.extend(48000u32.to_le_bytes());
+    wav.extend(144000u32.to_le_bytes());
+    wav.extend(3u16.to_le_bytes());
+    wav.extend(24u16.to_le_bytes());
+    wav.extend(b"data");
+    wav.extend(288u32.to_le_bytes());
+    wav.resize(332, 0);
+    assert_eq!(
+        client
+            .post(&endpoint)
+            .query(&[("name", "Cab.wav"), ("folder", "Cabinet/44.1 kHz")])
+            .body(wav)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        201
+    );
+    let page: Value = client
+        .get(&endpoint)
+        .query(&[("format", "ir")])
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let audio = &page["data"][0]["audio"];
+    assert_eq!(audio["sample_rate"], 48000);
+    assert_eq!(audio["bits_per_sample"], 24);
+    assert_eq!(audio["channels"], 1);
+    assert_eq!(audio["frames"], 96);
+    assert_eq!(audio["duration_ms"], 2.0);
+    assert_eq!(
+        client
+            .get(format!("{url}/audio"))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap(),
+        before
+    );
+    task.abort();
+    let _ = std::fs::remove_dir_all(path.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn local_file_upload_needs_no_provider_account_and_does_not_change_audio() {
     let (url, task, path) = start(false).await;
     let client = reqwest::Client::new();
@@ -1658,6 +1758,43 @@ async fn local_file_upload_needs_no_provider_account_and_does_not_change_audio()
     assert_eq!(page["data"][0], uploaded);
     assert_eq!(uploaded["format"], "nam");
     assert!(uploaded.get("tone_id").is_none());
+    let folder: Value = client
+        .post(&endpoint)
+        .query(&[("name", "Folder amp.nam"), ("folder", "My models/Clean")])
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(folder["folder"], "My models/Clean");
+    for (format, query, count) in [
+        ("nam", "LOCAL AMP", 1),
+        ("ir", "", 0),
+        ("nam", "missing", 0),
+    ] {
+        let filtered: Value = client
+            .get(&endpoint)
+            .query(&[("all", "true"), ("format", format), ("query", query)])
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(filtered["data"].as_array().unwrap().len(), count);
+    }
+    assert_eq!(
+        client
+            .get(&endpoint)
+            .query(&[("format", "wrong")])
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
     let larger = serde_json::to_vec(
         &json!({"architecture":"Linear","weights":[1],"metadata":{"padding":"x".repeat(128*1024)}}),
     )

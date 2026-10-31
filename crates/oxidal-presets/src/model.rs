@@ -1,12 +1,30 @@
-//! Verified temporary audition assets. A staged asset is not a saved rig.
+//! Verified persistent NAM/IR library and audition assets. A file is not a saved rig.
 use crate::{Error, MAX_FILE_BYTES, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+    time::SystemTime,
 };
+
+#[derive(Debug)]
+struct IndexEntry {
+    id: String,
+    format: String,
+    downloaded: bool,
+    search: String,
+    sort: String,
+}
+#[derive(Debug)]
+struct CachedIndex {
+    modified: SystemTime,
+    entries: Arc<Vec<IndexEntry>>,
+}
+static LIBRARY_INDEX: OnceLock<Mutex<BTreeMap<PathBuf, CachedIndex>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -139,9 +157,43 @@ impl ModelStore {
     pub fn new(root: PathBuf) -> Self {
         Self { root }
     }
+    /// Bounded informational header inspection for an existing IR. Invalid or
+    /// unsupported WAV headers have no information; playback still verifies bytes.
+    pub fn wav_info(&self, id: &str) -> Result<Option<crate::WavInfo>> {
+        let asset = self.metadata(id)?;
+        if asset.format != "ir" {
+            return Ok(None);
+        }
+        let path = self.root.join(id).join(asset.filename());
+        let metadata = fs::symlink_metadata(&path)?;
+        if !metadata.file_type().is_file() || metadata.len() > MAX_FILE_BYTES as u64 {
+            return Ok(None);
+        }
+        let mut file = fs::File::open(path)?;
+        Ok(crate::WavInfo::read(&mut file, metadata.len()))
+    }
     /// Browser uploads are inert content-addressed assets, not provider identities.
     /// Native preparation remains the authority for model/IR compatibility.
     pub fn stage_local(&self, name: &str, bytes: &[u8]) -> Result<(String, ModelAsset)> {
+        self.stage_local_in_folder(name, None, bytes)
+    }
+    /// A display-only relative folder preserves the organization of bulk imports.
+    /// It is never resolved as a filesystem path.
+    pub fn stage_local_in_folder(
+        &self,
+        name: &str,
+        folder: Option<&str>,
+        bytes: &[u8],
+    ) -> Result<(String, ModelAsset)> {
+        if folder.is_some_and(|f| {
+            f.len() > 1024
+                || f.contains('\\')
+                || f.chars().any(char::is_control)
+                || f.split('/')
+                    .any(|p| p.is_empty() || matches!(p, "." | ".."))
+        }) {
+            return Err(Error::Invalid("Choose a relative display folder"));
+        }
         if name.is_empty()
             || name.len() > 200
             || name.contains(['/', '\\'])
@@ -163,15 +215,20 @@ impl ModelStore {
         if bytes.is_empty() || bytes.len() > MAX_FILE_BYTES {
             return Err(Error::Invalid("Model file must contain 1 byte to 32 MiB"));
         }
-        if format == "nam" {
+        let nam_info = if format == "nam" {
             let model: serde_json::Value = serde_json::from_slice(bytes)
                 .map_err(|_| Error::Invalid("NAM file is not valid JSON"))?;
             if !model.is_object() || !model["architecture"].is_string() {
                 return Err(Error::Invalid("NAM file has no architecture"));
             }
-        } else if bytes.len() < 12
-            || !matches!(&bytes[..4], b"RIFF" | b"RF64")
-            || &bytes[8..12] != b"WAVE"
+            Some(crate::NamInfo::from_model(&model))
+        } else {
+            None
+        };
+        if format == "ir"
+            && (bytes.len() < 12
+                || !matches!(&bytes[..4], b"RIFF" | b"RF64")
+                || &bytes[8..12] != b"WAVE")
         {
             return Err(Error::Invalid("IR file is not a WAV file"));
         }
@@ -189,7 +246,14 @@ impl ModelStore {
             .and_then(|s| s.to_str())
             .unwrap_or(name)
             .to_owned();
-        let tone = serde_json::json!({"id":0,"local":true,"title":title,"format":format,"models":[{"id":model_id,"name":title,"model_url":format!("oxidal-model://{sha256}/{}",if format=="nam"{"model.nam"}else{"model.wav"})}]});
+        let mut tone = serde_json::json!({"id":0,"local":true,"title":title,"format":format,"models":[{"id":model_id,"name":title,"model_url":format!("oxidal-model://{sha256}/{}",if format=="nam"{"model.nam"}else{"model.wav"})}]});
+        if let Some(folder) = folder {
+            tone["oxidal_folder"] = folder.into();
+        }
+        if let Some(info) = nam_info {
+            tone["oxidal_nam"] =
+                serde_json::to_value(info).map_err(|_| Error::Invalid("Invalid NAM metadata"))?;
+        }
         let asset = ModelAsset {
             schema: 1,
             tone_id: 0,
@@ -311,6 +375,144 @@ impl ModelStore {
     /// Every model kept on this unit: local files and, with `downloads`,
     /// models fetched from TONE3000 too.
     pub fn page(&self, after: Option<&str>, downloads: bool) -> Result<LocalAssetPage> {
+        self.legacy_page(after, downloads, None, "")
+    }
+    /// Filter before pagination so a match beyond the first page is reachable
+    /// without loading every model payload or accumulating the library in a UI.
+    pub fn filtered_page(
+        &self,
+        after: Option<&str>,
+        downloads: bool,
+        format: Option<&str>,
+        query: &str,
+    ) -> Result<LocalAssetPage> {
+        if format.is_none() && query.is_empty() {
+            return self.page(after, downloads);
+        }
+        if format.is_some_and(|f| !matches!(f, "nam" | "ir"))
+            || query.chars().count() > 256
+            || after.is_some_and(|id| !hash(id))
+        {
+            return Err(Error::Invalid("Invalid model format, search or cursor"));
+        }
+        let index = self.browse_index()?;
+        let start = match after {
+            Some(id) => {
+                index
+                    .iter()
+                    .position(|e| e.id == id)
+                    .ok_or(Error::Conflict(
+                        "File library changed; return to the first page",
+                    ))?
+                    + 1
+            }
+            None => 0,
+        };
+        let query = query.trim().to_lowercase();
+        let matched = index
+            .iter()
+            .skip(start)
+            .filter(|e| {
+                (downloads || !e.downloaded)
+                    && format.is_none_or(|f| e.format == f)
+                    && e.search.contains(&query)
+            })
+            .take(65)
+            .collect::<Vec<_>>();
+        let next = (matched.len() > 64).then(|| matched[63].id.clone());
+        let rows = matched
+            .into_iter()
+            .take(64)
+            .map(|e| Ok((e.id.clone(), self.metadata(&e.id)?)))
+            .collect::<Result<Vec<_>>>()?;
+        Ok((rows, next))
+    }
+    /// Immutable metadata is indexed once per directory generation. New asset
+    /// publication/removal changes the root mtime; payloads are never cached.
+    fn browse_index(&self) -> Result<Arc<Vec<IndexEntry>>> {
+        let modified = match fs::symlink_metadata(&self.root) {
+            Ok(m) if m.file_type().is_dir() => m.modified()?,
+            Ok(_) => return Err(Error::Invalid("Invalid model directory")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Arc::new(Vec::new())),
+            Err(e) => return Err(e.into()),
+        };
+        let mut cache = LIBRARY_INDEX
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|_| Error::Invalid("Model index unavailable"))?;
+        if let Some(cached) = cache.get(&self.root).filter(|c| c.modified == modified) {
+            return Ok(cached.entries.clone());
+        }
+        let mut entries = Vec::new();
+        let mut bytes = 0usize;
+        for entry in fs::read_dir(&self.root)? {
+            let id = entry?.file_name().to_string_lossy().into_owned();
+            if !hash(&id) {
+                continue;
+            }
+            if entries.len() >= 131072 {
+                return Err(Error::Invalid(
+                    "Model library exceeds the bounded index capacity",
+                ));
+            }
+            let asset = self.metadata(&id)?;
+            let folder = asset.tone["oxidal_folder"].as_str().unwrap_or("");
+            let info = &asset.tone["oxidal_nam"];
+            let search = format!(
+                "{}\n{}\n{folder}\n{}\n{}\n{}",
+                asset.title,
+                asset.name,
+                info["name"].as_str().unwrap_or(""),
+                info["author"].as_str().unwrap_or(""),
+                info["gear"].as_str().unwrap_or("")
+            )
+            .to_lowercase();
+            let sort = if folder.is_empty() {
+                asset.name.clone()
+            } else {
+                format!("{folder}/{}", asset.name)
+            };
+            bytes += id.len() + search.len() + sort.len() + asset.format.len();
+            if bytes > 32 * 1024 * 1024 {
+                return Err(Error::Invalid(
+                    "Model library exceeds the bounded index capacity",
+                ));
+            }
+            entries.push(IndexEntry {
+                id,
+                format: asset.format,
+                downloaded: asset.tone_id != 0,
+                search,
+                sort,
+            });
+        }
+        entries.sort_by(|a, b| natural_name(&a.sort, &b.sort).then(a.id.cmp(&b.id)));
+        let entries = Arc::new(entries);
+        // At most two roots (e.g. a production root and a disposable qualifier).
+        // Eviction only loses a derived acceleration; disk remains authoritative.
+        if !cache.contains_key(&self.root) && cache.len() >= 2 {
+            cache.pop_first();
+        }
+        cache.insert(
+            self.root.clone(),
+            CachedIndex {
+                modified,
+                entries: entries.clone(),
+            },
+        );
+        Ok(entries)
+    }
+    fn legacy_page(
+        &self,
+        after: Option<&str>,
+        downloads: bool,
+        format: Option<&str>,
+        query: &str,
+    ) -> Result<LocalAssetPage> {
+        if format.is_some_and(|f| !matches!(f, "nam" | "ir")) || query.chars().count() > 256 {
+            return Err(Error::Invalid("Invalid model format or search"));
+        }
+        let query = query.trim().to_lowercase();
         if after.is_some_and(|s| !hash(s)) {
             return Err(Error::Invalid("Invalid local model cursor"));
         }
@@ -340,6 +542,18 @@ impl ModelStore {
                 .map_err(|_| Error::Invalid("Invalid model metadata"))?;
             asset.validate()?;
             if asset.tone_id != 0 && !downloads {
+                continue;
+            }
+            if format.is_some_and(|f| f != asset.format)
+                || (!query.is_empty()
+                    && !asset.title.to_lowercase().contains(&query)
+                    && !asset.name.to_lowercase().contains(&query)
+                    && !asset.tone["oxidal_folder"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&query))
+            {
                 continue;
             }
             if rows.len() == 64 {
