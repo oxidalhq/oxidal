@@ -281,11 +281,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 announced = true;
             }
             // Shared bounded, nonblocking reads outside PCM; failures stay in MIDI status.
-            if primed {
-                let mut rig = shared.lock("midi poll");
-                if !rig.switching() {
-                    midi.poll(|settings, message| rig.active_mut().midi_message(settings, message));
-                }
+            if primed && !shared.lock("midi state").switching() {
+                // Device enumeration/open on a disconnected MIDI input can
+                // take several audio periods. Only dispatching a received
+                // message needs the rig; retries must never hold its lock.
+                midi.poll(|settings, message| {
+                    shared
+                        .lock("midi message")
+                        .active_mut()
+                        .midi_message(settings, message)
+                });
             }
             if pump.elapsed() >= Duration::from_millis(10) {
                 // JUCE dispatch waits up to 1 ms: run it outside the rig lock so
