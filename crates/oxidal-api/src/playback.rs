@@ -27,8 +27,13 @@ type Reply = Result<AudioState, String>;
 #[derive(Debug)]
 pub(super) struct Playback {
     boot: Arc<Policy>,
+    library_access: Arc<tokio::sync::RwLock<()>>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(AudioCommand, oneshot::Sender<Reply>)>,
+    commands: mpsc::Sender<(
+        AudioCommand,
+        oneshot::Sender<Reply>,
+        tokio::sync::OwnedRwLockReadGuard<()>,
+    )>,
     state: watch::Receiver<AudioState>,
     meters: watch::Receiver<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
@@ -1730,6 +1735,7 @@ impl Playback {
         config: &Config,
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
+        library_access: Arc<tokio::sync::RwLock<()>>,
     ) -> Result<Self, String> {
         if let Some(path) = &config.audio_worker
             && (!path.is_absolute() || !path.is_file())
@@ -1777,7 +1783,11 @@ impl Playback {
         };
         let (updates, state) = watch::channel(initial.clone());
         let (meters, meter_state) = watch::channel(None);
-        let (commands, mut receiver) = mpsc::channel::<(AudioCommand, oneshot::Sender<Reply>)>(1);
+        let (commands, mut receiver) = mpsc::channel::<(
+            AudioCommand,
+            oneshot::Sender<Reply>,
+            tokio::sync::OwnedRwLockReadGuard<()>,
+        )>(1);
         let mut owner = Owner {
             last_tool_poll: std::time::Instant::now(),
             levels,
@@ -1795,7 +1805,9 @@ impl Playback {
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
+        let owner_access = library_access.clone();
         tokio::spawn(async move {
+            let boot_access = owner_access.clone().read_owned().await;
             match boot {
                 Ok(Some(Choice::Native {
                     settings,
@@ -1810,16 +1822,18 @@ impl Playback {
                 // A corrupt preference is reported separately; audio was never started.
                 _ => (),
             }
+            drop(boot_access);
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             loop {
                 tokio::select! {
                     biased;
                     _ = async { match shutdown.as_mut() { Some(s) => { if !*s.borrow() { let _ = s.changed().await; } }, None => std::future::pending::<()>().await } } => break,
                     item = receiver.recv() => match item {
-                        Some((command, response)) => { let _ = response.send(owner.command(command).await); },
+                        Some((command, response, _access)) => { let _ = response.send(owner.command(command).await); },
                         None => break,
                     },
                     _ = interval.tick() => {
+                        let Ok(_access) = owner_access.clone().try_read_owned() else { continue; };
                         owner.check_exit();
                         owner.advance_model().await;
                         owner.poll_tools().await;
@@ -1830,6 +1844,8 @@ impl Playback {
                     },
                 }
             }
+            drop(receiver);
+            let _shutdown_access = owner_access.clone().read_owned().await;
             owner.checkpoint();
             // Retain the permit if the OS has not reaped a failed/stuck worker yet.
             while owner.worker.is_some() {
@@ -1841,6 +1857,7 @@ impl Playback {
         });
         Ok(Self {
             boot: policy,
+            library_access,
             commands,
             state,
             finished,
@@ -1860,9 +1877,10 @@ impl Playback {
         state
     }
     pub(crate) async fn dispatch(&self, command: AudioCommand) -> Reply {
+        let access = self.library_access.clone().read_owned().await;
         let (response, received) = oneshot::channel();
         self.commands
-            .try_send((command, response))
+            .try_send((command, response, access))
             .map_err(|_| "audio_busy")?;
         // The owner retains its command even when this client disconnects.
         let mut state = received

@@ -24,8 +24,13 @@ type Reply = Result<RigAudioState, String>;
 #[derive(Debug)]
 pub(super) struct RigPlayback {
     boot: Arc<Policy>,
+    library_access: Arc<tokio::sync::RwLock<()>>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(RigAudioCommand, oneshot::Sender<Reply>)>,
+    commands: mpsc::Sender<(
+        RigAudioCommand,
+        oneshot::Sender<Reply>,
+        tokio::sync::OwnedRwLockReadGuard<()>,
+    )>,
     state: watch::Receiver<RigAudioState>,
 }
 struct Worker {
@@ -1084,6 +1089,7 @@ impl RigPlayback {
         config: &Config,
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
+        library_access: Arc<tokio::sync::RwLock<()>>,
     ) -> Result<Self, String> {
         if config
             .rig_worker
@@ -1123,8 +1129,11 @@ impl RigPlayback {
             save: None,
         };
         let (updates, state) = watch::channel(initial.clone());
-        let (commands, mut receiver) =
-            mpsc::channel::<(RigAudioCommand, oneshot::Sender<Reply>)>(1);
+        let (commands, mut receiver) = mpsc::channel::<(
+            RigAudioCommand,
+            oneshot::Sender<Reply>,
+            tokio::sync::OwnedRwLockReadGuard<()>,
+        )>(1);
         let mut owner = Owner {
             levels,
             boot: policy.clone(),
@@ -1143,7 +1152,9 @@ impl RigPlayback {
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
+        let owner_access = library_access.clone();
         tokio::spawn(async move {
+            let boot_access = owner_access.clone().read_owned().await;
             match boot {
                 Ok(Some(Choice::Mixed { settings })) if owner.executable.is_some() => {
                     if let Err(error) = owner.start(settings).await {
@@ -1153,15 +1164,18 @@ impl RigPlayback {
                 // The shared boot error remains recoverable without changing PCM state.
                 _ => (),
             }
+            drop(boot_access);
             let mut interval = tokio::time::interval(Duration::from_millis(200));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {biased;
                     _=async{match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
-                    item=receiver.recv()=>match item{Some((command,response))=>{let _=response.send(owner.command(command).await);},None=>break},
-                    _=interval.tick()=>owner.poll().await,
+                    item=receiver.recv()=>match item{Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
+                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
                 }
             }
+            drop(receiver);
+            let _shutdown_access = owner_access.clone().read_owned().await;
             owner.checkpoint();
             while owner.worker.is_some() || owner.export.is_some() {
                 let _ = owner.release().await;
@@ -1174,6 +1188,7 @@ impl RigPlayback {
         });
         Ok(Self {
             boot: policy,
+            library_access,
             finished,
             commands,
             state,
@@ -1188,9 +1203,10 @@ impl RigPlayback {
         state
     }
     pub(crate) async fn dispatch(&self, command: RigAudioCommand) -> Reply {
+        let access = self.library_access.clone().read_owned().await;
         let (response, received) = oneshot::channel();
         self.commands
-            .try_send((command, response))
+            .try_send((command, response, access))
             .map_err(|_| "rig_audio_busy")?;
         let mut state = received
             .await
@@ -1236,6 +1252,7 @@ mod tests {
         std::fs::write(&executable, "#!/bin/sh\nexec sleep 60\n").unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
         let (shutdown, signal) = watch::channel(false);
+        let library_access = Arc::new(tokio::sync::RwLock::new(()));
         let rig = RigPlayback::new(
             &Config {
                 debug_socket: None,
@@ -1254,6 +1271,7 @@ mod tests {
             Arc::new(crate::levels::Levels::load(
                 root.join("presets/unit-levels.json"),
             )),
+            library_access.clone(),
         )
         .unwrap();
         let probe = oxidal_audio::AudioProbe {
@@ -1283,22 +1301,35 @@ mod tests {
         };
         for iteration in 0..2 {
             let s = rig.snapshot();
-            let starting = tokio::time::timeout(
-                Duration::from_secs(1),
-                rig.dispatch(RigAudioCommand {
-                    session: s.session,
-                    expected_revision: s.revision,
-                    action: RigAudioAction::Start {
-                        settings: Box::new(settings.clone()),
-                    },
-                }),
-            )
-            .await
-            .unwrap()
-            .unwrap();
+            let dispatch = rig.dispatch(RigAudioCommand {
+                session: s.session,
+                expected_revision: s.revision,
+                action: RigAudioAction::Start {
+                    settings: Box::new(settings.clone()),
+                },
+            });
+            tokio::pin!(dispatch);
+            let exclusive = library_access.write().await;
+            assert!(
+                tokio::time::timeout(Duration::from_millis(20), &mut dispatch)
+                    .await
+                    .is_err()
+            );
+            assert_eq!(rig.snapshot().revision, s.revision);
+            drop(exclusive);
+            let starting = tokio::time::timeout(Duration::from_secs(1), dispatch)
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(starting.phase, AudioPhase::Starting);
             assert!(starting.device_owned);
             assert!(crate::audio::PROBE.try_acquire().is_err());
+            // The guard covers file operations, never the running PCM lifetime.
+            drop(
+                tokio::time::timeout(Duration::from_secs(1), library_access.write())
+                    .await
+                    .unwrap(),
+            );
             if iteration == 0 {
                 let stopped = tokio::time::timeout(
                     Duration::from_secs(4),

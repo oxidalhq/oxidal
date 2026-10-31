@@ -16,7 +16,9 @@ where
     F: FnOnce(&mut Store) -> Result<Response, Error> + Send + 'static,
 {
     let store = shared.presets.clone();
+    let access = shared.library_access.clone().read_owned().await;
     match tokio::task::spawn_blocking(move || {
+        let _access = access;
         let mut store = store
             .lock()
             .map_err(|_| Error::Io(std::io::Error::other("store lock failed")))?;
@@ -113,7 +115,9 @@ pub(super) async fn owned_download(
 /// plugin URIs and scalar/MIDI state, never executable paths or device bindings.
 pub(super) async fn graphs(State(shared): State<Arc<Shared>>) -> Response {
     let root = shared.config.preset_dir.join("graphs");
+    let access = shared.library_access.clone().read_owned().await;
     match tokio::task::spawn_blocking(move || {
+        let _access = access;
         let catalog = oxidal_presets::CatalogStore::open(
             root.parent()
                 .ok_or(Error::Invalid("Invalid graph store"))?

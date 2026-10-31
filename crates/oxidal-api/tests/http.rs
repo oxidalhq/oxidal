@@ -5,6 +5,62 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+#[tokio::test]
+async fn interrupted_library_removal_recovers_before_router_start_and_corruption_blocks_startup() {
+    use oxidal_presets::{LibraryKind, RemovalReferences, RemovalRequest, RemovalStore, Store};
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-startup-removal-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let bytes = include_bytes!("../../oxidal-presets/tests/fixtures/authored-current.t3kpreset");
+    let id = Store::new(root.clone()).import(bytes).unwrap().sha256;
+    let removal = RemovalStore::new(root.clone());
+    let preview = removal
+        .preview(LibraryKind::Original, &id, &RemovalReferences::default())
+        .unwrap();
+    let pending = removal
+        .begin(
+            &RemovalRequest {
+                entry_kind: LibraryKind::Original,
+                id: id.clone(),
+                expected_preview: preview.token,
+                delete_models: false,
+            },
+            &RemovalReferences::default(),
+        )
+        .unwrap();
+    std::mem::forget(pending);
+    assert!(!root.join(format!("{id}.t3kpreset")).exists());
+    let config = Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: false,
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.clone(),
+        ui_dir: root.join("ui"),
+    };
+    assert!(router(config.clone()).is_ok());
+    assert_eq!(
+        std::fs::read(root.join(format!("{id}.t3kpreset"))).unwrap(),
+        bytes
+    );
+    let corrupt = root.join(".remove-corrupt");
+    std::fs::create_dir(&corrupt).unwrap();
+    std::fs::write(corrupt.join("intent.json"), b"invalid journal").unwrap();
+    let error = router(config).err().unwrap();
+    assert!(error.contains("Cannot recover interrupted preset removal"));
+    assert!(corrupt.join("intent.json").exists());
+    assert!(root.join(format!("{id}.t3kpreset")).exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf) {
     let path = std::env::temp_dir().join(format!(
         "oxidal-test-{}-{}.json",

@@ -42,6 +42,7 @@ impl Account {
         &self,
         request: StageModel,
         root: PathBuf,
+        library_access: Option<Arc<tokio::sync::RwLock<()>>>,
     ) -> Result<StagedModel, &'static str> {
         if request.tone_id == 0 || request.model_id == 0 {
             return Err("Select a tone and model");
@@ -97,10 +98,17 @@ impl Account {
             sha256: sha256.clone(),
             tone: metadata,
         };
-        let id = tokio::task::spawn_blocking(move || ModelStore::new(root).stage(&asset, &bytes))
-            .await
-            .map_err(|_| "Model staging stopped")?
-            .map_err(|_| "Cannot store the audition model; check free storage")?;
+        let library_guard = match library_access {
+            Some(gate) => Some(gate.read_owned().await),
+            None => None,
+        };
+        let id = tokio::task::spawn_blocking(move || {
+            let _library_guard = library_guard;
+            ModelStore::new(root).stage(&asset, &bytes)
+        })
+        .await
+        .map_err(|_| "Model staging stopped")?
+        .map_err(|_| "Cannot store the audition model; check free storage")?;
         // A disconnect may arrive during the disk write. The inert cache may remain, but
         // its reply cannot authorize a later chain edit on behalf of that account.
         if !self.current(&access) {
@@ -211,7 +219,11 @@ pub(crate) async fn stage(
 ) -> Response {
     match shared
         .account
-        .stage_model(request, shared.config.preset_dir.join("audition-models"))
+        .stage_model(
+            request,
+            shared.config.preset_dir.join("audition-models"),
+            Some(shared.library_access.clone()),
+        )
         .await
     {
         Ok(value) => Json(value).into_response(),

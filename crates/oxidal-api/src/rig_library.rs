@@ -150,7 +150,9 @@ where
     let root = shared.config.preset_dir.clone();
     // The blocking task retains admission if the requester disconnects. No file
     // reads/parsing/fsync execute on the async or audio threads.
+    let access = shared.library_access.clone().read_owned().await;
     match tokio::task::spawn_blocking(move || {
+        let _access = access;
         let _permit = permit;
         operation(root)
     })

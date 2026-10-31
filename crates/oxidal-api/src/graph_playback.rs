@@ -19,8 +19,13 @@ type Reply = Result<GraphAudioState, String>;
 #[derive(Debug)]
 pub(super) struct GraphPlayback {
     boot: Arc<Policy>,
+    library_access: Arc<tokio::sync::RwLock<()>>,
     pub(super) finished: watch::Receiver<bool>,
-    commands: mpsc::Sender<(GraphAudioCommand, oneshot::Sender<Reply>)>,
+    commands: mpsc::Sender<(
+        GraphAudioCommand,
+        oneshot::Sender<Reply>,
+        tokio::sync::OwnedRwLockReadGuard<()>,
+    )>,
     state: watch::Receiver<GraphAudioState>,
 }
 struct Worker {
@@ -491,6 +496,7 @@ impl GraphPlayback {
         config: &Config,
         policy: Arc<Policy>,
         levels: Arc<crate::levels::Levels>,
+        library_access: Arc<tokio::sync::RwLock<()>>,
     ) -> Result<Self, String> {
         if let Some(p) = &config.graph_worker
             && (!p.is_absolute() || !p.is_file())
@@ -525,8 +531,11 @@ impl GraphPlayback {
             saved_copy: None,
         };
         let (updates, state) = watch::channel(initial.clone());
-        let (commands, mut receiver) =
-            mpsc::channel::<(GraphAudioCommand, oneshot::Sender<Reply>)>(1);
+        let (commands, mut receiver) = mpsc::channel::<(
+            GraphAudioCommand,
+            oneshot::Sender<Reply>,
+            tokio::sync::OwnedRwLockReadGuard<()>,
+        )>(1);
         let mut owner = Owner {
             levels,
             boot: policy.clone(),
@@ -539,23 +548,28 @@ impl GraphPlayback {
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
+        let owner_access = library_access.clone();
         tokio::spawn(async move {
+            let boot_access = owner_access.clone().read_owned().await;
             if let Ok(Some(Choice::Effects { settings })) = boot
                 && owner.executable.is_some()
                 && let Err(error) = owner.start(settings).await
             {
                 owner.phase(AudioPhase::Failed, Some(error));
             }
+            drop(boot_access);
             let mut interval = tokio::time::interval(Duration::from_millis(200));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tokio::select! {
                     biased;
                     _=async {match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
-                    item=receiver.recv()=>match item {Some((command,response))=>{let _=response.send(owner.command(command).await);},None=>break},
-                    _=interval.tick()=>owner.poll().await,
+                    item=receiver.recv()=>match item {Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
+                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
                 }
             }
+            drop(receiver);
+            let _shutdown_access = owner_access.clone().read_owned().await;
             while owner.worker.is_some() {
                 if owner.release().await.is_err() {
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -565,6 +579,7 @@ impl GraphPlayback {
         });
         Ok(Self {
             boot: policy,
+            library_access,
             commands,
             state,
             finished,
@@ -579,9 +594,10 @@ impl GraphPlayback {
         state
     }
     pub(crate) async fn dispatch(&self, command: GraphAudioCommand) -> Reply {
+        let access = self.library_access.clone().read_owned().await;
         let (response, received) = oneshot::channel();
         self.commands
-            .try_send((command, response))
+            .try_send((command, response, access))
             .map_err(|_| "graph_audio_busy")?;
         let mut state = received
             .await

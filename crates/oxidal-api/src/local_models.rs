@@ -117,7 +117,9 @@ pub(super) async fn upload(
         Err(e) => return failure(e.status(), "File exceeds the 32 MiB upload limit"),
     };
     let root = shared.config.preset_dir.join("audition-models");
+    let access = shared.library_access.clone().read_owned().await;
     match tokio::task::spawn_blocking(move || {
+        let _access = access;
         ModelStore::new(root).stage_local_in_folder(&query.name, query.folder.as_deref(), &bytes)
     })
     .await
@@ -148,8 +150,12 @@ pub(super) async fn collection(
         return failure(StatusCode::BAD_REQUEST, "Choose local collection assets");
     };
     let root = shared.config.preset_dir.join("audition-models");
-    match tokio::task::spawn_blocking(move || ModelStore::new(root).collection(&request.assets))
-        .await
+    let access = shared.library_access.clone().read_owned().await;
+    match tokio::task::spawn_blocking(move || {
+        let _access = access;
+        ModelStore::new(root).collection(&request.assets)
+    })
+    .await
     {
         Ok(Ok((id, asset))) => (
             StatusCode::CREATED,
@@ -172,7 +178,9 @@ pub(super) async fn list(
         return failure(StatusCode::BAD_REQUEST, "Invalid local model cursor");
     };
     let root = shared.config.preset_dir.join("audition-models");
+    let access = shared.library_access.clone().read_owned().await;
     match tokio::task::spawn_blocking(move || {
+        let _access = access;
         let store = ModelStore::new(root);
         let (rows, next) = store.filtered_page(
             query.after.as_deref(),

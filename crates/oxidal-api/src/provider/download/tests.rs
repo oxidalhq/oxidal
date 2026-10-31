@@ -32,6 +32,7 @@ async fn entitled_download_is_verified_and_recalls_without_account_or_network() 
                 model_id: 9,
             },
             cached.clone(),
+            None,
         )
         .await
         .unwrap();
@@ -72,7 +73,8 @@ async fn wrong_target_and_redirect_never_publish_an_asset() {
                     tone_id: 7,
                     model_id: 10
                 },
-                cached.clone()
+                cached.clone(),
+                None,
             )
             .await
             .is_err()
@@ -84,7 +86,8 @@ async fn wrong_target_and_redirect_never_publish_an_asset() {
                     tone_id: 7,
                     model_id: 9
                 },
-                cached.clone()
+                cached.clone(),
+                None,
             )
             .await
             .unwrap_err(),
@@ -139,6 +142,7 @@ async fn empty_download_and_disconnect_during_transfer_leave_no_selectable_asset
                     model_id: 9,
                 },
                 destination,
+                None,
             )
             .await
     });

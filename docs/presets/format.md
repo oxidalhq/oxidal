@@ -317,6 +317,16 @@ current source/model references, and clear a deleted stopped source from its
 in-memory playback owner before committing. This primitive alone does not provide
 those runtime guarantees.
 
+The daemon now runs journal recovery before creating playback owners. A shared
+file-access gate covers accepted native/mixed/effects commands, their periodic
+checkpoint work, offline-editor exchanges and library publication. Its read guard
+travels with the accepted operation, including blocking jobs and abandoned HTTP
+exchanges. Exclusive access can wait for those operations without locking the PCM
+thread. Playback owners skip a periodic file-operation tick while exclusive work
+is pending. The permanent-delete coordinator, stopped-owner invalidation and UI
+are still pending; asynchronous worker preparations/exports also require explicit
+reference checks before that coordinator may commit a transaction.
+
 A preview addresses one library kind and immutable ID. Separate NAM/IR assets are
 kept by default. Optional cleanup matches embedded binary hashes or remembered
 model assignments and retains files referenced by other saved entries, remembered

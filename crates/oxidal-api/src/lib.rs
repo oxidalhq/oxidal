@@ -148,6 +148,7 @@ struct Shared {
     artwork_work: Arc<tokio::sync::Semaphore>,
     bundle_work: Arc<tokio::sync::Semaphore>,
     catalog_work: Arc<tokio::sync::Semaphore>,
+    library_access: Arc<tokio::sync::RwLock<()>>,
     debug: debug::DebugBridge,
     monitor: watch::Receiver<monitor::Monitoring>,
     history: Arc<monitor_history::Journal>,
@@ -221,6 +222,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .layer(middleware::from_fn(ui_cache));
     let (monitor_updates, monitor) = watch::channel(monitor::Monitoring::default());
+    oxidal_presets::RemovalStore::new(config.preset_dir.clone())
+        .recover()
+        .map_err(|e| format!("Cannot recover interrupted preset removal: {e}"))?;
+    let library_access = Arc::new(tokio::sync::RwLock::new(()));
     let boot = Arc::new(audio_boot::Policy::new(
         config.preset_dir.join("boot-audio.json"),
     ));
@@ -241,10 +246,26 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )),
         audit: audit::Audit::new(config.preset_dir.join("control-audit")),
         monitor,
-        playback: playback::Playback::new(&config, boot.clone(), levels.clone())?,
-        graph_playback: graph_playback::GraphPlayback::new(&config, boot.clone(), levels.clone())?,
-        rig_playback: rig_playback::RigPlayback::new(&config, boot, levels.clone())?,
+        playback: playback::Playback::new(
+            &config,
+            boot.clone(),
+            levels.clone(),
+            library_access.clone(),
+        )?,
+        graph_playback: graph_playback::GraphPlayback::new(
+            &config,
+            boot.clone(),
+            levels.clone(),
+            library_access.clone(),
+        )?,
+        rig_playback: rig_playback::RigPlayback::new(
+            &config,
+            boot,
+            levels.clone(),
+            library_access.clone(),
+        )?,
         levels,
+        library_access,
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         boosts: Arc::new(boosts::Store::load(config.preset_dir.join("boosts.json"))),
         blends: Arc::new(blends::Store::load(config.preset_dir.join("blends.json"))),

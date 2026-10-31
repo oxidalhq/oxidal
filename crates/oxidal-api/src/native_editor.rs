@@ -84,20 +84,28 @@ impl Worker {
     }
 }
 async fn dispatch(shared: Arc<Shared>, request: WorkerRequest) -> Response {
-    exchange(shared.native.clone(), request).await
+    let access = shared.library_access.clone().read_owned().await;
+    exchange(shared.native.clone(), request, Some(access)).await
 }
-async fn exchange(worker: Arc<Mutex<Option<Worker>>>, request: WorkerRequest) -> Response {
+async fn exchange(
+    worker: Arc<Mutex<Option<Worker>>>,
+    request: WorkerRequest,
+    access: Option<tokio::sync::OwnedRwLockReadGuard<()>>,
+) -> Response {
     // Complete each written request/reply pair even when HTTP navigation/disconnect
     // cancels its caller. Otherwise the next request would consume the abandoned
     // reply, losing revision and command identity across the IPC stream.
-    tokio::spawn(async move { dispatch_owned(worker, request).await })
-        .await
-        .unwrap_or_else(|_| {
-            failure(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Native exchange interrupted",
-            )
-        })
+    tokio::spawn(async move {
+        let _access = access;
+        dispatch_owned(worker, request).await
+    })
+    .await
+    .unwrap_or_else(|_| {
+        failure(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Native exchange interrupted",
+        )
+    })
 }
 async fn dispatch_owned(worker: Arc<Mutex<Option<Worker>>>, request: WorkerRequest) -> Response {
     // Allow an in-flight status read to finish before an edit. Revision/session checks
@@ -153,8 +161,12 @@ mod tests {
             output: BufReader::new(child.stdout.take().unwrap()),
             child,
         })));
+        let library_access = Arc::new(tokio::sync::RwLock::new(()));
+        let access = library_access.clone().read_owned().await;
         let first_worker = worker.clone();
-        let first = tokio::spawn(async move { exchange(first_worker, WorkerRequest::State).await });
+        let first = tokio::spawn(async move {
+            exchange(first_worker, WorkerRequest::State, Some(access)).await
+        });
         let mut line = String::new();
         tokio::time::timeout(Duration::from_secs(5), received.read_line(&mut line))
             .await
@@ -162,12 +174,16 @@ mod tests {
             .unwrap();
         first.abort();
         let _ = first.await;
-        let second = exchange(worker.clone(), WorkerRequest::State).await;
+        // A cancelled HTTP task cannot release library protection while the
+        // accepted worker operation can still read or publish preset files.
+        assert!(library_access.try_write().is_err());
+        let second = exchange(worker.clone(), WorkerRequest::State, None).await;
         let bytes = axum::body::to_bytes(second.into_body(), 1024)
             .await
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body["error"], "reply-2");
+        assert!(library_access.try_write().is_ok());
         let mut guard = worker.lock().await;
         let active = guard.as_mut().unwrap();
         active.child.kill().await.unwrap();
