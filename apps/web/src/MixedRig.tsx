@@ -39,6 +39,7 @@ import {
   CaretLeft,
   CaretRight,
   Trash,
+  Lightning,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
@@ -50,6 +51,7 @@ import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
 import { ArtworkDeck } from './AssetArtwork';
 import { ToneDetails } from './ToneDetails';
+import { PerformView } from './PerformView';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -366,6 +368,8 @@ export function MixedRig({
     }
   }
   const [editing, setEditing] = useState(false);
+  /** The stage view: scene pads and effect switches, nothing to edit. */
+  const [performing, setPerforming] = useState(false);
   /** An edit waiting for the player to accept losing unsaved block edits. */
   const [unsaved, setUnsaved] = useState<(() => Promise<void>) | null>(null);
   /** Builds the next version of this preset, plays it and hides the one it
@@ -946,6 +950,127 @@ export function MixedRig({
         }
       : null;
   };
+  // Perform: the sounding scene's blocks and effects as switches, scene pads
+  // above, the preset pads below. A Hold effect's tile engages and releases the
+  // hold; any other effect's tile switches it in and out.
+  const holdOf = (node: string) =>
+    state.control?.controls.find(
+      (c) =>
+        c.target.kind === 'lv2' &&
+        c.target.node === node &&
+        c.target.symbol === 'hold',
+    );
+  const nativeSwitch = (node: string, block: string) =>
+    state.control?.controls.find(
+      (c) =>
+        c.target.kind === 'native' &&
+        c.target.node === node &&
+        c.target.parameter === `block:${block}:enabled`,
+    );
+  const activeScene = Math.max(
+    0,
+    sceneList.findIndex((s) => s.id === state.control?.scene),
+  );
+  const stageLanes: RigLaneVM[] = (
+    sceneLanes.length ? [sceneLanes[activeScene]!] : effectLanes
+  ).map((lane, _, all) => ({
+    ...lane,
+    tag: all.length > 1 ? lane.input : undefined,
+    blocks: lane.blocks
+      .filter((b) => !b.empty)
+      .map((b) => {
+        const hold = holdOf(laneTarget(b.id)?.node ?? '');
+        return hold ? { ...b, on: hold.value === hold.maximum } : b;
+      }),
+  }));
+  function switchTile(tile: string) {
+    const at = laneTarget(tile);
+    const control = current.current?.control;
+    if (!at || !control) return;
+    const hold = holdOf(at.node);
+    const toggle = hold ?? (at.block ? nativeSwitch(at.node, at.block) : null);
+    const bypass = control.controls.find(
+      (c) => c.target.kind === 'bypass' && c.target.node === at.node,
+    );
+    const [target, value] = toggle
+      ? [
+          toggle.target,
+          toggle.value === toggle.minimum ? toggle.maximum : toggle.minimum,
+        ]
+      : bypass
+        ? [bypass.target, bypass.value === 1 ? 0 : 1]
+        : [null, 0];
+    if (!target) return;
+    void command({
+      kind: 'control',
+      command: {
+        session: control.session,
+        expected_revision: control.revision,
+        target,
+        value,
+      },
+    });
+  }
+  if (performing && running)
+    return (
+      <>
+        <PerformView
+          now={{
+            session: state.session,
+            playing: running,
+            name: matching?.manifest.name,
+            modified: !!changed,
+          }}
+          lanes={stageLanes}
+          disabled={disabled || !!edit || editing || switching}
+          onToggle={switchTile}
+          onEdit={() => setPerforming(false)}
+          scenes={
+            !!state.control?.scenes?.scenes.length && (
+              <ScenePads
+                scenes={state.control.scenes.scenes}
+                active={state.control.scene}
+                fading={!!state.control.scene_transitioning}
+                disabled={disabled || !!edit}
+                onSelect={(scene) => {
+                  const control = current.current?.control;
+                  if (control)
+                    void command({
+                      kind: 'scene',
+                      command: {
+                        session: control.session,
+                        expected_revision: control.revision,
+                        scene,
+                      },
+                    });
+                }}
+              />
+            )
+          }
+          selector={
+            <RigPresetSelector
+              current={{
+                key: revision
+                  ? choiceKey({
+                      kind: 'scenes',
+                      revision,
+                      name: '',
+                      scenes: [],
+                    })
+                  : '',
+                name: matching?.manifest.name,
+                modified: !!changed,
+                refresh: revision,
+              }}
+              disabled={disabled || busy || switching || !!edit || !!picker}
+              pads
+              onSelect={(choice) => void choose(choice)}
+            />
+          }
+        />
+        {error && <p role="alert">{error}</p>}
+      </>
+    );
   return (
     <section className="panel space-y-3" aria-label="Sounding mixed rig">
       <div className="rig-performance-header">
@@ -977,6 +1102,16 @@ export function MixedRig({
           <span className="phone-hidden">
             {state.save?.running ? 'Saving…' : 'Save'}
           </span>
+        </Button>
+        <Button
+          variant="outline"
+          aria-label="Perform view"
+          title="Scene pads and effect switches for playing live"
+          disabled={!running || disabled || !!edit || editing}
+          onClick={() => setPerforming(true)}
+        >
+          <Lightning aria-hidden="true" />
+          <span className="phone-hidden">Perform</span>
         </Button>
         {state.device_owned ? (
           <Button

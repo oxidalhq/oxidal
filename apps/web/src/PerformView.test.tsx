@@ -58,7 +58,13 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   const edit = vi.fn();
   render(
     <PerformView
-      state={state}
+      now={{
+        session: state.session,
+        playing: true,
+        name: state.preset_name,
+        modified: state.modified,
+      }}
+      selector={null}
       disabled={false}
       lanes={[
         {
@@ -85,7 +91,6 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
         },
       ]}
       onToggle={toggle}
-      onRecall={() => {}}
       onEdit={edit}
     />,
   );

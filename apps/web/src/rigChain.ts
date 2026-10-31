@@ -23,6 +23,8 @@ export interface RigBlockVM {
 export interface RigLaneVM {
   id: string;
   input: string;
+  /** A short tag when a screen shows several lanes together, such as L or R. */
+  tag?: string;
   blocks: RigBlockVM[];
   /** Shown but not sounding, such as another scene's branch. */
   dim?: boolean;

@@ -796,7 +796,12 @@ export function LiveRig({
     return (
       <>
         <PerformView
-          state={state}
+          now={{
+            session: state.session,
+            playing: state.phase === 'running',
+            name: state.preset_name,
+            modified: state.modified,
+          }}
           lanes={chainLanes}
           disabled={disabled || !!draft || !!picker}
           onToggle={(id) => {
@@ -806,9 +811,21 @@ export function LiveRig({
             if (enabled)
               void apply(enabled.target, enabled.value === 1 ? 0 : 1);
           }}
-          onRecall={(choice) => void recall(choice)}
           onEdit={() => setPerformance(false)}
           knobs={knobStrip}
+          selector={
+            <RigPresetSelector
+              current={{
+                key: tone3000Key(state),
+                name: state.preset_name,
+                modified: state.modified,
+                refresh: state.saved_copy,
+              }}
+              disabled={disabled || !!draft || !!picker}
+              pads
+              onSelect={(choice) => void recall(choice)}
+            />
+          }
         />
         {error && <p role="alert">{error}</p>}
       </>

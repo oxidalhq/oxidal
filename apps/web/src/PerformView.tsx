@@ -1,12 +1,10 @@
 import { ArrowLeft } from '@phosphor-icons/react';
 import { useState } from 'react';
-import type { AudioState, Monitoring } from './api';
+import type { Monitoring } from './api';
 import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
 import type { RigLaneVM } from './rigChain';
-import { RigPresetSelector } from './RigPresetSelector';
-import { tone3000Key, type PresetChoice } from './presetChoices';
 import './ChainView.css';
 import './PerformView.css';
 
@@ -93,22 +91,32 @@ function EdgeMeter({
  * @see docs/interface.md
  */
 export function PerformView({
-  state,
+  now,
   lanes,
   disabled,
   onToggle,
-  onRecall,
   onEdit,
   knobs,
+  scenes,
+  selector,
 }: {
-  state: AudioState;
+  /** What is playing: the surface is the same for every engine. */
+  now: {
+    session: string;
+    playing: boolean;
+    name?: string | null;
+    modified: boolean;
+  };
   lanes: RigLaneVM[];
   disabled: boolean;
   onToggle: (blockId: string) => void;
-  onRecall: (choice: PresetChoice) => void;
   onEdit: () => void;
   /** Performance knob strip, rendered by the rig that owns the controls. */
   knobs?: React.ReactNode;
+  /** Scene pads, for a preset with scenes. */
+  scenes?: React.ReactNode;
+  /** The preset pads, rendered by the rig that owns the library. */
+  selector: React.ReactNode;
 }) {
   const [live, setLive] = useState<{
     snapshot: Monitoring | null;
@@ -173,7 +181,7 @@ export function PerformView({
   const audio = snapshot?.audio ?? null;
   const xruns = audio?.xruns ?? snapshot?.xruns ?? null;
   const outputClips = (audio?.output ?? []).map((c) => c.clips ?? 0);
-  const recallKey = `${state.session}:${state.preset_name ?? ''}`;
+  const recallKey = `${now.session}:${now.name ?? ''}`;
   // Counters restart from the moment this preset is playing in Perform.
   if (audio && (!baseline || baseline.key !== recallKey) && xruns != null)
     setBaseline({ key: recallKey, xruns, clips: outputClips });
@@ -323,13 +331,13 @@ export function PerformView({
           <div className="perform-headline">
             <div className="perform-now">
               <span className="perform-now-state">
-                {state.phase === 'running' ? 'Playing' : 'Not playing'}
+                {now.playing ? 'Playing' : 'Not playing'}
               </span>
               <strong className="perform-now-name">
-                {state.preset_name ?? 'Unsaved preset'}
+                {now.name ?? 'Unsaved preset'}
               </strong>
               <span className="perform-now-sub">
-                {state.modified ? (
+                {now.modified ? (
                   <span className="perform-edited">edited, not saved</span>
                 ) : (
                   'saved'
@@ -338,6 +346,7 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
+          {scenes}
           {played.length > 0 && (
             <div className="perform-section">
               <h3>
@@ -348,7 +357,7 @@ export function PerformView({
                   <div key={lane.id} className="perform-lane">
                     {played.length > 1 && (
                       <span className="perform-lane-tag">
-                        {lane.id === 'left' ? 'L' : 'R'}
+                        {lane.tag ?? (lane.id === 'left' ? 'L' : 'R')}
                       </span>
                     )}
                     <div className="perform-tiles">
@@ -378,19 +387,7 @@ export function PerformView({
               </div>
             </div>
           )}
-          <div className="perform-section">
-            <RigPresetSelector
-              current={{
-                key: tone3000Key(state),
-                name: state.preset_name,
-                modified: state.modified,
-                refresh: state.saved_copy,
-              }}
-              disabled={disabled}
-              pads
-              onSelect={onRecall}
-            />
-          </div>
+          <div className="perform-section">{selector}</div>
         </div>
         <EdgeMeter
           side="out"

@@ -228,3 +228,100 @@ it('shows artwork for the selected hybrid assignment rather than another block',
   fireEvent.click(screen.getByRole('button', { name: 'Select model 2' }));
   expect(screen.getByTestId('model-artwork')).toHaveTextContent('asset-b');
 });
+
+it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {
+  const toggle = (node: string, kind: string, symbol?: string) => ({
+    target: symbol ? { kind, node, symbol } : { kind, node },
+    label: symbol ?? 'Bypass',
+    display: '',
+    toggle: true,
+    value: 0,
+    minimum: 0,
+    maximum: 1,
+    integer: false,
+    logarithmic: false,
+  });
+  const state = {
+    phase: 'running',
+    session: 'daemon',
+    revision: 2,
+    configured: { revision: 'rig' },
+    control: {
+      session: 'audio',
+      revision: 3,
+      controls: [toggle('hold', 'lv2', 'hold'), toggle('hold', 'bypass')],
+      eq: [],
+      slots: [],
+    },
+  } as unknown as Awaited<ReturnType<typeof rigAudioState>>;
+  vi.mocked(rigAudioState).mockResolvedValue(state);
+  vi.mocked(rigAudioCommand).mockResolvedValue(state);
+  const edge = (
+    from: string,
+    fromPort: number,
+    to: string,
+    toPort: number,
+  ) => ({
+    from: { node: from, port: fromPort },
+    to: { node: to, port: toPort },
+  });
+  vi.mocked(rigDocument).mockResolvedValue({
+    revision: 'rig',
+    manifest: {
+      name: 'Hold rig',
+      extensions: {
+        'urn:oxidal:authoring': { labels: { hold: 'Oxidal Hold (Stereo)' } },
+      },
+      tone3000: { instances: [{ id: 'native' }] },
+      oxidal: {
+        lv2: [{ id: 'hold', pluginUri: 'urn:oxidal:plugin:hold#stereo' }],
+        graph: {
+          nodes: [
+            { id: 'in', kind: 'input' },
+            { id: 'amp', kind: 'tone3000', instance: 'native' },
+            { id: 'hold', kind: 'lv2', instance: 'hold' },
+            { id: 'out', kind: 'output' },
+          ],
+          edges: [
+            edge('in', 0, 'amp', 0),
+            edge('in', 1, 'amp', 1),
+            edge('amp', 0, 'hold', 0),
+            edge('amp', 1, 'hold', 1),
+            edge('hold', 0, 'out', 0),
+            edge('hold', 1, 'out', 1),
+          ],
+        },
+      },
+    },
+  } as unknown as Awaited<ReturnType<typeof rigDocument>>);
+  render(
+    <MixedRig
+      connected
+      onPlaying={() => {}}
+      onPresent={() => {}}
+      otherPlaying={false}
+    />,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Perform view' }));
+  const tile = await screen.findByRole('button', {
+    name: 'Oxidal Hold (Stereo) on',
+  });
+  expect(tile).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(tile);
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenCalledWith(state, {
+      kind: 'control',
+      command: {
+        session: 'audio',
+        expected_revision: 3,
+        target: { kind: 'lv2', node: 'hold', symbol: 'hold' },
+        value: 1,
+      },
+    }),
+  );
+  // Back to the rig view.
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
+  expect(
+    await screen.findByRole('button', { name: 'Perform view' }),
+  ).toBeVisible();
+});
