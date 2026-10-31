@@ -27,6 +27,7 @@ async fn dispatch(shared: Arc<Shared>, command: Command) -> Response {
                 Json(PackState {
                     available: false,
                     audio_running: running,
+                    storage_writable: false,
                     packs: oxidal_device::packs::catalog(),
                     job: None,
                     message: "Effect-pack administration is unavailable on this host".into(),

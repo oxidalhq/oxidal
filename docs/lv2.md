@@ -187,7 +187,7 @@ One scan can run at a time. Responses are limited to 4 MiB and discovery to ten 
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
 
-Settings → Effect packs exposes only the eight Debian collections with at least
+Settings → Effects exposes only the eight Debian collections with at least
 one successful ARM64 audio-harness result. `GET /api/v1/packs` reports their
 installed versions, approximate size, usable count and current helper-owned job;
 `POST /api/v1/packs/{id}/install` and `/remove` accept only compiled allowlist IDs.

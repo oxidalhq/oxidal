@@ -14,6 +14,8 @@ Initial laptop scope is **64-bit x86 Linux**, not every legacy 32-bit laptop. Th
 
 Keep platform configuration separate from portable runtime logic. A regular Linux install must not apply Pi boot settings, replace the host network setup, strip desktop packages, or require appliance partitioning. Audio permissions, scheduling and optional service startup must be explicit installation steps. Appliance read-only partitions and future A/B recovery belong to board-image profiles, not mandatory laptop setup.
 
+The storage-lock control follows that boundary: ordinary installs and pre-layout images report it unavailable. The appliance profile starts Unlocked. Once the separate writable-data layout is present, Settings may schedule `ro systemd.volatile=state` or `rw` in the fixed firmware command line for the next boot; it never live-remounts the root. See [storage lock](../docs/storage-lock.md).
+
 **Current delivery:** `node scripts/artifacts.mjs --appliance` builds a relocatable native Linux bundle containing the daemon, web UI, isolated native editor, saved-preset player, general LV2 graph worker and mixed-rig worker. `scripts/image.py` assembles that ARM64 bundle into a fresh disposable Pi OS image, installs its dependencies, enables boot services, captures the package closure and runs the installed-service qualification before producing checksums. This is an experimental first-boot image, not hardware or live-performance qualification. The ordinary artifact workflow remains a preview build; Linux laptop package lifecycle and Orange Pi images remain separate work.
 
 ## General audio-device support target

@@ -16,6 +16,7 @@ pub enum PackAction {
 pub struct EffectPack {
     pub id: String,
     pub name: String,
+    pub website: String,
     pub package: String,
     pub size_mib: u16,
     pub usable_plugins: u16,
@@ -37,6 +38,7 @@ pub struct PackJob {
 pub struct PackState {
     pub available: bool,
     pub audio_running: bool,
+    pub storage_writable: bool,
     pub packs: Vec<EffectPack>,
     pub job: Option<PackJob>,
     pub message: String,
@@ -46,6 +48,7 @@ pub struct PackState {
 struct Spec {
     id: &'static str,
     name: &'static str,
+    website: &'static str,
     package: &'static str,
     size_mib: u16,
     usable_plugins: u16,
@@ -56,6 +59,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "guitarix",
         name: "Guitarix",
+        website: "https://guitarix.org/",
         package: "guitarix-lv2",
         size_mib: 20,
         usable_plugins: 70,
@@ -64,6 +68,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "dragonfly",
         name: "Dragonfly Reverb",
+        website: "https://github.com/michaelwillis/dragonfly-reverb",
         package: "dragonfly-reverb-lv2",
         size_mib: 9,
         usable_plugins: 4,
@@ -72,6 +77,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "calf",
         name: "Calf",
+        website: "https://github.com/calf-studio-gear/calf",
         package: "calf-plugins",
         size_mib: 23,
         usable_plugins: 37,
@@ -80,6 +86,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "invada",
         name: "Invada Studio",
+        website: "https://launchpad.net/invada-studio",
         package: "invada-studio-plugins-lv2",
         size_mib: 3,
         usable_plugins: 14,
@@ -88,6 +95,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "x42",
         name: "x42",
+        website: "https://www.x42-plugins.com/x42/",
         package: "x42-plugins",
         size_mib: 10,
         usable_plugins: 44,
@@ -96,6 +104,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "mda",
         name: "MDA",
+        website: "https://gitlab.com/drobilla/mda-lv2",
         package: "mda-lv2",
         size_mib: 5,
         usable_plugins: 31,
@@ -104,6 +113,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "swh",
         name: "SWH",
+        website: "http://plugin.org.uk/",
         package: "swh-lv2",
         size_mib: 3,
         usable_plugins: 78,
@@ -112,6 +122,7 @@ const SPECS: [Spec; 8] = [
     Spec {
         id: "fomp",
         name: "FOMP",
+        website: "https://drobilla.net/software/fomp/",
         package: "fomp",
         size_mib: 2,
         usable_plugins: 4,
@@ -129,6 +140,7 @@ pub fn catalog() -> Vec<EffectPack> {
         .map(|spec| EffectPack {
             id: spec.id.into(),
             name: spec.name.into(),
+            website: spec.website.into(),
             package: spec.package.into(),
             size_mib: spec.size_mib,
             usable_plugins: spec.usable_plugins,
@@ -155,6 +167,13 @@ pub struct Manager {
 impl Manager {
     pub async fn start(&mut self, id: &str, action: PackAction) -> Result<(), &'static str> {
         self.finish().await;
+        match crate::storage::current_mode() {
+            Ok(crate::storage::StorageMode::Unlocked) => {}
+            Ok(crate::storage::StorageMode::Locked) => {
+                return Err("Unlock storage and restart before changing effect packs");
+            }
+            Err(_) => return Err("Cannot verify writable system storage"),
+        }
         if self.active.is_some() {
             return Err("Another effect-pack change is already running");
         }
@@ -188,6 +207,10 @@ impl Manager {
         PackState {
             available,
             audio_running: false,
+            storage_writable: matches!(
+                crate::storage::current_mode(),
+                Ok(crate::storage::StorageMode::Unlocked)
+            ),
             packs,
             job: self.active.as_ref().map(|active| PackJob {
                 pack: active.pack.into(),
@@ -281,6 +304,7 @@ mod tests {
     fn allowlist_has_only_qualified_nonempty_packs() {
         assert_eq!(SPECS.len(), 8);
         assert!(SPECS.iter().all(|pack| pack.usable_plugins > 0));
+        assert!(SPECS.iter().all(|pack| pack.website.starts_with("http")));
         assert!(known("swh"));
         assert!(!known("lsp"));
         assert!(!known("../swh-lv2"));

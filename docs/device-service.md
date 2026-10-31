@@ -6,11 +6,15 @@ The helper uses a root-owned runtime directory and group-restricted socket, chec
 
 ## Effect packs
 
-Settings → Effect packs uses `GET /api/v1/packs` and the fixed `POST /api/v1/packs/{id}/install|remove` actions. The helper maps eight stable IDs to exact Debian packages: Guitarix, Dragonfly Reverb, Calf, Invada, x42, MDA, SWH and FOMP. LSP and any collection with no harness-usable plugins are absent. Browser input cannot select another package. The list reports measured usable counts from the ARM64 pack harness, approximate installed size, installed version and the relevant qualification note.
+Settings → Effects uses `GET /api/v1/packs` and the fixed `POST /api/v1/packs/{id}/install|remove` actions. The helper maps eight stable IDs to exact Debian packages: Guitarix, Dragonfly Reverb, Calf, Invada, x42, MDA, SWH and FOMP. LSP and any collection with no harness-usable plugins are absent. Browser input cannot select another package. The list reports measured usable counts from the ARM64 pack harness, approximate installed size, installed version and the relevant qualification note.
 
 One helper-owned job may run at a time. It executes apt through fixed `nice -n 19` and idle-I/O `ionice -c 3` arguments, uses apt/dpkg locking, has a 30-minute deadline and survives the initiating HTTP request. The browser polls job state and may leave the screen. The daemon refuses Install or Remove while any native, graph or mixed engine owns the audio device. Package failure—including offline repositories—is reported rather than presented as an empty or successful collection. Removal names only the selected top-level package; apt does not autoremove dependencies. Reinstall remains available.
 
 Package installation necessarily gives this narrowly allowlisted root service system and Internet write access that network-only operation did not need. `NoNewPrivileges`, home protection, private temporary storage, peer-UID checks and the typed protocol remain; the unit admits only Unix/netlink/IPv4/IPv6 address families. This is why the package map and argument vector live in the compiled helper rather than the daemon or web client.
+
+## Storage mode
+
+Storage mode uses the same typed boundary but a separate fixed target. The browser sends only `locked` or `unlocked`; the helper validates and atomically replaces `/boot/firmware/cmdline.txt`. It never remounts the running root. The control is unavailable until the appliance writable-data layout marker exists, and effect-pack work independently refuses an actively read-only root. See [storage lock](storage-lock.md).
 
 ## Current workflow
 

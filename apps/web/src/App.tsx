@@ -4,6 +4,7 @@ import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
 import { EffectPacks } from './EffectPacks';
+import { StorageLock } from './StorageLock';
 import {
   lazy,
   Suspense,
@@ -49,11 +50,13 @@ import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
 import {
   capabilities,
+  deviceStorage,
   parseSnapshot,
   sendCommand,
   type Action,
   type MappingFile,
   type Snapshot,
+  type StorageState,
 } from './api';
 
 /** Quiet rig control over a single authoritative Rust state model.
@@ -69,6 +72,7 @@ function InstrumentApp() {
     playingName !== null || graphName !== null || mixedName !== null;
   const [state, setState] = useState<Snapshot | null>(null);
   const [connected, setConnected] = useState(false);
+  const [storage, setStorage] = useState<StorageState | null>(null);
   const [simulator, setSimulator] = useState(false);
   // Example state is never a fallback for a stopped or unavailable audio engine.
   // Both an explicit development URL and server capability are required.
@@ -91,7 +95,7 @@ function InstrumentApp() {
     audio: 'Audio setup',
     connections: 'Connections',
     midi: 'MIDI controls',
-    effects: 'Effect packs',
+    effects: 'Effects',
     display: 'Display',
     device: 'Device',
     maintenance: 'Maintenance',
@@ -208,6 +212,21 @@ function InstrumentApp() {
       window.removeEventListener('online', open);
     };
   }, [accept]);
+
+  useEffect(() => {
+    let active = true;
+    if (connected)
+      void deviceStorage()
+        .then((next) => {
+          if (active) setStorage(next);
+        })
+        .catch(() => {
+          if (active) setStorage(null);
+        });
+    return () => {
+      active = false;
+    };
+  }, [connected]);
 
   function showSettings() {
     const mapping = state?.mappings.mappings[0];
@@ -750,7 +769,14 @@ function InstrumentApp() {
                   />
                 )}
                 {settingsSection === 'device' && (
-                  <DevicePower connected={connected} />
+                  <>
+                    <StorageLock
+                      connected={connected}
+                      state={storage}
+                      onState={setStorage}
+                    />
+                    <DevicePower connected={connected} />
+                  </>
                 )}
                 {settingsSection === 'maintenance' && (
                   <>

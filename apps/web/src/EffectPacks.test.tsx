@@ -21,12 +21,14 @@ vi.mock('./api', () => ({
 const inventory: EffectPacksState = {
   available: true,
   audio_running: false,
+  storage_writable: true,
   job: null,
   message: '',
   packs: [
     {
       id: 'dragonfly',
       name: 'Dragonfly Reverb',
+      website: 'https://github.com/michaelwillis/dragonfly-reverb',
       package: 'dragonfly-reverb-lv2',
       size_mib: 9,
       usable_plugins: 4,
@@ -37,6 +39,7 @@ const inventory: EffectPacksState = {
     {
       id: 'swh',
       name: 'SWH',
+      website: 'http://plugin.org.uk/',
       package: 'swh-lv2',
       size_mib: 3,
       usable_plugins: 78,
@@ -67,6 +70,14 @@ it('shows only the curated inventory and starts a device-owned install', async (
     'Installing Dragonfly Reverb',
   );
   expect(screen.getByText(/78 usable effects/)).toBeInTheDocument();
+  expect(screen.getAllByRole('link', { name: 'Website' })[0]).toHaveAttribute(
+    'href',
+    'https://github.com/michaelwillis/dragonfly-reverb',
+  );
+  expect(screen.getAllByRole('link', { name: 'Website' })[0]).toHaveAttribute(
+    'target',
+    '_blank',
+  );
 });
 
 it('refuses changes while audio plays and confirms removal inline', async () => {
@@ -87,4 +98,15 @@ it('refuses changes while audio plays and confirms removal inline', async () => 
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('swh', 'remove'),
   );
+});
+
+it('keeps apt actions unavailable while the active system root is locked', async () => {
+  vi.mocked(effectPacks).mockResolvedValue({
+    ...inventory,
+    storage_writable: false,
+  });
+  render(<EffectPacks connected audioRunning={false} />);
+  expect(await screen.findByRole('button', { name: 'Install' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent('Unlock system storage');
 });

@@ -9,6 +9,7 @@ pub mod policy;
 #[cfg(unix)]
 pub mod power;
 pub mod radio;
+pub mod storage;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +55,10 @@ pub enum Command {
         id: String,
         action: packs::PackAction,
     },
+    StorageStatus {},
+    Storage {
+        mode: storage::StorageMode,
+    },
 }
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -69,6 +74,8 @@ impl std::fmt::Debug for Command {
             Self::Forget { .. } => "Forget",
             Self::Packs {} => "Packs",
             Self::Pack { .. } => "Pack",
+            Self::StorageStatus {} => "StorageStatus",
+            Self::Storage { .. } => "Storage",
         })
     }
 }
@@ -201,6 +208,8 @@ pub struct Reply {
     pub state: Option<NetworkState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub packs: Option<packs::PackState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<storage::StorageState>,
     pub error: Option<String>,
 }
 

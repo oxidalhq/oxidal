@@ -57,6 +57,10 @@ class DeviceTests(unittest.TestCase):
             self.assertIsNone(packs['error'])
             self.assertEqual(len(packs['packs']['packs']), 8)
             self.assertNotIn('lsp', [pack['id'] for pack in packs['packs']['packs']])
+            storage = request({'type': 'storage_status'})
+            self.assertIsNone(storage['error'])
+            self.assertFalse(storage['storage']['available'])
+            self.assertIn('writable-data layout', storage['storage']['message'])
             # Unknown commands/fields and invalid inputs cannot reach nmcli.
             for command in ({'type': 'shell', 'command': 'reboot'}, {'type': 'status', 'shell': 'reboot'},
                             {'type': 'join', 'interface': '../invalid', 'ssid': 'Test', 'password': 'never-echo-test'},

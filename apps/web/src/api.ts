@@ -235,6 +235,34 @@ export async function deviceNetwork(
   return body;
 }
 
+export type StorageState = Contract['storage_state'];
+export type StorageRequest = Contract['storage_request'];
+const storageValidator = ajv.compile<StorageState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/StorageState',
+});
+async function parseStorage(response: Response): Promise<StorageState> {
+  const body = await presetResponse(response);
+  if (!storageValidator(body)) throw new Error('Incompatible storage response');
+  return body;
+}
+export async function deviceStorage(): Promise<StorageState> {
+  return parseStorage(
+    await fetch('/api/v1/device/storage', { cache: 'no-store' }),
+  );
+}
+export async function changeStorage(
+  request: StorageRequest,
+): Promise<StorageState> {
+  return parseStorage(
+    await fetch('/api/v1/device/storage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }),
+  );
+}
+
 export type EffectPacks = Contract['effect_packs'];
 const effectPacksValidator = ajv.compile<EffectPacks>({
   $defs: schema.$defs,

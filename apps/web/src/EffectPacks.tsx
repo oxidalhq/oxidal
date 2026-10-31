@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArrowSquareOut } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import {
   changeEffectPack,
@@ -77,11 +78,11 @@ export function EffectPacks({
   const locked = Boolean(state?.job) || busy !== null;
 
   return (
-    <section className="panel space-y-4" aria-label="Effect packs">
+    <section className="panel space-y-4" aria-label="Effects">
       <div>
-        <h2>Effect packs</h2>
+        <h2>Effects</h2>
         <p className="caption mt-1 max-w-2xl">
-          Add qualified LV2 collections to this unit. The usable count comes
+          Add qualified effect collections to this unit. The usable count comes
           from Oxidal’s audio harness; unsupported plugins stay out of the
           effect chooser.
         </p>
@@ -91,6 +92,11 @@ export function EffectPacks({
         <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
           Stop audio before installing or removing effects. This protects the
           playing session from package and disk activity.
+        </p>
+      )}
+      {state && !state.storage_writable && (
+        <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm">
+          Unlock system storage and restart before changing effect packs.
         </p>
       )}
       {state?.job && (
@@ -122,6 +128,14 @@ export function EffectPacks({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <strong>{pack.name}</strong>
+                    <a
+                      className="tone-details-link text-xs"
+                      href={pack.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Website <ArrowSquareOut aria-hidden="true" />
+                    </a>
                     <span className="caption">
                       {pack.installed
                         ? `Installed${pack.version ? ` · ${pack.version}` : ''}`
@@ -139,7 +153,11 @@ export function EffectPacks({
                       <Button
                         variant={awaitingRemove ? 'destructive' : 'outline'}
                         disabled={
-                          !connected || !state.available || playing || locked
+                          !connected ||
+                          !state.available ||
+                          !state.storage_writable ||
+                          playing ||
+                          locked
                         }
                         onClick={() => {
                           if (awaitingRemove) void change(pack.id, 'remove');
@@ -165,7 +183,11 @@ export function EffectPacks({
                     <Button
                       variant="outline"
                       disabled={
-                        !connected || !state.available || playing || locked
+                        !connected ||
+                        !state.available ||
+                        !state.storage_writable ||
+                        playing ||
+                        locked
                       }
                       onClick={() => void change(pack.id, 'install')}
                     >

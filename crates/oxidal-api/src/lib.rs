@@ -27,6 +27,7 @@ mod provider;
 mod rig_library;
 mod rig_playback;
 mod rig_recovery;
+mod storage_lock;
 mod terminal;
 use axum::{
     Json, Router,
@@ -105,6 +106,8 @@ pub struct Contract {
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
     pub effect_packs: oxidal_device::packs::PackState,
+    pub storage_state: oxidal_device::storage::StorageState,
+    pub storage_request: storage_lock::StorageRequest,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
     pub rig_audio_state: oxidal_engine::protocol::RigAudioState,
     pub rig_audio_command: oxidal_engine::protocol::RigAudioCommand,
@@ -357,6 +360,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/debug/logs", get(debug::logs))
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
+        .route(
+            "/device/storage",
+            get(storage_lock::state).post(storage_lock::change),
+        )
         .route("/packs", get(packs::state))
         .route("/packs/{id}/{action}", post(packs::change))
         .route("/audio", get(playback::state).post(playback::command))

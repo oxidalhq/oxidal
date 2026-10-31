@@ -384,6 +384,7 @@ export type Operation =
   | "mixed_audio"
   | "effects_audio"
   | "effect_packs"
+  | "storage"
   | "network"
   | "account"
   | "native_editor"
@@ -566,9 +567,17 @@ export type Command3 =
       action: PackAction;
       id: string;
       type: "pack";
+    }
+  | {
+      type: "storage_status";
+    }
+  | {
+      mode: StorageMode;
+      type: "storage";
     };
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
+export type StorageMode = "unlocked" | "locked";
 export type RigAudioAction =
   | {
       command: HostUtility;
@@ -766,6 +775,8 @@ export interface Contract {
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
+  storage_request: StorageRequest;
+  storage_state: StorageState;
   terminal_command: TerminalCommand;
   terminal_state: TerminalState;
   tone_page: Page;
@@ -1306,6 +1317,7 @@ export interface PackState {
   job?: PackJob | null;
   message: string;
   packs: EffectPack[];
+  storage_writable: boolean;
 }
 export interface PackJob {
   action: PackAction;
@@ -1321,6 +1333,7 @@ export interface EffectPack {
   size_mib: number;
   usable_plugins: number;
   version?: string | null;
+  website: string;
 }
 export interface ApiError {
   error: string;
@@ -2359,6 +2372,16 @@ export interface StagedModel {
   sha256: string;
   title: string;
   tone_id: number;
+}
+export interface StorageRequest {
+  mode: StorageMode;
+}
+export interface StorageState {
+  available: boolean;
+  current?: StorageMode | null;
+  message: string;
+  next_boot?: StorageMode | null;
+  reboot_required: boolean;
 }
 export interface TerminalState {
   available: boolean;

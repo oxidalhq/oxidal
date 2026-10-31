@@ -199,6 +199,12 @@
     "staged_model": {
       "$ref": "#/$defs/StagedModel"
     },
+    "storage_request": {
+      "$ref": "#/$defs/StorageRequest"
+    },
+    "storage_state": {
+      "$ref": "#/$defs/StorageState"
+    },
     "terminal_command": {
       "$ref": "#/$defs/TerminalCommand"
     },
@@ -255,6 +261,8 @@
     "network_state",
     "network_command",
     "effect_packs",
+    "storage_state",
+    "storage_request",
     "audio_state",
     "rig_audio_state",
     "rig_audio_command",
@@ -2562,6 +2570,36 @@
             "id",
             "action"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "storage_status"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "$ref": "#/$defs/StorageMode"
+            },
+            "type": {
+              "type": "string",
+              "const": "storage"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "mode"
+          ]
         }
       ]
     },
@@ -3417,12 +3455,16 @@
             "string",
             "null"
           ]
+        },
+        "website": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
       "required": [
         "id",
         "name",
+        "website",
         "package",
         "size_mib",
         "usable_plugins",
@@ -6058,6 +6100,7 @@
         "mixed_audio",
         "effects_audio",
         "effect_packs",
+        "storage",
         "network",
         "account",
         "native_editor",
@@ -6156,12 +6199,16 @@
           "items": {
             "$ref": "#/$defs/EffectPack"
           }
+        },
+        "storage_writable": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
       "required": [
         "available",
         "audio_running",
+        "storage_writable",
         "packs",
         "message"
       ]
@@ -8889,6 +8936,65 @@
       "required": [
         "connected",
         "events"
+      ]
+    },
+    "StorageMode": {
+      "type": "string",
+      "enum": [
+        "unlocked",
+        "locked"
+      ]
+    },
+    "StorageRequest": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/StorageMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "StorageState": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StorageMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "next_boot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StorageMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reboot_required": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "reboot_required",
+        "message"
       ]
     },
     "StreamConfig": {

@@ -1215,6 +1215,7 @@ async fn effect_pack_catalog_is_curated_even_without_a_privileged_helper() {
     let state: Value = response.json().await.unwrap();
     assert_eq!(state["available"], false);
     assert_eq!(state["audio_running"], false);
+    assert_eq!(state["storage_writable"], false);
     assert_eq!(state["packs"].as_array().unwrap().len(), 8);
     assert!(
         state["packs"]
@@ -1247,6 +1248,45 @@ async fn effect_pack_catalog_is_curated_even_without_a_privileged_helper() {
             .unwrap()
             .status(),
         404
+    );
+    task.abort();
+}
+
+#[tokio::test]
+async fn storage_lock_is_next_boot_only_and_optional_without_the_root_helper() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{url}/device/storage"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let state: Value = response.json().await.unwrap();
+    assert_eq!(state["available"], false);
+    assert!(state["current"].is_null());
+    assert!(state["next_boot"].is_null());
+    assert_eq!(state["reboot_required"], false);
+    assert_eq!(
+        client
+            .post(format!("{url}/device/storage"))
+            .json(&json!({"mode":"locked"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        503
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/device/storage"))
+            .json(&json!({"mode":"later"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
     );
     task.abort();
 }
