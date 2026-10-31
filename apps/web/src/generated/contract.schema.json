@@ -8377,6 +8377,15 @@
     "Snapshot2": {
       "type": "object",
       "properties": {
+        "deadline_misses": {
+          "description": "Callbacks reaching/exceeding one period, not necessarily ALSA underruns.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
         "deadline_us": {
           "type": "number",
           "format": "double"
@@ -8427,6 +8436,14 @@
         },
         "process_us_p95": {
           "type": "number",
+          "format": "double"
+        },
+        "process_us_peak": {
+          "description": "Largest callback duration since this stream began, independent of polling.",
+          "type": [
+            "number",
+            "null"
+          ],
           "format": "double"
         },
         "xruns": {

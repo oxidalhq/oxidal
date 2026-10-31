@@ -5,7 +5,7 @@ use oxidal_lv2::World;
 use oxidal_presets::{BundleStore, manifest::Tails};
 
 #[derive(Debug)]
-struct Resident {
+pub(crate) struct Resident {
     session: Session,
     name: String,
     left: Vec<f32>,
@@ -15,6 +15,26 @@ struct Resident {
     preserve: bool,
     retained: bool,
     error: Option<String>,
+}
+impl Resident {
+    /// Audio-only work on one exclusive resident. Errors are consumed after all
+    /// helpers join; no graph ownership/control/state operation runs here.
+    pub(crate) fn process_block(&mut self) {
+        if self.error.is_some() {
+            return;
+        }
+        if let Err(error) = self.session.process(
+            &[&self.input[0], &self.input[1]],
+            &mut [&mut self.left, &mut self.right],
+        ) {
+            self.error = Some(error);
+            return;
+        }
+        for i in 0..self.left.len() {
+            self.left[i] = self.delay[0].next(self.left[i]);
+            self.right[i] = self.delay[1].next(self.right[i]);
+        }
+    }
 }
 #[derive(Debug)]
 struct Transition {
@@ -27,6 +47,7 @@ struct Transition {
 }
 #[derive(Debug)]
 pub struct ResidentSet {
+    pool: Option<crate::render::RenderPool>,
     residents: Vec<Resident>,
     active: usize,
     transition: Option<Transition>,
@@ -132,7 +153,18 @@ impl ResidentSet {
                 Delay::new(delay, &mut used, budget)?,
             ];
         }
+        let helpers = residents.len().saturating_sub(1).min(3);
+        let pool = if crate::render::render_thread_enabled() && helpers > 0 {
+            Some(crate::render::RenderPool::named(
+                helpers,
+                residents.len().div_ceil(helpers),
+                "oxidal-set",
+            )?)
+        } else {
+            None
+        };
         let result = Self {
+            pool,
             residents,
             active: 0,
             transition: None,
@@ -233,60 +265,28 @@ impl ResidentSet {
         // Render the incoming graph first. If it rejects its first block, the
         // old graph still receives unchanged input in this same callback.
         let target = self.transition.as_ref().map(|t| t.target);
-        for index in target
-            .into_iter()
-            .chain((0..self.residents.len()).filter(|i| Some(*i) != target))
-        {
-            let resident = &mut self.residents[index];
-            let audible =
-                index == self.active || self.transition.as_ref().is_some_and(|t| t.target == index);
-            if resident.error.is_some() {
-                continue;
+        if let Some(index) = target {
+            self.prepare_input(index, input);
+            self.render_batch(Some(index), None)?;
+            if let Some(error) = &self.residents[index].error {
+                self.switch_error = Some(format!("Prepared alternative failed: {error}"));
+                self.transition = None;
             }
-            for (i, (&left, &right)) in input[0].iter().zip(input[1]).enumerate() {
-                let gain = match &self.transition {
-                    Some(t) if t.preserve || t.retained_target => {
-                        let weight = ((t.cursor + i) as f32 / (t.length - 1) as f32).min(1.0);
-                        if index == self.active {
-                            if t.preserve { 1.0 - weight } else { 1.0 }
-                        } else if index == t.target {
-                            weight
-                        } else {
-                            0.0
-                        }
-                    }
-                    _ => {
-                        if audible {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    }
-                };
-                resident.input[0][i] = left * gain;
-                resident.input[1][i] = right * gain;
+        }
+        // Candidate validation above preserves same-block failure fallback.
+        // The remaining independent graphs can overlap without changing the
+        // deterministic return-summing order or dropping any tail work.
+        for index in 0..self.residents.len() {
+            if Some(index) != target {
+                self.prepare_input(index, input);
             }
-            if let Err(error) = resident.session.process(
-                &[&resident.input[0], &resident.input[1]],
-                &mut [&mut resident.left, &mut resident.right],
-            ) {
-                if index == self.active {
-                    for port in output.iter_mut() {
-                        port.fill(0.0);
-                    }
-                    return Err(error);
-                }
-                resident.error = Some(error.clone());
-                if self.transition.as_ref().is_some_and(|t| t.target == index) {
-                    self.transition = None;
-                    self.switch_error = Some(format!("Prepared alternative failed: {error}"));
-                }
-                continue;
+        }
+        self.render_batch(None, target)?;
+        if let Some(error) = &self.residents[self.active].error {
+            for port in output.iter_mut() {
+                port.fill(0.0);
             }
-            for i in 0..self.frames {
-                resident.left[i] = resident.delay[0].next(resident.left[i]);
-                resident.right[i] = resident.delay[1].next(resident.right[i]);
-            }
+            return Err(error.clone());
         }
         let (left_output, right_output) = output.split_at_mut(1);
         for (i, (out_left, out_right)) in left_output[0]
@@ -355,6 +355,67 @@ impl ResidentSet {
             *out_right = right;
         }
         Ok(())
+    }
+    fn prepare_input(&mut self, index: usize, input: &[&[f32]]) {
+        let resident = &mut self.residents[index];
+        let audible =
+            index == self.active || self.transition.as_ref().is_some_and(|t| t.target == index);
+        for (i, (&left, &right)) in input[0].iter().zip(input[1]).enumerate() {
+            let gain = match &self.transition {
+                Some(t) if t.preserve || t.retained_target => {
+                    let weight = ((t.cursor + i) as f32 / (t.length - 1) as f32).min(1.0);
+                    if index == self.active {
+                        if t.preserve { 1.0 - weight } else { 1.0 }
+                    } else if index == t.target {
+                        weight
+                    } else {
+                        0.0
+                    }
+                }
+                _ => {
+                    if audible {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
+            };
+            resident.input[0][i] = left * gain;
+            resident.input[1][i] = right * gain;
+        }
+    }
+    fn render_batch(&mut self, only: Option<usize>, skip: Option<usize>) -> Result<(), String> {
+        let selected = |index| only.is_none_or(|i| i == index) && skip != Some(index);
+        let Some(pool) = &self.pool else {
+            for (index, resident) in self.residents.iter_mut().enumerate() {
+                if selected(index) {
+                    resident.process_block();
+                }
+            }
+            return Ok(());
+        };
+        let (first, others) = self
+            .residents
+            .split_first_mut()
+            .expect("nonempty resident set");
+        for (offset, resident) in others.iter_mut().enumerate() {
+            let index = offset + 1;
+            if selected(index) && resident.error.is_none() {
+                // Stable assignment for the full session: native AudioPort binds
+                // to its first render thread, including while it is the candidate.
+                pool.queue(
+                    (index - 1) % pool.helpers(),
+                    crate::render::ResidentJob::block(resident),
+                );
+            }
+        }
+        pool.start();
+        if selected(0) {
+            first.process_block();
+        }
+        // Always join, including when the main resident failed. Owner controls
+        // and buffer reuse cannot race work still running on another core.
+        pool.finish()
     }
     pub fn take_switch_error(&mut self) -> Option<String> {
         self.switch_error.take()

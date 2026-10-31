@@ -133,3 +133,33 @@ it('keeps stopped audio visible without showing a normal running badge', async (
   await act(async () => {});
   expect(screen.getByRole('status')).toHaveTextContent('Audio stopped');
 });
+
+it('retains a session peak after the recent callback window becomes quiet', async () => {
+  const reading = {
+    ...snapshot(1, 'running'),
+    audio_age_ms: 0,
+    audio: {
+      frames: 128,
+      input: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
+      output: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
+      process_us_p50: 20,
+      process_us_p95: 30,
+      process_us_max: 40,
+      process_us_peak: 1200,
+      deadline_misses: 1,
+      deadline_us: 1000,
+      invalid_samples: 0,
+    },
+  } satisfies Monitoring;
+  vi.mocked(monitoring).mockResolvedValue(reading);
+  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  await act(async () => {});
+  expect(screen.getByText('pk 120%')).toHaveAttribute('data-warning', 'true');
+  expect(screen.getByText('DSP p95').parentElement).toHaveTextContent('3%');
+});

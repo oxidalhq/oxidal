@@ -49,6 +49,20 @@ Open Settings, refresh devices, check the capture and playback configurations, t
 
 For a direct daemon launch, `OXIDAL_AUDIO_WORKER` must be the absolute path to a binary built with `oxidal-tone3000/audio-worker`. The daemon provisions its editor’s `native-runtime` directory itself; no development-launcher environment is required. The supervisor uses a separate `audio-runtime` folder under its preset directory for native data. That directory and the editor's isolated root are daemon-owned. HTTP clients cannot supply executables, shell commands, arbitrary PCM plugins or file paths. The public discovery/probe and health fields deliberately retain their unqualified playback flags; the separate audio lifecycle state reports experimental worker activity.
 
+## Callback timing
+
+`process_us_p50`, `process_us_p95` and `process_us_max` describe the most recent
+128 callbacks. `process_us_peak` and `deadline_misses` accumulate over the stream's
+lifetime and reset only with a new stream. A miss means processing took at least
+one audio period; it is separate from an ALSA xrun, since queued playback can
+absorb an occasional late callback. Measurements include DSP and its internal
+waits but exclude device I/O. Low average host CPU does not prove deadline headroom.
+
+The resource strip shows current p95 and the retained session peak. Monitor also
+shows the cumulative miss count. These fields remain unavailable when reading older
+worker snapshots; qualification tools require the updated worker counters rather
+than inferring lifetime performance from sparse rolling-window samples.
+
 ## Repeatable verification
 
 The normal Rust workspace tests cover bounds, unlisted PCM rejection, real HTTP discovery/probe failure and unchanged rig/library availability. On Linux with the ALSA feature they also configure/release libasound's own `null` PCM in both directions across all five formats and check missing-device failure. An injected EPIPE regression also verifies capture/playback and wait recovery, discarded partial buffers, retained processing state and rejection of other device errors. The null plugin is internal to those tests and cannot be selected through the public API. It establishes library integration, not real device, latency, xrun or audible output qualification.

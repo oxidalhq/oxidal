@@ -404,11 +404,25 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
       </div>
       <dl className="health-list">
         <div>
-          <dt className="text-muted-foreground">Block time p50 / p95 / max</dt>
+          <dt className="text-muted-foreground">
+            Recent block time p50 / p95 / max
+          </dt>
           <dd className="font-mono">
             {stale || !state?.audio
               ? 'Unavailable'
               : `${ms(state.audio.process_us_p50)} / ${ms(state.audio.process_us_p95)} / ${ms(state.audio.process_us_max)} ms of ${ms(state.audio.deadline_us)}`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">
+            Session peak / missed deadlines
+          </dt>
+          <dd className="font-mono">
+            {stale ||
+            state?.audio?.process_us_peak == null ||
+            state.audio.deadline_misses == null
+              ? 'Unavailable'
+              : `${ms(state.audio.process_us_peak)} ms / ${state.audio.deadline_misses}`}
           </dd>
         </div>
         <div>

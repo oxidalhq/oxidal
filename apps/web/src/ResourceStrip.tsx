@@ -54,7 +54,8 @@ export function ResourceStrip({
       : null;
   const peak =
     audio && audio.deadline_us > 0
-      ? (100 * audio.process_us_max) / audio.deadline_us
+      ? (100 * Math.max(audio.process_us_peak ?? 0, audio.process_us_max)) /
+        audio.deadline_us
       : null;
   const clips = audio
     ? [...audio.input, ...audio.output].reduce(
@@ -125,7 +126,7 @@ export function ResourceStrip({
       <dl>
         <div
           data-warning={load != null && load >= 100}
-          title="Measured processing p95 / audio-period deadline; excludes device I/O and scheduling"
+          title="Processing p95 and session peak / audio-period deadline; excludes device I/O"
         >
           <dt>DSP p95</dt>
           <dd>

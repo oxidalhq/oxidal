@@ -23,6 +23,12 @@ pub struct Snapshot {
     pub process_us_p50: f64,
     pub process_us_p95: f64,
     pub process_us_max: f64,
+    /// Largest callback duration since this stream began, independent of polling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_us_peak: Option<f64>,
+    /// Callbacks reaching/exceeding one period, not necessarily ALSA underruns.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadline_misses: Option<u64>,
     pub deadline_us: f64,
     pub invalid_samples: u64,
 }
@@ -40,6 +46,9 @@ impl Snapshot {
             ]
             .iter()
             .all(|v| v.is_finite() && *v >= 0.0)
+            && self
+                .process_us_peak
+                .is_none_or(|v| v.is_finite() && v >= 0.0)
     }
 }
 #[derive(Debug, Clone, Copy, Default)]
@@ -88,6 +97,8 @@ pub struct Meter {
     count: usize,
     index: usize,
     deadline: f64,
+    peak: f64,
+    deadline_misses: u64,
 }
 impl Meter {
     pub fn new(frames: u32, rate: u32) -> Self {
@@ -99,6 +110,8 @@ impl Meter {
             count: 0,
             index: 0,
             deadline: f64::from(frames) * 1_000_000.0 / f64::from(rate.max(1)),
+            peak: 0.0,
+            deadline_misses: 0,
         }
     }
     pub fn input(&mut self, left: &[f32], right: &[f32]) {
@@ -115,6 +128,12 @@ impl Meter {
             0.0
         };
         self.index = (self.index + 1) % 128;
+        if process_us.is_finite() {
+            self.peak = self.peak.max(process_us);
+            if process_us >= self.deadline {
+                self.deadline_misses = self.deadline_misses.saturating_add(1);
+            }
+        }
         self.count = (self.count + 1).min(128);
     }
     /// Resets only interval levels; counts remain cumulative so clients can reset their own view.
@@ -137,6 +156,8 @@ impl Meter {
             process_us_p50: q(50),
             process_us_p95: q(95),
             process_us_max: q(100),
+            process_us_peak: Some(self.peak),
+            deadline_misses: Some(self.deadline_misses),
             deadline_us: self.deadline,
             invalid_samples: self
                 .input
@@ -206,5 +227,31 @@ mod tests {
         assert_eq!(s.process_us_p95, 248.0);
         assert_eq!(s.invalid_samples, 512);
         assert!(s.valid());
+    }
+    #[test]
+    fn lifetime_peak_and_misses_survive_window_eviction_and_polling() {
+        let mut meter = Meter::new(48, 48000); // 1 ms deadline
+        meter.output(&[0.0], &[0.0], 1200.0);
+        meter.output(&[0.0], &[0.0], 1000.0);
+        for _ in 0..256 {
+            meter.output(&[0.0], &[0.0], 50.0);
+        }
+        for _ in 0..3 {
+            let state = meter.snapshot();
+            assert_eq!(state.process_us_max, 50.0);
+            assert_eq!(state.process_us_peak, Some(1200.0));
+            assert_eq!(state.deadline_misses, Some(2));
+            assert!(state.valid());
+        }
+        let fresh = Meter::new(48, 48000).snapshot();
+        assert_eq!(fresh.process_us_peak, Some(0.0));
+        assert_eq!(fresh.deadline_misses, Some(0));
+        let mut legacy = serde_json::to_value(fresh).unwrap();
+        legacy.as_object_mut().unwrap().remove("process_us_peak");
+        legacy.as_object_mut().unwrap().remove("deadline_misses");
+        let decoded: Snapshot = serde_json::from_value(legacy).unwrap();
+        assert!(decoded.valid());
+        assert_eq!(decoded.deadline_misses, None);
+        assert_eq!(decoded.process_us_peak, None);
     }
 }

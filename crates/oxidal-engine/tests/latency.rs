@@ -355,6 +355,7 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
 
 #[test]
 fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
+    oxidal_engine::render::enable_render_thread();
     for preserve in [false, true] {
         resident_switch_qualification(preserve);
     }

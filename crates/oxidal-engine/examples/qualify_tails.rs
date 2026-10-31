@@ -9,6 +9,7 @@ use oxidal_presets::{Bundle, BundleStore};
 use serde_json::json;
 use std::{collections::BTreeMap, error::Error};
 fn main() -> Result<(), Box<dyn Error>> {
+    oxidal_engine::render::enable_render_thread();
     let world = World::discover()?;
     let mut evidence = vec![];
     for uri in [

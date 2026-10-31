@@ -504,6 +504,15 @@ The byte budget covers those host allocations, not plugin internal memory. CPU
 admission, tail detection and suspension are not implemented. Preparing more
 presets increases callback cost even when host CPU looks low.
 
+During streaming, up to three resident helpers overlap independent prepared
+graphs with the main render thread. Each graph stays assigned to one thread for
+its entire lifetime, preserving native audio-port affinity. During a transition,
+the candidate finishes first so failure can still leave the old graph's input
+unchanged in that same block; the remaining residents then run concurrently.
+All helpers join before return mixing or owner-thread control access. Returns
+sum in the original order, including every retained tail. The serial/parallel
+regression compares exact PCM across 10,000 blocks and mixed-policy recalls.
+
 Lane helpers signal completion through a retained thread wake token. After a
 short bounded spin, the render owner parks until those helpers finish, instead of
 staying runnable at a higher real-time priority than native processing threads.

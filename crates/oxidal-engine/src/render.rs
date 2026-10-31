@@ -33,8 +33,8 @@ pub(crate) fn pump_port(engine: &oxidal_tone3000::Engine) -> oxidal_tone3000::Pu
 ///
 /// The rig holds native engines and LV2 instances, which are not `Send`. The
 /// render thread only calls `ResidentSet::process`: native nodes go through
-/// render ports the bridge admits from that thread, and LV2 `run` is an
-/// audio-class call. Construction, control, state and destruction stay on the
+/// render ports on fixed audio threads, and LV2 `run` is an audio-class call.
+/// All resident/lane helpers join before releasing the rig mutex. Construction, control, state and destruction stay on the
 /// owner thread, which created the rig.
 #[derive(Debug)]
 pub struct SharedRig {
@@ -111,7 +111,7 @@ impl Drop for OwnerGuard<'_> {
 }
 
 /// One native lane for a helper: its render port and its block in the graph's
-/// sample buffer. Valid only between `LanePool::start` and `LanePool::finish`.
+/// sample buffer. Valid only between `RenderPool::start` and `RenderPool::finish`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LaneJob {
     port: *mut oxidal_tone3000::AudioPort,
@@ -150,6 +150,47 @@ impl LaneJob {
         port.process(left, right).map_err(|e| e.to_string())
     }
 }
+/// Exclusive resident block, with inputs prepared before publication. The
+/// resident and all of its buffers remain untouched until the pool is joined.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ResidentJob(*mut crate::resident::Resident);
+impl ResidentJob {
+    pub(crate) fn block(resident: &mut crate::resident::Resident) -> Self {
+        Self(resident)
+    }
+    fn run(self) {
+        // SAFETY: queueing transfers this disjoint resident to its fixed helper.
+        // The caller joins every job before reading errors, mixing, or allowing
+        // owner-thread controls. Native engines therefore retain thread affinity.
+        unsafe { &mut *self.0 }.process_block();
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RenderJob {
+    Lane(LaneJob),
+    Resident(ResidentJob),
+}
+impl From<LaneJob> for RenderJob {
+    fn from(job: LaneJob) -> Self {
+        Self::Lane(job)
+    }
+}
+impl From<ResidentJob> for RenderJob {
+    fn from(job: ResidentJob) -> Self {
+        Self::Resident(job)
+    }
+}
+impl RenderJob {
+    fn run(self) -> Result<(), String> {
+        match self {
+            Self::Lane(job) => job.run(),
+            Self::Resident(job) => {
+                job.run();
+                Ok(())
+            }
+        }
+    }
+}
 const IDLE: u32 = 0;
 const READY: u32 = 1;
 const DONE: u32 = 2;
@@ -159,7 +200,7 @@ struct Mailbox {
     quit: AtomicBool,
     failed: AtomicBool,
     /// Written by the render thread while IDLE, read by the helper while READY.
-    jobs: std::cell::UnsafeCell<Vec<LaneJob>>,
+    jobs: std::cell::UnsafeCell<Vec<RenderJob>>,
     /// Published with jobs; copied by the helper before releasing DONE.
     waiter: std::cell::UnsafeCell<Option<std::thread::Thread>>,
 }
@@ -173,16 +214,19 @@ struct Helper {
     mailbox: std::sync::Arc<Mailbox>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
-/// Realtime helper threads that render independent native lanes of one graph
-/// in parallel with the render thread. Each lane keeps the same thread for the
-/// life of the graph, because a native engine binds to its first audio thread.
+/// Bounded realtime helpers for independent native lanes or prepared residents.
+/// Each job keeps its fixed helper for the graph lifetime because a native
+/// engine binds to its first audio thread; all work joins before buffer reuse.
 #[derive(Debug)]
-pub(crate) struct LanePool {
+pub(crate) struct RenderPool {
     helpers: Vec<Helper>,
 }
-impl LanePool {
+impl RenderPool {
     /// Spawned on the owner thread while the graph is built, never in render.
     pub(crate) fn new(helpers: usize, jobs_each: usize) -> Result<Self, String> {
+        Self::named(helpers, jobs_each, "oxidal-lane")
+    }
+    pub(crate) fn named(helpers: usize, jobs_each: usize, name: &str) -> Result<Self, String> {
         let mut pool = Self {
             helpers: Vec::with_capacity(helpers),
         };
@@ -196,7 +240,7 @@ impl LanePool {
             });
             let worker = mailbox.clone();
             let thread = std::thread::Builder::new()
-                .name(format!("oxidal-lane-{}", index + 1))
+                .name(format!("{name}-{}", index + 1))
                 .spawn(move || {
                     oxidal_audio::realtime::enter();
                     loop {
@@ -238,12 +282,12 @@ impl LanePool {
         self.helpers.len()
     }
     /// Queues a lane for helper `helper` (render thread, before `start`).
-    pub(crate) fn queue(&self, helper: usize, job: LaneJob) {
+    pub(crate) fn queue(&self, helper: usize, job: impl Into<RenderJob>) {
         let mailbox = &self.helpers[helper].mailbox;
         debug_assert_eq!(mailbox.state.load(Ordering::Acquire), IDLE);
         // SAFETY: the helper does not read `jobs` while IDLE; capacity was
         // reserved for every lane it owns, so this never allocates.
-        unsafe { (*mailbox.jobs.get()).push(job) };
+        unsafe { (*mailbox.jobs.get()).push(job.into()) };
     }
     /// Wakes every helper with queued lanes.
     pub(crate) fn start(&self) {
@@ -288,13 +332,13 @@ impl LanePool {
             mailbox.state.store(IDLE, Ordering::Release);
         }
         if failed {
-            Err("Native lane render failed".into())
+            Err("Parallel audio render failed".into())
         } else {
             Ok(())
         }
     }
 }
-impl Drop for LanePool {
+impl Drop for RenderPool {
     fn drop(&mut self) {
         for helper in &mut self.helpers {
             helper.mailbox.quit.store(true, Ordering::Release);
@@ -312,7 +356,7 @@ mod tests {
 
     #[test]
     fn repeated_early_and_late_completions_do_not_lose_wakes() {
-        let pool = LanePool::new(3, 0).unwrap();
+        let pool = RenderPool::new(3, 0).unwrap();
         // Empty jobs isolate mailbox handoff from DSP. Alternate completion
         // before joining with immediate joins, reusing each slot thousands of
         // times so stale park tokens and back-to-back READY publications occur.

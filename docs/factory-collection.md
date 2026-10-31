@@ -125,6 +125,25 @@ python3 scripts/qualify-factory.py \
   --restore /path/to/owner-audio.json --output /path/to/pi-scenes.json
 ```
 
+For a longer prepared-set run, save a `StartRig` settings object containing its
+prepared alternatives, then use:
+
+```sh
+python3 scripts/qualify-prepared.py \
+  --settings /path/to/prepared-settings.json \
+  --restore /path/to/owner-audio.json --output /path/to/prepared-soak.json \
+  --seconds 3600 --frames 256 --capture-last-hold
+```
+
+The optional Hold flag captures the voices in the last prepared preset. The test
+uses continuous reference input, keeps physical output muted between switches,
+polls telemetry frequently and restores the supplied configuration even on a
+failed deadline check. Its report records polling gaps as well as observed peaks.
+DSP percentiles cover a rolling 128-callback window; the separate session peak
+and deadline-miss count are cumulative, so a polling delay cannot hide a spike.
+The example buffer size is a qualification choice, not an automatic capacity
+guarantee. A killed process still requires manual restoration.
+
 The reference utility measures pre-master DSP and mutes physical output while
 active. Its LUFS and real ALSA scheduling evidence do not establish audible tone
 quality, analog round-trip performance, clipping before the measurement mute, or

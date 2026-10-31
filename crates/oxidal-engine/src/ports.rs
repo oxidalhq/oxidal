@@ -122,7 +122,7 @@ pub struct PreparedPorts {
     /// position of `order` (0 inside or outside a group).
     waves: Vec<usize>,
     /// Helpers that render a group's lanes in parallel, with the render thread.
-    lanes: Option<crate::render::LanePool>,
+    lanes: Option<crate::render::RenderPool>,
     // Declared after nodes so plugins finish worker cleanup before files disappear.
     assets: crate::lv2_state::Assets,
 }
@@ -370,7 +370,7 @@ impl PreparedPorts {
         let widest = waves.iter().copied().max().unwrap_or(0);
         let lanes = if crate::render::render_thread_enabled() && widest >= 2 {
             let helpers = (widest - 1).min(LANE_HELPERS);
-            Some(crate::render::LanePool::new(
+            Some(crate::render::RenderPool::new(
                 helpers,
                 widest.div_ceil(helpers + 1),
             )?)

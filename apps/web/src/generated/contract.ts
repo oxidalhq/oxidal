@@ -1450,6 +1450,10 @@ export interface NativeValue {
   value: number;
 }
 export interface Snapshot2 {
+  /**
+   * Callbacks reaching/exceeding one period, not necessarily ALSA underruns.
+   */
+  deadline_misses?: number | null;
   deadline_us: number;
   frames: number;
   /**
@@ -1467,6 +1471,10 @@ export interface Snapshot2 {
   process_us_max: number;
   process_us_p50: number;
   process_us_p95: number;
+  /**
+   * Largest callback duration since this stream began, independent of polling.
+   */
+  process_us_peak?: number | null;
   /**
    * Recovered transport overruns/underruns in this worker lifetime.
    */
