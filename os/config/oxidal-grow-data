@@ -4,7 +4,7 @@ set -eu
 
 source=$(findmnt -n -o SOURCE --target /var/lib)
 device=$(readlink -f "$source")
-label=$(lsblk -dn -o LABEL "$device")
+label=$(blkid -s LABEL -o value "$device")
 partition=$(lsblk -dn -o PARTN "$device")
 parent=$(lsblk -dn -o PKNAME "$device")
 

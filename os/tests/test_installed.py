@@ -20,7 +20,9 @@ class InstalledTests(unittest.TestCase):
         ).strip()
         device = subprocess.check_output(['readlink', '-f', source], text=True).strip()
         self.assertEqual(
-            subprocess.check_output(['lsblk', '-dn', '-o', 'LABEL', device], text=True).strip(),
+            subprocess.check_output(
+                ['blkid', '-s', 'LABEL', '-o', 'value', device], text=True
+            ).strip(),
             'OXIDAL_DATA',
         )
         self.assertEqual(

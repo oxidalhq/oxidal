@@ -147,6 +147,7 @@ class ApplianceTests(ProvisionTests):
             },
         )
         self.assertIn(b'OXIDAL_DATA', files['usr/local/sbin/oxidal-grow-data'])
+        self.assertIn(b'blkid -s LABEL -o value', files['usr/local/sbin/oxidal-grow-data'])
         unit = files['etc/systemd/system/oxidal-grow-data.service']
         self.assertIn(b'Before=NetworkManager.service oxidal-device.service oxidald.service', unit)
         self.assertIn(b'ConditionPathIsMountPoint=/var/lib', unit)
