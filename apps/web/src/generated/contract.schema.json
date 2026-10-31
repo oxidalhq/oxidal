@@ -58,6 +58,9 @@
     "debug_state": {
       "$ref": "#/$defs/State"
     },
+    "effect_packs": {
+      "$ref": "#/$defs/PackState"
+    },
     "error": {
       "$ref": "#/$defs/ApiError"
     },
@@ -251,6 +254,7 @@
     "control_audit",
     "network_state",
     "network_command",
+    "effect_packs",
     "audio_state",
     "rig_audio_state",
     "rig_audio_command",
@@ -2524,6 +2528,40 @@
             "type",
             "uuid"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "packs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/PackAction"
+            },
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pack"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id",
+            "action"
+          ]
         }
       ]
     },
@@ -3342,6 +3380,54 @@
         "live_audio",
         "can_undo",
         "can_redo"
+      ]
+    },
+    "EffectPack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "qualification": {
+          "type": "string"
+        },
+        "size_mib": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "usable_plugins": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "package",
+        "size_mib",
+        "usable_plugins",
+        "installed",
+        "qualification"
       ]
     },
     "Endpoint": {
@@ -5971,6 +6057,7 @@
         "native_audio",
         "mixed_audio",
         "effects_audio",
+        "effect_packs",
         "network",
         "account",
         "native_editor",
@@ -6013,6 +6100,70 @@
       "required": [
         "id",
         "preset"
+      ]
+    },
+    "PackAction": {
+      "type": "string",
+      "enum": [
+        "install",
+        "remove"
+      ]
+    },
+    "PackJob": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/PackAction"
+        },
+        "pack": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "pack",
+        "action",
+        "phase"
+      ]
+    },
+    "PackState": {
+      "type": "object",
+      "properties": {
+        "audio_running": {
+          "type": "boolean"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PackJob"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "packs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EffectPack"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "audio_running",
+        "packs",
+        "message"
       ]
     },
     "Page": {

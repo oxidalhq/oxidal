@@ -187,6 +187,17 @@ One scan can run at a time. Responses are limited to 4 MiB and discovery to ten 
 failed workers are killed/reaped, including after the requesting browser disconnects.
 Unavailable/failed discovery returns an error rather than an empty successful catalog.
 
+Settings → Effect packs exposes only the eight Debian collections with at least
+one successful ARM64 audio-harness result. `GET /api/v1/packs` reports their
+installed versions, approximate size, usable count and current helper-owned job;
+`POST /api/v1/packs/{id}/install` and `/remove` accept only compiled allowlist IDs.
+The daemon refuses package changes while an audio worker owns the device. The root
+helper serializes jobs and runs fixed apt arguments at nice 19 and idle I/O priority.
+After a completed install, the next catalog request above rescans Lilv paths, so
+newly installed effects appear without restarting the daemon. Package installation
+success does not expand the qualified URI set: harness-rejected, crashed, timed-out,
+silent-at-default and resource-dependent plugins remain distinguishable evidence.
+
 ### Offline pack smoke checks
 
 On Linux with `liblilv-dev`, `lv2-dev` and `pkg-config`, build the independent

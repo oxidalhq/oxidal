@@ -3,6 +3,7 @@ import { GuitarSettings } from './GuitarSettings';
 import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
 import { DevicePower } from './DevicePower';
+import { EffectPacks } from './EffectPacks';
 import {
   lazy,
   Suspense,
@@ -78,12 +79,19 @@ function InstrumentApp() {
   const [view, setView] = useWorkspaceNavigation();
   const [tunerOpen, setTunerOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
-    'audio' | 'connections' | 'midi' | 'display' | 'device' | 'maintenance'
+    | 'audio'
+    | 'connections'
+    | 'midi'
+    | 'effects'
+    | 'display'
+    | 'device'
+    | 'maintenance'
   >('audio');
   const settingsLabels = {
     audio: 'Audio setup',
     connections: 'Connections',
     midi: 'MIDI controls',
+    effects: 'Effect packs',
     display: 'Display',
     device: 'Device',
     maintenance: 'Maintenance',
@@ -734,6 +742,12 @@ function InstrumentApp() {
                 )}
                 {settingsSection === 'audio' && (
                   <AudioSettings connected={connected} />
+                )}
+                {settingsSection === 'effects' && (
+                  <EffectPacks
+                    connected={connected}
+                    audioRunning={audioRunning}
+                  />
                 )}
                 {settingsSection === 'device' && (
                   <DevicePower connected={connected} />

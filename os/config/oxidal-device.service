@@ -15,11 +15,10 @@ Restart=on-failure
 RestartSec=3
 UMask=0077
 NoNewPrivileges=yes
-ProtectSystem=strict
-ReadWritePaths=/etc/NetworkManager/system-connections /etc/default
+ProtectSystem=false
 ProtectHome=yes
 PrivateTmp=yes
-RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
 TimeoutStopSec=5
 
 [Install]

@@ -1206,6 +1206,52 @@ async fn network_boundary_is_optional_strict_and_redacts_invalid_credentials() {
 }
 
 #[tokio::test]
+async fn effect_pack_catalog_is_curated_even_without_a_privileged_helper() {
+    let (url, task, _) = start(false).await;
+    let client = reqwest::Client::new();
+    let response = client.get(format!("{url}/packs")).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let state: Value = response.json().await.unwrap();
+    assert_eq!(state["available"], false);
+    assert_eq!(state["audio_running"], false);
+    assert_eq!(state["packs"].as_array().unwrap().len(), 8);
+    assert!(
+        state["packs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|pack| pack["usable_plugins"].as_u64().unwrap() > 0)
+    );
+    assert!(
+        !state["packs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|pack| pack["id"] == "lsp")
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/packs/swh/install"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        503
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/packs/swh/reboot"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    task.abort();
+}
+
+#[tokio::test]
 async fn monitor_reports_real_availability_without_inventing_audio() {
     let (url, task, _) = start(false).await;
     let client = reqwest::Client::new();

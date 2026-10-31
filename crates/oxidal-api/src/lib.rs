@@ -18,6 +18,7 @@ mod monitor;
 mod monitor_history;
 mod native_defaults;
 mod native_editor;
+mod packs;
 mod playback;
 mod playback_recovery;
 mod plugins;
@@ -103,6 +104,7 @@ pub struct Contract {
     pub control_audit: audit::AuditHistory,
     pub network_state: oxidal_device::NetworkState,
     pub network_command: oxidal_device::Command,
+    pub effect_packs: oxidal_device::packs::PackState,
     pub audio_state: oxidal_audio::lifecycle::AudioState,
     pub rig_audio_state: oxidal_engine::protocol::RigAudioState,
     pub rig_audio_command: oxidal_engine::protocol::RigAudioCommand,
@@ -355,6 +357,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/debug/logs", get(debug::logs))
         .route("/terminal/{mode}", post(terminal::command))
         .route("/device/network", get(device::state).post(device::command))
+        .route("/packs", get(packs::state))
+        .route("/packs/{id}/{action}", post(packs::change))
         .route("/audio", get(playback::state).post(playback::command))
         .route("/levels", get(levels::state).post(levels::update))
         .route("/guitars", get(guitars::state).post(guitars::update))

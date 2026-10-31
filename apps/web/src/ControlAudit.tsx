@@ -7,6 +7,7 @@ const labels: Record<History['records'][number]['operation'], string> = {
   native_audio: 'TONE3000 audio',
   mixed_audio: 'Hybrid audio',
   effects_audio: 'Effects audio',
+  effect_packs: 'Effect packs',
   network: 'Wi-Fi / device',
   account: 'TONE3000 account',
   native_editor: 'Draft authoring',

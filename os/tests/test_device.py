@@ -53,9 +53,14 @@ class DeviceTests(unittest.TestCase):
             self.assertIsNone(reply['error'])
             self.assertTrue(reply['state']['available'])
             self.assertIsInstance(reply['state']['interfaces'], list)
+            packs = request({'type': 'packs'})
+            self.assertIsNone(packs['error'])
+            self.assertEqual(len(packs['packs']['packs']), 8)
+            self.assertNotIn('lsp', [pack['id'] for pack in packs['packs']['packs']])
             # Unknown commands/fields and invalid inputs cannot reach nmcli.
             for command in ({'type': 'shell', 'command': 'reboot'}, {'type': 'status', 'shell': 'reboot'},
-                            {'type': 'join', 'interface': '../invalid', 'ssid': 'Test', 'password': 'never-echo-test'}):
+                            {'type': 'join', 'interface': '../invalid', 'ssid': 'Test', 'password': 'never-echo-test'},
+                            {'type': 'pack', 'id': '../swh-lv2', 'action': 'install'}):
                 result = request(command)
                 self.assertIsNone(result['state'])
                 self.assertTrue(result['error'])

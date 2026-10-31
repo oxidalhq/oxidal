@@ -235,6 +235,32 @@ export async function deviceNetwork(
   return body;
 }
 
+export type EffectPacks = Contract['effect_packs'];
+const effectPacksValidator = ajv.compile<EffectPacks>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/PackState',
+});
+async function parseEffectPacks(response: Response): Promise<EffectPacks> {
+  const body = await presetResponse(response);
+  if (!effectPacksValidator(body))
+    throw new Error('Incompatible effect-pack response');
+  return body;
+}
+export async function effectPacks(): Promise<EffectPacks> {
+  return parseEffectPacks(await fetch('/api/v1/packs', { cache: 'no-store' }));
+}
+export async function changeEffectPack(
+  id: string,
+  action: 'install' | 'remove',
+): Promise<EffectPacks> {
+  return parseEffectPacks(
+    await fetch(
+      `/api/v1/packs/${encodeURIComponent(id)}/${encodeURIComponent(action)}`,
+      { method: 'POST' },
+    ),
+  );
+}
+
 export type Monitoring = Contract['monitoring'];
 const monitoringValidator = ajv.compile<Monitoring>({
   $defs: schema.$defs,

@@ -383,6 +383,7 @@ export type Operation =
   | "native_audio"
   | "mixed_audio"
   | "effects_audio"
+  | "effect_packs"
   | "network"
   | "account"
   | "native_editor"
@@ -413,6 +414,7 @@ export type Command2 =
       id: string;
       type: "cancel";
     };
+export type PackAction = "install" | "remove";
 export type GraphAudioAction =
   | {
       command: HostUtility;
@@ -556,6 +558,14 @@ export type Command3 =
   | {
       type: "forget";
       uuid: string;
+    }
+  | {
+      type: "packs";
+    }
+  | {
+      action: PackAction;
+      id: string;
+      type: "pack";
     };
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
@@ -711,6 +721,7 @@ export interface Contract {
   control_audit: AuditHistory;
   debug_command: Command2;
   debug_state: State;
+  effect_packs: PackState;
   error: ApiError;
   graph_audio_command: GraphAudioCommand;
   graph_audio_state: GraphAudioState;
@@ -1288,6 +1299,28 @@ export interface Job {
   id: string;
   output: string;
   phase: string;
+}
+export interface PackState {
+  audio_running: boolean;
+  available: boolean;
+  job?: PackJob | null;
+  message: string;
+  packs: EffectPack[];
+}
+export interface PackJob {
+  action: PackAction;
+  pack: string;
+  phase: string;
+}
+export interface EffectPack {
+  id: string;
+  installed: boolean;
+  name: string;
+  package: string;
+  qualification: string;
+  size_mib: number;
+  usable_plugins: number;
+  version?: string | null;
 }
 export interface ApiError {
   error: string;

@@ -2,13 +2,14 @@
 #[cfg(unix)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use oxidal_device::{Command, Reply, SOCKET, ipc, network::Network};
+    use oxidal_device::{Command, Reply, SOCKET, ipc, network::Network, packs::Manager};
     use std::{fs, os::unix::fs::PermissionsExt, time::Duration};
     use tokio::{net::UnixListener, process::Command as Process};
     if !cfg!(target_os = "linux") {
         return Err("Device helper requires Linux".into());
     }
     let mut network = Network::default();
+    let mut packs = Manager::default();
     network.recover().await?;
     // /run/oxidal-device is created by systemd, root-owned with a restricted group.
     match fs::remove_file(SOCKET) {
@@ -34,8 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(Command::Power { action }) = &command {
                     let action=*action;
                     let reply=match network.status(false).await {
-                        Ok(state) if state.pending.is_none()=>Reply{state:Some(oxidal_device::NetworkState{message:"System power request accepted; unsaved edits will be lost".into(),..state}),error:None},
-                        _=>Reply{state:None,error:Some("Finish network recovery before a system power request".into())}
+                        Ok(state) if state.pending.is_none()=>Reply{state:Some(oxidal_device::NetworkState{message:"System power request accepted; unsaved edits will be lost".into(),..state}),packs:None,error:None},
+                        _=>Reply{state:None,packs:None,error:Some("Finish network recovery before a system power request".into())}
                     };
                     let accepted=reply.error.is_none();
                     let sent=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&serde_json::to_vec(&reply)?)).await;
@@ -46,13 +47,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
                 let changing=matches!(&command,Some(Command::Join{..}|Command::Hotspot{..}|Command::Policy{..}));
+                if matches!(&command,Some(Command::Packs{}|Command::Pack{..})) {
+                    let result=match command {
+                        Some(Command::Packs{})=>Ok(()),
+                        Some(Command::Pack{id,action})=>packs.start(&id,action).await,
+                        _=>unreachable!(),
+                    };
+                    let reply=match result {
+                        Ok(())=>Reply{state:None,packs:Some(packs.state().await),error:None},
+                        Err(error)=>Reply{state:None,packs:None,error:Some(error.into())},
+                    };
+                    let bytes=serde_json::to_vec(&reply)?;
+                    let _=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&bytes)).await;
+                    continue;
+                }
                 let result=match command {
                     Some(command) if changing=>network.begin(&command).await,
                     Some(command)=>network.command(command).await,
                     None=>Err("Invalid device request"),
                 };
                 let activate=changing && result.is_ok();
-                let reply=match result {Ok(state)=>Reply{state:Some(state),error:None},Err(error)=>Reply{state:None,error:Some(error.into())}};
+                let reply=match result {Ok(state)=>Reply{state:Some(state),packs:None,error:None},Err(error)=>Reply{state:None,packs:None,error:Some(error.into())}};
                 let bytes=serde_json::to_vec(&reply)?;
                 let _=tokio::time::timeout(Duration::from_secs(2),ipc::write(&mut stream,&bytes)).await;
                 if activate {

@@ -4,6 +4,7 @@
 pub mod ipc;
 #[cfg(unix)]
 pub mod network;
+pub mod packs;
 pub mod policy;
 #[cfg(unix)]
 pub mod power;
@@ -48,6 +49,11 @@ pub enum Command {
     Forget {
         uuid: String,
     },
+    Packs {},
+    Pack {
+        id: String,
+        action: packs::PackAction,
+    },
 }
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,6 +67,8 @@ impl std::fmt::Debug for Command {
             Self::Confirm { .. } => "Confirm",
             Self::Cancel { .. } => "Cancel",
             Self::Forget { .. } => "Forget",
+            Self::Packs {} => "Packs",
+            Self::Pack { .. } => "Pack",
         })
     }
 }
@@ -129,6 +137,9 @@ impl Command {
             {
                 return Err("Invalid connection identifier");
             }
+            Self::Pack { id, .. } if !packs::known(id) => {
+                return Err("Unknown effect pack");
+            }
             _ => {}
         }
         Ok(())
@@ -188,6 +199,8 @@ pub struct NetworkState {
 #[serde(deny_unknown_fields)]
 pub struct Reply {
     pub state: Option<NetworkState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packs: Option<packs::PackState>,
     pub error: Option<String>,
 }
 
