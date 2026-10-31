@@ -156,7 +156,7 @@ class InstalledTests(unittest.TestCase):
                         '--marker', temporary + '/factory-installed.json']
                     subprocess.run(seed_command, check=True)
                     seeded = json.loads(get('/api/v1/presets/rigs'))['presets']
-                    self.assertEqual(len(seeded), 10)
+                    self.assertEqual(len(seeded), len(json.loads((home / 'factory/catalog.json').read_text())['sounds']))
                     self.assertTrue(all(p['origin'] == 'oxidal_example' and p['native_instances'] == 0
                         and len(p['scenes']) == 4 for p in seeded))
                     subprocess.run(seed_command, check=True)
