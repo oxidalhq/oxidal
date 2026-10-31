@@ -2957,6 +2957,13 @@ textarea {
   .rig-performance-header .preset-picker {
     flex-basis: 9rem;
   }
+  .rig-editor .rig-performance-header {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .rig-editor .rig-performance-header .preset-picker {
+    grid-column: 1 / -1;
+  }
   /* Icon-only header buttons on phones; their names stay for screen readers. */
   .rig-performance-header .phone-hidden {
     position: absolute;
@@ -2969,6 +2976,15 @@ textarea {
   .rig-performance-header > .oxidal-button:has(.phone-hidden) {
     width: var(--touch-target);
     padding: 0;
+  }
+  .rig-editor .rig-performance-header > .oxidal-button {
+    width: 100%;
+  }
+  .rig-editor {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
   }
 }
 .rig-workspace {

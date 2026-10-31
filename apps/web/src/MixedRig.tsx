@@ -1248,7 +1248,10 @@ export function MixedRig({
       </>
     );
   return (
-    <section className="panel space-y-3" aria-label="Sounding mixed rig">
+    <section
+      className="panel rig-editor space-y-3"
+      aria-label="Sounding mixed rig"
+    >
       <div className="rig-performance-header">
         <RigPresetSelector
           current={{

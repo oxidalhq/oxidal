@@ -48,6 +48,7 @@ import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
 import { ControlEditor } from './ControlEditor';
+import { usePerform } from './performState';
 import {
   capabilities,
   deviceStorage,
@@ -64,6 +65,7 @@ import {
  */
 function InstrumentApp() {
   const screen = useScreenSession();
+  const { on: performing } = usePerform();
   const [playingName, setPlayingName] = useState<string | null>(null);
   const [graphName, setGraphName] = useState<string | null>(null);
   const [mixedPresent, setMixedPresent] = useState(false);
@@ -387,7 +389,9 @@ function InstrumentApp() {
         <main>
           <div
             className={
-              view === 'rig' && playingName ? 'sr-only' : 'page-heading'
+              view === 'rig' && (playingName || (performing && audioRunning))
+                ? 'sr-only'
+                : 'page-heading'
             }
           >
             <div>
