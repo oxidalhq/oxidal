@@ -15,6 +15,7 @@ vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
   rigDocument: vi.fn(),
+  sceneBlends: vi.fn(async () => null),
 }));
 vi.mock('./presetChoices', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./presetChoices')>()),
@@ -238,6 +239,24 @@ it('shows artwork for the selected hybrid assignment rather than another block',
   expect(screen.getByTestId('model-artwork')).toHaveTextContent('asset-a');
   fireEvent.click(screen.getByRole('button', { name: 'Select model 2' }));
   expect(screen.getByTestId('model-artwork')).toHaveTextContent('asset-b');
+});
+
+it('keeps gain-snapshot scenes usable when they share one native chain', async () => {
+  const state = setup();
+  state.control!.scenes = {
+    fade_ms: 15,
+    scenes: [
+      { id: 'scene-1', name: 'Dry', gains: [] },
+      { id: 'scene-2', name: 'Interlock', gains: [] },
+    ],
+  };
+  state.control!.scene = 'scene-2';
+
+  const active = await screen.findByRole('button', {
+    name: 'Scene 2: Interlock',
+  });
+  expect(active).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.queryByText('Scene branches')).not.toBeInTheDocument();
 });
 
 it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {

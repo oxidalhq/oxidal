@@ -958,9 +958,25 @@ export function MixedRig({
   // of its own blocks, in scene order, with the sounding scene's lane bright.
   const sceneList = state.control?.scenes?.scenes ?? [];
   const soundingScene = sceneList.find((s) => s.id === state.control?.scene);
-  const sceneBranches = sceneList.length
-    ? nodes.filter((n) => n.kind === 'tone3000').slice(0, sceneList.length)
+  const sceneExtension = matching?.manifest.extensions[
+    'urn:oxidal:scenes:1'
+  ] as
+    | {
+        branches?: { id?: unknown }[];
+      }
+    | undefined;
+  // Named gain snapshots also use the scenes extension, but they are not one
+  // TONE3000 branch per scene. Only the composer's explicit branch catalogue
+  // may be presented as scene lanes.
+  const sceneBranchIds = Array.isArray(sceneExtension?.branches)
+    ? sceneExtension.branches.flatMap((branch) =>
+        typeof branch.id === 'string' ? [branch.id] : [],
+      )
     : [];
+  const sceneBranches = sceneBranchIds.flatMap((id) => {
+    const node = nodes.find((candidate) => candidate.id === id);
+    return node?.kind === 'tone3000' ? [node] : [];
+  });
   /** A TONE3000 node's own blocks as tiles, empty slots as + tiles. */
   const nativeTiles = (n: (typeof nodes)[number]): RigBlockVM[] => {
     const layout = state.control?.authoring?.find((a) => a.node === n.id)
@@ -1015,7 +1031,7 @@ export function MixedRig({
   );
   const sceneEffectSet = new Set(sceneEffectIds.flat());
   const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
-    const scene = sceneList[index];
+    const scene = sceneList.find((candidate) => candidate.id === n.id);
     return {
       id: scene?.name ?? n.id,
       input: String(index + 1),
@@ -1136,10 +1152,11 @@ export function MixedRig({
     );
   const activeScene = Math.max(
     0,
-    sceneList.findIndex((s) => s.id === state.control?.scene),
+    sceneBranches.findIndex((branch) => branch.id === state.control?.scene),
   );
+  const activeSceneLane = sceneLanes[activeScene] ?? sceneLanes[0];
   const stageLanes: RigLaneVM[] = (
-    sceneLanes.length ? [sceneLanes[activeScene]!] : effectLanes
+    activeSceneLane ? [activeSceneLane] : effectLanes
   ).map((lane, _, all) => ({
     ...lane,
     tag: all.length > 1 ? lane.input : undefined,
