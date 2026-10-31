@@ -17,10 +17,13 @@ const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 export function SceneChange({
   preset,
   disabled,
+  trails = false,
 }: {
   /** The preset's stable id. */
   preset: string;
   disabled?: boolean;
+  /** Input-gated branches keep their effect histories audible. */
+  trails?: boolean;
 }) {
   const [blends, setBlends] = useState<SceneBlends | null | 'unsupported'>(
     null,
@@ -61,11 +64,11 @@ export function SceneChange({
       <button
         type="button"
         className="scene-change"
-        aria-label={`Scene change: ${blend ? `blend ${seconds(blend)}` : 'trails'}`}
+        aria-label={`Scene change: ${blend ? `blend ${seconds(blend)}` : trails ? 'trails' : 'cut'}`}
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
-        {blend ? `Blend ${seconds(blend)}` : 'Trails'}
+        {blend ? `Blend ${seconds(blend)}` : trails ? 'Trails' : 'Cut'}
       </button>
       {open && (
         <AdjustmentDialog title="Scene change" onCancel={() => setOpen(false)}>
@@ -82,13 +85,19 @@ export function SceneChange({
                 }
               }}
             >
-              <ToggleGroupItem value="trails">Trails</ToggleGroupItem>
+              <ToggleGroupItem value="trails">
+                {trails ? 'Trails' : 'Cut'}
+              </ToggleGroupItem>
               <ToggleGroupItem value="blend">Blend</ToggleGroupItem>
             </ToggleGroup>
             <p className="caption">
               {blend
-                ? 'The whole outgoing scene keeps sounding and fades out while the new one starts.'
-                : 'The outgoing scene stops getting your guitar at once; its delay and reverb ring out over the new scene.'}
+                ? trails
+                  ? 'The outgoing guitar feed fades while the new scene starts. Its echoes and reverb continue ringing.'
+                  : 'The outgoing scene, including its echoes and reverb, fades out while the new one starts.'
+                : trails
+                  ? 'The outgoing scene stops getting your guitar; its echoes and reverb ring out over the new scene.'
+                  : 'This preset selects branch outputs, so outgoing echoes and reverb stop with the scene. Blend makes that change gradual.'}
             </p>
             {blend > 0 && (
               <div className="slider-field">

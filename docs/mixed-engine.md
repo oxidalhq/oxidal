@@ -119,7 +119,7 @@ phase variation. The older stereo executor remains uncompensated.
 
 `PreparedPorts::from_bundle` preflights every native profile, installed LV2 URI,
 audio-port declaration, complete control set and host buffer budget before creating
-processors. Unknown required extensions, unsupported features and Preserve tails are rejected. It loads exact verified native payloads
+processors. Unknown required extensions, unsupported features are rejected. It loads exact verified native payloads
 and instantiates installed LV2 libraries; clients cannot supply library paths.
 
 The native codec baseline is derived from the pinned adapter source revision by
@@ -488,24 +488,30 @@ continue across the switch. Invalid/stale targets retain the sounding session;
 reported candidate DSP/pump failures make that alternative unavailable while the
 active path continues. Native/plugin process crashes still fail the worker closed.
 
-Output paths share the greatest reported graph delay in the set. Candidate input
-is primed for that delay plus one block, then a sample-counted linear crossfade
-moves between the aligned outputs. Live priming plus fading is bounded to one
-second before admission, leaving the control response deadline headroom. The web
-uses a ten-millisecond fade. All resident graphs process (inactive inputs receive
-silence), so the measured processing cost and RAM include the entire set. Host
-routing/scratch/delay allocations share the existing byte budget; plugin/native
-internal allocations remain separate. No plugin is instantiated, transferred or
-destroyed inside the process closure.
+Output paths share the greatest reported graph delay in the set. **Cut** primes
+candidate input for that delay plus one block, then crossfades the aligned outputs.
+**Preserve** ramps the input sends and keeps outgoing returns connected; completion
+waits for the aligned delay to drain the ramp. Returning to a retained graph does
+not fade its existing tail a second time. The web uses a ten-millisecond switch.
+Live transitions are bounded to one second before admission, leaving the control
+response deadline headroom.
 
-The maintained latency suite checks unequal-delay PCM continuity, repeated
-switches, retained controls, candidate failure and buffer rejection. Actual
-HTTP/worker tests check stable PID, continued frames, stale rejection, independent
-edits, Save receipts and reconstruction. Browser tests exercise the library and
-live controls on XR, Fold and BOOX. This is resident switching with **Cut** tails;
-background creation of new residents during playback, Preserve/Fade tails, physical
-MIDI selection, native standalone-worker unification and physical deadline/xrun
-acceptance remain open. Ordinary Start/Restart/reconfigure still interrupt audio.
+All resident graphs process, including those whose tails have decayed. Retained
+returns have no time limit, so infinite Hold/feedback persists until released or
+transport stops. The set has fixed membership and preallocated stereo input,
+output and delay buffers; no plugin is created or destroyed in the callback.
+The byte budget covers those host allocations, not plugin internal memory. CPU
+admission, tail detection and suspension are not implemented. Preparing more
+presets increases callback cost even when host CPU looks low.
+
+The maintained latency and tails suites compare PCM against uninterrupted
+references, including unequal delays, repeated recalls, mixed Cut/Preserve returns,
+retained controls, candidate failure and buffer rejection. Actual HTTP/worker tests
+cover stable PID, continued frames, stale rejection, edits, Save and reconstruction.
+The installed-plugin `qualify_tails` example and factory device workflow are described
+in [Factory collection](factory-collection.md). Background creation of residents,
+standalone native-worker unification and physical deadline acceptance remain open.
+Ordinary Start/Restart/reconfigure still interrupt audio.
 
 ## Live whole-native model transactions
 

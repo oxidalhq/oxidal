@@ -3,7 +3,7 @@ use crate::{PreparedPorts, Processor};
 use oxidal_lv2::{Plugin, PluginInfo, World};
 use oxidal_presets::{
     Bundle,
-    manifest::{Lv2Instance, NodeKind, ProcessingRole, Tails},
+    manifest::{Lv2Instance, NodeKind, ProcessingRole},
 };
 use oxidal_tone3000::{Engine, InputMode};
 
@@ -42,9 +42,7 @@ impl PreparedPorts {
             .oxidal
             .as_ref()
             .ok_or("Explicit host graph required")?;
-        if host.recall.tails != Tails::Cut
-            || host.lv2.iter().any(|p| !p.required_features.is_empty())
-        {
+        if host.lv2.iter().any(|p| !p.required_features.is_empty()) {
             return Err("Unsupported declared feature or tail policy".into());
         }
         let samples = host

@@ -449,6 +449,7 @@ export function sceneRig(
     }
   }
   manifest.extensions['urn:oxidal:authoring']!.scene_tails = tails;
+  host.recall.tails = tails;
   manifest.extensions['urn:oxidal:authoring']!.internal_nodes = [
     ...host.graph.nodes
       .filter((n) => n.id.startsWith('scene-'))

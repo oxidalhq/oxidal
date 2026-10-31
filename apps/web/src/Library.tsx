@@ -21,6 +21,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
+import { FactoryCollection } from './FactoryCollection';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
@@ -430,6 +431,12 @@ export function Library({
                 title="Oxidal examples"
                 onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
               />
+              <div className="mt-4 mb-6">
+                <FactoryCollection
+                  connected={connected}
+                  onChanged={() => setRefresh((v) => v + 1)}
+                />
+              </div>
               <div className="section-heading">
                 <h2>TONE3000</h2>
               </div>

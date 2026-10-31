@@ -3,7 +3,7 @@
 use crate::Processor;
 use oxidal_presets::{
     Bundle,
-    manifest::{NodeKind, ProcessingRole, Tails},
+    manifest::{NodeKind, ProcessingRole},
 };
 use oxidal_tone3000::ProcessingRole as NativeRole;
 use std::collections::{BTreeMap, VecDeque};
@@ -152,9 +152,6 @@ impl PreparedPorts {
             .oxidal
             .as_ref()
             .ok_or("Explicit host graph required")?;
-        if host.recall.tails != Tails::Cut {
-            return Err("Preserve tails requires a qualified transition host".into());
-        }
         if host.lv2.iter().any(|p| !p.required_features.is_empty()) {
             return Err("Unsupported declared LV2 features".into());
         }

@@ -1449,7 +1449,14 @@ export function MixedRig({
         <ScenePads
           extra={
             matching && (
-              <SceneChange preset={matching.manifest.id} disabled={disabled} />
+              <SceneChange
+                preset={matching.manifest.id}
+                disabled={disabled}
+                trails={
+                  matching.manifest.extensions['urn:oxidal:authoring']
+                    ?.scene_tails === 'preserve'
+                }
+              />
             )
           }
           scenes={state.control.scenes.scenes}

@@ -63,7 +63,7 @@ Portable mixed rigs now support a preselected resident set with one continuous P
 owner, fixed reported-delay alignment and sample-counted preset crossfades.
 Independent resident edits and Save receipts survive switching/reconstruction.
 Library/live controls and maintained DSP/worker/browser tests cover this path; see
-docs/mixed-engine.md. Runtime resident creation, Preserve/Fade tails, standalone
+docs/mixed-engine.md. Runtime resident creation, tail suspension, standalone
 native-worker unification, physical MIDI and physical deadlines remain open.
 
 Whole-native mixed nodes now accept verified live NAM/IR replacement and insertion,

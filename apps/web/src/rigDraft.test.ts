@@ -286,6 +286,7 @@ it('keeps outgoing branch histories by selecting input gates and unity-summing o
         e.from.node.startsWith('scene-feed-'),
       ),
   ).toBe(true);
+  expect(manifest.oxidal.recall.tails).toBe('preserve');
   expect(manifest.extensions['urn:oxidal:authoring'].scene_tails).toBe(
     'preserve',
   );

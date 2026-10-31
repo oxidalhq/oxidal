@@ -45,6 +45,8 @@ Try this:
 
 Open **Library** to import a `.t3kpreset`, retain its original bytes and download it unchanged. This does not load or play the preset.
 
+**Library → Explore Oxidal sounds** builds twelve original four-scene recipes from installed effects and your selected saved NAM voices. Three recipes work with effects alone; no third-party capture payloads are bundled. Prepared Preserve recalls keep outgoing effect histories, while Blend ramps scene input sends. See [factory collection](docs/factory-collection.md) for dependencies, assembly, real-device testing and the current processing-capacity limits.
+
 MIDI mappings and imported originals persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/downloads, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
 
 The optional [native TONE3000 adapter](docs/native-tone3000.md) provides real offline authoring on macOS/Linux. `pnpm native:check` qualifies the processor and, on Linux, the isolated playback lifecycle against ALSA null. See [experimental Linux playback](docs/audio.md#experimental-linux-playback) for explicit opt-in and limitations; ordinary previews never start audio automatically.

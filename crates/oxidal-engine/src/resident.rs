@@ -2,7 +2,7 @@
 //! destruction happen before/after streaming; switching never loads a plugin.
 use crate::{Session, ports::Delay, protocol::*};
 use oxidal_lv2::World;
-use oxidal_presets::BundleStore;
+use oxidal_presets::{BundleStore, manifest::Tails};
 
 #[derive(Debug)]
 struct Resident {
@@ -11,6 +11,9 @@ struct Resident {
     left: Vec<f32>,
     right: Vec<f32>,
     delay: [Delay; 2],
+    input: [Vec<f32>; 2],
+    preserve: bool,
+    retained: bool,
     error: Option<String>,
 }
 #[derive(Debug)]
@@ -19,13 +22,14 @@ struct Transition {
     prime: usize,
     cursor: usize,
     length: usize,
+    preserve: bool,
+    retained_target: bool,
 }
 #[derive(Debug)]
 pub struct ResidentSet {
     residents: Vec<Resident>,
     active: usize,
     transition: Option<Transition>,
-    zero: Vec<f32>,
     frames: usize,
     rate: u32,
     latency: u32,
@@ -52,9 +56,7 @@ impl ResidentSet {
         let frames = settings.stream.input.period_frames as usize;
         let rate = settings.stream.input.sample_rate;
         let mut residents = Vec::new();
-        let mut used = frames
-            .checked_mul(size_of::<f32>())
-            .ok_or("Resident buffer overflow")?;
+        let mut used = 0;
         let active = PreparedRecall {
             revision: settings.revision.clone(),
             recall: settings.recall.clone(),
@@ -62,6 +64,11 @@ impl ResidentSet {
         for choice in std::iter::once(&active).chain(&settings.prepared) {
             let bundle = store.read(&choice.revision).map_err(|e| e.to_string())?;
             let name = bundle.manifest().name.clone();
+            let preserve = bundle
+                .manifest()
+                .oxidal
+                .as_ref()
+                .is_some_and(|host| host.recall.tails == Tails::Preserve);
             let rows = choice
                 .recall
                 .as_ref()
@@ -95,7 +102,7 @@ impl ResidentSet {
             }
             used = used
                 .checked_add(session.buffer_bytes())
-                .and_then(|n| n.checked_add(frames * 2 * size_of::<f32>()))
+                .and_then(|n| n.checked_add(frames * 4 * size_of::<f32>()))
                 .filter(|n| *n <= budget)
                 .ok_or("Resident buffers exceed host budget")?;
             residents.push(Resident {
@@ -104,6 +111,9 @@ impl ResidentSet {
                 left: vec![0.0; frames],
                 right: vec![0.0; frames],
                 delay: Default::default(),
+                input: [vec![0.0; frames], vec![0.0; frames]],
+                preserve,
+                retained: false,
                 error: None,
             });
         }
@@ -126,7 +136,6 @@ impl ResidentSet {
             residents,
             active: 0,
             transition: None,
-            zero: vec![0.0; frames],
             frames,
             rate,
             latency,
@@ -205,6 +214,8 @@ impl ResidentSet {
             prime: self.latency as usize + self.frames,
             cursor: 0,
             length: command.fade_frames as usize,
+            preserve: self.residents[self.active].preserve,
+            retained_target: self.residents[target].retained,
         });
         Ok(())
     }
@@ -219,19 +230,44 @@ impl ResidentSet {
             }
             return Err("Invalid resident process block".into());
         }
-        for (index, resident) in self.residents.iter_mut().enumerate() {
+        // Render the incoming graph first. If it rejects its first block, the
+        // old graph still receives unchanged input in this same callback.
+        let target = self.transition.as_ref().map(|t| t.target);
+        for index in target
+            .into_iter()
+            .chain((0..self.residents.len()).filter(|i| Some(*i) != target))
+        {
+            let resident = &mut self.residents[index];
             let audible =
                 index == self.active || self.transition.as_ref().is_some_and(|t| t.target == index);
-            let (left, right) = if audible {
-                (input[0], input[1])
-            } else {
-                (self.zero.as_slice(), self.zero.as_slice())
-            };
             if resident.error.is_some() {
                 continue;
             }
+            for (i, (&left, &right)) in input[0].iter().zip(input[1]).enumerate() {
+                let gain = match &self.transition {
+                    Some(t) if t.preserve || t.retained_target => {
+                        let weight = ((t.cursor + i) as f32 / (t.length - 1) as f32).min(1.0);
+                        if index == self.active {
+                            if t.preserve { 1.0 - weight } else { 1.0 }
+                        } else if index == t.target {
+                            weight
+                        } else {
+                            0.0
+                        }
+                    }
+                    _ => {
+                        if audible {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                };
+                resident.input[0][i] = left * gain;
+                resident.input[1][i] = right * gain;
+            }
             if let Err(error) = resident.session.process(
-                &[left, right],
+                &[&resident.input[0], &resident.input[1]],
                 &mut [&mut resident.left, &mut resident.right],
             ) {
                 if index == self.active {
@@ -260,16 +296,56 @@ impl ResidentSet {
         {
             let old = &self.residents[self.active];
             let (mut left, mut right) = (old.left[i], old.right[i]);
+            for (index, resident) in self.residents.iter().enumerate() {
+                if resident.retained
+                    && resident.error.is_none()
+                    && index != self.active
+                    && self.transition.as_ref().is_none_or(|t| t.target != index)
+                {
+                    left += resident.left[i];
+                    right += resident.right[i];
+                }
+            }
             if let Some(t) = &mut self.transition {
-                if t.prime > 0 {
+                if t.preserve {
+                    // Fade the sends, never the stored return. Report completion
+                    // only after the aligned graph latency has drained the ramp.
+                    left += self.residents[t.target].left[i];
+                    right += self.residents[t.target].right[i];
+                    t.cursor += 1;
+                    if t.cursor >= t.length + self.latency as usize {
+                        self.residents[self.active].retained = true;
+                        self.residents[t.target].retained = false;
+                        self.active = t.target;
+                        self.transition = None;
+                    }
+                } else if t.retained_target {
+                    // This incoming graph already has an audible return. Keep
+                    // it at unity; ramp only its new send. Fading the return a
+                    // second time would dip/cut a tail on A → B(Cut) → A.
+                    let weight = (t.cursor.saturating_sub(self.latency as usize) as f32
+                        / (t.length - 1) as f32)
+                        .min(1.0);
+                    left += self.residents[t.target].left[i] - old.left[i] * weight;
+                    right += self.residents[t.target].right[i] - old.right[i] * weight;
+                    t.cursor += 1;
+                    if t.cursor >= t.length + self.latency as usize {
+                        self.residents[self.active].retained = false;
+                        self.residents[t.target].retained = false;
+                        self.active = t.target;
+                        self.transition = None;
+                    }
+                } else if t.prime > 0 {
                     t.prime -= 1;
                 } else {
                     let next = &self.residents[t.target];
                     let weight = (t.cursor as f32 / (t.length - 1) as f32).min(1.0);
-                    left += (next.left[i] - left) * weight;
-                    right += (next.right[i] - right) * weight;
+                    left += (next.left[i] - old.left[i]) * weight;
+                    right += (next.right[i] - old.right[i]) * weight;
                     t.cursor += 1;
                     if t.cursor == t.length {
+                        self.residents[self.active].retained = false;
+                        self.residents[t.target].retained = false;
                         self.active = t.target;
                         self.transition = None;
                     }

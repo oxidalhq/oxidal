@@ -93,7 +93,7 @@ pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dy
     assert!(PreparedPorts::new(&bundle, processors(world, &bundle)?, 48000.0, 128, 1).is_err());
     let mut changed = bundle.manifest().clone();
     changed.oxidal.as_mut().unwrap().recall.tails = oxidal_presets::manifest::Tails::Preserve;
-    let unsupported = Bundle::from_parts(
+    let preserved = Bundle::from_parts(
         changed.encode()?,
         BTreeMap::from([(
             "current".into(),
@@ -102,13 +102,13 @@ pub fn qualify(world: &World, original: &[u8], root: &Path) -> Result<(), Box<dy
     )?;
     assert!(
         PreparedPorts::new(
-            &unsupported,
+            &preserved,
             processors(world, &bundle)?,
             48000.0,
             128,
             1024 * 1024
         )
-        .is_err()
+        .is_ok()
     );
     for role in [false, true] {
         let mut invalid = bundle.manifest().clone();

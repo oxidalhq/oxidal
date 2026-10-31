@@ -355,15 +355,29 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
 
 #[test]
 fn resident_switches_keep_continuous_aligned_pcm_and_owned_controls() {
+    for preserve in [false, true] {
+        resident_switch_qualification(preserve);
+    }
+}
+fn resident_switch_qualification(preserve: bool) {
     use oxidal_engine::{
         ResidentSet,
         protocol::{PreparedRecall, SwitchCommand},
     };
     let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
-    let root = std::env::temp_dir().join(format!("oxidal-resident-{}", std::process::id()));
+    let root =
+        std::env::temp_dir().join(format!("oxidal-resident-{}-{preserve}", std::process::id()));
     let store = BundleStore::new(root.clone());
-    let a = store.save(&bundle(137, 0, false)).unwrap();
-    let b = store.save(&bundle(29, 0, false)).unwrap();
+    let fixture = |delay| {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(bundle(delay, 0, false).manifest_bytes()).unwrap();
+        if preserve {
+            value["oxidal"]["recall"]["tails"] = json!("preserve");
+        }
+        Bundle::from_parts(serde_json::to_vec(&value).unwrap(), BTreeMap::new()).unwrap()
+    };
+    let a = store.save(&fixture(137)).unwrap();
+    let b = store.save(&fixture(29)).unwrap();
     let input = oxidal_audio::AudioProbe {
         endpoint: "hw:CARD=Qualification,DEV=0".into(),
         direction: oxidal_audio::Direction::Capture,

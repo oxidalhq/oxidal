@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 it('switches between trails and a blend and saves the time when let go', async () => {
-  render(<SceneChange preset="p" />);
+  render(<SceneChange preset="p" trails />);
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Scene change: trails' }));
   const dialog = within(screen.getByRole('dialog'));
@@ -64,4 +64,14 @@ it('switches between trails and a blend and saves the time when let go', async (
   fireEvent.click(dialog.getByRole('radio', { name: 'Trails' }));
   await act(async () => {});
   expect(stored).toEqual({});
+});
+
+it('does not promise trails for a preset with output selectors', async () => {
+  render(<SceneChange preset="legacy" />);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('button', { name: 'Scene change: cut' }));
+  expect(
+    screen.queryByRole('radio', { name: 'Trails' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText(/selects branch outputs/)).toBeInTheDocument();
 });

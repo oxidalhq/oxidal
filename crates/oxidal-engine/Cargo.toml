@@ -39,3 +39,7 @@ required-features = ["native"]
 name = "oxidal-rig-worker"
 path = "src/bin/oxidal-rig-worker.rs"
 required-features = ["worker"]
+
+[[example]]
+name = "qualify_tails"
+required-features = ["native"]
