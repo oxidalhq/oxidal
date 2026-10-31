@@ -135,9 +135,16 @@ type Port = { node: string; port: number };
 /** The two sides of a stereo signal at one point of the graph. */
 type Stereo = [Port, Port];
 
-/** A preset manifest under construction: blocks are chained from stereo points. */
-function rigBuilder(id: string, name: string, profile: string, draft: boolean) {
-  const manifest: RigDocument['manifest'] = {
+/** A preset manifest under construction: blocks are chained from stereo points.
+ * `base` continues an existing manifest, such as a preset with scenes. */
+export function rigBuilder(
+  id: string,
+  name: string,
+  profile: string,
+  draft: boolean,
+  base?: RigDocument['manifest'],
+) {
+  const manifest: RigDocument['manifest'] = base ?? {
     format: 'oxidal.preset',
     formatVersion: 1,
     id,
@@ -157,7 +164,8 @@ function rigBuilder(id: string, name: string, profile: string, draft: boolean) {
   };
   const host = manifest.oxidal!;
   const sources: RigPublish['resources'] = {};
-  const labels: Record<string, string> = {};
+  const labels = (base?.extensions['urn:oxidal:authoring']?.labels ??
+    {}) as Record<string, string>;
   const link = (from: Port, to: string, toPort: number) =>
     host.graph.edges.push({ from, to: { node: to, port: toPort } });
   /** Chains `effects` after `from` and returns the stereo point after them. */

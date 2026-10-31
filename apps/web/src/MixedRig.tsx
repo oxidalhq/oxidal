@@ -72,7 +72,10 @@ import {
   type RigAudioAction,
   type RigControl,
   type RigDocument,
+  type Lv2Plugin,
 } from './api';
+import type { RigPublish } from './generated/contract';
+import { addSceneEffect, branchEffects, removeSceneEffect } from './sceneEdit';
 
 const key = (c: RigControl) => JSON.stringify(c.target);
 /** Actual mixed readback only; an edited document never masquerades as sounding. */
@@ -363,51 +366,79 @@ export function MixedRig({
     }
   }
   const [editing, setEditing] = useState(false);
-  /** Rebuilds this preset with a change to its blocks, plays the new version
-   * and hides the one it replaces, so the library keeps one preset. */
-  async function editChain(change: (lanes: Lanes) => Lanes) {
-    const opened = document?.revision === revision ? document : null;
-    if (!opened || editing) return;
-    setEditing(true);
-    setError('');
-    try {
-      const rate =
-        current.current?.configured?.stream.input.sample_rate ?? 48000;
-      const live: Record<string, Record<string, number>> = {};
-      for (const c of current.current?.control?.controls ?? [])
-        if (c.target.kind === 'lv2')
-          (live[c.target.node] ??= {})[c.target.symbol] = c.value;
-      const next = change(readLanes(opened, await installedLv2(rate), live));
-      const [library, catalog] = await Promise.all([
-        rigLibrary(),
-        libraryCatalog(),
-      ]);
-      const listed = catalog.items.find(
-        (i) => i.kind === 'rig' && i.id === opened.revision,
-      );
-      const published = await publishRig(
-        buildLanes(
-          opened.manifest.id,
-          listed?.name ?? opened.manifest.name,
-          next,
-          library.native_profile,
-        ),
-      );
-      await playScenes(published.revision);
-      if (listed) {
-        const latest = await libraryCatalog();
-        await libraryCatalog({
-          expected_revision: latest.revision,
-          entry_kind: 'rig',
-          id: opened.revision,
-          action: { kind: 'visibility', archived: true },
-        });
+  /** An edit waiting for the player to accept losing unsaved block edits. */
+  const [unsaved, setUnsaved] = useState<(() => Promise<void>) | null>(null);
+  /** Builds the next version of this preset, plays it and hides the one it
+   * replaces, so the library keeps one preset. Edits to the blocks inside a
+   * TONE3000 chain that were not saved are not carried over, so the player
+   * confirms first. */
+  function rebuild(
+    make: (context: {
+      opened: RigDocument;
+      plugins: Lv2Plugin[];
+      live: Record<string, Record<string, number>>;
+      name: string;
+      profile: string;
+    }) => RigPublish,
+  ) {
+    const run = async () => {
+      const opened = document?.revision === revision ? document : null;
+      if (!opened || editing) return;
+      setEditing(true);
+      setError('');
+      try {
+        const rate =
+          current.current?.configured?.stream.input.sample_rate ?? 48000;
+        const live: Record<string, Record<string, number>> = {};
+        for (const c of current.current?.control?.controls ?? [])
+          if (c.target.kind === 'lv2')
+            (live[c.target.node] ??= {})[c.target.symbol] = c.value;
+        const [plugins, library, catalog] = await Promise.all([
+          installedLv2(rate),
+          rigLibrary(),
+          libraryCatalog(),
+        ]);
+        const listed = catalog.items.find(
+          (i) => i.kind === 'rig' && i.id === opened.revision,
+        );
+        const published = await publishRig(
+          make({
+            opened,
+            plugins,
+            live,
+            name: listed?.name ?? opened.manifest.name,
+            profile: library.native_profile,
+          }),
+        );
+        await playScenes(published.revision);
+        if (listed) {
+          const latest = await libraryCatalog();
+          await libraryCatalog({
+            expected_revision: latest.revision,
+            entry_kind: 'rig',
+            id: opened.revision,
+            action: { kind: 'visibility', archived: true },
+          });
+        }
+      } catch (cause) {
+        if (alive.current) setError(String(cause));
+      } finally {
+        if (alive.current) setEditing(false);
       }
-    } catch (cause) {
-      if (alive.current) setError(String(cause));
-    } finally {
-      if (alive.current) setEditing(false);
-    }
+    };
+    if (changed) setUnsaved(() => run);
+    else return run();
+  }
+  /** Rebuilds this preset with a change to its chain of blocks. */
+  function editChain(change: (lanes: Lanes) => Lanes) {
+    return rebuild(({ opened, plugins, live, name, profile }) =>
+      buildLanes(
+        opened.manifest.id,
+        name,
+        change(readLanes(opened, plugins, live)),
+        profile,
+      ),
+    );
   }
   /** One place left or right within the block's lane. */
   function shift(id: string, step: -1 | 1) {
@@ -806,13 +837,36 @@ export function MixedRig({
         };
       });
   };
+  const sceneGraph = matching?.manifest.oxidal?.graph;
+  /** Each scene's effects: after its TONE3000 chain, sounded only in that scene. */
+  const sceneEffectIds = sceneBranches.map((n) =>
+    sceneGraph ? branchEffects(sceneGraph, n.id) : [],
+  );
+  const sceneEffectSet = new Set(sceneEffectIds.flat());
   const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
     const scene = sceneList[index];
     return {
       id: scene?.name ?? n.id,
       input: String(index + 1),
       dim: !!scene && state.control?.scene !== scene.id,
-      blocks: nativeTiles(n),
+      blocks: [
+        ...nativeTiles(n),
+        ...sceneEffectIds[index]!.flatMap((id) => {
+          const fx = nodes.find((node) => node.id === id);
+          return fx
+            ? [{ ...describeNode(fx).block, id: laneBlockId(fx.id, '') }]
+            : [];
+        }),
+        {
+          // A + after the scene's chain, for an effect in this scene.
+          id: laneBlockId(END, String(index)),
+          label: 'Add',
+          kind: blockKind('', ''),
+          on: false,
+          face: null,
+          empty: true,
+        },
+      ],
     };
   });
   // Presets with effects: a straight chain, or a split into lanes, drawn like
@@ -845,10 +899,12 @@ export function MixedRig({
   const lanedNodes = new Set([
     ...sceneBranches.map((n) => n.id),
     ...chainNodes,
+    ...sceneEffectSet,
     // Mono adapters belong to their effect's tile, never a tile of their own.
-    ...(chainIds ? nodes.filter((n) => /-(mono|stereo)$/.test(n.id)) : []).map(
-      (n) => n.id,
-    ),
+    ...(chainIds || sceneEffectSet.size
+      ? nodes.filter((n) => /-(mono|stereo)$/.test(n.id))
+      : []
+    ).map((n) => n.id),
   ]);
   const inLane = !!selected && lanedNodes.has(selected.id);
   /** A dragged effect dropped before tile `before` in `lane` (null: the end). */
@@ -947,6 +1003,32 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {unsaved && (
+        <AdjustmentDialog
+          title="Keep your edits?"
+          onCancel={() => setUnsaved(null)}
+        >
+          <p>
+            This changes the preset&apos;s effects by building a new version of
+            it. Edits you made to the blocks inside its TONE3000 chains and have
+            not saved are not carried over. Save a copy first to keep them.
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setUnsaved(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const run = unsaved;
+                setUnsaved(null);
+                void run();
+              }}
+            >
+              Continue
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
       {discarding && (
         <AdjustmentDialog
           title="Discard unsaved changes?"
@@ -1356,7 +1438,45 @@ export function MixedRig({
           }}
         />
       )}
-      {laneSlot && !effectLanes.length && (
+      {laneSlot &&
+        !effectLanes.length &&
+        sceneLanes.length > 0 &&
+        state.configured && (
+          <SlotChooser
+            sampleRate={state.configured.stream.input.sample_rate}
+            presetName={matching?.manifest.name ?? 'this preset'}
+            modified={!!changed}
+            allowEffects
+            modelsAllowed={laneSlot.node !== END}
+            placement="here"
+            onCancel={() => setLaneSlot(null)}
+            onModel={(format) => {
+              setPicker({
+                opening: state,
+                node: laneSlot.node,
+                target: laneSlot.target,
+                name: 'Empty slot',
+                insert: true,
+                format,
+              });
+              setLaneSlot(null);
+            }}
+            onEffect={(plugin) => {
+              const slot = laneSlot;
+              setLaneSlot(null);
+              // The effect goes at the end of this scene, after its TONE3000 chain.
+              const branch =
+                slot.node === END
+                  ? sceneBranches[Number(slot.target)]?.id
+                  : slot.node;
+              if (!branch) return;
+              void rebuild(({ opened, live, name }) =>
+                addSceneEffect(opened, branch, lv2Effect(plugin), live, name),
+              );
+            }}
+          />
+        )}
+      {laneSlot && !effectLanes.length && !sceneLanes.length && (
         <AddBlockChooser
           onCancel={() => setLaneSlot(null)}
           onChoose={(format) => {
@@ -1520,6 +1640,21 @@ export function MixedRig({
         (selectedView.branch || selectedView.bypass) && (
           <div className="selected-node" aria-label="Selected block">
             <h3 className="min-w-0 flex-1 break-words">{selectedView.label}</h3>
+            {sceneEffectSet.has(selected.id) && (
+              <div className="action-row" role="group" aria-label="Arrange">
+                <Button
+                  variant="ghost"
+                  disabled={disabled || !!edit || editing}
+                  onClick={() =>
+                    void rebuild(({ opened, live, name }) =>
+                      removeSceneEffect(opened, selected.id, live, name),
+                    )
+                  }
+                >
+                  <Trash aria-hidden="true" /> Remove
+                </Button>
+              </div>
+            )}
             {editable && selected.kind === 'lv2' && (
               <div className="action-row" role="group" aria-label="Arrange">
                 <Button

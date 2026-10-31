@@ -166,8 +166,9 @@ export function SlotChooser({
               <span>
                 <strong>Effect</strong>
                 <span>
-                  Pitch, Hold, delay and other effects, before, after or beside
-                  this chain.
+                  {placement === 'here'
+                    ? 'Pitch, Hold, delay and other effects, added here.'
+                    : 'Pitch, Hold, delay and other effects, before, after or beside this chain.'}
                 </span>
               </span>
             </button>
