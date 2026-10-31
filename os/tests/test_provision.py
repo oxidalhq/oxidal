@@ -103,6 +103,22 @@ class ApplianceTests(ProvisionTests):
             files[name] = hashlib.sha256(file.read_bytes()).hexdigest()
         (self.bundle / 'manifest.json').write_text(json.dumps({'format': 2, 'engine_available': True, 'target': 'linux-arm64', 'files': files}))
 
+    def test_bundled_effect_is_verified_and_exposed_to_lv2_discovery(self):
+        import hashlib
+        import json
+        path = self.bundle / 'lv2/oxidal-hold.lv2/NOTICE'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'original effect notice')
+        manifest = self.bundle / 'manifest.json'
+        data = json.loads(manifest.read_text())
+        data['files']['lv2/oxidal-hold.lv2/NOTICE'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        manifest.write_text(json.dumps(data))
+        provision.provision(self.root, True, self.bundle)
+        self.assertEqual((self.root / 'usr/local/lib/lv2/oxidal-hold.lv2/NOTICE').read_bytes(), path.read_bytes())
+        path.write_bytes(b'tampered')
+        with self.assertRaises(ValueError):
+            provision.provision(self.root, True, self.bundle)
+
     def test_bundle_without_mixed_worker_is_rejected_before_install(self):
         import json
         path = self.bundle / 'manifest.json'

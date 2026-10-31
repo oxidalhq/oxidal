@@ -203,6 +203,10 @@ def create_access(path):
 
 def appliance_files(bundle, access, hotspot):
     files, data = bundle_files(bundle)
+    # Bundled original effects retain their verified copy and notice in /opt;
+    # expose the same files through the service's ordinary LV2 discovery path.
+    files.update({'usr/local/lib/lv2/' + name.removeprefix('opt/oxidal/lv2/'): content
+                  for name, content in list(files.items()) if name.startswith('opt/oxidal/lv2/')})
     files['etc/systemd/system/oxidald.service'] = (HERE / 'config/oxidald.service').read_bytes()
     files['etc/systemd/system/oxidal-admin-terminal.service'] = (HERE / 'config/oxidal-admin-terminal.service').read_bytes()
     files['etc/systemd/system/oxidal-terminal.service'] = (HERE / 'config/oxidal-terminal.service').read_bytes()

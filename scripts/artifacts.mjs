@@ -118,6 +118,21 @@ for (const binary of binaries) {
     );
 }
 if (appliance) {
+  const holdBuild = join(root, '.local/hold-appliance');
+  run('cmake', [
+    '-S',
+    'native/hold',
+    '-B',
+    holdBuild,
+    '-DCMAKE_BUILD_TYPE=Release',
+  ]);
+  run('cmake', ['--build', holdBuild, '--parallel', '2']);
+  run('ctest', ['--test-dir', holdBuild, '--output-on-failure']);
+  cpSync(
+    join(holdBuild, 'oxidal-hold.lv2'),
+    join(staging, 'lv2/oxidal-hold.lv2'),
+    { recursive: true },
+  );
   mkdirSync(join(staging, 'licenses'), { recursive: true });
   copyFileSync(
     join(root, 'native/tone3000/NOTICE-split.md'),

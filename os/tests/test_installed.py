@@ -113,7 +113,7 @@ class InstalledTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='oxidal-installed-') as temporary:
             env = {**os.environ, 'OXIDAL_ADDR': '127.0.0.1:3210', 'OXIDAL_SIMULATOR': '0',
                    'OXIDAL_PRESET_DIR': temporary + '/presets', 'OXIDAL_MAPPING_PATH': temporary + '/mappings.json',
-                   'OXIDAL_UI_DIR': str(home / 'ui'), 'LV2_PATH': '/usr/lib/lv2',
+                   'OXIDAL_UI_DIR': str(home / 'ui'), 'LV2_PATH': '/usr/lib/lv2:/usr/local/lib/lv2',
                    'OXIDAL_NATIVE_WORKER': str(home / 'bin/oxidal-native-worker'),
                    'OXIDAL_AUDIO_WORKER': str(home / 'bin/oxidal-audio-worker'),
                    'OXIDAL_GRAPH_WORKER': str(home / 'bin/oxidal-graph-worker'),
@@ -136,6 +136,16 @@ class InstalledTests(unittest.TestCase):
                     else:
                         self.fail('Daemon did not become ready')
                     self.assertTrue(health['native_editor'])
+                    catalog = json.loads(get('/api/v1/plugins/lv2?sample_rate=48000'))
+                    admitted = {p['uri'] for p in catalog['plugins'] if not p['unsupported']}
+                    self.assertTrue({
+                        'urn:oxidal:plugin:hold#stereo',
+                        'http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo',
+                        'http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo',
+                        'http://invadarecords.com/plugins/lv2/filter/hpf/stereo',
+                        'http://drobilla.net/plugins/mda/Tracker',
+                    }.issubset(admitted), 'Factory effects missing from the installed image')
+
                     self.assertNotEqual(health['midi_transport'], 'simulator')
                     self.assertEqual(json.loads(get('/api/v1/audio'))['phase'], 'stopped')
                     self.assertEqual(json.loads(get('/api/v1/graph-audio'))['phase'], 'stopped')

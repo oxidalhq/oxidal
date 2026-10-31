@@ -32,7 +32,7 @@ preset. Different captures change gain, timbre and processing cost substantially
 Automatic TONE3000 capture selection/download is a separate unfinished workflow.
 
 Recipes pin plugin URIs, complete control defaults and explicit parameter values.
-Required packs are Guitarix, Invada, MDA and Oxidal Hold. Missing dependencies are
+Required packs are Guitarix, Invada, MDA and Oxidal Hold. New appliance builds install these packs and bundle the tested Hold effect; existing installations can install the external packs through Settings → Effects. Missing dependencies are
 shown before Build. The initial reverbs are GxReverb-Stereo and GxZita_rev1-Stereo.
 Dragonfly's Atom ports require explicit portable state in the mixed loader; it is
 not silently admitted through the scalar recipe builder. Same-name URI substitutes,
