@@ -2,7 +2,7 @@
 //! No PCM device is opened. @see docs/factory-collection.md
 use oxidal_engine::{
     ResidentSet, Session,
-    protocol::{ControlCommand, PreparedRecall, StartRig, SwitchCommand, Target},
+    protocol::{ControlCommand, PreparedRecall, SaveRequest, StartRig, SwitchCommand, Target},
 };
 use oxidal_lv2::World;
 use oxidal_presets::{Bundle, BundleStore};
@@ -15,7 +15,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     for uri in [
         "http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo",
         "urn:oxidal:plugin:hold#stereo",
+        "https://github.com/michaelwillis/dragonfly-reverb",
     ] {
+        eprintln!("Qualifying {uri}");
         evidence.extend(qualify(&world, uri)?);
     }
     println!("{}", serde_json::to_string_pretty(&evidence)?);
@@ -38,6 +40,11 @@ fn qualify(world: &World, uri: &str) -> Result<Vec<serde_json::Value>, Box<dyn E
         controls.insert("dry".into(), 0.0);
         controls.insert("attack".into(), 10.0);
         controls.insert("width".into(), 100.0);
+    } else if uri.contains("dragonfly") {
+        controls.insert("dry_level".into(), 0.0);
+        controls.insert("early_level".into(), 0.0);
+        controls.insert("late_level".into(), 100.0);
+        controls.insert("decay".into(), 4.0);
     } else {
         controls.insert("DRY_WET_MIX".into(), 1.0);
         controls.insert("MID_RT60".into(), 4.0);
@@ -95,7 +102,18 @@ fn qualify(world: &World, uri: &str) -> Result<Vec<serde_json::Value>, Box<dyn E
             },
         };
         let mut rig = ResidentSet::new(&store, world, &settings, 1 << 24)?;
-        let mut reference = Session::new(make("Reference", true)?, world, 48000.0, 192, 1 << 24)?;
+        // The uninterrupted reference is reopened through isolated Save, so this
+        // also verifies complete scalar restoration with no UI/state messages.
+        let saved = oxidal_engine::save_revision(
+            &store,
+            world,
+            SaveRequest {
+                settings: settings.clone(),
+                recall: rig.snapshot().recall(),
+                name: "Reopened reference".into(),
+            },
+        )?;
+        let mut reference = Session::new(store.read(&saved)?, world, 48000.0, 192, 1 << 24)?;
         let (mut actual_energy, mut expected_energy, mut max_error) = (0.0f64, 0.0f64, 0.0f32);
         let mut durations = vec![];
         for block in 0..2000 {
@@ -146,7 +164,7 @@ fn qualify(world: &World, uri: &str) -> Result<Vec<serde_json::Value>, Box<dyn E
         if preserve {
             assert!(
                 max_error < 1e-6,
-                "Preserve lost real effect history: {max_error}"
+                "Preserve lost real effect history for {uri}: {max_error}"
             );
         } else {
             assert!(

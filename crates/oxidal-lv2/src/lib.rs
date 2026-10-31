@@ -29,6 +29,42 @@ pub struct Port {
     pub maximum: Option<f32>,
     pub default: Option<f32>,
 }
+/// Curated plugins whose complete sound is represented by scalar controls.
+/// Their Atom ports carry UI preset messages; no messages are sent in this mode.
+/// Unknown plugins and changed port layouts still require portable state.
+/// @see docs/lv2.md
+pub fn scalar_state_complete(info: &PluginInfo) -> bool {
+    #[derive(Deserialize)]
+    struct Layout {
+        controls: Vec<String>,
+        atoms: Vec<String>,
+    }
+    static LAYOUTS: std::sync::OnceLock<std::collections::BTreeMap<String, Layout>> =
+        std::sync::OnceLock::new();
+    let layouts = LAYOUTS.get_or_init(|| {
+        serde_json::from_str(include_str!("../scalar-state.json"))
+            .expect("checked scalar state layouts")
+    });
+    let Some(layout) = layouts.get(&info.uri) else {
+        return false;
+    };
+    let mut controls: Vec<_> = info
+        .ports
+        .iter()
+        .filter(|p| p.control && p.input)
+        .map(|p| p.symbol.clone())
+        .collect();
+    let mut atoms: Vec<_> = info
+        .ports
+        .iter()
+        .filter(|p| p.atom)
+        .map(|p| p.symbol.clone())
+        .collect();
+    controls.sort();
+    atoms.sort();
+    info.unsupported.is_none() && controls == layout.controls && atoms == layout.atoms
+}
+
 impl Port {
     pub fn normalize(&self, value: f32) -> Result<f32, String> {
         let (lo, hi) = self.range()?;
@@ -98,6 +134,56 @@ pub use graph::PreparedGraph;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn curated_scalar_state_requires_exact_plugin_and_port_layout() {
+        let layouts: serde_json::Value =
+            serde_json::from_str(include_str!("../scalar-state.json")).unwrap();
+        let uri = "https://github.com/michaelwillis/dragonfly-reverb";
+        let layout = &layouts[uri];
+        let ports = ["controls", "atoms"]
+            .into_iter()
+            .flat_map(|kind| {
+                layout[kind]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(move |name| Port {
+                        index: 0,
+                        symbol: name.as_str().unwrap().into(),
+                        audio: false,
+                        control: kind == "controls",
+                        atom: kind == "atoms",
+                        input: true,
+                        output: false,
+                        integer: false,
+                        toggled: false,
+                        logarithmic: false,
+                        latency: false,
+                        minimum: Some(0.0),
+                        maximum: Some(1.0),
+                        default: Some(0.0),
+                    })
+            })
+            .collect();
+        let mut info = PluginInfo {
+            uri: uri.into(),
+            name: "Hall".into(),
+            category: None,
+            author: None,
+            ports,
+            unsupported: None,
+        };
+        assert!(scalar_state_complete(&info));
+        info.ports[0].symbol.push_str("-changed");
+        assert!(!scalar_state_complete(&info));
+        info.ports[0].symbol = layout["controls"][0].as_str().unwrap().into();
+        info.uri = "urn:dragonfly:room".into();
+        assert!(!scalar_state_complete(&info));
+        info.uri = uri.into();
+        info.unsupported = Some("New unsupported feature".into());
+        assert!(!scalar_state_complete(&info));
+    }
+
     #[test]
     fn native_controls_preserve_logarithmic_and_discrete_ranges() {
         let mut p = Port {

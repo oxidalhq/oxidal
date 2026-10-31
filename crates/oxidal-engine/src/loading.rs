@@ -197,7 +197,10 @@ pub(crate) fn control_values(
     instance: &Lv2Instance,
     info: &PluginInfo,
 ) -> Result<Vec<(u32, f32)>, String> {
-    if info.ports.iter().any(|p| p.atom) && instance.state.is_none() {
+    if info.ports.iter().any(|p| p.atom)
+        && instance.state.is_none()
+        && !oxidal_lv2::scalar_state_complete(info)
+    {
         return Err("Atom effects require an explicit portable state resource".into());
     }
     let controls: Vec<_> = info.ports.iter().filter(|p| p.input && p.control).collect();

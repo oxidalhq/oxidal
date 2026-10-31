@@ -25,8 +25,13 @@ impl Drop for TemporaryDirectory {
 }
 
 fn backup_root(shared: &Shared) -> Result<(PathBuf, bool), &'static str> {
-    let presets = &shared.config.preset_dir;
-    let mappings = &shared.config.mapping_path;
+    backup_layout(&shared.config.preset_dir, &shared.config.mapping_path)
+}
+
+fn backup_layout(
+    presets: &std::path::Path,
+    mappings: &std::path::Path,
+) -> Result<(PathBuf, bool), &'static str> {
     let root = presets.parent().ok_or("Library backup is unavailable")?;
     if presets.file_name().and_then(|v| v.to_str()) != Some("presets")
         || mappings.parent() != Some(root)
@@ -34,19 +39,25 @@ fn backup_root(shared: &Shared) -> Result<(PathBuf, bool), &'static str> {
     {
         return Err("Library backup requires the standard private data layout");
     }
-    for path in [root, presets.as_path()] {
+    // systemd DynamicUser exposes StateDirectory through a root-owned symlink
+    // (/var/lib/oxidal -> /var/lib/private/oxidal). Resolve that configured root,
+    // while still rejecting a substituted presets directory or mappings file.
+    let root = fs::canonicalize(root).map_err(|_| "Library backup is unavailable")?;
+    let presets = root.join("presets");
+    let mappings = root.join("mappings.json");
+    for path in [root.as_path(), presets.as_path()] {
         let metadata = fs::symlink_metadata(path).map_err(|_| "Library backup is unavailable")?;
         if !metadata.is_dir() || metadata.file_type().is_symlink() {
             return Err("Library backup requires the standard private data layout");
         }
     }
-    let mappings_exist = match fs::symlink_metadata(mappings) {
+    let mappings_exist = match fs::symlink_metadata(&mappings) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => true,
         Ok(_) => return Err("Library mappings are not a regular file"),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
         Err(_) => return Err("Library mappings could not be inspected"),
     };
-    Ok((root.into(), mappings_exist))
+    Ok((root, mappings_exist))
 }
 
 fn manifest() -> Vec<u8> {
@@ -171,6 +182,32 @@ pub(super) async fn library(State(shared): State<Arc<Shared>>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn dynamic_user_state_directory_is_backed_up_but_child_symlinks_are_rejected() {
+        let base =
+            std::env::temp_dir().join(format!("oxidal-backup-layout-{}", std::process::id()));
+        let private = base.join("private");
+        fs::create_dir_all(private.join("presets")).unwrap();
+        let visible = base.join("visible");
+        std::os::unix::fs::symlink(&private, &visible).unwrap();
+        let (root, mappings) =
+            backup_layout(&visible.join("presets"), &visible.join("mappings.json")).unwrap();
+        assert_eq!(root, private.canonicalize().unwrap());
+        assert!(!mappings);
+        fs::write(private.join("mappings.json"), b"{}").unwrap();
+        assert!(
+            backup_layout(&visible.join("presets"), &visible.join("mappings.json"))
+                .unwrap()
+                .1
+        );
+        fs::remove_dir(private.join("presets")).unwrap();
+        fs::create_dir(base.join("other")).unwrap();
+        std::os::unix::fs::symlink(base.join("other"), private.join("presets")).unwrap();
+        assert!(backup_layout(&visible.join("presets"), &visible.join("mappings.json")).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
 
     #[test]
     fn standard_layout_and_manifest_exclude_private_sessions() {

@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 
 import provision
+import development_library
 
 
 def run(*args):
@@ -48,9 +49,11 @@ def regular(path):
 
 
 def build(base, bundle, access, destination, boot_splash=False, development_presets=None,
-          profile_name='appliance'):
+          profile_name='appliance', development_library_backup=None):
     if platform.system() != 'Linux' or platform.machine() not in ('aarch64', 'arm64'):
         raise ValueError('Build this Pi image on native ARM64 Linux, including an ARM64 Linux container')
+    if development_presets and development_library_backup:
+        raise ValueError('Choose one private development seed')
     base = regular(base)
     provision.verify_image(base)
     _, payload = provision.bundle_files(bundle)
@@ -64,6 +67,14 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
     access = Path(access).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix='oxidal-image-', dir=destination.parent) as temporary:
         work = Path(temporary)
+        library_overlay = None
+        image_bytes = provision.manifest()['appliance']['image_bytes']
+        if development_library_backup:
+            library_overlay = work / 'development-library.tar'
+            library = development_library.overlay(regular(development_library_backup), library_overlay)
+            data_bytes = sum(row['bytes'] for row in library['files'])
+            gib = 1024**3
+            image_bytes = max(image_bytes, ((data_bytes + provision.manifest()['appliance']['root_partition_bytes'] + 3*gib + gib-1) // gib) * gib)
         raw = work / 'base.img'
         with raw.open('xb') as stream:
             subprocess.run(['xz', '-dc', str(base)], stdout=stream, check=True)
@@ -73,7 +84,7 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         image_profile = appliance['profiles'][profile_name]
         with destination.open('xb') as stream:
             os.fchmod(stream.fileno(), 0o600)
-            stream.truncate(appliance['image_bytes'])
+            stream.truncate(image_bytes)
         root_size = appliance['root_partition_bytes'] // 1024**2
         run(
             'virt-resize', '--format', 'raw', '--output-format', 'raw',
@@ -179,6 +190,8 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         fstab.write_text(provision.storage_fstab(fstab.read_text(), data_uuid))
         run('guestfish', '-a', str(destination), '-m', '/dev/sda2',
             'upload', str(fstab), '/etc/fstab')
+        if library_overlay:
+            run('guestfish', '-a', str(destination), '-i', 'tar-in', str(library_overlay), '/')
         run('virt-customize', '-a', str(destination), '--run-command',
             'mount -a && OXIDAL_TEST_INSTALLED=1 python3 -m unittest discover -s /opt/oxidal/qualification -v > /usr/share/oxidal/installed-tests.log 2>&1')
         # Export evidence from the finished filesystem, not the staging tree.
@@ -194,7 +207,8 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
         'bundle_manifest': payload, 'installed_qualification': 'passed',
         'hardware_qualified': False, 'physical_sd_written': False, 'boot_splash': boot_splash,
         'image_profile': profile_name, 'masked_units': image_profile['masked_units'],
-        'development_presets': bool(development_presets), 'firmware_uuid': firmware_uuid,
+        'development_presets': bool(development_presets),
+        'development_library': bool(development_library_backup), 'firmware_uuid': firmware_uuid,
         'root_uuid': root_uuid, 'data_uuid': data_uuid,
         'first_boot': 'Connect to the generated hotspot or wired LAN; trust the supplied CA; open https://oxidal.local.',
         'pending_hardware': ['Pi boot', 'Wi-Fi radio/hotspot', 'physical audio and latency', 'thermal and power-loss testing'],
@@ -212,6 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True)
     parser.add_argument('--boot-splash', action='store_true', help='Enable the Oxidal Plymouth boot splash; console diagnostics remain available')
     parser.add_argument('--development-presets', help='Opt-in private development seed from a local native-preset directory; never for distribution')
+    parser.add_argument('--development-library-backup', help='Explicit private library backup; excludes account tokens and audio autostart; never distribute')
     parser.add_argument('--profile', choices=('appliance', 'development'), default='appliance')
     args = parser.parse_args()
-    print(json.dumps(build(args.base, args.bundle, args.access, args.output, args.boot_splash, args.development_presets, args.profile), indent=2))
+    print(json.dumps(build(args.base, args.bundle, args.access, args.output, args.boot_splash, args.development_presets, args.profile, args.development_library_backup), indent=2))

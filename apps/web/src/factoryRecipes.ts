@@ -1,8 +1,15 @@
 import type { Lv2Plugin, RigDocument } from './api';
+import scalarLayouts from '../../../crates/oxidal-lv2/scalar-state.json' with { type: 'json' };
 import type { RigNativeSource } from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft.ts';
 
 const pluginUris: Record<string, string> = {
+  'x42 Compressor Stereo': 'http://gareus.org/oss/lv2/darc#stereo',
+  'FOMP Chorus': 'http://drobilla.net/plugins/fomp/cs_chorus2',
+  'FOMP Phaser': 'http://drobilla.net/plugins/fomp/cs_phaser1_lfo',
+  'FOMP Auto-wah': 'http://drobilla.net/plugins/fomp/autowah',
+  'Dragonfly Hall': 'https://github.com/michaelwillis/dragonfly-reverb',
+  'Dragonfly Early Reflections': 'urn:dragonfly:early',
   'Oxidal Pitch (Stereo)': 'urn:oxidal:plugin:pitch#stereo',
   'Reverse Delay (5s max)': 'http://plugin.org.uk/swh-plugins/revdelay',
   'MDA Leslie': 'http://drobilla.net/plugins/mda/Leslie',
@@ -100,6 +107,51 @@ const sub = (level: number) =>
   fx('MDA SubSynth', { level, dry_mix: 0, thresh: 0.35 });
 const tape = () =>
   fx('GxTape', { drive: 0.25, hiss: 0, wowdepth: 0.006, flutdepth: 0.004 });
+const studioComp = (threshold = -24) =>
+  fx('x42 Compressor Stereo', {
+    threshold,
+    Ratio: 0.5,
+    attack: 0.015,
+    release: 0.25,
+  });
+const silk = () =>
+  fx('FOMP Chorus', {
+    delay: 12,
+    mod_freq_1: 0.23,
+    mod_amp_1: 1.5,
+    mod_freq_2: 0.71,
+    mod_amp_2: 0.4,
+  });
+const orbit = (rate = 0.3, sections = 6) =>
+  fx('FOMP Phaser', {
+    in_gain: -3,
+    sections,
+    lfo_freq: rate,
+    mod_gain: 1.5,
+    fb_gain: 0.35,
+    out_mix: 0.5,
+  });
+const flyHall = (decay = 4, wet = 24) =>
+  fx('Dragonfly Hall', {
+    dry_level: 100,
+    early_level: 8,
+    late_level: wet,
+    decay,
+    low_cut: 120,
+    high_cut: 6500,
+    low_mult: 0.7,
+    delay: 22,
+    spin: 1.8,
+    wander: 10,
+  });
+const flyRoom = () =>
+  fx('Dragonfly Early Reflections', {
+    dry_level: 100,
+    early_level: 22,
+    size: 14,
+    low_cut: 100,
+    high_cut: 6500,
+  });
 const held = () =>
   fx('Oxidal Hold (Stereo)', {
     dry: 0,
@@ -807,6 +859,170 @@ export const factoryRecipes: FactoryRecipe[] = [
       { name: 'Both', mix: [0.6, 0.3, 0.3] },
     ],
   },
+  {
+    id: 'C05',
+    name: 'Studio Glass',
+    description:
+      'Inspired by polished pop and fingerstyle sessions. x42 compression keeps the shared clean NAM voice even; FOMP chorus and Dragonfly reflections add space without a long wash.',
+    categories: ['Clean', 'Pop', 'Fingerstyle'],
+    before: [nam('clean'), studioComp()],
+    voices: [
+      voice('Close'),
+      voice('Silk', silk()),
+      voice('Pulse', orbit(0.22, 4)),
+    ],
+    after: [
+      fx('Dragonfly Early Reflections', {
+        dry_level: 100,
+        early_level: 15,
+        size: 16,
+        low_cut: 120,
+        high_cut: 7000,
+      }),
+    ],
+    scenes: selections(['Close', 'Silk', 'Pulse', 'Lead']),
+  },
+  {
+    id: 'B05',
+    name: 'Rubber Pocket',
+    description:
+      'Inspired by elastic funk bass. x42 catches peaks before FOMP auto-wah; a shared bass NAM voice gives the dry, envelope and phaser scenes the same foundation. Start with single notes and adjust wah drive to your pickups.',
+    categories: ['Bass', 'Funk', 'Envelope'],
+    before: [studioComp(-22)],
+    voices: [
+      voice('Pocket'),
+      voice(
+        'Envelope',
+        fx('FOMP Auto-wah', {
+          drive: 3,
+          decay: 0.22,
+          range: 0.65,
+          freq: 0.35,
+          mix: 0.6,
+        }),
+      ),
+      voice('Motion', orbit(0.4, 4)),
+    ],
+    after: [nam('bass')],
+    scenes: selections(['Pocket', 'Envelope', 'Motion', 'Accent']),
+  },
+  {
+    id: 'K05',
+    name: 'Liquid Chrome',
+    description:
+      'Inspired by psychedelic rock and new-wave rhythm. A shared crunch NAM voice feeds FOMP chorus or its six-stage LFO phaser, with a short Dragonfly reflection pattern behind the whole instrument.',
+    categories: ['Rock', 'Psychedelic', 'New wave'],
+    before: [nam('crunch')],
+    voices: [
+      voice('Crunch'),
+      voice('Liquid', silk()),
+      voice('Chrome', orbit(0.32, 6)),
+    ],
+    after: [flyRoom()],
+    scenes: selections(['Crunch', 'Liquid', 'Chrome', 'Lead']),
+  },
+  {
+    id: 'A05',
+    name: 'Glass Atrium',
+    description:
+      'Inspired by spacious post-rock. Effect-only: keep the direct attack, add a rhythmic delay or a soft FOMP chorus, and let the shared Dragonfly Hall ring through scene changes.',
+    categories: ['Ambient', 'Post-rock', 'Hall'],
+    before: [],
+    voices: [
+      voice('Direct'),
+      voice('Echo', echo(0.28)),
+      voice('Drift', silk()),
+    ],
+    after: [flyHall(5, 27)],
+    scenes: selections(['Direct', 'Echo', 'Drift', 'Lift']),
+  },
+  {
+    id: 'A06',
+    name: 'Blue Hour',
+    description:
+      'Inspired by close, late-night neo-soul. Effect-only: x42 compression, a soft FOMP chorus or a slow tremolo, and compact Dragonfly early reflections. Use your own amp voice before this preset if desired.',
+    categories: ['Neo-soul', 'Ambient', 'Room'],
+    before: [studioComp(-26)],
+    voices: [
+      voice('Close'),
+      voice('Silk', silk()),
+      voice('Pulse', fx('GxTremolo', { depth: 0.2, freq: 1.7, dry_wet: 60 })),
+    ],
+    after: [flyRoom()],
+    scenes: selections(['Close', 'Silk', 'Pulse', 'Lift']).map((s, i) => ({
+      ...s,
+      level: i === 2 ? 1.55 : s.level,
+    })),
+  },
+  {
+    id: 'X05',
+    name: 'Prism Orbit',
+    description:
+      'Experimental effect-only sound: FOMP phasing, an octave-up voice and a long Dragonfly Hall. Move between slow orbit, bright shards and a blended cloud; sparse notes leave room for the tails.',
+    categories: ['Experimental', 'Ambient', 'Pitch'],
+    before: [],
+    voices: [
+      voice('Anchor'),
+      voice('Orbit', orbit(0.15, 12)),
+      voice('Shards', pitch(12), orbit(0.7, 8)),
+    ],
+    after: [flyHall(7, 30)],
+    scenes: [
+      { name: 'Anchor', mix: [0.8, 0, 0] },
+      { name: 'Orbit', mix: [0.45, 0.45, 0] },
+      { name: 'Shards', mix: [0.5, 0, 0.25] },
+      { name: 'Cloud', mix: [0.35, 0.3, 0.2] },
+    ],
+  },
+  {
+    id: 'X06',
+    name: 'Rubber Bloom',
+    description:
+      'Experimental effect-only instrument: FOMP auto-wah follows your attack while a separate Hold voice blooms through chorus. Capture a chord with Hold, then play short notes over it; scenes preserve the captured sound.',
+    categories: ['Experimental', 'Hold', 'Envelope'],
+    before: [],
+    voices: [
+      voice('Live'),
+      voice(
+        'Rubber',
+        fx('FOMP Auto-wah', {
+          drive: 6,
+          decay: 0.4,
+          range: 0.8,
+          freq: 0.45,
+          mix: 0.8,
+        }),
+      ),
+      voice('Bloom', held(), silk()),
+    ],
+    after: [flyRoom()],
+    scenes: [
+      { name: 'Live', mix: [0.8, 0, 0] },
+      { name: 'Rubber', mix: [0, 0.8, 0] },
+      { name: 'Bloom', mix: [0.65, 0, 0.4] },
+      { name: 'Both', mix: [0, 0.65, 0.35] },
+    ],
+  },
+  {
+    id: 'S05',
+    name: 'Velvet Ensemble',
+    description:
+      'Inspired by string-machine ensembles. Effect-only: FOMP chorus softens an octave-down or unshifted voice before a shared Dragonfly early-reflection space. For the low scene, play single notes and let the attack settle.',
+    categories: ['Synth', 'Ensemble', 'Pitch'],
+    before: [studioComp(-24)],
+    voices: [
+      voice('Plain'),
+      voice('Velvet', silk()),
+      voice('Low', pitch(-12), silk()),
+    ],
+    after: [flyRoom()],
+    scenes: [
+      { name: 'Plain', mix: [0.8, 0, 0] },
+      { name: 'Velvet', mix: [0, 0.8, 0] },
+      { name: 'Low', mix: [0.5, 0, 0.3] },
+      { name: 'Ensemble', mix: [0.2, 0.4, 0.25] },
+    ],
+  },
 ];
 
 export function factoryRoles(recipe: FactoryRecipe): FactoryRole[] {
@@ -819,6 +1035,31 @@ export function factoryRoles(recipe: FactoryRecipe): FactoryRole[] {
       ].flatMap((e) => ('native' in e ? [e.native] : [])),
     ),
   ];
+}
+
+// Shared with the native loader. These exact layouts need no non-scalar audio
+// state; arbitrary Atom plugins remain outside factory scalar authoring.
+function factoryScalar(plugin: Lv2Plugin) {
+  if (plugin.unsupported) return false;
+  if (!plugin.ports.some((p) => p.atom)) return true;
+  const layouts: Record<string, { controls: string[]; atoms: string[] }> =
+    scalarLayouts;
+  const layout = layouts[plugin.uri];
+  return (
+    !!layout &&
+    JSON.stringify(
+      plugin.ports
+        .filter((p) => p.control && p.input)
+        .map((p) => p.symbol)
+        .sort(),
+    ) === JSON.stringify(layout.controls) &&
+    JSON.stringify(
+      plugin.ports
+        .filter((p) => p.atom)
+        .map((p) => p.symbol)
+        .sort(),
+    ) === JSON.stringify(layout.atoms)
+  );
 }
 
 /** Missing dependencies are reported before publication. */
@@ -837,10 +1078,7 @@ export function factoryMissingPlugins(
         .filter(
           (e) =>
             !plugins.some(
-              (p) =>
-                p.uri === pluginUris[e.plugin] &&
-                !p.unsupported &&
-                !p.ports.some((port) => port.atom),
+              (p) => p.uri === pluginUris[e.plugin] && factoryScalar(p),
             ),
         )
         .map((e) => e.plugin),
@@ -874,7 +1112,7 @@ export function buildFactoryRecipe(
       };
     }
     const plugin = plugins.find((p) => p.uri === pluginUris[e.plugin]);
-    if (!plugin || plugin.unsupported || plugin.ports.some((p) => p.atom))
+    if (!plugin || !factoryScalar(plugin))
       throw new Error(`Install ${e.plugin} before building ${recipe.name}.`);
     const controls = Object.fromEntries(
       plugin.ports

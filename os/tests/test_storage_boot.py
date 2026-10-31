@@ -49,7 +49,9 @@ try:
     assert api('device/network')['available']
     assert api('rig-audio')['phase'] == 'stopped'
     examples = [p for p in api('presets/rigs')['presets'] if p['origin'] == 'oxidal_example']
-    assert len(examples) == 10, 'Factory examples did not survive startup/storage mode'
+    if not Path('/usr/share/oxidal/development-library.json').exists():
+        expected_examples = len(json.loads(Path('/opt/oxidal/factory/catalog.json').read_text())['sounds'])
+        assert len(examples) == expected_examples, 'Factory examples did not survive startup/storage mode'
     # Persistent state survives every locked/unlocked boot, including re-lock.
     marker = Path('/var/lib/oxidal/storage-persistent-marker')
     if phase == 0:

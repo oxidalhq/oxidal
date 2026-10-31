@@ -1,0 +1,25 @@
+{
+  "https://github.com/michaelwillis/dragonfly-reverb": {
+    "controls": [
+      "decay",
+      "delay",
+      "diffuse",
+      "dry_level",
+      "early_level",
+      "early_send",
+      "high_cut",
+      "high_mult",
+      "high_xo",
+      "late_level",
+      "low_cut",
+      "low_mult",
+      "low_xo",
+      "modulation",
+      "size",
+      "spin",
+      "wander",
+      "width"
+    ],
+    "atoms": ["lv2_events_in", "lv2_events_out"]
+  }
+}

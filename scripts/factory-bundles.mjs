@@ -17,6 +17,12 @@ const plugins = JSON.parse(
     'utf8',
   ),
 );
+const scalar_layouts = JSON.parse(
+  readFileSync(
+    new URL('../crates/oxidal-lv2/scalar-state.json', import.meta.url),
+    'utf8',
+  ),
+);
 const recipes = factoryRecipes.filter(
   (recipe) => factoryRoles(recipe).length === 0,
 );
@@ -45,6 +51,6 @@ const sounds = recipes.map((recipe) => {
 mkdirSync(values.output, { recursive: true });
 writeFileSync(
   join(values.output, 'catalog.json'),
-  JSON.stringify({ version: 1, sounds }, null, 2) + '\n',
+  JSON.stringify({ version: 1, scalar_layouts, sounds }, null, 2) + '\n',
 );
 console.log(`Prepared ${sounds.length} asset-free factory sounds`);

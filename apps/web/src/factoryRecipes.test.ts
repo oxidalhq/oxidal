@@ -24,8 +24,8 @@ const source: RigNativeSource = {
   source: { kind: 'original', preset: 'a'.repeat(64) },
 };
 const validate = new Ajv({ strict: false }).compile(schema);
-it('builds thirty-two portable four-scene instruments from the installed public plugin metadata', () => {
-  expect(factoryRecipes).toHaveLength(32);
+it('builds forty portable four-scene instruments from the installed public plugin metadata', () => {
+  expect(factoryRecipes).toHaveLength(40);
   for (const recipe of factoryRecipes) {
     const request = buildFactoryRecipe(
       recipe,
@@ -83,4 +83,19 @@ it('requires explicit native bindings and rejects incompatible plugin control ra
       'profile',
     ),
   ).toThrow('incompatible control');
+});
+
+it('admits only the qualified Dragonfly scalar layouts, not changed message ports', () => {
+  const recipe = factoryRecipes.find((r) => r.id === 'A05')!;
+  expect(factoryMissingPlugins(recipe, plugins)).toEqual([]);
+  const changed = plugins.map((p) => ({
+    ...p,
+    ports: p.ports.map((port) =>
+      port.atom ? { ...port, symbol: 'unknown-message' } : port,
+    ),
+  }));
+  expect(factoryMissingPlugins(recipe, changed)).toContain('Dragonfly Hall');
+  expect(() => buildFactoryRecipe(recipe, changed, {}, 'profile')).toThrow(
+    'Install Dragonfly Hall',
+  );
 });

@@ -42,8 +42,13 @@ def seed(catalog, marker, api=request):
         manifest = json.loads(sound['request']['manifest_json'])
         for effect in manifest['oxidal']['lv2']:
             plugin = plugins.get(effect['pluginUri'])
-            if not plugin or plugin['unsupported'] or any(p['atom'] for p in plugin['ports']):
+            if not plugin or plugin['unsupported']:
                 raise ValueError('Factory effect unavailable: ' + effect['pluginUri'])
+            if any(p['atom'] for p in plugin['ports']):
+                actual = {'controls': sorted(p['symbol'] for p in plugin['ports'] if p['control'] and p['input']),
+                          'atoms': sorted(p['symbol'] for p in plugin['ports'] if p['atom'])}
+                if data.get('scalar_layouts', {}).get(plugin['uri']) != actual:
+                    raise ValueError('Factory effect needs portable state: ' + effect['pluginUri'])
             controls = {p['symbol']: p for p in plugin['ports'] if p['input'] and p['control']}
             if set(controls) != set(effect['controls']):
                 raise ValueError('Factory effect controls changed')

@@ -315,3 +315,20 @@ rewrite it; disable and enable again to capture a replacement. The existing Linu
 HTTP and browser suites cover these paths, including missing-worker disable and
 failed boot-record publication. See [shared boot selection](audio.md#shared-boot-selection).
 This does not add opaque plugin state, persistent DSP tails or seamless switching.
+
+## Curated scalar Dragonfly Hall
+
+Factory authoring admits Dragonfly Hall through the exact control/message layout
+in `crates/oxidal-lv2/scalar-state.json`. Its DSP parameters are all captured as
+scalar controls; the UI preset-name message is never sent. Upstream's legacy
+preset-name restore also changes decay, which is why this scalar mode supplies
+all parameters directly and does not synthesize opaque preset state. The loader
+still requires explicit portable state for other Atom effects, and rejects a
+changed Hall layout. No file-loading plugin gains an exception.
+
+`qualify_tails` compares the preserved outgoing Hall against an uninterrupted
+reference reopened through isolated Save, with Cut as a negative control. This
+covers scalar restore and tail continuity, not retained DSP history across a
+full process restart. Dragonfly Room remains outside this curated mode.
+
+Source: [Dragonfly Hall implementation](https://github.com/michaelwillis/dragonfly-reverb/blob/master/plugins/dragonfly-hall-reverb/Plugin.cpp).

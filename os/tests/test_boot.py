@@ -62,7 +62,32 @@ try:
     assert get('/api/v1/graph-audio')['phase'] == 'stopped'
     assert get('/api/v1/rig-audio')['phase'] == 'stopped'
     factory = get('/api/v1/presets/rigs')['presets']
-    assert len([p for p in factory if p['origin'] == 'oxidal_example']) == 10
+    development = Path('/usr/share/oxidal/development-library.json')
+    if not development.exists():
+        expected = len(json.loads(Path('/opt/oxidal/factory/catalog.json').read_text())['sounds'])
+        assert len([p for p in factory if p['origin'] == 'oxidal_example']) == expected
+    else:
+        import hashlib
+        private = json.loads(development.read_text())
+        for row in private['files']:
+            path = Path('/var/lib/oxidal') / row['path']
+            assert path.stat().st_size == row['bytes'], row['path']
+            digest = hashlib.sha256()
+            with path.open('rb') as stream:
+                for block in iter(lambda: stream.read(1024**2), b''):
+                    digest.update(block)
+            assert digest.hexdigest() == row['sha256'], row['path']
+        assert not Path('/var/lib/oxidal/presets/accounts/tone3000-account.json').exists()
+        expected_api = Path('/usr/share/oxidal/development-library-api.json')
+        if expected_api.exists():
+            expected = json.loads(expected_api.read_text())
+            actual = []
+            page = get('/api/v1/presets/rigs')
+            while True:
+                actual += [p['revision'] for p in page['presets']]
+                if not page.get('next'): break
+                page = get('/api/v1/presets/rigs?after=' + page['next'])
+            assert sorted(actual) == sorted(expected['rig_revisions']), (len(actual), len(expected['rig_revisions']))
     assert Path('/var/lib/oxidal/factory-installed.json').is_file()
     # The installed daemon must serve optional development originals unchanged.
     from pathlib import Path

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Exercise a prepared set with a muted reference riff and frequent telemetry.
-See docs/factory-collection.md. Restores the supplied rig on normal/error exit.
+See docs/factory-collection.md. Restores the supplied rig on normal/error exit unless another rig has taken over.
 No boot settings, preset content or unit levels are written.
 """
 import argparse
@@ -69,8 +69,17 @@ def start(config):
     return s
 
 
+def owns_set(state):
+    configured = state.get('configured') or {}
+    present = {configured.get('revision')} | {p['revision'] for p in configured.get('prepared', [])}
+    return present == set(revisions)
+
+
 def switch(revision):
-    c = request()['control']
+    state = request()
+    if not owns_set(state):
+        raise RuntimeError('Another rig took over the audio device')
+    c = state['control']
     action({'kind': 'switch', 'command': {'session': c['session'],
         'expected_revision': c['revision'], 'revision': revision, 'fade_frames': 480}})
 
@@ -160,7 +169,17 @@ except Exception as error:
     raise
 finally:
     save()
-    restored = start(original['configured'])
-    result['restored_configuration'] = restored['configured'] == original['configured']
-    save()
-    print('Restored', restored['configured']['revision'], flush=True)
+    try:
+        state = request()
+        if not owns_set(state):
+            result['restore_skipped_external_change'] = True
+            print('Another rig is selected; leaving it unchanged', flush=True)
+        else:
+            restored = start(original['configured'])
+            result['restored_configuration'] = restored['configured'] == original['configured']
+            print('Restored', restored['configured']['revision'], flush=True)
+    except Exception as restore_error:
+        result['restore_error'] = str(restore_error)
+        raise
+    finally:
+        save()

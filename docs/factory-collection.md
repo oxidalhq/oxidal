@@ -1,13 +1,13 @@
 # Factory collection
 
-Library → **Explore Oxidal sounds** assembles 32 original starting points,
+Library → **Explore Oxidal sounds** assembles 40 original starting points,
 with four scenes each, from installed effects and explicitly selected local NAM
 presets. It adds an immutable Oxidal example without changing the playing sound.
 Editing an example creates an owned copy. These are version-1 recipes, not a
 claim that every genre or arbitrary capture is already auditioned and balanced.
 
-Fresh appliance images install the ten effects-only sounds in Library on first
-boot, with four scenes each and no downloads. The remaining 22 are available in
+Fresh appliance images install the 15 effects-only sounds in Library on first
+boot, with four scenes each and no downloads. The remaining 25 are available in
 the collection browser for assembly with the NAM voices you choose. The initial
 seed uses deterministic manifests, verifies installed plugin controls and writes
 a persistent completion marker. A partial run can retry without duplicating
@@ -39,6 +39,13 @@ Substation (dub/sub), Soft Ruin (shoegaze), Orbit (interlocking delays), Rotor C
 Small Hours (tape), Broken Radio (degraded/ring textures), and Held Light (pitched
 sustain). Search names, genres and descriptions inside the collection browser.
 
+The provider additions are Studio Glass (x42 compressor, FOMP modulation and
+Dragonfly Early Reflections), Rubber Pocket (x42/FOMP bass envelope), Liquid Chrome
+(FOMP rock modulation), Glass Atrium (Dragonfly Hall), Blue Hour (close reflections),
+Prism Orbit (experimental phaser/pitch/Hall), Rubber Bloom (experimental wah/Hold),
+and Velvet Ensemble (chorus/pitch/reflections). Dragonfly Room is deferred pending
+independent-instance comparison; it is not used by these recipes.
+
 Fixed echo controls are not tempo-synchronized. Coastline uses a room rather than
 claiming a spring algorithm. Sub/tracker recipes require clear single notes; pitch
 voices add algorithmic delay. Hold capture/release remains explicit in its blocks.
@@ -46,7 +53,7 @@ These limitations are in the individual descriptions, not hidden by genre names.
 
 ## Assets and dependencies
 
-The image contains the recipe settings, **not** third-party NAM/IR payloads or
+The standard image contains the recipe settings, **not** third-party NAM/IR payloads or
 private development presets. Twenty-two recipes require local saved NAM voices; all four A recipes, all four S recipes, X02 and X04 use effects only. A selected native source contributes its **whole
 saved chain**, including its cabinets and settings. Choose an appropriate
 amp-and-cab source; this is not an automatic extraction of one amp from a complex
