@@ -2500,3 +2500,88 @@ async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_rec
     server.abort();
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[tokio::test]
+async fn set_list_moves_across_native_kinds_appends_new_files_and_keeps_payloads_unchanged() {
+    let (url, task, path) = start(false).await;
+    let root = path.with_extension("presets");
+    let client = reqwest::Client::new();
+    let imported: Value = client
+        .post(format!("{url}/presets"))
+        .body(LEGACY_PRESET.to_vec())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let owned = oxidal_presets::OwnedStore::new(root.join("owned"))
+        .save_created(CURRENT_PRESET)
+        .unwrap();
+    let endpoint = format!("{url}/presets/catalog");
+    let catalog: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(catalog["items"][0]["kind"], "owned");
+    let moved=client.post(&endpoint).json(&json!({"expected_revision":catalog["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"place","before":{"kind":"owned","id":owned.id}}})).send().await.unwrap();
+    assert_eq!(moved.status(), 200);
+    let moved: Value = moved.json().await.unwrap();
+    assert_eq!(moved["items"][0]["kind"], "original");
+    let mut bytes = LEGACY_PRESET.to_vec();
+    let index = bytes.windows(7).position(|w| w == b"Fixture").unwrap();
+    bytes[index..index + 7].copy_from_slice(b"AAA new");
+    let added: Value = client
+        .post(format!("{url}/presets"))
+        .body(bytes.clone())
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let after: Value = client
+        .get(&endpoint)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        after["items"].as_array().unwrap().last().unwrap()["id"],
+        added["sha256"]
+    );
+    let hidden:Value=client.post(&endpoint).json(&json!({"expected_revision":after["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"visibility","archived":true}})).send().await.unwrap().json().await.unwrap();
+    assert_eq!(hidden["items"][0]["archived"], true);
+    let restored:Value=client.post(&endpoint).json(&json!({"expected_revision":hidden["revision"],"entry_kind":"original","id":imported["sha256"],"action":{"kind":"visibility","archived":false}})).send().await.unwrap().json().await.unwrap();
+    assert_eq!(restored["items"][0]["id"], imported["sha256"]);
+    assert_eq!(
+        std::fs::read(root.join(format!(
+            "{}.t3kpreset",
+            imported["sha256"].as_str().unwrap()
+        )))
+        .unwrap(),
+        LEGACY_PRESET
+    );
+    assert_eq!(
+        oxidal_presets::OwnedStore::new(root.join("owned"))
+            .read(&owned.id)
+            .unwrap()
+            .1,
+        CURRENT_PRESET
+    );
+    let file: Value =
+        serde_json::from_slice(&std::fs::read(root.join("library.json")).unwrap()).unwrap();
+    assert_eq!(file["order"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        file["order"][0],
+        format!("original:{}", imported["sha256"].as_str().unwrap())
+    );
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}

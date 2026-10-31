@@ -2,6 +2,7 @@ import {
   graphAudioCommand,
   graphAudioState,
   nativeState,
+  libraryCatalog,
   playbackCommand,
   playbackState,
   presetLibrary,
@@ -48,15 +49,16 @@ export const boostKey = {
 export const scenesLabel = (scenes: string[]) =>
   scenes.length > 1 ? `${scenes.length} scenes` : '';
 
-/** Scene presets, saved copies, then originals; each source fails alone. */
+/** One device set list; source failures remain visible and do not hide other formats. */
 export async function loadPresetChoices(): Promise<{
   items: PresetChoice[];
   error: string;
 }> {
-  const [originals, native, rigs] = await Promise.allSettled([
+  const [originals, native, rigs, catalog] = await Promise.allSettled([
     presetLibrary(),
     nativeState(),
     rigLibrary(),
+    libraryCatalog(),
   ]);
   const items: PresetChoice[] = [
     ...(rigs.status === 'fulfilled' ? rigs.value.presets : []).map(
@@ -84,15 +86,38 @@ export async function loadPresetChoices(): Promise<{
       }),
     ),
   ];
+  if (catalog.status === 'fulfilled') {
+    const listed = new Map(
+      catalog.value.items.map((item, index) => [
+        `${item.kind}:${item.id}`,
+        { item, index },
+      ]),
+    );
+    const identity = (item: PresetChoice) =>
+      `${item.kind === 'scenes' ? 'rig' : item.owned ? 'owned' : 'original'}:${item.kind === 'scenes' ? item.revision : item.id}`;
+    // A save may finish between source requests. Unknown entries still join the
+    // end; a confirmed archived entry must not reappear from an older response.
+    for (let i = items.length - 1; i >= 0; i--) {
+      const row = listed.get(identity(items[i]!));
+      if (row?.item.archived) items.splice(i, 1);
+      else if (row) items[i] = { ...items[i]!, name: row.item.name };
+    }
+    items.sort(
+      (a, b) =>
+        (listed.get(identity(a))?.index ?? Infinity) -
+        (listed.get(identity(b))?.index ?? Infinity),
+    );
+  }
   const failed = [
     originals.status === 'rejected' && 'originals',
     native.status === 'rejected' && 'saved copies',
     rigs.status === 'rejected' && 'presets with scenes',
+    catalog.status === 'rejected' && 'set-list order',
   ].filter(Boolean);
   return {
     items,
     error:
-      failed.length === 3
+      failed.length === 4
         ? 'Preset list unavailable'
         : failed.length
           ? `Some presets are unavailable (${failed.join(', ')})`

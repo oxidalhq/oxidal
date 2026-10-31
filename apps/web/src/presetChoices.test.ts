@@ -1,12 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   graphAudioState,
+  nativeState,
+  presetLibrary,
+  rigLibrary,
+  libraryCatalog,
   playbackState,
   rigAudioCommand,
   rigAudioState,
 } from './api';
 import {
   discardsSceneEdits,
+  loadPresetChoices,
+  choiceKey,
   playScenes,
   type PresetChoice,
 } from './presetChoices';
@@ -14,6 +20,7 @@ vi.mock('./api', () => ({
   graphAudioCommand: vi.fn(),
   graphAudioState: vi.fn(),
   nativeState: vi.fn(),
+  libraryCatalog: vi.fn().mockResolvedValue({ revision: 'empty', items: [] }),
   playbackCommand: vi.fn(),
   playbackState: vi.fn(),
   presetLibrary: vi.fn(),
@@ -70,4 +77,40 @@ it('resumes the last scenes preset with its edits instead of starting it fresh',
     kind: 'start',
     settings: { revision: b, recall: null },
   });
+});
+
+it('uses one cross-kind catalog order and ignores archived stale source rows', async () => {
+  vi.mocked(presetLibrary).mockResolvedValue([
+    { sha256: 'a', name: 'Original A' },
+    { sha256: 'b', name: 'Original B' },
+  ] as never);
+  vi.mocked(nativeState).mockResolvedValue({
+    owned: [{ id: 'a', preset: { name: 'Copy' } }],
+  } as never);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [{ revision: 'r', name: 'Scenes', scenes: ['Clean', 'Heavy'] }],
+  } as never);
+  const item = (
+    kind: 'original' | 'owned' | 'rig',
+    id: string,
+    name: string,
+    archived = false,
+  ) => ({ kind, id, name, source_name: name, archived });
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    revision: 'confirmed',
+    items: [
+      item('original', 'b', 'First'),
+      item('rig', 'r', 'Scenes'),
+      item('owned', 'a', 'Copy'),
+      item('original', 'a', 'Original A', true),
+    ],
+  });
+  const result = await loadPresetChoices();
+  expect(result.items.map(choiceKey)).toEqual([
+    'original:b',
+    'scenes:r',
+    'copy:a',
+  ]);
+  expect(result.items[0]?.name).toBe('First');
+  expect(result.error).toBe('');
 });

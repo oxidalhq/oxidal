@@ -4244,6 +4244,29 @@
             "kind",
             "up"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "before": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LibraryReference"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "place"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
         }
       ]
     },

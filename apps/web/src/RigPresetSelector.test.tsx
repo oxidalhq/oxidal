@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { RigPresetSelector } from './RigPresetSelector';
 import { nativeState, presetLibrary, rigLibrary, libraryCatalog } from './api';
 import {
@@ -27,6 +27,9 @@ HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
 HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.open = false;
 };
+beforeEach(() => {
+  vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
+});
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -35,6 +38,7 @@ const state = { key: 'original:a', name: 'Amp A', modified: false };
 const tone = (id: string, owned: boolean) =>
   expect.objectContaining({ kind: 'tone3000', id, owned });
 function library() {
+  vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
   vi.mocked(rigLibrary).mockResolvedValue({
     presets: [],
     native_profile: 'tone3000-plugin:test',
@@ -67,7 +71,7 @@ it('selects original and owned identities without optimistically changing the so
   expect(
     screen.getByText(/Unsaved edits stay with each preset/),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'My A' }));
+  fireEvent.click(screen.getByRole('button', { name: /^My A\s*My copy$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName('Playing preset: Amp A');
   fireEvent.click(picker);
@@ -75,9 +79,9 @@ it('selects original and owned identities without optimistically changing the so
     target: { value: 'b' },
   });
   expect(
-    screen.queryByRole('button', { name: 'My A' }),
+    screen.queryByRole('button', { name: /^My A\s*My copy$/ }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*Original$/ }));
   expect(select).toHaveBeenLastCalledWith(tone('b', false));
   view.rerender(
     <RigPresetSelector current={state} disabled onSelect={select} />,
@@ -115,7 +119,9 @@ it('keeps the current rig visible when the library fails, and permits retry', as
     ).toBeNull(),
   );
   fireEvent.click(picker);
-  expect(screen.getByRole('button', { name: 'Amp B' })).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: /^Amp B\s*Original$/ }),
+  ).toBeEnabled();
 });
 it('groups imaging separately and never substitutes normalized percentages for physical readback', () => {
   for (const id of [
@@ -259,7 +265,7 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Amp B' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*Original$/ }));
   expect(select).toHaveBeenCalledWith(tone('b', false));
 });
 it('keeps saved copies selectable when originals cannot be read', async () => {
@@ -273,7 +279,7 @@ it('keeps saved copies selectable when originals cannot be read', async () => {
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'My A' }));
+  fireEvent.click(screen.getByRole('button', { name: /^My A\s*My copy$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
 });
 
@@ -303,7 +309,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   const groups = screen
     .getAllByRole('region')
     .map((g) => g.getAttribute('aria-label'));
-  expect(groups).toEqual(['Scenes and effects', 'My copies', 'Originals']);
+  expect(groups).toEqual(['Set list']);
   fireEvent.click(
     screen.getByRole('button', { name: /^Clean to heavy\s*3 scenes$/ }),
   );
@@ -347,6 +353,10 @@ it('renames from the rig header and refreshes its device label without recalling
   vi.mocked(presetLibrary).mockResolvedValue([
     { sha256: 'a', name: 'My new label' },
   ] as Awaited<ReturnType<typeof presetLibrary>>);
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    revision: 'labels-two',
+    items: [{ ...item, name: 'My new label' }],
+  });
   fireEvent.change(name, { target: { value: 'My new label' } });
   fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
   await waitFor(() =>

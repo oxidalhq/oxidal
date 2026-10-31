@@ -23,11 +23,13 @@ export function PresetManagement({
   disabled,
   onChanged,
   label = 'Preset options',
+  compact = false,
 }: {
   entry: Entry;
   disabled: boolean;
   onChanged: () => void;
   label?: string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -38,7 +40,7 @@ export function PresetManagement({
         onClick={() => setOpen(true)}
         aria-label={`${label}: ${entry.name}`}
       >
-        {label}
+        {compact ? 'Options' : label}
       </Button>
       {open && (
         <ManagementDialog
@@ -242,7 +244,9 @@ export function DeletePresetDialog({
                 {!!preview.remembered_files && (
                   <p className="caption">
                     Also removes {preview.remembered_files} remembered session
-                    or checkpoint files ({size(preview.remembered_bytes)}).
+                    or checkpoint{' '}
+                    {preview.remembered_files === 1 ? 'file' : 'files'} (
+                    {size(preview.remembered_bytes)}).
                   </p>
                 )}
                 <p className="caption">

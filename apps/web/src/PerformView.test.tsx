@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PerformView } from './PerformView';
 import { setPerform } from './performState';
 import {
   monitoring,
   nativeState,
+  libraryCatalog,
   presetLibrary,
   rigLibrary,
   type AudioState,
@@ -13,9 +14,13 @@ import {
 vi.mock('./api', () => ({
   monitoring: vi.fn(),
   nativeState: vi.fn(),
+  libraryCatalog: vi.fn().mockResolvedValue({ revision: 'empty', items: [] }),
   presetLibrary: vi.fn(),
   rigLibrary: vi.fn(),
 }));
+beforeEach(() => {
+  vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
+});
 afterEach(() => {
   setPerform({ on: false, mode: 'play' });
   cleanup();

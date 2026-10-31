@@ -291,53 +291,36 @@ export function RigPresetSelector({
             Unsaved edits stay with each preset. Presets with scenes keep them
             until you open another preset with scenes.
           </p>
-          {(
-            [
-              ['Scenes and effects', (p: Choice) => p.kind === 'scenes'],
-              ['My copies', (p: Choice) => p.kind === 'tone3000' && p.owned],
-              ['Originals', (p: Choice) => p.kind === 'tone3000' && !p.owned],
-            ] as const
-          ).map(([label, inGroup]) => {
-            const rows = items.filter(
-              (p) => inGroup(p) && p.name.toLowerCase().includes(found),
-            );
-            return (
-              rows.length > 0 && (
-                <section
-                  key={label}
-                  className="preset-picker-group"
-                  aria-label={label}
+          <section className="preset-picker-group" aria-label="Set list">
+            <h3>Set list</h3>
+            {items
+              .filter((p) => p.name.toLowerCase().includes(found))
+              .map((p) => (
+                <button
+                  key={key(p)}
+                  type="button"
+                  className="preset-picker-row"
+                  data-preset={key(p)}
+                  aria-pressed={key(p) === selected}
+                  disabled={disabled || loading}
+                  onClick={() => {
+                    setOpen(false);
+                    if (key(p) !== selected) choose(p);
+                  }}
                 >
-                  <h3>{label}</h3>
-                  {rows.map((p) => (
-                    <button
-                      key={key(p)}
-                      type="button"
-                      className="preset-picker-row"
-                      data-preset={key(p)}
-                      aria-pressed={key(p) === selected}
-                      disabled={disabled || loading}
-                      onClick={() => {
-                        setOpen(false);
-                        if (key(p) !== selected) choose(p);
-                      }}
-                    >
-                      <span>{p.name}</span>
-                      {key(p) === selected ? (
-                        <span className="preset-picker-playing">Playing</span>
-                      ) : (
-                        p.kind === 'scenes' && (
-                          <span className="preset-picker-scenes">
-                            {scenesLabel(p.scenes) || 'Effects'}
-                          </span>
-                        )
-                      )}
-                    </button>
-                  ))}
-                </section>
-              )
-            );
-          })}
+                  <span>{p.name}</span>
+                  <span
+                    className={
+                      key(p) === selected
+                        ? 'preset-picker-playing'
+                        : 'preset-picker-scenes'
+                    }
+                  >
+                    {key(p) === selected ? 'Playing' : origin(p)}
+                  </span>
+                </button>
+              ))}
+          </section>
           {!loading &&
             !items.some((p) => p.name.toLowerCase().includes(found)) && (
               <p role="status">No presets match.</p>

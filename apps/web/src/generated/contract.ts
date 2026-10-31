@@ -450,6 +450,10 @@ export type LibraryAction =
   | {
       kind: "move";
       up: boolean;
+    }
+  | {
+      before?: LibraryReference | null;
+      kind: "place";
     };
 export type EditorAction =
   | {
@@ -1523,6 +1527,10 @@ export interface LibraryUpdate {
   expected_revision: string;
   id: string;
 }
+export interface LibraryReference {
+  id: string;
+  kind: LibraryKind;
+}
 export interface LocalModel {
   /**
    * Actual bounded WAV-header readings; absent for NAM/unsupported headers.
@@ -1855,10 +1863,6 @@ export interface RemovalResult {
   cleanup_pending: boolean;
   deleted: LibraryReference;
   model_files_deleted: number;
-}
-export interface LibraryReference {
-  id: string;
-  kind: LibraryKind;
 }
 export interface RigAudioCommand {
   action: RigAudioAction;

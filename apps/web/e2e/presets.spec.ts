@@ -1,4 +1,5 @@
 import { setDisplayMode } from './display';
+import { randomUUID } from 'node:crypto';
 import {
   test,
   expect,
@@ -4975,4 +4976,226 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
     await request.get('/api/v1/models/local?all=true')
   ).json();
   expect(models.data.some((m: { id: string }) => m.id === asset.id)).toBe(true);
+});
+
+test('device portrait set-list drag and keyboard order agree with picker and Perform', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(60000);
+  const bytes = Buffer.from(
+    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
+  );
+  const title = info.project.name.slice(0, 7).padEnd(7, 'x');
+  bytes.write(title, bytes.indexOf(Buffer.from('Fixture')), 'utf8');
+  const importedResponse = await request.post('/api/v1/presets', {
+    data: bytes,
+  });
+  expect(importedResponse.ok()).toBe(true);
+  const imported = await importedResponse.json();
+  const rigName = `Set-list ${info.project.name}`;
+  const manifest = {
+    format: 'oxidal.preset',
+    formatVersion: 1,
+    id: randomUUID(),
+    name: rigName,
+    tone3000: { instances: [] },
+    oxidal: {
+      graph: {
+        nodes: [
+          { id: 'in', kind: 'input', audioInputs: 0, audioOutputs: 2 },
+          { id: 'out', kind: 'output', audioInputs: 2, audioOutputs: 0 },
+        ],
+        edges: [
+          { from: { node: 'in', port: 0 }, to: { node: 'out', port: 0 } },
+          { from: { node: 'in', port: 1 }, to: { node: 'out', port: 1 } },
+        ],
+      },
+      lv2: [],
+      recall: { tails: 'cut' },
+    },
+    resources: [],
+    extensions: {},
+    requiredExtensions: [],
+  };
+  const published = await request.post('/api/v1/presets/rigs', {
+    data: { manifest_json: JSON.stringify(manifest), resources: {} },
+  });
+  expect(published.ok(), await published.text()).toBe(true);
+  const rig = await published.json();
+  const catalog = async () =>
+    (await request.get('/api/v1/presets/catalog')).json();
+  const place = async (
+    kind: string,
+    id: string,
+    before: { kind: string; id: string } | null,
+  ) => {
+    const current = await catalog();
+    const response = await request.post('/api/v1/presets/catalog', {
+      data: {
+        expected_revision: current.revision,
+        entry_kind: kind,
+        id,
+        action: { kind: 'place', before },
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  };
+  const first = (await catalog()).items.find(
+    (i: { kind: string; archived: boolean }) =>
+      i.kind !== 'graph' && !i.archived,
+  );
+  await place('rig', rig.revision, { kind: first.kind, id: first.id });
+  await place('original', imported.sha256, { kind: 'rig', id: rig.revision });
+  const audioBefore = await (await request.get('/api/v1/audio')).json();
+  await page.goto('/#library');
+  await page
+    .getByRole('button', { name: 'Manage library', exact: true })
+    .click();
+  const management = page.getByRole('region', {
+    name: 'Manage library',
+    exact: true,
+  });
+  const original = management.locator(
+    `[data-library-kind="original"][data-library-entry="${imported.sha256}"]`,
+  );
+  const scenes = management.locator(
+    `[data-library-kind="rig"][data-library-entry="${rig.revision}"]`,
+  );
+  await original
+    .getByRole('button', { name: `Move ${imported.name} down`, exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
+    )
+    .toEqual([rig.revision, imported.sha256]);
+  const handle = original.getByRole('button', {
+    name: `Drag ${imported.name}`,
+    exact: true,
+  });
+  await handle.hover();
+  const sourceBox = (await handle.boundingBox())!;
+  const targetBox = (await scenes.boundingBox())!;
+  await page.mouse.move(
+    sourceBox.x + sourceBox.width / 2,
+    sourceBox.y + sourceBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, targetBox.y + 10, {
+    steps: 12,
+  });
+  await page.mouse.up();
+  await expect
+    .poll(async () =>
+      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
+    )
+    .toEqual([imported.sha256, rig.revision]);
+  await handle.press('ArrowDown');
+  await expect
+    .poll(async () =>
+      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
+    )
+    .toEqual([rig.revision, imported.sha256]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .include('[aria-label="Manage library"]')
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.screenshot({
+    path: info.outputPath('set-list-library.png'),
+    fullPage: true,
+  });
+  // A read-only playback transport fixture exposes the same real catalog in Rig.
+  // No audio command is sent or hardware playback claimed by this UI check.
+  await page.route('**/api/v1/audio', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const body = { ...audioBefore };
+    const input = {
+      endpoint: 'hw:CARD=Test,DEV=0',
+      direction: 'capture',
+      sample_rate: 48000,
+      channels: 2,
+      format: 's16',
+      period_frames: 128,
+      periods: 3,
+    };
+    Object.assign(body, {
+      phase: 'running',
+      device_owned: true,
+      preset_name: imported.name,
+      configured: {
+        preset_id: imported.sha256,
+        owned: false,
+        draft: false,
+        stream: {
+          input,
+          output: { ...input, direction: 'playback' },
+          input_map: [0, 1],
+          output_map: [0, 1],
+          levels: { input_trim_db: 0, output_level_db: 0 },
+          hear_yourself: true,
+        },
+      },
+    });
+    await route.fulfill({ json: body });
+  });
+  await page.getByRole('button', { name: 'Rig', exact: true }).click();
+  await page
+    .getByRole('button', {
+      name: `Playing preset: ${imported.name}`,
+      exact: true,
+    })
+    .click();
+  const picker = page.getByRole('dialog', {
+    name: 'Switch preset',
+    exact: true,
+  });
+  await expect
+    .poll(async () =>
+      (
+        await picker
+          .locator('.preset-picker-row > span:first-child')
+          .allTextContents()
+      ).slice(0, 2),
+    )
+    .toEqual([rigName, imported.name]);
+  await picker
+    .getByRole('button', { name: 'Close dialog', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Preset actions', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Perform view', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Perform view', exact: true })
+    .getByRole('button', { name: 'Presets', exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await page.locator('.preset-pad-text strong').allTextContents()).slice(
+        0,
+        2,
+      ),
+    )
+    .toEqual([rigName, imported.name]);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath('set-list-perform.png'),
+    fullPage: true,
+  });
+  expect(await (await request.get('/api/v1/audio')).json()).toEqual(
+    audioBefore,
+  );
 });

@@ -490,3 +490,30 @@
 .library-model-preview .tone-details-picture img {
   object-fit: contain;
 }
+
+/* Reordering uses a dedicated handle so normal row gestures keep scrolling. */
+.set-list-handle {
+  touch-action: none;
+  cursor: grab;
+  flex: 0 0 auto;
+}
+.set-list[data-dragging] .set-list-handle {
+  cursor: grabbing;
+}
+.set-list-row[data-moving] {
+  opacity: 0.65;
+}
+.set-list-row[data-drop-before] {
+  box-shadow: 0 -2px 0 var(--foreground);
+}
+
+.set-list-row {
+  display: grid;
+  gap: 0.5rem;
+}
+@media (min-width: 48rem) {
+  .set-list-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}

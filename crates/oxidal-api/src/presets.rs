@@ -191,10 +191,10 @@ fn catalog_items(root: &std::path::Path) -> Result<Vec<oxidal_presets::LibraryIt
 pub(super) async fn catalog(State(shared): State<Arc<Shared>>) -> Response {
     let root = shared.config.preset_dir.clone();
     job(shared, move |_| {
-        Ok(
-            Json(oxidal_presets::CatalogStore::open(root.clone())?.view(catalog_items(&root)?)?)
-                .into_response(),
+        Ok(Json(
+            oxidal_presets::CatalogStore::open(root.clone())?.reconcile(catalog_items(&root)?)?,
         )
+        .into_response())
     })
     .await
 }
@@ -209,7 +209,9 @@ pub(super) async fn manage(
     let root = shared.config.preset_dir.clone();
     job(shared, move |_| {
         let items = catalog_items(&root)?;
-        let result = oxidal_presets::CatalogStore::open(root)?.update(items, request)?;
+        let mut catalog = oxidal_presets::CatalogStore::open(root)?;
+        catalog.reconcile(items.clone())?;
+        let result = catalog.update(items, request)?;
         Ok(Json(result).into_response())
     })
     .await

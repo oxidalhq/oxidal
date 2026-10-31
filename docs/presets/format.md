@@ -308,6 +308,33 @@ controls. Metadata supports up to 4096 changed labels/order/removal references
 within a 1 MiB file. This storage bound is not a limit on simultaneous NAM
 instances. Preset payload stores retain their existing admission limits.
 
+### One performance set list
+
+The existing `library.json` order is authoritative across native originals, saved
+copies and mixed/scenes presets. Catalog GET reconciles its bounded inventory
+cache under the daemon's store lock: existing explicit positions are preserved,
+newly observed keys append, and multiple new files use filesystem timestamps as a
+tie-breaker. This does not rewrite preset bytes or add a metadata migration for
+older workers. A first empty list keeps the scenes/copies/originals default.
+Archived entries retain their place and are skipped until restored. Deleting an
+entry clears its own position. The file stays in the existing application data
+root for backup; this change does not qualify a new backup/restore workflow.
+
+`LibraryAction::Move` crosses recallable preset kinds. `Place` accepts an optional
+`before` kind/ID, with null meaning the end. Both use the confirmed catalog
+revision; unavailable/archived targets and crossing into legacy scalar graph
+authoring documents are refused. Those documents remain available in Author and
+retain a separate management order; they are not silently enrolled as performance
+presets. All identity keys stay unchanged by ordering.
+
+Library management exposes position numbers, dedicated drag handles, and Move
+up/down. Touch requires holding the handle; a moving or cancelled gesture sends
+no reorder. Arrow keys on a handle use the same revision-checked Move action.
+The switcher, its search, Previous/Next and Perform pads consume the confirmed
+catalog sequence, with origin labels on rows rather than group-based reshuffling.
+MIDI program selection will consume this same sequence in its implementation;
+physical MIDI qualification is separate.
+
 ### Permanent preset deletion
 
 `GET /api/v1/presets/removal?kind=original&id=<sha256>` previews one immutable

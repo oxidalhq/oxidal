@@ -10,6 +10,15 @@ use std::{
     path::PathBuf,
 };
 
+fn default_group(kind: LibraryKind) -> u8 {
+    match kind {
+        LibraryKind::Rig => 0,
+        LibraryKind::Owned => 1,
+        LibraryKind::Original => 2,
+        LibraryKind::Graph => 3,
+    }
+}
+
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
@@ -58,9 +67,18 @@ pub struct LibraryCatalog {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryAction {
-    Rename { name: String },
-    Visibility { archived: bool },
-    Move { up: bool },
+    Rename {
+        name: String,
+    },
+    Visibility {
+        archived: bool,
+    },
+    Move {
+        up: bool,
+    },
+    Place {
+        before: Option<crate::LibraryReference>,
+    },
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -86,6 +104,50 @@ pub struct CatalogStore {
     positions: BTreeMap<String, usize>,
 }
 impl CatalogStore {
+    /// Refresh the bounded inventory cache under the caller's store lock. Existing
+    /// positions stay stable; newly published files join the end, oldest first.
+    pub fn reconcile(&mut self, items: Vec<LibraryItem>) -> Result<LibraryCatalog> {
+        let catalog = self.view(items.clone())?;
+        let known = items
+            .iter()
+            .map(|i| i.kind.key(&i.id))
+            .collect::<Result<BTreeSet<_>>>()?;
+        let mut candidate = self.preferences.clone();
+        candidate.order.retain(|key| known.contains(key));
+        let mut unseen = catalog
+            .items
+            .iter()
+            .filter(|i| {
+                !self
+                    .positions
+                    .contains_key(&i.kind.key(&i.id).expect("validated key"))
+            })
+            .collect::<Vec<_>>();
+        if !self.preferences.order.is_empty() {
+            unseen.sort_by_key(|item| self.published(item));
+        }
+        for item in unseen {
+            candidate.order.push(item.kind.key(&item.id)?);
+        }
+        if candidate.order != self.preferences.order {
+            if candidate.order.len() > 4096 {
+                return Err(Error::Invalid("Set list exceeds library capacity"));
+            }
+            self.persist(candidate)?;
+        }
+        self.view(items)
+    }
+    fn published(&self, item: &LibraryItem) -> std::time::SystemTime {
+        let path = match item.kind {
+            LibraryKind::Original => self.root.join(format!("{}.t3kpreset", item.id)),
+            LibraryKind::Owned => self.root.join("owned").join(&item.id),
+            LibraryKind::Rig => self.root.join("bundles").join(&item.id),
+            LibraryKind::Graph => self.root.join("graphs").join(format!("{}.json", item.id)),
+        };
+        fs::symlink_metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH)
+    }
     /// Remove only the deleted entry's display preferences; no logical-ID fanout.
     pub fn forget(&mut self, kind: LibraryKind, id: &str) -> Result<()> {
         let key = kind.key(id)?;
@@ -175,9 +237,10 @@ impl CatalogStore {
             item.archived = !self.visible(item.kind, &item.id)?;
         }
         items.sort_by(|a, b| {
-            a.kind
-                .cmp(&b.kind)
+            (a.kind == LibraryKind::Graph)
+                .cmp(&(b.kind == LibraryKind::Graph))
                 .then_with(|| self.rank(a).cmp(&self.rank(b)))
+                .then_with(|| default_group(a.kind).cmp(&default_group(b.kind)))
                 .then_with(|| a.name.cmp(&b.name))
                 .then_with(|| a.id.cmp(&b.id))
         });
@@ -234,22 +297,85 @@ impl CatalogStore {
                 }
             }
             LibraryAction::Move { up } => {
-                let mut order = catalog
+                if !self.visible(request.entry_kind, &request.id)? {
+                    return Err(Error::Invalid("Restore a preset before moving it"));
+                }
+                let visible = catalog
                     .items
                     .iter()
-                    .filter(|i| i.kind == request.entry_kind)
+                    .filter(|i| {
+                        !i.archived
+                            && (i.kind == LibraryKind::Graph)
+                                == (request.entry_kind == LibraryKind::Graph)
+                    })
                     .map(|i| i.kind.key(&i.id))
                     .collect::<Result<Vec<_>>>()?;
-                let from = order.iter().position(|k| k == &key).expect("entry checked");
+                let from = visible
+                    .iter()
+                    .position(|k| k == &key)
+                    .expect("entry checked");
                 let to = if up {
                     from.saturating_sub(1)
                 } else {
-                    (from + 1).min(order.len() - 1)
+                    (from + 1).min(visible.len() - 1)
                 };
-                order.swap(from, to);
-                let moved = order.iter().cloned().collect::<BTreeSet<_>>();
-                candidate.order.retain(|k| !moved.contains(k));
-                candidate.order.extend(order);
+                let mut order = catalog
+                    .items
+                    .iter()
+                    .map(|i| i.kind.key(&i.id))
+                    .collect::<Result<Vec<_>>>()?;
+                if from != to {
+                    order.retain(|k| k != &key);
+                    let target = order
+                        .iter()
+                        .position(|k| k == &visible[to])
+                        .expect("target checked");
+                    order.insert(target + usize::from(!up), key);
+                }
+                candidate.order = order;
+            }
+            LibraryAction::Place { before } => {
+                if !self.visible(request.entry_kind, &request.id)? {
+                    return Err(Error::Invalid("Restore a preset before moving it"));
+                }
+                let before = before
+                    .map(|entry| {
+                        if !catalog
+                            .items
+                            .iter()
+                            .any(|i| i.kind == entry.kind && i.id == entry.id && !i.archived)
+                            || (entry.kind == LibraryKind::Graph)
+                                != (request.entry_kind == LibraryKind::Graph)
+                        {
+                            return Err(Error::Invalid("Drop target is unavailable"));
+                        }
+                        entry.kind.key(&entry.id)
+                    })
+                    .transpose()?;
+                if before.as_ref() == Some(&key) {
+                    return Ok(catalog);
+                }
+                let mut order = catalog
+                    .items
+                    .iter()
+                    .map(|i| i.kind.key(&i.id))
+                    .collect::<Result<Vec<_>>>()?;
+                order.retain(|k| k != &key);
+                let target = before
+                    .as_ref()
+                    .and_then(|b| order.iter().position(|k| k == b))
+                    .unwrap_or_else(|| {
+                        if request.entry_kind == LibraryKind::Graph {
+                            order.len()
+                        } else {
+                            order
+                                .iter()
+                                .position(|k| k.starts_with("graph:"))
+                                .unwrap_or(order.len())
+                        }
+                    });
+                order.insert(target, key);
+                candidate.order = order;
             }
         }
         if candidate.labels.len() > 4096
@@ -304,6 +430,164 @@ impl CatalogStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn one_order_crosses_kinds_preserves_hidden_slots_and_appends_new_entries() {
+        let root = std::env::temp_dir().join(format!("oxidal-global-order-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let item = |kind, id: &str, name: &str| LibraryItem {
+            kind,
+            id: id.repeat(64),
+            name: name.into(),
+            source_name: name.into(),
+            archived: false,
+        };
+        let mut rows = vec![
+            item(LibraryKind::Original, "a", "Original"),
+            item(LibraryKind::Owned, "b", "Copy"),
+            item(LibraryKind::Rig, "c", "Scenes"),
+        ];
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let initial = store.reconcile(rows.clone()).unwrap();
+        assert_eq!(
+            initial.items.iter().map(|i| i.kind).collect::<Vec<_>>(),
+            [LibraryKind::Rig, LibraryKind::Owned, LibraryKind::Original]
+        );
+        let moved = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: initial.revision,
+                    entry_kind: LibraryKind::Original,
+                    id: rows[0].id.clone(),
+                    action: LibraryAction::Place {
+                        before: Some(crate::LibraryReference {
+                            kind: LibraryKind::Rig,
+                            id: rows[2].id.clone(),
+                        }),
+                    },
+                },
+            )
+            .unwrap();
+        assert_eq!(moved.items[0].kind, LibraryKind::Original);
+        let hidden = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: moved.revision.clone(),
+                    entry_kind: LibraryKind::Rig,
+                    id: rows[2].id.clone(),
+                    action: LibraryAction::Visibility { archived: true },
+                },
+            )
+            .unwrap();
+        assert_eq!(hidden.items[1].kind, LibraryKind::Rig);
+        assert!(hidden.items[1].archived);
+        assert!(matches!(
+            store.update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: moved.revision,
+                    entry_kind: LibraryKind::Original,
+                    id: rows[0].id.clone(),
+                    action: LibraryAction::Move { up: false }
+                }
+            ),
+            Err(Error::Conflict(_))
+        ));
+        rows.push(item(LibraryKind::Original, "d", "A new name sorts first"));
+        let appended = store.reconcile(rows.clone()).unwrap();
+        assert_eq!(appended.items.last().unwrap().id, rows[3].id);
+        let restored = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: appended.revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: rows[2].id.clone(),
+                    action: LibraryAction::Visibility { archived: false },
+                },
+            )
+            .unwrap();
+        assert_eq!(restored.items[1].kind, LibraryKind::Rig);
+        let swapped = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: restored.revision,
+                    entry_kind: LibraryKind::Owned,
+                    id: rows[1].id.clone(),
+                    action: LibraryAction::Move { up: true },
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            swapped.items.iter().map(|i| i.kind).collect::<Vec<_>>(),
+            [
+                LibraryKind::Original,
+                LibraryKind::Owned,
+                LibraryKind::Rig,
+                LibraryKind::Original
+            ]
+        );
+        let reopened = CatalogStore::open(root.clone())
+            .unwrap()
+            .reconcile(rows)
+            .unwrap();
+        assert_eq!(reopened.revision, swapped.revision);
+        assert_eq!(reopened.items[1].kind, LibraryKind::Owned);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn invalid_drop_targets_do_not_rewrite_order_or_cross_into_authoring_drafts() {
+        let root = std::env::temp_dir().join(format!("oxidal-drop-order-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let rows = vec![
+            LibraryItem {
+                kind: LibraryKind::Owned,
+                id: "a".repeat(64),
+                name: "Copy".into(),
+                source_name: "Copy".into(),
+                archived: false,
+            },
+            LibraryItem {
+                kind: LibraryKind::Graph,
+                id: "b".repeat(64),
+                name: "Draft".into(),
+                source_name: "Draft".into(),
+                archived: false,
+            },
+        ];
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let initial = store.reconcile(rows.clone()).unwrap();
+        for target in [
+            crate::LibraryReference {
+                kind: LibraryKind::Rig,
+                id: "c".repeat(64),
+            },
+            crate::LibraryReference {
+                kind: LibraryKind::Graph,
+                id: rows[1].id.clone(),
+            },
+        ] {
+            assert!(
+                store
+                    .update(
+                        rows.clone(),
+                        LibraryUpdate {
+                            expected_revision: initial.revision.clone(),
+                            entry_kind: LibraryKind::Owned,
+                            id: rows[0].id.clone(),
+                            action: LibraryAction::Place {
+                                before: Some(target)
+                            }
+                        }
+                    )
+                    .is_err()
+            );
+            assert_eq!(store.view(rows.clone()).unwrap().revision, initial.revision);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn labels_visibility_order_and_stale_requests_survive_reopen() {
         let root = std::env::temp_dir().join(format!("oxidal-catalog-{}", std::process::id()));

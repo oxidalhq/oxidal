@@ -4,10 +4,12 @@ import {
   ArrowDown,
   Archive,
   ArrowCounterClockwise,
+  DotsSixVertical,
 } from '@phosphor-icons/react';
 import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
 import { Button } from './components/ui/button';
 import { PresetManagement } from './PresetManagement';
+import { useSetListDrag } from './useSetListDrag';
 
 export function LibraryManagement({
   connected,
@@ -21,6 +23,14 @@ export function LibraryManagement({
   const [busy, setBusy] = useState(false);
   const [removed, setRemoved] = useState(false);
   const alive = useRef(false);
+  const writing = useRef(false);
+  const root = useRef<HTMLDivElement>(null);
+  const drag = useSetListDrag(root, (item, before) => {
+    void edit(item, {
+      kind: 'place',
+      before: before ? { kind: before.kind, id: before.id } : null,
+    });
+  });
   useEffect(() => {
     alive.current = true;
     void libraryCatalog()
@@ -38,7 +48,8 @@ export function LibraryManagement({
     item: LibraryCatalog['items'][number],
     action: LibraryUpdate['action'],
   ) {
-    if (!catalog) return;
+    if (!catalog || writing.current) return;
+    writing.current = true;
     setBusy(true);
     setError('');
     try {
@@ -62,13 +73,19 @@ export function LibraryManagement({
         }
       }
     } finally {
+      writing.current = false;
       if (alive.current) setBusy(false);
     }
   }
+  const visible = catalog?.items.filter((i) => i.archived === removed) ?? [];
+  const performance = visible.filter((i) => i.kind !== 'graph');
+  const effects = visible.filter((i) => i.kind === 'graph');
   return (
     <section className="space-y-3" aria-label="Manage library">
+      <h2>Set list</h2>
       <p className="caption">
-        Labels and order stay on this device. Removed entries can be restored.
+        One set-list order for the preset picker and Perform. Hold a handle to
+        drag, or use Move up and Move down. Removed entries can be restored.
       </p>
       <Button
         variant="outline"
@@ -79,26 +96,47 @@ export function LibraryManagement({
       </Button>
       {error && <p role="alert">{error}</p>}
       {!catalog && <p role="status">Loading library…</p>}
-      {catalog?.items
-        .filter((i) => i.archived === removed)
-        .map((item) => (
-          <LibraryRow
-            key={`${item.kind}:${item.id}:${item.name}`}
-            item={item}
-            disabled={busy || !connected}
-            onChanged={() => {
-              onChanged();
-              void libraryCatalog()
-                .then((c) => {
-                  if (alive.current) setCatalog(c);
-                })
-                .catch((e: unknown) => {
-                  if (alive.current) setError(String(e));
-                });
-            }}
-            onEdit={(action) => void edit(item, action)}
-          />
-        ))}
+      <div
+        ref={root}
+        className="set-list"
+        data-dragging={drag.dragging || undefined}
+      >
+        {visible.map((item) => {
+          const group = item.kind === 'graph' ? effects : performance;
+          const index = group.findIndex(
+            (i) => i.kind === item.kind && i.id === item.id,
+          );
+          return (
+            <LibraryRow
+              key={`${item.kind}:${item.id}:${item.name}`}
+              item={item}
+              position={
+                item.kind !== 'graph' && !removed ? index + 1 : undefined
+              }
+              disabled={busy || !connected}
+              first={index === 0}
+              last={index === group.length - 1}
+              drag={drag}
+              onChanged={() => {
+                onChanged();
+                void libraryCatalog()
+                  .then((c) => {
+                    if (alive.current) setCatalog(c);
+                  })
+                  .catch((e: unknown) => {
+                    if (alive.current) setError(String(e));
+                  });
+              }}
+              onEdit={(action) => void edit(item, action)}
+            />
+          );
+        })}
+      </div>
+      {drag.dragging && (
+        <p className="sr-only" role="status">
+          Moving preset. Release to set its position.
+        </p>
+      )}
       {catalog && !catalog.items.some((i) => i.archived === removed) && (
         <p className="caption">
           {removed ? 'No removed entries.' : 'No saved entries.'}
@@ -112,43 +150,74 @@ function LibraryRow({
   disabled,
   onEdit,
   onChanged,
+  position,
+  first,
+  last,
+  drag,
 }: {
   item: LibraryCatalog['items'][number];
+  position: number | undefined;
+  first: boolean;
+  last: boolean;
+  drag: ReturnType<typeof useSetListDrag>;
   disabled: boolean;
   onEdit: (action: LibraryUpdate['action']) => void;
   onChanged: () => void;
 }) {
   return (
     <div
-      className="space-y-2 border-b border-border py-3"
+      className="set-list-row border-b border-border py-3"
       data-library-entry={item.id}
       data-library-kind={item.kind}
+      data-drop-before={drag.before === `${item.kind}:${item.id}` || undefined}
+      data-moving={drag.dragging === `${item.kind}:${item.id}` || undefined}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="set-list-title flex items-center gap-3">
+        {!item.archived && item.kind !== 'graph' && (
+          <Button
+            variant="ghost"
+            className="set-list-handle"
+            disabled={disabled}
+            aria-label={`Drag ${item.name}`}
+            onPointerDown={(e) => drag.start(e, item)}
+            onPointerMove={drag.move}
+            onPointerUp={drag.end}
+            onPointerCancel={drag.cancel}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                onEdit({ kind: 'move', up: e.key === 'ArrowUp' });
+              }
+            }}
+          >
+            <DotsSixVertical aria-hidden="true" />
+          </Button>
+        )}
+
         <div className="min-w-0 flex-1">
           <h3 className="break-words">{item.name}</h3>
           <p className="caption">
+            {position !== undefined && (
+              <span aria-label={`Set-list position ${position}`}>
+                {position} ·{' '}
+              </span>
+            )}
             {item.kind === 'original'
               ? 'Imported tone'
               : item.kind === 'owned'
                 ? 'Saved tone'
                 : item.kind === 'rig'
                   ? 'Preset with scenes'
-                  : 'Effects preset'}
+                  : 'Effects draft · Author'}
           </p>
         </div>
-        <PresetManagement
-          entry={item}
-          disabled={disabled}
-          onChanged={onChanged}
-        />
       </div>
-      <div className="action-row">
+      <div className="action-row set-list-actions">
         {!item.archived && (
           <>
             <Button
               variant="ghost"
-              disabled={disabled}
+              disabled={disabled || first}
               aria-label={`Move ${item.name} up`}
               onClick={() => onEdit({ kind: 'move', up: true })}
             >
@@ -156,7 +225,7 @@ function LibraryRow({
             </Button>
             <Button
               variant="ghost"
-              disabled={disabled}
+              disabled={disabled || last}
               aria-label={`Move ${item.name} down`}
               onClick={() => onEdit({ kind: 'move', up: false })}
             >
@@ -164,6 +233,12 @@ function LibraryRow({
             </Button>
           </>
         )}
+        <PresetManagement
+          entry={item}
+          disabled={disabled}
+          onChanged={onChanged}
+          compact
+        />
         <Button
           variant="outline"
           disabled={disabled}
