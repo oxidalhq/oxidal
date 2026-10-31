@@ -2,6 +2,7 @@ import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle } from './ChainView';
 import { GuitarPicker } from './GuitarSettings';
 import { PerformView } from './PerformView';
+import { setPerform, usePerform } from './performState';
 import './RigControls.css';
 import { blockKind, type RigLaneVM } from './rigChain';
 import { useWorkspaceState } from './workspaceMemory';
@@ -125,7 +126,8 @@ export function LiveRig({
     opening: AudioState;
     format: 'nam' | 'ir';
   } | null>(null);
-  const [performance, setPerformance] = useState(false);
+  const { on: performance } = usePerform();
+  const setPerformance = (on: boolean) => setPerform({ on });
   const [actionsOpen, setActionsOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   // An empty slot the player tapped, and a preset with effects being made.

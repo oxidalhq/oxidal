@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PerformView } from './PerformView';
+import { setPerform } from './performState';
 import {
   monitoring,
   nativeState,
@@ -16,6 +17,7 @@ vi.mock('./api', () => ({
   rigLibrary: vi.fn(),
 }));
 afterEach(() => {
+  setPerform({ on: false, mode: 'play' });
   cleanup();
   vi.resetAllMocks();
 });
@@ -130,4 +132,25 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(screen.getByRole('button', { name: 'Muff on' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
   expect(edit).toHaveBeenCalled();
+});
+
+it('stays in Perform on the same screen when the view is rebuilt, as when a preset hands over to another engine', async () => {
+  vi.mocked(monitoring).mockResolvedValue(snapshot);
+  const props = {
+    now: { session: 's', playing: true, name: 'A', modified: false },
+    lanes: [],
+    disabled: false,
+    onToggle: () => {},
+    onEdit: () => {},
+    selector: <p>Preset pads</p>,
+  };
+  const first = render(<PerformView {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Presets' }));
+  first.unmount();
+  render(<PerformView {...props} now={{ ...props.now, name: 'B' }} />);
+  expect(screen.getByText('Preset pads')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Presets' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });

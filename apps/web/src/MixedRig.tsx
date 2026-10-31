@@ -52,6 +52,7 @@ import { ModelPicker } from './ModelPicker';
 import { ArtworkDeck } from './AssetArtwork';
 import { ToneDetails } from './ToneDetails';
 import { PerformView } from './PerformView';
+import { setPerform, usePerform } from './performState';
 import { LiveEq } from './LiveEq';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -369,7 +370,8 @@ export function MixedRig({
   }
   const [editing, setEditing] = useState(false);
   /** The stage view: scene pads and effect switches, nothing to edit. */
-  const [performing, setPerforming] = useState(false);
+  const { on: performing } = usePerform();
+  const setPerforming = (on: boolean) => setPerform({ on });
   /** An edit waiting for the player to accept losing unsaved block edits. */
   const [unsaved, setUnsaved] = useState<(() => Promise<void>) | null>(null);
   /** Builds the next version of this preset, plays it and hides the one it

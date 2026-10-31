@@ -4,6 +4,7 @@ import type { Monitoring } from './api';
 import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
+import { setPerform, usePerform } from './performState';
 import type { RigLaneVM } from './rigChain';
 import './ChainView.css';
 import './PerformView.css';
@@ -137,7 +138,8 @@ export function PerformView({
     signalAt: null,
     showing: false,
   });
-  const [mode, setMode] = useState<'play' | 'presets'>('play');
+  const { mode } = usePerform();
+  const setMode = (next: 'play' | 'presets') => setPerform({ mode: next });
   const [baseline, setBaseline] = useState<{
     key: string;
     xruns: number;

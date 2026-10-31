@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MixedRig } from './MixedRig';
+import { setPerform } from './performState';
 import { rigAudioState, rigAudioCommand, rigDocument } from './api';
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
@@ -48,6 +49,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  setPerform({ on: false, mode: 'play' });
   cleanup();
   vi.resetAllMocks();
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
