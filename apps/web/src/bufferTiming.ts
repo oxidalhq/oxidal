@@ -1,8 +1,10 @@
 import type { StartAudio } from './api';
 
-/** Period sizes offered: powers of two plus 48 and 96, since USB full-speed
+/** Period sizes offered: powers of two plus USB packet-aligned choices, since full-speed
  * interfaces transfer in 1 ms packets (48 frames at 48 kHz). */
-export const BUFFER_SIZES = [16, 32, 48, 64, 96, 128, 256, 512, 1024, 2048];
+export const BUFFER_SIZES = [
+  16, 32, 48, 64, 96, 128, 192, 256, 512, 1024, 2048,
+];
 
 /** Device buffer length in ms: period size × periods at the session rate. */
 export function bufferMs(
