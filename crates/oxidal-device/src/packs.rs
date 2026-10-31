@@ -281,7 +281,7 @@ async fn change(package: &str, action: PackAction) -> Result<(), &'static str> {
         .env("DEBIAN_FRONTEND", "noninteractive")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit())
         .kill_on_drop(true)
         .spawn()
         .map_err(|_| "Cannot start the package manager")?;
