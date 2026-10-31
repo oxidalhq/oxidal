@@ -610,3 +610,26 @@
 .perform-more[data-warn] summary {
   color: var(--brand);
 }
+
+/* A phone: every preset on one scrolling page, boxes sized to fit a few rows. */
+@media (max-width: 480px) {
+  .perform-gig .preset-pad {
+    min-height: 4.5rem;
+  }
+  .perform-gig .preset-pad-grid {
+    grid-auto-rows: minmax(4.5rem, auto);
+  }
+  .perform-gig .preset-pad-text strong {
+    font-size: 0.9375rem;
+  }
+  .perform-boxes {
+    grid-auto-rows: minmax(7rem, 9rem);
+  }
+  .perform-box-face > svg {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .perform-box-label {
+    font-size: 0.875rem;
+  }
+}

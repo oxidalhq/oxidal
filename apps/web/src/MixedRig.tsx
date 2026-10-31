@@ -1064,6 +1064,7 @@ export function MixedRig({
               }}
               disabled={disabled || busy || switching || !!edit || !!picker}
               pads
+              all
               onSelect={(choice) => void choose(choice)}
             />
           }

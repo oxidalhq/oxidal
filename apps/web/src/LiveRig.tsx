@@ -823,6 +823,7 @@ export function LiveRig({
               }}
               disabled={disabled || !!draft || !!picker}
               pads
+              all
               onSelect={(choice) => void recall(choice)}
             />
           }

@@ -33,8 +33,11 @@ export function RigPresetSelector({
   disabled,
   onSelect,
   pads = false,
+  all = false,
 }: {
   pads?: boolean;
+  /** With pads: every preset on one scrolling page, with the steps first. */
+  all?: boolean;
   /** The playing preset: its list key ('' for a draft), name and edit state. */
   current: {
     key: string;
@@ -70,9 +73,10 @@ export function RigPresetSelector({
   }, [refresh, playing.refresh]);
   const selected = playing.key;
   const index = items.findIndex((p) => key(p) === selected);
+  const size = all ? Math.max(items.length, 8) : 8;
   const currentBank = Math.min(
-    Math.max(0, Math.ceil(items.length / 8) - 1),
-    bank ?? Math.max(0, Math.floor(index / 8)),
+    Math.max(0, Math.ceil(items.length / size) - 1),
+    bank ?? Math.max(0, Math.floor(index / size)),
   );
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item);
@@ -80,19 +84,44 @@ export function RigPresetSelector({
   if (pads) {
     const previous = index > 0 ? items[index - 1] : undefined;
     const next = index >= 0 ? items[index + 1] : undefined;
+    const steps = (
+      <div className="preset-step">
+        <button
+          type="button"
+          aria-label={
+            previous ? `Previous preset: ${previous.name}` : 'Previous preset'
+          }
+          disabled={disabled || loading || !previous}
+          onClick={() => choose(previous)}
+        >
+          <span>‹ Previous</span>
+          <strong>{previous?.name ?? '—'}</strong>
+        </button>
+        <button
+          type="button"
+          aria-label={next ? `Next preset: ${next.name}` : 'Next preset'}
+          disabled={disabled || loading || !next}
+          onClick={() => choose(next)}
+        >
+          <span>Next ›</span>
+          <strong>{next?.name ?? '—'}</strong>
+        </button>
+      </div>
+    );
     return (
       <div className="preset-pads" aria-label="Preset pads">
         <h3>
           Presets
           <span>
             {items.length
-              ? `${currentBank * 8 + 1}–${Math.min(items.length, currentBank * 8 + 8)} of ${items.length}`
+              ? `${currentBank * size + 1}–${Math.min(items.length, currentBank * size + size)} of ${items.length}`
               : ''}
           </span>
         </h3>
+        {all && steps}
         <div className="preset-pad-grid">
           {items
-            .slice(currentBank * 8, currentBank * 8 + 8)
+            .slice(currentBank * size, currentBank * size + size)
             .map((item, offset) => {
               const sounding = key(item) === selected;
               const upcoming = !!next && key(item) === key(next);
@@ -107,7 +136,7 @@ export function RigPresetSelector({
                   onClick={() => choose(item)}
                 >
                   <span className="preset-pad-number">
-                    {currentBank * 8 + offset + 1}
+                    {currentBank * size + offset + 1}
                   </span>
                   <span className="preset-pad-text">
                     <strong>{item.name}</strong>
@@ -119,7 +148,7 @@ export function RigPresetSelector({
               );
             })}
         </div>
-        {items.length > 8 && (
+        {items.length > size && (
           <div className="preset-bank">
             <button
               type="button"
@@ -130,40 +159,19 @@ export function RigPresetSelector({
               <CaretLeft aria-hidden="true" />
             </button>
             <span>
-              {currentBank + 1} / {Math.ceil(items.length / 8)}
+              {currentBank + 1} / {Math.ceil(items.length / size)}
             </span>
             <button
               type="button"
               aria-label="Next bank"
-              disabled={(currentBank + 1) * 8 >= items.length || disabled}
+              disabled={(currentBank + 1) * size >= items.length || disabled}
               onClick={() => setBank(currentBank + 1)}
             >
               <CaretRight aria-hidden="true" />
             </button>
           </div>
         )}
-        <div className="preset-step">
-          <button
-            type="button"
-            aria-label={
-              previous ? `Previous preset: ${previous.name}` : 'Previous preset'
-            }
-            disabled={disabled || loading || !previous}
-            onClick={() => choose(previous)}
-          >
-            <span>‹ Previous</span>
-            <strong>{previous?.name ?? '—'}</strong>
-          </button>
-          <button
-            type="button"
-            aria-label={next ? `Next preset: ${next.name}` : 'Next preset'}
-            disabled={disabled || loading || !next}
-            onClick={() => choose(next)}
-          >
-            <span>Next ›</span>
-            <strong>{next?.name ?? '—'}</strong>
-          </button>
-        </div>
+        {!all && steps}
         {loading && <p role="status">Loading presets…</p>}
         {error && (
           <div role="status">
