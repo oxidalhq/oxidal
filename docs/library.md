@@ -95,3 +95,18 @@ confirmed application or failure. Audition changes the selected live block;
 closing keeps that change, and the player can restore it with Undo in Rig. It
 does not save or overwrite a preset. With no suitable running rig, the preview
 links to Rig rather than starting audio automatically.
+
+## Library backup
+
+Library → Manage library → Download backup streams a versioned tar archive directly
+from the private data root. It includes preset payloads, set-list order and labels,
+descriptions/categories, per-preset MIDI maps, separate NAM/IR files and the global
+MIDI mapping document. The download holds the library's exclusive file gate so a
+concurrent save, import or deletion cannot produce a partial snapshot. Large assets
+are never collected into memory or duplicated into a temporary archive on the unit.
+
+The archive deliberately excludes TONE3000 account tokens, control-audit records and
+monitor history. Account sign-in must be re-established independently. Symlinks are
+archived as links rather than followed outside the private root. The v1 archive is a
+portable backup artifact; automated in-place restore is not yet exposed because it
+needs its own preview, capacity check, stopped-audio gate and rollback transaction.

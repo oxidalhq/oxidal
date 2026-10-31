@@ -5,6 +5,7 @@ import {
   Archive,
   ArrowCounterClockwise,
   DotsSixVertical,
+  DownloadSimple,
 } from '@phosphor-icons/react';
 import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
 import { Button } from './components/ui/button';
@@ -94,13 +95,25 @@ export function LibraryManagement({
         One set-list order for the preset picker and Perform. Hold a handle to
         drag, or use Move up and Move down. Removed entries can be restored.
       </p>
-      <Button
-        variant="outline"
-        aria-pressed={removed}
-        onClick={() => setRemoved((v) => !v)}
-      >
-        {removed ? 'Show available' : 'Show removed'}
-      </Button>
+      <div className="action-row">
+        <Button
+          variant="outline"
+          aria-pressed={removed}
+          onClick={() => setRemoved((v) => !v)}
+        >
+          {removed ? 'Show available' : 'Show removed'}
+        </Button>
+        <Button variant="outline" asChild>
+          <a href="/api/v1/backup/library" download>
+            <DownloadSimple aria-hidden="true" /> Download backup
+          </a>
+        </Button>
+      </div>
+      <p className="caption">
+        Backup includes presets, set-list order, descriptions, MIDI maps and
+        separate NAM/IR files. Account sign-in and diagnostic history stay on
+        this unit.
+      </p>
       {error && <p role="alert">{error}</p>}
       {!catalog && <p role="status">Loading library…</p>}
       <div

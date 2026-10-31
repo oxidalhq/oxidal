@@ -89,6 +89,18 @@ it('keyboard movement uses the confirmed set-list revision across preset kinds',
     await Promise.resolve();
   });
 });
+it('offers a streamed library backup without account sessions', async () => {
+  await view();
+  expect(screen.getByRole('link', { name: 'Download backup' })).toHaveAttribute(
+    'href',
+    '/api/v1/backup/library',
+  );
+  expect(
+    screen.getByText(
+      /Account sign-in and diagnostic history stay on this unit/,
+    ),
+  ).toBeInTheDocument();
+});
 it('touch needs a hold and does not reorder when the gesture moves before it', async () => {
   const handle = await view();
   vi.useFakeTimers();

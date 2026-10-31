@@ -2,6 +2,7 @@ mod artwork;
 mod audio;
 mod audio_boot;
 mod audit;
+mod backup;
 mod blends;
 mod boosts;
 mod calibration;
@@ -353,6 +354,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/monitor", get(monitor::state))
         .route("/audit", get(audit::history))
         .route("/audit/export", get(audit::export))
+        .route("/backup/library", get(backup::library))
         .route("/monitor/history", get(monitor_history::state))
         .route("/monitor/history/export", get(monitor_history::export))
         .route("/monitor/events", get(monitor::events))

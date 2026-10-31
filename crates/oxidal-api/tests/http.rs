@@ -2411,6 +2411,74 @@ async fn owned_download_preserves_bytes_and_can_be_reimported() {
 }
 
 #[tokio::test]
+async fn library_backup_streams_order_details_mappings_and_assets_without_accounts() {
+    let root = std::env::temp_dir().join(format!(
+        "oxidal-backup-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let presets = root.join("presets");
+    std::fs::create_dir_all(presets.join("models")).unwrap();
+    std::fs::create_dir_all(presets.join("accounts")).unwrap();
+    std::fs::write(
+        presets.join("library.json"),
+        br#"{"labels":{},"archived":[],"order":[]}"#,
+    )
+    .unwrap();
+    std::fs::write(presets.join("preset-details.json"), br#"{"entries":{}}"#).unwrap();
+    std::fs::write(presets.join("models/cab.wav"), b"asset bytes").unwrap();
+    std::fs::write(presets.join("accounts/token.json"), b"private token").unwrap();
+    std::fs::write(
+        root.join("mappings.json"),
+        br#"{"version":1,"mappings":[]}"#,
+    )
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let app = router(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: presets.clone(),
+        ui_dir: root.join("ui"),
+    })
+    .unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let response = reqwest::get(format!("{url}/backup/library")).await.unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.headers()["content-type"], "application/x-tar");
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let archive = root.join("backup.tar");
+    std::fs::write(&archive, response.bytes().await.unwrap()).unwrap();
+    let listing = std::process::Command::new("/usr/bin/tar")
+        .args(["-tf", archive.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert!(listing.status.success());
+    let listing = String::from_utf8(listing.stdout).unwrap();
+    for entry in [
+        "manifest.json",
+        "presets/library.json",
+        "presets/preset-details.json",
+        "presets/models/cab.wav",
+        "mappings.json",
+    ] {
+        assert!(listing.lines().any(|line| line == entry), "missing {entry}");
+    }
+    assert!(!listing.contains("presets/accounts"));
+    task.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 async fn monitoring_history_records_without_a_browser_and_exports_validated_samples() {
     let (url, task, path) = start(false).await;
     let client = reqwest::Client::new();
