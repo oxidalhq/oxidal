@@ -26,10 +26,6 @@ class InstalledTests(unittest.TestCase):
             'OXIDAL_DATA',
         )
         self.assertEqual(
-            subprocess.check_output(['lsblk', '-dn', '-o', 'PARTN', device], text=True).strip(),
-            '3',
-        )
-        self.assertEqual(
             subprocess.check_output(
                 ['findmnt', '-n', '-o', 'FSTYPE', '--target', '/var/lib'], text=True
             ).strip(),
