@@ -2245,6 +2245,294 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+/* Settings use one horizontal tab rail. A nested desktop sidebar spent space and
+   introduced a second divider without adding hierarchy. */
+.settings-workspace {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+.settings-workspace > .settings-nav {
+  display: flex;
+  flex-flow: row nowrap;
+  align-self: stretch;
+  gap: 0.25rem;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+.settings-workspace > .settings-nav > button {
+  width: auto;
+  flex: 0 0 auto;
+  padding-inline: 0.75rem;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+.settings-workspace > .settings-nav > button[aria-current='page'] {
+  color: var(--foreground);
+  background: var(--secondary);
+  box-shadow: none;
+}
+
+/* Connections keeps the current link, the next action and advanced policy on
+   separate levels. Only meaningful mode choices are visually grouped. */
+.network-settings {
+  container-type: inline-size;
+}
+.network-heading {
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+.network-heading .caption,
+.network-message {
+  margin: 0.25rem 0 0;
+}
+.network-message {
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+.network-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--secondary);
+}
+.network-summary-primary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+.network-summary-primary > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+.network-summary-primary strong,
+.network-summary-primary small {
+  overflow-wrap: anywhere;
+}
+.network-summary-primary small {
+  color: var(--muted-foreground);
+}
+.network-state-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 999px;
+}
+.network-state-dot[data-active='true'] {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.network-address {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font: 0.75rem var(--font-mono);
+}
+.network-interface-details {
+  margin-top: 0.25rem;
+}
+.network-interface-details > summary {
+  width: fit-content;
+  min-height: 2.25rem;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.network-interface-details ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+.network-interface-details li {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.25fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+.network-interface-details li span {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.network-pending {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border-inline-start: 3px solid var(--brand);
+  background: var(--secondary);
+}
+.network-pending p {
+  margin: 0;
+}
+.network-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+.network-mode-tabs {
+  display: inline-flex;
+  min-width: 0;
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  background: var(--secondary);
+}
+.network-mode-tabs > button {
+  min-height: 2.25rem;
+  border: 0;
+  color: var(--muted-foreground);
+}
+.network-mode-tabs > button[aria-pressed='true'] {
+  color: var(--foreground);
+  background: var(--card);
+}
+.network-list {
+  margin-top: 0.75rem;
+  border-block: 1px solid var(--border);
+}
+.network-row.oxidal-button {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  padding: 0.75rem 0.25rem;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  text-align: left;
+  white-space: normal;
+}
+.network-row.oxidal-button:last-child {
+  border-bottom: 0;
+}
+.network-row.oxidal-button[aria-pressed='true'] {
+  padding-inline: 0.75rem;
+  background: var(--secondary);
+}
+.network-connected {
+  display: block;
+  color: var(--brand);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.network-form,
+.network-policy-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+.network-form > .field,
+.network-policy-form > .field {
+  margin: 0;
+}
+.network-interface-select,
+.network-form-wide {
+  grid-column: 1 / -1;
+}
+.network-submit,
+.network-policy-form > button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.network-secondary {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.network-disclosure {
+  border-bottom: 1px solid var(--border);
+}
+.network-secondary .network-disclosure:last-child {
+  border-bottom: 0;
+}
+.network-disclosure > summary {
+  min-height: 3rem;
+  font-size: 0.875rem;
+}
+.network-disclosure[open] {
+  padding-bottom: 1rem;
+}
+.network-saved-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.network-review {
+  margin-block: 1rem;
+}
+.network-review > div {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-block: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.network-review dt {
+  color: var(--muted-foreground);
+}
+.network-review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+@container (max-width: 34rem) {
+  .network-heading {
+    align-items: stretch;
+  }
+  .network-heading > button {
+    align-self: flex-start;
+  }
+  .network-summary {
+    align-items: flex-start;
+  }
+  .network-address {
+    display: none;
+  }
+  .network-toolbar > .network-mode-tabs {
+    flex: 1 1 auto;
+  }
+  .network-mode-tabs > button {
+    flex: 1;
+  }
+  .network-form,
+  .network-policy-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .network-form > *,
+  .network-policy-form > *,
+  .network-interface-select,
+  .network-form-wide,
+  .network-submit,
+  .network-policy-form > button {
+    grid-column: 1;
+  }
+  .network-submit,
+  .network-policy-form > button {
+    width: 100%;
+  }
+}
+
 /* Healthy telemetry is an instrument readout, not a stack of connection badges. */
 .resource-strip {
   grid-template-columns: minmax(0, 1fr) 44px;
