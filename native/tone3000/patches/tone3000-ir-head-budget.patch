@@ -1,0 +1,16 @@
+--- a/plugin/src/ProcessorModelLoader.cpp
++++ b/plugin/src/ProcessorModelLoader.cpp
+@@ -59,9 +59,10 @@
+ // convolver's prepared block size (irConvolverBlockSizeFor, ChainBlock.h),
+ // the tail in partitions of this size, so per-callback CPU stops scaling
+ // linearly with tail length. Bigger head = more per-callback FFT work;
+-// smaller = chunkier tail batches. 8192 (~170 ms) is a conventional
+-// reverb head size.
+-constexpr int kIrNonUniformHeadSamples = 8192;
++// smaller = more frequent tail transforms. Oxidal distributes historical
++// tail products across callbacks; 2048 bounds the remaining transform burst
++// for small Pi audio periods without truncating the IR or adding latency.
++constexpr int kIrNonUniformHeadSamples = 2048;
+ 
+ // NAM phase-interleaved oversampling eligibility (see NamEngine.h).
+ // Phase interleaving is exact only for architectures whose temporal structure

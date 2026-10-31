@@ -160,6 +160,8 @@ struct Mailbox {
     failed: AtomicBool,
     /// Written by the render thread while IDLE, read by the helper while READY.
     jobs: std::cell::UnsafeCell<Vec<LaneJob>>,
+    /// Published with jobs; copied by the helper before releasing DONE.
+    waiter: std::cell::UnsafeCell<Option<std::thread::Thread>>,
 }
 // SAFETY: `jobs` has one writer at a time, handed over by the `state`
 // release/acquire pair; the raw pointers inside are only dereferenced by the
@@ -190,6 +192,7 @@ impl LanePool {
                 quit: AtomicBool::new(false),
                 failed: AtomicBool::new(false),
                 jobs: std::cell::UnsafeCell::new(Vec::with_capacity(jobs_each)),
+                waiter: std::cell::UnsafeCell::new(None),
             });
             let worker = mailbox.clone();
             let thread = std::thread::Builder::new()
@@ -211,7 +214,16 @@ impl LanePool {
                                 worker.failed.store(true, Ordering::Relaxed);
                             }
                         }
+                        // Copy before DONE: the caller may reuse the mailbox
+                        // immediately after observing completion. Unpark tokens
+                        // survive an early notification, so no wake is lost.
+                        // SAFETY: READY transfers waiter with jobs; the caller
+                        // does not modify either until it observes DONE.
+                        let waiter = unsafe { (&*worker.waiter.get()).clone() };
                         worker.state.store(DONE, Ordering::Release);
+                        if let Some(waiter) = waiter {
+                            waiter.unpark();
+                        }
                     }
                 })
                 .map_err(|e| format!("Lane helper unavailable: {e}"))?;
@@ -240,6 +252,8 @@ impl LanePool {
             if unsafe { (*helper.mailbox.jobs.get()).is_empty() } {
                 continue;
             }
+            // SAFETY: still IDLE; publishing READY hands both cells over.
+            unsafe { *helper.mailbox.waiter.get() = Some(std::thread::current()) };
             helper.mailbox.state.store(READY, Ordering::Release);
             if let Some(thread) = &helper.thread {
                 thread.thread().unpark();
@@ -258,10 +272,14 @@ impl LanePool {
             let mut spins = 0u32;
             while mailbox.state.load(Ordering::Acquire) != DONE {
                 spins = spins.saturating_add(1);
-                if spins < 20_000 {
+                if spins < 64 {
                     std::hint::spin_loop();
                 } else {
-                    std::thread::yield_now();
+                    // Yielding leaves an RR90 thread runnable and can starve
+                    // the native RR89 jobs its lanes are waiting for. Park
+                    // until a helper completion instead; always recheck DONE
+                    // because notifications may belong to another helper.
+                    std::thread::park();
                 }
             }
             failed |= mailbox.failed.swap(false, Ordering::Relaxed);
@@ -284,6 +302,34 @@ impl Drop for LanePool {
                 thread.thread().unpark();
                 let _ = thread.join();
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_early_and_late_completions_do_not_lose_wakes() {
+        let pool = LanePool::new(3, 0).unwrap();
+        // Empty jobs isolate mailbox handoff from DSP. Alternate completion
+        // before joining with immediate joins, reusing each slot thousands of
+        // times so stale park tokens and back-to-back READY publications occur.
+        for round in 0..10_000 {
+            for helper in &pool.helpers {
+                assert_eq!(helper.mailbox.state.load(Ordering::Acquire), IDLE);
+                // SAFETY: test owns the IDLE mailbox exactly as start does.
+                unsafe {
+                    *helper.mailbox.waiter.get() = Some(std::thread::current());
+                }
+                helper.mailbox.state.store(READY, Ordering::Release);
+                helper.thread.as_ref().unwrap().thread().unpark();
+            }
+            if round % 2 == 0 {
+                std::thread::yield_now();
+            }
+            pool.finish().unwrap();
         }
     }
 }

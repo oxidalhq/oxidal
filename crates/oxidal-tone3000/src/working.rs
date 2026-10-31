@@ -52,6 +52,13 @@ fn profile() -> String {
         Sha256::digest(include_bytes!("../../../native/tone3000/sources.json"))
     )
 }
+fn compatible_profile(candidate: &str) -> bool {
+    // The distributed-convolution overlay changes scheduling/partition size,
+    // never the captured state codec. Keep the exact preceding profile readable
+    // across this upgrade; unknown profiles still fail closed.
+    candidate == profile()
+        || candidate == "3d1597be8cdb3d5e021d0534ee2766839e875029803d62b1d3835d8010555c82"
+}
 pub fn origin(settings: &StartAudio) -> String {
     format!(
         "{}:{}",
@@ -112,7 +119,7 @@ fn read_envelope(
             .history
             .as_ref()
             .is_some_and(|history| !history.valid())
-        || header.profile != profile()
+        || !compatible_profile(&header.profile)
         || header.origin != source
         || if header.schema == 1 {
             bytes.len() <= split + 5
@@ -1000,6 +1007,29 @@ mod tests {
             "existing damaged receipt must not be silently repaired"
         );
         std::fs::write(&path, &original).unwrap();
+        // Re-hash a legitimate previous-profile envelope, as an upgrade would
+        // encounter it. Content verification remains independent of compatibility.
+        let split = original.iter().position(|b| *b == b'\n').unwrap();
+        let mut header: Header = serde_json::from_slice(&original[..split]).unwrap();
+        for (old_profile, accepted) in [
+            (
+                "3d1597be8cdb3d5e021d0534ee2766839e875029803d62b1d3835d8010555c82",
+                true,
+            ),
+            ("unreviewed-native-profile", false),
+        ] {
+            header.profile = old_profile.into();
+            let mut migrated = serde_json::to_vec(&header).unwrap();
+            migrated.extend_from_slice(&original[split..]);
+            let receipt = format!("{:x}", Sha256::digest(&migrated));
+            std::fs::write(directory(&root).join(&receipt), migrated).unwrap();
+            let result = read(&root, &receipt, "original:fixture");
+            assert_eq!(result.is_ok(), accepted);
+            if accepted {
+                assert_eq!(result.unwrap(), state);
+                assert!(read(&root, &receipt, "owned:wrong-origin").is_err());
+            }
+        }
         std::fs::write(directory(&root).join(".pending-interrupted"), b"incomplete").unwrap();
         assert_eq!(read(&root, &id, "original:fixture").unwrap(), state);
         std::fs::remove_dir_all(root).unwrap();

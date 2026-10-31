@@ -142,8 +142,9 @@ def main():
         raise ValueError('Native build output must be an absolute path without symlinks')
     options = ['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'] if system == 'Darwin' else []
     run('cmake', '-S', str(HERE), '-B', str(build),
-        f'-DTONE3000_SOURCE={source}', '-DCMAKE_BUILD_TYPE=Release', *options)
-    run('cmake', '--build', str(build), '--target', 'oxidal_tone3000', '-j', '4')
+        f'-DTONE3000_SOURCE={source}', '-DCMAKE_BUILD_TYPE=Release', '-DBUILD_TESTING=ON', *options)
+    run('cmake', '--build', str(build), '--target', 'oxidal_tone3000', 'convolution_schedule_test', '-j', '4')
+    run('ctest', '--test-dir', str(build), '--output-on-failure', '-R', 'convolution-schedule')
     library = build / ('liboxidal_tone3000.so' if system == 'Linux' else 'liboxidal_tone3000.dylib')
     (build / 'qualification-build.json').write_text(json.dumps({
         'host_os': system,

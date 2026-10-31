@@ -44,3 +44,18 @@ target_link_libraries(oxidal_tone3000 PRIVATE juce::juce_dsp juce::juce_audio_fo
   juce::juce_recommended_config_flags)
 add_dependencies(oxidal_tone3000 NAM)
 set_target_properties(oxidal_tone3000 PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN TRUE)
+
+include(CTest)
+if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/convolution_reference.py"
+    "${TONE3000_SOURCE}/libs/juce" "${CMAKE_CURRENT_BINARY_DIR}/convolution-engines.h"
+    COMMAND_ERROR_IS_FATAL ANY)
+  add_executable(convolution_schedule_test tests/ConvolutionSchedule.cpp)
+  target_include_directories(convolution_schedule_test PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+  target_compile_definitions(convolution_schedule_test PRIVATE
+    JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1 JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0)
+  target_link_libraries(convolution_schedule_test PRIVATE juce::juce_dsp)
+  add_test(NAME convolution-schedule-equivalence COMMAND convolution_schedule_test)
+endif()

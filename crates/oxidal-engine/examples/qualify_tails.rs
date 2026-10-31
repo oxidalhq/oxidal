@@ -1,8 +1,8 @@
-//! Signal comparison using the installed factory reverb on the target CPU.
+//! Signal comparison using the installed factory reverb and Hold on the target CPU.
 //! No PCM device is opened. @see docs/factory-collection.md
 use oxidal_engine::{
     ResidentSet, Session,
-    protocol::{PreparedRecall, StartRig, SwitchCommand},
+    protocol::{ControlCommand, PreparedRecall, StartRig, SwitchCommand, Target},
 };
 use oxidal_lv2::World;
 use oxidal_presets::{Bundle, BundleStore};
@@ -10,21 +10,38 @@ use serde_json::json;
 use std::{collections::BTreeMap, error::Error};
 fn main() -> Result<(), Box<dyn Error>> {
     let world = World::discover()?;
-    let uri = "http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo";
+    let mut evidence = vec![];
+    for uri in [
+        "http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo",
+        "urn:oxidal:plugin:hold#stereo",
+    ] {
+        evidence.extend(qualify(&world, uri)?);
+    }
+    println!("{}", serde_json::to_string_pretty(&evidence)?);
+    Ok(())
+}
+fn qualify(world: &World, uri: &str) -> Result<Vec<serde_json::Value>, Box<dyn Error>> {
+    let hold = uri == "urn:oxidal:plugin:hold#stereo";
     let plugin = world
         .plugins(48000.0)?
         .into_iter()
         .find(|p| p.uri == uri)
-        .ok_or("Install GxZita_rev1-Stereo")?;
+        .ok_or("Install the factory reverb and Oxidal Hold")?;
     let mut controls: BTreeMap<_, _> = plugin
         .ports
         .iter()
         .filter(|p| p.input && p.control)
         .map(|p| Ok((p.symbol.clone(), p.default.ok_or("Missing default")?)))
         .collect::<Result<_, &str>>()?;
-    controls.insert("DRY_WET_MIX".into(), 1.0);
-    controls.insert("MID_RT60".into(), 4.0);
-    controls.insert("LOW_RT60".into(), 4.0);
+    if hold {
+        controls.insert("dry".into(), 0.0);
+        controls.insert("attack".into(), 10.0);
+        controls.insert("width".into(), 100.0);
+    } else {
+        controls.insert("DRY_WET_MIX".into(), 1.0);
+        controls.insert("MID_RT60".into(), 4.0);
+        controls.insert("LOW_RT60".into(), 4.0);
+    }
     let edge = |a, ap, b, bp| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
     let make = |name, preserve| -> Result<Bundle, Box<dyn Error>> {
         let m = json!({"format":"oxidal.preset","formatVersion":1,
@@ -76,11 +93,25 @@ fn main() -> Result<(), Box<dyn Error>> {
                 levels: Default::default(),
             },
         };
-        let mut rig = ResidentSet::new(&store, &world, &settings, 1 << 24)?;
-        let mut reference = Session::new(make("Reference", true)?, &world, 48000.0, 192, 1 << 24)?;
+        let mut rig = ResidentSet::new(&store, world, &settings, 1 << 24)?;
+        let mut reference = Session::new(make("Reference", true)?, world, 48000.0, 192, 1 << 24)?;
         let (mut actual_energy, mut expected_energy, mut max_error) = (0.0f64, 0.0f64, 0.0f32);
         let mut durations = vec![];
         for block in 0..2000 {
+            if hold && block == 75 {
+                for session in [&mut reference, rig.active_mut()] {
+                    let state = session.snapshot();
+                    session.apply(ControlCommand {
+                        session: state.session,
+                        expected_revision: state.revision,
+                        target: Target::Lv2 {
+                            node: "fx".into(),
+                            symbol: "hold".into(),
+                        },
+                        value: 1.0,
+                    })?;
+                }
+            }
             if block == 250 {
                 let state = rig.snapshot();
                 rig.switch(SwitchCommand {
@@ -91,7 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 })?;
             }
             let mut input = [0.0f32; 192];
-            if block < 25 {
+            if block < if hold { 100 } else { 25 } {
                 for (i, s) in input.iter_mut().enumerate() {
                     *s = 0.05 * ((block * 192 + i) as f32 * 0.0576).sin();
                 }
@@ -114,7 +145,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if preserve {
             assert!(
                 max_error < 1e-6,
-                "Preserve lost real reverb history: {max_error}"
+                "Preserve lost real effect history: {max_error}"
             );
         } else {
             assert!(
@@ -126,6 +157,5 @@ fn main() -> Result<(), Box<dyn Error>> {
         evidence.push(json!({"preserve":preserve,"plugin":uri,"post_switch_energy":actual_energy,"reference_energy":expected_energy,"max_sample_error":max_error,"offline_process_us_p95":durations[1900],"offline_process_us_max":durations[1999]}));
     }
     std::fs::remove_dir_all(root)?;
-    println!("{}", serde_json::to_string_pretty(&evidence)?);
-    Ok(())
+    Ok(evidence)
 }

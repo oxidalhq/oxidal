@@ -120,7 +120,7 @@ The engine tests compare retained echoes against uninterrupted PCM, rapid
 A→B→C→A sequences, mixed Cut/Preserve returns, unequal path latency and candidate
 failure. `cargo run --release -p oxidal-engine --features native --example
 qualify_tails` runs on a Linux device with Guitarix installed: it compares the
-actual Zita reverb tail to an unswitched reference and checks Cut as a negative
-control. It opens no PCM device and reports offline timing separately from live
+actual Zita reverb tail and a captured Oxidal Hold chord to unswitched references,
+with Cut as a negative control. It opens no PCM device and reports offline timing separately from live
 ALSA evidence. Physical listening and longer loaded-device acceptance remain
 necessary before a release claim.

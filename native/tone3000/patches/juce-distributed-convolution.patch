@@ -1,0 +1,74 @@
+--- a/modules/juce_dsp/frequency/juce_Convolution.cpp
++++ b/modules/juce_dsp/frequency/juce_Convolution.cpp
+@@ -224,6 +224,7 @@
+ 
+         currentSegment = 0;
+         inputDataPos = 0;
++        tailSegmentsProcessed = 0;
+     }
+ 
+     void processSamples (const float* input, float* output, size_t numSamples)
+@@ -328,6 +329,23 @@
+ 
+             numSamplesProcessed += numSamplesToProcess;
+             inputDataPos += numSamplesToProcess;
++
++            // Oxidal: older input partitions are already complete. Spread
++            // their multiply/accumulate work over this input block instead of
++            // doing every partition in the final audio callback. Keep the same
++            // accumulation order and finish before the current-partition FFT.
++            if (tailSegmentsProcessed == 0)
++                FloatVectorOperations::fill (outputTempData, 0, static_cast<int> (fftSize + 1));
++
++            const auto wanted = ((numSegments - 1) * inputDataPos + blockSize - 1) / blockSize;
++            while (tailSegmentsProcessed < wanted)
++            {
++                const auto segment = ++tailSegmentsProcessed;
++                const auto index = (currentSegment + segment * indexStep) % numInputSegments;
++                convolutionProcessingAndAccumulate (buffersInputSegments[index].getWritePointer (0),
++                                                    buffersImpulseSegments[segment].getWritePointer (0),
++                                                    outputTempData);
++            }
+ 
+             // processing itself when needed (with latency)
+             if (inputDataPos == blockSize)
+@@ -339,23 +357,6 @@
+                 fftObject->performRealOnlyForwardTransform (inputSegmentData);
+                 prepareForConvolution (inputSegmentData);
+ 
+-                // Complex multiplication
+-                FloatVectorOperations::fill (outputTempData, 0, static_cast<int> (fftSize + 1));
+-
+-                auto index = currentSegment;
+-
+-                for (size_t i = 1; i < numSegments; ++i)
+-                {
+-                    index += indexStep;
+-
+-                    if (index >= numInputSegments)
+-                        index -= numInputSegments;
+-
+-                    convolutionProcessingAndAccumulate (buffersInputSegments[index].getWritePointer (0),
+-                                                        buffersImpulseSegments[i].getWritePointer (0),
+-                                                        outputTempData);
+-                }
+-
+                 FloatVectorOperations::copy (outputData, outputTempData, static_cast<int> (fftSize + 1));
+ 
+                 convolutionProcessingAndAccumulate (inputSegmentData,
+@@ -380,6 +381,7 @@
+                 currentSegment = (currentSegment > 0) ? (currentSegment - 1) : (numInputSegments - 1);
+ 
+                 inputDataPos = 0;
++                tailSegmentsProcessed = 0;
+             }
+         }
+     }
+@@ -441,6 +443,7 @@
+     const size_t numSegments;
+     const size_t numInputSegments;
+     size_t currentSegment = 0, inputDataPos = 0;
++    size_t tailSegmentsProcessed = 0;
+ 
+     AudioBuffer<float> bufferInput, bufferOutput, bufferTempOutput, bufferOverlap;
+     std::vector<AudioBuffer<float>> buffersInputSegments, buffersImpulseSegments;

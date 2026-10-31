@@ -79,6 +79,22 @@
       "before": "f59ec93376551f87ebfc10e0450f5db631d7303de36a6e6bfe9f8a79ee4f0eec",
       "after": "a667f23c4c12f6424ba3559e85fadf1bf3b212722cd499cb5b7ffdca0760f692",
       "patch_sha256": "7b72f0d14f5087c7c6779dee4516d441782cbd32d6c0e94a39492ed17e1aea00"
+    },
+    {
+      "namespace": "juce",
+      "path": "modules/juce_dsp/frequency/juce_Convolution.cpp",
+      "patch": "juce-distributed-convolution.patch",
+      "before": "d7bc9838c3c96822250493a2e2c13ab804bb8057b7da978a0c90df41384f2275",
+      "after": "6aa92f0f7e84148f37931e8b6a9d496050d5d2b81e435135515e4f93fb2ddafd",
+      "patch_sha256": "d4b1ea44649ef95e0d17bfb73efc4b50e62045f95e458ced15393d54afdea4dc"
+    },
+    {
+      "namespace": "tone3000",
+      "path": "plugin/src/ProcessorModelLoader.cpp",
+      "patch": "tone3000-ir-head-budget.patch",
+      "before": "b818e3cbfe5845609465a7512437a936841be85117ad97bce0d80054df2e2967",
+      "after": "55e0a92b17ef40630fcf784c44eb6b81741f196932b2f2d829d842b1ac4bd43e",
+      "patch_sha256": "d971c545d7eb5bf987fa5620c776757ccd77e9748f71491dbf93d8a0858ac18b"
     }
   ],
   "addons": [

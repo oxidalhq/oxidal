@@ -504,6 +504,22 @@ The byte budget covers those host allocations, not plugin internal memory. CPU
 admission, tail detection and suspension are not implemented. Preparing more
 presets increases callback cost even when host CPU looks low.
 
+Lane helpers signal completion through a retained thread wake token. After a
+short bounded spin, the render owner parks until those helpers finish, instead of
+staying runnable at a higher real-time priority than native processing threads.
+Ownership and complete joins still apply; the callback never returns unfinished
+lane buffers. A repeated early/late-completion regression checks wake-token races.
+
+The pinned native convolution overlay distributes historical IR partition
+accumulation across callbacks and uses a 2,048-sample nonuniform head. It keeps
+the full IR and zero reported convolution latency; it does not shorten a tail to
+fit a deadline. The maintained native build compares the exact pinned engine
+against the overlay across irregular blocks, long IRs and reset, and compares
+stereo output with the former 8,192-sample head. These offline equivalence tests
+do not establish live hardware deadlines. Existing native checkpoint data from
+the exact preceding overlay profile remains readable because its state codec is
+unchanged; unknown profiles are still rejected.
+
 The maintained latency and tails suites compare PCM against uninterrupted
 references, including unequal delays, repeated recalls, mixed Cut/Preserve returns,
 retained controls, candidate failure and buffer rejection. Actual HTTP/worker tests
