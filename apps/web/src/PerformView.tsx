@@ -137,6 +137,7 @@ export function PerformView({
     signalAt: null,
     showing: false,
   });
+  const [mode, setMode] = useState<'play' | 'presets'>('play');
   const [baseline, setBaseline] = useState<{
     key: string;
     xruns: number;
@@ -270,8 +271,26 @@ export function PerformView({
   const played = lanes
     .map((lane) => ({ ...lane, blocks: lane.blocks.filter((b) => !b.empty) }))
     .filter((lane) => lane.blocks.length);
+  const boxes = played.flatMap((lane) =>
+    lane.blocks.map((block) => ({
+      block,
+      tag:
+        played.length > 1
+          ? (lane.tag ?? (lane.id === 'left' ? 'L' : 'R'))
+          : undefined,
+    })),
+  );
+  // A one-line read of the live stats; the full set opens beneath it.
+  const summary = stats
+    .slice(0, 4)
+    .map((s) => `${s.label} ${s.value}${s.unit ?? ''}`)
+    .join(' · ');
   return (
-    <section className="perform" aria-label="Perform">
+    <section
+      className="perform perform-gig"
+      aria-label="Perform"
+      data-mode={mode}
+    >
       <div className="perform-bar">
         <button
           type="button"
@@ -282,6 +301,23 @@ export function PerformView({
           <ArrowLeft aria-hidden="true" /> Rig
         </button>
         <h2>Perform</h2>
+        <div className="perform-modes" role="group" aria-label="Perform view">
+          {(
+            [
+              ['play', 'Play'],
+              ['presets', 'Presets'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={mode === id}
+              onClick={() => setMode(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="perform-body">
         <EdgeMeter
@@ -293,41 +329,6 @@ export function PerformView({
           showing={live.showing}
         />
         <div className="perform-main">
-          <div className="perform-stats" role="group" aria-label="Live stats">
-            {stats.map((s) => {
-              const content = (
-                <>
-                  <span className="perform-stat-label">{s.label}</span>
-                  <span className="perform-stat-value">
-                    {s.value}
-                    {s.unit && <small>{s.unit}</small>}
-                  </span>
-                  <span className="perform-stat-detail">{s.detail}</span>
-                </>
-              );
-              return s.onClick ? (
-                <button
-                  key={s.label}
-                  type="button"
-                  className="perform-stat"
-                  data-warn={s.warn || undefined}
-                  onClick={s.onClick}
-                >
-                  {content}
-                </button>
-              ) : (
-                <div
-                  key={s.label}
-                  className="perform-stat"
-                  data-warn={s.warn || undefined}
-                >
-                  {content}
-                </div>
-              );
-            })}
-          </div>
-          {knobs}
-          <MasterLevel />
           <div className="perform-headline">
             <div className="perform-now">
               <span className="perform-now-state">
@@ -346,48 +347,86 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
-          {scenes}
-          {played.length > 0 && (
-            <div className="perform-section">
-              <h3>
-                Blocks <span>tap to bypass</span>
-              </h3>
-              <div className="perform-lanes">
-                {played.map((lane) => (
-                  <div key={lane.id} className="perform-lane">
-                    {played.length > 1 && (
-                      <span className="perform-lane-tag">
-                        {lane.tag ?? (lane.id === 'left' ? 'L' : 'R')}
+          {mode === 'presets' ? (
+            <div className="perform-section perform-fill">{selector}</div>
+          ) : (
+            <>
+              {scenes}
+              {boxes.length > 0 ? (
+                <div className="perform-boxes" role="group" aria-label="Blocks">
+                  {boxes.map(({ block, tag }) => (
+                    <button
+                      key={block.id}
+                      type="button"
+                      className="perform-box"
+                      data-kind={block.kind}
+                      data-on={block.on}
+                      aria-pressed={block.on}
+                      aria-label={`${block.label} on`}
+                      title={block.label}
+                      disabled={disabled}
+                      onClick={() => onToggle(block.id)}
+                    >
+                      <span className="chain-led" aria-hidden="true" />
+                      {tag && <span className="perform-box-tag">{tag}</span>}
+                      <span className="perform-box-face">{block.face}</span>
+                      <span className="perform-box-label">{block.label}</span>
+                      <span className="perform-box-state">
+                        {block.on ? 'On' : 'Off'}
                       </span>
-                    )}
-                    <div className="perform-tiles">
-                      {lane.blocks.map((block) => (
-                        <button
-                          key={block.id}
-                          type="button"
-                          className="rig-tile"
-                          data-kind={block.kind}
-                          data-on={block.on}
-                          aria-pressed={block.on}
-                          aria-label={`${block.label} on`}
-                          title={block.label}
-                          disabled={disabled}
-                          onClick={() => onToggle(block.id)}
-                        >
-                          <span className="rig-tile-face">
-                            <span className="chain-led" aria-hidden="true" />
-                            {block.face}
-                          </span>
-                          <span className="rig-tile-label">{block.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                !scenes && (
+                  <p className="caption">
+                    Nothing to switch in this preset. Presets has the rest.
+                  </p>
+                )
+              )}
+            </>
           )}
-          <div className="perform-section">{selector}</div>
+          {knobs}
+          <MasterLevel />
+          <details
+            className="perform-more"
+            data-warn={stats.some((s) => s.warn) || undefined}
+          >
+            <summary>{summary}</summary>
+            <div className="perform-stats" role="group" aria-label="Live stats">
+              {stats.map((s) => {
+                const content = (
+                  <>
+                    <span className="perform-stat-label">{s.label}</span>
+                    <span className="perform-stat-value">
+                      {s.value}
+                      {s.unit && <small>{s.unit}</small>}
+                    </span>
+                    <span className="perform-stat-detail">{s.detail}</span>
+                  </>
+                );
+                return s.onClick ? (
+                  <button
+                    key={s.label}
+                    type="button"
+                    className="perform-stat"
+                    data-warn={s.warn || undefined}
+                    onClick={s.onClick}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div
+                    key={s.label}
+                    className="perform-stat"
+                    data-warn={s.warn || undefined}
+                  >
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
         </div>
         <EdgeMeter
           side="out"

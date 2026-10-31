@@ -454,3 +454,159 @@
   color: var(--foreground);
   outline: none;
 }
+
+/* Gig view: the screen is the controls. Big boxes that fill what is left of it,
+   as on a pedalboard: tap a scene, tap a block, tap a preset. */
+.perform-gig .perform-body {
+  display: flex;
+  min-height: calc(100dvh - 7.5rem);
+}
+.perform-gig .perform-main {
+  flex: 1;
+}
+.perform-modes {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.perform-modes button {
+  min-height: var(--touch-target);
+  padding: 0 1rem;
+  border: 0;
+  background: none;
+  color: var(--foreground);
+  font: 600 0.875rem var(--font-sans);
+}
+.perform-modes button[aria-pressed='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+.perform-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 44%), 1fr));
+  grid-auto-rows: minmax(9rem, 15rem);
+  align-content: start;
+  gap: 0.5rem;
+}
+.perform-box {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem 0.625rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+}
+.perform-box .chain-led {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+}
+.perform-box-tag {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.625rem;
+  color: var(--muted-foreground);
+  font: 600 0.75rem var(--font-mono);
+}
+.perform-box-face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+}
+.perform-box-face > svg {
+  width: clamp(3rem, 9vw, 5rem);
+  height: clamp(3rem, 9vw, 5rem);
+}
+.perform-box-face img {
+  max-height: 6rem;
+  max-width: 100%;
+  object-fit: cover;
+}
+.perform-box-label {
+  max-width: 100%;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.perform-box-state {
+  color: var(--muted-foreground);
+  font: 600 0.6875rem var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.perform-box[data-on='true'] {
+  background: var(--foreground);
+  color: var(--background);
+}
+.perform-box[data-on='true'] .perform-box-state,
+.perform-box[data-on='true'] .perform-box-tag {
+  color: inherit;
+}
+.perform-box[data-on='false'] {
+  border-color: var(--wire);
+  color: var(--muted-foreground);
+}
+.perform-box[data-on='false'] .perform-box-face {
+  opacity: 0.55;
+}
+:root[data-display='epaper'] .perform-box[data-on='false'] {
+  border-style: dashed;
+  border-color: var(--foreground);
+}
+.perform-box:disabled {
+  opacity: 0.6;
+}
+.perform-box:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+/* Scene and preset pads grow to match. */
+.perform-gig .scene-pad {
+  min-height: 6rem;
+}
+.perform-gig .scene-pad strong {
+  font-size: 1.25rem;
+}
+.perform-gig .preset-pad {
+  min-height: 6.5rem;
+}
+.perform-gig .preset-pad-text strong {
+  font-size: 1.125rem;
+  white-space: normal;
+}
+.perform-gig .preset-pad-grid {
+  grid-auto-rows: minmax(6.5rem, 1fr);
+}
+.perform-fill {
+  flex: 1;
+}
+/* The live stats keep one line; the whole set opens under it. */
+.perform-more {
+  border-top: 1px solid var(--border);
+  padding-top: 0.25rem;
+}
+.perform-more summary {
+  min-height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  color: var(--muted-foreground);
+  font: 500 0.75rem var(--font-mono);
+}
+.perform-more[data-warn] summary {
+  color: var(--brand);
+}

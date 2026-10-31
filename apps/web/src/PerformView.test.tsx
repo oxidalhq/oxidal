@@ -64,7 +64,7 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
         name: state.preset_name,
         modified: state.modified,
       }}
-      selector={null}
+      selector={<p>Preset pads</p>}
       disabled={false}
       lanes={[
         {
@@ -121,6 +121,13 @@ it('shows edge meters and live stats measured from this preset, and toggles stom
   expect(muff).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(muff);
   expect(toggle).toHaveBeenCalledWith('fuzz');
+  // Presets is its own full screen; Play brings the boxes back.
+  expect(screen.queryByText('Preset pads')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Presets' }));
+  expect(screen.getByText('Preset pads')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Muff on' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+  expect(screen.getByRole('button', { name: 'Muff on' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Back to Rig' }));
   expect(edit).toHaveBeenCalled();
 });
