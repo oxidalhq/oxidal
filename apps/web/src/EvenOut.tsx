@@ -106,8 +106,9 @@ export function EvenOut({ connected }: { connected: boolean }) {
             <summary>How it works</summary>
             <p className="caption">
               Plays a built-in riff through each new or changed preset and scene
-              for about four seconds, silently, then puts back what you were
-              playing. Boost stays yours on top.
+              at Oxidal's fixed factory level for about four seconds, silently,
+              then puts back what you were playing. Your guitar profile does not
+              change the result. Boost stays yours on top.
             </p>
           </details>
           {entries.length > 0 && (

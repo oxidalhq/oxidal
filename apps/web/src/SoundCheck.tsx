@@ -114,10 +114,6 @@ export function SoundCheck({
     !!monitor?.audio &&
     monitor.audio_age_ms != null &&
     monitor.audio_age_ms < 3000;
-  const channels = [
-    ...(monitor?.audio?.input ?? []),
-    ...(monitor?.audio?.output ?? []),
-  ];
   const input = monitor?.audio?.input ?? [];
   const output = monitor?.audio?.output ?? [];
   const inputPeak = input.length
@@ -126,7 +122,8 @@ export function SoundCheck({
   const outputPeak = output.length
     ? Math.max(...output.map((channel) => channel.peak_dbfs))
     : null;
-  const clips = channels.reduce((sum, channel) => sum + channel.clips, 0);
+  const inputClips = input.reduce((sum, channel) => sum + channel.clips, 0);
+  const outputClips = output.reduce((sum, channel) => sum + channel.clips, 0);
   const deadlineMisses = monitor?.audio?.deadline_misses ?? 0;
   const processing = processingHeadroom(live ? monitor?.audio : null);
   const entries = useMemo(
@@ -184,10 +181,16 @@ export function SoundCheck({
       detail:
         'Presets and scenes have not been measured against one target yet. Use Even out below.',
     });
-  if (clips > 0)
+  if (inputClips > 0)
     fixes.push({
-      title: 'Clear digital clipping',
-      detail: `${clips} full-scale samples are recorded in the current audio session. Check input gain, boosts and master level.`,
+      title: 'Reduce interface input gain',
+      detail: `${inputClips} clipped input samples were recorded before the rig. Lower the interface's physical input-gain knob, then remeasure the guitar profile.`,
+      action: { label: 'Audio setup', run: onAudioSetup },
+    });
+  if (outputClips > 0)
+    fixes.push({
+      title: 'Reduce digital output level',
+      detail: `${outputClips} clipped output samples were recorded after the rig. Reduce scene/preset Boost or master Level; the interface's physical volume knob cannot repair digital clipping.`,
       action: { label: 'Audio setup', run: onAudioSetup },
     });
   if ((monitor?.xruns ?? 0) > 0 || deadlineMisses > 0)
@@ -308,6 +311,15 @@ export function SoundCheck({
               <Guitar aria-hidden="true" /> Guitar profiles
             </Button>
           </ToolRow>
+          <ToolRow
+            title="Profile health"
+            value={
+              activeGuitar?.peak_dbfs != null && activeGuitar.noise_dbfs != null
+                ? 'Checked automatically'
+                : 'Measurement needed'
+            }
+            detail="Sound Check follows the active profile automatically. Measure each guitar once; remeasure after changing interface, input, physical gain or the guitar's output level."
+          />
         </ToolSection>
 
         <ToolSection
@@ -335,7 +347,37 @@ export function SoundCheck({
           <ToolRow
             title="Input / output peak"
             value={`${dbfs(inputPeak)} / ${dbfs(outputPeak)}`}
-            detail={`${clips} full-scale samples in this audio session.`}
+            detail={`${inputClips} input clips · ${outputClips} output clips in this audio session.`}
+          />
+          <ToolRow
+            title="Input gain guidance"
+            value={
+              inputClips > 0
+                ? 'Reduce physical gain'
+                : activeGuitar?.peak_dbfs == null
+                  ? 'Measure your guitar'
+                  : activeGuitar.peak_dbfs > -3
+                    ? 'Very little headroom'
+                    : activeGuitar.peak_dbfs < -30
+                      ? 'Measured level is low'
+                      : 'Measured level is usable'
+            }
+            detail={
+              activeGuitar?.peak_dbfs == null
+                ? 'Measure a strong strum. Re-measure whenever the interface input-gain knob changes.'
+                : `Profile strum ${dbfs(activeGuitar.peak_dbfs)} before trim. Re-measure after changing the physical input-gain knob; Oxidal cannot read that knob.`
+            }
+          />
+          <ToolRow
+            title="Listening volume"
+            value={
+              outputClips > 0 ? 'Digital clipping' : 'Physical level unknown'
+            }
+            detail={
+              outputClips > 0
+                ? 'Reduce Boost or master Level before raising any physical output control.'
+                : 'If the digital output is healthy but headphones or speakers are too loud or quiet, adjust the interface, amplifier or speaker controls.'
+            }
           />
         </ToolSection>
 

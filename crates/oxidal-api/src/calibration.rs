@@ -19,7 +19,7 @@ use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand, SceneCommand, Sta
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::Write,
     path::PathBuf,
     sync::{
@@ -33,8 +33,14 @@ use std::{
 const MEASURE_SECONDS: f32 = 3.0;
 /// Offsets are kept within this, so one odd preset cannot swing the output.
 const MAX_OFFSET_DB: f32 = 12.0;
-/// A typical humbucker strum when no guitar has been measured.
-const DEFAULT_PEAK_DB: f32 = -12.0;
+/// Stable Oxidal factory riff level. It must not depend on one unit's guitar.
+const FACTORY_REFERENCE_PEAK_DB: f32 = -12.0;
+/// Changing the reference invalidates cached measurements without changing the file schema.
+const FACTORY_REFERENCE_REVISION: &str = "oxidal-factory-riff-v1";
+
+fn measurement_content(content: &str) -> String {
+    format!("{FACTORY_REFERENCE_REVISION}:{content}")
+}
 
 /// One measured preset or scene, keyed like boosts (`boosts.rs`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -655,29 +661,34 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     let items = tokio::task::spawn_blocking(move || inventory(&root))
         .await
         .map_err(|_| "Preset inventory failed")??;
-    let cached = shared.calibration.current();
+    let visible: BTreeSet<&str> = items.iter().map(|item| item.key.as_str()).collect();
+    let mut cached = shared.calibration.current();
+    let cached_len = cached.measured.len();
+    cached
+        .measured
+        .retain(|key, _| visible.contains(key.as_str()));
+    if cached.measured.len() != cached_len {
+        let store = shared.calibration.clone();
+        let retained = cached.clone();
+        tokio::task::spawn_blocking(move || store.save(retained))
+            .await
+            .map_err(|_| "Calibration cleanup failed")??;
+    }
     let todo: Vec<Item> = items
         .into_iter()
         .filter(|item| {
             all || cached
                 .measured
                 .get(&item.key)
-                .is_none_or(|m| m.content != item.content)
+                .is_none_or(|m| m.content != measurement_content(&item.content))
         })
         .collect();
     shared.calibration.update(|p| p.total = todo.len());
     if todo.is_empty() {
         return Ok(());
     }
-    // The riff stands in for the reference guitar as it reaches the rig.
-    let guitars = shared.guitars.current();
-    let peak_db = guitars
-        .reference
-        .as_ref()
-        .and_then(|id| guitars.guitars.iter().find(|g| &g.id == id))
-        .and_then(|g| g.peak_dbfs.map(|p| p + g.trim_db))
-        .unwrap_or(DEFAULT_PEAK_DB)
-        .clamp(-30.0, -3.0);
+    // Factory loudness must reproduce across units and guitar profiles.
+    let peak_db = FACTORY_REFERENCE_PEAK_DB;
     let mut outcome = Ok(());
     for item in todo {
         if shared.calibration.cancel.load(Ordering::Acquire) {
@@ -706,7 +717,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
                     item.key.clone(),
                     Measured {
                         name: item.name.clone(),
-                        content: item.content.clone(),
+                        content: measurement_content(&item.content),
                         lufs,
                     },
                 );
@@ -816,5 +827,13 @@ mod tests {
         assert_eq!(wild.offset("quiet"), Some(MAX_OFFSET_DB));
         assert_eq!(Calibration::default().target(), None);
         assert!(c.offset("crunch").unwrap().is_sign_positive());
+    }
+
+    #[test]
+    fn reference_revision_invalidates_personalized_measurements() {
+        assert_eq!(
+            measurement_content("preset-revision"),
+            "oxidal-factory-riff-v1:preset-revision"
+        );
     }
 }

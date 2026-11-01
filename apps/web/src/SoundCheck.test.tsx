@@ -154,6 +154,10 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   expect(screen.getByText(/Modern Lead -14.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Ambient Clean -25.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();
+  expect(screen.getByText('Checked automatically')).toBeVisible();
+  expect(
+    screen.getByText(/Sound Check follows the active profile automatically/),
+  ).toBeVisible();
   expect(screen.getByText(/Jogg capture → Jogg playback/)).toBeVisible();
   expect(screen.getByText('+1.5 dB')).toBeVisible();
   expect(screen.getByText('+2.0 dB')).toBeVisible();
@@ -206,12 +210,55 @@ it('prioritises missing audio, incomplete guitar measurements and live faults', 
 
   expect(screen.getByText('Choose and start an audio interface')).toBeVisible();
   expect(screen.getByText('Finish measuring Jiva')).toBeVisible();
-  expect(screen.getByText('Clear digital clipping')).toBeVisible();
+  expect(screen.getByText('Reduce interface input gain')).toBeVisible();
   expect(screen.getByText('Increase audio headroom')).toBeVisible();
   fireEvent.click(screen.getAllByRole('button', { name: 'Audio setup' })[0]!);
   fireEvent.click(screen.getByRole('button', { name: 'Measure guitar' }));
   expect(onAudioSetup).toHaveBeenCalledOnce();
   expect(onGuitars).toHaveBeenCalledOnce();
+});
+
+it('separates physical input gain from digital output clipping advice', async () => {
+  vi.mocked(useMonitorFeed).mockReturnValue({
+    snapshot: {
+      ...monitoring,
+      audio: {
+        ...monitoring.audio!,
+        input: [
+          { peak_dbfs: -0.1, rms_dbfs: -12, clips: 2 },
+          { peak_dbfs: -80, rms_dbfs: -90, clips: 0 },
+        ],
+        output: [
+          { peak_dbfs: 0, rms_dbfs: -8, clips: 3 },
+          { peak_dbfs: -1, rms_dbfs: -10, clips: 0 },
+        ],
+      },
+    },
+    link: 2,
+    disconnected: false,
+    error: '',
+    at: 1,
+  });
+
+  render(
+    <SoundCheck
+      connected
+      displayMode="stage"
+      onAudioSetup={() => {}}
+      onGuitars={() => {}}
+    />,
+  );
+  await act(async () => {});
+
+  expect(screen.getByText('Reduce interface input gain')).toBeVisible();
+  expect(screen.getByText('Reduce digital output level')).toBeVisible();
+  expect(
+    screen.getByText('2 input clips · 3 output clips in this audio session.'),
+  ).toBeVisible();
+  expect(screen.getByText(/Oxidal cannot read that knob/)).toBeVisible();
+  expect(
+    screen.getByText(/physical volume knob cannot repair digital clipping/),
+  ).toBeVisible();
 });
 
 it('warns about tight processing headroom before the first dropout', async () => {
