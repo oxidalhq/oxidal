@@ -3087,9 +3087,7 @@ for (const layout of ['serial', 'scenes'] as const) {
     await dialog.getByRole('button', { name: tone.name, exact: true }).click();
     const composer = page.getByRole('region', { name: 'Compose rig' });
     if (layout === 'scenes') {
-      await composer
-        .getByRole('button', { name: 'Scenes', exact: true })
-        .click();
+      await composer.getByRole('tab', { name: 'Scenes', exact: true }).click();
       await expect(
         composer.getByLabel('Scene tails', { exact: true }),
       ).toHaveValue('preserve');
@@ -3118,7 +3116,7 @@ for (const layout of ['serial', 'scenes'] as const) {
       await composer
         .getByRole('button', { name: 'Move Simple amplifier earlier' })
         .click();
-      await expect(composer.locator('[data-effect]').first()).toContainText(
+      await expect(composer.locator('.rig-tile').first()).toContainText(
         'Simple amplifier',
       );
       await composer

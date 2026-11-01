@@ -434,10 +434,9 @@ test('audio inspection keeps the authoring service connected', async ({
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
-  await panel
-    .getByText('Interface diagnostics & new device setup', { exact: true })
-    .click();
-  await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
+  await expect(
+    panel.getByRole('heading', { name: 'Audio interface setup' }),
+  ).toBeVisible();
   await expect(
     panel.getByRole('button', { name: 'Refresh audio devices' }),
   ).toBeEnabled();
@@ -578,10 +577,10 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
-  await panel
-    .getByText('Interface diagnostics & new device setup', { exact: true })
-    .click();
-  await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
+  await expect(
+    panel.getByRole('heading', { name: 'Audio interface setup' }),
+  ).toBeVisible();
+  await expect(panel.getByLabel('Audio endpoint')).toBeVisible();
   await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/capture');
   await expect(panel.getByLabel('Sample rate (Hz)')).toHaveValue('48000');
   await expect(

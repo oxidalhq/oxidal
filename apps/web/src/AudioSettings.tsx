@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EngineSettings } from './EngineSettings';
 import { MasterLevel } from './MasterLevel';
 import { NativeDefaults } from './NativeDefaults';
@@ -30,10 +30,13 @@ export function AudioSettings({ connected }: { connected: boolean }) {
   });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const refreshing = useRef(false);
   const endpoint = inventory?.endpoints.find(
     (e) => `${e.id}/${e.direction}` === selected,
   );
-  async function refresh() {
+  const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
     setBusy(true);
     setMessage('');
     setSelected('');
@@ -53,9 +56,15 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     } catch (error) {
       setMessage(String(error));
     } finally {
+      refreshing.current = false;
       setBusy(false);
     }
-  }
+  }, []);
+  useEffect(() => {
+    if (!connected) return;
+    const request = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(request);
+  }, [connected, refresh]);
   async function probe() {
     if (!endpoint) return;
     setBusy(true);
@@ -96,11 +105,14 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       <h2>Audio</h2>
       <MasterLevel />
       <PlaybackSettings connected={connected} input={input} output={output} />
-      <details className="audio-diagnostics">
-        <summary>Interface diagnostics &amp; new device setup</summary>
+      <section
+        className="audio-diagnostics"
+        aria-labelledby="audio-interface-setup"
+      >
+        <h3 id="audio-interface-setup">Audio interface setup</h3>
         <p className="caption">
-          Inspect and test a device here. A configuration check does not change
-          the playing preset; stop audio before testing an occupied interface.
+          Connected interfaces appear automatically. Check input and output here
+          before starting a new playback session.
         </p>
         <Button
           variant="outline"
@@ -139,7 +151,8 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                         key={`${e.id}/${e.direction}`}
                         value={`${e.id}/${e.direction}`}
                       >
-                        {e.name} · {e.direction} · {e.id}
+                        {e.direction === 'capture' ? 'Input' : 'Output'} ·{' '}
+                        {e.name} · {e.id}
                       </option>
                     ))}
                   </select>
@@ -234,7 +247,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             </p>
           ))}
         <p role="status">{busy ? 'Inspecting audio…' : message}</p>
-      </details>
+      </section>
       <EngineSettings connected={connected} />
       <NativeDefaults connected={connected} />
     </section>

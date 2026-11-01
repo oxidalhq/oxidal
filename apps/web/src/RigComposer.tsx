@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { ArtworkDeck } from './AssetArtwork';
+import { ChainView } from './ChainView';
+import { GearIcon } from './GearIcon';
 import { NativeSplitDialog } from './NativeSplitDialog';
 import {
   lv2Effect,
@@ -27,8 +31,13 @@ import {
   type Preset,
 } from './api';
 import type { ResourceSource } from './generated/contract';
+import { blockKind, type RigBlockVM } from './rigChain';
+import './RigComposer.css';
 
-/** Draft editing leaves the sounding session alone. Play admits a verified revision. */
+/**
+ * Draft editing leaves the sounding session alone. Play admits a verified revision.
+ * @see docs/interface.md
+ */
 export function RigComposer({
   connected,
   initial,
@@ -47,6 +56,7 @@ export function RigComposer({
   const [layout, setLayout] = useState<'serial' | 'scenes'>('serial');
   const [sceneTails, setSceneTails] = useState<'cut' | 'preserve'>('preserve');
   const [name, setName] = useState(initialName);
+  const [selected, setSelected] = useState(initial[0]?.id ?? '');
   const [picker, setPicker] = useState<'tones' | 'effects' | null>('tones');
   const [tones, setTones] = useState<
     { preset: Preset; source: ResourceSource }[]
@@ -114,6 +124,70 @@ export function RigComposer({
       [next[index], next[index + step]] = [next[index + step]!, next[index]!];
       return next;
     });
+  }
+  function moveBefore(id: string, before: string | null) {
+    setEffects((old) => {
+      const next = [...old];
+      let index = next.findIndex((effect) => effect.id === id);
+      if (index < 0) return old;
+      let destination = before
+        ? next.findIndex((effect) => effect.id === before)
+        : next.length;
+      if (destination < 0) return old;
+      if (destination > index) destination -= 1;
+      while (index !== destination) {
+        const step = index < destination ? 1 : -1;
+        if (
+          !canMoveEffect(next, index, step) ||
+          (layout === 'scenes' &&
+            next[index]?.kind !== next[index + step]?.kind)
+        )
+          return old;
+        [next[index], next[index + step]] = [next[index + step]!, next[index]!];
+        index += step;
+      }
+      return next;
+    });
+  }
+  function movable(id: string) {
+    const index = effects.findIndex((effect) => effect.id === id);
+    return ([-1, 1] as const).some(
+      (step) =>
+        canMoveEffect(effects, index, step) &&
+        (layout !== 'scenes' ||
+          effects[index]?.kind === effects[index + step]?.kind),
+    );
+  }
+  const block = (effect: DraftEffect): RigBlockVM => {
+    const stage = effect.kind === 'native' ? effect.stage?.role : undefined;
+    const kind = stage ?? blockKind('', effect.name);
+    return {
+      id: effect.id,
+      label: effect.name,
+      kind,
+      on: true,
+      face: <GearIcon gear={stage ?? ''} name={effect.name} />,
+    };
+  };
+  const selectedEffect =
+    effects.find((effect) => effect.id === selected) ?? effects[0];
+  const selectedIndex = selectedEffect
+    ? effects.findIndex((effect) => effect.id === selectedEffect.id)
+    : -1;
+  function remove(id: string) {
+    const index = effects.findIndex((effect) => effect.id === id);
+    const next = removeEffect(effects, id);
+    setEffects(next);
+    if (selected === id)
+      setSelected(next[Math.min(index, next.length - 1)]?.id ?? '');
+  }
+  function chooseLayout(next: 'serial' | 'scenes') {
+    setLayout(next);
+    if (next === 'scenes')
+      setEffects((old) => [
+        ...old.filter((effect) => effect.kind === 'native'),
+        ...old.filter((effect) => effect.kind === 'lv2'),
+      ]);
   }
   async function play() {
     if (busy) return;
@@ -210,98 +284,70 @@ export function RigComposer({
     }
   }
   return (
-    <section className="space-y-3" aria-label="Compose rig">
-      <h2 className="sr-only">Compose preset</h2>
-      <div className="flex items-center gap-2">
+    <section className="rig-builder space-y-3" aria-label="Compose rig">
+      <header className="rig-builder-header">
         <label className="field min-w-0 flex-1">
           <span className="sr-only">Preset name</span>
           <input
             value={name}
             maxLength={80}
             disabled={busy}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <span className="caption">Draft</span>
-      </div>
-      <div className="action-row" role="group" aria-label="Rig layout">
-        <Button
-          variant="ghost"
-          aria-pressed={layout === 'serial'}
-          disabled={busy}
-          onClick={() => setLayout('serial')}
-        >
-          Serial chain
-        </Button>
-        <Button
-          variant="ghost"
-          aria-pressed={layout === 'scenes'}
-          disabled={
-            busy || effects.some((e) => e.kind === 'native' && !!e.stage)
-          }
-          onClick={() => {
-            setLayout('scenes');
-            setEffects((old) => [
-              ...old.filter((e) => e.kind === 'native'),
-              ...old.filter((e) => e.kind === 'lv2'),
-            ]);
-          }}
-        >
-          Scenes
-        </Button>
-      </div>
-      {layout === 'scenes' && (
-        <div className="control-stack">
-          <label htmlFor="scene-tail-mode">Scene tails</label>
-          <select
-            id="scene-tail-mode"
-            value={sceneTails}
-            disabled={busy}
-            onChange={(e) =>
-              setSceneTails(e.target.value as 'cut' | 'preserve')
-            }
-          >
-            <option value="preserve">Keep branch trails</option>
-            <option value="cut">Cut branch tails</option>
-          </select>
-          <p className="caption">
-            All branches stay ready. Shared effects keep ringing. Keeping branch
-            trails stops new input to an outgoing branch while its existing
-            sound drains.
-          </p>
-        </div>
-      )}
-      <div className="action-row">
-        <Button
-          variant="outline"
-          disabled={!connected || busy}
-          onClick={() => {
-            setQuery('');
-            setLoading(true);
-            setError('');
-            setPicker('tones');
-          }}
-        >
-          Add saved tone
-        </Button>
-        <Button
-          variant="outline"
-          disabled={!connected || busy}
-          onClick={() => {
-            setQuery('');
-            setLoading(true);
-            setError('');
-            setPicker('effects');
-          }}
-        >
-          Add effect
-        </Button>
+        <Badge>Draft</Badge>
         <Button
           disabled={!connected || busy || !name.trim()}
           onClick={() => void play()}
         >
           {busy ? 'Preparing…' : 'Play draft'}
         </Button>
+      </header>
+      <div className="rig-builder-toolbar">
+        <Tabs
+          value={layout}
+          onValueChange={(value) => chooseLayout(value as 'serial' | 'scenes')}
+        >
+          <TabsList aria-label="Rig layout">
+            <TabsTrigger value="serial" disabled={busy}>
+              Chain
+            </TabsTrigger>
+            <TabsTrigger
+              value="scenes"
+              disabled={
+                busy || effects.some((e) => e.kind === 'native' && !!e.stage)
+              }
+            >
+              Scenes
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="action-row">
+          <Button
+            variant="outline"
+            disabled={!connected || busy}
+            onClick={() => {
+              setQuery('');
+              setLoading(true);
+              setError('');
+              setPicker('tones');
+            }}
+          >
+            Add saved tone
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!connected || busy}
+            onClick={() => {
+              setQuery('');
+              setLoading(true);
+              setError('');
+              setPicker('effects');
+            }}
+          >
+            Add effect
+          </Button>
+        </div>
       </div>
       {preparing && (
         <Button
@@ -312,44 +358,140 @@ export function RigComposer({
           {cancelling ? 'Cancelling…' : 'Cancel preparation'}
         </Button>
       )}
-      <ol className="space-y-2" aria-label="Draft signal chain">
-        <li className="caption">Input · L / R</li>
-        {effects.map((effect, index) => (
-          <li
-            key={effect.id}
-            data-effect={effect.id}
-            className="space-y-2 border-b border-border py-2"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1 font-semibold break-words">
-                {index + 1} · {effect.name}
+      <div className="rig-builder-workspace">
+        <div className="rig-builder-canvas">
+          <div className="rig-builder-canvas-heading">
+            <div>
+              <p className="eyebrow">Signal path</p>
+              <h2>{layout === 'serial' ? 'Chain' : 'Scenes'}</h2>
+            </div>
+            <span className="caption">
+              {effects.length} {effects.length === 1 ? 'block' : 'blocks'}
+            </span>
+          </div>
+          {layout === 'serial' ? (
+            <ChainView
+              label="Draft signal chain"
+              lanes={[
+                {
+                  id: 'Main',
+                  input: 'IN',
+                  blocks: effects.map(block),
+                },
+              ]}
+              selected={selectedEffect?.id}
+              onSelect={setSelected}
+              disabled={busy}
+              movable={movable}
+              onMove={(id, _lane, before) => moveBefore(id, before)}
+            />
+          ) : (
+            <>
+              <ChainView
+                label="Scene branches"
+                parallel
+                lanes={effects
+                  .filter((effect) => effect.kind === 'native')
+                  .map((effect, index) => ({
+                    id: `Scene ${index + 1}`,
+                    input: String(index + 1),
+                    blocks: [block(effect)],
+                  }))}
+                selected={selectedEffect?.id}
+                onSelect={setSelected}
+                disabled={busy}
+              />
+              <div className="rig-builder-shared">
+                <Badge>Shared after scenes</Badge>
+                <ChainView
+                  label="Shared effects"
+                  lanes={[
+                    {
+                      id: 'Shared',
+                      input: 'SUM',
+                      blocks: effects
+                        .filter((effect) => effect.kind === 'lv2')
+                        .map(block),
+                    },
+                  ]}
+                  selected={selectedEffect?.id}
+                  onSelect={setSelected}
+                  disabled={busy}
+                  movable={movable}
+                  onMove={(id, _lane, before) => moveBefore(id, before)}
+                />
+              </div>
+              <label className="rig-builder-tail-mode">
+                <span>Scene tails</span>
+                <select
+                  value={sceneTails}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setSceneTails(event.target.value as 'cut' | 'preserve')
+                  }
+                >
+                  <option value="preserve">Keep ringing</option>
+                  <option value="cut">Cut immediately</option>
+                </select>
+              </label>
+            </>
+          )}
+          {!effects.length && (
+            <div className="rig-builder-empty">
+              <strong>Start with a tone or effect</strong>
+              <span>
+                Add blocks above. The signal path stays editable until you play
+                it.
               </span>
-              <div className="flex gap-2">
+            </div>
+          )}
+        </div>
+        <section className="rig-builder-inspector" aria-label="Block inspector">
+          {selectedEffect ? (
+            <>
+              <div className="rig-builder-inspector-heading">
+                <div className="rig-builder-inspector-icon">
+                  {block(selectedEffect).face}
+                </div>
+                <div>
+                  <Badge>
+                    {selectedEffect.kind === 'native'
+                      ? selectedEffect.stage?.role === 'amp'
+                        ? 'Amp'
+                        : selectedEffect.stage?.role === 'cab'
+                          ? 'Cab / IR'
+                          : 'NAM tone'
+                      : 'Effect'}
+                  </Badge>
+                  <h3>{selectedEffect.name}</h3>
+                </div>
+              </div>
+              <div className="rig-builder-inspector-actions">
                 <Button
                   variant="outline"
                   className="h-11 w-11 p-0"
-                  aria-label={`Move ${effect.name} earlier`}
+                  aria-label={`Move ${selectedEffect.name} earlier`}
                   disabled={
                     busy ||
-                    !canMoveEffect(effects, index, -1) ||
+                    !canMoveEffect(effects, selectedIndex, -1) ||
                     (layout === 'scenes' &&
-                      effect.kind !== effects[index - 1]?.kind)
+                      selectedEffect.kind !== effects[selectedIndex - 1]?.kind)
                   }
-                  onClick={() => move(index, -1)}
+                  onClick={() => move(selectedIndex, -1)}
                 >
                   <ArrowUp size={18} />
                 </Button>
                 <Button
                   variant="outline"
                   className="h-11 w-11 p-0"
-                  aria-label={`Move ${effect.name} later`}
+                  aria-label={`Move ${selectedEffect.name} later`}
                   disabled={
                     busy ||
-                    !canMoveEffect(effects, index, 1) ||
+                    !canMoveEffect(effects, selectedIndex, 1) ||
                     (layout === 'scenes' &&
-                      effect.kind !== effects[index + 1]?.kind)
+                      selectedEffect.kind !== effects[selectedIndex + 1]?.kind)
                   }
-                  onClick={() => move(index, 1)}
+                  onClick={() => move(selectedIndex, 1)}
                 >
                   <ArrowDown size={18} />
                 </Button>
@@ -357,91 +499,102 @@ export function RigComposer({
                   variant="ghost"
                   className="h-11 w-11 p-0"
                   aria-label={
-                    effect.kind === 'native' && effect.stage
-                      ? `Remove amp/cab pair ${effect.name}`
-                      : `Remove ${effect.name}`
+                    selectedEffect.kind === 'native' && selectedEffect.stage
+                      ? `Remove amp/cab pair ${selectedEffect.name}`
+                      : `Remove ${selectedEffect.name}`
                   }
                   disabled={busy}
-                  onClick={() =>
-                    setEffects((old) => removeEffect(old, effect.id))
-                  }
+                  onClick={() => remove(selectedEffect.id)}
                 >
                   <Trash size={18} />
                 </Button>
               </div>
-            </div>
-            {layout === 'scenes' && effect.kind === 'native' && (
-              <label className="field">
-                <span className="sr-only">
-                  Scene{' '}
-                  {effects
-                    .filter((e) => e.kind === 'native')
-                    .findIndex((e) => e.id === effect.id) + 1}{' '}
-                  name
-                </span>
-                <input
-                  value={effect.name}
-                  maxLength={80}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setEffects((old) =>
-                      old.map((item) =>
-                        item.id === effect.id
-                          ? { ...item, name: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-              </label>
-            )}
-            {layout === 'serial' &&
-              effect.kind === 'native' &&
-              !effect.stage && (
-                <Button
-                  variant="outline"
-                  disabled={busy || !connected}
-                  onClick={() => setSplit(effect)}
-                >
-                  Separate amp & cab
-                </Button>
-              )}
-            {effect.kind === 'native' && effect.stage && (
-              <p className="caption">
-                {effect.stage.role === 'amp'
-                  ? `Amp · ${effect.stage.recipe.input === 'left' ? 'L' : 'R'} input`
-                  : 'Cab / IR'}{' '}
-                · linked pair · 48 kHz
-              </p>
-            )}
-            {effect.kind === 'lv2' &&
-              effect.plugin.ports.filter((p) => p.audio && p.input).length ===
-                1 && (
+              {layout === 'scenes' && selectedEffect.kind === 'native' && (
                 <label className="field">
-                  Mono input
-                  <select
-                    value={effect.mono}
+                  Scene name
+                  <input
+                    aria-label={`Scene ${
+                      effects
+                        .filter((effect) => effect.kind === 'native')
+                        .findIndex(
+                          (effect) => effect.id === selectedEffect.id,
+                        ) + 1
+                    } name`}
+                    value={selectedEffect.name}
+                    maxLength={80}
                     disabled={busy}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setEffects((old) =>
                         old.map((item) =>
-                          item.id === effect.id && item.kind === 'lv2'
-                            ? { ...item, mono: e.target.value as MonoInput }
+                          item.id === selectedEffect.id
+                            ? { ...item, name: event.target.value }
                             : item,
                         ),
                       )
                     }
-                  >
-                    <option value="sum">L + R (average)</option>
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
-                  </select>
+                  />
                 </label>
               )}
-          </li>
-        ))}
-        <li className="caption">Output · L / R</li>
-      </ol>
+              {layout === 'serial' &&
+                selectedEffect.kind === 'native' &&
+                !selectedEffect.stage && (
+                  <Button
+                    variant="outline"
+                    disabled={busy || !connected}
+                    onClick={() => setSplit(selectedEffect)}
+                  >
+                    Separate amp & cab
+                  </Button>
+                )}
+              {selectedEffect.kind === 'native' && selectedEffect.stage && (
+                <p className="caption">
+                  {selectedEffect.stage.role === 'amp'
+                    ? `Amp · ${selectedEffect.stage.recipe.input === 'left' ? 'L' : 'R'} input`
+                    : 'Cab / IR'}{' '}
+                  · linked pair · 48 kHz
+                </p>
+              )}
+              {selectedEffect.kind === 'lv2' &&
+                selectedEffect.plugin.ports.filter(
+                  (port) => port.audio && port.input,
+                ).length === 1 && (
+                  <label className="field">
+                    Mono input
+                    <select
+                      value={selectedEffect.mono}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setEffects((old) =>
+                          old.map((item) =>
+                            item.id === selectedEffect.id && item.kind === 'lv2'
+                              ? {
+                                  ...item,
+                                  mono: event.target.value as MonoInput,
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="sum">L + R (average)</option>
+                      <option value="left">Left</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </label>
+                )}
+              <p className="caption">
+                Draft changes do not alter the sounding rig until you choose
+                Play draft.
+              </p>
+            </>
+          ) : (
+            <div className="rig-builder-inspector-empty">
+              <strong>No block selected</strong>
+              <span>Add a tone or effect to begin.</span>
+            </div>
+          )}
+        </section>
+      </div>
       <p className="caption">
         Play to hear it, then save from the sounding rig. Mono effects return
         the same signal to L and R.
@@ -458,6 +611,7 @@ export function RigComposer({
             setEffects((old) =>
               old.flatMap((e) => (e.id === split.id ? pair : [e])),
             );
+            setSelected(pair[0].id);
             setSplit(null);
           }}
         />
@@ -487,15 +641,14 @@ export function RigComposer({
                           className="min-h-11 w-full justify-start text-left whitespace-normal"
                           disabled={loading}
                           onClick={() => {
-                            setEffects((old) => [
-                              ...old,
-                              {
-                                id: `native-${crypto.randomUUID()}`,
-                                kind: 'native',
-                                name: t.preset.name,
-                                ...t,
-                              },
-                            ]);
+                            const item: DraftEffect = {
+                              id: `native-${crypto.randomUUID()}`,
+                              kind: 'native',
+                              name: t.preset.name,
+                              ...t,
+                            };
+                            setEffects((old) => [...old, item]);
+                            setSelected(item.id);
                             setPicker(null);
                           }}
                         >
@@ -528,6 +681,7 @@ export function RigComposer({
                             try {
                               const item = lv2Effect(plugin);
                               setEffects((old) => [...old, item]);
+                              setSelected(item.id);
                               setPicker(null);
                             } catch (cause) {
                               setError(String(cause));
