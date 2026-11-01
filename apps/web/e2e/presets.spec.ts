@@ -3235,21 +3235,26 @@ for (const layout of ['serial', 'scenes'] as const) {
         }),
       );
       await rig.getByText('MIDI controls', { exact: true }).click();
-      await rig
-        .getByLabel('MIDI input', { exact: true })
-        .selectOption('hw:Unavailable,0,0');
-      await rig.getByLabel('MIDI channel', { exact: true }).selectOption('2');
-      await rig
-        .getByLabel('MIDI trigger 2', { exact: true })
-        .selectOption('control');
+      await rig.getByLabel('MIDI input', { exact: true }).click();
+      await page
+        .getByRole('option', {
+          name: 'Unavailable test controller',
+          exact: true,
+        })
+        .click();
+      await rig.getByLabel('MIDI channel', { exact: true }).click();
+      await page.getByRole('option', { name: '2', exact: true }).click();
+      await rig.getByLabel('MIDI trigger 2', { exact: true }).click();
+      await page.getByRole('option', { name: 'CC press', exact: true }).click();
       await rig.getByLabel('MIDI number 2', { exact: true }).fill('20');
       await rig
         .getByRole('button', { name: 'Map branch Clean', exact: true })
         .click();
       await rig.getByLabel('Branch Clean CC', { exact: true }).fill('64');
-      await rig
-        .getByLabel('Branch Clean behavior', { exact: true })
-        .selectOption('gate');
+      await rig.getByLabel('Branch Clean behavior', { exact: true }).click();
+      await page
+        .getByRole('option', { name: 'CC on/off', exact: true })
+        .click();
 
       await rig
         .getByRole('button', { name: 'Add parameter mapping', exact: true })
@@ -3258,13 +3263,18 @@ for (const layout of ['serial', 'scenes'] as const) {
         (c: { target: { kind: string; node: string } }) =>
           c.target.kind === 'bypass',
       );
-      await rig
-        .getByLabel('MIDI parameter 1', { exact: true })
-        .selectOption(JSON.stringify(mappedControl.target));
+      await rig.getByLabel('MIDI parameter 1', { exact: true }).click();
+      await page
+        .getByRole('option', {
+          name: `${mappedControl.target.node} · ${mappedControl.label}`,
+          exact: true,
+        })
+        .click();
       await rig.getByLabel('Parameter CC 1', { exact: true }).fill('21');
-      await rig
-        .getByLabel('Parameter behavior 1', { exact: true })
-        .selectOption('toggle');
+      await rig.getByLabel('Parameter behavior 1', { exact: true }).click();
+      await page
+        .getByRole('option', { name: 'Toggle on press', exact: true })
+        .click();
 
       await rig
         .getByRole('button', { name: 'Apply MIDI', exact: true })
@@ -3942,23 +3952,35 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
       }),
     );
     await sounding.getByText('MIDI controls', { exact: true }).click();
-    await sounding
-      .getByLabel('MIDI input', { exact: true })
-      .selectOption('hw:Unavailable,0,0');
+    await sounding.getByLabel('MIDI input', { exact: true }).click();
+    await page
+      .getByRole('option', {
+        name: 'Unavailable test controller',
+        exact: true,
+      })
+      .click();
     await sounding
       .getByRole('button', { name: 'Add parameter mapping', exact: true })
       .click();
-    await sounding.getByLabel('MIDI parameter 1', { exact: true }).selectOption(
-      JSON.stringify({
-        kind: 'native',
-        node: 'native',
-        parameter: 'inputLevel',
-      }),
+    const inputLevel = (
+      await (await request.get('/api/v1/audio')).json()
+    ).control.controls.find(
+      (control: { target: { kind: string; parameter?: string } }) =>
+        control.target.kind === 'native' &&
+        control.target.parameter === 'inputLevel',
     );
+    await sounding.getByLabel('MIDI parameter 1', { exact: true }).click();
+    await page
+      .getByRole('option', {
+        name: `${inputLevel.target.node} · ${inputLevel.label}`,
+        exact: true,
+      })
+      .click();
     await sounding.getByLabel('Parameter CC 1', { exact: true }).fill('21');
-    await sounding
-      .getByLabel('Parameter behavior 1', { exact: true })
-      .selectOption('relative_offset64');
+    await sounding.getByLabel('Parameter behavior 1', { exact: true }).click();
+    await page
+      .getByRole('option', { name: 'Encoder: offset 64', exact: true })
+      .click();
     await sounding
       .getByRole('button', { name: 'Apply MIDI', exact: true })
       .click();

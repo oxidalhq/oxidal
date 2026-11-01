@@ -295,7 +295,7 @@ test('device portrait and landscape keep controls accessible and preserve a rota
       .getByRole('tablist', { name: 'Settings sections' })
       .getByRole('tab', { name: 'Display', exact: true })
       .click();
-    await expect(page.getByLabel('Display mode')).toHaveValue('epaper');
+    await expect(page.getByLabel('Display mode')).toHaveText('E-paper');
     await setDisplayMode(page, 'default');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute(
@@ -531,8 +531,10 @@ test('stage display keeps screen awake across views and exposes fullscreen avail
       .click();
   };
   await showDisplay();
-  if (testInfo.project.name === 'boox-air3c')
-    await page.getByLabel('Display mode').selectOption('epaper');
+  if (testInfo.project.name === 'boox-air3c') {
+    await page.getByLabel('Display mode').click();
+    await page.getByRole('option', { name: 'E-paper', exact: true }).click();
+  }
   const wake = page.getByRole('button', {
     name: 'Keep screen awake',
     exact: true,

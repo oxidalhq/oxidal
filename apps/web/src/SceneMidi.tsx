@@ -3,6 +3,13 @@ import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { DialogFooter } from './components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import {
   consumeMidiAssignmentRequest,
@@ -334,27 +341,40 @@ export function MidiControls({
             <div className="midi-device-row flex flex-wrap items-end gap-2">
               <label className="field min-w-0 flex-1">
                 MIDI input
-                <select
+                <Select
                   aria-label="MIDI input"
-                  value={draft?.input ?? ''}
+                  value={draft?.input ?? '__choose__'}
                   disabled={disabled || loading}
-                  onChange={(e) =>
-                    setDraft((old) => old && { ...old, input: e.target.value })
+                  onValueChange={(value) =>
+                    setDraft(
+                      (old) =>
+                        old && {
+                          ...old,
+                          input: value === '__choose__' ? '' : value,
+                        },
+                    )
                   }
                 >
-                  <option value="">Choose controller</option>
-                  {draft?.input &&
-                    !devices?.inputs.some((p) => p.id === draft.input) && (
-                      <option value={draft.input}>
-                        {draft.input} · unavailable
-                      </option>
-                    )}
-                  {devices?.inputs.map((port) => (
-                    <option key={port.id} value={port.id}>
-                      {port.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger aria-label="MIDI input">
+                    <SelectValue placeholder="Choose controller" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__choose__">
+                      Choose controller
+                    </SelectItem>
+                    {draft?.input &&
+                      !devices?.inputs.some((p) => p.id === draft.input) && (
+                        <SelectItem value={draft.input}>
+                          {draft.input} · unavailable
+                        </SelectItem>
+                      )}
+                    {devices?.inputs.map((port) => (
+                      <SelectItem key={port.id} value={port.id}>
+                        {port.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
               <Button
                 variant="outline"
@@ -378,24 +398,27 @@ export function MidiControls({
               <>
                 <label className="field midi-channel">
                   MIDI channel
-                  <select
-                    aria-label="MIDI channel"
+                  <Select
                     disabled={disabled}
-                    value={draft?.channel ?? 1}
-                    onChange={(e) =>
+                    value={String(draft?.channel ?? 1)}
+                    onValueChange={(value) =>
                       setDraft(
-                        (old) =>
-                          old && { ...old, channel: Number(e.target.value) },
+                        (old) => old && { ...old, channel: Number(value) },
                       )
                     }
                   >
-                    <option value={0}>All channels</option>
-                    {Array.from({ length: 16 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {i + 1}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="MIDI channel">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">All channels</SelectItem>
+                      {Array.from({ length: 16 }, (_, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>
+                          {i + 1}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
                 <details
                   className="midi-assignments"
@@ -414,13 +437,12 @@ export function MidiControls({
                       <div className="grid grid-cols-2 items-end gap-2">
                         <label className="field min-w-0">
                           Message
-                          <select
-                            aria-label={`MIDI trigger ${index + 1}`}
+                          <Select
                             value={
                               binding.controller == null ? 'program' : 'control'
                             }
                             disabled={disabled}
-                            onChange={(e) =>
+                            onValueChange={(value) =>
                               setDraft(
                                 (old) =>
                                   old && {
@@ -430,11 +452,11 @@ export function MidiControls({
                                         ? {
                                             ...b,
                                             program:
-                                              e.target.value === 'program'
+                                              value === 'program'
                                                 ? index
                                                 : null,
                                             controller:
-                                              e.target.value === 'control'
+                                              value === 'control'
                                                 ? index
                                                 : null,
                                           }
@@ -444,9 +466,16 @@ export function MidiControls({
                               )
                             }
                           >
-                            <option value="program">Program</option>
-                            <option value="control">CC press</option>
-                          </select>
+                            <SelectTrigger
+                              aria-label={`MIDI trigger ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="program">Program</SelectItem>
+                              <SelectItem value="control">CC press</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </label>
                         <label className="field min-w-0">
                           {binding.controller == null
@@ -603,20 +632,29 @@ export function MidiControls({
                                   </label>
                                   <label className="field min-w-0">
                                     Behavior
-                                    <select
-                                      aria-label={`Branch ${branch.name} behavior`}
+                                    <Select
                                       value={binding.mode}
                                       disabled={disabled}
-                                      onChange={(event) =>
+                                      onValueChange={(value) =>
                                         change({
-                                          mode: event.target.value as
-                                            'gate' | 'toggle',
+                                          mode: value as 'gate' | 'toggle',
                                         })
                                       }
                                     >
-                                      <option value="toggle">Toggle</option>
-                                      <option value="gate">CC on/off</option>
-                                    </select>
+                                      <SelectTrigger
+                                        aria-label={`Branch ${branch.name} behavior`}
+                                      >
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="toggle">
+                                          Toggle
+                                        </SelectItem>
+                                        <SelectItem value="gate">
+                                          CC on/off
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </label>
                                 </div>
                                 <div className="action-row">
@@ -690,15 +728,12 @@ export function MidiControls({
                         >
                           <label className="field min-w-0">
                             Control
-                            <select
-                              aria-label={`MIDI parameter ${index + 1}`}
+                            <Select
                               value={JSON.stringify(binding.target)}
                               disabled={disabled}
-                              onChange={(event) => {
+                              onValueChange={(value) => {
                                 const selected = controls.find(
-                                  (c) =>
-                                    JSON.stringify(c.target) ===
-                                    event.target.value,
+                                  (c) => JSON.stringify(c.target) === value,
                                 );
                                 if (selected)
                                   change({
@@ -707,20 +742,29 @@ export function MidiControls({
                                   });
                               }}
                             >
-                              {!control && (
-                                <option value={JSON.stringify(binding.target)}>
-                                  Unavailable control
-                                </option>
-                              )}
-                              {controls.map((c) => (
-                                <option
-                                  key={JSON.stringify(c.target)}
-                                  value={JSON.stringify(c.target)}
-                                >
-                                  {c.target.node} · {c.label}
-                                </option>
-                              ))}
-                            </select>
+                              <SelectTrigger
+                                aria-label={`MIDI parameter ${index + 1}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {!control && (
+                                  <SelectItem
+                                    value={JSON.stringify(binding.target)}
+                                  >
+                                    Unavailable control
+                                  </SelectItem>
+                                )}
+                                {controls.map((c) => (
+                                  <SelectItem
+                                    key={JSON.stringify(c.target)}
+                                    value={JSON.stringify(c.target)}
+                                  >
+                                    {c.target.node} · {c.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </label>
                           <div className="grid grid-cols-2 gap-2">
                             <label className="field min-w-0">
@@ -739,34 +783,42 @@ export function MidiControls({
                             </label>
                             <label className="field min-w-0">
                               Behavior
-                              <select
-                                aria-label={`Parameter behavior ${index + 1}`}
+                              <Select
                                 value={binding.mode ?? 'absolute'}
                                 disabled={disabled}
-                                onChange={(e) =>
+                                onValueChange={(value) =>
                                   change({
-                                    mode: e.target.value as NonNullable<
+                                    mode: value as NonNullable<
                                       typeof binding.mode
                                     >,
                                   })
                                 }
                               >
-                                <option value="absolute">Absolute</option>
-                                {control?.toggle ? (
-                                  <option value="toggle">
-                                    Toggle on press
-                                  </option>
-                                ) : (
-                                  <>
-                                    <option value="relative_twos_complement">
-                                      Encoder: two’s complement
-                                    </option>
-                                    <option value="relative_offset64">
-                                      Encoder: offset 64
-                                    </option>
-                                  </>
-                                )}
-                              </select>
+                                <SelectTrigger
+                                  aria-label={`Parameter behavior ${index + 1}`}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="absolute">
+                                    Absolute
+                                  </SelectItem>
+                                  {control?.toggle ? (
+                                    <SelectItem value="toggle">
+                                      Toggle on press
+                                    </SelectItem>
+                                  ) : (
+                                    <>
+                                      <SelectItem value="relative_twos_complement">
+                                        Encoder: two’s complement
+                                      </SelectItem>
+                                      <SelectItem value="relative_offset64">
+                                        Encoder: offset 64
+                                      </SelectItem>
+                                    </>
+                                  )}
+                                </SelectContent>
+                              </Select>
                             </label>
                           </div>
                           <div className="action-row">

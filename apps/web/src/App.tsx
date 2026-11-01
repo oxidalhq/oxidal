@@ -25,6 +25,13 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { Switch } from './components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { LiveRig } from './LiveRig';
 const MixedRig = lazy(() =>
@@ -446,27 +453,31 @@ function InstrumentApp() {
                 <div className="performance-actions preset-controls">
                   <label className="field">
                     Example preset
-                    <select
-                      aria-label="Example preset"
+                    <Select
                       disabled={!connected}
                       value={state.preset}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         void run(
                           {
                             type: 'set',
                             target: 'rig.preset',
-                            value: e.target.value === 'parallel' ? 1 : 0,
+                            value: value === 'parallel' ? 1 : 0,
                           },
                           true,
                         )
                       }
                     >
-                      <option value="custom" disabled>
-                        Custom routing
-                      </option>
-                      <option value="serial">Serial</option>
-                      <option value="parallel">Parallel</option>
-                    </select>
+                      <SelectTrigger aria-label="Example preset">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="custom" disabled>
+                          Custom routing
+                        </SelectItem>
+                        <SelectItem value="serial">Serial</SelectItem>
+                        <SelectItem value="parallel">Parallel</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
                   <Button
                     className="bypass-switch"
@@ -691,17 +702,20 @@ function InstrumentApp() {
                       <h2 className="sr-only">Display</h2>
                       <label className="field display-mode">
                         <span>Display mode</span>
-                        <select
+                        <Select
                           value={displayMode}
-                          onChange={(event) =>
-                            setDisplayMode(event.target.value)
-                          }
+                          onValueChange={setDisplayMode}
                         >
-                          <option value="default">Default</option>
-                          <option value="stage">Night</option>
-                          <option value="sunlight">Sunlight</option>
-                          <option value="epaper">E-paper</option>
-                        </select>
+                          <SelectTrigger aria-label="Display mode">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">Default</SelectItem>
+                            <SelectItem value="stage">Night</SelectItem>
+                            <SelectItem value="sunlight">Sunlight</SelectItem>
+                            <SelectItem value="epaper">E-paper</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </label>
 
                       <div className="action-row">
@@ -851,22 +865,23 @@ function InstrumentApp() {
                       <div className="form-grid">
                         <label className="field">
                           Target
-                          <select
-                            aria-label="Target"
-                            value={target}
-                            onChange={(e) => setTarget(e.target.value)}
-                          >
-                            {state.parameters.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.label}
-                              </option>
-                            ))}
-                            {state.actions.map((action) => (
-                              <option key={action.id} value={action.id}>
-                                {action.label}
-                              </option>
-                            ))}
-                          </select>
+                          <Select value={target} onValueChange={setTarget}>
+                            <SelectTrigger aria-label="Target">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {state.parameters.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.label}
+                                </SelectItem>
+                              ))}
+                              {state.actions.map((action) => (
+                                <SelectItem key={action.id} value={action.id}>
+                                  {action.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </label>
                         <label className="field">
                           MIDI channel
@@ -890,17 +905,22 @@ function InstrumentApp() {
                         </label>
                         <label className="field">
                           Knob mode
-                          <select
+                          <Select
                             value={mode}
-                            onChange={(e) =>
-                              setMode(e.target.value as typeof mode)
+                            onValueChange={(value) =>
+                              setMode(value as typeof mode)
                             }
                           >
-                            <option value="absolute">Absolute</option>
-                            <option value="relative_twos_complement">
-                              Relative · two’s complement
-                            </option>
-                          </select>
+                            <SelectTrigger aria-label="Knob mode">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="absolute">Absolute</SelectItem>
+                              <SelectItem value="relative_twos_complement">
+                                Relative · two’s complement
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </label>
                       </div>
                       <div className="form-grid">
@@ -928,17 +948,22 @@ function InstrumentApp() {
                         </label>
                         <label className="field">
                           Scaling curve
-                          <select
+                          <Select
                             value={curve}
-                            onChange={(e) =>
-                              setCurve(e.target.value as typeof curve)
+                            onValueChange={(value) =>
+                              setCurve(value as typeof curve)
                             }
                           >
-                            <option value="linear">Linear</option>
-                            <option value="logarithmic">
-                              Logarithmic (minimum above zero)
-                            </option>
-                          </select>
+                            <SelectTrigger aria-label="Scaling curve">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="linear">Linear</SelectItem>
+                              <SelectItem value="logarithmic">
+                                Logarithmic (minimum above zero)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </label>
                       </div>
                       <div className="performance-actions">

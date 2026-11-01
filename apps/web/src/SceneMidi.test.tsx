@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SceneMidi } from './SceneMidi';
 import { midiDevices } from './api';
@@ -312,6 +313,7 @@ it('shows the global set-list program and local-scene precedence', async () => {
 });
 
 it('retains the draft and reports a rejected controller update', async () => {
+  const user = userEvent.setup();
   let reject!: (reason: Error) => void;
   const command = vi.fn(
     () =>
@@ -321,9 +323,8 @@ it('retains the draft and reports a rejected controller update', async () => {
   );
   render(<SceneMidi state={state()} disabled={false} onCommand={command} />);
   await open();
-  fireEvent.change(screen.getByLabelText('MIDI channel'), {
-    target: { value: '3' },
-  });
+  await user.click(screen.getByLabelText('MIDI channel'));
+  await user.click(screen.getByRole('option', { name: '3' }));
   fireEvent.click(screen.getByRole('button', { name: 'Apply MIDI' }));
   expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
@@ -332,7 +333,7 @@ it('retains the draft and reports a rejected controller update', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Controller update failed',
   );
-  expect(screen.getByLabelText('MIDI channel')).toHaveValue('3');
+  expect(screen.getByLabelText('MIDI channel')).toHaveTextContent('3');
   expect(screen.getByRole('button', { name: 'Apply MIDI' })).toBeEnabled();
   expect(command).toHaveBeenCalledTimes(1);
 });

@@ -281,7 +281,8 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     .getByRole('tablist', { name: 'Settings sections' })
     .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
-  await page.getByLabel('Target', { exact: true }).selectOption('rig.bypass');
+  await page.getByLabel('Target', { exact: true }).click();
+  await page.getByRole('option', { name: 'Rig bypass', exact: true }).click();
   await page.getByRole('button', { name: 'Learn next MIDI message' }).click();
   await page.getByLabel('CC number', { exact: true }).fill('99');
   await page.getByLabel('MIDI value', { exact: true }).fill('127');
@@ -302,9 +303,8 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
   await expect(
     page.getByRole('button', { name: 'Bypass off', exact: true }),
   ).toHaveAttribute('aria-pressed', 'false');
-  await page
-    .getByLabel('Example preset', { exact: true })
-    .selectOption('parallel');
+  await page.getByLabel('Example preset', { exact: true }).click();
+  await page.getByRole('option', { name: 'Parallel', exact: true }).click();
   await expect(page.getByTestId('block-nam-b')).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Parallel rig' }),
@@ -325,8 +325,8 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
   await expect(page.getByLabel('CC number', { exact: true })).toHaveValue('99');
-  await expect(page.getByLabel('Target', { exact: true })).toHaveValue(
-    'rig.bypass',
+  await expect(page.getByLabel('Target', { exact: true })).toHaveText(
+    'Rig bypass',
   );
 });
 

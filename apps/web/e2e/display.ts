@@ -19,7 +19,14 @@ export async function setDisplayMode(
     .getByRole('button', { name: 'Settings', exact: true })
     .click();
   await section.getByRole('tab', { name: 'Display', exact: true }).click();
-  await page.getByLabel('Display mode').selectOption(mode);
+  const labels = {
+    default: 'Default',
+    stage: 'Night',
+    sunlight: 'Sunlight',
+    epaper: 'E-paper',
+  } as const;
+  await page.getByLabel('Display mode').click();
+  await page.getByRole('option', { name: labels[mode], exact: true }).click();
   if (previousSection)
     await section
       .getByRole('tab', { name: previousSection, exact: true })
