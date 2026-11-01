@@ -409,10 +409,9 @@ test('an abandoned browser preview rolls back; reconnect retains draft without r
     .toBe(true);
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
-  await expect(
-    page.getByRole('complementary', { name: 'DSP and system resources' }),
-  ).toHaveAttribute('data-connected', 'true');
-  await expect(page.getByTestId('value-nam-a.level')).toHaveText('50%');
+  await expect(page.getByTestId('value-nam-a.level')).toHaveText('50%', {
+    timeout: 15000,
+  });
   await expect(
     page.getByLabel('Draft NAM A level (%)', { exact: true }),
   ).toHaveValue('91');

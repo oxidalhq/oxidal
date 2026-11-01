@@ -242,14 +242,14 @@ test('device portrait and landscape keep controls accessible and preserve a rota
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       for (const section of [
         'Audio',
-        'Connections',
+        'Network',
         'MIDI',
         'Display',
         'Maintenance',
       ]) {
         await page
           .getByRole('tablist', { name: 'Settings sections' })
-          .getByRole('button', { name: section, exact: true })
+          .getByRole('tab', { name: section, exact: true })
           .click();
         await fits(page);
         await accessible(page);
@@ -363,14 +363,14 @@ test('stage display modes persist and stay accessible in both orientations', asy
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       for (const section of [
         'Audio',
-        'Connections',
+        'Network',
         'MIDI',
         'Display',
         'Maintenance',
       ]) {
         await page
           .getByRole('tablist', { name: 'Settings sections' })
-          .getByRole('button', { name: section, exact: true })
+          .getByRole('tab', { name: section, exact: true })
           .click();
         await fits(page);
         await accessible(page);

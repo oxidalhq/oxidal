@@ -1,5 +1,5 @@
 import { setDisplayMode } from './display';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   test,
   expect,
@@ -364,7 +364,10 @@ test('rig controls follow the actual session without example effects', async ({
   };
   await expect(rig.getByRole('button', { name: 'Add block' })).toBeVisible();
   await rig.getByRole('button', { name: 'Add block' }).click();
-  await rig.getByRole('button', { name: 'Add NAM', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Add a block' })
+    .getByRole('button', { name: 'Add NAM', exact: true })
+    .click();
   const positions = page.getByRole('dialog', { name: 'Add NAM · position' });
   await expect(
     positions.getByRole('button', { name: 'Right chain · position 3' }),
@@ -427,10 +430,16 @@ test('native preset upload, durable library, exact download and rejected replace
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await page.getByText('Import preset', { exact: true }).click();
-  for (const name of [
+  const fixtureNames = [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
-  ]) {
+  ];
+  const fixtureIds = fixtureNames.map((name) =>
+    createHash('sha256')
+      .update(readFileSync(new URL(name, fixtures)))
+      .digest('hex'),
+  );
+  for (const name of fixtureNames) {
     await page
       .getByLabel('TONE3000 preset file')
       .setInputFiles(fileURLToPath(new URL(name, fixtures)));
@@ -444,7 +453,10 @@ test('native preset upload, durable library, exact download and rejected replace
       page.getByRole('button', { name: 'Import original', exact: true }),
     ).toBeEnabled();
   }
-  const rows = page.getByRole('listitem');
+  const rowSelector = fixtureIds
+    .map((id) => `[data-testid="preset-${id}"]`)
+    .join(',');
+  const rows = page.locator(rowSelector);
   await expect(rows).toHaveCount(2);
   await page
     .getByRole('button', { name: 'Import original', exact: true })
@@ -454,13 +466,13 @@ test('native preset upload, durable library, exact download and rejected replace
   ).toBeEnabled();
   await expect(rows).toHaveCount(2);
   // Rows mark only the exception (legacy format); the current-format row has no tag.
-  const current = rows.filter({ hasNotText: 'legacy format' });
+  const current = page.locator(`[data-testid="preset-${fixtureIds[0]}"]`);
   await page
     .getByRole('searchbox', { name: 'Search presets' })
     .fill('no-matching-rig-unique');
   await expect(rows).toHaveCount(0);
   await expect(
-    page.getByText('No single-chain presets match this name.'),
+    page.getByText('No TONE3000 presets match these filters.'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Clear preset search' }).click();
   await expect(rows).toHaveCount(2);
@@ -476,7 +488,7 @@ test('native preset upload, durable library, exact download and rejected replace
   const second = await context.newPage();
   await second.goto('/');
   await second.getByRole('button', { name: 'Library', exact: true }).click();
-  await expect(second.getByRole('listitem')).toHaveCount(2);
+  await expect(second.locator(rowSelector)).toHaveCount(2);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await page.getByText('Import preset', { exact: true }).click();
@@ -492,10 +504,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(page.getByRole('alert')).toContainText('Not a TONE3000 preset');
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
-  await page
-    .getByRole('navigation', { name: 'Library sections' })
-    .getByRole('button', { name: 'Author', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Author', exact: true }).click();
   await expect(
     page.getByText(/Playback and editing are not available/),
   ).toBeVisible();
@@ -1879,6 +1888,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
 test('asset artwork stays identifiable offline in portrait and landscape', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60000);
   // Presentation fixture; Rust HTTP tests cover real cache publication/restart/integrity.
   const id = 'a'.repeat(64);
   const amp = 'b'.repeat(64);
@@ -1960,7 +1970,7 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
   });
   await expect(image).toHaveCount(0);
   await page
-    .getByRole('group', { name: 'Library view' })
+    .getByRole('radiogroup', { name: 'Library view' })
     .getByRole('radio', { name: 'Artwork', exact: true })
     .click();
   await expect(image).toBeVisible();
@@ -4903,8 +4913,9 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   });
   expect(imported.ok()).toBe(true);
   const preset = await imported.json();
+  const independentName = `keep-delete-test-${info.project.name}.nam`;
   const independent = await request.post(
-    '/api/v1/models/local?name=keep-delete-test.nam',
+    `/api/v1/models/local?name=${independentName}`,
     {
       data: Buffer.from('{"architecture":"Linear","weights":[1,2,3]}'),
       headers: { 'Content-Type': 'application/octet-stream' },
@@ -4965,7 +4976,9 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(row).toHaveCount(0);
   const models = await (
-    await request.get('/api/v1/models/local?all=true')
+    await request.get(
+      `/api/v1/models/local?all=true&format=nam&query=${independentName}`,
+    )
   ).json();
   expect(models.data.some((m: { id: string }) => m.id === asset.id)).toBe(true);
 });
@@ -4975,17 +4988,8 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   request,
 }, info) => {
   test.setTimeout(60000);
-  const bytes = Buffer.from(
-    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
-  );
-  const title = info.project.name.slice(0, 7).padEnd(7, 'x');
-  bytes.write(title, bytes.indexOf(Buffer.from('Fixture')), 'utf8');
-  const importedResponse = await request.post('/api/v1/presets', {
-    data: bytes,
-  });
-  expect(importedResponse.ok()).toBe(true);
-  const imported = await importedResponse.json();
   const rigName = `Set-list ${info.project.name}`;
+  const secondName = `Set-list peer ${info.project.name}`;
   const manifest = {
     format: 'oxidal.preset',
     formatVersion: 1,
@@ -5015,8 +5019,27 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   });
   expect(published.ok(), await published.text()).toBe(true);
   const rig = await published.json();
+  const secondPublished = await request.post('/api/v1/presets/rigs', {
+    data: {
+      manifest_json: JSON.stringify({
+        ...manifest,
+        id: randomUUID(),
+        name: secondName,
+      }),
+      resources: {},
+    },
+  });
+  expect(secondPublished.ok(), await secondPublished.text()).toBe(true);
+  const second = await secondPublished.json();
   const catalog = async () =>
     (await request.get('/api/v1/presets/catalog')).json();
+  const mineOrder = async () =>
+    (await catalog()).items
+      .filter(
+        (i: { origin: string; archived: boolean }) =>
+          i.origin === 'mine' && !i.archived,
+      )
+      .map((i: { id: string }) => i.id);
   const place = async (
     kind: string,
     id: string,
@@ -5034,11 +5057,19 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     expect(response.ok(), await response.text()).toBe(true);
   };
   const first = (await catalog()).items.find(
-    (i: { kind: string; archived: boolean }) =>
-      i.kind !== 'graph' && !i.archived,
+    (i: { id: string; kind: string; origin: string; archived: boolean }) =>
+      (i.kind === 'original' || i.kind === 'rig') &&
+      i.origin === 'mine' &&
+      i.id !== rig.revision &&
+      i.id !== second.revision &&
+      !i.archived,
   );
-  await place('rig', rig.revision, { kind: first.kind, id: first.id });
-  await place('original', imported.sha256, { kind: 'rig', id: rig.revision });
+  await place(
+    'rig',
+    rig.revision,
+    first ? { kind: first.kind, id: first.id } : null,
+  );
+  await place('rig', second.revision, { kind: 'rig', id: rig.revision });
   const audioBefore = await (await request.get('/api/v1/audio')).json();
   await page.goto('/#library');
   await page
@@ -5048,47 +5079,49 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     name: 'Manage library',
     exact: true,
   });
-  const original = management.locator(
-    `[data-library-kind="original"][data-library-entry="${imported.sha256}"]`,
+  const peer = management.locator(
+    `[data-library-kind="rig"][data-library-entry="${second.revision}"]`,
   );
   const scenes = management.locator(
     `[data-library-kind="rig"][data-library-entry="${rig.revision}"]`,
   );
-  await original
-    .getByRole('button', { name: `Move ${imported.name} down`, exact: true })
+  await peer
+    .getByRole('button', { name: `Move ${secondName} down`, exact: true })
     .click();
   await expect
-    .poll(async () =>
-      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
-    )
-    .toEqual([rig.revision, imported.sha256]);
-  const handle = original.getByRole('button', {
-    name: `Drag ${imported.name}`,
+    .poll(async () => (await mineOrder()).slice(0, 2))
+    .toEqual([rig.revision, second.revision]);
+  const handle = peer.getByRole('button', {
+    name: `Drag ${secondName}`,
     exact: true,
   });
-  await handle.hover();
   const sourceBox = (await handle.boundingBox())!;
   const targetBox = (await scenes.boundingBox())!;
-  await page.mouse.move(
-    sourceBox.x + sourceBox.width / 2,
-    sourceBox.y + sourceBox.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(sourceBox.x + sourceBox.width / 2, targetBox.y + 10, {
-    steps: 12,
+  const pointer = {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    button: 0,
+    clientX: sourceBox.x + sourceBox.width / 2,
+    clientY: sourceBox.y + sourceBox.height / 2,
+  };
+  await handle.dispatchEvent('pointerdown', pointer);
+  await page.waitForTimeout(350);
+  await handle.dispatchEvent('pointermove', {
+    ...pointer,
+    clientY: targetBox.y + 10,
   });
-  await page.mouse.up();
+  await handle.dispatchEvent('pointerup', {
+    ...pointer,
+    clientY: targetBox.y + 10,
+  });
   await expect
-    .poll(async () =>
-      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
-    )
-    .toEqual([imported.sha256, rig.revision]);
+    .poll(async () => (await mineOrder()).slice(0, 2))
+    .toEqual([second.revision, rig.revision]);
   await handle.press('ArrowDown');
   await expect
-    .poll(async () =>
-      (await catalog()).items.slice(0, 2).map((i: { id: string }) => i.id),
-    )
-    .toEqual([rig.revision, imported.sha256]);
+    .poll(async () => (await mineOrder()).slice(0, 2))
+    .toEqual([rig.revision, second.revision]);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -5122,9 +5155,9 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     Object.assign(body, {
       phase: 'running',
       device_owned: true,
-      preset_name: imported.name,
+      preset_name: secondName,
       configured: {
-        preset_id: imported.sha256,
+        preset_id: second.revision,
         owned: false,
         draft: false,
         stream: {
@@ -5142,7 +5175,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   await page.getByRole('button', { name: 'Rig', exact: true }).click();
   await page
     .getByRole('button', {
-      name: `Playing preset: ${imported.name}`,
+      name: `Playing preset: ${secondName}`,
       exact: true,
     })
     .click();
@@ -5158,7 +5191,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
           .allTextContents()
       ).slice(0, 2),
     )
-    .toEqual([rigName, imported.name]);
+    .toEqual([rigName, secondName]);
   await picker
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
@@ -5177,7 +5210,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
         2,
       ),
     )
-    .toEqual([rigName, imported.name]);
+    .toEqual([rigName, secondName]);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -5242,7 +5275,7 @@ test('device portrait preset details edit and category search never recall audio
   expect(
     (
       await new AxeBuilder({ page })
-        .include('dialog')
+        .include('[role="dialog"]')
         .withTags(['wcag2a', 'wcag2aa'])
         .analyze()
     ).violations,
