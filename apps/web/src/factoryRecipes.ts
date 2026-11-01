@@ -80,7 +80,9 @@ function applyNativeBudget(
 ) {
   const instances = manifest.tone3000.instances;
   if (!defaults || instances.length < 2) return;
-  const factor = instances.length >= 4 ? 0 : 0.5;
+  // Three voices plus shared effects can pass steady playback at 4× yet miss a
+  // deadline while exporting. Keep enough headroom for live save operations.
+  const factor = instances.length >= 3 ? 0 : 0.5;
   const parameters = Object.fromEntries(
     nativeSettingIds.map((id) => [id, defaults.parameters[id] ?? 0]),
   );

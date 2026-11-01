@@ -82,7 +82,7 @@ it('builds portable scene instruments and complex serial chains from installed m
         parameters: Record<string, number>;
       }[]) {
         expect(value.parameters.osEnabled).toBe(1);
-        expect(value.parameters.osFactor).toBe(engines >= 4 ? 0 : 0.5);
+        expect(value.parameters.osFactor).toBe(engines >= 3 ? 0 : 0.5);
       }
     }
   }
