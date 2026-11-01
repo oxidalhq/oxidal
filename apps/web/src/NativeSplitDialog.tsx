@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { WarningCircle } from '@phosphor-icons/react';
+import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { presetArtwork, type AssetArtwork } from './api';
 import { splitNative, type NativeDraft } from './rigDraft';
 
@@ -63,49 +73,63 @@ export function NativeSplitDialog({
           {(['amp', 'cab'] as const).map((role) => (
             <label key={role} className="field min-w-0">
               {role === 'amp' ? 'Amp block' : 'Cab / IR block'}
-              <select
+              <Select
                 value={role === 'amp' ? amp : cab}
                 disabled={loading}
-                onChange={(e) =>
-                  (role === 'amp' ? setAmp : setCab)(e.target.value)
+                onValueChange={(value) =>
+                  (role === 'amp' ? setAmp : setCab)(value)
                 }
               >
-                <option value="">Choose {role}</option>
-                {blocks
-                  .filter((b) => b.gear === role && b.block_id)
-                  .map((b) => (
-                    <option key={b.block_id} value={b.block_id}>
-                      {b.title}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger
+                  aria-label={role === 'amp' ? 'Amp block' : 'Cab / IR block'}
+                >
+                  <SelectValue placeholder={`Choose ${role}`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {blocks
+                    .filter((b) => b.gear === role && b.block_id)
+                    .map((b) => (
+                      <SelectItem key={b.block_id} value={b.block_id}>
+                        {b.title}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </label>
           ))}
           <label className="field min-w-0">
             Amp input
-            <select
+            <Select
               value={input}
-              onChange={(e) => setInput(e.target.value as 'left' | 'right')}
+              onValueChange={(value) => setInput(value as 'left' | 'right')}
             >
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
+              <SelectTrigger aria-label="Amp input">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">Left</SelectItem>
+                <SelectItem value="right">Right</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         </div>
-        <label className="flex min-h-11 items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            className="h-5 w-5 shrink-0 accent-primary"
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <Checkbox
             checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
+            onChange={(event) => setConfirmed(event.currentTarget.checked)}
+            aria-label="Confirm amp-head capture"
           />
-          This NAM is an amp-head capture, without a baked-in cab.
+          <span>This NAM is an amp-head capture, without a baked-in cab.</span>
         </label>
         <p className="caption">48 kHz · one amp + mono IR · checked on Play.</p>
         {error && (
-          <p role="alert" className="text-sm break-words">
-            {error}
-          </p>
+          <Alert variant="destructive" role="alert">
+            <WarningCircle aria-hidden="true" />
+            <AlertTitle>Cannot separate this tone</AlertTitle>
+            <AlertDescription className="break-words text-current">
+              {error}
+            </AlertDescription>
+          </Alert>
         )}
         <div className="action-row sticky bottom-0 bg-card py-2">
           <Button

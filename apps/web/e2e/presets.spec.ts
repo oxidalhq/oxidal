@@ -3470,15 +3470,20 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     .getByRole('button', { name: 'Separate amp & cab', exact: true })
     .click();
   let dialog = page.getByRole('dialog', { name: 'Separate amp & cab' });
-  await expect(dialog.getByLabel('Amp block')).not.toHaveValue('');
-  await expect(dialog.getByLabel('Cab / IR block')).not.toHaveValue('');
+  await expect(dialog.getByLabel('Amp block')).not.toHaveText('Choose amp');
+  await expect(dialog.getByLabel('Cab / IR block')).not.toHaveText(
+    'Choose cab',
+  );
   await expect(
     dialog.getByRole('button', { name: 'Separate', exact: true }),
   ).toBeDisabled();
   await dialog
     .getByRole('combobox', { name: 'Amp input', exact: true })
-    .selectOption('right');
-  await dialog.getByRole('checkbox').check();
+    .click();
+  await page.getByRole('option', { name: 'Right', exact: true }).click();
+  await dialog
+    .getByRole('checkbox', { name: 'Confirm amp-head capture' })
+    .check();
   const viewport = page.viewportSize()!;
   for (const size of [
     viewport,
@@ -3513,10 +3518,13 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
     .getByRole('button', { name: 'Separate amp & cab', exact: true })
     .click();
   dialog = page.getByRole('dialog');
-  await dialog.getByRole('checkbox').check();
+  await dialog
+    .getByRole('checkbox', { name: 'Confirm amp-head capture' })
+    .check();
   await dialog
     .getByRole('combobox', { name: 'Amp input', exact: true })
-    .selectOption('right');
+    .click();
+  await page.getByRole('option', { name: 'Right', exact: true }).click();
   await dialog.getByRole('button', { name: 'Separate', exact: true }).click();
   await expect(composer.locator('[data-effect]')).toHaveCount(2);
   await expect(

@@ -744,8 +744,11 @@ test('native device defaults save independently of the playing tone', async ({
       has: page.locator('summary', { hasText: 'TONE3000 device defaults' }),
     });
     await panel.locator('summary').click();
-    await panel.getByLabel('NAM size for new models').selectOption('0.75');
-    await panel.getByLabel('Native multi-core processing').check();
+    await panel.getByLabel('NAM size for new models').click();
+    await page.getByRole('option', { name: '75%', exact: true }).click();
+    await panel
+      .getByRole('switch', { name: 'Native multi-core processing' })
+      .click();
     await panel.getByRole('button', { name: 'Save device defaults' }).click();
     await expect(panel.getByRole('status')).toContainText('Defaults saved');
     const saved = await (await request.get(endpoint)).json();
@@ -754,14 +757,14 @@ test('native device defaults save independently of the playing tone', async ({
     await page.reload();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await panel.locator('summary').click();
-    await expect(panel.getByLabel('NAM size for new models')).toHaveValue(
-      '0.75',
-    );
+    await expect(panel.getByLabel('NAM size for new models')).toHaveText('75%');
     await panel
       .getByRole('button', { name: 'Reset defaults', exact: true })
       .click();
     await expect(panel.getByRole('status')).toContainText('Defaults saved');
-    await expect(panel.getByLabel('NAM size for new models')).toHaveValue('0');
+    await expect(panel.getByLabel('NAM size for new models')).toHaveText(
+      'Lite',
+    );
   } finally {
     const latest = await (await request.get(endpoint)).json();
     await request.post(endpoint, {

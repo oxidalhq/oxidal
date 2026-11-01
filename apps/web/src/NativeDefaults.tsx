@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { nativeDefaults, type NativeDefaults as Defaults } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
+import { Switch } from './components/ui/switch';
 /** Device defaults apply at the next native instance, separately from live tone edits. */
 export function NativeDefaults({ connected }: { connected: boolean }) {
   const [state, setState] = useState<Defaults | null>(null);
@@ -58,42 +66,47 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
       </p>
       {draft && (
         <fieldset disabled={!connected || busy} className="control-stack">
-          <label>
+          <label className="field">
             NAM size for new models
-            <select
-              value={draft.nam_size}
-              onChange={(e) =>
-                setDraft({ ...draft, nam_size: Number(e.target.value) })
+            <Select
+              value={String(draft.nam_size)}
+              onValueChange={(value) =>
+                setDraft({ ...draft, nam_size: Number(value) })
               }
             >
-              <option value={0}>Lite</option>
-              <option value={0.25}>25%</option>
-              <option value={0.5}>50%</option>
-              <option value={0.75}>75%</option>
-              <option value={1}>Full</option>
-            </select>
+              <SelectTrigger aria-label="NAM size for new models">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Lite</SelectItem>
+                <SelectItem value="0.25">25%</SelectItem>
+                <SelectItem value="0.5">50%</SelectItem>
+                <SelectItem value="0.75">75%</SelectItem>
+                <SelectItem value="1">Full</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
-          <label>
-            <input
-              type="checkbox"
+          <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+            <span>Native multi-core processing</span>
+            <Switch
               checked={draft.multi_core}
-              onChange={(e) =>
-                setDraft({ ...draft, multi_core: e.target.checked })
+              onCheckedChange={(checked) =>
+                setDraft({ ...draft, multi_core: checked })
               }
-            />{' '}
-            Native multi-core processing
+              aria-label="Native multi-core processing"
+            />
           </label>
-          <label>
-            <input
-              type="checkbox"
+          <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+            <span>Input calibration</span>
+            <Switch
               checked={(draft.parameters.calibrateInput ?? 0) === 1}
-              onChange={(e) =>
-                parameter('calibrateInput', e.target.checked ? 1 : 0)
+              onCheckedChange={(checked) =>
+                parameter('calibrateInput', checked ? 1 : 0)
               }
-            />{' '}
-            Input calibration
+              aria-label="Input calibration"
+            />
           </label>
-          <label>
+          <label className="field">
             Input calibration (dBu)
             <input
               type="number"
@@ -115,24 +128,31 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
               }}
             />
           </label>
-          <label>
-            <input
-              type="checkbox"
+          <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+            <span>Oversampling</span>
+            <Switch
               checked={(draft.parameters.osEnabled ?? 0) === 1}
-              onChange={(e) => parameter('osEnabled', e.target.checked ? 1 : 0)}
-            />{' '}
-            Oversampling
+              onCheckedChange={(checked) =>
+                parameter('osEnabled', checked ? 1 : 0)
+              }
+              aria-label="Oversampling"
+            />
           </label>
-          <label>
+          <label className="field">
             Oversampling factor
-            <select
-              value={draft.parameters.osFactor ?? 0}
-              onChange={(e) => parameter('osFactor', Number(e.target.value))}
+            <Select
+              value={String(draft.parameters.osFactor ?? 0)}
+              onValueChange={(value) => parameter('osFactor', Number(value))}
             >
-              <option value={0}>2×</option>
-              <option value={0.5}>4×</option>
-              <option value={1}>8×</option>
-            </select>
+              <SelectTrigger aria-label="Oversampling factor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">2×</SelectItem>
+                <SelectItem value="0.5">4×</SelectItem>
+                <SelectItem value="1">8×</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void save()}>Save device defaults</Button>
