@@ -1238,9 +1238,6 @@ export function MixedRig({
                   ? choiceKey({
                       kind: 'scenes',
                       revision,
-                      name: '',
-                      scenes: [],
-                      origin: sourceOrigin,
                     })
                   : '',
                 name: matching?.manifest.name,
@@ -1276,9 +1273,6 @@ export function MixedRig({
               ? choiceKey({
                   kind: 'scenes',
                   revision,
-                  name: '',
-                  scenes: [],
-                  origin: sourceOrigin,
                 })
               : '',
             name: matching?.manifest.name,

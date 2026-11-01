@@ -11,13 +11,13 @@ import {
 import {
   playScenes,
   readKeepReady,
-  scenesLabel,
+  rigTopologyLabel,
   writeKeepReady,
 } from './presetChoices';
 import { requestMidiAssignments } from './midiNavigation';
 
 /**
- * Presets with scenes in the Library: rows look and play like every other
+ * Portable rigs in the Library: rows look and play like every other
  * preset; one tap stops whatever is playing and opens the Rig page.
  * Keep ready loads chosen presets in the background for gapless switching.
  * @see docs/audio.md
@@ -123,7 +123,7 @@ export function SavedRigs({
   );
   if (!originItems.length && !error) return null;
   return (
-    <section className="library-scenes" aria-label="Presets with scenes">
+    <section className="library-scenes" aria-label="Saved rigs">
       <div className="section-heading">
         <h2>{title}</h2>
         {origin === 'mine' && (
@@ -169,9 +169,9 @@ export function SavedRigs({
                       {active && (
                         <span className="library-playing">Playing</span>
                       )}
-                      {[scenesLabel(scenes), scenes.join(', ')]
+                      {[rigTopologyLabel({ ...p, scenes }), scenes.join(', ')]
                         .filter(Boolean)
-                        .join(': ') || 'With effects'}
+                        .join(' · ')}
                     </>
                   )}
                 </span>
@@ -222,7 +222,7 @@ export function SavedRigs({
         <p role="status" className="caption">
           {next
             ? 'No matches yet. Load more to search further.'
-            : 'No presets with scenes match these filters.'}
+            : 'No saved rigs match these filters.'}
         </p>
       )}
       {next && (

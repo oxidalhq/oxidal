@@ -7917,6 +7917,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "topology": {
+          "$ref": "#/$defs/RigTopology"
         }
       },
       "additionalProperties": false,
@@ -7926,7 +7929,8 @@
         "name",
         "origin",
         "native_instances",
-        "lv2_instances"
+        "lv2_instances",
+        "topology"
       ]
     },
     "RigNativeSource": {
@@ -8001,6 +8005,14 @@
       "required": [
         "manifest_json",
         "resources"
+      ]
+    },
+    "RigTopology": {
+      "type": "string",
+      "enum": [
+        "serial",
+        "parallel",
+        "scenes"
       ]
     },
     "SampleFormat": {

@@ -15,6 +15,7 @@ import {
   loadPresetChoices,
   choiceKey,
   playScenes,
+  rigTopologyLabel,
   type PresetChoice,
 } from './presetChoices';
 vi.mock('./api', () => ({
@@ -46,7 +47,37 @@ const scenes = (revision: string): PresetChoice => ({
   revision,
   name: revision,
   scenes: [],
+  topology: 'serial',
+  nativeInstances: 1,
+  lv2Instances: 2,
   origin: 'mine',
+});
+
+it('describes routing and actual processor counts without treating scenes as lanes', () => {
+  expect(
+    rigTopologyLabel({
+      topology: 'serial',
+      scenes: [],
+      native_instances: 2,
+      lv2_instances: 6,
+    }),
+  ).toBe('Serial chain · 2 NAM stages · 6 effects');
+  expect(
+    rigTopologyLabel({
+      topology: 'parallel',
+      scenes: [],
+      native_instances: 2,
+      lv2_instances: 1,
+    }),
+  ).toBe('Parallel graph · 2 NAM stages · 1 effect');
+  expect(
+    rigTopologyLabel({
+      topology: 'scenes',
+      scenes: ['Clean', 'Crunch', 'Heavy'],
+      native_instances: 3,
+      lv2_instances: 0,
+    }),
+  ).toBe('3 scenes · 3 NAM stages · 0 effects');
 });
 
 it('asks before another scenes preset replaces unsaved edits, unless it is kept ready', () => {
@@ -103,7 +134,16 @@ it('uses one cross-kind catalog order and ignores archived stale source rows', a
     owned: [{ id: 'a', preset: { name: 'Copy' } }],
   } as never);
   vi.mocked(rigLibrary).mockResolvedValue({
-    presets: [{ revision: 'r', name: 'Scenes', scenes: ['Clean', 'Heavy'] }],
+    presets: [
+      {
+        revision: 'r',
+        name: 'Scenes',
+        scenes: ['Clean', 'Heavy'],
+        topology: 'scenes',
+        native_instances: 2,
+        lv2_instances: 0,
+      },
+    ],
   } as never);
   const item = (
     kind: 'original' | 'owned' | 'rig',

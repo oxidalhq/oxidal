@@ -308,6 +308,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
         origin: 'mine',
         native_instances: 3,
         lv2_instances: 0,
+        topology: 'scenes',
         scenes: ['Clean', 'Crunch', 'Heavy'],
       },
     ],
@@ -325,7 +326,9 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
     .map((g) => g.getAttribute('aria-label'));
   expect(groups).toEqual(['Mine', 'TONE3000']);
   fireEvent.click(
-    screen.getByRole('button', { name: /^Clean to heavy\s*3 scenes$/ }),
+    screen.getByRole('button', {
+      name: /Clean to heavy.*Mine.*3 scenes.*3 NAM stages.*0 effects/,
+    }),
   );
   expect(select).toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'scenes', revision }),

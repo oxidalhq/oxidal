@@ -26,10 +26,22 @@ export type PresetChoice = {
   origin: PresetOrigin;
 } & (
   | { kind: 'tone3000'; id: string; owned: boolean; name: string }
-  | { kind: 'scenes'; revision: string; name: string; scenes: string[] }
+  | {
+      kind: 'scenes';
+      revision: string;
+      name: string;
+      scenes: string[];
+      topology: 'serial' | 'parallel' | 'scenes';
+      nativeInstances: number;
+      lv2Instances: number;
+    }
 );
 
-export const choiceKey = (c: PresetChoice) =>
+export const choiceKey = (
+  c:
+    | { kind: 'scenes'; revision: string }
+    | { kind: 'tone3000'; id: string; owned: boolean },
+) =>
   c.kind === 'scenes'
     ? `scenes:${c.revision}`
     : `${c.owned ? 'copy' : 'original'}:${c.id}`;
@@ -41,8 +53,6 @@ export const tone3000Key = (state: AudioState | null | undefined) =>
         kind: 'tone3000',
         id: state.configured.preset_id,
         owned: state.configured.owned,
-        name: '',
-        origin: state.configured.owned ? 'mine' : 'tone3000',
       })
     : '';
 
@@ -54,8 +64,31 @@ export const boostKey = {
   scene: (presetId: string, sceneId: string) => `scenes:${presetId}#${sceneId}`,
 };
 
-export const scenesLabel = (scenes: string[]) =>
-  scenes.length > 1 ? `${scenes.length} scenes` : '';
+export const rigTopologyLabel = (rig: {
+  scenes: string[];
+  topology: 'serial' | 'parallel' | 'scenes';
+  native_instances: number;
+  lv2_instances: number;
+}) =>
+  [
+    rig.topology === 'scenes'
+      ? `${rig.scenes.length} ${rig.scenes.length === 1 ? 'scene' : 'scenes'}`
+      : rig.topology === 'parallel'
+        ? 'Parallel graph'
+        : 'Serial chain',
+    `${rig.native_instances} NAM ${rig.native_instances === 1 ? 'stage' : 'stages'}`,
+    `${rig.lv2_instances} ${rig.lv2_instances === 1 ? 'effect' : 'effects'}`,
+  ].join(' · ');
+
+export const choiceTopologyLabel = (choice: PresetChoice) =>
+  choice.kind === 'scenes'
+    ? rigTopologyLabel({
+        scenes: choice.scenes,
+        topology: choice.topology,
+        native_instances: choice.nativeInstances,
+        lv2_instances: choice.lv2Instances,
+      })
+    : '';
 
 /** One device set list; source failures remain visible and do not hide other formats. */
 export async function loadPresetChoices(): Promise<{
@@ -76,6 +109,9 @@ export async function loadPresetChoices(): Promise<{
         revision: p.revision,
         name: p.name,
         scenes: p.scenes ?? [],
+        topology: p.topology,
+        nativeInstances: p.native_instances,
+        lv2Instances: p.lv2_instances,
         origin: p.origin,
       }),
     ),
@@ -162,7 +198,7 @@ export async function loadPresetChoices(): Promise<{
 }
 
 const KEEP_READY = 'oxidal.prepared-rigs';
-/** Presets with scenes the player keeps loaded for gapless switching. */
+/** Portable rigs the player keeps loaded for gapless switching. */
 export function readKeepReady(): string[] {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(KEEP_READY) ?? '[]');

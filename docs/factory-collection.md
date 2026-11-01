@@ -99,7 +99,8 @@ Serial recipes have one ordered path and no scene split/merge. Mono effects add
 explicit stereo-to-mono and mono-to-stereo adapters while preserving the order of
 the processing blocks. The collection UI reports scene count, parallel voice count,
 serial block count and NAM stage count separately so those quantities are not
-mistaken for an engine limit.
+mistaken for an engine limit. Once saved, the normal Library and Rig picker report
+serial/parallel/scene topology and the actual NAM and LV2 instance counts.
 
 New preserved-scene compositions and these factory recipes also declare whole
 preset `recall.tails: preserve`. A prepared resident switch ramps input sends and

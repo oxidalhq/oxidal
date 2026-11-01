@@ -244,7 +244,7 @@ Library preset buttons send `load_preset` through the audio owner, reusing the c
 
 The interface uses two words. A **preset** is anything you load: one TONE3000 chain, or several running in parallel. A **scene** is a variation inside a preset (Clean, Crunch, Heavy), switched by the pads on Rig and never listed with presets. "Rig" is only the page name.
 
-- **One list:** the Rig picker, Perform pads and Library show every preset. Presets with scenes come first and carry their scene count; `GET /api/v1/presets/rigs` returns each entry's `scenes` names in pad order.
+- **One list:** the Rig picker, Perform pads and Library show every preset. `GET /api/v1/presets/rigs` reports whether each portable graph is serial, parallel or scene-driven, plus its actual NAM/effect instance counts and scene names in pad order. The UI shows those separately so scene count is never presented as a processor or lane limit.
 - **One tap:** choosing a preset stops whichever engine holds the interface, waits until it is released, then starts the right one with the unit's audio setup (`apps/web/src/presetChoices.ts`). A preset with scenes that is kept ready switches without stopping.
 - **Gaps:** changing scene never interrupts audio; changing preset briefly does, unless both presets with scenes are kept ready.
 

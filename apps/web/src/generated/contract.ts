@@ -661,6 +661,7 @@ export type PortableResourceKind = "tone3000-preset" | "tone3000-source" | "lv2-
 export type PortablePartitionInput = "left" | "right";
 export type PortableProcessingRole = "whole" | "amp" | "cab";
 export type LibraryOrigin = "tone3000" | "oxidal_example" | "mine";
+export type RigTopology = "serial" | "parallel" | "scenes";
 export type ResourceSource =
   | {
       kind: "original";
@@ -2332,6 +2333,7 @@ export interface RigEntry {
    * Scene names in pad order; empty for a preset without scenes.
    */
   scenes?: string[];
+  topology: RigTopology;
 }
 export interface RigNativeSource {
   preset: Inspection;

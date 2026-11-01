@@ -12,12 +12,16 @@ use axum::{
 };
 use oxidal_presets::{
     Bundle, BundleStore, Error, OwnedStore, Store,
-    manifest::{Manifest, ResourceKind},
+    manifest::{Graph, Manifest, ResourceKind},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 // A 1 MiB exact JSON manifest may expand when escaped as a JSON string.
 pub const PUBLISH_LIMIT: usize = 7 * 1024 * 1024;
@@ -36,9 +40,79 @@ pub struct RigEntry {
     pub origin: oxidal_presets::LibraryOrigin,
     pub native_instances: usize,
     pub lv2_instances: usize,
+    pub topology: RigTopology,
     /// Scene names in pad order; empty for a preset without scenes.
     #[serde(default)]
     pub scenes: Vec<String>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RigTopology {
+    Serial,
+    Parallel,
+    Scenes,
+}
+fn graph_has_parallel_paths(graph: &Graph) -> bool {
+    let mut incoming: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    let mut outgoing: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for edge in &graph.edges {
+        outgoing
+            .entry(&edge.from.node)
+            .or_default()
+            .insert(&edge.to.node);
+        incoming
+            .entry(&edge.to.node)
+            .or_default()
+            .insert(&edge.from.node);
+    }
+    incoming
+        .values()
+        .chain(outgoing.values())
+        .any(|peers| peers.len() > 1)
+}
+#[cfg(test)]
+mod topology_tests {
+    use super::*;
+    use oxidal_presets::manifest::{Edge, Endpoint};
+
+    fn edge(from: &str, from_port: u8, to: &str, to_port: u8) -> Edge {
+        Edge {
+            from: Endpoint {
+                node: from.into(),
+                port: from_port,
+            },
+            to: Endpoint {
+                node: to.into(),
+                port: to_port,
+            },
+        }
+    }
+    fn graph(edges: Vec<Edge>) -> Graph {
+        Graph {
+            nodes: Vec::new(),
+            edges,
+        }
+    }
+
+    #[test]
+    fn channel_adapters_remain_serial_but_distinct_branches_are_parallel() {
+        let serial = graph(vec![
+            edge("input", 0, "merge", 0),
+            edge("input", 1, "merge", 1),
+            edge("merge", 0, "effect", 0),
+            edge("effect", 0, "split", 0),
+            edge("split", 0, "output", 0),
+            edge("split", 1, "output", 1),
+        ]);
+        assert!(!graph_has_parallel_paths(&serial));
+        let parallel = graph(vec![
+            edge("split", 0, "clean", 0),
+            edge("split", 1, "heavy", 0),
+            edge("clean", 0, "merge", 0),
+            edge("heavy", 0, "merge", 1),
+        ]);
+        assert!(graph_has_parallel_paths(&parallel));
+    }
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -200,13 +274,24 @@ pub async fn list(
             {
                 continue;
             }
-            let scenes = m
+            let scenes: Vec<String> = m
                 .scenes()
                 .ok()
                 .flatten()
                 .map(|s| s.scenes.into_iter().map(|scene| scene.name).collect())
                 .unwrap_or_default();
             let origin = oxidal_presets::LibraryOrigin::from_manifest(&m)?;
+            let topology = if !scenes.is_empty() {
+                RigTopology::Scenes
+            } else if m
+                .oxidal
+                .as_ref()
+                .is_some_and(|host| graph_has_parallel_paths(&host.graph))
+            {
+                RigTopology::Parallel
+            } else {
+                RigTopology::Serial
+            };
             presets.push(RigEntry {
                 revision,
                 id: m.id,
@@ -214,6 +299,7 @@ pub async fn list(
                 origin,
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
+                topology,
                 scenes,
             });
         }

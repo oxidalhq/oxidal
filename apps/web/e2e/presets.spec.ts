@@ -99,7 +99,7 @@ async function routeProviderModels(
 /** Exercise the real paged library instead of assuming the saved hash sorts first. */
 async function playSavedRig(page: Page, name: string) {
   const library = page.getByRole('region', {
-    name: 'Presets with scenes',
+    name: 'Saved rigs',
     exact: true,
   });
   await expect(library).toBeVisible();
@@ -2694,7 +2694,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
   await expect(
-    audioSettings.getByRole('heading', { name: 'Presets with scenes' }),
+    audioSettings.getByRole('heading', { name: 'Portable rigs' }),
   ).toBeVisible();
   await audioSettings
     .getByText('Current device & buffers', { exact: true })
@@ -2789,7 +2789,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await expect.poll(async () => (await get()).phase).toBe('stopped');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   const savedLibrary = page.getByRole('region', {
-    name: 'Presets with scenes',
+    name: 'Saved rigs',
     exact: true,
   });
   await savedLibrary

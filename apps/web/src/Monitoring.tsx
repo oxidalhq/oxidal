@@ -469,7 +469,7 @@ export function Monitoring({ displayMode }: { displayMode: string }) {
         <summary>Measurement details</summary>
         <p className="caption break-words">
           TONE3000 audio: {state?.audio_phase || 'reading'} · Effects audio:{' '}
-          {state?.graph_phase || 'reading'} · Presets with scenes:{' '}
+          {state?.graph_phase || 'reading'} · Portable rigs:{' '}
           {state?.rig_phase || 'reading'}
           {stream && ` · ${stream.input.endpoint} → ${stream.output.endpoint}`}
         </p>

@@ -13,19 +13,23 @@ import './PresetPicker.css';
 import { Button } from './components/ui/button';
 import {
   choiceKey as key,
+  choiceTopologyLabel,
   loadPresetChoices,
-  scenesLabel,
   type PresetChoice as Choice,
 } from './presetChoices';
 
-const originLabel = (item: Choice) =>
+const sourceLabel = (item: Choice) =>
   item.origin === 'mine'
     ? item.kind === 'scenes'
-      ? scenesLabel(item.scenes) || 'With effects'
+      ? 'Mine'
       : 'My copy'
     : item.origin === 'oxidal_example'
       ? 'Oxidal example'
       : 'TONE3000';
+const originLabel = (item: Choice) =>
+  item.kind === 'scenes'
+    ? `${sourceLabel(item)} · ${choiceTopologyLabel(item)}`
+    : sourceLabel(item);
 
 /** One preset picker for every engine: the playing name opens a searchable list
  * of all presets, those with scenes first; a row plays it. Scenes are switched
