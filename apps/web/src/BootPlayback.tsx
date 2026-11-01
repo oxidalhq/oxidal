@@ -89,6 +89,7 @@ export function BootPlayback({
       setBusy(false);
     }
   }
+  if (!selected && !invalid && !running) return null;
   return (
     <div className="control-stack">
       <Button
@@ -100,11 +101,11 @@ export function BootPlayback({
           ? 'Clear invalid boot setup'
           : selected
             ? 'Disable boot playback'
-            : 'Use this session on boot'}
+            : 'Start automatically on future boots'}
       </Button>
       {error && <p role="alert">{error}</p>}
       <details className="control-help">
-        <summary>Boot playback</summary>
+        <summary>Automatic startup</summary>
         <p className="caption">
           Captures the confirmed sound and device setup when enabled. Only one
           session starts on boot. Later edits do not change it; disable and

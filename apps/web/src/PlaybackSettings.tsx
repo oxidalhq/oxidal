@@ -2,7 +2,7 @@ import { HostAudioControls } from './HostAudioControls';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { BootPlayback } from './BootPlayback';
 import { RecoveryNotice } from './RecoveryNotice';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   playbackState,
   rigAudioState,
@@ -113,7 +113,7 @@ export function PlaybackSettings({
       clearTimeout(timer);
     };
   }, []);
-  async function loadPresets() {
+  const loadPresets = useCallback(async () => {
     setBusy(true);
     setError('');
     try {
@@ -132,7 +132,12 @@ export function PlaybackSettings({
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+  useEffect(() => {
+    if (!connected) return;
+    const request = window.setTimeout(() => void loadPresets(), 0);
+    return () => window.clearTimeout(request);
+  }, [connected, loadPresets]);
   async function command(action: AudioAction) {
     if (!state) return;
     setBusy(true);
@@ -151,10 +156,27 @@ export function PlaybackSettings({
     }
   }
   const preset = presets.find((p) => `${p.owned}/${p.id}` === selected);
+  const routedInputMap = input
+    ? (inputMap.map((channel) => Math.min(channel, input.channels - 1)) as [
+        number,
+        number,
+      ])
+    : inputMap;
+  const routedOutputMap = output
+    ? (outputMap.map((channel) => Math.min(channel, output.channels - 1)) as [
+        number,
+        number,
+      ])
+    : outputMap;
   const settings: StartAudio | null =
     input && output && preset
       ? {
-          stream: { input, output, input_map: inputMap, output_map: outputMap },
+          stream: {
+            input,
+            output,
+            input_map: routedInputMap,
+            output_map: routedOutputMap,
+          },
           preset_id: preset.id,
           owned: preset.owned,
         }
@@ -431,7 +453,7 @@ export function PlaybackSettings({
                 Output: {output ? configurationLabel(output) : 'Not checked'}
               </p>
               <Button variant="outline" onClick={() => void loadPresets()}>
-                Refresh saved presets
+                Refresh presets
               </Button>
               <div className="form-grid">
                 <label className="field">
@@ -464,7 +486,7 @@ export function PlaybackSettings({
                     ).map((label, i) => {
                       const capture = i < 2;
                       const index = (i % 2) as 0 | 1;
-                      const values = capture ? inputMap : outputMap;
+                      const values = capture ? routedInputMap : routedOutputMap;
                       return (
                         <label key={label} className="field">
                           {label} channel (1-based)

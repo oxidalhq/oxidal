@@ -1093,10 +1093,10 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
   await expect.poll(() => cleared).toBe(true);
   await expect(
     panel.getByRole('button', {
-      name: 'Use this session on boot',
+      name: 'Start automatically on future boots',
       exact: true,
     }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   expect(audio.phase).toBe('unavailable');
   expect(audio.device_owned).toBe(false);
 });
@@ -1603,7 +1603,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     });
     await audio.getByText('Current device & buffers', { exact: true }).click();
     await audio
-      .getByRole('button', { name: 'Use this session on boot' })
+      .getByRole('button', { name: 'Start automatically on future boots' })
       .click();
     await expect(
       audio.getByRole('button', { name: 'Disable boot playback' }),
@@ -1613,7 +1613,9 @@ test('playback lifecycle keeps native authoring available after stop and restart
     ).toBe(true);
     await audio.getByRole('button', { name: 'Disable boot playback' }).click();
     await expect(
-      audio.getByRole('button', { name: 'Use this session on boot' }),
+      audio.getByRole('button', {
+        name: 'Start automatically on future boots',
+      }),
     ).toBeVisible();
     expect(
       (await (await request.get('/api/v1/audio')).json()).start_on_boot,
@@ -2167,7 +2169,10 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     playback.getByRole('heading', { name: 'Effects audio' }),
   ).toBeVisible();
   await playback
-    .getByRole('button', { name: 'Use this session on boot', exact: true })
+    .getByRole('button', {
+      name: 'Start automatically on future boots',
+      exact: true,
+    })
     .click();
   await expect.poll(async () => (await read()).start_on_boot).toBe(true);
   expect(
@@ -2726,7 +2731,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   expect((await get()).configured.stream.input.sample_rate).toBe(44100);
   await expect(audioSettings.getByRole('status')).toHaveText('running');
   await audioSettings
-    .getByRole('button', { name: 'Use this session on boot' })
+    .getByRole('button', { name: 'Start automatically on future boots' })
     .click();
   await expect(
     audioSettings.getByRole('button', { name: 'Disable boot playback' }),

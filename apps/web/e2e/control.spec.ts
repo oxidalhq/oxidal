@@ -597,6 +597,21 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   const checked = panel.getByLabel('Checked audio configuration');
   await expect(checked).toContainText('128 samples × 3 = 8.0 ms');
   await expect(checked).not.toContainText('Not checked');
+  await expect(panel.getByLabel('Input left channel (1-based)')).toHaveValue(
+    '1',
+  );
+  await expect(panel.getByLabel('Input right channel (1-based)')).toHaveValue(
+    '1',
+  );
+  await expect(panel.getByLabel('Output left channel (1-based)')).toHaveValue(
+    '1',
+  );
+  await expect(panel.getByLabel('Output right channel (1-based)')).toHaveValue(
+    '2',
+  );
+  await expect(
+    panel.getByRole('button', { name: 'Start automatically on future boots' }),
+  ).toHaveCount(0);
   await panel.getByLabel('Buffer size (samples per period)').fill('256');
   await expect(checked).toContainText('Input: Not checked');
   await expect(checked).toContainText('Output: Not checked');
