@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { WarningCircle } from '@phosphor-icons/react';
+import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -225,6 +227,17 @@ function CollectionDialog({
             {!profile && !error && (
               <p role="status">Reading installed effects…</p>
             )}
+            {error && (
+              <Alert variant="destructive" role="alert">
+                <WarningCircle aria-hidden="true" />
+                <AlertTitle>Factory assembly unavailable</AlertTitle>
+                <AlertDescription className="break-words text-current">
+                  Oxidal could not read the installed effects and saved NAM
+                  sources. You can still browse and search these sounds, but
+                  building is disabled. {error}
+                </AlertDescription>
+              </Alert>
+            )}
             <label className="flex">
               <span className="sr-only">Find a factory sound</span>
               <input
@@ -271,7 +284,7 @@ function CollectionDialog({
             </ul>
           </>
         )}
-        {error && <p role="alert">{error}</p>}
+        {selected && error && <p role="alert">{error}</p>}
       </div>
     </AdjustmentDialog>
   );

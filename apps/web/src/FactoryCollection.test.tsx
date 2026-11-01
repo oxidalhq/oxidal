@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { FactoryCollection } from './FactoryCollection';
-import { publishRig, presetDetails } from './api';
+import { installedLv2, publishRig, presetDetails } from './api';
 import catalog from './fixtures/factory-lv2.json';
 afterEach(() => {
   cleanup();
@@ -85,4 +85,24 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   await user.clear(screen.getByRole('searchbox'));
   await user.type(screen.getByRole('searchbox'), 'unmatched-query');
   expect(screen.getByRole('status')).toHaveTextContent('No matching sounds');
+});
+
+it('explains an unavailable catalog before the disabled recipe list', async () => {
+  vi.mocked(installedLv2).mockRejectedValueOnce(
+    new Error('LV2 discovery is unavailable'),
+  );
+  const user = userEvent.setup();
+  render(<FactoryCollection connected onChanged={() => {}} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Factory assembly unavailable',
+  );
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'You can still browse and search these sounds',
+  );
+  expect(
+    screen.getByRole('button', { name: 'Explore Afterlight' }),
+  ).toBeDisabled();
 });
