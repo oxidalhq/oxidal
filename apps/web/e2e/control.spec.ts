@@ -210,20 +210,20 @@ test('disconnect disables edits and reconnect restores the authoritative snapsho
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
+  const namLevel = page.getByRole('button', {
+    name: 'Adjust NAM A level value',
+  });
+  await expect(namLevel).toBeEnabled();
   await context.setOffline(true);
   await expect(
     page.getByText('Connection lost · reconnecting', { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Adjust NAM A level value' }),
-  ).toBeDisabled();
+  await expect(namLevel).toBeDisabled();
   await context.setOffline(false);
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await expect(
-    page.getByRole('button', { name: 'Adjust NAM A level value' }),
-  ).toBeEnabled();
+  await expect(namLevel).toBeEnabled();
 });
 
 test('quiet interface has no detected WCAG AA violations', async ({
