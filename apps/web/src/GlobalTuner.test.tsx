@@ -125,7 +125,9 @@ it('rejects a different session before issuing a tuner command', async () => {
     .mockResolvedValueOnce(native)
     .mockResolvedValue({ ...native, session: 'replacement' });
   render(<GlobalTuner onClose={() => {}} />);
-  await screen.findByRole('alert');
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Tuner unavailable',
+  );
   expect(playbackCommand).not.toHaveBeenCalled();
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });
@@ -135,7 +137,9 @@ it('explains unsupported audio rather than starting a different rig', async () =
     ReturnType<typeof rigAudioState>
   >);
   render(<GlobalTuner onClose={() => {}} />);
-  await screen.findByRole('alert');
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Tuner unavailable',
+  );
   expect(screen.getByRole('radio', { name: 'Mute' })).toBeDisabled();
   expect(playbackCommand).not.toHaveBeenCalled();
 });

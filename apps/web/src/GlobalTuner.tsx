@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
+import { WarningCircle } from '@phosphor-icons/react';
 import {
   playbackState,
   playbackCommand,
@@ -14,6 +15,7 @@ import {
   type AudioState,
 } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 type Tools = NonNullable<NonNullable<AudioState['authoring']>['tools']>;
 type Owner =
@@ -247,6 +249,7 @@ export function GlobalTuner({
     nearest === null
       ? '—'
       : `${['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'][((nearest % 12) + 12) % 12]}${Math.floor(nearest / 12) - 1}`;
+  const errorMessage = error.startsWith('Error: ') ? error.slice(7) : error;
   return (
     <AdjustmentDialog
       title="Tuner"
@@ -338,7 +341,15 @@ export function GlobalTuner({
           A440 · Your previous sound monitoring returns when you close the
           tuner.
         </p>
-        {error && <p role="alert">{error}</p>}
+        {error && (
+          <Alert variant="warning" role="alert">
+            <WarningCircle aria-hidden="true" />
+            <AlertTitle>Tuner unavailable</AlertTitle>
+            <AlertDescription className="break-words text-current">
+              {errorMessage}
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
     </AdjustmentDialog>
   );
