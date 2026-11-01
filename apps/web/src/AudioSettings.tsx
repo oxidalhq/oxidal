@@ -10,6 +10,13 @@ import {
   type AudioProbe,
 } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 /** Hardware inspection only; playback lifecycle stays separate from the editor service.
  * @see docs/audio.md
@@ -176,27 +183,32 @@ export function AudioSettings({ connected }: { connected: boolean }) {
               <div className="form-grid">
                 <label className="field">
                   Input
-                  <select
-                    aria-label="Input"
-                    value={selectedInput}
+                  <Select
+                    value={selectedInput || undefined}
                     disabled={inputEndpoints.length === 0}
-                    onChange={(e) => {
-                      setSelectedInput(e.target.value);
+                    onValueChange={(value) => {
+                      setSelectedInput(value);
                       invalidate();
                       setMessage('');
                     }}
                   >
-                    <option value="">
-                      {inputEndpoints.length === 0
-                        ? 'No input detected'
-                        : 'Choose an input'}
-                    </option>
-                    {inputEndpoints.map((endpoint) => (
-                      <option key={endpoint.id} value={endpoint.id}>
-                        {endpoint.name} · {endpoint.id}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Input">
+                      <SelectValue
+                        placeholder={
+                          inputEndpoints.length === 0
+                            ? 'No input detected'
+                            : 'Choose an input'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inputEndpoints.map((endpoint) => (
+                        <SelectItem key={endpoint.id} value={endpoint.id}>
+                          {endpoint.name} · {endpoint.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {inputEndpoints.length === 0 && (
                     <span className="caption">
                       {outputEndpoints.length > 0
@@ -207,27 +219,32 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 </label>
                 <label className="field">
                   Output
-                  <select
-                    aria-label="Output"
-                    value={selectedOutput}
+                  <Select
+                    value={selectedOutput || undefined}
                     disabled={outputEndpoints.length === 0}
-                    onChange={(e) => {
-                      setSelectedOutput(e.target.value);
+                    onValueChange={(value) => {
+                      setSelectedOutput(value);
                       invalidate();
                       setMessage('');
                     }}
                   >
-                    <option value="">
-                      {outputEndpoints.length === 0
-                        ? 'No output detected'
-                        : 'Choose an output'}
-                    </option>
-                    {outputEndpoints.map((endpoint) => (
-                      <option key={endpoint.id} value={endpoint.id}>
-                        {endpoint.name} · {endpoint.id}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Output">
+                      <SelectValue
+                        placeholder={
+                          outputEndpoints.length === 0
+                            ? 'No output detected'
+                            : 'Choose an output'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outputEndpoints.map((endpoint) => (
+                        <SelectItem key={endpoint.id} value={endpoint.id}>
+                          {endpoint.name} · {endpoint.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   {outputEndpoints.length === 0 && (
                     <span className="caption">
                       Connect an audio output, then refresh.
@@ -272,18 +289,25 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 </label>
                 <label className="field">
                   Sample format
-                  <select
+                  <Select
                     value={request.format}
-                    onChange={(e) =>
-                      update('format', e.target.value as AudioProbe['format'])
+                    onValueChange={(value) =>
+                      update('format', value as AudioProbe['format'])
                     }
                   >
-                    <option value="s16">16-bit integer</option>
-                    <option value="s24">24-bit in 32-bit container</option>
-                    <option value="s24_packed">24-bit packed</option>
-                    <option value="s32">32-bit integer</option>
-                    <option value="float">32-bit float</option>
-                  </select>
+                    <SelectTrigger aria-label="Sample format">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="s16">16-bit integer</SelectItem>
+                      <SelectItem value="s24">
+                        24-bit in 32-bit container
+                      </SelectItem>
+                      <SelectItem value="s24_packed">24-bit packed</SelectItem>
+                      <SelectItem value="s32">32-bit integer</SelectItem>
+                      <SelectItem value="float">32-bit float</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label className="field">
                   Buffer size (samples per period)

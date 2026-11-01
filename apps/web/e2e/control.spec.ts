@@ -604,11 +604,11 @@ test('audio setup recovers a late USB interface without losing its draft', async
   connected = true;
   await setup.getByRole('button', { name: 'Refresh audio devices' }).click();
 
-  await expect(setup.getByLabel('Input', { exact: true })).toHaveValue(
-    'hw:CARD=Jogg,DEV=0',
+  await expect(setup.getByLabel('Input', { exact: true })).toHaveText(
+    'Jogg USB Audio · hw:CARD=Jogg,DEV=0',
   );
-  await expect(setup.getByLabel('Output', { exact: true })).toHaveValue(
-    'hw:CARD=Jogg,DEV=0',
+  await expect(setup.getByLabel('Output', { exact: true })).toHaveText(
+    'Jogg USB Audio · hw:CARD=Jogg,DEV=0',
   );
   await expect(setup.getByLabel('Sample rate (Hz)')).toHaveValue('44100');
   await expect(
@@ -687,10 +687,10 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   ).toBeVisible();
   await expect(
     setup.getByRole('combobox', { name: 'Input', exact: true }),
-  ).toHaveValue('hw:USB,0');
+  ).toHaveText('Test interface · hw:USB,0');
   await expect(
     setup.getByRole('combobox', { name: 'Output', exact: true }),
-  ).toHaveValue('hw:USB,0');
+  ).toHaveText('Test interface · hw:USB,0');
   await expect(panel.getByLabel('Sample rate (Hz)')).toHaveValue('48000');
   await expect(panel.getByLabel('Input channels')).toHaveValue('1');
   await expect(panel.getByLabel('Output channels')).toHaveValue('2');
