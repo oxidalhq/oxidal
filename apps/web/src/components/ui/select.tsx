@@ -6,6 +6,24 @@ import { twMerge } from 'tailwind-merge';
 
 export const Select = SelectPrimitive.Root;
 export const SelectValue = SelectPrimitive.Value;
+export const SelectGroup = SelectPrimitive.Group;
+
+export function SelectLabel({
+  className,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Label>) {
+  return (
+    <SelectPrimitive.Label
+      className={twMerge(
+        clsx(
+          'px-2 pt-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground',
+          className,
+        ),
+      )}
+      {...props}
+    />
+  );
+}
 
 export function SelectTrigger({
   className,
@@ -73,6 +91,7 @@ export function SelectItem({
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      data-value={props.value}
       className={twMerge(
         clsx(
           'relative flex min-h-10 cursor-default items-center rounded-sm py-2 pr-8 pl-2 text-sm outline-none select-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40',

@@ -12,6 +12,15 @@ import { EditQueue } from './editQueue';
 import { TouchAdjust } from './TouchAdjust';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 const blockLabels: Record<string, string> = {
   enabled: 'Enabled',
@@ -299,27 +308,36 @@ export function NativeEditor({
         <div className="form-grid">
           <label className="field">
             Preset to load
-            <select
-              value={selection}
+            <Select
+              value={selection || '__choose__'}
               disabled={blocked || !!state?.edit}
-              onChange={(e) => setSelection(e.target.value)}
+              onValueChange={(value) =>
+                setSelection(value === '__choose__' ? '' : value)
+              }
             >
-              <option value="">Choose a preset</option>
-              <optgroup label="Originals">
-                {presets.map((p) => (
-                  <option key={p.sha256} value={`original:${p.sha256}`}>
-                    {p.name} · original
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Owned copies">
-                {state?.owned.map((p) => (
-                  <option key={p.id} value={`owned:${p.id}`}>
-                    {p.preset.name} · owned
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+              <SelectTrigger aria-label="Preset to load">
+                <SelectValue placeholder="Choose a preset" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__choose__">Choose a preset</SelectItem>
+                <SelectGroup>
+                  <SelectLabel>Originals</SelectLabel>
+                  {presets.map((p) => (
+                    <SelectItem key={p.sha256} value={`original:${p.sha256}`}>
+                      {p.name} · original
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Owned copies</SelectLabel>
+                  {state?.owned.map((p) => (
+                    <SelectItem key={p.id} value={`owned:${p.id}`}>
+                      {p.preset.name} · owned
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </label>
           <Button
             disabled={blocked || !selection || !!state?.edit}
@@ -408,38 +426,45 @@ export function NativeEditor({
         <div className="form-grid">
           <label className="field">
             Native control
-            <select
+            <Select
               value={target}
               disabled={blocked || !!state?.edit}
-              onChange={(e) => {
-                setTarget(e.target.value);
-                setValue(String(controlValue(state, e.target.value)));
+              onValueChange={(selected) => {
+                setTarget(selected);
+                setValue(String(controlValue(state, selected)));
               }}
             >
-              {[
-                { label: 'Tone', tone: true },
-                { label: 'Device processing', tone: false },
-              ].map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {editableParameters
-                    .filter((p) => p.tone === group.tone)
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                        {!p.tone ? ' · device' : ''}
-                        {p.staged ? ' · staged' : ''}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-              <optgroup label="Tone blocks">
-                {state?.block_controls.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.lane} · {blockLabels[p.parameter]}
-                  </option>
+              <SelectTrigger aria-label="Native control">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[
+                  { label: 'Tone', tone: true },
+                  { label: 'Device processing', tone: false },
+                ].map((group) => (
+                  <SelectGroup key={group.label}>
+                    <SelectLabel>{group.label}</SelectLabel>
+                    {editableParameters
+                      .filter((p) => p.tone === group.tone)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.label}
+                          {!p.tone ? ' · device' : ''}
+                          {p.staged ? ' · staged' : ''}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
                 ))}
-              </optgroup>
-            </select>
+                <SelectGroup>
+                  <SelectLabel>Tone blocks</SelectLabel>
+                  {state?.block_controls.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} · {p.lane} · {blockLabels[p.parameter]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </label>
           <button
             type="button"
