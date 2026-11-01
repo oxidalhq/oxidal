@@ -4594,7 +4594,13 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
       formatVersion: 1,
       id: 'fixture',
       name: 'Parallel sound',
-      extensions: {},
+      extensions: {
+        'urn:oxidal:authoring': {
+          labels: {
+            'amp-a': 'x42-comp - Dynamic Compressor with readable name',
+          },
+        },
+      },
       requiredExtensions: [],
       resources: [],
       tone3000: { instances: [] },
@@ -4683,6 +4689,28 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   for (const button of await rig.locator('[data-node] button').all()) {
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
+  await rig.locator('[data-node="amp-a"] button').click();
+  const selected = rig.locator('[aria-label="Selected block"]');
+  const title = selected.locator('.selected-node-title');
+  const titleBox = (await title.boundingBox())!;
+  expect(titleBox.width).toBeGreaterThan(160);
+  expect(titleBox.height).toBeLessThan(100);
+  await expect(title).toHaveCSS('word-break', 'normal');
+  if ((page.viewportSize()?.width ?? 0) <= 600) {
+    const arrange = selected.getByRole('group', { name: 'Arrange' });
+    const toggleBox = (await selected
+      .getByRole('button', { name: /readable name on$/ })
+      .boundingBox())!;
+    expect(toggleBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    if (await arrange.count()) {
+      const arrangeBox = (await arrange.boundingBox())!;
+      expect(arrangeBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    }
+  }
+  await page.screenshot({
+    path: info.outputPath('mixed-selected-block.png'),
+    fullPage: true,
+  });
   await page.screenshot({
     path: info.outputPath('mixed-routing-portrait.png'),
     fullPage: true,

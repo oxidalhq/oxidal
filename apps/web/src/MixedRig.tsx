@@ -2170,7 +2170,7 @@ export function MixedRig({
         selectedView &&
         (selectedView.branch || selectedView.bypass) && (
           <div className="selected-node" aria-label="Selected block">
-            <h3 className="min-w-0 flex-1 break-words">{selectedView.label}</h3>
+            <h3 className="selected-node-title">{selectedView.label}</h3>
             {sceneEffectSet.has(selected.id) && (
               <div className="action-row" role="group" aria-label="Arrange">
                 <Button
