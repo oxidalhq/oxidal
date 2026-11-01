@@ -189,6 +189,24 @@ def storage_layout_files():
     }
 
 
+def development_deploy_files(profile):
+    """Opt-in private-image deploy boundary; never present in appliance images."""
+    if profile == 'appliance':
+        return {}
+    if profile != 'development':
+        raise ValueError('Unknown image profile')
+    helper = (HERE / 'scripts/development_deploy.py').read_bytes()
+    sudoers = (
+        b'# Private development image: scoped Oxidal application deploy only.\n'
+        b'oxidal-admin ALL=(root) NOPASSWD: /usr/local/sbin/oxidal-development-deploy bins *, '
+        b'/usr/local/sbin/oxidal-development-deploy ui *\n'
+    )
+    return {
+        'usr/local/sbin/oxidal-development-deploy': helper,
+        'etc/sudoers.d/oxidal-development-deploy': sudoers,
+    }
+
+
 def create_access(path):
     """Generate per-device credentials locally; never print passwords or install them in web assets."""
     directory = Path(path).absolute()

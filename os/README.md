@@ -171,6 +171,17 @@ Content hashes are stored in `/usr/share/oxidal/development-library.json` and ch
 by the boot qualifier. Audio starts stopped. Image capacity expands to accommodate
 the selected library plus headroom; only regular image files are written.
 
+The `development` image profile also installs a narrowly scoped local deploy helper
+for repeat testing. `oxidal-admin` may run only `oxidal-development-deploy bins
+SHA256` or `oxidal-development-deploy ui SHA256` without another sudo password.
+The helper reads the fixed `/tmp/oxidal-bins.tgz` or `/tmp/oxidal-ui.tgz`, verifies
+the supplied lowercase SHA-256, rejects links/traversal and enforces file/byte
+budgets. Binary updates are limited to the unprivileged daemon, its audio workers
+and the worker-loaded TONE3000 library; the root device/debug/terminal services are
+not replaceable. A failed service restart restores the preceding binaries, and only
+one previous UI/binary set is retained. Normal `appliance` images contain neither
+the helper nor its sudo rule.
+
 For an already assembled disposable image, `os/scripts/development_library.py
 --backup BACKUP --output NEW_OVERLAY.tar` produces the same validated root overlay
 for libguestfs import. Apply it only with the data partition mounted at `/var/lib`,

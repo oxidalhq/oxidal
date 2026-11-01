@@ -196,6 +196,11 @@ cpSync(join(root, 'os/manifests'), join(staging, 'os/manifests'), {
   recursive: true,
 });
 cpSync(join(root, 'os/scripts/provision.py'), join(staging, 'os/provision.py'));
+mkdirSync(join(staging, 'os/scripts'), { recursive: true });
+cpSync(
+  join(root, 'os/scripts/development_deploy.py'),
+  join(staging, 'os/scripts/development_deploy.py'),
+);
 const files = {};
 function inventory(folder, prefix = '') {
   for (const entry of readdirSync(folder)) {

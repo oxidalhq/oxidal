@@ -122,6 +122,11 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(contents)
             target.chmod(0o755 if relative == 'usr/local/sbin/oxidal-grow-data' else 0o644)
+        for relative, contents in provision.development_deploy_files(profile_name).items():
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(contents)
+            target.chmod(0o755 if relative.startswith('usr/local/sbin/') else 0o440)
         (root / 'usr/share/oxidal/image-profile.json').write_text(json.dumps({
             'name': profile_name,
             'diagnostic_packages': image_profile['diagnostic_packages'],
@@ -168,6 +173,8 @@ def build(base, bundle, access, destination, boot_splash=False, development_pres
             "run-command sed -i 's/^LOGIN_TIMEOUT[[:space:]].*/LOGIN_TIMEOUT 180/' /etc/login.defs",
             'run-command systemd-analyze verify /etc/systemd/system/oxidald.service /etc/systemd/system/oxidal-regdomain.service /etc/systemd/system/oxidal-device.service /etc/systemd/system/oxidal-debug.service /etc/systemd/system/oxidal-terminal.service /etc/systemd/system/oxidal-admin-terminal.service /etc/systemd/system/oxidal-grow-data.service',
             'run-command nginx -t',
+            *(['run-command visudo -cf /etc/sudoers.d/oxidal-development-deploy']
+              if profile_name == 'development' else []),
             *(['run-command plymouth-set-default-theme -R oxidal',
                "run-command sed -i '1s/$/ splash plymouth.ignore-serial-consoles/' /boot/firmware/cmdline.txt"] if boot_splash else []),
             'run-command dpkg-query -W > /usr/share/oxidal/installed-packages.txt',

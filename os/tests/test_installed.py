@@ -29,6 +29,16 @@ class InstalledTests(unittest.TestCase):
             )
         if profile['name'] == 'appliance':
             self.assertEqual(profile['diagnostic_packages'], [])
+            self.assertFalse(Path('/usr/local/sbin/oxidal-development-deploy').exists())
+            self.assertFalse(Path('/etc/sudoers.d/oxidal-development-deploy').exists())
+        else:
+            self.assertTrue(Path('/usr/local/sbin/oxidal-development-deploy').is_file())
+            subprocess.run(
+                ['visudo', '-cf', '/etc/sudoers.d/oxidal-development-deploy'],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
     def test_writable_data_layout(self):
         marker = Path('/usr/share/oxidal/storage-layout-v1')

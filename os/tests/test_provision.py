@@ -54,6 +54,21 @@ class ProvisionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 provision.storage_fstab(original + collision, data_uuid)
 
+    def test_scoped_deploy_boundary_exists_only_in_development_images(self):
+        self.assertEqual(provision.development_deploy_files('appliance'), {})
+        files = provision.development_deploy_files('development')
+        self.assertEqual(
+            set(files),
+            {
+                'usr/local/sbin/oxidal-development-deploy',
+                'etc/sudoers.d/oxidal-development-deploy',
+            },
+        )
+        self.assertIn(b'oxidal-development-deploy bins *', files['etc/sudoers.d/oxidal-development-deploy'])
+        self.assertNotIn(b'oxidal-device-service', files['usr/local/sbin/oxidal-development-deploy'])
+        with self.assertRaises(ValueError):
+            provision.development_deploy_files('unknown')
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix='os-')
         self.addCleanup(self.directory.cleanup)
