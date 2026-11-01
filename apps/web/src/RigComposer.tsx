@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { Badge } from './components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -423,16 +430,21 @@ export function RigComposer({
               </div>
               <label className="rig-builder-tail-mode">
                 <span>Scene tails</span>
-                <select
+                <Select
                   value={sceneTails}
                   disabled={busy}
-                  onChange={(event) =>
-                    setSceneTails(event.target.value as 'cut' | 'preserve')
+                  onValueChange={(value) =>
+                    setSceneTails(value as 'cut' | 'preserve')
                   }
                 >
-                  <option value="preserve">Keep ringing</option>
-                  <option value="cut">Cut immediately</option>
-                </select>
+                  <SelectTrigger aria-label="Scene tails">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="preserve">Keep ringing</SelectItem>
+                    <SelectItem value="cut">Cut immediately</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
             </>
           )}
@@ -560,26 +572,31 @@ export function RigComposer({
                 ).length === 1 && (
                   <label className="field">
                     Mono input
-                    <select
+                    <Select
                       value={selectedEffect.mono}
                       disabled={busy}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setEffects((old) =>
                           old.map((item) =>
                             item.id === selectedEffect.id && item.kind === 'lv2'
                               ? {
                                   ...item,
-                                  mono: event.target.value as MonoInput,
+                                  mono: value as MonoInput,
                                 }
                               : item,
                           ),
                         )
                       }
                     >
-                      <option value="sum">L + R (average)</option>
-                      <option value="left">Left</option>
-                      <option value="right">Right</option>
-                    </select>
+                      <SelectTrigger aria-label="Mono input">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sum">L + R (average)</SelectItem>
+                        <SelectItem value="left">Left</SelectItem>
+                        <SelectItem value="right">Right</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
                 )}
               <p className="caption">

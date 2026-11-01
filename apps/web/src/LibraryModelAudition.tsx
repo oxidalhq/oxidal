@@ -9,6 +9,13 @@ import {
 } from './api';
 import { assertAuditionOwner } from './rigControls';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 type Owner =
   | { kind: 'native'; state: AudioState }
@@ -203,20 +210,22 @@ export function LibraryModelAudition({
           </p>
           <label className="field">
             Replace block
-            <select
-              value={choice}
+            <Select
+              value={choice || undefined}
               disabled={busy || applied}
-              onChange={(e) => setChoice(e.target.value)}
+              onValueChange={setChoice}
             >
-              <option value="" disabled>
-                Choose a block…
-              </option>
-              {options.map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Replace block">
+                <SelectValue placeholder="Choose a block…" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((t) => (
+                  <SelectItem key={t.key} value={t.key}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <div className="flex flex-wrap gap-2">
             <Button

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LibraryModelAudition } from './LibraryModelAudition';
 import {
@@ -58,11 +59,13 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 it('opening is read-only and audition needs a selected block and an explicit click', async () => {
+  const user = userEvent.setup();
   render(<LibraryModelAudition asset="chosen-file" onOpenRig={vi.fn()} />);
   const select = await screen.findByRole('combobox', { name: 'Replace block' });
   expect(playbackCommand).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Audition' })).toBeDisabled();
-  fireEvent.change(select, { target: { value: '/amp' } });
+  await user.click(select);
+  await user.click(screen.getByRole('option', { name: 'Left chain · My amp' }));
   vi.mocked(playbackCommand).mockResolvedValue({
     ...opening,
     model_change: {
@@ -89,9 +92,11 @@ it('opening is read-only and audition needs a selected block and an explicit cli
   });
 });
 it('rejects a native owner changed while the preview was open', async () => {
+  const user = userEvent.setup();
   render(<LibraryModelAudition asset="chosen-file" onOpenRig={vi.fn()} />);
   const select = await screen.findByRole('combobox', { name: 'Replace block' });
-  fireEvent.change(select, { target: { value: '/amp' } });
+  await user.click(select);
+  await user.click(screen.getByRole('option', { name: 'Left chain · My amp' }));
   vi.mocked(playbackState).mockResolvedValue({ ...opening, revision: 11 });
   fireEvent.click(screen.getByRole('button', { name: 'Audition' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -100,11 +105,13 @@ it('rejects a native owner changed while the preview was open', async () => {
   expect(playbackCommand).not.toHaveBeenCalled();
 });
 it('rejects a different mixed worker before sending an audition', async () => {
+  const user = userEvent.setup();
   vi.mocked(playbackState).mockResolvedValue({ ...opening, phase: 'stopped' });
   vi.mocked(rigAudioState).mockResolvedValue(mixed);
   render(<LibraryModelAudition asset="chosen-file" onOpenRig={vi.fn()} />);
   const select = await screen.findByRole('combobox', { name: 'Replace block' });
-  fireEvent.change(select, { target: { value: 'node-1/amp' } });
+  await user.click(select);
+  await user.click(screen.getByRole('option', { name: 'Left chain · My amp' }));
   vi.mocked(rigAudioState).mockResolvedValue({
     ...mixed,
     control: { ...mixed.control!, session: 'other-worker' },
@@ -117,11 +124,13 @@ it('rejects a different mixed worker before sending an audition', async () => {
 });
 
 it('auditions the selected mixed node with its current control revision', async () => {
+  const user = userEvent.setup();
   vi.mocked(playbackState).mockResolvedValue({ ...opening, phase: 'stopped' });
   vi.mocked(rigAudioState).mockResolvedValue(mixed);
   render(<LibraryModelAudition asset="chosen-file" onOpenRig={vi.fn()} />);
   const select = await screen.findByRole('combobox', { name: 'Replace block' });
-  fireEvent.change(select, { target: { value: 'node-1/amp' } });
+  await user.click(select);
+  await user.click(screen.getByRole('option', { name: 'Left chain · My amp' }));
   const next: RigAudioState = {
     ...mixed,
     control: {

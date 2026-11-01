@@ -3096,7 +3096,7 @@ for (const layout of ['serial', 'scenes'] as const) {
       await composer.getByRole('tab', { name: 'Scenes', exact: true }).click();
       await expect(
         composer.getByLabel('Scene tails', { exact: true }),
-      ).toHaveValue('preserve');
+      ).toHaveText('Keep ringing');
       await composer
         .getByRole('button', { name: 'Add saved tone', exact: true })
         .click();
@@ -3117,7 +3117,8 @@ for (const layout of ['serial', 'scenes'] as const) {
     await dialog
       .getByRole('button', { name: 'Simple amplifier', exact: true })
       .click();
-    await composer.getByLabel('Mono input').selectOption('right');
+    await composer.getByLabel('Mono input').click();
+    await page.getByRole('option', { name: 'Right', exact: true }).click();
     if (layout === 'serial') {
       await composer
         .getByRole('button', { name: 'Move Simple amplifier earlier' })
@@ -4212,15 +4213,13 @@ test('mixed rig authoring: local NAM and IR collections audition without provide
     name: 'Model variant',
     exact: true,
   });
-  await expect(variant.getByRole('option')).toHaveCount(2);
+  await variant.click();
+  await expect(page.getByRole('option')).toHaveCount(2);
+  await page.keyboard.press('Escape');
   await rig
     .getByRole('button', { name: 'Next model variant', exact: true })
     .click();
-  await expect(variant).toHaveValue(
-    (await variant
-      .getByRole('option', { name: 'My variant 2', exact: true })
-      .getAttribute('value')) ?? '',
-  );
+  await expect(variant).toHaveText('My variant 2');
   await command({ kind: 'restart' });
   await page.reload();
   await expect(rig).toBeVisible();
@@ -5311,7 +5310,8 @@ test('device portrait preset details edit and category search never recall audio
   await expect(
     page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
   ).toBeVisible();
-  await page.getByLabel('Category', { exact: true }).selectOption('Ambient');
+  await page.getByLabel('Category', { exact: true }).click();
+  await page.getByRole('option', { name: 'Ambient', exact: true }).click();
   await expect(
     page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
   ).toBeVisible();

@@ -4,6 +4,13 @@ import { ToolRow, ToolSection } from './ToolRow';
 import { useEffect, useRef, useState } from 'react';
 import { tone3000Tone, type AudioState, type AudioAction } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { SettingDialog } from './SettingDialog';
 import { formatDefault, settingHelp } from './engineHelp';
@@ -147,24 +154,26 @@ export function NativeAuthoring({
           <label className="field min-w-0">
             Model variant · {activeVariant >= 0 ? activeVariant + 1 : '—'} /{' '}
             {variants.length}
-            <select
-              aria-label="Model variant"
+            <Select
               disabled={editingDisabled || busy}
-              value={laneBlocks[position]?.active_model ?? ''}
-              onChange={(event) =>
+              value={String(laneBlocks[position]?.active_model ?? '')}
+              onValueChange={(value) =>
                 selectVariant(
-                  variants.findIndex(
-                    (model) => model.id === Number(event.target.value),
-                  ),
+                  variants.findIndex((model) => model.id === Number(value)),
                 )
               }
             >
-              {variants.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Model variant">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {variants.map((model) => (
+                  <SelectItem key={model.id} value={String(model.id)}>
+                    {model.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <Button
             variant="outline"

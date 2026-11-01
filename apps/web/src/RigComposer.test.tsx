@@ -134,7 +134,9 @@ it('uses one signal canvas and selected-block inspector for chain and scenes', a
     container.querySelector('.rig-tile:first-child .rig-tile-label'),
   ).toHaveTextContent('Tape delay');
   await user.click(screen.getByRole('tab', { name: 'Scenes' }));
-  expect(screen.getByLabelText('Scene tails')).toHaveValue('preserve');
+  expect(screen.getByLabelText('Scene tails')).toHaveTextContent(
+    'Keep ringing',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Clean tone' }));
   expect(screen.getByLabelText('Scene 1 name')).toHaveValue('Clean tone');
   expect(screen.getByText('Shared after scenes')).toBeVisible();

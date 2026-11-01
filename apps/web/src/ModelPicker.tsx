@@ -11,6 +11,13 @@ import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { DialogFooter } from './components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import {
@@ -422,23 +429,28 @@ export function ModelPicker({
                 )}
                 <label className="field">
                   TONE3000 library
-                  <select
+                  <Select
                     value={query.collection}
                     disabled={locked}
-                    onChange={(e) => {
+                    onValueChange={(value) => {
                       setQuery({
-                        collection: e.target.value as ToneQuery['collection'],
+                        collection: value as ToneQuery['collection'],
                         page: 1,
                       });
                       setSearch('');
                     }}
                   >
-                    <option value="latest">Latest</option>
-                    <option value="favorites">Favorites</option>
-                    <option value="downloaded">Downloaded</option>
-                    <option value="created">My tones</option>
-                    <option value="trending">Trending</option>
-                  </select>
+                    <SelectTrigger aria-label="TONE3000 library">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="latest">Latest</SelectItem>
+                      <SelectItem value="favorites">Favorites</SelectItem>
+                      <SelectItem value="downloaded">Downloaded</SelectItem>
+                      <SelectItem value="created">My tones</SelectItem>
+                      <SelectItem value="trending">Trending</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <div className="catalog-filters">
                   <ToggleGroup

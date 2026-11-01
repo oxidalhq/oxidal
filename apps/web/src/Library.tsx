@@ -25,6 +25,13 @@ import { FactoryCollection } from './FactoryCollection';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { PresetDetailsDialog } from './PresetDetails';
@@ -271,18 +278,24 @@ export function Library({
               {categories.length > 0 && (
                 <label className="field mb-3">
                   Category
-                  <select
-                    aria-label="Category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
+                  <Select
+                    value={category || '__all__'}
+                    onValueChange={(value) =>
+                      setCategory(value === '__all__' ? '' : value)
+                    }
                   >
-                    <option value="">All categories</option>
-                    {categories.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Category">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All categories</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
               )}
               {detailsError && <p role="status">{detailsError}</p>}
