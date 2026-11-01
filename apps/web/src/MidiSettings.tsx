@@ -24,9 +24,15 @@ export function MidiSettings({ connected }: { connected: boolean }) {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
+      let nextDelay = 3000;
       const opening = generation.current;
       try {
         const [a, b] = await Promise.all([playbackState(), rigAudioState()]);
+        nextDelay =
+          (a.phase === 'running' && a.midi?.connected) ||
+          (b.phase === 'running' && b.control?.midi?.connected)
+            ? 750
+            : 3000;
         if (active && !sending.current && opening === generation.current) {
           setNative(a);
           setMixed(b);
@@ -35,7 +41,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
       } catch (cause) {
         if (active) setError(String(cause));
       } finally {
-        if (active) timer = setTimeout(() => void refresh(), 750);
+        if (active) timer = setTimeout(() => void refresh(), nextDelay);
       }
     }
     void refresh();

@@ -12,6 +12,13 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
+import {
   libraryCatalog,
   applyMidiTemplate,
   midiDevices,
@@ -555,49 +562,59 @@ export function MidiMapScreen({
       <div className="grid gap-3 rounded-lg bg-muted/45 p-3 md:grid-cols-[minmax(0,1fr)_10rem]">
         <label className="field min-w-0">
           MIDI input
-          <select
-            aria-label="Global MIDI input"
-            value={map.input ?? ''}
+          <Select
+            value={map.input ?? '__off__'}
             disabled={!connected || busy}
-            onChange={(event) =>
+            onValueChange={(value) =>
               void replaceMap({
                 ...map,
-                input: event.target.value || null,
+                input: value === '__off__' ? null : value,
               }).catch(() => undefined)
             }
           >
-            <option value="">Off</option>
-            {map.input &&
-              !devices?.inputs.some((device) => device.id === map.input) && (
-                <option value={map.input}>{map.input} · unavailable</option>
-              )}
-            {devices?.inputs.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Global MIDI input">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__off__">Off</SelectItem>
+              {map.input &&
+                !devices?.inputs.some((device) => device.id === map.input) && (
+                  <SelectItem value={map.input}>
+                    {map.input} · unavailable
+                  </SelectItem>
+                )}
+              {devices?.inputs.map((device) => (
+                <SelectItem key={device.id} value={device.id}>
+                  {device.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="field">
           Channel
-          <select
-            aria-label="Global MIDI channel"
-            value={map.channel}
+          <Select
+            value={String(map.channel)}
             disabled={!map.input || !connected || busy}
-            onChange={(event) =>
+            onValueChange={(value) =>
               void replaceMap({
                 ...map,
-                channel: Number(event.target.value),
+                channel: Number(value),
               }).catch(() => undefined)
             }
           >
-            <option value={0}>All</option>
-            {Array.from({ length: 16 }, (_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {index + 1}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Global MIDI channel">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">All</SelectItem>
+              {Array.from({ length: 16 }, (_, index) => (
+                <SelectItem key={index + 1} value={String(index + 1)}>
+                  {index + 1}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <div className="min-w-0 md:col-span-2">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -606,8 +623,8 @@ export function MidiMapScreen({
               {!map.input
                 ? 'MIDI is off'
                 : status?.connected
-                  ? 'Listening'
-                  : 'Waiting for controller'}
+                  ? 'Controller connected'
+                  : 'Controller disconnected'}
             </strong>
             {status && (
               <span className="caption">{status.events} messages</span>
@@ -650,18 +667,20 @@ export function MidiMapScreen({
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
             <label className="field min-w-0">
               Scene template
-              <select
-                aria-label="Scene button template"
-                value={templateButtons}
+              <Select
+                value={String(templateButtons)}
                 disabled={busy || !connected}
-                onChange={(event) =>
-                  setTemplateButtons(Number(event.target.value))
-                }
+                onValueChange={(value) => setTemplateButtons(Number(value))}
               >
-                <option value={0}>None</option>
-                <option value={4}>4 buttons</option>
-                <option value={8}>8 buttons</option>
-              </select>
+                <SelectTrigger aria-label="Scene button template">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">None</SelectItem>
+                  <SelectItem value="4">4 buttons</SelectItem>
+                  <SelectItem value="8">8 buttons</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label className="field">
               First CC
@@ -695,37 +714,49 @@ export function MidiMapScreen({
           <div className="grid gap-2 border-t border-border/70 pt-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
             <label className="field min-w-0">
               Copy from
-              <select
-                aria-label="Copy MIDI mappings from"
-                value={copyFrom}
+              <Select
+                value={copyFrom || undefined}
                 disabled={busy || !connected || copySources.length === 0}
-                onChange={(event) => setCopyFrom(event.target.value)}
+                onValueChange={setCopyFrom}
               >
-                <option value="">Choose mapped preset</option>
-                {copySources.map((group) => (
-                  <option key={keyOf(group.entry)} value={keyOf(group.entry)}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Copy MIDI mappings from">
+                  <SelectValue placeholder="Choose mapped preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  {copySources.map((group) => (
+                    <SelectItem
+                      key={keyOf(group.entry)}
+                      value={keyOf(group.entry)}
+                    >
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label className="field min-w-0">
               Copy to
-              <select
-                aria-label="Copy MIDI mappings to"
-                value={copyTo}
+              <Select
+                value={copyTo || undefined}
                 disabled={busy || !connected || !copyFrom}
-                onChange={(event) => setCopyTo(event.target.value)}
+                onValueChange={setCopyTo}
               >
-                <option value="">Choose destination</option>
-                {groups
-                  .filter((group) => keyOf(group.entry) !== copyFrom)
-                  .map((group) => (
-                    <option key={keyOf(group.entry)} value={keyOf(group.entry)}>
-                      {group.name}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger aria-label="Copy MIDI mappings to">
+                  <SelectValue placeholder="Choose destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups
+                    .filter((group) => keyOf(group.entry) !== copyFrom)
+                    .map((group) => (
+                      <SelectItem
+                        key={keyOf(group.entry)}
+                        value={keyOf(group.entry)}
+                      >
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </label>
             <Button
               variant="outline"

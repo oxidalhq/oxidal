@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MidiMapScreen } from './MidiMapScreen';
 import {
@@ -192,6 +193,7 @@ it('learns a fresh message on a row and tests through the hardware-free path', a
 });
 
 it('saves and applies a scene-button template without hardware', async () => {
+  const user = userEvent.setup();
   arrange();
   render(
     <MidiMapScreen
@@ -201,9 +203,8 @@ it('saves and applies a scene-button template without hardware', async () => {
       onMapApplied={vi.fn(async () => undefined)}
     />,
   );
-  fireEvent.change(await screen.findByLabelText('Scene button template'), {
-    target: { value: '4' },
-  });
+  await user.click(await screen.findByLabelText('Scene button template'));
+  await user.click(screen.getByRole('option', { name: '4 buttons' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save template' }));
   await waitFor(() =>
     expect(updateMidiMap).toHaveBeenCalledWith(
@@ -225,6 +226,7 @@ it('saves and applies a scene-button template without hardware', async () => {
 });
 
 it('copies and preview-confirms clearing a preset map', async () => {
+  const user = userEvent.setup();
   arrange();
   render(
     <MidiMapScreen
@@ -234,12 +236,10 @@ it('copies and preview-confirms clearing a preset map', async () => {
       onMapApplied={vi.fn(async () => undefined)}
     />,
   );
-  fireEvent.change(await screen.findByLabelText('Copy MIDI mappings from'), {
-    target: { value: `rig:${id('a')}` },
-  });
-  fireEvent.change(screen.getByLabelText('Copy MIDI mappings to'), {
-    target: { value: `owned:${id('b')}` },
-  });
+  await user.click(await screen.findByLabelText('Copy MIDI mappings from'));
+  await user.click(screen.getByRole('option', { name: 'Stage Rig' }));
+  await user.click(screen.getByLabelText('Copy MIDI mappings to'));
+  await user.click(screen.getByRole('option', { name: 'Clean Amp' }));
   fireEvent.click(screen.getByRole('button', { name: 'Copy mappings' }));
   await waitFor(() =>
     expect(updateMidiMap).toHaveBeenCalledWith(

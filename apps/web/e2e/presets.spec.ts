@@ -3286,7 +3286,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         controller: 21,
         mode: 'toggle',
       });
-      await expect(rig.getByText(/Waiting for controller/)).toBeVisible();
+      await expect(rig.getByText(/Controller disconnected/)).toBeVisible();
       for (const viewport of [
         initialViewport,
         { width: initialViewport.height, height: initialViewport.width },
@@ -3969,7 +3969,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
             ?.parameter_bindings[0].controller,
       )
       .toBe(21);
-    await expect(sounding.getByText(/Waiting for controller/)).toBeVisible();
+    await expect(sounding.getByText(/Controller disconnected/)).toBeVisible();
     await expect(
       sounding.getByRole('button', { name: 'Learn CC 1', exact: true }),
     ).toBeDisabled();
