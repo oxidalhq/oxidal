@@ -6,6 +6,7 @@ import { TouchAdjust } from './TouchAdjust';
 import { DialogFooter } from './components/ui/dialog';
 import { formatDefault } from './engineHelp';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { Switch } from './components/ui/switch';
 import './ChainView.css';
 
 /** Prepared engine/model setting: draft a value, then Apply (audio restarts). */
@@ -62,18 +63,15 @@ export function SettingDialog({
             ))}
           </ToggleGroup>
         ) : control.toggle ? (
-          <button
-            type="button"
-            role="switch"
-            className="led-toggle"
-            aria-checked={value === 1}
-            aria-label={control.label}
-            disabled={busy || stale}
-            onClick={() => setValue((old) => (old === 1 ? 0 : 1))}
-          >
-            <span className="chain-led" aria-hidden="true" />
-            {value === 1 ? 'On' : 'Off'}
-          </button>
+          <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+            <span>{value === 1 ? 'On' : 'Off'}</span>
+            <Switch
+              checked={value === 1}
+              aria-label={control.label}
+              disabled={busy || stale}
+              onCheckedChange={(checked) => setValue(checked ? 1 : 0)}
+            />
+          </label>
         ) : (
           <TouchAdjust
             label="Prepared setting value"

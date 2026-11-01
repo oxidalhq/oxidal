@@ -12,6 +12,13 @@ import {
 import { monitoringHistory, type MonitoringHistory as History } from './api';
 import { Button } from './components/ui/button';
 import { ChartContainer } from './components/ui/chart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 /** Appliance-owned samples, distinct from the live browser's Freeze/Reset view. */
 export function MonitoringHistory() {
@@ -107,29 +114,31 @@ export function MonitoringHistory() {
           <div className="grid min-w-0 grid-cols-2 gap-2">
             <label className="field">
               History range
-              <select
-                aria-label="History range"
-                value={range}
-                onChange={(e) => setRange(e.target.value)}
-              >
-                <option value="all">All loaded</option>
-                <option value="5">Last 5 min · this run</option>
-                <option value="15">Last 15 min · this run</option>
-                <option value="60">Last hour · this run</option>
-              </select>
+              <Select value={range} onValueChange={setRange}>
+                <SelectTrigger aria-label="History range">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All loaded</SelectItem>
+                  <SelectItem value="5">Last 5 min · this run</SelectItem>
+                  <SelectItem value="15">Last 15 min · this run</SelectItem>
+                  <SelectItem value="60">Last hour · this run</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label className="field">
               History metric
-              <select
-                aria-label="History metric"
-                value={metric}
-                onChange={(e) => setMetric(e.target.value)}
-              >
-                <option value="load">DSP / CPU</option>
-                <option value="memory">RAM</option>
-                <option value="temperature">Temperature</option>
-                <option value="xruns">New xruns</option>
-              </select>
+              <Select value={metric} onValueChange={setMetric}>
+                <SelectTrigger aria-label="History metric">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="load">DSP / CPU</SelectItem>
+                  <SelectItem value="memory">RAM</SelectItem>
+                  <SelectItem value="temperature">Temperature</SelectItem>
+                  <SelectItem value="xruns">New xruns</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <Button

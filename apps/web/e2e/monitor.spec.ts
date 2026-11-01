@@ -220,16 +220,17 @@ test('monitor shows device history after browser reload and exports retained sam
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
   ).toBeVisible();
-  await page.getByLabel('History range', { exact: true }).selectOption('5');
+  await page.getByLabel('History range', { exact: true }).click();
   await page
-    .getByLabel('History metric', { exact: true })
-    .selectOption('memory');
+    .getByRole('option', { name: 'Last 5 min · this run', exact: true })
+    .click();
+  await page.getByLabel('History metric', { exact: true }).click();
+  await page.getByRole('option', { name: 'RAM', exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded RAM · %' }),
   ).toBeVisible();
-  await page
-    .getByLabel('History metric', { exact: true })
-    .selectOption('xruns');
+  await page.getByLabel('History metric', { exact: true }).click();
+  await page.getByRole('option', { name: 'New xruns', exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded New xruns per sample · count' }),
   ).toBeVisible();
@@ -301,17 +302,23 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
   await expect(panel.getByText(/Accepted means/)).toBeVisible();
-  await panel.getByLabel('Operation', { exact: true }).selectOption('network');
-  await panel.getByLabel('Outcome', { exact: true }).selectOption('rejected');
+  await panel.getByLabel('Operation', { exact: true }).click();
+  await page
+    .getByRole('option', { name: 'Wi-Fi / device', exact: true })
+    .click();
+  await panel.getByLabel('Outcome', { exact: true }).click();
+  await page.getByRole('option', { name: 'Rejected', exact: true }).click();
   await expect(
     panel.getByRole('list', { name: 'Audit entries' }),
   ).toContainText('Wi-Fi / device');
   await panel.getByLabel('From', { exact: true }).fill('2099-01-01T00:00');
   await expect(panel.getByText('No matching requests.')).toBeVisible();
   await panel.getByLabel('From', { exact: true }).fill('');
-  await panel.getByLabel('Outcome', { exact: true }).selectOption('accepted');
+  await panel.getByLabel('Outcome', { exact: true }).click();
+  await page.getByRole('option', { name: 'Accepted', exact: true }).click();
   await expect(panel.getByText('No matching requests.')).toBeVisible();
-  await panel.getByLabel('Outcome', { exact: true }).selectOption('all');
+  await panel.getByLabel('Outcome', { exact: true }).click();
+  await page.getByRole('option', { name: 'All outcomes', exact: true }).click();
   const filteredDownload = page.waitForEvent('download');
   await panel
     .getByRole('button', { name: 'Export filtered', exact: true })
@@ -331,8 +338,8 @@ test('monitor shows redacted control audit with filters and reload persistence',
   await panel
     .getByRole('button', { name: 'Clear filters', exact: true })
     .click();
-  await expect(panel.getByLabel('Operation', { exact: true })).toHaveValue(
-    'all',
+  await expect(panel.getByLabel('Operation', { exact: true })).toHaveText(
+    'All operations',
   );
   const download = await request.get('/api/v1/audit/export');
   expect(download.headers()['content-disposition']).toContain(

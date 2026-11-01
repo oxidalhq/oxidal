@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react';
 import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
 import { controlAudit, type ControlAudit as History } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 const labels: Record<History['records'][number]['operation'], string> = {
   native_audio: 'TONE3000 audio',
@@ -129,33 +136,33 @@ export function ControlAudit() {
           >
             <label className="grid min-w-0 gap-1 text-sm">
               Operation
-              <select
-                className="min-h-11 w-full min-w-0"
-                aria-label="Operation"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option value="all">All operations</option>
-                {Object.entries(labels).map(([key, value]) => (
-                  <option key={key} value={key}>
-                    {value}
-                  </option>
-                ))}
-              </select>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger aria-label="Operation">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All operations</SelectItem>
+                  {Object.entries(labels).map(([key, value]) => (
+                    <SelectItem key={key} value={key}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
             <label className="grid min-w-0 gap-1 text-sm">
               Outcome
-              <select
-                className="min-h-11 w-full min-w-0"
-                aria-label="Outcome"
-                value={outcome}
-                onChange={(e) => setOutcome(e.target.value)}
-              >
-                <option value="all">All outcomes</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="failed">Failed</option>
-              </select>
+              <Select value={outcome} onValueChange={setOutcome}>
+                <SelectTrigger aria-label="Outcome">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All outcomes</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label className="grid min-w-0 gap-1 text-sm">
               From

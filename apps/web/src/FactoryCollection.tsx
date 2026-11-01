@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { Badge } from './components/ui/badge';
 import {
   installedLv2,
@@ -142,25 +149,27 @@ function CollectionDialog({
             {factoryRoles(selected).map((role) => (
               <label key={role} className="field">
                 <span>{role[0]!.toUpperCase() + role.slice(1)} NAM voice</span>
-                <select
+                <Select
                   disabled={busy}
-                  value={bindings[role]?.preset.sha256 ?? ''}
-                  onChange={(e) =>
+                  value={bindings[role]?.preset.sha256}
+                  onValueChange={(value) =>
                     setBindings((b) => ({
                       ...b,
-                      [role]: sources.find(
-                        (s) => s.preset.sha256 === e.target.value,
-                      ),
+                      [role]: sources.find((s) => s.preset.sha256 === value),
                     }))
                   }
                 >
-                  <option value="">Choose a saved NAM preset…</option>
-                  {sources.map((s) => (
-                    <option key={s.preset.sha256} value={s.preset.sha256}>
-                      {s.preset.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger aria-label={`${role} NAM voice`}>
+                    <SelectValue placeholder="Choose a saved NAM preset…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sources.map((s) => (
+                      <SelectItem key={s.preset.sha256} value={s.preset.sha256}>
+                        {s.preset.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
             ))}
             {factoryRoles(selected).length > 0 && (
