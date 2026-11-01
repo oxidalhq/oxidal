@@ -514,6 +514,70 @@ async function enterValue(page: Page, label: string, value: string) {
   await input.fill(value);
 }
 
+test('audio setup recovers a late USB interface without losing its draft', async ({
+  page,
+}) => {
+  let connected = false;
+  await page.route('**/api/v1/audio/devices', (route) =>
+    route.fulfill({
+      json: {
+        backend_available: true,
+        streaming_available: true,
+        warnings: [],
+        endpoints: connected
+          ? [
+              {
+                id: 'hw:CARD=Jogg,DEV=0',
+                name: 'Jogg USB Audio',
+                direction: 'capture',
+              },
+              {
+                id: 'hw:CARD=Jogg,DEV=0',
+                name: 'Jogg USB Audio',
+                direction: 'playback',
+              },
+              {
+                id: 'hw:CARD=HDMI,DEV=0',
+                name: 'HDMI',
+                direction: 'playback',
+              },
+            ]
+          : [
+              {
+                id: 'hw:CARD=HDMI,DEV=0',
+                name: 'HDMI',
+                direction: 'playback',
+              },
+            ],
+      },
+    }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const setup = page.getByRole('region', { name: 'Audio interface setup' });
+  await expect(setup.getByLabel('Input', { exact: true })).toBeDisabled();
+  await expect(setup).toContainText('playback-only devices');
+  await setup.getByLabel('Sample rate (Hz)').fill('44100');
+  await setup.getByLabel('Buffer size (samples per period)').fill('256');
+
+  connected = true;
+  await setup.getByRole('button', { name: 'Refresh audio devices' }).click();
+
+  await expect(setup.getByLabel('Input', { exact: true })).toHaveValue(
+    'hw:CARD=Jogg,DEV=0',
+  );
+  await expect(setup.getByLabel('Output', { exact: true })).toHaveValue(
+    'hw:CARD=Jogg,DEV=0',
+  );
+  await expect(setup.getByLabel('Sample rate (Hz)')).toHaveValue('44100');
+  await expect(
+    setup.getByLabel('Buffer size (samples per period)'),
+  ).toHaveValue('256');
+  await expect(
+    setup.getByRole('button', { name: 'Check input and output' }),
+  ).toBeEnabled();
+});
+
 test('audio configuration exposes buffers and discards changed or failed checks', async ({
   page,
 }) => {

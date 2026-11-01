@@ -39,6 +39,14 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     (endpoint) =>
       endpoint.direction === 'playback' && endpoint.id === selectedOutput,
   );
+  const inputEndpoints =
+    inventory?.endpoints.filter(
+      (endpoint) => endpoint.direction === 'capture',
+    ) ?? [];
+  const outputEndpoints =
+    inventory?.endpoints.filter(
+      (endpoint) => endpoint.direction === 'playback',
+    ) ?? [];
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
     refreshing.current = true;
@@ -64,14 +72,13 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             : '',
       );
       setSelectedOutput((current) => {
-        if (outputs.some((endpoint) => endpoint.id === current)) return current;
         const matchingInput =
           inputs.length === 1
             ? outputs.find((endpoint) => endpoint.id === inputs[0]!.id)
             : undefined;
-        return (
-          matchingInput?.id ?? (outputs.length === 1 ? outputs[0]!.id : '')
-        );
+        if (matchingInput) return matchingInput.id;
+        if (outputs.some((endpoint) => endpoint.id === current)) return current;
+        return outputs.length === 1 ? outputs[0]!.id : '';
       });
       setMessage(
         !devices.backend_available
@@ -159,7 +166,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
         >
           Refresh audio devices
         </Button>
-        {inventory?.backend_available && inventory.endpoints.length > 0 && (
+        {inventory?.backend_available && (
           <>
             <fieldset
               disabled={busy || !connected}
@@ -170,42 +177,62 @@ export function AudioSettings({ connected }: { connected: boolean }) {
                 <label className="field">
                   Input
                   <select
+                    aria-label="Input"
                     value={selectedInput}
+                    disabled={inputEndpoints.length === 0}
                     onChange={(e) => {
                       setSelectedInput(e.target.value);
                       invalidate();
                       setMessage('');
                     }}
                   >
-                    <option value="">Choose an input</option>
-                    {inventory.endpoints
-                      .filter((endpoint) => endpoint.direction === 'capture')
-                      .map((endpoint) => (
-                        <option key={endpoint.id} value={endpoint.id}>
-                          {endpoint.name} · {endpoint.id}
-                        </option>
-                      ))}
+                    <option value="">
+                      {inputEndpoints.length === 0
+                        ? 'No input detected'
+                        : 'Choose an input'}
+                    </option>
+                    {inputEndpoints.map((endpoint) => (
+                      <option key={endpoint.id} value={endpoint.id}>
+                        {endpoint.name} · {endpoint.id}
+                      </option>
+                    ))}
                   </select>
+                  {inputEndpoints.length === 0 && (
+                    <span className="caption">
+                      {outputEndpoints.length > 0
+                        ? 'HDMI and other playback-only devices cannot receive your guitar. Connect or reconnect a USB audio interface, then refresh.'
+                        : 'No audio input is connected. Connect or reconnect a USB audio interface, then refresh.'}
+                    </span>
+                  )}
                 </label>
                 <label className="field">
                   Output
                   <select
+                    aria-label="Output"
                     value={selectedOutput}
+                    disabled={outputEndpoints.length === 0}
                     onChange={(e) => {
                       setSelectedOutput(e.target.value);
                       invalidate();
                       setMessage('');
                     }}
                   >
-                    <option value="">Choose an output</option>
-                    {inventory.endpoints
-                      .filter((endpoint) => endpoint.direction === 'playback')
-                      .map((endpoint) => (
-                        <option key={endpoint.id} value={endpoint.id}>
-                          {endpoint.name} · {endpoint.id}
-                        </option>
-                      ))}
+                    <option value="">
+                      {outputEndpoints.length === 0
+                        ? 'No output detected'
+                        : 'Choose an output'}
+                    </option>
+                    {outputEndpoints.map((endpoint) => (
+                      <option key={endpoint.id} value={endpoint.id}>
+                        {endpoint.name} · {endpoint.id}
+                      </option>
+                    ))}
                   </select>
+                  {outputEndpoints.length === 0 && (
+                    <span className="caption">
+                      Connect an audio output, then refresh.
+                    </span>
+                  )}
                 </label>
                 <label className="field">
                   Sample rate (Hz)
