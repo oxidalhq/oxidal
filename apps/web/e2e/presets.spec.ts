@@ -5281,6 +5281,21 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
       ).slice(0, 2),
     )
     .toEqual([rigName, secondName]);
+  const pickerTitles = picker.locator('.preset-picker-row > span:first-child');
+  for (let index = 0; index < 2; index += 1) {
+    const box = await pickerTitles.nth(index).boundingBox();
+    expect(box?.width).toBeGreaterThan(120);
+    expect(
+      await pickerTitles.nth(index).evaluate((element) => ({
+        overflowWrap: getComputedStyle(element).overflowWrap,
+        wordBreak: getComputedStyle(element).wordBreak,
+      })),
+    ).toEqual({ overflowWrap: 'break-word', wordBreak: 'normal' });
+  }
+  await page.screenshot({
+    path: info.outputPath('preset-picker.png'),
+    fullPage: true,
+  });
   await picker
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
