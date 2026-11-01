@@ -1970,7 +1970,10 @@ async fn native_device_defaults_are_durable_validated_and_revision_checked() {
         .json()
         .await
         .unwrap();
-    assert_eq!(initial["settings"]["nam_size"], 0.0);
+    assert_eq!(initial["settings"]["nam_size"], 1.0);
+    assert_eq!(initial["settings"]["multi_core"], true);
+    assert_eq!(initial["settings"]["parameters"]["osEnabled"], 1.0);
+    assert_eq!(initial["settings"]["parameters"]["osFactor"], 1.0);
     let request = json!({"expected_revision":initial["revision"],"settings":{"nam_size":0.75,"multi_core":true,"parameters":{"osFactor":0.5,"inputCalibrationLevel":0.6}}});
     let response = client.post(&endpoint).json(&request).send().await.unwrap();
     assert_eq!(response.status(), 200);

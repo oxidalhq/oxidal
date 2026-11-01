@@ -33,7 +33,14 @@ const stream = (frames: number, periods = 4): StartAudio['stream'] => ({
   output_map: [0, 1],
   hear_yourself: true,
 });
-let live = { frames: 64, periods: 4, xruns: 0, sequence: 0 };
+let live = {
+  frames: 64,
+  periods: 4,
+  xruns: 0,
+  misses: 0,
+  processed: 128,
+  sequence: 0,
+};
 const reading = (): Monitoring =>
   ({
     sequence: ++live.sequence,
@@ -43,7 +50,12 @@ const reading = (): Monitoring =>
     host: {},
     source: 'native',
     stream: stream(live.frames, live.periods),
-    audio: null,
+    audio: {
+      frames: (live.processed += live.frames),
+      xruns: live.xruns,
+      deadline_misses: live.misses,
+      invalid_samples: 0,
+    },
     audio_age_ms: null,
     xruns: live.xruns,
     error: null,
@@ -61,7 +73,14 @@ beforeEach(() => {
     ],
   });
   vi.stubGlobal('EventSource', Events);
-  live = { frames: 64, periods: 4, xruns: 0, sequence: 0 };
+  live = {
+    frames: 64,
+    periods: 4,
+    xruns: 0,
+    misses: 0,
+    processed: 128,
+    sequence: 0,
+  };
   vi.mocked(monitoring).mockImplementation(async () => reading());
 });
 afterEach(() => {
@@ -81,7 +100,14 @@ function device() {
     const frames = next.input.period_frames;
     const periods = next.input.periods;
     if (frames < 48) return;
-    live = { ...live, frames, periods, xruns: periods < 3 ? 5 : 0 };
+    live = {
+      ...live,
+      frames,
+      periods,
+      xruns: periods < 3 ? 5 : 0,
+      misses: 0,
+      processed: 0,
+    };
   });
 }
 
@@ -97,8 +123,8 @@ it('steps the size down, then the periods, and keeps the last clean buffer', asy
     screen.getByRole('button', { name: 'Find lowest stable buffer' }),
   );
   expect(apply).toHaveBeenLastCalledWith(stream(48));
-  await tick(22000);
-  expect(screen.getByText('48 × 4: clean for 20 s.')).toBeVisible();
+  await tick(62000);
+  expect(screen.getByText('48 × 4: clean for 60 s.')).toBeVisible();
   expect(apply).toHaveBeenLastCalledWith(stream(32));
   await tick(16000);
   expect(
@@ -107,8 +133,8 @@ it('steps the size down, then the periods, and keeps the last clean buffer', asy
     ),
   ).toBeVisible();
   expect(apply).toHaveBeenLastCalledWith(stream(48, 3));
-  await tick(22000);
-  expect(screen.getByText('48 × 3: clean for 20 s.')).toBeVisible();
+  await tick(62000);
+  expect(screen.getByText('48 × 3: clean for 60 s.')).toBeVisible();
   expect(apply).toHaveBeenLastCalledWith(stream(48, 2));
   live.xruns = 0;
   await tick(2000);
@@ -141,4 +167,19 @@ it('keeps the original buffer when nothing smaller works', async () => {
   expect(
     screen.getByText('Lowest stable buffer: 48 × 2 (2.0 ms).'),
   ).toBeVisible();
+});
+
+it('rejects a deadline miss even when the xrun counter stays at zero', async () => {
+  const apply = device();
+  render(
+    <BufferFinder stream={stream(64)} running disabled={false} apply={apply} />,
+  );
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Find lowest stable buffer' }),
+  );
+  await tick(2000);
+  live.misses = 1;
+  await tick(2000);
+  expect(screen.getByText('48 × 4: 1 audio deadline miss.')).toBeVisible();
+  expect(apply).toHaveBeenLastCalledWith(stream(64, 3));
 });

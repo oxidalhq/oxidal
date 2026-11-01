@@ -7,7 +7,7 @@ use std::{
     io::{Read, Write},
     path::Path,
 };
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "NativeDefaultSettings")]
 pub struct Settings {
@@ -15,6 +15,15 @@ pub struct Settings {
     pub multi_core: bool,
     /// Normalized native parameter values, limited to the reference machine defaults.
     pub parameters: BTreeMap<String, f32>,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            nam_size: 1.0,
+            multi_core: true,
+            parameters: BTreeMap::from([("osEnabled".into(), 1.0), ("osFactor".into(), 1.0)]),
+        }
+    }
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {

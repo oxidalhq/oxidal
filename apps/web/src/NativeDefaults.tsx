@@ -9,6 +9,11 @@ import {
   SelectValue,
 } from './components/ui/select';
 import { Switch } from './components/ui/switch';
+const QUALITY_DEFAULTS: Defaults['settings'] = {
+  nam_size: 1,
+  multi_core: true,
+  parameters: { osEnabled: 1, osFactor: 1 },
+};
 /** Device defaults apply at the next native instance, separately from live tone edits. */
 export function NativeDefaults({ connected }: { connected: boolean }) {
   const [state, setState] = useState<Defaults | null>(null);
@@ -38,9 +43,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
     try {
       const next = await nativeDefaults({
         expected_revision: state.revision,
-        settings: reset
-          ? { nam_size: 0, multi_core: false, parameters: {} }
-          : draft,
+        settings: reset ? QUALITY_DEFAULTS : draft,
       });
       setState(next);
       setDraft(next.settings);
@@ -62,7 +65,9 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
       <summary>TONE3000 device defaults</summary>
       <p className="text-muted-foreground">
         New native instances use these defaults. Saved tone and session settings
-        take priority; playing audio stays unchanged.
+        take priority; playing audio stays unchanged. Oxidal starts new models
+        at Full A2 and 8×, then dense rigs can deliberately use Lite or lower
+        oversampling when the measured DSP budget requires it.
       </p>
       {draft && (
         <fieldset disabled={!connected || busy} className="control-stack">

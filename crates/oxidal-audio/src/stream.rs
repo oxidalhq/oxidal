@@ -23,6 +23,8 @@ pub struct Duplex {
     pending: bool,
     faulted: bool,
     recovered_xruns: u64,
+    recovery_window: std::time::Instant,
+    recovery_burst: u8,
     /// Last completed block, or the last re-prime: a stall is measured from here.
     progress: std::time::Instant,
     meter: crate::meter::Meter,
@@ -31,6 +33,10 @@ pub struct Duplex {
 /// interfaces can come back from a restart with ALSA reporting RUNNING while
 /// neither side moves; without this only the worker's 2 s watchdog would act.
 const STALL: std::time::Duration = std::time::Duration::from_millis(250);
+/// Repeated recovery is itself an unusable audio state. Stop instead of
+/// producing an unbounded crackle loop while the UI continues to say Running.
+const RECOVERY_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
+const MAX_RECOVERY_BURST: u8 = 3;
 /// A single block slower than this is logged with its duration.
 const SLOW_BLOCK_US: f64 = 50_000.0;
 
@@ -63,14 +69,13 @@ impl Duplex {
     fn open_pcm(config: StreamConfig) -> Result<Self, String> {
         let capture = crate::linux::configured(&config.input).map_err(|e| e.to_string())?;
         let playback = crate::linux::configured(&config.output).map_err(|e| e.to_string())?;
-        // Start playback only after a small queue is primed; do not start from one thin block.
+        // Playback is started explicitly with capture after its complete buffer
+        // is primed with silence. A boundary threshold prevents an early start.
         let sw = playback.sw_params_current().map_err(|e| e.to_string())?;
         sw.set_avail_min(config.output.period_frames.into())
             .map_err(|e| e.to_string())?;
-        sw.set_start_threshold(i64::from(
-            config.output.period_frames * (config.output.periods - 1),
-        ))
-        .map_err(|e| e.to_string())?;
+        sw.set_start_threshold(sw.get_boundary().map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
         playback.sw_params(&sw).map_err(|e| e.to_string())?;
         drop(sw);
         let frames = config.input.period_frames as usize;
@@ -80,7 +85,7 @@ impl Duplex {
             config.levels,
         );
         host.begin_output();
-        Ok(Self {
+        let mut stream = Self {
             host,
             input: vec![
                 0;
@@ -105,8 +110,12 @@ impl Duplex {
             pending: false,
             faulted: false,
             recovered_xruns: 0,
+            recovery_window: std::time::Instant::now(),
+            recovery_burst: 0,
             progress: std::time::Instant::now(),
-        })
+        };
+        stream.start_streams()?;
+        Ok(stream)
     }
     /// At most one prepared block per call. EAGAIN waits at most 5ms; EPIPE re-primes both PCM handles.
     /// Other device failures and processor errors fail closed.
@@ -231,6 +240,17 @@ impl Duplex {
     /// partial output block or retaining captured frames would mix samples from
     /// opposite sides of the gap.
     fn reprime(&mut self, direction: &str) -> Result<Step, String> {
+        let now = std::time::Instant::now();
+        if now.duration_since(self.recovery_window) > RECOVERY_WINDOW {
+            self.recovery_window = now;
+            self.recovery_burst = 0;
+        }
+        if self.recovery_burst >= MAX_RECOVERY_BURST {
+            return Err(format!(
+                "Audio stream remained unstable after {MAX_RECOVERY_BURST} recoveries in one second ({direction})"
+            ));
+        }
+        self.recovery_burst += 1;
         self.capture
             .drop()
             .map_err(|e| format!("Capture recovery stop failed: {e}"))?;
@@ -250,6 +270,7 @@ impl Duplex {
         self.output.fill(0);
         self.left.fill(0.0);
         self.right.fill(0.0);
+        self.start_streams()?;
         self.recovered_xruns = self.recovered_xruns.saturating_add(1);
         // Keep the installed meter protocol compatible. The worker journal exposes
         // recovery until a separately versioned UI/daemon counter update ships.
@@ -261,6 +282,50 @@ impl Duplex {
         // controls and accumulated meters remain intact; this is not gapless audio.
         self.progress = std::time::Instant::now();
         Ok(Step::Waiting)
+    }
+    /// Queues silence before capture starts so the first processed period has
+    /// playback headroom. Linked handles then start on one hardware boundary.
+    fn start_streams(&mut self) -> Result<(), String> {
+        let stride =
+            self.config.output.channels as usize * samples::width(self.config.output.format);
+        let target = usize::try_from(self.config.output.period_frames * self.config.output.periods)
+            .map_err(|_| "Playback prime size exceeds this platform".to_owned())?;
+        let mut queued = 0;
+        while queued < target {
+            let frames = (target - queued).min(self.left.len());
+            match self
+                .playback
+                .io_bytes()
+                .writei(&self.output[..frames * stride])
+            {
+                Ok(0) => return Err("Playback prime returned zero frames".into()),
+                Ok(written) => queued += written,
+                Err(error) if error.errno() == 11 => {
+                    if !self
+                        .playback
+                        .wait(Some(5))
+                        .map_err(|e| format!("Playback prime wait failed: {e}"))?
+                    {
+                        return Err("Playback prime timed out".into());
+                    }
+                }
+                Err(error) => return Err(format!("Playback prime failed: {error}")),
+            }
+        }
+        // Do not trust a successful snd_pcm_link as proof that a USB interface
+        // exposes one synchronized duplex clock. Jogg accepts that call while
+        // its mono-capture/stereo-playback pair immediately overruns. Start
+        // capture first: it has a complete hardware buffer in which playback
+        // can be started, while playback already has a complete silent queue.
+        // Starting playback first lets that queue drain while the USB capture
+        // endpoint is still being started and can create an immediate underrun.
+        self.capture
+            .start()
+            .map_err(|e| format!("Capture start failed: {e}"))?;
+        self.playback
+            .start()
+            .map_err(|e| format!("Playback start failed: {e}"))?;
+        Ok(())
     }
     pub fn telemetry(&mut self) -> crate::meter::Snapshot {
         let mut snapshot = self.meter.snapshot();
@@ -433,6 +498,9 @@ mod tests {
         let mut stream = Duplex::open_pcm(config(SampleFormat::S24Packed)).unwrap();
         let mut processed = 0;
         for direction in ["Capture", "Playback", "Capture wait", "Playback wait"] {
+            // Each direction is an independent, successfully recovered event;
+            // the burst-breaker behavior has its own regression below.
+            stream.recovery_window = std::time::Instant::now() - RECOVERY_WINDOW * 2;
             stream
                 .step(|l, r| {
                     processed += 1;
@@ -488,6 +556,16 @@ mod tests {
         }
         assert_eq!(stream.recovered_xruns, 4);
         assert_eq!(stream.telemetry().xruns, Some(4));
+    }
+    #[test]
+    fn repeated_xruns_stop_instead_of_crackling_forever() {
+        let mut stream = Duplex::open_pcm(config(SampleFormat::S24Packed)).unwrap();
+        for _ in 0..MAX_RECOVERY_BURST {
+            assert_eq!(stream.reprime("Capture").unwrap(), Step::Waiting);
+        }
+        let error = stream.reprime("Capture").unwrap_err();
+        assert!(error.contains("remained unstable"));
+        assert_eq!(stream.recovered_xruns, u64::from(MAX_RECOVERY_BURST));
     }
     #[test]
     fn processor_failure_does_not_submit_output() {

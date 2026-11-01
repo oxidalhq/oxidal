@@ -183,6 +183,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             // Moved in: only the render thread receives host utilities.
             let host_recv = host_recv;
             let outcome = (|| -> Result<(), String> {
+                let mut left = vec![0.0; settings.stream.input.period_frames as usize];
+                let mut right = left.clone();
+                let zero = left.clone();
+                // Bind and warm the active graph on its permanent render thread
+                // before ALSA starts. Complex NAM/convolution graphs can spend
+                // several audio periods binding ports and filling cold internal
+                // schedules; doing that after capture has started turns a graph
+                // that fits at steady state into an immediate xrun burst.
+                for _ in 0..8 {
+                    shared.render(&[&zero, &zero], &mut [&mut left, &mut right])?;
+                }
+                left.fill(0.0);
+                right.fill(0.0);
                 let mut stream = {
                     #[cfg(feature = "qualification")]
                     if null {
@@ -193,8 +206,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     #[cfg(not(feature = "qualification"))]
                     Duplex::open(settings.stream.clone())?
                 };
-                let mut left = vec![0.0; settings.stream.input.period_frames as usize];
-                let mut right = left.clone();
                 let mut progress = Instant::now();
                 let mut published = Instant::now();
                 while !stop.load(Ordering::Acquire) {

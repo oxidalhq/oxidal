@@ -371,6 +371,7 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
     ['Display', 'Display'],
     ['Device', 'Device'],
     ['Maintenance', 'Maintenance'],
+    ['About Oxidal', 'About Oxidal'],
   ] as const;
 
   for (const size of [
@@ -389,7 +390,7 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
         return [...rows.values()];
       }),
       `balanced settings rows at ${size.width}px`,
-    ).toEqual(size.width <= 760 ? [4, 4] : [8]);
+    ).toEqual(size.width <= 900 ? [3, 3, 3] : [9]);
     for (const [tab, heading] of sections) {
       await tabs.getByRole('tab', { name: tab, exact: true }).click();
       await expect(
@@ -1003,9 +1004,10 @@ test('native device defaults save independently of the playing tone', async ({
     await panel.locator('summary').click();
     await panel.getByLabel('NAM size for new models').click();
     await page.getByRole('option', { name: '75%', exact: true }).click();
-    await panel
-      .getByRole('switch', { name: 'Native multi-core processing' })
-      .click();
+    const multiCore = panel.getByRole('switch', {
+      name: 'Native multi-core processing',
+    });
+    if (!(await multiCore.isChecked())) await multiCore.click();
     await panel.getByRole('button', { name: 'Save device defaults' }).click();
     await expect(panel.getByRole('status')).toContainText('Defaults saved');
     const saved = await (await request.get(endpoint)).json();
@@ -1020,7 +1022,7 @@ test('native device defaults save independently of the playing tone', async ({
       .click();
     await expect(panel.getByRole('status')).toContainText('Defaults saved');
     await expect(panel.getByLabel('NAM size for new models')).toHaveText(
-      'Lite',
+      'Full',
     );
   } finally {
     const latest = await (await request.get(endpoint)).json();

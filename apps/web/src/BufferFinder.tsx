@@ -9,7 +9,7 @@ type Buffer = { frames: number; periods: number };
 
 const MIN_PERIODS = 2;
 const START_MS = 15000;
-const LISTEN_MS = 20000;
+const LISTEN_MS = 60000;
 
 const ms = (n: number) => `${n.toFixed(1)} ms`;
 const label = (b: Buffer) => `${b.frames} × ${b.periods}`;
@@ -34,7 +34,10 @@ type Run = {
     buffer: Buffer;
     since: number | null;
     xruns: number;
-    deadline: number;
+    deadlineMisses: number;
+    invalidSamples: number;
+    frames: number | null;
+    startDeadline: number;
   } | null;
   log: string[];
   result: string | null;
@@ -74,7 +77,10 @@ export function BufferFinder({
         buffer,
         since: null,
         xruns: 0,
-        deadline: performance.now() + START_MS,
+        deadlineMisses: 0,
+        invalidSamples: 0,
+        frames: null,
+        startDeadline: performance.now() + START_MS,
       },
       log: note ? [...next.log, note] : next.log,
     });
@@ -118,7 +124,11 @@ export function BufferFinder({
       snap.stream.input.periods === t.buffer.periods &&
       [snap.audio_phase, snap.rig_phase, snap.graph_phase].includes('running');
     if (!live) {
-      if (now > t.deadline)
+      if (t.since != null) {
+        failed(r, `${label(t.buffer)}: audio stopped or restarted.`);
+        return;
+      }
+      if (now > t.startDeadline)
         failed(
           r,
           `${label(t.buffer)}: the interface refused it or audio did not start.`,
@@ -126,8 +136,25 @@ export function BufferFinder({
       return;
     }
     const xruns = snap.audio?.xruns ?? snap.xruns ?? 0;
+    const deadlineMisses = snap.audio?.deadline_misses ?? 0;
+    const invalidSamples = snap.audio?.invalid_samples ?? 0;
+    const frames = snap.audio?.frames ?? null;
     if (t.since == null) {
-      setRun({ ...r, trial: { ...t, since: now, xruns } });
+      setRun({
+        ...r,
+        trial: {
+          ...t,
+          since: now,
+          xruns,
+          deadlineMisses,
+          invalidSamples,
+          frames,
+        },
+      });
+      return;
+    }
+    if (frames != null && t.frames != null && frames < t.frames) {
+      failed(r, `${label(t.buffer)}: the audio worker restarted.`);
       return;
     }
     if (xruns > t.xruns) {
@@ -137,6 +164,18 @@ export function BufferFinder({
       );
       return;
     }
+    if (deadlineMisses > t.deadlineMisses) {
+      failed(
+        r,
+        `${label(t.buffer)}: ${deadlineMisses - t.deadlineMisses} audio deadline ${deadlineMisses - t.deadlineMisses === 1 ? 'miss' : 'misses'}.`,
+      );
+      return;
+    }
+    if (invalidSamples > t.invalidSamples) {
+      failed(r, `${label(t.buffer)}: invalid audio samples detected.`);
+      return;
+    }
+    if (frames !== t.frames) setRun({ ...r, trial: { ...t, frames } });
     if (now - t.since < LISTEN_MS) return;
     const passed = { ...r, good: t.buffer };
     const note = `${label(t.buffer)}: clean for ${LISTEN_MS / 1000} s.`;
@@ -213,10 +252,11 @@ export function BufferFinder({
       )}
       {!testing && (
         <p className="caption">
-          Restarts audio several times, about 20 seconds per step: first smaller
-          sizes, then fewer periods. Keeps the smallest setting with no
-          dropouts. Load your heaviest preset first. You don&apos;t need to
-          play: processing load is the same in silence.
+          Restarts audio several times: first smaller sizes, then fewer periods.
+          Each running step listens for one minute and rejects xruns, deadline
+          misses, invalid samples, stopped audio or a worker restart. Load your
+          heaviest preset first. You don&apos;t need to play: processing load is
+          the same in silence.
         </p>
       )}
       {run && run.log.length > 0 && (
