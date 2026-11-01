@@ -9,6 +9,7 @@ import {
   type GraphAudioAction,
   type AudioProbe,
 } from './api';
+import { canResumeAudio, resumeUnavailable } from './audioResume';
 
 /** Settings operate on the same effects owner as the playing chain. */
 export function EffectsPlaybackSettings({
@@ -49,6 +50,8 @@ export function EffectsPlaybackSettings({
   }
   if (!state.configured) return null;
   const stream = state.configured.stream;
+  const resumeReady =
+    state.device_owned || canResumeAudio(stream, input, output);
   return (
     <section className="control-stack" aria-label="Playback controls">
       <div className="section-heading">
@@ -69,12 +72,15 @@ export function EffectsPlaybackSettings({
         )}
         <Button
           variant="outline"
-          disabled={!connected || busy || transitioning}
+          disabled={!connected || busy || transitioning || !resumeReady}
           onClick={() => void command({ kind: 'restart' })}
         >
           {state.device_owned ? 'Restart audio' : 'Resume session'}
         </Button>
       </div>
+      {!state.device_owned && !resumeReady && (
+        <p className="caption">{resumeUnavailable}</p>
+      )}
       {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
       <p className="caption">

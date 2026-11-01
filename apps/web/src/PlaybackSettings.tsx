@@ -31,6 +31,7 @@ import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 import { AudioReconfigure } from './AudioReconfigure';
 import { BufferFinder } from './BufferFinder';
 import { bufferMs } from './bufferTiming';
+import { canResumeAudio, resumeUnavailable } from './audioResume';
 
 function configurationLabel(configuration: AudioProbe) {
   const channels =
@@ -199,6 +200,10 @@ export function PlaybackSettings({
         : effects?.phase === 'running'
           ? { kind: 'effects' as const, stream: effects.configured?.stream }
           : null;
+  const nativeResumeReady =
+    !state?.configured ||
+    state.device_owned ||
+    canResumeAudio(state.configured.stream, input, output);
   const hostControls = playing?.stream ? (
     <HostAudioControls
       hear={playing.stream.hear_yourself ?? true}
@@ -393,13 +398,18 @@ export function PlaybackSettings({
               </>
             ) : state?.configured ? (
               <Button
-                disabled={!connected || busy || transitioning}
+                disabled={
+                  !connected || busy || transitioning || !nativeResumeReady
+                }
                 onClick={() => void command({ kind: 'resume' })}
               >
                 Resume session
               </Button>
             ) : null}
           </div>
+          {state?.configured && !state.device_owned && !nativeResumeReady && (
+            <p className="caption">{resumeUnavailable}</p>
+          )}
           {boot}
           <details className="control-help">
             <summary>Playback help</summary>
