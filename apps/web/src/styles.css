@@ -2145,8 +2145,10 @@ textarea {
     padding-inline: 0;
   }
   .masthead nav {
-    grid-template-columns: repeat(5, minmax(44px, 1fr));
-    gap: 0.5rem;
+    flex: 1 1 0;
+    width: auto;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.25rem;
   }
 }
 

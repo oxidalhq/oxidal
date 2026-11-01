@@ -38,8 +38,8 @@ import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
   import('./Library').then((m) => ({ default: m.Library })),
 );
-const Monitoring = lazy(() =>
-  import('./Monitoring').then((m) => ({ default: m.Monitoring })),
+const SoundCheck = lazy(() =>
+  import('./SoundCheck').then((m) => ({ default: m.SoundCheck })),
 );
 import { DebugConsole } from './DebugConsole';
 const WebTerminal = lazy(() =>
@@ -367,7 +367,7 @@ function InstrumentApp() {
                     rig: 'Rig',
                     guitars: 'Guitars',
                     library: 'Library',
-                    monitor: 'Monitor',
+                    monitor: 'Sound Check',
                     settings: 'Settings',
                   }[destination]
                 }
@@ -408,7 +408,7 @@ function InstrumentApp() {
                   : view === 'guitars'
                     ? 'Guitars'
                     : view === 'monitor'
-                      ? 'Monitor'
+                      ? 'Sound Check'
                       : view === 'library'
                         ? 'Library'
                         : 'Settings'}
@@ -430,7 +430,7 @@ function InstrumentApp() {
                   : view === 'guitars'
                     ? 'Your guitars'
                     : view === 'monitor'
-                      ? 'Signal & system'
+                      ? 'Instrument health'
                       : view === 'library'
                         ? 'Library'
                         : settingsLabels[settingsSection]}
@@ -511,8 +511,16 @@ function InstrumentApp() {
           ) : view === 'guitars' ? (
             <GuitarSettings />
           ) : view === 'monitor' ? (
-            <Suspense fallback={<p>Loading monitor…</p>}>
-              <Monitoring displayMode={displayMode} />
+            <Suspense fallback={<p>Loading Sound Check…</p>}>
+              <SoundCheck
+                connected={connected}
+                displayMode={displayMode}
+                onGuitars={() => setView('guitars')}
+                onAudioSetup={() => {
+                  setSettingsSection('audio');
+                  showSettings();
+                }}
+              />
             </Suspense>
           ) : view === 'library' ? (
             <Suspense fallback={<p>Loading library…</p>}>

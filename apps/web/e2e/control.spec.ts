@@ -650,7 +650,7 @@ test('global tuner is accessible outside preset authoring and survives rotation'
   page,
 }) => {
   await page.goto('/');
-  for (const view of ['Rig', 'Library', 'Monitor', 'Settings']) {
+  for (const view of ['Rig', 'Library', 'Sound Check', 'Settings']) {
     await page.getByRole('button', { name: view, exact: true }).click();
     await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Tuner', exact: true });
