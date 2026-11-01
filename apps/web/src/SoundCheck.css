@@ -3,6 +3,19 @@
   gap: 1.5rem;
   min-width: 0;
 }
+.sound-check-tabs {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.sound-check-tabs > .ui-tabs-list {
+  justify-self: start;
+}
+.sound-check-tab-panel {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
 .sound-check-intro {
   display: flex;
   align-items: flex-start;
@@ -109,8 +122,113 @@
 .sound-check-diagnostics-heading {
   display: grid;
   gap: 0.375rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--foreground);
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.sound-check-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.sound-check-metric {
+  display: grid;
+  align-content: start;
+  gap: 0.375rem;
+  min-height: 7.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.sound-check-metric span,
+.sound-check-metric small {
+  color: var(--muted-foreground);
+}
+.sound-check-metric span {
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.sound-check-metric strong {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.sound-check-metric small {
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.sound-check-limit {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.sound-check-limit-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 1.125rem;
+}
+.sound-check-limit-heading > div {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 48rem;
+}
+.sound-check-limit-heading h3,
+.sound-check-limit-heading p {
+  margin: 0;
+}
+.sound-check-limit-heading h3 {
+  font-size: 1rem;
+}
+.sound-check-limit-heading p {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.sound-check-limit-heading .ui-badge {
+  justify-self: start;
+}
+.sound-check-limit-details {
+  border-top: 1px solid var(--border);
+}
+.sound-check-limit-details summary {
+  padding: 0.75rem 1.125rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+}
+.sound-check-limit-details[open] summary {
+  color: var(--foreground);
+}
+.sound-check-limit-groups {
+  display: grid;
+  gap: 0;
+  padding: 0 1.125rem 1rem;
+}
+.sound-check-limit-groups > div {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+.sound-check-limit-groups strong,
+.sound-check-limit-groups span {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.sound-check-limit-groups span {
+  color: var(--muted-foreground);
 }
 .sound-check > .instrument-surface {
   padding: 0;
@@ -125,8 +243,25 @@
     width: fit-content;
   }
   .sound-check-grid,
-  .sound-check-stages {
+  .sound-check-stages,
+  .sound-check-metrics {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .sound-check-tabs > .ui-tabs-list {
+    justify-self: stretch;
+  }
+  .sound-check-tabs > .ui-tabs-list > * {
+    flex: 1 1 0;
+  }
+  .sound-check-limit-heading {
+    display: grid;
+  }
+  .sound-check-limit-heading > .oxidal-button {
+    justify-self: start;
+  }
+  .sound-check-limit-groups > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
   }
   .sound-check-stages .tool-row,
   .sound-check-stages .tool-row:nth-child(3n + 2),

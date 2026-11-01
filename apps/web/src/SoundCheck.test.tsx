@@ -5,6 +5,7 @@ import {
   render,
   screen,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   boosts,
@@ -158,6 +159,7 @@ afterEach(() => {
 });
 
 it('summarises measured loudness, guitar, interface and distinct level stages', async () => {
+  const user = userEvent.setup();
   const onLibrary = vi.fn();
   render(
     <SoundCheck
@@ -192,7 +194,9 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   expect(screen.getByText('+1.0 dB')).toBeVisible();
   expect(screen.getByText('+4.5 dB')).toBeVisible();
   expect(screen.getByText('−6.0 dB')).toBeVisible();
+  await user.click(screen.getByRole('tab', { name: 'Loudness' }));
   expect(screen.getByRole('region', { name: 'Even out' })).toBeVisible();
+  await user.click(screen.getByRole('tab', { name: 'Diagnostics' }));
   expect(
     screen.getByRole('region', { name: 'Audio and system monitoring' }),
   ).toBeVisible();
@@ -331,7 +335,7 @@ it('calls out presets that hit the bounded loudness correction limit', async () 
     entries: [
       {
         key: 'very-quiet',
-        name: 'Very Quiet',
+        name: 'Oxidal · Very Quiet · Clean',
         lufs: -40,
         offset_db: 12,
       },
@@ -349,6 +353,17 @@ it('calls out presets that hit the bounded loudness correction limit', async () 
   );
   await act(async () => {});
 
-  expect(screen.getByText('Loudness correction limit reached')).toBeVisible();
-  expect(screen.getByText(/Very Quiet needs the maximum ±12 dB/)).toBeVisible();
+  expect(screen.getByText('1 scene needs manual gain review')).toBeVisible();
+  expect(
+    screen.queryByText('Automatic correction stopped at ±12 dB'),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Review loudness' }));
+  expect(
+    screen.getByText('Automatic correction stopped at ±12 dB'),
+  ).toBeVisible();
+  expect(screen.getByText(/protects gain structure/)).toBeVisible();
+  fireEvent.click(screen.getByText('Show 1 preset'));
+  expect(screen.getByText('Oxidal · Very Quiet')).toBeVisible();
+  expect(screen.getByText('Clean (+12.0 dB)')).toBeVisible();
 });
