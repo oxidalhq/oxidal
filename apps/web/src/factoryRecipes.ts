@@ -1,6 +1,9 @@
 import type { Lv2Plugin, RigDocument } from './api';
 import scalarLayouts from '../../../crates/oxidal-lv2/scalar-state.json' with { type: 'json' };
-import type { RigNativeSource } from './generated/contract';
+import type {
+  NativeDefaultSettings,
+  RigNativeSource,
+} from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft.ts';
 
 const pluginUris: Record<string, string> = {
@@ -58,6 +61,41 @@ export type FactoryRecipe = {
   after: Effect[];
   scenes: { name: string; mix: number[]; level?: number }[];
 };
+
+const nativeSettingIds = [
+  'osEnabled',
+  'osFactor',
+  'pitchEnabled',
+  'pitchWindow',
+  'inputCalibrationLevel',
+  'calibrateInput',
+  'targetLoudness',
+] as const;
+
+/** Full A2 stays selected by the source preset. Dense graphs only reduce the
+ * internal sample-rate multiplier so every resident scene meets its deadline. */
+function applyNativeBudget(
+  manifest: RigDocument['manifest'],
+  defaults?: NativeDefaultSettings,
+) {
+  const instances = manifest.tone3000.instances;
+  if (!defaults || instances.length < 2) return;
+  const factor = instances.length >= 4 ? 0 : 0.5;
+  const parameters = Object.fromEntries(
+    nativeSettingIds.map((id) => [id, defaults.parameters[id] ?? 0]),
+  );
+  parameters.osEnabled = 1;
+  parameters.osFactor = factor;
+  manifest.extensions['urn:oxidal:native-settings:1'] = {
+    instances: Object.fromEntries(
+      instances.map((instance) => [
+        instance.id,
+        { input_mode: 'stereo', parameters },
+      ]),
+    ),
+  };
+  manifest.requiredExtensions.push('urn:oxidal:native-settings:1');
+}
 const fx = (plugin: string, controls: Record<string, number> = {}): Effect => ({
   plugin,
   controls,
@@ -1169,6 +1207,7 @@ export function buildFactoryRecipe(
   bindings: Partial<Record<FactoryRole, RigNativeSource>>,
   profile: string,
   id = crypto.randomUUID(),
+  defaults?: NativeDefaultSettings,
 ) {
   const rig = rigBuilder(id, `Oxidal · ${recipe.name}`, profile, false);
   let sequence = 0;
@@ -1232,6 +1271,7 @@ export function buildFactoryRecipe(
     const result = rig.finish(rig.chain(chain, rig.input));
     const manifest: RigDocument['manifest'] = JSON.parse(result.manifest_json);
     manifest.oxidal!.recall.tails = 'preserve';
+    applyNativeBudget(manifest, defaults);
     Object.assign(manifest.extensions['urn:oxidal:authoring']!, {
       origin: 'oxidal_example',
       factory_recipe: recipe.id,
@@ -1304,6 +1344,7 @@ export function buildFactoryRecipe(
   const result = rig.finish([output[0]!, output[1]!]);
   const manifest: RigDocument['manifest'] = JSON.parse(result.manifest_json);
   manifest.oxidal!.recall.tails = 'preserve';
+  applyNativeBudget(manifest, defaults);
   manifest.requiredExtensions.push('urn:oxidal:gain:1', 'urn:oxidal:scenes:1');
   manifest.extensions['urn:oxidal:gain:1'] = {};
   manifest.extensions['urn:oxidal:scenes:1'] = {

@@ -23,6 +23,19 @@ const source: RigNativeSource = {
   },
   source: { kind: 'original', preset: 'a'.repeat(64) },
 };
+const defaults = {
+  nam_size: 1,
+  multi_core: true,
+  parameters: {
+    osEnabled: 1,
+    osFactor: 1,
+    pitchEnabled: 0,
+    pitchWindow: 0.33333334,
+    inputCalibrationLevel: 0.5968333,
+    calibrateInput: 1,
+    targetLoudness: 0.7,
+  },
+};
 const validate = new Ajv({ strict: false }).compile(schema);
 it('builds portable scene instruments and complex serial chains from installed metadata', () => {
   expect(factoryRecipes).toHaveLength(44);
@@ -32,6 +45,8 @@ it('builds portable scene instruments and complex serial chains from installed m
       plugins,
       { clean: source, crunch: source, heavy: source, bass: source },
       'profile',
+      crypto.randomUUID(),
+      defaults,
     );
     const m = JSON.parse(request.manifest_json);
     expect(validate(m), JSON.stringify(validate.errors)).toBe(true);
@@ -55,6 +70,20 @@ it('builds portable scene instruments and complex serial chains from installed m
       const keys = (scene: { gains: { node: string; port: number }[] }) =>
         scene.gains.map((g) => `${g.node}:${g.port}`).sort();
       for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
+    }
+    const engines = m.tone3000.instances.length;
+    const settings = m.extensions['urn:oxidal:native-settings:1'];
+    if (engines < 2) {
+      expect(settings).toBeUndefined();
+    } else {
+      expect(m.requiredExtensions).toContain('urn:oxidal:native-settings:1');
+      expect(Object.keys(settings.instances)).toHaveLength(engines);
+      for (const value of Object.values(settings.instances) as {
+        parameters: Record<string, number>;
+      }[]) {
+        expect(value.parameters.osEnabled).toBe(1);
+        expect(value.parameters.osFactor).toBe(engines >= 4 ? 0 : 0.5);
+      }
     }
   }
 });

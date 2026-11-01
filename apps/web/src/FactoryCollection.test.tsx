@@ -10,6 +10,22 @@ afterEach(() => {
 });
 vi.mock('./api', () => ({
   installedLv2: vi.fn(async () => catalog),
+  nativeDefaults: vi.fn(async () => ({
+    revision: 'defaults-1',
+    settings: {
+      nam_size: 1,
+      multi_core: true,
+      parameters: {
+        osEnabled: 1,
+        osFactor: 1,
+        pitchEnabled: 0,
+        pitchWindow: 0.33333334,
+        inputCalibrationLevel: 0.5968333,
+        calibrateInput: 1,
+        targetLoudness: 0.7,
+      },
+    },
+  })),
   rigNativeSources: vi.fn(async () => []),
   rigLibrary: vi.fn(async () => ({ native_profile: 'profile' })),
   publishRig: vi.fn(async () => ({ revision: 'a'.repeat(64) })),

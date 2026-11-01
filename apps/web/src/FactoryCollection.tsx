@@ -14,13 +14,17 @@ import { Badge } from './components/ui/badge';
 import { DialogFooter } from './components/ui/dialog';
 import {
   installedLv2,
+  nativeDefaults,
   rigNativeSources,
   rigLibrary,
   publishRig,
   presetDetails,
   type Lv2Plugin,
 } from './api';
-import type { RigNativeSource } from './generated/contract';
+import type {
+  NativeDefaultSettings,
+  RigNativeSource,
+} from './generated/contract';
 import {
   factoryRecipes,
   factoryRoles,
@@ -95,6 +99,7 @@ function CollectionDialog({
   const [plugins, setPlugins] = useState<Lv2Plugin[]>([]);
   const [sources, setSources] = useState<RigNativeSource[]>([]);
   const [profile, setProfile] = useState('');
+  const [defaults, setDefaults] = useState<NativeDefaultSettings | null>(null);
   const [selected, setSelected] = useState<FactoryRecipe | null>(null);
   const [bindings, setBindings] = useState<
     Partial<Record<FactoryRole, RigNativeSource>>
@@ -117,12 +122,18 @@ function CollectionDialog({
   );
   useEffect(() => {
     let alive = true;
-    Promise.all([installedLv2(48000), rigNativeSources(), rigLibrary()])
-      .then(([p, s, l]) => {
+    Promise.all([
+      installedLv2(48000),
+      rigNativeSources(),
+      rigLibrary(),
+      nativeDefaults(),
+    ])
+      .then(([p, s, l, d]) => {
         if (alive) {
           setPlugins(p);
           setSources(s);
           setProfile(l.native_profile);
+          setDefaults(d.settings);
         }
       })
       .catch((e) => {
@@ -137,7 +148,14 @@ function CollectionDialog({
     setError('');
     try {
       const document = await publishRig(
-        buildFactoryRecipe(recipe, plugins, bindings, profile, ids[recipe.id]),
+        buildFactoryRecipe(
+          recipe,
+          plugins,
+          bindings,
+          profile,
+          ids[recipe.id],
+          defaults ?? undefined,
+        ),
       );
       const details = await presetDetails();
       await presetDetails({
