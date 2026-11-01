@@ -162,13 +162,26 @@ class InstalledTests(unittest.TestCase):
                         'http://drobilla.net/plugins/mda/Tracker',
                     }.issubset(admitted), 'Factory effects missing from the installed image')
 
+                    factory_catalog = json.loads((home / 'factory/catalog.json').read_text())
+                    expected_scenes = {}
+                    for sound in factory_catalog['sounds']:
+                        manifest = json.loads(sound['request']['manifest_json'])
+                        expected_scenes[manifest['id']] = len(
+                            manifest.get('extensions', {})
+                            .get('urn:oxidal:scenes:1', {})
+                            .get('scenes', [])
+                        )
                     seed_command = ['python3', str(home / 'factory/seed.py'),
                         '--marker', temporary + '/factory-installed.json']
                     subprocess.run(seed_command, check=True)
                     seeded = json.loads(get('/api/v1/presets/rigs'))['presets']
-                    self.assertEqual(len(seeded), len(json.loads((home / 'factory/catalog.json').read_text())['sounds']))
+                    self.assertEqual(len(seeded), len(factory_catalog['sounds']))
                     self.assertTrue(all(p['origin'] == 'oxidal_example' and p['native_instances'] == 0
-                        and len(p['scenes']) == 4 for p in seeded))
+                        for p in seeded))
+                    self.assertEqual(
+                        {p['id']: len(p['scenes']) for p in seeded},
+                        expected_scenes,
+                    )
                     subprocess.run(seed_command, check=True)
                     self.assertEqual(json.loads(get('/api/v1/presets/rigs'))['presets'], seeded)
 
