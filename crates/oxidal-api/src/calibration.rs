@@ -174,6 +174,9 @@ impl Store {
     fn progress(&self) -> Progress {
         self.progress.lock().map(|p| p.clone()).unwrap_or_default()
     }
+    pub(crate) fn running(&self) -> bool {
+        self.progress().running
+    }
     fn update(&self, change: impl FnOnce(&mut Progress)) {
         if let Ok(mut progress) = self.progress.lock() {
             change(&mut progress);
@@ -646,7 +649,6 @@ async fn restore(shared: &Shared, playing: Playing, stream: &oxidal_audio::Strea
                 .get_or_insert(format!("Could not restore what was playing: {e}"));
         });
     }
-    crate::boosts::follow(shared).await;
 }
 
 async fn run(shared: Arc<Shared>, all: bool) {
@@ -658,6 +660,10 @@ async fn run(shared: Arc<Shared>, all: bool) {
             p.error = Some(e);
         }
     });
+    // The original sound is restored at a neutral offset. Resume its saved
+    // calibration and deliberate boost only after the run no longer owns the
+    // output, so status polling cannot alter a measurement in flight.
+    crate::boosts::follow(&shared).await;
 }
 async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     if shared.graph_playback.snapshot().device_owned {
@@ -665,7 +671,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     }
     let native = shared.playback.snapshot();
     let rig = shared.rig_playback.snapshot();
-    let stream = native
+    let mut stream = native
         .configured
         .as_ref()
         .map(|c| c.stream.clone())
@@ -718,6 +724,16 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     if todo.is_empty() {
         return Ok(());
     }
+    // Measure preset content, not a previously stored calibration offset or
+    // intentional scene boost. Starts during this run inherit the same neutral
+    // value. The store is restored from boost/calibration state after playback
+    // itself has been restored.
+    stream.levels.boost_db = 0.0;
+    let neutral = oxidal_audio::tools::HostLevels {
+        boost_db: 0.0,
+        ..shared.levels.current()
+    };
+    crate::levels::apply_running(shared, neutral).await?;
     // Factory loudness must reproduce across units and guitar profiles.
     let peak_db = FACTORY_REFERENCE_PEAK_DB;
     let mut outcome = Ok(());

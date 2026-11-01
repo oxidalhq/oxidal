@@ -78,6 +78,13 @@ fn valid_boost(db: f32) -> bool {
     let (lo, hi) = HostLevels::BOOST_RANGE;
     db.is_finite() && (lo..=hi).contains(&db)
 }
+fn resolved_offset(desired_db: f32, current_db: f32, calibrating: bool) -> (f32, bool) {
+    if calibrating {
+        (current_db, false)
+    } else {
+        (desired_db, current_db != desired_db)
+    }
+}
 impl Boosts {
     pub fn validate(&self) -> Result<(), String> {
         if self.boosts.len() > MAX_BOOSTS
@@ -200,11 +207,16 @@ pub(crate) async fn follow(shared: &Shared) -> BoostState {
     let boosts = shared.boosts.current();
     let calibrated_db = shared.calibration.current().total(&playing);
     let (lo, hi) = HostLevels::OFFSET_RANGE;
-    let applied_db = (boosts.total(&playing) + calibrated_db).clamp(lo, hi);
+    let desired_db = (boosts.total(&playing) + calibrated_db).clamp(lo, hi);
     let current = shared.levels.current();
-    if current.boost_db != applied_db {
+    // Even Out owns a deliberately neutral output while its reference riff is
+    // measuring. A health/boost status read must remain read-only during that
+    // window instead of advancing the audio revision or biasing the result.
+    let calibrating = shared.calibration.running();
+    let (applied_db, should_apply) = resolved_offset(desired_db, current.boost_db, calibrating);
+    if should_apply {
         let levels = HostLevels {
-            boost_db: applied_db,
+            boost_db: desired_db,
             ..current
         };
         // A stopped unit has nothing to change, and a refused change is
@@ -279,6 +291,13 @@ mod tests {
         ] {
             assert!(!valid_key(key), "{key}");
         }
+    }
+
+    #[test]
+    fn calibration_status_reads_keep_the_neutral_offset_unchanged() {
+        assert_eq!(resolved_offset(6.0, 0.0, true), (0.0, false));
+        assert_eq!(resolved_offset(6.0, 0.0, false), (6.0, true));
+        assert_eq!(resolved_offset(6.0, 6.0, false), (6.0, false));
     }
     #[test]
     fn the_playing_preset_and_scene_add_up_within_range() {
