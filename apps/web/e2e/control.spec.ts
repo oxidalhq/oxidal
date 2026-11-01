@@ -434,16 +434,15 @@ test('audio inspection keeps the authoring service connected', async ({
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
+  const setup = panel.getByRole('region', { name: 'Audio interface setup' });
   await expect(
-    panel.getByRole('heading', { name: 'Audio interface setup' }),
+    setup.getByRole('heading', { name: 'Audio interface setup' }),
   ).toBeVisible();
   await expect(
-    panel.getByRole('button', { name: 'Refresh audio devices' }),
+    setup.getByRole('button', { name: 'Refresh audio devices' }),
   ).toBeEnabled();
-  await expect(panel.getByRole('status').last()).not.toBeEmpty();
-  await expect(panel.getByRole('status').last()).not.toHaveText(
-    'Inspecting audio…',
-  );
+  await expect(setup.getByRole('status')).not.toBeEmpty();
+  await expect(setup.getByRole('status')).not.toHaveText('Inspecting audio…');
   const health = await (await request.get('/api/v1/health')).json();
   expect(health.audio_available).toBe(false);
   await expect(
@@ -577,30 +576,36 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
+  const setup = panel.getByRole('region', { name: 'Audio interface setup' });
   await expect(
-    panel.getByRole('heading', { name: 'Audio interface setup' }),
+    setup.getByRole('heading', { name: 'Audio interface setup' }),
   ).toBeVisible();
-  await expect(panel.getByLabel('Audio endpoint')).toBeVisible();
-  await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/capture');
+  await expect(
+    setup.getByRole('combobox', { name: 'Input', exact: true }),
+  ).toHaveValue('hw:USB,0');
+  await expect(
+    setup.getByRole('combobox', { name: 'Output', exact: true }),
+  ).toHaveValue('hw:USB,0');
   await expect(panel.getByLabel('Sample rate (Hz)')).toHaveValue('48000');
+  await expect(panel.getByLabel('Input channels')).toHaveValue('1');
+  await expect(panel.getByLabel('Output channels')).toHaveValue('2');
   await expect(
     panel.getByLabel('Buffer size (samples per period)'),
   ).toHaveValue('128');
   await expect(panel.getByLabel('Buffer periods')).toHaveValue('3');
-  await panel.getByRole('button', { name: 'Check audio settings' }).click();
+  await panel.getByRole('button', { name: 'Check input and output' }).click();
   const checked = panel.getByLabel('Checked audio configuration');
   await expect(checked).toContainText('128 samples × 3 = 8.0 ms');
-  await panel.getByLabel('Audio endpoint').selectOption('hw:USB,0/playback');
-  await panel.getByRole('button', { name: 'Check audio settings' }).click();
   await expect(checked).not.toContainText('Not checked');
   await panel.getByLabel('Buffer size (samples per period)').fill('256');
+  await expect(checked).toContainText('Input: Not checked');
   await expect(checked).toContainText('Output: Not checked');
-  await expect(checked).toContainText('Input: hw:USB,0');
   fail = true;
-  await panel.getByRole('button', { name: 'Check audio settings' }).click();
-  await expect(panel.getByRole('status').last()).toContainText(
+  await panel.getByRole('button', { name: 'Check input and output' }).click();
+  await expect(setup.getByRole('status')).toContainText(
     'Unsupported configuration',
   );
+  await expect(checked).toContainText('Input: Not checked');
   await expect(checked).toContainText('Output: Not checked');
   await panel.getByRole('button', { name: 'Refresh audio devices' }).click();
   await expect(checked).toContainText('Input: Not checked');
