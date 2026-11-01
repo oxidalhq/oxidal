@@ -69,6 +69,33 @@ it('mirrors the daemon: the active guitar trim, and its gate above trimmed noise
   ).toBeNull();
 });
 
+it('shows measured strum and noise levels on each profile row', async () => {
+  saved = {
+    guitars: [
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: null },
+      {
+        id: 'st',
+        name: 'Steinberger',
+        trim_db: 0,
+        peak_dbfs: -21.9,
+        noise_dbfs: -35.6,
+        gate: false,
+      },
+    ],
+    reference: 'st',
+    active: 'st',
+  };
+
+  render(<GuitarSettings />);
+
+  expect(
+    await screen.findByText('Strum not measured. Noise not measured.'),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Measured strum −21.9 dBFS. Noise −35.6 dBFS · gate off.'),
+  ).toBeVisible();
+});
+
 it('sets a trim by hand in 0.5 dB steps and resets it', async () => {
   saved = {
     guitars: [{ id: 'st', name: 'Steinberger', trim_db: 0, peak_dbfs: null }],

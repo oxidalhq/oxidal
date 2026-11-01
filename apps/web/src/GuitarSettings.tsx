@@ -18,6 +18,8 @@ const TRIM = { min: -24, max: 24, step: 0.5 };
 
 const db = (n: number) =>
   `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dB`;
+const dbfs = (n: number) =>
+  `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)} dBFS`;
 const clampTrim = (n: number) =>
   Math.min(TRIM.max, Math.max(TRIM.min, Math.round(n * 2) / 2));
 
@@ -144,18 +146,22 @@ export function GuitarSettings() {
       {profiles.guitars.map((g) => {
         const active = profiles.active === g.id;
         const gate = gateFor({ ...profiles, active: g.id });
+        const strum =
+          g.peak_dbfs == null
+            ? 'Strum not measured.'
+            : `Measured strum ${dbfs(g.peak_dbfs)}.`;
+        const noise =
+          g.noise_dbfs == null
+            ? 'Noise not measured.'
+            : gate == null
+              ? `Noise ${dbfs(g.noise_dbfs)} · gate off.`
+              : `Noise ${dbfs(g.noise_dbfs)} · gate opens at ${dbfs(gate)}.`;
         return (
           <ToolRow
             key={g.id}
             title={g.name}
             value={`Trim ${db(g.trim_db ?? 0)}`}
-            detail={
-              g.noise_dbfs == null
-                ? 'Gate not set up.'
-                : gate == null
-                  ? 'Gate off.'
-                  : `Gate opens at ${gate} dBFS.`
-            }
+            detail={`${strum} ${noise}`}
           >
             <Button
               variant="outline"
