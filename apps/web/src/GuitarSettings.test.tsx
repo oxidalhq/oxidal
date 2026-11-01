@@ -89,7 +89,10 @@ it('shows measured strum and noise levels on each profile row', async () => {
   render(<GuitarSettings />);
 
   expect(
-    await screen.findByText('Strum not measured. Noise not measured.'),
+    await screen.findByText(/Sound Check follows the selected profile/),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Strum not measured. Noise not measured.'),
   ).toBeVisible();
   expect(
     screen.getByText('Measured strum −21.9 dBFS. Noise −35.6 dBFS · gate off.'),
@@ -191,10 +194,12 @@ it('adds, switches and renames guitars', async () => {
     ['Steinberger', 0],
   ]);
   expect(saved.active).toBe(saved.guitars[0]!.id);
-  fireEvent.click(screen.getAllByRole('button', { name: 'Play this' })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: 'Use guitar' }));
   await act(async () => {});
   expect(saved.active).toBe(saved.guitars[1]!.id);
-  fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[1]!);
+  expect(screen.queryByRole('button', { name: 'Playing' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Manage Steinberger' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Rename guitar' }));
   fireEvent.change(screen.getByLabelText('Name'), {
     target: { value: 'Steinberger Spirit' },
   });
@@ -203,6 +208,35 @@ it('adds, switches and renames guitars', async () => {
   );
   await act(async () => {});
   expect(saved.guitars[1]!.name).toBe('Steinberger Spirit');
+});
+
+it('confirms removal and selects a remaining guitar instead of clearing the profile', async () => {
+  saved = {
+    guitars: [
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 },
+      { id: 'st', name: 'Steinberger', trim_db: 4, peak_dbfs: -14 },
+    ],
+    reference: 'st',
+    active: 'st',
+  };
+  render(<GuitarSettings />);
+  await act(async () => {});
+
+  fireEvent.click(screen.getByRole('button', { name: 'Manage Steinberger' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove profile…' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent(
+    'The next guitar will become the selected profile.',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Keep guitar' }));
+  expect(saved.guitars).toHaveLength(2);
+
+  fireEvent.click(screen.getByRole('button', { name: 'Manage Steinberger' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove profile…' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove guitar' }));
+  await act(async () => {});
+  expect(saved.guitars.map((g) => g.id)).toEqual(['jiva']);
+  expect(saved.active).toBe('jiva');
+  expect(saved.reference).toBeNull();
 });
 
 it('shows the playing guitar beside Level and switches it from a dialog', async () => {

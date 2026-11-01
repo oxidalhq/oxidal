@@ -268,6 +268,94 @@ test('quiet interface has no detected WCAG AA violations', async ({
   });
 });
 
+test('guitar profiles explain automatic Sound Check use and guard removal', async ({
+  page,
+  request,
+}, testInfo) => {
+  const configured = await request.post('/api/v1/guitars', {
+    data: {
+      guitars: [
+        {
+          id: 'jiva',
+          name: 'Ibanez Jiva',
+          trim_db: 0,
+          peak_dbfs: -8,
+          noise_dbfs: -68,
+          gate: true,
+        },
+        {
+          id: 'steinberger',
+          name: 'Steinberger',
+          trim_db: 6,
+          peak_dbfs: -14,
+          noise_dbfs: -70,
+          gate: true,
+        },
+      ],
+      reference: 'jiva',
+      active: 'steinberger',
+    },
+  });
+  expect(configured.ok()).toBe(true);
+
+  await page.goto('/?development=simulator');
+  await page.getByRole('button', { name: 'Guitars', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Your guitars', exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Sound Check follows the selected profile automatically/),
+  ).toBeVisible();
+  await expect(
+    page.locator('.ui-badge').filter({ hasText: /^Playing$/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Level reference', { exact: true }),
+  ).toBeVisible();
+
+  await expect(
+    page.getByRole('button', { name: 'Use guitar', exact: true }),
+  ).toHaveCount(1);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    )
+    .toBe(true);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.screenshot({
+    path: testInfo.outputPath('guitar-profiles-narrow.png'),
+    fullPage: true,
+  });
+
+  await page
+    .getByRole('button', { name: 'Manage Steinberger', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Remove profile…', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'The next guitar will become the selected profile.',
+  );
+  await page.getByRole('button', { name: 'Remove guitar' }).click();
+  await expect
+    .poll(async () => {
+      const profiles = await (await request.get('/api/v1/guitars')).json();
+      return [
+        profiles.guitars.map((g: { id: string }) => g.id),
+        profiles.active,
+      ];
+    })
+    .toEqual([['jiva'], 'jiva']);
+});
+
 test('MIDI learn persists a bypass mapping and preset controls reflect both ways', async ({
   page,
   request,

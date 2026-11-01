@@ -33,15 +33,20 @@ export function ToolSection({
   title,
   scope,
   label,
+  className = '',
   children,
 }: {
   title: string;
   scope: string;
   label?: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="tool-section" aria-label={label ?? title}>
+    <section
+      className={`tool-section ${className}`.trim()}
+      aria-label={label ?? title}
+    >
       <h3>
         {title}
         <span>{scope}</span>

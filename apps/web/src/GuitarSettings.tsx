@@ -3,7 +3,9 @@ import type { GuitarProfiles } from './api';
 import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
 import './MasterLevel.css';
+import './GuitarSettings.css';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
 import { gateFor, useGuitars } from './useGuitars';
@@ -35,6 +37,8 @@ export function GuitarSettings() {
     id: string | null;
     value: string;
   } | null>(null);
+  const [managing, setManaging] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   // One guitar's trim or gate dialog.
   const [editing, setEditing] = useState<{
     id: string;
@@ -136,12 +140,13 @@ export function GuitarSettings() {
       title="Profiles"
       scope="This unit · kept across presets, not saved in them"
       label="Guitar profiles"
+      className="guitar-profiles"
     >
       <p className="caption">
-        Give each guitar a trim so they all hit your presets at the same level:
-        a guitar with quieter pickups gets a few dB more. Set it by ear, or let
-        Measure strum match it to your first guitar. The gate opens just above
-        each guitar&apos;s own hiss.
+        Choose the guitar you are holding. Its trim and gate apply immediately
+        to every rig, and Sound Check follows the selected profile automatically
+        — there is no separate Sound Check run. Remeasure only after changing
+        the guitar&apos;s output or the interface input/gain.
       </p>
       {profiles.guitars.map((g) => {
         const active = profiles.active === g.id;
@@ -160,17 +165,24 @@ export function GuitarSettings() {
           <ToolRow
             key={g.id}
             title={g.name}
-            value={`Trim ${db(g.trim_db ?? 0)}`}
+            value={
+              <span className="guitar-profile-value">
+                {active && <Badge data-state="playing">Playing</Badge>}
+                {profiles.reference === g.id && <Badge>Level reference</Badge>}
+                <span>Trim {db(g.trim_db ?? 0)}</span>
+              </span>
+            }
             detail={`${strum} ${noise}`}
           >
-            <Button
-              variant="outline"
-              aria-pressed={active}
-              disabled={busy}
-              onClick={() => edit({ active: active ? null : g.id })}
-            >
-              {active ? 'Playing' : 'Play this'}
-            </Button>
+            {!active && (
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => edit({ active: g.id })}
+              >
+                Use guitar
+              </Button>
+            )}
             <Button
               variant="outline"
               disabled={busy}
@@ -188,23 +200,10 @@ export function GuitarSettings() {
             <Button
               variant="ghost"
               disabled={busy}
-              onClick={() => setNaming({ id: g.id, value: g.name })}
+              aria-label={`Manage ${g.name}`}
+              onClick={() => setManaging(g.id)}
             >
-              Rename
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() =>
-                edit({
-                  guitars: profiles.guitars.filter((x) => x.id !== g.id),
-                  active: active ? null : profiles.active,
-                  reference:
-                    profiles.reference === g.id ? null : profiles.reference,
-                })
-              }
-            >
-              Remove
+              Manage
             </Button>
           </ToolRow>
         );
@@ -399,6 +398,97 @@ export function GuitarSettings() {
           </form>
         </AdjustmentDialog>
       )}
+      {managing &&
+        (() => {
+          const guitar = profiles.guitars.find((g) => g.id === managing);
+          if (!guitar) return null;
+          return (
+            <AdjustmentDialog
+              title={guitar.name}
+              onCancel={() => setManaging(null)}
+            >
+              <div className="control-stack">
+                <p className="caption">
+                  Profile management does not change any presets.
+                </p>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setManaging(null);
+                    setNaming({ id: guitar.id, value: guitar.name });
+                  }}
+                >
+                  Rename guitar
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => {
+                    setManaging(null);
+                    setRemoving(guitar.id);
+                  }}
+                >
+                  Remove profile…
+                </Button>
+              </div>
+            </AdjustmentDialog>
+          );
+        })()}
+      {removing &&
+        (() => {
+          const guitar = profiles.guitars.find((g) => g.id === removing);
+          if (!guitar) return null;
+          const isActive = profiles.active === guitar.id;
+          const isReference = profiles.reference === guitar.id;
+          return (
+            <AdjustmentDialog
+              title={`Remove ${guitar.name}?`}
+              onCancel={() => setRemoving(null)}
+            >
+              <div className="control-stack">
+                <p>
+                  This removes its trim, strum and noise measurements from this
+                  unit. Presets and other guitar profiles are not changed.
+                </p>
+                {(isActive || isReference) && (
+                  <p className="caption">
+                    {isActive
+                      ? 'The next guitar will become the selected profile. '
+                      : ''}
+                    {isReference
+                      ? 'The next measured guitar will become the level reference.'
+                      : ''}
+                  </p>
+                )}
+                <div className="dialog-footer">
+                  <Button variant="outline" onClick={() => setRemoving(null)}>
+                    Keep guitar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => {
+                      const remaining = profiles.guitars.filter(
+                        (item) => item.id !== guitar.id,
+                      );
+                      edit({
+                        guitars: remaining,
+                        active: isActive
+                          ? (remaining[0]?.id ?? null)
+                          : profiles.active,
+                        reference: isReference ? null : profiles.reference,
+                      });
+                      setRemoving(null);
+                    }}
+                  >
+                    Remove guitar
+                  </Button>
+                </div>
+              </div>
+            </AdjustmentDialog>
+          );
+        })()}
       {error && <p role="alert">{error}</p>}
     </ToolSection>
   );

@@ -1,0 +1,29 @@
+.guitar-profile-value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.375rem;
+}
+
+.guitar-profile-value > :last-child {
+  white-space: nowrap;
+}
+
+.guitar-profile-value .ui-badge[data-state='playing'] {
+  background: var(--foreground);
+  border-color: var(--foreground);
+  color: var(--background);
+}
+
+@media (max-width: 38rem) {
+  .guitar-profile-value {
+    justify-content: flex-start;
+  }
+
+  .guitar-profiles .tool-row-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+}
