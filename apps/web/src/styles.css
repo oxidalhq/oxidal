@@ -2163,7 +2163,7 @@ textarea {
     flex: 1 1 0;
     width: auto;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.25rem;
+    gap: 0.5rem;
   }
 }
 
