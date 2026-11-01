@@ -375,9 +375,21 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
 
   for (const size of [
     { width: 390, height: 844 },
+    { width: 690, height: 700 },
     { width: 844, height: 390 },
   ]) {
     await page.setViewportSize(size);
+    expect(
+      await tabs.getByRole('tab').evaluateAll((items) => {
+        const rows = new Map<number, number>();
+        for (const item of items) {
+          const top = Math.round(item.getBoundingClientRect().top);
+          rows.set(top, (rows.get(top) ?? 0) + 1);
+        }
+        return [...rows.values()];
+      }),
+      `balanced settings rows at ${size.width}px`,
+    ).toEqual(size.width <= 760 ? [4, 4] : [8]);
     for (const [tab, heading] of sections) {
       await tabs.getByRole('tab', { name: tab, exact: true }).click();
       await expect(

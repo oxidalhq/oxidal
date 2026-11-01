@@ -190,7 +190,10 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
-@media (max-width: 600px) {
+/* Eight settings destinations need two balanced rows before they can fit as a
+   single strip. Avoid the awkward 7 + 1 wrap at tablet and narrow-desktop
+   widths; the wide layout still keeps every destination on one row. */
+@media (max-width: 760px) {
   .settings-workspace > .ui-tabs-list {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
