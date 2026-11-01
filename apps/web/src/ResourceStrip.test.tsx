@@ -2,18 +2,8 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ResourceStrip } from './ResourceStrip';
 import { monitoring, type Monitoring } from './api';
+import { refreshMonitorFeed } from './monitorFeed';
 vi.mock('./api', () => ({ monitoring: vi.fn() }));
-class Events extends EventTarget {
-  static latest: Events;
-  closed = false;
-  constructor() {
-    super();
-    Events.latest = this;
-  }
-  close() {
-    this.closed = true;
-  }
-}
 const snapshot = (sequence: number, phase: string): Monitoring => ({
   sequence,
   audio_phase: 'stopped',
@@ -29,7 +19,6 @@ const snapshot = (sequence: number, phase: string): Monitoring => ({
 });
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubGlobal('EventSource', Events);
 });
 afterEach(() => {
   cleanup();
@@ -62,7 +51,7 @@ it('refreshes BOOX on confirmed lifecycle changes without accepting an older in-
   });
   expect(monitoring).toHaveBeenCalledTimes(2);
   await act(async () => {
-    Events.latest.dispatchEvent(new Event('lifecycle'));
+    refreshMonitorFeed();
   });
   expect(screen.getByTestId('resource-state')).toHaveTextContent(
     'Audio starting',
@@ -85,14 +74,13 @@ it('refreshes BOOX on confirmed lifecycle changes without accepting an older in-
     'Awaiting meters',
   );
   await act(async () => {
-    Events.latest.dispatchEvent(new Event('lifecycle'));
+    refreshMonitorFeed();
   });
   expect(screen.getByTestId('resource-state')).toHaveTextContent(
     'Audio stopping',
   );
   view.unmount();
-  expect(Events.latest.closed).toBe(true);
-  Events.latest.dispatchEvent(new Event('lifecycle'));
+  refreshMonitorFeed();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(6000);
   });

@@ -126,6 +126,47 @@ test('parallel rig validation and MIDI/web state converge across browsers', asyn
   ).toBe(true);
 });
 
+test('three tabs retain API capacity with one event stream per tab', async ({
+  page,
+  context,
+}) => {
+  const second = await context.newPage();
+  const third = await context.newPage();
+  const pages = [page, second, third];
+  const monitorStreams = pages.map(() => 0);
+  pages.forEach((candidate, index) => {
+    candidate.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/v1/monitor/events')
+        monitorStreams[index]! += 1;
+    });
+  });
+
+  await Promise.all(pages.map((candidate) => candidate.goto('/')));
+  for (const candidate of pages)
+    await expect(
+      candidate.getByRole('complementary', {
+        name: 'DSP and system resources',
+      }),
+    ).toHaveAttribute('data-connected', 'true');
+
+  const capabilities = await Promise.all(
+    pages.map((candidate) =>
+      candidate.evaluate(async () => {
+        const response = await fetch('/api/v1/health');
+        return { ok: response.ok, body: await response.json() };
+      }),
+    ),
+  );
+  expect(capabilities.every((result) => result.ok)).toBe(true);
+  expect(capabilities.every((result) => result.body.protocol === 1)).toBe(true);
+  expect(monitorStreams).toEqual([0, 0, 0]);
+
+  await third.close();
+  await expect(
+    page.getByRole('complementary', { name: 'DSP and system resources' }),
+  ).toHaveAttribute('data-connected', 'true');
+});
+
 test('MIDI continues with browsers closed; simulator feedback cannot loop into input', async ({
   page,
   request,

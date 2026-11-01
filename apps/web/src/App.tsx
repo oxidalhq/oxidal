@@ -34,6 +34,7 @@ const GraphAuthor = lazy(() =>
 );
 import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
+import { refreshMonitorFeed } from './monitorFeed';
 import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
   import('./Library').then((m) => ({ default: m.Library })),
@@ -184,6 +185,7 @@ function InstrumentApp() {
           if (active && events === source) {
             accept(next);
             setConnected(true);
+            refreshMonitorFeed();
           }
         } catch {
           if (active) {

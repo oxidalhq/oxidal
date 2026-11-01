@@ -29,7 +29,6 @@ const listeners = new Set<() => void>();
 const intervals = new Map<symbol, number>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: AbortController | null = null;
-let events: EventSource | null = null;
 let sequence: number | undefined;
 let advanced = 0;
 
@@ -81,22 +80,9 @@ async function refresh() {
 }
 function start() {
   advanced = performance.now();
-  // Polling stays the source of truth; lifecycle events only invalidate it.
-  if (typeof EventSource !== 'undefined') {
-    const source = new EventSource('/api/v1/monitor/events');
-    events = source;
-    source.addEventListener('lifecycle', () => {
-      if (events !== source) return;
-      sequence = undefined;
-      advanced = performance.now();
-      void refresh();
-    });
-  }
   void refresh();
 }
 function stop() {
-  events?.close();
-  events = null;
   pending?.abort();
   pending = null;
   clearTimeout(timer);
@@ -118,7 +104,11 @@ export function useMonitorFeed(everyMs: number): MonitorReading {
   );
 }
 
-/** Fetch now instead of waiting for the next tick, e.g. when a view resumes. */
+/**
+ * Fetch now instead of waiting for the next tick. The app's existing control
+ * event stream calls this for lifecycle changes, avoiding a second permanent
+ * HTTP connection in every browser tab.
+ */
 export function refreshMonitorFeed() {
   if (intervals.size > 0) void refresh();
 }
