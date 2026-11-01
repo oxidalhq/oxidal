@@ -726,6 +726,7 @@ export interface Contract {
   boosts: BoostState;
   calibration: CalibrationState;
   calibration_command: CalibrationCommand;
+  calibration_coverage: CalibrationCoverage;
   capabilities: Capabilities;
   command: Command;
   control_audit: AuditHistory;
@@ -1214,6 +1215,24 @@ export interface Progress {
 }
 export interface CalibrationCommand {
   action: CalibrationAction;
+}
+export interface CalibrationCoverage {
+  /**
+   * Cached measurements whose content still matches the visible item.
+   */
+  measured: number;
+  /**
+   * Cached measurements whose preset or scene content has changed.
+   */
+  stale: number;
+  /**
+   * Visible presets and scenes currently eligible for measurement.
+   */
+  total: number;
+  /**
+   * Visible items that have never been measured.
+   */
+  unmeasured: number;
 }
 /**
  * Development appliance capabilities; audio is deliberately unavailable.

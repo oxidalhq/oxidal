@@ -862,6 +862,7 @@ export async function sceneBlends(
 }
 
 export type CalibrationState = Contract['calibration'];
+export type CalibrationCoverage = Contract['calibration_coverage'];
 const calibrationValidator = ajv.compile<CalibrationState>({
   $defs: schema.$defs,
   $ref: '#/$defs/CalibrationState',
@@ -885,6 +886,22 @@ export async function calibration(
   if (response.status === 404) return null;
   const body = await presetResponse(response);
   if (!calibrationValidator(body)) throw new Error('Incompatible calibration');
+  return body;
+}
+
+const calibrationCoverageValidator = ajv.compile<CalibrationCoverage>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/CalibrationCoverage',
+});
+/** Current preset/scene coverage, scanned on demand rather than on the audio poll. */
+export async function calibrationCoverage(
+  signal?: AbortSignal,
+): Promise<CalibrationCoverage | null> {
+  const response = await fetch('/api/v1/calibration/coverage', { signal });
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!calibrationCoverageValidator(body))
+    throw new Error('Incompatible calibration coverage');
   return body;
 }
 

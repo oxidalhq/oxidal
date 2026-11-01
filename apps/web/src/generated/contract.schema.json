@@ -43,6 +43,9 @@
     "calibration_command": {
       "$ref": "#/$defs/CalibrationCommand"
     },
+    "calibration_coverage": {
+      "$ref": "#/$defs/CalibrationCoverage"
+    },
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
@@ -275,6 +278,7 @@
     "boosts",
     "boost_update",
     "calibration",
+    "calibration_coverage",
     "scene_blends",
     "scene_blend_update",
     "calibration_command",
@@ -2048,6 +2052,42 @@
       "additionalProperties": false,
       "required": [
         "action"
+      ]
+    },
+    "CalibrationCoverage": {
+      "type": "object",
+      "properties": {
+        "measured": {
+          "description": "Cached measurements whose content still matches the visible item.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "stale": {
+          "description": "Cached measurements whose preset or scene content has changed.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "total": {
+          "description": "Visible presets and scenes currently eligible for measurement.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "unmeasured": {
+          "description": "Visible items that have never been measured.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "measured",
+        "stale",
+        "unmeasured"
       ]
     },
     "CalibrationEntry": {

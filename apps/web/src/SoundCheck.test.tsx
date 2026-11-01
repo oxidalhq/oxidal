@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   boosts,
   calibration,
+  calibrationCoverage,
   guitarProfiles,
   unitLevels,
   type BoostState,
@@ -23,6 +24,7 @@ import { SoundCheck } from './SoundCheck';
 vi.mock('./api', () => ({
   boosts: vi.fn(),
   calibration: vi.fn(),
+  calibrationCoverage: vi.fn(),
   guitarProfiles: vi.fn(),
   unitLevels: vi.fn(),
 }));
@@ -122,6 +124,12 @@ const monitoring: Monitoring = {
 
 beforeEach(() => {
   vi.mocked(calibration).mockResolvedValue(calibrationState);
+  vi.mocked(calibrationCoverage).mockResolvedValue({
+    total: 4,
+    measured: 2,
+    stale: 1,
+    unmeasured: 1,
+  });
   vi.mocked(boosts).mockResolvedValue(boostState);
   vi.mocked(guitarProfiles).mockResolvedValue(profiles);
   vi.mocked(unitLevels).mockResolvedValue(levels);
@@ -154,7 +162,9 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
 
   expect(screen.getByText('11.0 LU spread')).toBeVisible();
   expect(screen.getByText('0.0 LU spread')).toBeVisible();
-  expect(screen.getByText(/2 stored measurements/)).toBeVisible();
+  expect(
+    screen.getByText(/2 current · 1 stale after changes · 1 never measured/),
+  ).toBeVisible();
   expect(screen.getByText(/Modern Lead -14.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Ambient Clean -25.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();

@@ -121,6 +121,7 @@ pub struct Contract {
     pub boosts: boosts::BoostState,
     pub boost_update: boosts::BoostUpdate,
     pub calibration: calibration::CalibrationState,
+    pub calibration_coverage: calibration::CalibrationCoverage,
     pub scene_blends: blends::Blends,
     pub scene_blend_update: blends::BlendUpdate,
     pub calibration_command: calibration::CalibrationCommand,
@@ -377,6 +378,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/calibration",
             get(calibration::state).post(calibration::command),
         )
+        .route("/calibration/coverage", get(calibration::coverage))
         .route(
             "/native/defaults",
             get(native_defaults::state).post(native_defaults::update),

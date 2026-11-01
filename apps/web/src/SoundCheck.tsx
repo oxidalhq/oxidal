@@ -9,10 +9,12 @@ import {
 import {
   boosts,
   calibration,
+  calibrationCoverage,
   guitarProfiles,
   unitLevels,
   type BoostState,
   type CalibrationState,
+  type CalibrationCoverage,
   type GuitarProfiles,
   type UnitLevels,
 } from './api';
@@ -27,6 +29,7 @@ import './SoundCheck.css';
 
 type HealthData = {
   calibration: CalibrationState | null;
+  coverage: CalibrationCoverage | null;
   boosts: BoostState | null;
   guitars: GuitarProfiles | null;
   levels: UnitLevels | null;
@@ -68,6 +71,7 @@ export function SoundCheck({
 }) {
   const [data, setData] = useState<HealthData>({
     calibration: null,
+    coverage: null,
     boosts: null,
     guitars: null,
     levels: null,
@@ -86,6 +90,7 @@ export function SoundCheck({
     const abort = new AbortController();
     Promise.allSettled([
       calibration(undefined, abort.signal),
+      calibrationCoverage(abort.signal),
       boosts(undefined, abort.signal),
       guitarProfiles(undefined, abort.signal),
       unitLevels(undefined, abort.signal),
@@ -98,9 +103,10 @@ export function SoundCheck({
       setData({
         calibration:
           results[0].status === 'fulfilled' ? results[0].value : null,
-        boosts: results[1].status === 'fulfilled' ? results[1].value : null,
-        guitars: results[2].status === 'fulfilled' ? results[2].value : null,
-        levels: results[3].status === 'fulfilled' ? results[3].value : null,
+        coverage: results[1].status === 'fulfilled' ? results[1].value : null,
+        boosts: results[2].status === 'fulfilled' ? results[2].value : null,
+        guitars: results[3].status === 'fulfilled' ? results[3].value : null,
+        levels: results[4].status === 'fulfilled' ? results[4].value : null,
       });
       setError(
         failed ? `Some health checks are unavailable: ${failed.reason}` : '',
@@ -143,7 +149,6 @@ export function SoundCheck({
   const correctedSpread = corrected.length
     ? Math.max(0, corrected[0]! - corrected.at(-1)!)
     : null;
-  const failedMeasurements = data.calibration?.progress.failed?.length ?? 0;
   const activeGuitar = data.guitars?.guitars.find(
     (guitar) => guitar.id === data.guitars?.active,
   );
@@ -290,7 +295,11 @@ export function SoundCheck({
           <ToolRow
             title="Target"
             value={lufs(data.calibration?.target_lufs)}
-            detail={`${entries.length} stored measurements · ${data.calibration?.progress.measured ?? 0} new or changed measured in the last run · ${failedMeasurements} unmeasured failures.`}
+            detail={
+              data.coverage
+                ? `${data.coverage.measured} current · ${data.coverage.stale} stale after changes · ${data.coverage.unmeasured} never measured · ${data.coverage.total} total.`
+                : `${entries.length} stored measurements. Refresh checks to scan current Library coverage.`
+            }
           />
           <ToolRow
             title="Before correction"

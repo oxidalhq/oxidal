@@ -1834,6 +1834,17 @@ async fn calibration_reports_progress_and_refuses_without_audio_setup() {
     assert_eq!(idle["target_lufs"], Value::Null);
     assert_eq!(idle["entries"], json!([]));
     assert_eq!(idle["progress"]["running"], false);
+    let coverage: Value = client
+        .get(format!("{endpoint}/coverage"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(coverage["measured"], 0);
+    assert_eq!(coverage["stale"], 0);
+    assert_eq!(coverage["total"], coverage["unmeasured"]);
     // Nothing has ever played, so there is no audio setup to calibrate with.
     let mut state: Value = client
         .post(&endpoint)

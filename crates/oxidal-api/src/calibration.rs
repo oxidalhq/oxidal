@@ -117,6 +117,18 @@ pub struct CalibrationState {
     pub entries: Vec<CalibrationEntry>,
     pub progress: Progress,
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CalibrationCoverage {
+    /// Visible presets and scenes currently eligible for measurement.
+    pub total: usize,
+    /// Cached measurements whose content still matches the visible item.
+    pub measured: usize,
+    /// Cached measurements whose preset or scene content has changed.
+    pub stale: usize,
+    /// Visible items that have never been measured.
+    pub unmeasured: usize,
+}
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CalibrationAction {
@@ -314,6 +326,25 @@ fn inventory(root: &std::path::Path) -> Result<Vec<Item>, String> {
         }
     }
     Ok(items)
+}
+
+fn coverage_for(calibration: &Calibration, items: &[Item]) -> CalibrationCoverage {
+    let mut coverage = CalibrationCoverage {
+        total: items.len(),
+        measured: 0,
+        stale: 0,
+        unmeasured: 0,
+    };
+    for item in items {
+        match calibration.measured.get(&item.key) {
+            Some(measured) if measured.content == measurement_content(&item.content) => {
+                coverage.measured += 1;
+            }
+            Some(_) => coverage.stale += 1,
+            None => coverage.unmeasured += 1,
+        }
+    }
+    coverage
 }
 
 async fn until(
@@ -746,6 +777,22 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> Response {
     )
         .into_response()
 }
+pub(super) async fn coverage(State(shared): State<Arc<Shared>>) -> Response {
+    let root = shared.config.preset_dir.clone();
+    let calibration = shared.calibration.current();
+    match tokio::task::spawn_blocking(move || {
+        inventory(&root).map(|items| coverage_for(&calibration, &items))
+    })
+    .await
+    {
+        Ok(Ok(coverage)) => ([(header::CACHE_CONTROL, "no-store")], Json(coverage)).into_response(),
+        Ok(Err(error)) => failure(StatusCode::INTERNAL_SERVER_ERROR, &error),
+        Err(_) => failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Calibration coverage unavailable",
+        ),
+    }
+}
 pub(super) async fn command(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<CalibrationCommand>, JsonRejection>,
@@ -834,6 +881,37 @@ mod tests {
         assert_eq!(
             measurement_content("preset-revision"),
             "oxidal-factory-riff-v1:preset-revision"
+        );
+    }
+
+    #[test]
+    fn coverage_distinguishes_current_stale_and_unmeasured_items() {
+        let mut calibration = measured(&[("current", -20.0), ("stale", -21.0)]);
+        calibration.measured.get_mut("current").unwrap().content = measurement_content("c");
+        let item = |key: &str, content: &str| Item {
+            key: key.into(),
+            name: key.into(),
+            content: content.into(),
+            target: Target::Tone3000 {
+                id: key.into(),
+                owned: false,
+            },
+        };
+        assert_eq!(
+            coverage_for(
+                &calibration,
+                &[
+                    item("current", "c"),
+                    item("stale", "changed"),
+                    item("new", "new"),
+                ],
+            ),
+            CalibrationCoverage {
+                total: 3,
+                measured: 1,
+                stale: 1,
+                unmeasured: 1,
+            }
         );
     }
 }
