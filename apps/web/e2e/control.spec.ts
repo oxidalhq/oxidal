@@ -356,6 +356,67 @@ test('guitar profiles explain automatic Sound Check use and guard removal', asyn
     .toEqual([['jiva'], 'jiva']);
 });
 
+test('settings navigation stays coherent across narrow and rotated layouts', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/?development=simulator');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Settings sections' });
+  const sections = [
+    ['Audio', 'Audio setup'],
+    ['Network', 'Network'],
+    ['Accounts', 'Accounts'],
+    ['MIDI', 'MIDI controls'],
+    ['Effects', 'Effects'],
+    ['Display', 'Display'],
+    ['Device', 'Device'],
+    ['Maintenance', 'Maintenance'],
+  ] as const;
+
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(size);
+    for (const [tab, heading] of sections) {
+      await tabs.getByRole('tab', { name: tab, exact: true }).click();
+      await expect(
+        tabs.getByRole('tab', { name: tab, exact: true }),
+      ).toHaveAttribute('data-state', 'active');
+      await expect(
+        page.getByRole('heading', { name: heading, level: 1, exact: true }),
+      ).toBeVisible();
+      const overflow = await page.evaluate(() =>
+        [...document.body.querySelectorAll<HTMLElement>('*')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            return box.right > innerWidth + 1 || box.left < -1;
+          })
+          .slice(0, 8)
+          .map((element) => ({
+            tag: element.tagName,
+            className: element.className,
+            text: element.innerText?.slice(0, 60),
+            right: Math.round(element.getBoundingClientRect().right),
+          })),
+      );
+      expect(overflow, `${tab} at ${size.width}×${size.height}`).toEqual([]);
+    }
+    await page.screenshot({
+      path: testInfo.outputPath(`settings-navigation-${size.width}.png`),
+      fullPage: true,
+    });
+  }
+
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+});
+
 test('MIDI learn persists a bypass mapping and preset controls reflect both ways', async ({
   page,
   request,

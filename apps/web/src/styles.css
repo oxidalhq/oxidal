@@ -190,6 +190,18 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
+@media (max-width: 600px) {
+  .settings-workspace > .ui-tabs-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+  .settings-workspace > .ui-tabs-list .ui-tabs-trigger {
+    min-width: 0;
+    padding-inline: 0.25rem;
+    text-align: center;
+  }
+}
 .section-heading {
   display: flex;
   justify-content: space-between;
