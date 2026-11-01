@@ -46,6 +46,14 @@ main block and Lite support block passed at 128 × 3. A three-engine scene rig a
 physical-device development results, not universal limits, a production-duration
 soak or analog round-trip latency claims.
 
+Dense scene rigs must budget every concurrently rendered engine. The three-engine
+Clean-to-heavy rig contains six size-aware A2 blocks. At 8× it missed its deadline
+even at 1024 × 3 (23.56 ms p95 against 21.33 ms) and is not a usable configuration.
+Keeping its two Full/four Lite model choices but setting the three engines to 4×
+passed one minute at 256 × 3 with zero xruns, deadline misses or invalid samples
+(3.40 ms p95 against 5.33 ms). This is a measured per-preset capacity decision;
+it does not change the Full/8× default for a new single engine.
+
 The native editor and playback use separate processes, owner threads and native data roots. Playback loads one saved original/owned preset; changes to the draft or generic rig/MIDI controls do not affect it. Stop does not destroy the editor session. Resume uses the last confirmed device settings and scalar adjustments. Recovery is checkpointed separately from boot playback; when boot playback is disabled, daemon startup restores the configuration without opening the interface and Resume is explicit. **Use this session on boot** captures the successfully running native, mixed or scalar-LV2 session, its confirmed scalar/model edits and exact device configuration; the daemon makes one startup attempt on later launches. One shared boot choice prevents competing owners. Disable boot playback to remove that preference. Subsequent session changes do not overwrite the saved boot session; disable and enable again to replace it. Missing devices or presets leave the web/editor reachable with an audio error; corrupt boot settings are reported separately and start no audio. Stop releases audio but retains the boot preference. Use TONE3000/Return to Oxidal app launching and tracking remain planned. For now, stop and wait for `stopped`, then launch the external app manually; release its interface before resuming.
 
 Use narrowly authorized lifecycle operations and configured executables. Avoid automatic restart races and preserve an explicit user choice after app exit/failure. The browser must not acquire arbitrary service-manager or shell permissions.
