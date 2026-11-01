@@ -24,6 +24,7 @@ import {
   GearSix,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Switch } from './components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { LiveRig } from './LiveRig';
 const MixedRig = lazy(() =>
@@ -966,22 +967,22 @@ function InstrumentApp() {
                         range, and no pickup. Values below 64 select off/serial;
                         64–127 select on/parallel.
                       </p>
-                      <div className="checkboxes">
-                        <label>
-                          <input
-                            type="checkbox"
+                      <div className="grid gap-2">
+                        <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                          <span>Pickup / soft takeover</span>
+                          <Switch
                             checked={pickup}
-                            onChange={(e) => setPickup(e.target.checked)}
+                            onCheckedChange={setPickup}
+                            aria-label="Pickup / soft takeover"
                           />
-                          Pickup / soft takeover
                         </label>
-                        <label>
-                          <input
-                            type="checkbox"
+                        <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
+                          <span>Send controller feedback</span>
+                          <Switch
                             checked={feedback}
-                            onChange={(e) => setFeedback(e.target.checked)}
+                            onCheckedChange={setFeedback}
+                            aria-label="Send controller feedback"
                           />
-                          Send controller feedback
                         </label>
                       </div>
                       <Button disabled={!connected} onClick={saveMapping}>

@@ -9,6 +9,7 @@ import {
 import { PresetDetailsDialog } from './PresetDetails';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
 
 type Entry = Pick<LibraryCatalog['items'][number], 'kind' | 'id' | 'name'>;
 const size = (bytes: number) =>
@@ -281,9 +282,8 @@ export function DeletePresetDialog({
                 {preview.models.length > 0 && (
                   <>
                     <label className="flex items-start gap-3">
-                      <input
+                      <Checkbox
                         className="mt-1"
-                        type="checkbox"
                         checked={cleanup}
                         disabled={
                           busy ||

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CircleNotch, PlugsConnected } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { Checkbox } from './components/ui/checkbox';
 import { detailsMatch } from './presetMetadata';
 import {
   rigLibrary,
@@ -205,8 +206,7 @@ export function SavedRigs({
               )}
               {choosing && (
                 <label className="library-ready">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     aria-label={`Keep ${p.name} ready`}
                     checked={prepared.includes(p.revision)}
                     disabled={
