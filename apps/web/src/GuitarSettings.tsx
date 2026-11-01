@@ -10,6 +10,7 @@ import './GuitarSettings.css';
 import { useMonitorReadings } from './monitorFeed';
 import { ToolRow, ToolSection } from './ToolRow';
 import { gateFor, useGuitars } from './useGuitars';
+import { guitarVerificationDetail } from './guitarVerification';
 
 type Guitar = GuitarProfiles['guitars'][number];
 
@@ -173,7 +174,7 @@ export function GuitarSettings() {
                 <span>Trim {db(g.trim_db ?? 0)}</span>
               </span>
             }
-            detail={`${strum} ${noise}`}
+            detail={`${strum} ${noise} ${guitarVerificationDetail(g)}`}
           >
             {!active && (
               <Button

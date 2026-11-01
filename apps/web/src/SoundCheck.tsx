@@ -25,6 +25,10 @@ import { Monitoring } from './Monitoring';
 import { useMonitorFeed } from './monitorFeed';
 import { processingHeadroom } from './processingHeadroom';
 import { ToolRow, ToolSection } from './ToolRow';
+import {
+  guitarVerificationDetail,
+  guitarVerificationState,
+} from './guitarVerification';
 import './SoundCheck.css';
 
 type HealthData = {
@@ -155,6 +159,7 @@ export function SoundCheck({
   const activeGuitar = data.guitars?.guitars.find(
     (guitar) => guitar.id === data.guitars?.active,
   );
+  const verification = guitarVerificationState(activeGuitar, monitor?.stream);
   const playingKeys = data.boosts?.playing ?? [];
   const presetBoost = playingKeys[0]
     ? (data.boosts?.boosts[playingKeys[0]] ?? 0)
@@ -190,6 +195,20 @@ export function SoundCheck({
       title: `Finish measuring ${activeGuitar.name}`,
       detail:
         'Measure both a strong strum and muted-string noise for useful trim and gate advice.',
+      action: { label: 'Measure guitar', run: onGuitars },
+    });
+  else if (activeGuitar && verification === 'unverified')
+    fixes.push({
+      title: `Verify ${activeGuitar.name} on this input`,
+      detail:
+        'This measurement predates input tracking. Measure strum or noise once while the current interface is running.',
+      action: { label: 'Measure guitar', run: onGuitars },
+    });
+  else if (activeGuitar && verification === 'stale')
+    fixes.push({
+      title: `Recheck ${activeGuitar.name} for this input`,
+      detail:
+        'The current endpoint, format, channel routing or buffer differs from the profile measurement.',
       action: { label: 'Measure guitar', run: onGuitars },
     });
   if (!loading && data.calibration && data.calibration.target_lufs == null)
@@ -359,11 +378,17 @@ export function SoundCheck({
           <ToolRow
             title="Profile health"
             value={
-              activeGuitar?.peak_dbfs != null && activeGuitar.noise_dbfs != null
-                ? 'Checked automatically'
-                : 'Measurement needed'
+              verification === 'current'
+                ? 'Current input verified'
+                : verification === 'stored'
+                  ? 'Checked input stored'
+                  : verification === 'stale'
+                    ? 'Input changed'
+                    : verification === 'unverified'
+                      ? 'Recheck input'
+                      : 'Measurement needed'
             }
-            detail="Sound Check follows the active profile automatically. Measure each guitar once; remeasure after changing interface, input, physical gain or the guitar's output level."
+            detail={`${guitarVerificationDetail(activeGuitar)} Sound Check follows the active profile automatically. Remeasure after changing the physical input-gain knob or the guitar's output level; Oxidal cannot read either control.`}
           />
         </ToolSection>
 

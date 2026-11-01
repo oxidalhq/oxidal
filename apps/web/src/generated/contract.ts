@@ -1600,6 +1600,28 @@ export interface Guitar {
    * Input trim for this guitar in dB (−24 to +24), applied before every rig.
    */
   trim_db?: number;
+  /**
+   * Input path used for the latest strum or noise measurement.
+   */
+  verification?: InputVerification | null;
+}
+/**
+ * Server-owned provenance for a guitar measurement. ALSA's stable card name is
+ * the best identity currently available; it is not presented as a USB serial.
+ */
+export interface InputVerification {
+  channels: number;
+  endpoint: string;
+  format: SampleFormat;
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  input_map: [number, number];
+  period_frames: number;
+  periods: number;
+  sample_rate: number;
+  verified_at_ms: number;
 }
 export interface Library {
   presets: Inspection[];

@@ -63,6 +63,16 @@ const profiles: GuitarProfiles = {
       peak_dbfs: -11.5,
       noise_dbfs: -68.5,
       gate: true,
+      verification: {
+        endpoint: 'Jogg capture',
+        sample_rate: 48000,
+        channels: 2,
+        format: 's32',
+        period_frames: 128,
+        periods: 3,
+        input_map: [0, 1],
+        verified_at_ms: Date.UTC(2026, 10, 1, 6, 0),
+      },
     },
   ],
 };
@@ -168,7 +178,7 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   expect(screen.getByText(/Modern Lead -14.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Ambient Clean -25.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();
-  expect(screen.getByText('Checked automatically')).toBeVisible();
+  expect(screen.getByText('Current input verified')).toBeVisible();
   expect(
     screen.getByText(/Sound Check follows the active profile automatically/),
   ).toBeVisible();

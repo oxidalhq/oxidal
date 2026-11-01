@@ -68,6 +68,34 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     };
     await route.fulfill({ json: state });
   });
+  await page.route('**/api/v1/guitars', (route) =>
+    route.fulfill({
+      json: {
+        active: 'fixture',
+        reference: 'fixture',
+        guitars: [
+          {
+            id: 'fixture',
+            name: 'Stage guitar',
+            trim_db: 0,
+            peak_dbfs: -12,
+            noise_dbfs: -70,
+            gate: true,
+            verification: {
+              endpoint: 'hw:CARD=Test,DEV=0',
+              sample_rate: 48000,
+              channels: 2,
+              format: 's16',
+              period_frames: 128,
+              periods: 3,
+              input_map: [0, 1],
+              verified_at_ms: Date.UTC(2026, 10, 1, 6, 0),
+            },
+          },
+        ],
+      },
+    }),
+  );
   await page.goto('/');
   const strip = page.getByRole('complementary', {
     name: 'DSP and system resources',
@@ -85,6 +113,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(strip).toBeVisible();
   await strip.getByRole('button', { name: 'Open resource details' }).click();
+  await expect(page.getByText('Current input verified')).toBeVisible();
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
@@ -189,8 +218,8 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     'Preset with scenes · waiting for live readings',
   );
   await expect(
-    panel.getByRole('meter', { name: 'Output L peak' }),
-  ).not.toHaveAttribute('aria-valuenow');
+    panel.getByRole('img', { name: 'Output L peak: No live reading' }),
+  ).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   expect((await strip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
   disconnected = true;

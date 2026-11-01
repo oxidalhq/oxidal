@@ -77,7 +77,7 @@ function Meter({
     <div className="meter-row" data-clip={clips > 0 || undefined}>
       <span className="meter-label">{label}</span>
       <div
-        role={reading == null ? 'status' : 'meter'}
+        role={reading == null ? 'img' : 'meter'}
         aria-label={
           reading == null ? `${label} peak: No live reading` : `${label} peak`
         }

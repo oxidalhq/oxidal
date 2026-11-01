@@ -8,13 +8,55 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use oxidal_audio::tools::HostLevels;
+use oxidal_audio::{SampleFormat, StreamConfig, lifecycle::AudioPhase, tools::HostLevels};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf, sync::Arc};
 
 const MAX_GUITARS: usize = 16;
 const GATE_MARGIN_DB: f32 = 6.0;
+
+/// Server-owned provenance for a guitar measurement. ALSA's stable card name is
+/// the best identity currently available; it is not presented as a USB serial.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InputVerification {
+    pub endpoint: String,
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub format: SampleFormat,
+    pub period_frames: u32,
+    pub periods: u32,
+    pub input_map: [u32; 2],
+    pub verified_at_ms: u64,
+}
+
+impl InputVerification {
+    fn from_stream(stream: &StreamConfig, verified_at_ms: u64) -> Self {
+        Self {
+            endpoint: stream.input.endpoint.clone(),
+            sample_rate: stream.input.sample_rate,
+            channels: stream.input.channels,
+            format: stream.input.format,
+            period_frames: stream.input.period_frames,
+            periods: stream.input.periods,
+            input_map: stream.input_map,
+            verified_at_ms,
+        }
+    }
+    fn validate(&self) -> bool {
+        !self.endpoint.is_empty()
+            && self.endpoint.len() <= 160
+            && (8000..=192000).contains(&self.sample_rate)
+            && (1..=64).contains(&self.channels)
+            && (1..=2048).contains(&self.period_frames)
+            && (2..=8).contains(&self.periods)
+            && self
+                .input_map
+                .iter()
+                .all(|&channel| channel < self.channels)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +74,9 @@ pub struct Guitar {
     /// Gate this guitar just above its measured noise.
     #[serde(default)]
     pub gate: bool,
+    /// Input path used for the latest strum or noise measurement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<InputVerification>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -66,6 +111,9 @@ impl Guitars {
                         .iter()
                         .flatten()
                         .all(|p| p.is_finite() && (-120.0..=0.0).contains(p))
+                    && g.verification
+                        .as_ref()
+                        .is_none_or(InputVerification::validate)
             })
         {
             return Err("Up to 16 guitars with unique ids, names of 1–40 characters, trims −24 to +24 dB and levels −120 to 0 dBFS".into());
@@ -107,6 +155,47 @@ impl Guitars {
                     .clamp(lo, hi)
             })
     }
+}
+
+fn active_stream(shared: &Shared) -> Option<StreamConfig> {
+    let native = shared.playback.snapshot();
+    if native.phase == AudioPhase::Running {
+        return native.configured.map(|configured| configured.stream);
+    }
+    let rig = shared.rig_playback.snapshot();
+    if rig.phase == AudioPhase::Running {
+        return rig.configured.map(|configured| configured.stream);
+    }
+    let graph = shared.graph_playback.snapshot();
+    if graph.phase == AudioPhase::Running {
+        return graph.configured.map(|configured| configured.stream);
+    }
+    None
+}
+
+fn reconcile_verifications(
+    previous: &Guitars,
+    mut next: Guitars,
+    stream: Option<&StreamConfig>,
+    verified_at_ms: u64,
+) -> Guitars {
+    for guitar in &mut next.guitars {
+        let prior = previous
+            .guitars
+            .iter()
+            .find(|candidate| candidate.id == guitar.id);
+        let measurement_changed = prior.is_none_or(|prior| {
+            prior.peak_dbfs != guitar.peak_dbfs || prior.noise_dbfs != guitar.noise_dbfs
+        });
+        guitar.verification = if guitar.peak_dbfs.is_none() && guitar.noise_dbfs.is_none() {
+            None
+        } else if measurement_changed {
+            stream.map(|stream| InputVerification::from_stream(stream, verified_at_ms))
+        } else {
+            prior.and_then(|prior| prior.verification.clone())
+        };
+    }
+    next
 }
 
 /// Profiles saved before trims were stored per guitar carry a reference peak
@@ -199,6 +288,17 @@ pub(super) async fn update(
     let Ok(Json(guitars)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid guitar profiles");
     };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .unwrap_or(0);
+    let guitars = reconcile_verifications(
+        &shared.guitars.current(),
+        guitars,
+        active_stream(&shared).as_ref(),
+        now,
+    );
     if let Err(e) = guitars.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }
@@ -225,6 +325,30 @@ pub(super) async fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn stream(endpoint: &str) -> StreamConfig {
+        let input = oxidal_audio::AudioProbe {
+            endpoint: endpoint.into(),
+            direction: oxidal_audio::Direction::Capture,
+            sample_rate: 48_000,
+            channels: 1,
+            format: SampleFormat::S24Packed,
+            period_frames: 64,
+            periods: 3,
+        };
+        StreamConfig {
+            hear_yourself: true,
+            levels: HostLevels::default(),
+            output: oxidal_audio::AudioProbe {
+                endpoint: endpoint.into(),
+                direction: oxidal_audio::Direction::Playback,
+                channels: 2,
+                ..input.clone()
+            },
+            input,
+            input_map: [0, 0],
+            output_map: [0, 1],
+        }
+    }
     fn guitar(id: &str, trim_db: f32) -> Guitar {
         Guitar {
             id: id.into(),
@@ -233,6 +357,7 @@ mod tests {
             peak_dbfs: None,
             noise_dbfs: None,
             gate: false,
+            verification: None,
         }
     }
     fn profiles() -> Guitars {
@@ -314,5 +439,44 @@ mod tests {
         // Current files pass through unchanged.
         let current = serde_json::to_value(&g).unwrap();
         assert_eq!(migrate(current).unwrap(), g);
+    }
+    #[test]
+    fn measurements_capture_the_current_input_and_client_edits_cannot_forge_it() {
+        let previous = profiles();
+        let mut measured = previous.clone();
+        measured.guitars[1].peak_dbfs = Some(-12.5);
+        let measured =
+            reconcile_verifications(&previous, measured, Some(&stream("hw:CARD=Jogg,DEV=0")), 42);
+        let verification = measured.guitars[1].verification.as_ref().unwrap();
+        assert_eq!(verification.endpoint, "hw:CARD=Jogg,DEV=0");
+        assert_eq!(verification.sample_rate, 48_000);
+        assert_eq!(verification.channels, 1);
+        assert_eq!(verification.input_map, [0, 0]);
+        assert_eq!(verification.verified_at_ms, 42);
+
+        let mut forged = measured.clone();
+        forged.guitars[1].name = "Renamed".into();
+        forged.guitars[1].verification = Some(InputVerification::from_stream(
+            &stream("hw:CARD=Other,DEV=0"),
+            99,
+        ));
+        let preserved = reconcile_verifications(&measured, forged, None, 100);
+        assert_eq!(
+            preserved.guitars[1].verification,
+            measured.guitars[1].verification
+        );
+    }
+    #[test]
+    fn changed_measurements_without_a_live_input_become_unverified() {
+        let mut previous = profiles();
+        previous.guitars[1].peak_dbfs = Some(-12.5);
+        previous.guitars[1].verification = Some(InputVerification::from_stream(
+            &stream("hw:CARD=Jogg,DEV=0"),
+            42,
+        ));
+        let mut changed = previous.clone();
+        changed.guitars[1].noise_dbfs = Some(-72.0);
+        let changed = reconcile_verifications(&previous, changed, None, 100);
+        assert_eq!(changed.guitars[1].verification, None);
     }
 }

@@ -4113,6 +4113,17 @@
           "type": "number",
           "format": "float",
           "default": 0
+        },
+        "verification": {
+          "description": "Input path used for the latest strum or noise measurement.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InputVerification"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -4425,6 +4436,64 @@
         "left",
         "right",
         "dual"
+      ]
+    },
+    "InputVerification": {
+      "description": "Server-owned provenance for a guitar measurement. ALSA's stable card name is\nthe best identity currently available; it is not presented as a USB serial.",
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "format": {
+          "$ref": "#/$defs/SampleFormat"
+        },
+        "input_map": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "maxItems": 2,
+          "minItems": 2
+        },
+        "period_frames": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "periods": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sample_rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "verified_at_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "endpoint",
+        "sample_rate",
+        "channels",
+        "format",
+        "period_frames",
+        "periods",
+        "input_map",
+        "verified_at_ms"
       ]
     },
     "Inspection": {

@@ -92,10 +92,14 @@ it('shows measured strum and noise levels on each profile row', async () => {
     await screen.findByText(/Sound Check follows the selected profile/),
   ).toBeVisible();
   expect(
-    screen.getByText('Strum not measured. Noise not measured.'),
+    screen.getByText(
+      'Strum not measured. Noise not measured. No input verification saved.',
+    ),
   ).toBeVisible();
   expect(
-    screen.getByText('Measured strum −21.9 dBFS. Noise −35.6 dBFS · gate off.'),
+    screen.getByText(
+      'Measured strum −21.9 dBFS. Noise −35.6 dBFS · gate off. No input verification saved.',
+    ),
   ).toBeVisible();
 });
 
