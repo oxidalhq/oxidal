@@ -67,6 +67,24 @@ class DevelopmentDeployTests(unittest.TestCase):
         self.assertEqual(binary.read_bytes(), b'old daemon')
         self.assertEqual(calls[-1], ['systemctl', 'start', 'oxidald.service'])
 
+    def test_ui_root_is_traversable_after_atomic_install(self):
+        current = self.root / 'ui'
+        current.mkdir()
+        (current / 'index.html').write_bytes(b'old')
+
+        deploy.deploy_ui({
+            'index.html': b'new',
+            'assets/app.js': b'app',
+        }, self.root)
+
+        self.assertEqual((current.stat().st_mode & 0o777), 0o755)
+        self.assertEqual((current / 'index.html').read_bytes(), b'new')
+        self.assertEqual((current / 'assets/app.js').read_bytes(), b'app')
+        self.assertEqual(
+            (self.root / 'deploy-rollback/ui/index.html').read_bytes(),
+            b'old',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

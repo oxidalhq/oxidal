@@ -133,6 +133,9 @@ def deploy_ui(files, root=Path('/opt/oxidal')):
     current = root / 'ui'
     previous = root / 'deploy-rollback/ui'
     stage = Path(tempfile.mkdtemp(prefix='.ui-', dir=root))
+    # mkdtemp is deliberately private. The installed root must be traversable
+    # by the unprivileged daemon after the atomic rename.
+    stage.chmod(0o755)
     try:
         for name, data in files.items():
             atomic_file(stage / name, data, 0o644)
