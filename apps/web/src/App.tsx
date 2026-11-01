@@ -402,9 +402,7 @@ function InstrumentApp() {
         <main>
           <div
             className={
-              view === 'rig' && (playingName || (performing && audioRunning))
-                ? 'sr-only'
-                : 'page-heading'
+              view === 'rig' && audioRunning ? 'sr-only' : 'page-heading'
             }
           >
             <div>

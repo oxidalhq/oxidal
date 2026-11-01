@@ -4669,6 +4669,9 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   await page.goto('/');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  await expect(
+    page.getByRole('heading', { name: 'Parallel sound', exact: true }),
+  ).toHaveCount(1);
   await expect(rig.locator('[data-node]')).toHaveCount(3);
   const a = (await rig.locator('[data-node="amp-a"]').boundingBox())!;
   const b = (await rig.locator('[data-node="amp-b"]').boundingBox())!;
