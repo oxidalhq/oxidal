@@ -496,16 +496,17 @@ not fade its existing tail a second time. The web uses a ten-millisecond switch.
 Live transitions are bounded to one second before admission, leaving the control
 response deadline headroom.
 
-All resident graphs process, including those whose tails have decayed. Retained
-returns have no time limit, so infinite Hold/feedback persists until released or
-transport stops. The set has fixed membership and preallocated stereo input,
-output and delay buffers; no plugin is created or destroyed in the callback.
-The byte budget covers those host allocations, not plugin internal memory. CPU
-admission, tail detection and suspension are not implemented. Preparing more
-presets increases callback cost even when host CPU looks low. The Rig view states
-the total gapless-ready count and Sound Check warns when measured p95 reaches 75%
-or the session peak reaches 85% of one period. This is a proactive warning, not
-startup admission; the worker still requires measured capacity qualification.
+Dormant alternatives are warmed on their permanent helpers before PCM opens, then
+sleep until selected. Cut returns continue processing silently after the crossfade;
+Preserve returns remain connected. Either stops rendering only after both channels
+stay below −140 dBFS for two continuous seconds. Infinite Hold/feedback therefore
+continues until released or transport stops. The set retains fixed membership and
+preallocated stereo input, output and delay buffers; no plugin is created or
+destroyed in the callback. The byte budget covers those host allocations, not
+plugin internal memory. The Rig view distinguishes loaded from currently rendering
+residents, and Sound Check warns when measured p95 reaches 75% or the session peak
+reaches 85% of one period. This is not startup CPU admission; actual transition and
+tail overlap still require measured capacity qualification.
 
 During streaming, up to three resident helpers overlap independent prepared
 graphs with the main render thread. Each graph stays assigned to one thread for

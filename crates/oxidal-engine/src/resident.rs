@@ -4,6 +4,12 @@ use crate::{Session, ports::Delay, protocol::*};
 use oxidal_lv2::World;
 use oxidal_presets::{BundleStore, manifest::Tails};
 
+/// A return must remain below -140 dBFS for two seconds before it can stop
+/// rendering. This is deliberately below useful audio and does not suspend an
+/// infinite Hold or feedback path that continues producing samples.
+const TAIL_SILENCE_FLOOR: f32 = 1.0e-7;
+const TAIL_SILENCE_SECONDS: u64 = 2;
+
 #[derive(Debug)]
 pub(crate) struct Resident {
     session: Session,
@@ -14,6 +20,8 @@ pub(crate) struct Resident {
     input: [Vec<f32>; 2],
     preserve: bool,
     retained: bool,
+    draining: bool,
+    quiet_frames: u64,
     error: Option<String>,
 }
 impl Resident {
@@ -33,6 +41,29 @@ impl Resident {
         for i in 0..self.left.len() {
             self.left[i] = self.delay[0].next(self.left[i]);
             self.right[i] = self.delay[1].next(self.right[i]);
+        }
+    }
+
+    fn observe_tail(&mut self, quiet_limit: u64) {
+        if !(self.retained || self.draining) || self.error.is_some() {
+            self.quiet_frames = 0;
+            return;
+        }
+        if self
+            .left
+            .iter()
+            .chain(&self.right)
+            .all(|sample| sample.abs() <= TAIL_SILENCE_FLOOR)
+        {
+            self.quiet_frames = self.quiet_frames.saturating_add(self.left.len() as u64);
+            if self.quiet_frames >= quiet_limit {
+                self.retained = false;
+                self.draining = false;
+                self.left.fill(0.0);
+                self.right.fill(0.0);
+            }
+        } else {
+            self.quiet_frames = 0;
         }
     }
 }
@@ -135,6 +166,8 @@ impl ResidentSet {
                 input: [vec![0.0; frames], vec![0.0; frames]],
                 preserve,
                 retained: false,
+                draining: false,
+                quiet_frames: 0,
                 error: None,
             });
         }
@@ -163,7 +196,7 @@ impl ResidentSet {
         } else {
             None
         };
-        let result = Self {
+        let mut result = Self {
             pool,
             residents,
             active: 0,
@@ -174,6 +207,14 @@ impl ResidentSet {
             buffer_bytes: used,
             switch_error: None,
         };
+        // Bind and warm every dormant processor on its permanent helper before
+        // PCM opens. A ready alternative can then sleep until selected instead
+        // of consuming every callback merely because it is loaded.
+        for index in 1..result.residents.len() {
+            result.render_batch(Some(index), None)?;
+            result.residents[index].left.fill(0.0);
+            result.residents[index].right.fill(0.0);
+        }
         if serde_json::to_vec(&result.snapshot())
             .map_err(|e| e.to_string())?
             .len()
@@ -202,11 +243,15 @@ impl ResidentSet {
             .iter()
             .enumerate()
             .filter(|(i, _)| *i != self.active)
-            .map(|(_, r)| PreparedStatus {
+            .map(|(i, r)| PreparedStatus {
                 revision: r.session.source_revision().into(),
                 name: r.name.clone(),
                 modified: r.session.is_modified(),
                 error: r.error.clone(),
+                rendering: r.retained
+                    || r.draining
+                    || self.transition.as_ref().is_some_and(|t| t.target == i),
+                tail: r.retained || r.draining,
             })
             .collect();
         state
@@ -238,6 +283,7 @@ impl ResidentSet {
         if let Some(error) = &self.residents[target].error {
             return Err(format!("Prepared alternative unavailable: {error}"));
         }
+        self.residents[target].quiet_frames = 0;
         self.switch_error = None;
         // Feed the candidate current input before blending. Both output paths
         // already have the same fixed host delay, including the active path.
@@ -282,6 +328,10 @@ impl ResidentSet {
             }
         }
         self.render_batch(None, target)?;
+        let quiet_limit = u64::from(self.rate) * TAIL_SILENCE_SECONDS;
+        for resident in &mut self.residents {
+            resident.observe_tail(quiet_limit);
+        }
         if let Some(error) = &self.residents[self.active].error {
             for port in output.iter_mut() {
                 port.fill(0.0);
@@ -315,7 +365,10 @@ impl ResidentSet {
                     t.cursor += 1;
                     if t.cursor >= t.length + self.latency as usize {
                         self.residents[self.active].retained = true;
+                        self.residents[self.active].draining = false;
+                        self.residents[self.active].quiet_frames = 0;
                         self.residents[t.target].retained = false;
+                        self.residents[t.target].draining = false;
                         self.active = t.target;
                         self.transition = None;
                     }
@@ -331,7 +384,10 @@ impl ResidentSet {
                     t.cursor += 1;
                     if t.cursor >= t.length + self.latency as usize {
                         self.residents[self.active].retained = false;
+                        self.residents[self.active].draining = true;
+                        self.residents[self.active].quiet_frames = 0;
                         self.residents[t.target].retained = false;
+                        self.residents[t.target].draining = false;
                         self.active = t.target;
                         self.transition = None;
                     }
@@ -345,7 +401,10 @@ impl ResidentSet {
                     t.cursor += 1;
                     if t.cursor == t.length {
                         self.residents[self.active].retained = false;
+                        self.residents[self.active].draining = true;
+                        self.residents[self.active].quiet_frames = 0;
                         self.residents[t.target].retained = false;
+                        self.residents[t.target].draining = false;
                         self.active = t.target;
                         self.transition = None;
                     }
@@ -385,10 +444,20 @@ impl ResidentSet {
         }
     }
     fn render_batch(&mut self, only: Option<usize>, skip: Option<usize>) -> Result<(), String> {
-        let selected = |index| only.is_none_or(|i| i == index) && skip != Some(index);
+        let active = self.active;
+        let target = self.transition.as_ref().map(|t| t.target);
+        let selected = |index: usize, resident: &Resident| {
+            only.is_none_or(|i| i == index)
+                && skip != Some(index)
+                && (only.is_some()
+                    || index == active
+                    || target == Some(index)
+                    || resident.retained
+                    || resident.draining)
+        };
         let Some(pool) = &self.pool else {
             for (index, resident) in self.residents.iter_mut().enumerate() {
-                if selected(index) {
+                if selected(index, resident) {
                     resident.process_block();
                 }
             }
@@ -400,7 +469,7 @@ impl ResidentSet {
             .expect("nonempty resident set");
         for (offset, resident) in others.iter_mut().enumerate() {
             let index = offset + 1;
-            if selected(index) && resident.error.is_none() {
+            if selected(index, resident) && resident.error.is_none() {
                 // Stable assignment for the full session: native AudioPort binds
                 // to its first render thread, including while it is the candidate.
                 pool.queue(
@@ -410,7 +479,7 @@ impl ResidentSet {
             }
         }
         pool.start();
-        if selected(0) {
+        if selected(0, first) {
             first.process_block();
         }
         // Always join, including when the main resident failed. Owner controls

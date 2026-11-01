@@ -188,3 +188,31 @@ fn returning_from_cut_preset_does_not_duck_an_already_ringing_target() {
     }
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn inaudible_preserved_return_sleeps_but_remains_gapless_ready() {
+    let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-tails-sleep-{}", std::process::id()));
+    let store = BundleStore::new(root.clone());
+    let a = store.save(&echo("Outgoing", true)).unwrap();
+    let b = store.save(&echo("Incoming", true)).unwrap();
+    let mut rig = ResidentSet::new(&store, &world, &settings(&[a, b.clone()]), 1 << 20).unwrap();
+    for block in 0..1700 {
+        if block == 2 {
+            switch(&mut rig, &b);
+        }
+        let mut input = [0.0; 64];
+        if block == 0 {
+            input[0] = 0.25;
+        }
+        let (mut left, mut right) = ([0.0; 64], [0.0; 64]);
+        rig.process(&[&input, &input], &mut [&mut left, &mut right])
+            .unwrap();
+    }
+    let state = rig.snapshot();
+    assert_eq!(state.source_revision, b);
+    assert_eq!(state.prepared.len(), 1);
+    assert!(!state.prepared[0].rendering);
+    assert!(!state.prepared[0].tail);
+    std::fs::remove_dir_all(root).unwrap();
+}

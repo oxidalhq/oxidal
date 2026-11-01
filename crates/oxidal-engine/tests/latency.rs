@@ -421,6 +421,7 @@ fn resident_switch_qualification(preserve: bool) {
         })
         .unwrap();
     let original = residents.snapshot();
+    assert!(original.prepared.iter().all(|preset| !preset.rendering));
     let command = |state: &oxidal_engine::protocol::Snapshot, revision: &str| SwitchCommand {
         session: state.session.clone(),
         expected_revision: state.revision,
@@ -441,6 +442,7 @@ fn resident_switch_qualification(preserve: bool) {
             residents
                 .switch(command(&residents.snapshot(), &b))
                 .unwrap();
+            assert!(residents.snapshot().prepared[0].rendering);
             assert!(
                 residents
                     .switch(command(&residents.snapshot(), &b))
@@ -478,6 +480,7 @@ fn resident_switch_qualification(preserve: bool) {
         if block == 20 {
             assert_eq!(residents.snapshot().source_revision, b);
             assert!(residents.snapshot().prepared[0].modified);
+            assert!(residents.snapshot().prepared[0].tail);
         }
     }
     assert!(!residents.switching());
@@ -499,16 +502,19 @@ fn resident_switch_qualification(preserve: bool) {
         recall: None,
     }];
     let mut residents = ResidentSet::new(&store, &world, &failing, 1024 * 1024).unwrap();
-    residents
-        .switch(command(&residents.snapshot(), &failed))
-        .unwrap();
+    assert!(
+        residents
+            .switch(command(&residents.snapshot(), &failed))
+            .unwrap_err()
+            .contains("Prepared alternative unavailable")
+    );
     let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
     residents
         .process(&[&[0.25; 64], &[0.25; 64]], &mut [&mut l, &mut r])
         .unwrap();
     assert!(residents.healthy());
     assert!(!residents.switching());
-    assert!(residents.take_switch_error().is_some());
+    assert!(residents.take_switch_error().is_none());
     assert_eq!(residents.snapshot().source_revision, a);
     assert!(residents.snapshot().prepared[0].error.is_some());
     assert!(

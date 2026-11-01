@@ -196,6 +196,15 @@ and headroom warning based on the actual prepared graphs, not a fixed lane or
 preset count. The qualification restored the exact pre-test rig and the live API
 then reported zero xruns, deadline misses and invalid samples.
 
+The later resident scheduler warms each alternative before PCM opens, then stops
+rendering untouched alternatives. Cut graphs drain silently and Preserve returns
+remain audible until both channels stay below −140 dBFS for two seconds; a Hold or
+feedback path that keeps producing samples does not sleep. This removes silent
+prepared graphs from steady callback work without shortening an audible tail. The
+measurements above remain historical evidence for the former always-rendering
+scheduler; repeat the same Pi matrix before accepting new resident-set capacity or
+buffer defaults.
+
 The optional Hold flag captures the voices in the last prepared preset. The test
 uses continuous reference input, keeps physical output muted between switches,
 polls telemetry frequently and restores the supplied configuration even on a

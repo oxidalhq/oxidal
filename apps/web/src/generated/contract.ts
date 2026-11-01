@@ -2194,7 +2194,15 @@ export interface PreparedStatus {
   error?: string | null;
   modified: boolean;
   name: string;
+  /**
+   * This alternative is currently transitioning or rendering a tail.
+   */
+  rendering?: boolean;
   revision: string;
+  /**
+   * The alternative is rendering only its outgoing return.
+   */
+  tail?: boolean;
 }
 export interface Scenes {
   branches?: Scene[];

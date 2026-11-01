@@ -71,6 +71,8 @@ function setup(
     name: string;
     modified: boolean;
     error: string | null;
+    rendering?: boolean;
+    tail?: boolean;
   }> = [],
 ) {
   const controls = [
@@ -135,11 +137,13 @@ it('explains the processing cost of gapless-ready rigs', async () => {
       name: 'Other rig',
       modified: false,
       error: null,
+      rendering: false,
+      tail: false,
     },
   ]);
   expect(
     await screen.findByText(
-      '2 gapless-ready rigs stay processing. Reduce the ready set if DSP headroom is tight.',
+      '2 gapless-ready rigs are loaded. 1 processing now; quiet alternatives sleep until selected.',
     ),
   ).toBeVisible();
   expect(screen.getByRole('group', { name: 'Prepared presets' })).toBeVisible();

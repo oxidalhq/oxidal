@@ -1491,8 +1491,11 @@ export function MixedRig({
       {!!state.control?.prepared?.length && (
         <div className="grid gap-2">
           <p className="caption">
-            {state.control.prepared.length + 1} gapless-ready rigs stay
-            processing. Reduce the ready set if DSP headroom is tight.
+            {state.control.prepared.length + 1} gapless-ready rigs are loaded.{' '}
+            {1 +
+              state.control.prepared.filter((preset) => preset.rendering)
+                .length}{' '}
+            processing now; quiet alternatives sleep until selected.
           </p>
           <div
             className="flex flex-wrap items-center gap-2"

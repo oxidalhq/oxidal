@@ -264,6 +264,12 @@ pub struct PreparedStatus {
     pub name: String,
     pub modified: bool,
     pub error: Option<String>,
+    /// This alternative is currently transitioning or rendering a tail.
+    #[serde(default)]
+    pub rendering: bool,
+    /// The alternative is rendering only its outgoing return.
+    #[serde(default)]
+    pub tail: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

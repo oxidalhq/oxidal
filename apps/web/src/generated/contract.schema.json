@@ -7080,8 +7080,18 @@
         "name": {
           "type": "string"
         },
+        "rendering": {
+          "description": "This alternative is currently transitioning or rendering a tail.",
+          "type": "boolean",
+          "default": false
+        },
         "revision": {
           "type": "string"
+        },
+        "tail": {
+          "description": "The alternative is rendering only its outgoing return.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
