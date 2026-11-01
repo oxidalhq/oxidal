@@ -1,13 +1,14 @@
 # Factory collection
 
-Library → **Explore Oxidal sounds** assembles 40 original starting points,
-with four scenes each, from installed effects and explicitly selected local NAM
-presets. It adds an immutable Oxidal example without changing the playing sound.
+Library → **Explore Oxidal sounds** assembles 44 original starting points from
+installed effects and explicitly selected local NAM presets. Forty are four-scene
+instruments; four experimental presets are long serial chains. It adds an immutable
+Oxidal example without changing the playing sound.
 Editing an example creates an owned copy. These are version-1 recipes, not a
 claim that every genre or arbitrary capture is already auditioned and balanced.
 
-Fresh appliance images install the 15 effects-only sounds in Library on first
-boot, with four scenes each and no downloads. The remaining 25 are available in
+Fresh appliance images install the 16 effects-only sounds in Library on first
+boot with no downloads. The remaining 28 are available in
 the collection browser for assembly with the NAM voices you choose. The initial
 seed uses deterministic manifests, verifies installed plugin controls and writes
 a persistent completion marker. A partial run can retry without duplicating
@@ -46,6 +47,15 @@ Prism Orbit (experimental phaser/pitch/Hall), Rubber Bloom (experimental wah/Hol
 and Velvet Ensemble (chorus/pitch/reflections). Dragonfly Room is deferred pending
 independent-instance comparison; it is not used by these recipes.
 
+Four experimental serial additions deliberately leave the repeated scene layout:
+Cascade Engine stacks two complete whole-rig NAM captures among pedals, Pressure
+Vessel drives one heavy NAM through a longer pedal path, Night Conveyor is a
+seven-block effects-only evolving chain, and Subcurrent runs one bass NAM through
+six further processing stages. They are capacity and sound-design starting points,
+not claims that whole-rig NAM stacking is equivalent to separate amp, cab and IR
+stages. Their descriptions require a low initial Master Level and Sound Check before
+audition.
+
 Fixed echo controls are not tempo-synchronized. Coastline uses a room rather than
 claiming a spring algorithm. Sub/tracker recipes require clear single notes; pitch
 voices add algorithmic delay. Hold capture/release remains explicit in its blocks.
@@ -54,14 +64,15 @@ These limitations are in the individual descriptions, not hidden by genre names.
 ## Assets and dependencies
 
 The standard image contains the recipe settings, **not** third-party NAM/IR payloads or
-private development presets. Twenty-two recipes require local saved NAM voices; all four A recipes, all four S recipes, X02 and X04 use effects only. A selected native source contributes its **whole
+private development presets. Twenty-eight recipes require local saved NAM voices;
+16 are effects-only. A selected native source contributes its **whole
 saved chain**, including its cabinets and settings. Choose an appropriate
 amp-and-cab source; this is not an automatic extraction of one amp from a complex
 preset. Different captures change gain, timbre and processing cost substantially.
 Automatic TONE3000 capture selection/download is a separate unfinished workflow.
 
 Recipes pin plugin URIs, complete control defaults and explicit parameter values.
-Required packs are Guitarix, Invada, MDA and SWH, plus Oxidal Hold and Pitch. New appliance builds install these packs and bundle the tested Hold and Pitch effects; existing installations can install the external packs through Settings → Effects. Missing dependencies are
+Required packs are Guitarix, Invada, MDA, SWH, x42, FOMP and Dragonfly, plus Oxidal Hold and Pitch. New appliance builds install these packs and bundle the tested Hold and Pitch effects; existing installations can install the external packs through Settings → Effects. Missing dependencies are
 shown before Build. The initial reverbs are GxReverb-Stereo and GxZita_rev1-Stereo.
 Dragonfly's Atom ports require explicit portable state in the mixed loader; it is
 not silently admitted through the scalar recipe builder. Same-name URI substitutes,
@@ -83,6 +94,12 @@ separate. Complete gain snapshots prevent old scene settings leaking into a new
 selection. Blend ramps these sends; it can also change the drive into nonlinear
 blocks. It is not a transparent crossfade between two independently rendered
 nonlinear outputs.
+
+Serial recipes have one ordered path and no scene split/merge. Mono effects add
+explicit stereo-to-mono and mono-to-stereo adapters while preserving the order of
+the processing blocks. The collection UI reports scene count, parallel voice count,
+serial block count and NAM stage count separately so those quantities are not
+mistaken for an engine limit.
 
 New preserved-scene compositions and these factory recipes also declare whole
 preset `recall.tails: preserve`. A prepared resident switch ramps input sends and
@@ -114,6 +131,8 @@ This validates all recipes and writes requests without publishing. Add `--publis
 to create presets through a loopback API or SSH tunnel (`--api` defaults to
 `http://127.0.0.1:3230`). Existing output IDs are reused on retry. Changing settings
 creates a new immutable revision; old revisions are not silently deleted.
+Use `--ids X07,H06,X08,B06` to build or publish only a named subset; an unknown ID
+is rejected before any request is written.
 
 Appliance packaging runs `scripts/factory-bundles.mjs --output <directory>` under
 Node's `--experimental-strip-types` option to generate only the asset-free bank.
@@ -123,8 +142,9 @@ idempotence. The recipe JSON, not a development-library export, is the source.
 
 For a device run, save `GET /api/v1/rig-audio` to `owner-audio.json` **before**
 changing audio. This command temporarily replaces the playing rig, measures four
-scenes per recipe with the built-in plucked-string riff, rapidly retargets Blend,
-and restores the supplied owner settings on normal/error exit:
+scenes for a scene instrument or one full pass for a serial chain with the built-in
+plucked-string riff, rapidly retargets Blend where scenes exist, and restores the
+supplied owner settings on normal/error exit:
 
 ```sh
 python3 scripts/qualify-factory.py \
@@ -141,6 +161,39 @@ python3 scripts/qualify-prepared.py \
   --restore /path/to/owner-audio.json --output /path/to/prepared-soak.json \
   --seconds 3600 --frames 256 --capture-last-hold
 ```
+
+For a bounded ad-hoc set, pass `--revisions first,second,...` instead of
+`--settings`; the runner reuses the captured restore snapshot's stream and builds
+null-recall prepared entries for only those immutable revisions.
+
+### Pi 5 serial-topology evidence
+
+The initial device qualification used the owner's Jogg at 48 kHz with three
+periods, the built-in reference riff and physical output muted. At 64 frames, each
+of the four serial presets ran alone with zero xruns, deadline misses or invalid
+samples. Their measured callback peaks were 1,279.152 µs for Cascade Engine,
+594.457 µs for Pressure Vessel, 344.978 µs for Night Conveyor and 1,171.358 µs for
+Subcurrent against a 1,333.333 µs deadline. Pressure Vessel's earlier two-NAM
+variants exceeded the deadline; the admitted recipe therefore uses one heavy NAM
+stage and those failed revisions were archived rather than presented as qualified.
+
+Prepared-set results show why lane count is not a capacity limit:
+
+| Resident set         | Frames | Result | Evidence                                                        |
+| -------------------- | -----: | ------ | --------------------------------------------------------------- |
+| X07 + H06            |     64 | Fail   | 1,503.726 µs peak; 11 deadline misses                           |
+| X07 + X08            |     64 | Fail   | 1,456.115 µs peak; first miss after 7.09 seconds                |
+| All four serial rigs |     64 | Fail   | 2,171.534 µs peak; 139 misses and 26 xruns                      |
+| All four serial rigs |    128 | Fail   | 3,411 µs peak; 163 misses and 9 xruns                           |
+| X07 + X08            |    128 | Pass   | 600 seconds, 488 switches, 2,634.124 µs peak, zero audio errors |
+
+The passing pair consumed 98.8% of its 2,666.667 µs callback deadline at its worst
+point, so it is measured evidence rather than a safe default capacity promise.
+Increasing the buffer also increases the amount of work each prepared graph does
+per callback; it did not make the four-resident set fit. Oxidal needs an admission
+and headroom warning based on the actual prepared graphs, not a fixed lane or
+preset count. The qualification restored the exact pre-test rig and the live API
+then reported zero xruns, deadline misses and invalid samples.
 
 The optional Hold flag captures the voices in the last prepared preset. The test
 uses continuous reference input, keeps physical output muted between switches,

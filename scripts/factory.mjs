@@ -13,6 +13,7 @@ const { values } = parseArgs({
     api: { type: 'string', default: 'http://127.0.0.1:3230' },
     bindings: { type: 'string' },
     output: { type: 'string' },
+    ids: { type: 'string' },
     publish: { type: 'boolean', default: false },
   },
 });
@@ -39,6 +40,20 @@ async function request(path, body) {
   return data;
 }
 const bindings = JSON.parse(await readFile(values.bindings, 'utf8'));
+const selected = values.ids
+  ? new Set(
+      values.ids
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )
+  : null;
+if (selected) {
+  const known = new Set(factoryRecipes.map((recipe) => recipe.id));
+  const unknown = [...selected].filter((id) => !known.has(id));
+  if (unknown.length)
+    throw new Error(`Unknown recipe ids: ${unknown.join(', ')}`);
+}
 const [catalog, library] = await Promise.all([
   request('/api/v1/plugins/lv2?sample_rate=48000'),
   request('/api/v1/presets/rigs'),
@@ -46,7 +61,9 @@ const [catalog, library] = await Promise.all([
 await mkdir(values.output, { recursive: true });
 // Reuse IDs on retry. Build everything before publishing anything.
 const requests = [];
-for (const recipe of factoryRecipes) {
+for (const recipe of factoryRecipes.filter(
+  (candidate) => !selected || selected.has(candidate.id),
+)) {
   const path = join(values.output, `${recipe.id}.json`);
   let id = randomUUID();
   try {

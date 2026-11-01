@@ -24,8 +24,8 @@ const source: RigNativeSource = {
   source: { kind: 'original', preset: 'a'.repeat(64) },
 };
 const validate = new Ajv({ strict: false }).compile(schema);
-it('builds forty portable four-scene instruments from the installed public plugin metadata', () => {
-  expect(factoryRecipes).toHaveLength(40);
+it('builds portable scene instruments and complex serial chains from installed metadata', () => {
+  expect(factoryRecipes).toHaveLength(44);
   for (const recipe of factoryRecipes) {
     const request = buildFactoryRecipe(
       recipe,
@@ -36,7 +36,6 @@ it('builds forty portable four-scene instruments from the installed public plugi
     const m = JSON.parse(request.manifest_json);
     expect(validate(m), JSON.stringify(validate.errors)).toBe(true);
     expect(m.oxidal.recall.tails).toBe('preserve');
-    expect(m.extensions['urn:oxidal:scenes:1'].scenes).toHaveLength(4);
     // Explicit fan-out, not repeated use of an ordinary output port.
     const counts = new Map<string, number>();
     for (const edge of m.oxidal.graph.edges) {
@@ -44,12 +43,38 @@ it('builds forty portable four-scene instruments from the installed public plugi
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     expect([...counts.values()].every((n) => n === 1)).toBe(true);
-    // Every scene covers the same full gain set; recalls cannot leak a prior mix.
-    const scenes = m.extensions['urn:oxidal:scenes:1'].scenes;
-    const keys = (scene: { gains: { node: string; port: number }[] }) =>
-      scene.gains.map((g) => `${g.node}:${g.port}`).sort();
-    for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
+    if (recipe.topology === 'serial') {
+      expect(m.extensions['urn:oxidal:scenes:1']).toBeUndefined();
+      expect(m.extensions['urn:oxidal:authoring'].factory_topology).toBe(
+        'serial',
+      );
+    } else {
+      expect(m.extensions['urn:oxidal:scenes:1'].scenes).toHaveLength(4);
+      // Every scene covers the same full gain set; recalls cannot leak a prior mix.
+      const scenes = m.extensions['urn:oxidal:scenes:1'].scenes;
+      const keys = (scene: { gains: { node: string; port: number }[] }) =>
+        scene.gains.map((g) => `${g.node}:${g.port}`).sort();
+      for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
+    }
   }
+});
+
+it('builds the dual-NAM serial example as one ordered path, not parallel scenes', () => {
+  const recipe = factoryRecipes.find((item) => item.id === 'X07')!;
+  const request = buildFactoryRecipe(
+    recipe,
+    plugins,
+    { clean: source, crunch: source },
+    'profile',
+  );
+  const manifest = JSON.parse(request.manifest_json);
+  expect(manifest.tone3000.instances).toHaveLength(2);
+  expect(manifest.oxidal.lv2).toHaveLength(6);
+  expect(manifest.extensions['urn:oxidal:scenes:1']).toBeUndefined();
+  const processing = manifest.oxidal.graph.nodes.filter(
+    (node: { kind: string }) => !['input', 'output'].includes(node.kind),
+  );
+  expect(processing.length).toBeGreaterThanOrEqual(8);
 });
 it('rejects a same-name substitute URI and Atom effects without portable state', () => {
   const r = factoryRecipes[0]!;

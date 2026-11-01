@@ -67,7 +67,19 @@ try:
             state = start(dict(revision=item['revision'], stream=test_stream,
                                recall=None, prepared=[], midi=None))
             action({'kind': 'host_utility', 'command': {'kind': 'output_mute', 'enabled': True}})
-            for scene in state['control']['scenes']['scenes']:
+            scene_state = state['control'].get('scenes')
+            scenes = scene_state['scenes'] if scene_state else []
+            if not scenes:
+                reference(True)
+                time.sleep(4.5)
+                measured = request()
+                reference(False)
+                telemetry = measured['telemetry']
+                reading = telemetry['monitoring'].get('reference')
+                record['scenes'].append(dict(scene=None, reference=reading, telemetry=telemetry))
+                if not reading or reading.get('lufs') is None:
+                    raise RuntimeError('No measured output from reference riff')
+            for scene in scenes:
                 current = request()['control']
                 action({'kind': 'scene', 'command': {'session': current['session'],
                        'expected_revision': current['revision'], 'scene': scene['id'], 'release_ms': 750}})
@@ -81,13 +93,14 @@ try:
                 if not reading or reading.get('lufs') is None:
                     raise RuntimeError('No measured output from reference riff')
             # Rapid scene retargets exercise Blend while the input is non-silent.
-            reference(True)
-            for i in range(40):
-                current = request()['control']
-                action({'kind': 'scene', 'command': {'session': current['session'],
-                       'expected_revision': current['revision'],
-                       'scene': state['control']['scenes']['scenes'][i % 4]['id'], 'release_ms': 750}})
-                time.sleep(.04)
+            if scenes:
+                reference(True)
+                for i in range(40):
+                    current = request()['control']
+                    action({'kind': 'scene', 'command': {'session': current['session'],
+                           'expected_revision': current['revision'],
+                           'scene': scenes[i % len(scenes)]['id'], 'release_ms': 750}})
+                    time.sleep(.04)
             record['final'] = request()['telemetry']
             reference(False)
         except Exception as error:

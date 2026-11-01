@@ -15,6 +15,7 @@ import {
   factoryRecipes,
   factoryRoles,
   factoryMissingPlugins,
+  factoryTopologySummary,
   buildFactoryRecipe,
   type FactoryRole,
   type FactoryRecipe,
@@ -132,9 +133,12 @@ function CollectionDialog({
         {selected ? (
           <>
             <p>{selected.description}</p>
-            <p className="caption">
-              Scenes: {selected.scenes.map((s) => s.name).join(' · ')}
-            </p>
+            <p className="caption">{factoryTopologySummary(selected)}</p>
+            {selected.scenes.length > 0 && (
+              <p className="caption">
+                Scenes: {selected.scenes.map((s) => s.name).join(' · ')}
+              </p>
+            )}
             {factoryRoles(selected).map((role) => (
               <label key={role} className="field">
                 <span>{role[0]!.toUpperCase() + role.slice(1)} NAM voice</span>
@@ -204,9 +208,9 @@ function CollectionDialog({
         ) : (
           <>
             <p className="caption">
-              {factoryRecipes.length} starting points with four scenes each.
-              Effect-only recipes work without NAM captures; others use voices
-              you choose.
+              {factoryRecipes.length} starting points: scene instruments and
+              complex serial chains. Effect-only recipes work without NAM
+              captures; others use voices you choose.
             </p>
             {!profile && !error && (
               <p role="status">Reading installed effects…</p>
@@ -235,6 +239,7 @@ function CollectionDialog({
                   <div>
                     <strong>{recipe.name}</strong>
                     <p className="caption">{recipe.categories.join(' · ')}</p>
+                    <p className="caption">{factoryTopologySummary(recipe)}</p>
                   </div>
                   {saved[recipe.id] ? (
                     <Badge>Built</Badge>

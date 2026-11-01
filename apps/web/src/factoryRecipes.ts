@@ -51,6 +51,8 @@ export type FactoryRecipe = {
   name: string;
   description: string;
   categories: string[];
+  /** Scene recipes split into voices; serial recipes run one ordered chain. */
+  topology?: 'scenes' | 'serial';
   before: Effect[];
   voices: Voice[];
   after: Effect[];
@@ -1023,6 +1025,68 @@ export const factoryRecipes: FactoryRecipe[] = [
       { name: 'Ensemble', mix: [0.2, 0.4, 0.25] },
     ],
   },
+  {
+    id: 'X07',
+    name: 'Cascade Engine',
+    description:
+      'Experimental long serial chain: compression and a clean whole-rig NAM feed drive, a second crunch whole-rig NAM, modulation, echo and hall. This deliberately stacks complete captures; it is not a separate amp/cab/IR claim. Start quietly and use Sound Check before raising Master Level.',
+    categories: ['Experimental', 'Dual NAM', 'Serial chain'],
+    topology: 'serial',
+    before: [studioComp(-26), nam('clean')],
+    voices: [
+      voice('Serial chain', drive(), nam('crunch'), silk(), orbit(0.2, 6)),
+    ],
+    after: [echo(0.14), flyHall(3.5, 18)],
+    scenes: [],
+  },
+  {
+    id: 'H06',
+    name: 'Pressure Vessel',
+    description:
+      'Experimental high-gain serial stack: a tight filter, overdrive and fuzz push one heavy whole-rig NAM, followed by phasing, bandwidth control and compact reflections. This is intentionally demanding and should be level-matched before audition.',
+    categories: ['Experimental', 'Heavy', 'Serial chain'],
+    topology: 'serial',
+    before: [
+      fx('Invada High Pass Filter (stereo)', { freq: 85 }),
+      drive(),
+      fx('GxBigMuffPi'),
+      nam('heavy'),
+    ],
+    voices: [voice('Serial chain', orbit(0.18, 4))],
+    after: [fx('Invada Low Pass Filter (stereo)', { freq: 6800 }), flyRoom()],
+    scenes: [],
+  },
+  {
+    id: 'X08',
+    name: 'Night Conveyor',
+    description:
+      'Experimental effect-only serial instrument: compression, phasing, a fifth-up pitch voice, reverse delay, chorus, dub echo and a long hall all process the same path in order. Sparse single notes reveal the evolving chain; chords can become dense quickly.',
+    categories: ['Experimental', 'Ambient', 'Serial chain'],
+    topology: 'serial',
+    before: [studioComp(-28), orbit(0.16, 8)],
+    voices: [voice('Serial chain', pitch(7), reverse(0.42), silk())],
+    after: [echo(0.18), flyHall(6, 24)],
+    scenes: [],
+  },
+  {
+    id: 'B06',
+    name: 'Subcurrent',
+    description:
+      'Experimental bass serial chain: a whole-rig bass NAM is peak-controlled, reinforced by a tracked sub, driven, filtered, widened and placed in a compact reflection space. Play clean single notes and check low-frequency headroom in Sound Check.',
+    categories: ['Bass', 'Experimental', 'Serial chain'],
+    topology: 'serial',
+    before: [nam('bass'), studioComp(-24), sub(0.3)],
+    voices: [
+      voice(
+        'Serial chain',
+        drive(),
+        fx('Invada Low Pass Filter (stereo)', { freq: 2600 }),
+        silk(),
+      ),
+    ],
+    after: [flyRoom()],
+    scenes: [],
+  },
 ];
 
 export function factoryRoles(recipe: FactoryRecipe): FactoryRole[] {
@@ -1035,6 +1099,16 @@ export function factoryRoles(recipe: FactoryRecipe): FactoryRole[] {
       ].flatMap((e) => ('native' in e ? [e.native] : [])),
     ),
   ];
+}
+
+export function factoryTopologySummary(recipe: FactoryRecipe) {
+  const blocks =
+    recipe.before.length +
+    recipe.voices.reduce((count, item) => count + item.effects.length, 0) +
+    recipe.after.length;
+  return recipe.topology === 'serial'
+    ? `${blocks} serial blocks · ${factoryRoles(recipe).length} NAM ${factoryRoles(recipe).length === 1 ? 'stage' : 'stages'}`
+    : `${recipe.scenes.length} scenes · ${recipe.voices.length} parallel voices · ${blocks} processing blocks`;
 }
 
 // Shared with the native loader. These exact layouts need no non-scalar audio
@@ -1143,6 +1217,29 @@ export function buildFactoryRecipe(
       controls: controls as Record<string, number>,
     };
   };
+  if (recipe.topology === 'serial') {
+    if (recipe.voices.length !== 1 || recipe.scenes.length !== 0)
+      throw new Error(
+        'A serial factory recipe needs one ordered chain and no scenes.',
+      );
+    const chain = [
+      ...recipe.before,
+      ...recipe.voices[0]!.effects,
+      ...recipe.after,
+    ].map(effect);
+    if (chain.length < 2)
+      throw new Error('A serial factory recipe needs at least two blocks.');
+    const result = rig.finish(rig.chain(chain, rig.input));
+    const manifest: RigDocument['manifest'] = JSON.parse(result.manifest_json);
+    manifest.oxidal!.recall.tails = 'preserve';
+    Object.assign(manifest.extensions['urn:oxidal:authoring']!, {
+      origin: 'oxidal_example',
+      factory_recipe: recipe.id,
+      factory_version: 1,
+      factory_topology: 'serial',
+    });
+    return { ...result, manifest_json: JSON.stringify(manifest) };
+  }
   const common = rig.chain(recipe.before.map(effect), rig.input);
   const split = common.map((from, side) => {
     const id = `scene-input-${side}`;

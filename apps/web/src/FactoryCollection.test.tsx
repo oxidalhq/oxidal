@@ -63,6 +63,7 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   await user.click(
     screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
   );
+  expect(screen.getByText(/44 starting points/)).toBeVisible();
   const search = screen.getByRole('searchbox', {
     name: 'Find a factory sound',
   });
@@ -75,6 +76,12 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   await user.click(explore);
   await user.click(screen.getByRole('button', { name: 'Back' }));
   expect(screen.getByRole('searchbox')).toHaveValue('shoegaze');
+  await user.clear(screen.getByRole('searchbox'));
+  await user.type(screen.getByRole('searchbox'), 'serial chain');
+  expect(
+    screen.getByRole('button', { name: 'Explore Night Conveyor' }),
+  ).toBeVisible();
+  expect(screen.getByText('7 serial blocks · 0 NAM stages')).toBeVisible();
   await user.clear(screen.getByRole('searchbox'));
   await user.type(screen.getByRole('searchbox'), 'unmatched-query');
   expect(screen.getByRole('status')).toHaveTextContent('No matching sounds');

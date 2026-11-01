@@ -12,7 +12,8 @@ import urllib.request
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--api', default='http://127.0.0.1:3230')
-parser.add_argument('--settings', required=True, help='StartRig settings, or a record containing settings')
+parser.add_argument('--settings', help='StartRig settings, or a record containing settings')
+parser.add_argument('--revisions', help='Comma-separated revisions; reuse the restore snapshot stream')
 parser.add_argument('--restore', required=True, help='Saved GET /api/v1/rig-audio snapshot')
 parser.add_argument('--output', required=True)
 parser.add_argument('--seconds', type=int, default=3600)
@@ -22,8 +23,22 @@ args = parser.parse_args()
 if not 1 <= args.seconds <= 86400:
     parser.error('--seconds must be between 1 and 86400')
 original = json.loads(Path(args.restore).read_text())
-settings = json.loads(Path(args.settings).read_text())
-settings = copy.deepcopy(settings.get('settings', settings))
+if bool(args.settings) == bool(args.revisions):
+    parser.error('use exactly one of --settings or --revisions')
+if args.revisions:
+    selected = [revision.strip() for revision in args.revisions.split(',') if revision.strip()]
+    if len(selected) < 2 or not original.get('configured'):
+        parser.error('--revisions needs at least two revisions and a configured restore snapshot')
+    settings = {
+        'revision': selected[0],
+        'stream': copy.deepcopy(original['configured']['stream']),
+        'recall': None,
+        'prepared': [{'revision': revision, 'recall': None} for revision in selected[1:]],
+        'midi': None,
+    }
+else:
+    settings = json.loads(Path(args.settings).read_text())
+    settings = copy.deepcopy(settings.get('settings', settings))
 settings['stream']['hear_yourself'] = False
 if args.frames:
     for direction in ('input', 'output'):
