@@ -98,6 +98,20 @@ def start(config):
     return s
 
 
+def wait_for_configuration(expected, seconds=5):
+    """Wait for the authoritative configured readback after a successful start."""
+    end = time.monotonic() + seconds
+    state = request()
+    while time.monotonic() < end:
+        if state.get('configured') == expected:
+            return state
+        if state.get('phase') != 'running':
+            raise RuntimeError('Restored transport stopped before configuration settled')
+        time.sleep(.1)
+        state = request()
+    return state
+
+
 def owns_set(state):
     configured = state.get('configured') or {}
     present = {configured.get('revision')} | {p['revision'] for p in configured.get('prepared', [])}
@@ -215,6 +229,7 @@ finally:
             print('Another rig is selected; leaving it unchanged', flush=True)
         else:
             restored = start(original['configured'])
+            restored = wait_for_configuration(original['configured'])
             result['restored_configuration'] = restored['configured'] == original['configured']
             print('Restored', restored['configured']['revision'], flush=True)
     except Exception as restore_error:
