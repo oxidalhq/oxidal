@@ -130,7 +130,7 @@ function setup(
   );
   return state;
 }
-it('explains the processing cost of gapless-ready rigs', async () => {
+it('keeps gapless-ready presets distinct from scenes in a compact disclosure', async () => {
   setup('mine', [
     {
       revision: 'other',
@@ -141,12 +141,67 @@ it('explains the processing cost of gapless-ready rigs', async () => {
       tail: false,
     },
   ]);
+  const summary = await screen.findByText('Ready to switch');
+  expect(summary.closest('details')).not.toHaveAttribute('open');
+  expect(screen.getByText('2 presets')).toBeVisible();
+  fireEvent.click(summary);
   expect(
-    await screen.findByText(
-      '2 gapless-ready rigs are loaded. 1 processing now; quiet alternatives sleep until selected.',
+    screen.getByText(
+      /These are other presets kept ready for an instant switch/,
     ),
   ).toBeVisible();
-  expect(screen.getByRole('group', { name: 'Prepared presets' })).toBeVisible();
+  expect(screen.getByRole('group', { name: 'Ready presets' })).toBeVisible();
+});
+it('reports native engines separately from actual blocks and A2 quality', async () => {
+  const state = setup();
+  state.control!.authoring = [
+    {
+      node: 'amp',
+      status: {
+        layout: {
+          left: [{ block_id: 'full' }, { insert: true }],
+          right: [{ block_id: 'scaled' }],
+        },
+        settings: [
+          { target: 'block:full:slimSize', value: 1 },
+          { target: 'block:scaled:slimSize', value: 0.5 },
+          { target: 'osEnabled', value: 1 },
+          { target: 'osFactor', display: '8x' },
+        ],
+      },
+    },
+  ] as unknown as NonNullable<typeof state.control>['authoring'];
+
+  expect(await screen.findByText('1 native engine')).toBeVisible();
+  expect(screen.getByText('2 chain blocks')).toBeVisible();
+  expect(
+    screen.getByText('A2 size · 1 Full · 0 Lite · 1 scaled'),
+  ).toBeVisible();
+  expect(screen.getByText('Oversampling · 8x')).toBeVisible();
+});
+it('keeps Perform mounted behind a clear loader while a preset switches', async () => {
+  setPerform({ on: true, mode: 'presets' });
+  const state = setup();
+  state.phase = 'starting';
+
+  expect(await screen.findByText('Switching preset…')).toBeVisible();
+  expect(
+    screen.getByText('Perform stays open while the next chain is prepared.'),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('region', { name: 'Sounding mixed rig' }),
+  ).not.toBeInTheDocument();
+});
+it('hides the old Rig chain behind a loader while a preset prepares', async () => {
+  const state = setup();
+  state.phase = 'starting';
+
+  const rig = await screen.findByRole('region', { name: 'Sounding mixed rig' });
+  expect(rig).toHaveAttribute('data-loading', 'true');
+  expect(screen.getByText('Preparing preset…')).toBeVisible();
+  expect(
+    screen.getByText('The chain will appear when its audio state is ready.'),
+  ).toBeVisible();
 });
 it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
   const state = setup();
@@ -286,6 +341,48 @@ it('keeps gain-snapshot scenes usable when they share one native chain', async (
   });
   expect(active).toHaveAttribute('aria-pressed', 'true');
   expect(screen.queryByText('Scene branches')).not.toBeInTheDocument();
+});
+
+it('explains the sounding scene as a branch mix rather than another chain', async () => {
+  const state = setup();
+  state.control!.scenes = {
+    fade_ms: 15,
+    scenes: [
+      {
+        id: 'scene-1',
+        name: 'Held foreground',
+        gains: [
+          { node: 'live-send', port: 0, value: 0.4 },
+          { node: 'hold-send', port: 0, value: 1 },
+        ],
+      },
+    ],
+    branches: [
+      {
+        id: 'live',
+        name: 'Live',
+        gains: [{ node: 'live-send', port: 0, value: 1 }],
+      },
+      {
+        id: 'held',
+        name: 'Held layer',
+        gains: [{ node: 'hold-send', port: 0, value: 1 }],
+      },
+    ],
+  };
+  state.control!.scene = 'scene-1';
+
+  expect(await screen.findByText('Current scene ·')).toBeVisible();
+  expect(screen.getAllByText('Held foreground')).toHaveLength(2);
+  expect(screen.getByText('Live 40% · Held layer 100%')).toBeVisible();
+  fireEvent.click(screen.getByText('Current scene ·'));
+  expect(
+    screen.getByText(
+      /Selecting blocks in the chain below edits shared effects/,
+    ),
+  ).toBeVisible();
+  expect(screen.getByText('Live · 40%')).toBeVisible();
+  expect(screen.getByText('Held layer · 100%')).toBeVisible();
 });
 
 it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {

@@ -41,6 +41,7 @@ import {
   Trash,
   Lightning,
   PlugsConnected,
+  ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
@@ -59,6 +60,7 @@ import { RecoveryNotice } from './RecoveryNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { rigNodeLabel } from './rigDraft';
 import { Button } from './components/ui/button';
+import { Badge } from './components/ui/badge';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
@@ -765,6 +767,47 @@ export function MixedRig({
       state.save.source_session === state.control.session &&
       state.save.source_control_revision === state.control.revision
     );
+  const nativeLoad = (() => {
+    const engines = state.control?.authoring ?? [];
+    const blocks = engines.reduce(
+      (count, row) =>
+        count +
+        [
+          ...(row.status.layout?.left ?? []),
+          ...(row.status.layout?.right ?? []),
+        ].filter((block) => !block.insert).length,
+      0,
+    );
+    const sizes = engines.flatMap((row) =>
+      (row.status.settings ?? []).filter((setting) =>
+        setting.target.endsWith(':slimSize'),
+      ),
+    );
+    const full = sizes.filter((setting) => setting.value === 1).length;
+    const lite = sizes.filter((setting) => setting.value === 0).length;
+    const scaled = sizes.length - full - lite;
+    const oversampling = [
+      ...new Set(
+        engines.map((row) => {
+          const enabled = row.status.settings?.find(
+            (setting) => setting.target === 'osEnabled',
+          );
+          const factor = row.status.settings?.find(
+            (setting) => setting.target === 'osFactor',
+          );
+          return enabled?.value === 1 ? factor?.display : 'Off';
+        }),
+      ),
+    ].filter(Boolean);
+    return {
+      engines: engines.length,
+      blocks,
+      full,
+      lite,
+      scaled,
+      oversampling,
+    };
+  })();
   const modelChange = state.control?.model_change;
   const modelPending =
     !!modelChange &&
@@ -958,6 +1001,32 @@ export function MixedRig({
   // of its own blocks, in scene order, with the sounding scene's lane bright.
   const sceneList = state.control?.scenes?.scenes ?? [];
   const soundingScene = sceneList.find((s) => s.id === state.control?.scene);
+  const sceneMix = (() => {
+    if (!soundingScene) return [];
+    const value = (node: string, port: number) =>
+      soundingScene.gains.find(
+        (gain) => gain.node === node && gain.port === port,
+      )?.value;
+    const branches = state.control?.scenes?.branches ?? [];
+    if (branches.length)
+      return branches.flatMap((branch) => {
+        const values = branch.gains.flatMap((gain) => {
+          const current = value(gain.node, gain.port);
+          return current == null ? [] : [current];
+        });
+        return values.length
+          ? [{ name: branch.name, value: Math.max(...values) }]
+          : [];
+      });
+    const byName = new Map<string, number>();
+    for (const gain of soundingScene.gains) {
+      const label = rigNodeLabel(matching, gain.node);
+      if (!label?.endsWith(' send')) continue;
+      const name = label.slice(0, -' send'.length);
+      byName.set(name, Math.max(byName.get(name) ?? 0, gain.value));
+    }
+    return [...byName].map(([name, value]) => ({ name, value }));
+  })();
   const sceneExtension = matching?.manifest.extensions[
     'urn:oxidal:scenes:1'
   ] as
@@ -1195,7 +1264,8 @@ export function MixedRig({
       },
     });
   }
-  if (performing && running)
+  const performSwitching = switching || state.phase === 'starting';
+  if (performing && (running || performSwitching))
     return (
       <>
         <PerformView
@@ -1206,7 +1276,8 @@ export function MixedRig({
             modified: !!changed,
           }}
           lanes={stageLanes}
-          disabled={disabled || !!edit || editing || switching}
+          disabled={disabled || !!edit || editing || performSwitching}
+          switching={performSwitching}
           onToggle={switchTile}
           onEdit={() => setPerforming(false)}
           scenes={
@@ -1265,6 +1336,7 @@ export function MixedRig({
     <section
       className="panel rig-editor space-y-3"
       aria-label="Sounding mixed rig"
+      data-loading={performSwitching || undefined}
     >
       <div className="rig-performance-header">
         <RigPresetSelector
@@ -1346,6 +1418,33 @@ export function MixedRig({
           </Button>
         )}
       </div>
+      {performSwitching && (
+        <div className="rig-switching" role="status" aria-live="polite">
+          <ArrowsClockwise aria-hidden="true" />
+          <span>
+            <strong>Preparing preset…</strong>
+            <small>The chain will appear when its audio state is ready.</small>
+          </span>
+        </div>
+      )}
+      {nativeLoad.engines > 0 && (
+        <div className="rig-load-summary" aria-label="Native processing load">
+          <Badge>
+            {nativeLoad.engines}{' '}
+            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
+          </Badge>
+          <Badge>{nativeLoad.blocks} chain blocks</Badge>
+          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
+            <Badge>
+              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
+              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
+            </Badge>
+          )}
+          {!!nativeLoad.oversampling.length && (
+            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
+          )}
+        </div>
+      )}
       {copyOnEdit && (
         <div
           className="rounded-md border border-border bg-card p-3"
@@ -1456,6 +1555,49 @@ export function MixedRig({
           </>
         }
       />
+      {!!state.control?.prepared?.length && (
+        <details className="ready-presets">
+          <summary>
+            <span>Ready to switch</span>
+            <Badge>{state.control.prepared.length + 1} presets</Badge>
+            <span className="ready-presets-state">1 playing</span>
+          </summary>
+          <p className="caption">
+            These are other presets kept ready for an instant switch. They are
+            not scenes. Quiet presets sleep until selected;{' '}
+            {1 +
+              state.control.prepared.filter((preset) => preset.rendering)
+                .length}{' '}
+            {1 +
+              state.control.prepared.filter((preset) => preset.rendering)
+                .length ===
+            1
+              ? 'preset is'
+              : 'presets are'}{' '}
+            processing now.
+          </p>
+          <div
+            className="ready-presets-list"
+            role="group"
+            aria-label="Ready presets"
+          >
+            {state.control.prepared.map((p) => (
+              <Button
+                key={p.revision}
+                className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
+                variant="outline"
+                disabled={disabled || !!edit || !!p.error}
+                onClick={() => void switchPrepared(p.revision)}
+              >
+                <span className="min-w-0 break-words">
+                  {p.name}
+                  {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </details>
+      )}
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
           extra={
@@ -1488,36 +1630,42 @@ export function MixedRig({
           }}
         />
       )}
-      {!!state.control?.prepared?.length && (
-        <div className="grid gap-2">
+      {soundingScene && (
+        <details className="scene-context">
+          <summary>
+            <span>
+              Current scene · <strong>{soundingScene.name}</strong>
+            </span>
+            {!!sceneMix.length && (
+              <span className="scene-context-mix">
+                {sceneMix
+                  .filter((branch) => branch.value > 0)
+                  .map(
+                    (branch) =>
+                      `${branch.name} ${Math.round(branch.value * 100)}%`,
+                  )
+                  .join(' · ') || 'All branches muted'}
+              </span>
+            )}
+          </summary>
           <p className="caption">
-            {state.control.prepared.length + 1} gapless-ready rigs are loaded.{' '}
-            {1 +
-              state.control.prepared.filter((preset) => preset.rendering)
-                .length}{' '}
-            processing now; quiet alternatives sleep until selected.
+            A scene recalls the branch levels shown here. Selecting blocks in
+            the chain below edits shared effects for every scene; use Save to
+            keep those edits with the preset.
           </p>
-          <div
-            className="flex flex-wrap items-center gap-2"
-            role="group"
-            aria-label="Prepared presets"
-          >
-            {state.control.prepared.map((p) => (
-              <Button
-                key={p.revision}
-                className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
-                variant="outline"
-                disabled={disabled || !!edit || !!p.error}
-                onClick={() => void switchPrepared(p.revision)}
-              >
-                <span className="min-w-0 break-words">
-                  {p.name}
-                  {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
-                </span>
-              </Button>
-            ))}
-          </div>
-        </div>
+          {!!sceneMix.length && (
+            <div className="scene-context-levels" aria-label="Scene mix">
+              {sceneMix.map((branch) => (
+                <Badge
+                  key={branch.name}
+                  data-state={branch.value > 0 ? 'active' : 'muted'}
+                >
+                  {branch.name} · {Math.round(branch.value * 100)}%
+                </Badge>
+              ))}
+            </div>
+          )}
+        </details>
       )}
       <RecoveryNotice message={state.recovery_error} />
       {(error || readError || state.error) && (

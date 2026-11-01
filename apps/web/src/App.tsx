@@ -57,6 +57,7 @@ const WebTerminal = lazy(() =>
 import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
 import { AudioSettings } from './AudioSettings';
+import { About } from './About';
 import { ControlEditor } from './ControlEditor';
 import {
   capabilities,
@@ -101,6 +102,7 @@ function InstrumentApp() {
     | 'display'
     | 'device'
     | 'maintenance'
+    | 'about'
   >('audio');
   const settingsLabels = {
     audio: 'Audio setup',
@@ -111,6 +113,7 @@ function InstrumentApp() {
     display: 'Display',
     device: 'Device',
     maintenance: 'Maintenance',
+    about: 'About Oxidal',
   };
   const [displayMode, setDisplayMode] = useState(() => {
     try {
@@ -843,6 +846,7 @@ function InstrumentApp() {
                     )}
                   </>
                 )}
+                {settingsSection === 'about' && <About />}
                 {settingsSection === 'midi' && !developmentSimulator && (
                   <MidiSettings connected={connected} />
                 )}

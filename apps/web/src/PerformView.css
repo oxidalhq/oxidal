@@ -36,6 +36,38 @@
   gap: 0.875rem;
   min-width: 0;
 }
+.perform-switching {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 10rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  text-align: left;
+}
+.perform-switching > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  animation: perform-spin 1s linear infinite;
+}
+.perform-switching > span {
+  display: grid;
+  gap: 0.125rem;
+}
+.perform-switching small {
+  color: var(--muted-foreground);
+}
+@keyframes perform-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+:root[data-display='epaper'] .perform-switching > svg {
+  animation: none;
+}
 
 /* Edge meter: L/R bars, held peak, -6 dBFS mark, clip cap. Rails never hide. */
 /* Thin rails laid over the page gutters: they take no layout width. */

@@ -1,4 +1,4 @@
-import { ArrowLeft } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowsClockwise } from '@phosphor-icons/react';
 import { useState } from 'react';
 import type { Monitoring } from './api';
 import { GuitarSwitch } from './GuitarSettings';
@@ -95,6 +95,7 @@ export function PerformView({
   now,
   lanes,
   disabled,
+  switching = false,
   onToggle,
   onEdit,
   knobs,
@@ -110,6 +111,8 @@ export function PerformView({
   };
   lanes: RigLaneVM[];
   disabled: boolean;
+  /** Keeps the live surface mounted while another preset is preparing. */
+  switching?: boolean;
   onToggle: (blockId: string) => void;
   onEdit: () => void;
   /** Performance knob strip, rendered by the rig that owns the controls. */
@@ -334,10 +337,11 @@ export function PerformView({
           <div className="perform-headline">
             <div className="perform-now">
               <span className="perform-now-state">
-                {now.playing ? 'Playing' : 'Not playing'}
+                {switching ? 'Switching' : now.playing ? 'Playing' : 'Stopped'}
               </span>
               <strong className="perform-now-name">
-                {now.name ?? 'Unsaved preset'}
+                {now.name ??
+                  (switching ? 'Preparing preset…' : 'Unsaved preset')}
               </strong>
               <span className="perform-now-sub">
                 {now.modified ? (
@@ -349,7 +353,17 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
-          {mode === 'presets' ? (
+          {switching ? (
+            <div className="perform-switching" role="status" aria-live="polite">
+              <ArrowsClockwise aria-hidden="true" />
+              <span>
+                <strong>Switching preset…</strong>
+                <small>
+                  Perform stays open while the next chain is prepared.
+                </small>
+              </span>
+            </div>
+          ) : mode === 'presets' ? (
             <div className="perform-section perform-fill">{selector}</div>
           ) : (
             <>

@@ -76,7 +76,7 @@ export const rigTopologyLabel = (rig: {
       : rig.topology === 'parallel'
         ? 'Parallel graph'
         : 'Serial chain',
-    `${rig.native_instances} NAM ${rig.native_instances === 1 ? 'stage' : 'stages'}`,
+    `${rig.native_instances} native ${rig.native_instances === 1 ? 'engine' : 'engines'}`,
     `${rig.lv2_instances} ${rig.lv2_instances === 1 ? 'effect' : 'effects'}`,
   ].join(' · ');
 

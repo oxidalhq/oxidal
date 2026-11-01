@@ -114,6 +114,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await expect(strip).toBeVisible();
   await strip.getByRole('button', { name: 'Open resource details' }).click();
   await expect(page.getByText('Current input verified')).toBeVisible();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   const panel = page.getByRole('region', {
     name: 'Audio and system monitoring',
   });
@@ -156,6 +157,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   await panel.getByRole('button', { name: 'Resume readings' }).click();
   for (const mode of ['stage', 'sunlight', 'epaper'] as const) {
     await setDisplayMode(page, mode);
+    await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -170,6 +172,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   }
   if (info.project.name === 'boox-air3c') {
     await setDisplayMode(page, 'epaper');
+    await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
     // E-paper must distinguish series without colour, in both plot and legend.
     for (const label of ['Output peak · dBFS', 'Processing budget · %']) {
       const chart = page.getByRole('figure', { name: label });
@@ -208,6 +211,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
     await page.setViewportSize(portrait);
   }
   await setDisplayMode(page, 'stage');
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await mkdir('../../.local/previews/monitor', { recursive: true });
   await page.screenshot({
     path: `../../.local/previews/monitor/${info.project.name}-fixture.png`,
@@ -245,6 +249,7 @@ test('monitor shows device history after browser reload and exports retained sam
   const initial = await (await request.get('/api/v1/monitor/history')).json();
   await page.goto('/');
   await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -289,6 +294,7 @@ test('monitor shows device history after browser reload and exports retained sam
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
     page.getByRole('figure', { name: 'Recorded DSP and CPU · %' }),
@@ -328,6 +334,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     .toBe(true);
   await page.goto('/');
   await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
   await expect(panel.getByText(/Accepted means/)).toBeVisible();
@@ -395,6 +402,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
   });
   await page.reload();
   await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();
   await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(
     'Wi-Fi / device',

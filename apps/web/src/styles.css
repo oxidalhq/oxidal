@@ -190,19 +190,67 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
-/* Eight settings destinations need two balanced rows before they can fit as a
-   single strip. Avoid the awkward 7 + 1 wrap at tablet and narrow-desktop
-   widths; the wide layout still keeps every destination on one row. */
-@media (max-width: 760px) {
+/* Nine settings destinations use three balanced rows before they fit as one
+   strip. Avoid an orphaned final tab at tablet and phone widths. */
+@media (max-width: 900px) {
   .settings-workspace > .ui-tabs-list {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
   .settings-workspace > .ui-tabs-list .ui-tabs-trigger {
     min-width: 0;
     padding-inline: 0.25rem;
     text-align: center;
+  }
+}
+.about-oxidal {
+  display: grid;
+  max-width: 58rem;
+  gap: 1.5rem;
+}
+.about-oxidal-intro {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 48rem;
+}
+.about-oxidal h2,
+.about-oxidal h3,
+.about-oxidal p {
+  margin: 0;
+}
+.about-oxidal h2 {
+  max-width: 20ch;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  line-height: 1.05;
+}
+.about-oxidal h3 {
+  font-size: 0.875rem;
+}
+.about-oxidal p,
+.about-feature-list {
+  color: var(--muted-foreground);
+  line-height: 1.65;
+}
+.about-feature-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 2rem;
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+.about-author {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.about-author p {
+  color: var(--foreground);
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+@media (max-width: 560px) {
+  .about-feature-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .section-heading {
@@ -2215,6 +2263,59 @@ textarea {
   font-weight: 500;
   line-height: 1.3;
 }
+
+/* Scene mixes and resident preset banks are compact disclosures, not another
+   row of scene pads. Their summaries keep the live rig readable at a glance. */
+.ready-presets,
+.scene-context {
+  min-width: 0;
+  border-block: 1px solid var(--border);
+}
+.ready-presets + .scene-context,
+.scene-context + .ready-presets {
+  border-top: 0;
+}
+.ready-presets > summary,
+.scene-context > summary {
+  min-width: 0;
+  gap: 0.5rem;
+  padding-inline: 0.25rem;
+}
+.ready-presets > summary > :first-child,
+.scene-context > summary > :first-child {
+  flex: none;
+  font-weight: 600;
+}
+.ready-presets-state,
+.scene-context-mix {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ready-presets > .caption,
+.scene-context > .caption {
+  margin: 0 0 0.625rem;
+  padding-inline: 0.25rem;
+}
+.ready-presets-list,
+.scene-context-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 0.25rem 0.75rem;
+}
+.scene-context-levels .ui-badge[data-state='muted'] {
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .scene-context-mix {
+    display: none;
+  }
+}
 .ui-toggle-group {
   display: flex;
   flex-wrap: wrap;
@@ -3028,6 +3129,49 @@ textarea {
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+}
+.rig-load-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.rig-editor[data-loading] > *:not(.rig-performance-header):not(.rig-switching) {
+  display: none;
+}
+.rig-switching {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 12rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.rig-switching > svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  animation: rig-spin 1s linear infinite;
+}
+.rig-switching > span {
+  display: grid;
+  gap: 0.125rem;
+}
+.rig-switching small {
+  color: var(--muted-foreground);
+}
+@keyframes rig-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+:root[data-display='epaper'] .rig-switching > svg {
+  animation: none;
+}
+.rig-load-summary .ui-badge {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
 }
 /* The preset name keeps a readable width; buttons that do not fit beside it
    wrap to their own row on phones. */
