@@ -313,6 +313,54 @@ Output level covers ±24 dB; a preset beyond that is set as close as it goes and
 
 The Rig and Perform views show five performance knobs above the chain for TONE3000 rigs: Gain (rig Input level), Bass, Mid and Treble (the rig tone stack, marked inactive while Tone stack is off) and Amount (the selected block's mix). Tap a knob to adjust it in the slider dialog, where the value is large enough to read on a phone. These five save with the preset; Level and Mono below them are unit-wide.
 
+## Physical round-trip latency
+
+Callback time, configured buffer size and `control.latency_frames` are useful
+diagnostics, but none is analog input-to-output latency. The maintained physical
+procedure records a direct reference and Oxidal's processed return in the same
+two-channel capture, so clock start and recorder latency cancel from their frame
+difference.
+
+1. Use a separate interface or recorder whose two input channels share one clock.
+   Send its playback output through a safe split: one side directly to capture
+   channel 1, and the other through an appropriate reamp/level adapter into the
+   selected Jogg instrument input. Connect the selected Jogg analog output to
+   capture channel 2. Begin at low monitor and reamp levels; do not connect a
+   speaker-level output to an interface input.
+2. Generate the −18 dBFS, eight-burst reference:
+
+   ```sh
+   python3 scripts/roundtrip-latency.py generate \
+     --output /tmp/oxidal-latency-stimulus.wav --sample-rate 48000
+   ```
+
+3. Start the exact Oxidal rig and stream under test. Record both capture channels
+   while playing the stimulus from the separate interface. Preserve the raw stereo
+   PCM WAV. Channel 1 must contain the direct split and channel 2 the Jogg return;
+   two separately started recordings are not comparable evidence.
+4. Save `GET /api/v1/rig-audio` with the capture. Its configured stream proves the
+   endpoint, format, rate and period shape; `control.latency_frames` is the graph's
+   reported algorithmic/alignment component, not the physical result. Analyse the
+   capture and attach that metadata:
+
+   ```sh
+   python3 scripts/roundtrip-latency.py analyse \
+     --input jogg-64-empty.wav --output jogg-64-empty.json \
+     --interface 'Jogg USB Audio' --firmware unknown \
+     --period-frames 64 --period-count 3 --graph-latency-frames 0 \
+     --rig 'Empty graph'
+   ```
+
+The analyser supports uncompressed 8/16/24/32-bit PCM WAV, detects repeated
+first arrivals, and reports every frame delta plus median, minimum, maximum, jitter
+and return SNR. A result with fewer than two valid events is rejected. Run the same
+cabling and levels at 64/128/256 frames for an empty graph, one NAM, NAM + IR, a
+long serial chain and a prepared resident switch. Keep converter/firmware identity,
+period count, graph delay, raw WAV and JSON with each result. Only these measured
+analog-in-to-analog-out values may be compared with equivalent external-device
+figures; buffer arithmetic and worker callback timing are never product latency
+claims.
+
 ## Realtime scheduling
 
 Each audio worker calls `oxidal_audio::realtime::enter()` first in `main`: `mlockall` plus `SCHED_RR` priority 90 for the audio thread, the setup PiPedal uses. Threads the native engine starts afterwards inherit it; the JSON and pipe helper threads drop back to normal priority with `leave()`. The worker journal records the outcome (`realtime: SCHED_RR 90; memory: locked`, or which service limit is missing). The service grants `LimitRTPRIO=95` and `LimitMEMLOCK=infinity`, and sets every CPU to the `performance` governor before starting (an `ExecStartPre=+` step), so clock ramping cannot delay a block. Without these, audio runs at normal priority and small buffers xrun under ordinary load. On the owner's Pi, 64 × 4 showed 383 xruns at normal priority, where PiPedal runs 16 × 4.
