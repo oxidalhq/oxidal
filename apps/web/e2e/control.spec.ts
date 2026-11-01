@@ -514,6 +514,30 @@ test('MIDI learn persists a bypass mapping and preset controls reflect both ways
     .getByRole('tablist', { name: 'Settings sections' })
     .getByRole('tab', { name: 'MIDI', exact: true })
     .click();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const midiPanel = await page
+    .getByRole('heading', { name: 'MIDI mapping', exact: true })
+    .locator('..')
+    .boundingBox();
+  const pickupSwitch = await page
+    .getByRole('switch', { name: 'Pickup / soft takeover' })
+    .boundingBox();
+  const feedbackSwitch = await page
+    .getByRole('switch', { name: 'Send controller feedback' })
+    .boundingBox();
+  expect(midiPanel).not.toBeNull();
+  expect(pickupSwitch).not.toBeNull();
+  expect(feedbackSwitch).not.toBeNull();
+  expect(pickupSwitch!.x + pickupSwitch!.width - midiPanel!.x).toBeLessThan(
+    620,
+  );
+  expect(
+    Math.abs(
+      pickupSwitch!.x +
+        pickupSwitch!.width -
+        (feedbackSwitch!.x + feedbackSwitch!.width),
+    ),
+  ).toBeLessThan(2);
   await page.getByLabel('Target', { exact: true }).click();
   await page.getByRole('option', { name: 'Rig bypass', exact: true }).click();
   await page.getByRole('button', { name: 'Learn next MIDI message' }).click();

@@ -989,7 +989,7 @@ function InstrumentApp() {
                         range, and no pickup. Values below 64 select off/serial;
                         64–127 select on/parallel.
                       </p>
-                      <div className="grid gap-2">
+                      <div className="grid max-w-xl gap-2">
                         <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
                           <span>Pickup / soft takeover</span>
                           <Switch
