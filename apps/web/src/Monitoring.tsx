@@ -71,21 +71,21 @@ function Meter({
     channel && !stale
       ? Math.max(0, Math.min(100, ((channel.rms_dbfs + 60) / 60) * 100))
       : 0;
+  const reading =
+    channel && !stale ? Math.max(-60, Math.min(0, channel.peak_dbfs)) : null;
   return (
     <div className="meter-row" data-clip={clips > 0 || undefined}>
       <span className="meter-label">{label}</span>
       <div
-        role="meter"
-        aria-label={`${label} peak`}
-        aria-valuemin={-60}
-        aria-valuemax={0}
-        aria-valuenow={
-          channel && !stale
-            ? Math.max(-60, Math.min(0, channel.peak_dbfs))
-            : undefined
+        role={reading == null ? 'status' : 'meter'}
+        aria-label={
+          reading == null ? `${label} peak: No live reading` : `${label} peak`
         }
+        aria-valuemin={reading == null ? undefined : -60}
+        aria-valuemax={reading == null ? undefined : 0}
+        aria-valuenow={reading ?? undefined}
         aria-valuetext={
-          stale ? 'No live reading' : number(channel?.peak_dbfs, ' dBFS')
+          reading == null ? undefined : number(channel?.peak_dbfs, ' dBFS')
         }
         className="meter-track"
       >

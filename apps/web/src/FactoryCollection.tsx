@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from './components/ui/select';
 import { Badge } from './components/ui/badge';
+import { DialogFooter } from './components/ui/dialog';
 import {
   installedLv2,
   rigNativeSources,
@@ -190,7 +191,7 @@ function CollectionDialog({
                 {factoryMissingPlugins(selected, plugins).join(', ')}.
               </p>
             )}
-            <div className="dialog-actions">
+            <DialogFooter>
               <Button
                 variant="outline"
                 disabled={busy}
@@ -212,7 +213,7 @@ function CollectionDialog({
               >
                 {busy ? 'Building…' : 'Build preset'}
               </Button>
-            </div>
+            </DialogFooter>
           </>
         ) : (
           <>

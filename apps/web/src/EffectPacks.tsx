@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import { DialogFooter } from './components/ui/dialog';
 import {
   changeEffectPack,
   effectPacks,
@@ -194,9 +195,9 @@ export function EffectPacks({
           <p className="caption">
             Local presets and their settings are not deleted.
           </p>
-          <div className="dialog-actions">
+          <DialogFooter>
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={busy !== null}
               onClick={() => setConfirmRemove(null)}
             >
@@ -209,7 +210,7 @@ export function EffectPacks({
             >
               Remove effects
             </Button>
-          </div>
+          </DialogFooter>
         </AdjustmentDialog>
       )}
     </section>

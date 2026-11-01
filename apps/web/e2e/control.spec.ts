@@ -417,6 +417,78 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
   ).toEqual([]);
 });
 
+test('shared surfaces retain their theme and width contracts', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120000);
+  await page.goto('/?development=simulator');
+  const navigation = page.getByRole('navigation', {
+    name: 'Instrument navigation',
+  });
+  const modes = ['default', 'stage', 'sunlight', 'epaper'] as const;
+  const views = [
+    'Rig',
+    'Guitars',
+    'Library',
+    'Sound Check',
+    'Settings',
+  ] as const;
+  const sizes = [
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+  ];
+
+  for (const mode of modes) {
+    await setDisplayMode(page, mode);
+    await expect(page.locator('html')).toHaveAttribute('data-display', mode);
+    for (const size of sizes) {
+      await page.setViewportSize(size);
+      for (const view of views) {
+        await navigation
+          .getByRole('button', { name: view, exact: true })
+          .click();
+        await expect(
+          navigation.getByRole('button', { name: view, exact: true }),
+        ).toHaveAttribute('aria-current', 'page');
+        const overflow = await page.evaluate(() =>
+          [...document.body.querySelectorAll<HTMLElement>('*')]
+            .filter((element) => {
+              if (!element.checkVisibility()) return false;
+              const box = element.getBoundingClientRect();
+              return box.right > innerWidth + 1 || box.left < -1;
+            })
+            .slice(0, 8)
+            .map((element) => ({
+              tag: element.tagName,
+              className: element.className,
+              text: element.innerText?.slice(0, 60),
+              left: Math.round(element.getBoundingClientRect().left),
+              right: Math.round(element.getBoundingClientRect().right),
+            })),
+        );
+        expect(
+          overflow,
+          `${mode} ${view} at ${size.width}×${size.height}`,
+        ).toEqual([]);
+        if (size.width === 390) {
+          expect(
+            (
+              await new AxeBuilder({ page })
+                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+                .analyze()
+            ).violations,
+            `${mode} ${view}`,
+          ).toEqual([]);
+        }
+      }
+      await page.screenshot({
+        path: testInfo.outputPath(`shared-${mode}-${size.width}.png`),
+        fullPage: true,
+      });
+    }
+  }
+});
+
 test('MIDI learn persists a bypass mapping and preset controls reflect both ways', async ({
   page,
   request,

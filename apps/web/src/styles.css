@@ -2572,14 +2572,6 @@ textarea {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.dialog-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
 @container (max-width: 34rem) {
   .network-heading {
     align-items: stretch;

@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from './components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { DialogFooter } from './components/ui/dialog';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
  * @see docs/device-service.md
@@ -562,9 +563,9 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
             oxidal.local and confirm within 90 seconds. Otherwise Oxidal
             restores the previous connection.
           </p>
-          <div className="dialog-actions">
+          <DialogFooter>
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={busy}
               onClick={() => setReview(false)}
             >
@@ -573,7 +574,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
             <Button disabled={busy} onClick={applyNetworkChange}>
               Apply network change
             </Button>
-          </div>
+          </DialogFooter>
         </AdjustmentDialog>
       )}
       {policyReview && (
@@ -590,9 +591,9 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
             Your phone may disconnect. Reconnect through the router, hotspot or
             Ethernet and keep the connection before the timer expires.
           </p>
-          <div className="dialog-actions">
+          <DialogFooter>
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={busy}
               onClick={() => setPolicyReview(false)}
             >
@@ -614,7 +615,7 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
             >
               Apply hotspot policy
             </Button>
-          </div>
+          </DialogFooter>
         </AdjustmentDialog>
       )}
     </section>

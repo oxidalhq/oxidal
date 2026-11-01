@@ -4,6 +4,7 @@ import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
+import { DialogFooter } from './components/ui/dialog';
 import './MasterLevel.css';
 import './GuitarSettings.css';
 import { useMonitorReadings } from './monitorFeed';
@@ -461,7 +462,7 @@ export function GuitarSettings() {
                       : ''}
                   </p>
                 )}
-                <div className="dialog-footer">
+                <DialogFooter>
                   <Button variant="outline" onClick={() => setRemoving(null)}>
                     Keep guitar
                   </Button>
@@ -484,7 +485,7 @@ export function GuitarSettings() {
                   >
                     Remove guitar
                   </Button>
-                </div>
+                </DialogFooter>
               </div>
             </AdjustmentDialog>
           );
