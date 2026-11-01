@@ -314,3 +314,31 @@ it('warns about tight processing headroom before the first dropout', async () =>
   expect(screen.getByText('Processing headroom is tight')).toBeVisible();
   expect(screen.getByText(/DSP p95 is 78%.*session peak is 87%/)).toBeVisible();
 });
+
+it('calls out presets that hit the bounded loudness correction limit', async () => {
+  vi.mocked(calibration).mockResolvedValue({
+    ...calibrationState,
+    entries: [
+      {
+        key: 'very-quiet',
+        name: 'Very Quiet',
+        lufs: -40,
+        offset_db: 12,
+      },
+    ],
+  });
+
+  render(
+    <SoundCheck
+      connected
+      displayMode="stage"
+      onAudioSetup={() => {}}
+      onGuitars={() => {}}
+      onLibrary={() => {}}
+    />,
+  );
+  await act(async () => {});
+
+  expect(screen.getByText('Loudness correction limit reached')).toBeVisible();
+  expect(screen.getByText(/Very Quiet needs the maximum ±12 dB/)).toBeVisible();
+});

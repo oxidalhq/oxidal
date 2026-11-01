@@ -149,6 +149,9 @@ export function SoundCheck({
   const correctedSpread = corrected.length
     ? Math.max(0, corrected[0]! - corrected.at(-1)!)
     : null;
+  const limitedCorrections = entries.filter(
+    (entry) => Math.abs(entry.offset_db) >= 11.95,
+  );
   const activeGuitar = data.guitars?.guitars.find(
     (guitar) => guitar.id === data.guitars?.active,
   );
@@ -223,6 +226,12 @@ export function SoundCheck({
     fixes.push({
       title: 'Review loudness outliers',
       detail: `${loudest?.name} and ${quietest?.name} are ${spread.toFixed(1)} LU apart before correction.`,
+      action: { label: 'Preset library', run: onLibrary },
+    });
+  if (limitedCorrections.length)
+    fixes.push({
+      title: 'Loudness correction limit reached',
+      detail: `${limitedCorrections.map((entry) => entry.name).join(', ')} ${limitedCorrections.length === 1 ? 'needs' : 'need'} the maximum ±12 dB correction. Review the preset gain structure instead of adding more automatic gain.`,
       action: { label: 'Preset library', run: onLibrary },
     });
 
