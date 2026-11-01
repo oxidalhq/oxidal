@@ -140,17 +140,21 @@ afterEach(() => {
 });
 
 it('summarises measured loudness, guitar, interface and distinct level stages', async () => {
+  const onLibrary = vi.fn();
   render(
     <SoundCheck
       connected
       displayMode="stage"
       onAudioSetup={() => {}}
       onGuitars={() => {}}
+      onLibrary={onLibrary}
     />,
   );
   await act(async () => {});
 
   expect(screen.getByText('11.0 LU spread')).toBeVisible();
+  expect(screen.getByText('0.0 LU spread')).toBeVisible();
+  expect(screen.getByText(/2 stored measurements/)).toBeVisible();
   expect(screen.getByText(/Modern Lead -14.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Ambient Clean -25.0 LUFS/)).toBeVisible();
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();
@@ -159,6 +163,10 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
     screen.getByText(/Sound Check follows the active profile automatically/),
   ).toBeVisible();
   expect(screen.getByText(/Jogg capture → Jogg playback/)).toBeVisible();
+  fireEvent.click(
+    screen.getAllByRole('button', { name: 'Preset library' })[0]!,
+  );
+  expect(onLibrary).toHaveBeenCalledOnce();
   expect(screen.getByText('+1.5 dB')).toBeVisible();
   expect(screen.getByText('+2.0 dB')).toBeVisible();
   expect(screen.getByText('+1.0 dB')).toBeVisible();
@@ -204,6 +212,7 @@ it('prioritises missing audio, incomplete guitar measurements and live faults', 
       displayMode="stage"
       onAudioSetup={onAudioSetup}
       onGuitars={onGuitars}
+      onLibrary={() => {}}
     />,
   );
   await act(async () => {});
@@ -246,6 +255,7 @@ it('separates physical input gain from digital output clipping advice', async ()
       displayMode="stage"
       onAudioSetup={() => {}}
       onGuitars={() => {}}
+      onLibrary={() => {}}
     />,
   );
   await act(async () => {});
@@ -286,6 +296,7 @@ it('warns about tight processing headroom before the first dropout', async () =>
       displayMode="stage"
       onAudioSetup={() => {}}
       onGuitars={() => {}}
+      onLibrary={() => {}}
     />,
   );
   await act(async () => {});

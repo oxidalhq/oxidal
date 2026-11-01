@@ -530,6 +530,7 @@ function InstrumentApp() {
                 connected={connected}
                 displayMode={displayMode}
                 onGuitars={() => setView('guitars')}
+                onLibrary={() => setView('library')}
                 onAudioSetup={() => {
                   setSettingsSection('audio');
                   showSettings();

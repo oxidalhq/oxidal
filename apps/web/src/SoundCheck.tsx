@@ -58,11 +58,13 @@ export function SoundCheck({
   displayMode,
   onAudioSetup,
   onGuitars,
+  onLibrary,
 }: {
   connected: boolean;
   displayMode: string;
   onAudioSetup: () => void;
   onGuitars: () => void;
+  onLibrary: () => void;
 }) {
   const [data, setData] = useState<HealthData>({
     calibration: null,
@@ -135,6 +137,13 @@ export function SoundCheck({
   const quietest = entries.at(-1);
   const spread =
     loudest && quietest ? Math.max(0, loudest.lufs - quietest.lufs) : null;
+  const corrected = entries
+    .map((entry) => entry.lufs + entry.offset_db)
+    .sort((a, b) => b - a);
+  const correctedSpread = corrected.length
+    ? Math.max(0, corrected[0]! - corrected.at(-1)!)
+    : null;
+  const failedMeasurements = data.calibration?.progress.failed?.length ?? 0;
   const activeGuitar = data.guitars?.guitars.find(
     (guitar) => guitar.id === data.guitars?.active,
   );
@@ -209,6 +218,7 @@ export function SoundCheck({
     fixes.push({
       title: 'Review loudness outliers',
       detail: `${loudest?.name} and ${quietest?.name} are ${spread.toFixed(1)} LU apart before correction.`,
+      action: { label: 'Preset library', run: onLibrary },
     });
 
   return (
@@ -280,10 +290,10 @@ export function SoundCheck({
           <ToolRow
             title="Target"
             value={lufs(data.calibration?.target_lufs)}
-            detail={`${entries.length} measured presets and scenes.`}
+            detail={`${entries.length} stored measurements · ${data.calibration?.progress.measured ?? 0} new or changed measured in the last run · ${failedMeasurements} unmeasured failures.`}
           />
           <ToolRow
-            title="Loudest / quietest"
+            title="Before correction"
             value={spread == null ? '—' : `${spread.toFixed(1)} LU spread`}
             detail={
               loudest && quietest
@@ -291,6 +301,23 @@ export function SoundCheck({
                 : 'Run Even out to build a measured comparison.'
             }
           />
+          <ToolRow
+            title="After correction"
+            value={
+              correctedSpread == null
+                ? '—'
+                : `${correctedSpread.toFixed(1)} LU spread`
+            }
+            detail={
+              loudest && quietest
+                ? `${loudest.name} ${lufs(loudest.lufs + loudest.offset_db)} · ${quietest.name} ${lufs(quietest.lufs + quietest.offset_db)}. Intentional Boost remains on top.`
+                : 'Corrections appear after the first completed Even out run.'
+            }
+          >
+            <Button variant="outline" onClick={onLibrary}>
+              Preset library
+            </Button>
+          </ToolRow>
         </ToolSection>
 
         <ToolSection
