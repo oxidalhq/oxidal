@@ -350,6 +350,14 @@ impl HostSignal {
             reference: crate::reference::Reference::new(rate),
         }
     }
+    /// Start a newly opened playback stream at silence and glide to its saved
+    /// level. ALSA may begin after only a few queued periods, so the envelope
+    /// belongs before sample encoding rather than around device open/close.
+    #[cfg(any(feature = "alsa", feature = "qualification"))]
+    pub(crate) fn begin_output(&mut self) {
+        self.monitor_gain.current = 0.0;
+        self.monitor_gain.target = if self.output_muted { 0.0 } else { 1.0 };
+    }
     pub fn command(&mut self, command: HostUtility) {
         match command {
             HostUtility::HearYourself { enabled } => self.hear = enabled,
@@ -481,6 +489,23 @@ mod host_tests {
         }
         assert!(left[127] > 0.17);
         assert!(!signal.state().output_muted);
+    }
+    #[test]
+    #[cfg(any(feature = "alsa", feature = "qualification"))]
+    fn a_new_output_stream_fades_in_without_a_sample_step() {
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        signal.begin_output();
+        let (mut left, mut right) = ([0.25; 64], [0.25; 64]);
+        signal.output(&mut left, &mut right);
+        assert!(left[0] > 0.0 && left[0] < 0.001);
+        assert!(left.windows(2).all(|samples| samples[0] < samples[1]));
+        assert_eq!(left, right);
+        for _ in 0..80 {
+            left.fill(0.25);
+            right.fill(0.25);
+            signal.output(&mut left, &mut right);
+        }
+        assert!(left[63] > 0.249);
     }
     #[test]
     fn input_monitor_and_output_test_are_independent_bounded_and_sample_clocked() {

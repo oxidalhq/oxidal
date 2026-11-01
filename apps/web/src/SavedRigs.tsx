@@ -9,6 +9,8 @@ import {
   type PresetDetails,
 } from './api';
 import {
+  GAPLESS_BANK_SIZE,
+  gaplessBank,
   playScenes,
   readKeepReady,
   rigTopologyLabel,
@@ -80,7 +82,13 @@ export function SavedRigs({
     setLoadingId(revision);
     setError('');
     try {
-      await playScenes(revision);
+      await playScenes(
+        revision,
+        gaplessBank(
+          revision,
+          shown.map((item) => item.revision),
+        ),
+      );
       if (alive.current) {
         // Starting may have added it to the ready set.
         setPrepared(readKeepReady());
@@ -126,21 +134,20 @@ export function SavedRigs({
     <section className="library-scenes" aria-label="Saved rigs">
       <div className="section-heading">
         <h2>{title}</h2>
-        {origin === 'mine' && (
-          <Button
-            variant="ghost"
-            aria-pressed={choosing}
-            disabled={busy}
-            onClick={() => setChoosing((v) => !v)}
-          >
-            Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          aria-pressed={choosing}
+          disabled={busy}
+          onClick={() => setChoosing((v) => !v)}
+        >
+          Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
+        </Button>
       </div>
-      {origin === 'mine' && choosing && (
+      {choosing && (
         <p className="caption">
-          Ready presets stay loaded while audio runs, so switching between them
-          has no gap. Each one uses extra processing and memory.
+          Choose up to {GAPLESS_BANK_SIZE} additional rigs to keep ready. They
+          stay loaded, so switching between them has no gap. Without custom
+          choices, each adjacent group of {GAPLESS_BANK_SIZE} loads together.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -196,13 +203,17 @@ export function SavedRigs({
                   Details
                 </Button>
               )}
-              {origin === 'mine' && choosing && (
+              {choosing && (
                 <label className="library-ready">
                   <input
                     type="checkbox"
                     aria-label={`Keep ${p.name} ready`}
                     checked={prepared.includes(p.revision)}
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      (!prepared.includes(p.revision) &&
+                        prepared.length >= GAPLESS_BANK_SIZE)
+                    }
                     onChange={(event) =>
                       setPrepared((old) =>
                         event.target.checked

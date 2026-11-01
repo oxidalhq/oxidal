@@ -58,6 +58,23 @@ impl Worker {
             .await
             .map_err(|e| e.to_string())
     }
+    async fn fade_output_to_silence(&mut self) -> Result<(), String> {
+        self.write(&WorkerRequest::HostUtility {
+            command: oxidal_audio::tools::HostUtility::OutputMute { enabled: true },
+        })
+        .await?;
+        let reply = tokio::time::timeout(Duration::from_millis(250), self.read())
+            .await
+            .map_err(|_| "Mixed output fade timed out".to_owned())??;
+        if let Some(error) = reply.error {
+            return Err(error);
+        }
+        // HostSignal's 10 ms one-pole glide is below -69 dB after 80 ms.
+        // Leave the device playing during that interval so its final held
+        // sample is effectively zero before EOF closes ALSA.
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        Ok(())
+    }
 }
 async fn read_reply(output: &mut BufReader<ChildStdout>) -> Result<WorkerReply, String> {
     let mut bytes = Vec::new();
@@ -267,6 +284,12 @@ impl Owner {
             // session. The device permit stays with the child until it is reaped.
             preparing.task.abort();
             let _ = preparing.task.await;
+        } else {
+            // A full preset/configuration replacement closes and reopens ALSA.
+            // Fade the old worker before EOF; the new stream independently
+            // fades in. Failure remains best-effort because a broken worker
+            // must still be reaped so the audio device can be recovered.
+            let _ = worker.fade_output_to_silence().await;
         }
         worker.input.take();
         if !matches!(

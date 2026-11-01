@@ -12,6 +12,7 @@ import {
 } from './api';
 import {
   discardsSceneEdits,
+  gaplessBank,
   loadPresetChoices,
   choiceKey,
   playScenes,
@@ -51,6 +52,14 @@ const scenes = (revision: string): PresetChoice => ({
   nativeInstances: 1,
   lv2Instances: 2,
   origin: 'mine',
+});
+
+it('makes bounded adjacent live banks without inventing an engine lane limit', () => {
+  const revisions = ['a', 'b', 'c', 'd', 'e'].map((letter) =>
+    letter.repeat(64),
+  );
+  expect(gaplessBank(revisions[2]!, revisions)).toEqual(revisions.slice(0, 4));
+  expect(gaplessBank(revisions[4]!, revisions)).toEqual(revisions.slice(4));
 });
 
 it('describes routing and actual processor counts without treating scenes as lanes', () => {
@@ -123,6 +132,54 @@ it('resumes the last scenes preset with its edits instead of starting it fresh',
     kind: 'start',
     settings: { revision: b, recall: null },
   });
+});
+
+it('starts an adjacent live bank so later preset choices use the resident switch', async () => {
+  const stopped = {
+    phase: 'stopped',
+    device_owned: false,
+    configured: { revision: 'c'.repeat(64), stream: {} },
+  };
+  vi.mocked(rigAudioState).mockResolvedValue(stopped as never);
+  vi.mocked(playbackState).mockResolvedValue({ device_owned: false } as never);
+  vi.mocked(graphAudioState).mockResolvedValue({
+    device_owned: false,
+  } as never);
+  await playScenes(a, [a, b]);
+  expect(vi.mocked(rigAudioCommand).mock.calls.at(-1)?.[1]).toMatchObject({
+    kind: 'start',
+    settings: {
+      revision: a,
+      prepared: [{ revision: b, recall: null }],
+    },
+  });
+});
+
+it('switches inside the loaded live bank without releasing the interface', async () => {
+  vi.mocked(rigAudioState).mockResolvedValue({
+    phase: 'running',
+    configured: {
+      revision: a,
+      stream: { input: { sample_rate: 48_000 } },
+    },
+    control: {
+      session: 'resident',
+      revision: 7,
+      prepared: [{ revision: b, error: null }],
+    },
+  } as never);
+  await playScenes(b, [a, b]);
+  expect(rigAudioCommand).toHaveBeenCalledWith(expect.anything(), {
+    kind: 'switch',
+    command: {
+      session: 'resident',
+      expected_revision: 7,
+      revision: b,
+      fade_frames: 480,
+    },
+  });
+  expect(playbackState).not.toHaveBeenCalled();
+  expect(graphAudioState).not.toHaveBeenCalled();
 });
 
 it('uses one cross-kind catalog order and ignores archived stale source rows', async () => {

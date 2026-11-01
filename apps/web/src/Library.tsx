@@ -340,9 +340,10 @@ export function Library({
               )}
               <EvenOut connected={connected} />
               <p className="caption">
-                Tap a preset to play it with your current audio setup. Changing
-                preset briefly interrupts audio; scenes switch without a gap on
-                Rig. Edits are kept when you return.
+                <strong>Live switching.</strong> Rigs with scenes or effects
+                load in adjacent groups of four. Changes inside that bank and
+                scenes on Rig are gapless. Direct TONE3000 presets and another
+                bank briefly interrupt audio.
               </p>
               <SavedRigs
                 connected={connected}

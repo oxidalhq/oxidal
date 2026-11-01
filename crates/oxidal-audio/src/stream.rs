@@ -74,12 +74,14 @@ impl Duplex {
         playback.sw_params(&sw).map_err(|e| e.to_string())?;
         drop(sw);
         let frames = config.input.period_frames as usize;
+        let mut host = crate::tools::HostSignal::new(
+            config.input.sample_rate,
+            config.hear_yourself,
+            config.levels,
+        );
+        host.begin_output();
         Ok(Self {
-            host: crate::tools::HostSignal::new(
-                config.input.sample_rate,
-                config.hear_yourself,
-                config.levels,
-            ),
+            host,
             input: vec![
                 0;
                 frames

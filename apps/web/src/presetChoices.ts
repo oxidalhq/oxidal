@@ -198,14 +198,20 @@ export async function loadPresetChoices(): Promise<{
 }
 
 const KEEP_READY = 'oxidal.prepared-rigs';
+export const GAPLESS_BANK_SIZE = 4;
 /** Portable rigs the player keeps loaded for gapless switching. */
 export function readKeepReady(): string[] {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(KEEP_READY) ?? '[]');
     return Array.isArray(saved)
-      ? saved.filter(
-          (v): v is string => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
-        )
+      ? [
+          ...new Set(
+            saved.filter(
+              (v): v is string =>
+                typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
+            ),
+          ),
+        ].slice(0, GAPLESS_BANK_SIZE)
       : [];
   } catch {
     return [];
@@ -213,10 +219,28 @@ export function readKeepReady(): string[] {
 }
 export function writeKeepReady(revisions: string[]) {
   try {
-    localStorage.setItem(KEEP_READY, JSON.stringify(revisions));
+    localStorage.setItem(
+      KEEP_READY,
+      JSON.stringify(
+        [...new Set(revisions)]
+          .filter((revision) => /^[a-f0-9]{64}$/.test(revision))
+          .slice(0, GAPLESS_BANK_SIZE),
+      ),
+    );
   } catch {
     /* browser storage unavailable */
   }
+}
+
+/** The bounded adjacent bank containing a selected Library rig. */
+export function gaplessBank(revision: string, ordered: string[]): string[] {
+  const unique = [...new Set(ordered)].filter((id) =>
+    /^[a-f0-9]{64}$/.test(id),
+  );
+  const index = unique.indexOf(revision);
+  if (index < 0) return [revision];
+  const start = Math.floor(index / GAPLESS_BANK_SIZE) * GAPLESS_BANK_SIZE;
+  return unique.slice(start, start + GAPLESS_BANK_SIZE);
 }
 
 const RELEASE_MS = 10000;
@@ -274,7 +298,7 @@ export async function playTone3000(id: string, owned: boolean) {
  * Plays a preset with scenes: a gapless switch when it is kept ready, a resume
  * with its unsaved edits when it was the last one playing, else a fresh start.
  */
-export async function playScenes(revision: string) {
+export async function playScenes(revision: string, adjacent: string[] = []) {
   const rig = await rigAudioState();
   if (rig.phase === 'running' && rig.control && rig.configured) {
     if (rig.configured.revision === revision) return;
@@ -309,19 +333,20 @@ export async function playScenes(revision: string) {
       'Choose the input, output and buffer in Settings → Audio first.',
     );
   const keep = readKeepReady();
+  const bank = keep.length
+    ? keep
+    : gaplessBank(revision, adjacent.length ? adjacent : [revision]);
   await rigAudioCommand(await rigAudioState(), {
     kind: 'start',
     settings: {
       revision,
       stream,
       recall: null,
-      prepared: [...new Set(keep)]
+      prepared: bank
         .filter((id) => id !== revision)
         .map((id) => ({ revision: id, recall: null })),
     },
   });
-  // A started preset joins the ready set, so switching back stays gapless.
-  if (keep.length) writeKeepReady([...new Set([...keep, revision])]);
 }
 
 /** Whether opening `choice` discards unsaved edits to the playing scenes preset. */

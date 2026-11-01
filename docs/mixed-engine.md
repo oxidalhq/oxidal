@@ -472,10 +472,13 @@ switching or physical real-time acceptance.
 
 ## Resident prepared preset switching
 
-Saved portable rigs can be selected with **Library → Rigs → Prepare set** before
-starting audio. The worker prepares every selected native/LV2 session before
-opening one PCM stream. The live chain then offers direct buttons for the prepared
-alternatives; selecting a prepared rig in the library uses the same switch path.
+Portable rigs with scenes/effects load from Library in adjacent four-rig live
+banks. **Keep ready** on either Mine or Oxidal examples selects up to four
+additional portable rigs as a custom resident set. The worker prepares every
+selected native/LV2 session before opening one PCM stream. The live chain then
+offers direct buttons for the prepared alternatives; selecting a resident rig in
+Library uses the same switch path. Entering another bank remains an interrupting
+reopen with a protective output fade; it is not described as gapless.
 Each resident retains its confirmed unsaved scalar/EQ controls. Restart, recovery
 and explicit boot settings retain the set and the per-resident recall records.
 An independent Save receipt remains bound to its source resident during switches.
