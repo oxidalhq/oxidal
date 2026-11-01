@@ -143,7 +143,7 @@ it('steps the size down, then the periods, and keeps the last clean buffer', asy
   expect(screen.getByText(/48 × 2: \d+ dropouts?\./)).toBeVisible();
   expect(apply).toHaveBeenLastCalledWith(stream(48, 3));
   expect(
-    screen.getByText('Lowest stable buffer: 48 × 3 (3.0 ms).'),
+    screen.getByText('Lowest clean one-minute candidate: 48 × 3 (3.0 ms).'),
   ).toBeVisible();
 });
 
@@ -165,7 +165,7 @@ it('keeps the original buffer when nothing smaller works', async () => {
   await tick(17000);
   expect(apply).toHaveBeenLastCalledWith(stream(48, 2));
   expect(
-    screen.getByText('Lowest stable buffer: 48 × 2 (2.0 ms).'),
+    screen.getByText('Lowest clean one-minute candidate: 48 × 2 (2.0 ms).'),
   ).toBeVisible();
 });
 

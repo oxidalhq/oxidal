@@ -94,7 +94,7 @@ export function BufferFinder({
       ...next,
       trial: null,
       log: [...next.log, note],
-      result: `Lowest stable buffer: ${label(next.good)} (${ms(bufferMs(at))}).`,
+      result: `Lowest clean one-minute candidate: ${label(next.good)} (${ms(bufferMs(at))}).`,
     });
   }
   /** After the period size bottoms out, try fewer periods at the best size. */
@@ -256,7 +256,9 @@ export function BufferFinder({
           Each running step listens for one minute and rejects xruns, deadline
           misses, invalid samples, stopped audio or a worker restart. Load your
           heaviest preset first. You don&apos;t need to play: processing load is
-          the same in silence.
+          the same in silence. A clean result is a screening candidate, not
+          proof of long-run stability; keep monitoring it during a sustained
+          playing test.
         </p>
       )}
       {run && run.log.length > 0 && (
