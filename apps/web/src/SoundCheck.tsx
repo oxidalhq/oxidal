@@ -21,6 +21,7 @@ import { Button } from './components/ui/button';
 import { EvenOut } from './EvenOut';
 import { Monitoring } from './Monitoring';
 import { useMonitorFeed } from './monitorFeed';
+import { processingHeadroom } from './processingHeadroom';
 import { ToolRow, ToolSection } from './ToolRow';
 import './SoundCheck.css';
 
@@ -127,6 +128,7 @@ export function SoundCheck({
     : null;
   const clips = channels.reduce((sum, channel) => sum + channel.clips, 0);
   const deadlineMisses = monitor?.audio?.deadline_misses ?? 0;
+  const processing = processingHeadroom(live ? monitor?.audio : null);
   const entries = useMemo(
     () =>
       [...(data.calibration?.entries ?? [])].sort((a, b) => b.lufs - a.lufs),
@@ -192,6 +194,12 @@ export function SoundCheck({
     fixes.push({
       title: 'Increase audio headroom',
       detail: `${monitor?.xruns ?? 0} recovered xruns and ${deadlineMisses} missed processing deadlines are recorded in this session.`,
+      action: { label: 'Audio setup', run: onAudioSetup },
+    });
+  else if (processing.tight)
+    fixes.push({
+      title: 'Processing headroom is tight',
+      detail: `DSP p95 is ${processing.p95?.toFixed(0)}% and the session peak is ${processing.peak?.toFixed(0)}% of one audio period. Use fewer gapless-ready rigs or a larger buffer before dropouts begin.`,
       action: { label: 'Audio setup', run: onAudioSetup },
     });
   if (spread != null && spread > 6)
@@ -339,11 +347,9 @@ export function SoundCheck({
           <ToolRow
             title="DSP p95 / deadline"
             value={
-              live && monitor?.audio?.deadline_us
-                ? `${((100 * monitor.audio.process_us_p95) / monitor.audio.deadline_us).toFixed(0)}%`
-                : '—'
+              processing.p95 != null ? `${processing.p95.toFixed(0)}%` : '—'
             }
-            detail={`${monitor?.xruns ?? 0} recovered xruns · ${deadlineMisses} missed deadlines.`}
+            detail={`${processing.peak == null ? 'No session peak' : `${processing.peak.toFixed(0)}% session peak`} · ${monitor?.xruns ?? 0} recovered xruns · ${deadlineMisses} missed deadlines.`}
           >
             <Pulse aria-hidden="true" className="sound-check-row-icon" />
           </ToolRow>

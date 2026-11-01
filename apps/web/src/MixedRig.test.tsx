@@ -64,7 +64,15 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
   Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
 });
-function setup(origin: 'mine' | 'oxidal_example' = 'mine') {
+function setup(
+  origin: 'mine' | 'oxidal_example' = 'mine',
+  prepared: Array<{
+    revision: string;
+    name: string;
+    modified: boolean;
+    error: string | null;
+  }> = [],
+) {
   const controls = [
     ['outputLevel', 'Output', '0 dB', false],
     ['gateEnabled', 'Gate enabled', 'Off', true],
@@ -92,6 +100,7 @@ function setup(origin: 'mine' | 'oxidal_example' = 'mine') {
       controls,
       eq: [],
       slots: [{ node: 'amp', slots: [] }],
+      prepared,
     },
   } as unknown as Awaited<ReturnType<typeof rigAudioState>>;
   vi.mocked(rigAudioState).mockResolvedValue(state);
@@ -119,6 +128,22 @@ function setup(origin: 'mine' | 'oxidal_example' = 'mine') {
   );
   return state;
 }
+it('explains the processing cost of gapless-ready rigs', async () => {
+  setup('mine', [
+    {
+      revision: 'other',
+      name: 'Other rig',
+      modified: false,
+      error: null,
+    },
+  ]);
+  expect(
+    await screen.findByText(
+      '2 gapless-ready rigs stay processing. Reduce the ready set if DSP headroom is tight.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('group', { name: 'Prepared presets' })).toBeVisible();
+});
 it('groups native controls in hybrid rigs and toggles booleans without a slider', async () => {
   const state = setup();
   await screen.findByRole('button', { name: 'Adjust Output' });

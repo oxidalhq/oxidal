@@ -1,6 +1,7 @@
 import { useMonitorFeed } from './monitorFeed';
 import { ChartLine, Waveform, WarningCircle } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { processingHeadroom } from './processingHeadroom';
 
 const percent = (n: number | null | undefined) =>
   n == null ? '—' : `${n.toFixed(0)}%`;
@@ -48,15 +49,7 @@ export function ResourceStrip({
     state.audio_age_ms != null &&
     state.audio_age_ms < 3000;
   const audio = fresh ? state.audio : null;
-  const load =
-    audio && audio.deadline_us > 0
-      ? (100 * audio.process_us_p95) / audio.deadline_us
-      : null;
-  const peak =
-    audio && audio.deadline_us > 0
-      ? (100 * Math.max(audio.process_us_peak ?? 0, audio.process_us_max)) /
-        audio.deadline_us
-      : null;
+  const { p95: load, peak, tight } = processingHeadroom(audio);
   const clips = audio
     ? [...audio.input, ...audio.output].reduce(
         (sum, channel) => sum + channel.clips,
@@ -125,7 +118,7 @@ export function ResourceStrip({
       </div>
       <dl>
         <div
-          data-warning={load != null && load >= 100}
+          data-warning={tight}
           title="Processing p95 and session peak / audio-period deadline; excludes device I/O"
         >
           <dt>DSP p95</dt>

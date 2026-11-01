@@ -1489,25 +1489,31 @@ export function MixedRig({
         />
       )}
       {!!state.control?.prepared?.length && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          role="group"
-          aria-label="Prepared presets"
-        >
-          {state.control.prepared.map((p) => (
-            <Button
-              key={p.revision}
-              className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
-              variant="outline"
-              disabled={disabled || !!edit || !!p.error}
-              onClick={() => void switchPrepared(p.revision)}
-            >
-              <span className="min-w-0 break-words">
-                {p.name}
-                {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
-              </span>
-            </Button>
-          ))}
+        <div className="grid gap-2">
+          <p className="caption">
+            {state.control.prepared.length + 1} gapless-ready rigs stay
+            processing. Reduce the ready set if DSP headroom is tight.
+          </p>
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label="Prepared presets"
+          >
+            {state.control.prepared.map((p) => (
+              <Button
+                key={p.revision}
+                className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
+                variant="outline"
+                disabled={disabled || !!edit || !!p.error}
+                onClick={() => void switchPrepared(p.revision)}
+              >
+                <span className="min-w-0 break-words">
+                  {p.name}
+                  {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
+                </span>
+              </Button>
+            ))}
+          </div>
         </div>
       )}
       <RecoveryNotice message={state.recovery_error} />

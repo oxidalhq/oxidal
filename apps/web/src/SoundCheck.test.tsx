@@ -213,3 +213,36 @@ it('prioritises missing audio, incomplete guitar measurements and live faults', 
   expect(onAudioSetup).toHaveBeenCalledOnce();
   expect(onGuitars).toHaveBeenCalledOnce();
 });
+
+it('warns about tight processing headroom before the first dropout', async () => {
+  vi.mocked(useMonitorFeed).mockReturnValue({
+    snapshot: {
+      ...monitoring,
+      audio: {
+        ...monitoring.audio!,
+        process_us_p95: 780,
+        process_us_max: 820,
+        process_us_peak: 870,
+        deadline_us: 1000,
+        deadline_misses: 0,
+      },
+    },
+    link: 2,
+    disconnected: false,
+    error: '',
+    at: 1,
+  });
+
+  render(
+    <SoundCheck
+      connected
+      displayMode="stage"
+      onAudioSetup={() => {}}
+      onGuitars={() => {}}
+    />,
+  );
+  await act(async () => {});
+
+  expect(screen.getByText('Processing headroom is tight')).toBeVisible();
+  expect(screen.getByText(/DSP p95 is 78%.*session peak is 87%/)).toBeVisible();
+});

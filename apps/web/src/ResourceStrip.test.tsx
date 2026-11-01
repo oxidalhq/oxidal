@@ -106,8 +106,14 @@ it('shows a measured zero and recovered xruns instead of treating zero as unavai
     audio_age_ms: 0,
     audio: {
       frames: 128,
-      input: [],
-      output: [],
+      input: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
+      output: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
       process_us_p95: 10,
       deadline_us: 1000,
     },
@@ -162,4 +168,37 @@ it('retains a session peak after the recent callback window becomes quiet', asyn
   await act(async () => {});
   expect(screen.getByText('pk 120%')).toHaveAttribute('data-warning', 'true');
   expect(screen.getByText('DSP p95').parentElement).toHaveTextContent('3%');
+});
+
+it('warns before a callback reaches its deadline', async () => {
+  const reading = {
+    ...snapshot(1, 'running'),
+    audio_age_ms: 0,
+    audio: {
+      frames: 128,
+      input: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
+      output: [
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+        { peak_dbfs: -120, rms_dbfs: -120, clips: 0 },
+      ],
+      process_us_p50: 400,
+      process_us_p95: 760,
+      process_us_max: 820,
+      process_us_peak: 860,
+      deadline_misses: 0,
+      deadline_us: 1000,
+      invalid_samples: 0,
+    },
+  } satisfies Monitoring;
+  vi.mocked(monitoring).mockResolvedValue(reading);
+  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  await act(async () => {});
+  expect(screen.getByText('DSP p95').parentElement).toHaveAttribute(
+    'data-warning',
+    'true',
+  );
+  expect(screen.getByText('pk 86%')).toHaveAttribute('data-warning', 'false');
 });

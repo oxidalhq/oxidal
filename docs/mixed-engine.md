@@ -502,7 +502,10 @@ transport stops. The set has fixed membership and preallocated stereo input,
 output and delay buffers; no plugin is created or destroyed in the callback.
 The byte budget covers those host allocations, not plugin internal memory. CPU
 admission, tail detection and suspension are not implemented. Preparing more
-presets increases callback cost even when host CPU looks low.
+presets increases callback cost even when host CPU looks low. The Rig view states
+the total gapless-ready count and Sound Check warns when measured p95 reaches 75%
+or the session peak reaches 85% of one period. This is a proactive warning, not
+startup admission; the worker still requires measured capacity qualification.
 
 During streaming, up to three resident helpers overlap independent prepared
 graphs with the main render thread. Each graph stays assigned to one thread for
