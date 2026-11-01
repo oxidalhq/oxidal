@@ -20,6 +20,13 @@ import {
   type StartAudio,
 } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 import { AudioReconfigure } from './AudioReconfigure';
 import { BufferFinder } from './BufferFinder';
@@ -458,20 +465,24 @@ export function PlaybackSettings({
               <div className="form-grid">
                 <label className="field">
                   Playback preset
-                  <select
-                    value={selected}
-                    onChange={(e) => setSelected(e.target.value)}
+                  <Select
+                    value={selected || undefined}
+                    onValueChange={setSelected}
                   >
-                    <option value="">Select saved preset</option>
-                    {presets.map((p) => (
-                      <option
-                        key={`${p.owned}/${p.id}`}
-                        value={`${p.owned}/${p.id}`}
-                      >
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Playback preset">
+                      <SelectValue placeholder="Select saved preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presets.map((p) => (
+                        <SelectItem
+                          key={`${p.owned}/${p.id}`}
+                          value={`${p.owned}/${p.id}`}
+                        >
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
                 <details className="control-help channel-routing">
                   <summary>Channel routing</summary>

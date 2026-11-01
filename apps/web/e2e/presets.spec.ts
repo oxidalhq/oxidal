@@ -1564,9 +1564,8 @@ test('playback lifecycle keeps native authoring available after stop and restart
     const currentBuffers = audio.getByRole('group', {
       name: 'Adjust current session',
     });
-    await currentBuffers
-      .getByLabel('Session buffer (samples)')
-      .selectOption('256');
+    await currentBuffers.getByLabel('Session buffer (samples)').click();
+    await page.getByRole('option', { name: /^256 ·/ }).click();
     await currentBuffers.getByLabel('Session input right channel').fill('1');
     const appliedResponse = page.waitForResponse(
       (response) =>
@@ -1589,7 +1588,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await expect(audio.getByRole('status')).toContainText('Audio: running');
     await expect(
       currentBuffers.getByLabel('Session buffer (samples)'),
-    ).toHaveValue('256');
+    ).toHaveText(/^256 ·/);
     await expect(
       currentBuffers.getByRole('button', {
         name: 'Apply & restart audio',
@@ -2194,10 +2193,12 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await playback.getByText('Current device & buffers', { exact: true }).click();
   await playback
     .getByLabel('Session sample rate (Hz)', { exact: true })
-    .fill('44100');
+    .click();
+  await page.getByRole('option', { name: '44100', exact: true }).click();
   await playback
     .getByLabel('Session buffer (samples)', { exact: true })
-    .selectOption('256');
+    .click();
+  await page.getByRole('option', { name: /^256 ·/ }).click();
   const apply = playback.getByRole('button', {
     name: 'Apply & restart audio',
     exact: true,
@@ -2707,16 +2708,16 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   const buffers = audioSettings.getByRole('group', {
     name: 'Adjust current session',
   });
-  await expect(
-    buffers
-      .getByLabel('Session buffer (samples)')
-      .locator('option[value="129"]'),
-  ).toHaveCount(0);
+  await buffers.getByLabel('Session buffer (samples)').click();
+  await expect(page.getByRole('option', { name: /^129/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(
     buffers.getByRole('button', { name: 'Apply & restart audio', exact: true }),
   ).toBeDisabled();
-  await buffers.getByLabel('Session buffer (samples)').selectOption('256');
-  await buffers.getByLabel('Session sample rate (Hz)').fill('44100');
+  await buffers.getByLabel('Session buffer (samples)').click();
+  await page.getByRole('option', { name: /^256 ·/ }).click();
+  await buffers.getByLabel('Session sample rate (Hz)').click();
+  await page.getByRole('option', { name: '44100', exact: true }).click();
   await buffers
     .getByRole('button', { name: 'Apply & restart audio', exact: true })
     .click();
@@ -4696,7 +4697,8 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   const buffer = group.getByRole('combobox', {
     name: 'Session buffer (samples)',
   });
-  await buffer.selectOption('256');
+  await buffer.click();
+  await page.getByRole('option', { name: /^256 ·/ }).click();
   await expect(group.getByText(/one period 5\.33 ms/)).toBeVisible();
   await expect(
     group.getByRole('button', { name: 'Apply & restart audio' }),
@@ -4710,7 +4712,7 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   expect(Math.abs(left.y - right.y)).toBeLessThan(2);
   expect(right.x).toBeGreaterThan(left.x);
   await group.getByRole('button', { name: 'Reset changes' }).click();
-  await expect(buffer).toHaveValue('64');
+  await expect(buffer).toHaveText(/^64 ·/);
   await expect(
     group.getByRole('button', { name: 'Apply & restart audio' }),
   ).toBeDisabled();

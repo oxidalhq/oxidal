@@ -251,7 +251,10 @@ test('administrator terminal is explicit and mode changes never start a shell', 
     .click();
   await page.getByText('Interactive terminal', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Web terminal' });
-  await panel.getByLabel('Terminal access').selectOption('admin');
+  await panel.getByLabel('Terminal access').click();
+  await page
+    .getByRole('option', { name: 'Administrator · password sudo' })
+    .click();
   await expect(panel.getByRole('status')).toContainText('oxidal-admin');
   await expect(panel).toContainText('Use sudo and the admin password');
   expect(starts).toEqual([]);
@@ -259,7 +262,8 @@ test('administrator terminal is explicit and mode changes never start a shell', 
     .getByRole('button', { name: 'Start terminal', exact: true })
     .click();
   await expect.poll(() => starts).toEqual(['admin']);
-  await panel.getByLabel('Terminal access').selectOption('unprivileged');
+  await panel.getByLabel('Terminal access').click();
+  await page.getByRole('option', { name: 'Unprivileged', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('oxidal-debug');
   expect(starts).toEqual(['admin']);
   expect(pageErrors).toEqual([]);

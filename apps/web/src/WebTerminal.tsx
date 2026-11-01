@@ -4,6 +4,13 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { terminalCommand, type TerminalState } from './api';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 /** Input is never persisted or retried; reconnect only reads the existing PTY. */
 function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {
@@ -250,13 +257,20 @@ export function WebTerminal() {
           <>
             <label className="field mt-3">
               Terminal access
-              <select
+              <Select
                 value={mode}
-                onChange={(e) => setMode(e.target.value as typeof mode)}
+                onValueChange={(value) => setMode(value as typeof mode)}
               >
-                <option value="unprivileged">Unprivileged</option>
-                <option value="admin">Administrator · password sudo</option>
-              </select>
+                <SelectTrigger aria-label="Terminal access">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unprivileged">Unprivileged</SelectItem>
+                  <SelectItem value="admin">
+                    Administrator · password sudo
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <p className="caption">
               Changing access leaves the other session running. End each session

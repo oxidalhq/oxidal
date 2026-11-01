@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AudioReconfigure } from './AudioReconfigure';
 import type { AudioProbe, StartAudio } from './api';
@@ -19,7 +20,8 @@ const initial: StartAudio['stream'] = {
   output_map: [0, 1],
   hear_yourself: false,
 };
-it('offers supported buffers with timing while applying only after explicit confirmation', () => {
+it('offers supported buffers with timing while applying only after explicit confirmation', async () => {
+  const user = userEvent.setup();
   const apply = vi.fn();
   render(
     <AudioReconfigure
@@ -36,18 +38,19 @@ it('offers supported buffers with timing while applying only after explicit conf
   const buffer = screen.getByRole('combobox', {
     name: 'Session buffer (samples)',
   });
-  expect(buffer.querySelector('option[value="129"]')).toBeNull();
-  fireEvent.change(buffer, { target: { value: '256' } });
+  await user.click(buffer);
+  expect(screen.queryByRole('option', { name: /^129/ })).toBeNull();
+  await user.click(screen.getByRole('option', { name: /^256 ·/ }));
   expect(screen.getByText(/one period 5\.33 ms/)).toBeVisible();
   expect(apply).not.toHaveBeenCalled();
-  fireEvent.click(button);
+  await user.click(button);
   expect(apply).toHaveBeenCalledWith({
     ...initial,
     input: { ...input, period_frames: 256 },
     output: { ...initial.output, period_frames: 256 },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Reset changes' }));
-  expect(buffer).toHaveValue('64');
+  await user.click(screen.getByRole('button', { name: 'Reset changes' }));
+  expect(buffer).toHaveTextContent(/^64 ·/);
   expect(button).toBeDisabled();
 });
 it('retains the monitoring preference when choosing a checked interface', () => {

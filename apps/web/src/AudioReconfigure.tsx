@@ -2,6 +2,13 @@ import { useState } from 'react';
 import type { AudioProbe, StartAudio } from './api';
 import { BUFFER_SIZES, bufferMs } from './bufferTiming';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 
 type Stream = StartAudio['stream'];
 
@@ -64,60 +71,72 @@ export function AudioReconfigure({
       <div className="audio-routing-fields grid min-w-0 grid-cols-2 gap-3">
         <label className="field col-span-2">
           Sample rate (Hz)
-          <select
-            aria-label="Session sample rate (Hz)"
-            value={draft.input.sample_rate}
-            onChange={(e) => shared('sample_rate', Number(e.target.value))}
+          <Select
+            value={String(draft.input.sample_rate)}
+            onValueChange={(value) => shared('sample_rate', Number(value))}
           >
-            {[
-              ...new Set([
-                44100,
-                48000,
-                88200,
-                96000,
-                initial.input.sample_rate,
-              ]),
-            ]
-              .sort((a, b) => a - b)
-              .map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger aria-label="Session sample rate (Hz)">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[
+                ...new Set([
+                  44100,
+                  48000,
+                  88200,
+                  96000,
+                  initial.input.sample_rate,
+                ]),
+              ]
+                .sort((a, b) => a - b)
+                .map((rate) => (
+                  <SelectItem key={rate} value={String(rate)}>
+                    {rate}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="field">
           Buffer (samples)
-          <select
-            aria-label="Session buffer (samples)"
-            value={draft.input.period_frames}
-            onChange={(e) => shared('period_frames', Number(e.target.value))}
+          <Select
+            value={String(draft.input.period_frames)}
+            onValueChange={(value) => shared('period_frames', Number(value))}
           >
-            {[...new Set([...BUFFER_SIZES, initial.input.period_frames])]
-              .sort((a, b) => a - b)
-              .map((frames) => (
-                <option key={frames} value={frames}>
-                  {frames}
-                  {draft.input.sample_rate > 0
-                    ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
-                    : ''}
-                </option>
-              ))}
-          </select>
+            <SelectTrigger aria-label="Session buffer (samples)">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[...new Set([...BUFFER_SIZES, initial.input.period_frames])]
+                .sort((a, b) => a - b)
+                .map((frames) => (
+                  <SelectItem key={frames} value={String(frames)}>
+                    {frames}
+                    {draft.input.sample_rate > 0
+                      ? ` · ${((1000 * frames) / draft.input.sample_rate).toFixed(2)} ms`
+                      : ''}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="field">
           Buffer periods
-          <select
-            aria-label="Session buffer periods"
-            value={draft.input.periods}
-            onChange={(e) => shared('periods', Number(e.target.value))}
+          <Select
+            value={String(draft.input.periods)}
+            onValueChange={(value) => shared('periods', Number(value))}
           >
-            {[2, 3, 4, 5, 6, 7, 8].map((periods) => (
-              <option key={periods} value={periods}>
-                {periods}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger aria-label="Session buffer periods">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[2, 3, 4, 5, 6, 7, 8].map((periods) => (
+                <SelectItem key={periods} value={String(periods)}>
+                  {periods}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         {(['input_map', 'output_map'] as const).flatMap((key) =>
           ([0, 1] as const).map((index) => (
