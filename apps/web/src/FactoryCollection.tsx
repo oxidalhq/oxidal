@@ -31,6 +31,32 @@ import {
   type FactoryRecipe,
 } from './factoryRecipes';
 
+const factoryFamilies: Record<string, string> = {
+  A: 'Space & ambience',
+  B: 'Bass',
+  C: 'Clean & studio',
+  H: 'Heavy',
+  K: 'Rock & drive',
+  R: 'Roots & rhythm',
+  S: 'Synth & pitch',
+  X: 'Experimental',
+};
+
+function groupFactoryRecipes(recipes: FactoryRecipe[]) {
+  const groups = new Map<string, { key: string; recipes: FactoryRecipe[] }>();
+  for (const recipe of recipes) {
+    const key = recipe.id[0] ?? 'other';
+    const label = factoryFamilies[key] ?? 'Other';
+    const group = groups.get(label) ?? { key, recipes: [] };
+    group.recipes.push(recipe);
+    groups.set(label, group);
+  }
+  return [...groups.entries()].map(([label, group]) => ({
+    label,
+    ...group,
+  }));
+}
+
 /** Local assembly never stops audio or downloads captures implicitly.
  * @see docs/factory-collection.md */
 export function FactoryCollection({
@@ -83,6 +109,7 @@ function CollectionDialog({
         .includes(query.trim().toLowerCase()),
     )
     .sort((a, b) => a.id.localeCompare(b.id));
+  const groupedRecipes = groupFactoryRecipes(visibleRecipes);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [ids] = useState(() =>
@@ -253,35 +280,61 @@ function CollectionDialog({
                 No matching sounds. Try another name or genre.
               </p>
             )}
-            <ul className="divide-y divide-border">
-              {visibleRecipes.map((recipe) => (
-                <li
-                  key={recipe.id}
-                  className="flex items-center justify-between gap-4 py-3"
+            <div className="space-y-5">
+              {groupedRecipes.map((group) => (
+                <section
+                  key={group.label}
+                  aria-labelledby={`factory-family-${group.key}`}
                 >
-                  <div>
-                    <strong>{recipe.name}</strong>
-                    <p className="caption">{recipe.categories.join(' · ')}</p>
-                    <p className="caption">{factoryTopologySummary(recipe)}</p>
-                  </div>
-                  {saved[recipe.id] ? (
-                    <Badge>Built</Badge>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      disabled={!profile}
-                      aria-label={`Explore ${recipe.name}`}
-                      onClick={() => {
-                        setSelected(recipe);
-                        setError('');
-                      }}
+                  <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                    <h3
+                      id={`factory-family-${group.key}`}
+                      className="m-0 text-sm"
                     >
-                      Explore<span className="sr-only"> {recipe.name}</span>
-                    </Button>
-                  )}
-                </li>
+                      {group.label}
+                    </h3>
+                    <Badge>
+                      {group.recipes.length}{' '}
+                      {group.recipes.length === 1 ? 'sound' : 'sounds'}
+                    </Badge>
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {group.recipes.map((recipe) => (
+                      <li
+                        key={recipe.id}
+                        className="flex items-center justify-between gap-4 py-3"
+                      >
+                        <div>
+                          <strong>{recipe.name}</strong>
+                          <p className="caption">
+                            {recipe.categories.join(' · ')}
+                          </p>
+                          <p className="caption">
+                            {factoryTopologySummary(recipe)}
+                          </p>
+                        </div>
+                        {saved[recipe.id] ? (
+                          <Badge>Built</Badge>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            disabled={!profile}
+                            aria-label={`Explore ${recipe.name}`}
+                            onClick={() => {
+                              setSelected(recipe);
+                              setError('');
+                            }}
+                          >
+                            Explore
+                            <span className="sr-only"> {recipe.name}</span>
+                          </Button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </div>
           </>
         )}
         {selected && error && <p role="alert">{error}</p>}

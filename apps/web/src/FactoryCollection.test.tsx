@@ -64,10 +64,29 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
     screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
   );
   expect(screen.getByText(/44 starting points/)).toBeVisible();
+  for (const family of [
+    'Space & ambience',
+    'Bass',
+    'Clean & studio',
+    'Heavy',
+    'Rock & drive',
+    'Roots & rhythm',
+    'Synth & pitch',
+    'Experimental',
+  ])
+    expect(
+      screen.getByRole('heading', { name: family, level: 3 }),
+    ).toBeVisible();
   const search = screen.getByRole('searchbox', {
     name: 'Find a factory sound',
   });
   await user.type(search, 'shoegaze');
+  expect(
+    screen.getByRole('heading', { name: 'Space & ambience', level: 3 }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('heading', { name: 'Heavy', level: 3 }),
+  ).not.toBeInTheDocument();
   const explore = screen.getByRole('button', { name: 'Explore Soft Ruin' });
   await waitFor(() => expect(explore).toBeEnabled());
   expect(
