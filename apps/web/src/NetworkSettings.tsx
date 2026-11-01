@@ -3,6 +3,13 @@ import { useEffect, useState } from 'react';
 import { deviceNetwork, type NetworkCommand, type NetworkState } from './api';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 
 /** Phone-first setup with explicit link-loss warning and server-owned recovery.
@@ -291,20 +298,25 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                 {wireless.length > 1 && (
                   <label className="field network-interface-select">
                     Wireless interface
-                    <select
+                    <Select
                       value={interfaceName}
-                      onChange={(e) => {
-                        setIface(e.target.value);
+                      onValueChange={(value) => {
+                        setIface(value);
                         setReview(false);
                       }}
                       disabled={busy}
                     >
-                      {wireless.map((device) => (
-                        <option key={device.name} value={device.name}>
-                          {device.name}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger aria-label="Wireless interface">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {wireless.map((device) => (
+                          <SelectItem key={device.name} value={device.name}>
+                            {device.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                 )}
                 <label className="field">
@@ -378,20 +390,25 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                     </label>
                     <label className="field">
                       Hotspot channel
-                      <select
-                        value={channel}
-                        onChange={(e) => {
-                          setChannel(Number(e.target.value));
+                      <Select
+                        value={String(channel)}
+                        onValueChange={(value) => {
+                          setChannel(Number(value));
                           setReview(false);
                         }}
                       >
-                        <option value={0}>Automatic</option>
-                        {state.radio.channels.map((c) => (
-                          <option key={c} value={c}>
-                            {c} · 2.4 GHz
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger aria-label="Hotspot channel">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Automatic</SelectItem>
+                          {state.radio.channels.map((c) => (
+                            <SelectItem key={c} value={String(c)}>
+                              {c} · 2.4 GHz
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                     <p
                       id="wireless-country-note"
@@ -435,25 +452,30 @@ export function NetworkSettings({ connected }: { connected: boolean }) {
                   >
                     <label className="field">
                       Start hotspot
-                      <select
+                      <Select
                         value={policyMode}
-                        onChange={(e) => {
-                          setPolicyMode(e.target.value as typeof policyMode);
+                        onValueChange={(value) => {
+                          setPolicyMode(value as typeof policyMode);
                           setPolicyReview(false);
                         }}
                       >
-                        <option value="always">Always</option>
-                        <option value="never">Never</option>
-                        <option value="no_ethernet">
-                          When Ethernet is disconnected
-                        </option>
-                        <option value="not_at_home">
-                          When home Wi-Fi is out of range
-                        </option>
-                        <option value="no_remembered">
-                          When no saved Wi-Fi is in range
-                        </option>
-                      </select>
+                        <SelectTrigger aria-label="Start hotspot">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="always">Always</SelectItem>
+                          <SelectItem value="never">Never</SelectItem>
+                          <SelectItem value="no_ethernet">
+                            When Ethernet is disconnected
+                          </SelectItem>
+                          <SelectItem value="not_at_home">
+                            When home Wi-Fi is out of range
+                          </SelectItem>
+                          <SelectItem value="no_remembered">
+                            When no saved Wi-Fi is in range
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </label>
                     {policyMode === 'not_at_home' && (
                       <label className="field">

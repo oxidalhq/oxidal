@@ -63,7 +63,7 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
   await panel.getByText('Automatic hotspot', { exact: true }).click();
   await expect(
     panel.getByRole('combobox', { name: 'Start hotspot', exact: true }),
-  ).toHaveValue('no_ethernet');
+  ).toHaveText('When Ethernet is disconnected');
   await panel.getByText('Automatic hotspot', { exact: true }).click();
   await panel.getByRole('button', { name: /Studio: Wi-Fi/ }).click();
   await panel
@@ -111,13 +111,15 @@ test('network setup reviews link loss, clears credentials and confirms recovery'
     '',
   );
   await expect(panel.getByLabel('Wireless country')).toHaveValue('NZ');
-  await panel
-    .getByRole('combobox', { name: 'Hotspot channel' })
-    .selectOption('6');
+  await panel.getByRole('combobox', { name: 'Hotspot channel' }).click();
+  await page.getByRole('option', { name: '6 · 2.4 GHz' }).click();
   await panel.getByText('Automatic hotspot', { exact: true }).click();
   await panel
     .getByRole('combobox', { name: 'Start hotspot', exact: true })
-    .selectOption('not_at_home');
+    .click();
+  await page
+    .getByRole('option', { name: 'When home Wi-Fi is out of range' })
+    .click();
   await panel.getByLabel('Home Wi-Fi name').fill('Studio: Wi-Fi');
   await panel.getByRole('button', { name: 'Review hotspot policy' }).click();
   expect(commands.filter((c) => c.type === 'policy')).toHaveLength(0);
