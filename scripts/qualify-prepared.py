@@ -8,6 +8,7 @@ import copy
 import json
 from pathlib import Path
 import time
+import urllib.parse
 import urllib.request
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -46,7 +47,7 @@ if args.frames:
 revisions = [settings['revision']] + [p['revision'] for p in settings['prepared']]
 if len(revisions) < 2 or not original.get('configured'):
     parser.error('A prepared alternative and a configured restore snapshot are required')
-result = dict(settings=settings, readings=[], switches=0, samples=0, required_seconds=args.seconds,
+result = dict(settings=settings, rigs=[], readings=[], switches=0, samples=0, required_seconds=args.seconds,
               physical_output_muted=True, observed_peak_us=0, lifetime_peak_us=0, deadline_misses=0, max_poll_gap_s=0,
               max_telemetry_gap_s=0, xruns=0, invalid_samples=0)
 
@@ -62,6 +63,19 @@ def request(body=None):
 def action(body):
     s = request()
     return request({'session': s['session'], 'expected_revision': s['revision'], 'action': body})
+
+
+def rig_catalog():
+    entries = []
+    after = None
+    while True:
+        query = '?' + urllib.parse.urlencode({'after': after}) if after else ''
+        with urllib.request.urlopen(args.api + '/api/v1/presets/rigs' + query, timeout=90) as response:
+            page = json.load(response)
+        entries.extend(page['presets'])
+        after = page.get('next')
+        if not after:
+            return {entry['revision']: entry for entry in entries}
 
 
 def settle():
@@ -106,6 +120,16 @@ def save():
 try:
     s = start(settings)
     owner = s['session']
+    catalog = rig_catalog()
+    result['rigs'] = [catalog.get(revision, {
+        'revision': revision,
+        'missing_from_library': True,
+    }) for revision in revisions]
+    result['worker'] = {
+        'buffer_bytes': s['control']['buffer_bytes'],
+        'latency_frames': s['control']['latency_frames'],
+        'prepared': s['control'].get('prepared', []),
+    }
     action({'kind': 'host_utility', 'command': {'kind': 'output_mute', 'enabled': True}})
     # Allow the temporary monitor fade to settle before starting measurement.
     time.sleep(.15)

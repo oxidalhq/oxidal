@@ -209,6 +209,10 @@ The optional Hold flag captures the voices in the last prepared preset. The test
 uses continuous reference input, keeps physical output muted between switches,
 polls telemetry frequently and restores the supplied configuration even on a
 failed deadline check. Its report records polling gaps as well as observed peaks.
+It also snapshots every resident's Library topology, scene names and actual
+native/LV2 instance counts, plus the worker's prepared status, buffer allocation
+and graph-reported latency. Missing Library metadata is explicit rather than
+silently reducing a capacity run to opaque revision hashes.
 DSP percentiles cover a rolling 128-callback window; the separate session peak
 and deadline-miss count are cumulative, so a polling delay cannot hide a spike.
 The example buffer size is a qualification choice, not an automatic capacity
