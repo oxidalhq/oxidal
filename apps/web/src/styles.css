@@ -190,12 +190,13 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
-/* Nine settings destinations use three balanced rows before they fit as one
-   strip. Avoid an orphaned final tab at tablet and phone widths. */
+/* Eight settings destinations use two balanced rows before they fit as one
+   strip. Avoid an orphaned final tab at tablet and phone widths. About sits
+   below the content as a separate link. */
 @media (max-width: 900px) {
   .settings-workspace > .ui-tabs-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
   }
   .settings-workspace > .ui-tabs-list .ui-tabs-trigger {
@@ -203,6 +204,17 @@ h2 {
     padding-inline: 0.25rem;
     text-align: center;
   }
+}
+@media (max-width: 380px) {
+  .settings-workspace > .ui-tabs-list .ui-tabs-trigger {
+    padding-inline: 0;
+    font-size: var(--text-xs);
+  }
+}
+.settings-about-link {
+  display: flex;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
 }
 .about-oxidal {
   display: grid;

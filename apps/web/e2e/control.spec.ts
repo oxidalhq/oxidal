@@ -356,6 +356,23 @@ test('guitar profiles explain automatic Sound Check use and guard removal', asyn
     .toEqual([['jiva'], 'jiva']);
 });
 
+test('about opens from settings and returns to the sections', async ({
+  page,
+}) => {
+  await page.goto('/?development=simulator');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Settings sections' });
+  await expect(tabs.getByRole('tab', { name: 'About Oxidal' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'About Oxidal', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'About Oxidal', level: 1, exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Back to settings' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Audio setup', level: 1, exact: true }),
+  ).toBeVisible();
+});
+
 test('settings navigation stays coherent across narrow and rotated layouts', async ({
   page,
 }, testInfo) => {
@@ -371,7 +388,6 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
     ['Display', 'Display'],
     ['Device', 'Device'],
     ['Maintenance', 'Maintenance'],
-    ['About Oxidal', 'About Oxidal'],
   ] as const;
 
   for (const size of [
@@ -390,7 +406,7 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
         return [...rows.values()];
       }),
       `balanced settings rows at ${size.width}px`,
-    ).toEqual(size.width <= 900 ? [3, 3, 3] : [9]);
+    ).toEqual(size.width <= 900 ? [4, 4] : [8]);
     for (const [tab, heading] of sections) {
       await tabs.getByRole('tab', { name: tab, exact: true }).click();
       await expect(

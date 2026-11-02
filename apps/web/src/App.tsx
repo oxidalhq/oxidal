@@ -682,15 +682,17 @@ function InstrumentApp() {
               <TabsList aria-label="Settings sections">
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
-                ).map((section) => (
-                  <TabsTrigger key={section} value={section}>
-                    {section === 'audio'
-                      ? 'Audio'
-                      : section === 'midi'
-                        ? 'MIDI'
-                        : settingsLabels[section]}
-                  </TabsTrigger>
-                ))}
+                )
+                  .filter((section) => section !== 'about')
+                  .map((section) => (
+                    <TabsTrigger key={section} value={section}>
+                      {section === 'audio'
+                        ? 'Audio'
+                        : section === 'midi'
+                          ? 'MIDI'
+                          : settingsLabels[section]}
+                    </TabsTrigger>
+                  ))}
               </TabsList>
               <TabsContent className="settings-content" value={settingsSection}>
                 {settingsSection === 'display' && (
@@ -1074,6 +1076,21 @@ function InstrumentApp() {
                   </>
                 )}
               </TabsContent>
+              <div className="settings-about-link">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSettingsSection(
+                      settingsSection === 'about' ? 'audio' : 'about',
+                    );
+                    window.scrollTo({ top: 0 });
+                  }}
+                >
+                  {settingsSection === 'about'
+                    ? 'Back to settings'
+                    : 'About Oxidal'}
+                </Button>
+              </div>
             </Tabs>
           )}
         </main>
