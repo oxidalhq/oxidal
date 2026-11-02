@@ -545,6 +545,10 @@
   position: absolute;
   top: 0.5rem;
   left: 0.625rem;
+  max-width: calc(100% - 1.25rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted-foreground);
   font: 600 0.75rem var(--font-mono);
 }

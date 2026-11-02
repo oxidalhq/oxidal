@@ -1132,9 +1132,26 @@ export function MixedRig({
       ? chainLanes(matching.manifest.oxidal.graph)
       : null;
   const chainNodes = new Set(chainIds?.flat() ?? []);
+  // Gain-snapshot scenes feed each parallel lane through `scene-feed-<lane>-<ch>`
+  // nodes labelled "<name> send": name the lane after its scene, and dim the
+  // lanes the sounding scene does not open.
+  const feedName = (index: number) => {
+    const label = rigNodeLabel(matching, `scene-feed-${index}-0`);
+    return label?.endsWith(' send') ? label.slice(0, -' send'.length) : null;
+  };
+  const feedOpen = (index: number) =>
+    soundingScene?.gains.some(
+      (gain) => gain.value > 0 && gain.node.startsWith(`scene-feed-${index}-`),
+    ) ?? false;
+  const snapshotLanes =
+    !!soundingScene && (chainIds?.length ?? 0) > 1 && feedName(0) !== null;
   const effectLanes: RigLaneVM[] = (chainIds ?? []).map((ids, index) => ({
-    id: chainIds!.length > 1 ? `Lane ${index + 1}` : 'Chain',
+    id:
+      chainIds!.length > 1
+        ? ((snapshotLanes ? feedName(index) : null) ?? `Lane ${index + 1}`)
+        : 'Chain',
     input: chainIds!.length > 1 ? String(index + 1) : 'IN',
+    dim: snapshotLanes ? !feedOpen(index) : undefined,
     blocks: ids
       .flatMap((id) => {
         const n = nodes.find((node) => node.id === id);
@@ -1224,11 +1241,14 @@ export function MixedRig({
     sceneBranches.findIndex((branch) => branch.id === state.control?.scene),
   );
   const activeSceneLane = sceneLanes[activeScene] ?? sceneLanes[0];
-  const stageLanes: RigLaneVM[] = (
-    activeSceneLane ? [activeSceneLane] : effectLanes
-  ).map((lane, _, all) => ({
+  const stageSource = activeSceneLane
+    ? [activeSceneLane]
+    : snapshotLanes && effectLanes.some((lane) => !lane.dim)
+      ? effectLanes.filter((lane) => !lane.dim)
+      : effectLanes;
+  const stageLanes: RigLaneVM[] = stageSource.map((lane, _, all) => ({
     ...lane,
-    tag: all.length > 1 ? lane.input : undefined,
+    tag: all.length > 1 ? (snapshotLanes ? lane.id : lane.input) : undefined,
     blocks: lane.blocks
       .filter((b) => !b.empty)
       .map((b) => {
