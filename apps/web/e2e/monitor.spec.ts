@@ -112,7 +112,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   ).toHaveText('—');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(strip).toBeVisible();
-  await strip.getByRole('button', { name: 'Open resource details' }).click();
+  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
   await expect(page.getByText('Current input verified')).toBeVisible();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   const panel = page.getByRole('region', {

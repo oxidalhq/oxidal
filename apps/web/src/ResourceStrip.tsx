@@ -1,11 +1,4 @@
 import { useMonitorFeed } from './monitorFeed';
-import {
-  ChartLine,
-  MusicNotes,
-  Waveform,
-  WarningCircle,
-} from '@phosphor-icons/react';
-import { Button } from './components/ui/button';
 import { processingHeadroom } from './processingHeadroom';
 
 const percent = (n: number | null | undefined) =>
@@ -15,13 +8,9 @@ const percent = (n: number | null | undefined) =>
 export function ResourceStrip({
   displayMode,
   connected,
-  onDetails,
-  onTuner,
 }: {
   displayMode: string;
   connected: boolean;
-  onDetails: () => void;
-  onTuner?: () => void;
 }) {
   const feed = useMonitorFeed(displayMode === 'epaper' ? 5000 : 1000);
   const state = feed.snapshot;
@@ -96,36 +85,9 @@ export function ResourceStrip({
       data-connected={connected && !disconnected}
     >
       <div className="resource-strip-state">
-        {onTuner && (
-          <Button
-            variant="outline"
-            onClick={onTuner}
-            aria-label="Open tuner"
-            title="Tuner"
-          >
-            <MusicNotes aria-hidden="true" />
-            <span className="strip-action-label">Tuner</span>
-          </Button>
-        )}
         <span className="sr-only" data-testid="resource-state">
           {status}
         </span>
-        <Button
-          variant="outline"
-          onClick={onDetails}
-          aria-label="Open resource details"
-          title={status}
-          data-warning={failed || disconnected || !connected}
-        >
-          {failed || disconnected || !connected ? (
-            <WarningCircle aria-hidden="true" />
-          ) : running ? (
-            <Waveform aria-hidden="true" />
-          ) : (
-            <ChartLine aria-hidden="true" />
-          )}
-          <span className="strip-action-label">Sound Check</span>
-        </Button>
       </div>
       <dl>
         <div

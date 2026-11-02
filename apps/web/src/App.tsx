@@ -42,6 +42,8 @@ const GraphAuthor = lazy(() =>
 );
 import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
+import { OPEN_TUNER_EVENT } from './tunerNavigation';
+import { TunerButton } from './TunerButton';
 import { refreshMonitorFeed } from './monitorFeed';
 import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
@@ -93,6 +95,11 @@ function InstrumentApp() {
       'simulator';
   const [view, setView] = useWorkspaceNavigation();
   const [tunerOpen, setTunerOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setTunerOpen(true);
+    window.addEventListener(OPEN_TUNER_EVENT, open);
+    return () => window.removeEventListener(OPEN_TUNER_EVENT, open);
+  }, []);
   const [settingsSection, setSettingsSection] = useState<
     | 'audio'
     | 'connections'
@@ -393,12 +400,7 @@ function InstrumentApp() {
           slow={displayMode === 'epaper'}
         />
       )}
-      <ResourceStrip
-        displayMode={displayMode}
-        connected={connected}
-        onDetails={() => setView('monitor')}
-        onTuner={() => setTunerOpen(true)}
-      />
+      <ResourceStrip displayMode={displayMode} connected={connected} />
       <div className="workspace">
         <main>
           <div
@@ -492,6 +494,7 @@ function InstrumentApp() {
                       </SelectContent>
                     </Select>
                   </label>
+                  <TunerButton />
                   <Button
                     className="bypass-switch"
                     variant="outline"

@@ -62,6 +62,7 @@ import { LevelMatch } from './LevelMatch';
 import { MasterLevel } from './MasterLevel';
 import { EditQueue } from './editQueue';
 import { requestMidiAssignments } from './midiNavigation';
+import { TunerButton } from './TunerButton';
 
 /** The sounding worker owns these controls; no simulator or offline editor writes. */
 const blockName = (label: string) =>
@@ -688,6 +689,7 @@ export function LiveRig({
           <Button variant="outline" onClick={onAudioSetup}>
             Audio setup
           </Button>
+          <TunerButton />
         </div>
       </section>
     );
@@ -918,6 +920,7 @@ export function LiveRig({
           <PlugsConnected aria-hidden="true" />
           <span className="phone-hidden">MIDI</span>
         </Button>
+        <TunerButton />
         {/* Save and the preset actions form one split button. */}
         <div className="preset-save-group" role="group" aria-label="Save">
           <Button

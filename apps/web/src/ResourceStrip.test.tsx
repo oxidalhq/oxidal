@@ -39,9 +39,7 @@ it('refreshes BOOX on confirmed lifecycle changes without accepting an older in-
     .mockResolvedValueOnce(snapshot(3, 'starting'))
     .mockResolvedValueOnce(snapshot(4, 'running'))
     .mockResolvedValueOnce(snapshot(5, 'stopping'));
-  const view = render(
-    <ResourceStrip displayMode="epaper" connected onDetails={() => {}} />,
-  );
+  const view = render(<ResourceStrip displayMode="epaper" connected />);
   await act(async () => {});
   expect(screen.getByTestId('resource-state')).toHaveTextContent(
     'Audio failed',
@@ -109,7 +107,7 @@ it('shows a measured zero and recovered xruns instead of treating zero as unavai
   vi.mocked(monitoring)
     .mockResolvedValueOnce(reading)
     .mockResolvedValueOnce({ ...reading, sequence: 2, xruns: 6 });
-  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
   expect(screen.getByText('Xruns').parentElement).toHaveTextContent('0');
   await act(async () => {
@@ -123,7 +121,7 @@ it('keeps stopped audio visible without showing a normal running badge', async (
     ...snapshot(1, 'stopped'),
     graph_phase: 'stopped',
   });
-  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
   expect(screen.getByRole('status')).toHaveTextContent('Audio stopped');
 });
@@ -152,7 +150,7 @@ it('retains a session peak after the recent callback window becomes quiet', asyn
     },
   } satisfies Monitoring;
   vi.mocked(monitoring).mockResolvedValue(reading);
-  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
   expect(screen.getByText('pk 120%')).toHaveAttribute('data-warning', 'true');
   expect(screen.getByText('DSP p95').parentElement).toHaveTextContent('3%');
@@ -182,7 +180,7 @@ it('warns before a callback reaches its deadline', async () => {
     },
   } satisfies Monitoring;
   vi.mocked(monitoring).mockResolvedValue(reading);
-  render(<ResourceStrip displayMode="stage" connected onDetails={() => {}} />);
+  render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
   expect(screen.getByText('DSP p95').parentElement).toHaveAttribute(
     'data-warning',

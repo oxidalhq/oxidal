@@ -3229,7 +3229,7 @@ textarea {
   }
   .rig-editor .rig-performance-header {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--touch-target), 1fr));
   }
   .rig-editor .rig-performance-header .preset-picker {
     grid-column: 1 / -1;
@@ -3407,36 +3407,6 @@ textarea {
   }
 }
 
-/* Status-strip actions: the tuner and the way into Sound Check read as the
-   buttons they are, grouped together at the end of the strip. */
-.resource-strip-state {
-  gap: 0.5rem;
-}
-.resource-strip-state > button {
-  width: auto;
-  gap: 0.375rem;
-  padding: 0 0.75rem;
-}
-.resource-strip-state > button:first-child {
-  margin-left: auto;
-}
-.resource-strip-state > button + .sr-only + button {
-  margin-left: 0;
-}
-.strip-action-label {
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-@media (max-width: 600px) {
-  .resource-strip-state > button:last-of-type .strip-action-label {
-    display: none;
-  }
-  .resource-strip-state > button:last-of-type {
-    width: var(--touch-target);
-    padding: 0;
-  }
-}
-
 /* One heading and button language inside setup panels: sub-headings read like
    the other sections, and lone buttons size to their label, left-aligned. */
 .audio-diagnostics > h3,
@@ -3461,4 +3431,19 @@ textarea {
 .page-heading > .oxidal-button {
   flex: none;
   width: auto;
+}
+
+/* Phone navigation: every icon sits on one line and the longer "Sound Check"
+   label wraps below it, instead of pushing its own icon up. */
+@media (max-width: 600px) {
+  .masthead nav {
+    align-items: start;
+  }
+  .masthead nav > button {
+    justify-content: flex-start;
+    align-self: start;
+    min-height: 3.5rem;
+    line-height: 1.15;
+    text-align: center;
+  }
 }

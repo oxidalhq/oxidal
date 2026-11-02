@@ -85,6 +85,7 @@ import {
 import type { RigPublish } from './generated/contract';
 import { addSceneEffect, branchEffects, removeSceneEffect } from './sceneEdit';
 import { requestMidiAssignments } from './midiNavigation';
+import { TunerButton } from './TunerButton';
 
 const key = (c: RigControl) => JSON.stringify(c.target);
 /** Actual mixed readback only; an edited document never masquerades as sounding. */
@@ -1413,6 +1414,7 @@ export function MixedRig({
           <Lightning aria-hidden="true" />
           <span className="phone-hidden">Perform</span>
         </Button>
+        <TunerButton disabled={!running} />
         {state.device_owned ? (
           <Button
             variant="outline"

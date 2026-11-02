@@ -1048,11 +1048,11 @@ test('native device defaults save independently of the playing tone', async ({
   }
 });
 
-test('global tuner is accessible outside preset authoring and survives rotation', async ({
+test('rig tuner is accessible outside preset authoring and survives rotation', async ({
   page,
 }) => {
-  await page.goto('/');
-  for (const view of ['Rig', 'Library', 'Sound Check', 'Settings']) {
+  await page.goto('/?development=simulator');
+  for (const view of ['Rig']) {
     await page.getByRole('button', { name: view, exact: true }).click();
     await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Tuner', exact: true });
