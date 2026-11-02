@@ -11,6 +11,7 @@ import {
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { StateNotice } from './components/ui/state-notice';
 import {
   Select,
   SelectContent,
@@ -1137,11 +1138,18 @@ export function MidiMapScreen({
             </section>
           );
         })}
-        {!visibleGroups.length && (
-          <p className="rounded-lg bg-muted/45 p-4 text-sm">
-            No mappings match “{query}”.
-          </p>
-        )}
+        {!visibleGroups.length &&
+          (query.trim() ? (
+            <StateNotice kind="empty" title="No matching mappings">
+              Nothing matches “{query.trim()}”. Try a preset name, Program or CC
+              number.
+            </StateNotice>
+          ) : (
+            <StateNotice kind="empty" title="No MIDI mappings yet">
+              Open a playing preset’s MIDI controls to assign scenes and
+              parameters.
+            </StateNotice>
+          ))}
       </div>
     </div>
   );
