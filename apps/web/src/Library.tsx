@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useWorkspaceState } from './workspaceMemory';
+import { StateNotice } from './components/ui/state-notice';
 import {
   importPreset,
   presetLibrary,
@@ -298,7 +299,11 @@ export function Library({
                   </Select>
                 </label>
               )}
-              {detailsError && <p role="status">{detailsError}</p>}
+              {detailsError && (
+                <StateNotice kind="error" title="Preset details unavailable">
+                  {detailsError}
+                </StateNotice>
+              )}
               {preview && (
                 <PresetDetailsDialog
                   entry={preview}
@@ -370,26 +375,35 @@ export function Library({
                 onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
               />
               {error && (
-                <p role="alert" className="error">
+                <StateNotice kind="error" title="Could not load preset">
                   {error}
-                </p>
+                </StateNotice>
               )}
               {copiesError && (
-                <div className="space-y-2">
-                  <p role="status">{copiesError}</p>
-                  <Button
-                    variant="outline"
-                    onClick={() => setRefresh((value) => value + 1)}
-                  >
-                    Retry saved copies
-                  </Button>
-                </div>
+                <StateNotice
+                  kind="error"
+                  title="Saved copies unavailable"
+                  action={
+                    <Button
+                      variant="outline"
+                      onClick={() => setRefresh((value) => value + 1)}
+                    >
+                      Retry saved copies
+                    </Button>
+                  }
+                >
+                  {copiesError}
+                </StateNotice>
               )}
-              <p role="status">{message}</p>
-              {!busy && presets.length === 0 && <p>No stored presets yet.</p>}
+              {message && <StateNotice kind="loading" title={message} />}
               <div className="section-heading">
                 <h2>Mine · single chain</h2>
               </div>
+              {!busy && presets.length === 0 && owned.length === 0 && (
+                <StateNotice kind="empty" title="No stored presets yet">
+                  Import a preset or build one with New preset.
+                </StateNotice>
+              )}
               {(query.trim() || category) &&
                 !busy &&
                 !owned.some((p) => matches(p.name, 'owned', p.id)) && (
