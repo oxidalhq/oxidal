@@ -644,6 +644,11 @@ export function LiveRig({
             {state.preset_name ? ` with ${state.preset_name}` : ''}, including
             unsaved edits. Or choose another rig from Library.
           </p>
+        ) : state?.phase === 'unavailable' ? (
+          <p>
+            This device cannot play audio right now. You can still browse and
+            edit presets; check Audio setup if an interface should be connected.
+          </p>
         ) : (
           <p>
             Choose a rig from Library to play. Audio setup is only needed when

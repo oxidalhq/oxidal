@@ -79,7 +79,11 @@ export function ResourceStrip({
             ? 'Audio stopping'
             : failed
               ? 'Audio failed'
-              : 'Audio stopped';
+              : [state.audio_phase, state.graph_phase, state.rig_phase].every(
+                    (phase) => phase === 'unavailable',
+                  )
+                ? 'Audio unavailable'
+                : 'Audio stopped';
   return (
     <aside
       className="resource-strip"
