@@ -1384,7 +1384,6 @@ export function MixedRig({
           </span>
         </Button>
         <Button
-          variant="outline"
           aria-label="Perform view"
           title="Scene pads and effect switches for playing live"
           disabled={!running || disabled || !!edit || editing}
