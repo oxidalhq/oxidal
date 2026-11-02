@@ -3406,3 +3406,49 @@ textarea {
     --dialog-pad: 1rem;
   }
 }
+
+/* Status-strip actions: the tuner and the way into Sound Check read as the
+   buttons they are, grouped together at the end of the strip. */
+.resource-strip-state {
+  gap: 0.5rem;
+}
+.resource-strip-state > button {
+  width: auto;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+}
+.resource-strip-state > button:first-child {
+  margin-left: auto;
+}
+.resource-strip-state > button + .sr-only + button {
+  margin-left: 0;
+}
+.strip-action-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+@media (max-width: 600px) {
+  .resource-strip-state > button:last-of-type .strip-action-label {
+    display: none;
+  }
+  .resource-strip-state > button:last-of-type {
+    width: var(--touch-target);
+    padding: 0;
+  }
+}
+
+/* One heading and button language inside setup panels: sub-headings read like
+   the other sections, and lone buttons size to their label, left-aligned. */
+.audio-diagnostics > h3,
+.audio-probe-fields > legend,
+.panel > h3 {
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+.audio-diagnostics > button,
+.audio-diagnostics > .audio-probe-fields button {
+  justify-self: start;
+}
+.audio-diagnostics > p[role='status'] {
+  font-size: var(--text-sm);
+}

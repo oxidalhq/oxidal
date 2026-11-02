@@ -206,7 +206,7 @@ export function GuitarSettings() {
               Gate
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               disabled={busy}
               aria-label={`Manage ${g.name}`}
               onClick={() => setManaging(g.id)}
