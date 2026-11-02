@@ -37,6 +37,7 @@ import {
 import { allFactoryRecipes as factoryRecipes } from './factoryCatalog';
 import { factoryVoices, isFactoryVoice } from './factoryVoices';
 import { VoiceSlot } from './VoiceSlot';
+import { playScenes } from './presetChoices';
 
 const factoryFamilies: Record<string, string> = {
   A: 'Space & ambience',
@@ -73,9 +74,11 @@ function groupFactoryRecipes(recipes: FactoryRecipe[]) {
 export function FactoryCollection({
   connected,
   onChanged,
+  onOpenRig,
 }: {
   connected: boolean;
   onChanged: () => void;
+  onOpenRig?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -91,6 +94,7 @@ export function FactoryCollection({
         <CollectionDialog
           onClose={() => setOpen(false)}
           onChanged={onChanged}
+          onOpenRig={onOpenRig}
         />
       )}
     </>
@@ -103,11 +107,13 @@ export function UnbuiltSounds({
   query,
   refresh,
   onChanged,
+  onOpenRig,
 }: {
   connected: boolean;
   query: string;
   refresh: number;
   onChanged: () => void;
+  onOpenRig?: () => void;
 }) {
   const [builtNames, setBuiltNames] = useState<Set<string> | null>(null);
   const [onDevice, setOnDevice] = useState<Set<string>>(new Set());
@@ -189,6 +195,7 @@ export function UnbuiltSounds({
           initialRecipe={open}
           onClose={() => setOpen(null)}
           onChanged={onChanged}
+          onOpenRig={onOpenRig}
         />
       )}
     </section>
@@ -197,12 +204,17 @@ export function UnbuiltSounds({
 function CollectionDialog({
   onClose,
   onChanged,
+  onOpenRig,
   initialRecipe,
 }: {
   onClose: () => void;
   onChanged: () => void;
+  onOpenRig?: () => void;
   initialRecipe?: FactoryRecipe;
 }) {
+  const [built, setBuilt] = useState<{ revision: string; name: string } | null>(
+    null,
+  );
   const [plugins, setPlugins] = useState<Lv2Plugin[]>([]);
   const [sources, setSources] = useState<RigNativeSource[]>([]);
   const [profile, setProfile] = useState('');
@@ -312,6 +324,10 @@ function CollectionDialog({
       });
       setSaved((s) => ({ ...s, [recipe.id]: document.revision }));
       onChanged();
+      setBuilt({
+        revision: document.revision,
+        name: recipe.era ? recipe.name : `Oxidal · ${recipe.name}`,
+      });
       setSelected(null);
     } catch (e) {
       setError(String(e));
@@ -321,16 +337,51 @@ function CollectionDialog({
   }
   return (
     <AdjustmentDialog
-      title={selected?.name ?? 'Oxidal sounds'}
+      title={built ? 'Built' : (selected?.name ?? 'Oxidal sounds')}
       onCancel={() => {
         if (!busy) {
-          if (selected) setSelected(null);
+          if (built) setBuilt(null);
+          else if (selected) setSelected(null);
           else onClose();
         }
       }}
     >
       <div className="control-stack">
-        {selected ? (
+        {built ? (
+          <>
+            <p>
+              <strong>{built.name}</strong> is in your library. Playing it
+              replaces the sound you are hearing now.
+            </p>
+            {error && <p role="alert">{error}</p>}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                disabled={busy}
+                onClick={() => setBuilt(null)}
+              >
+                Done
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await playScenes(built.revision);
+                    onOpenRig?.();
+                    onClose();
+                  } catch (cause) {
+                    setError(String(cause));
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Starting…' : 'Play now'}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : selected ? (
           <>
             <p>{selected.description}</p>
             <p className="caption">{factoryTopologySummary(selected)}</p>

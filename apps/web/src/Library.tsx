@@ -463,11 +463,13 @@ export function Library({
                 connected={connected}
                 query={query}
                 refresh={refresh}
+                onOpenRig={onOpenRig}
                 onChanged={() => setRefresh((v) => v + 1)}
               />
               <div className="mt-4 mb-6">
                 <FactoryCollection
                   connected={connected}
+                  onOpenRig={onOpenRig}
                   onChanged={() => setRefresh((v) => v + 1)}
                 />
               </div>

@@ -87,6 +87,7 @@ it('builds an effect-only example without touching transport, then reports it bu
   await user.click(explore);
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Build preset' }));
+  await user.click(await screen.findByRole('button', { name: 'Done' }));
   await screen.findByText('Built');
   expect(changed).toHaveBeenCalledOnce();
   expect(publishRig).toHaveBeenCalledOnce();
@@ -222,6 +223,7 @@ it('offers one download for a missing voice, then builds with the downloaded cap
   );
   await waitFor(() => expect(build).toBeEnabled());
   await user.click(build);
+  await user.click(await screen.findByRole('button', { name: 'Done' }));
   await screen.findByText('Built');
   const request = vi.mocked(publishRig).mock.calls.at(-1)![0];
   const manifest = JSON.parse(request.manifest_json);
