@@ -72,6 +72,14 @@
   --touch-target: 2.75rem;
   --title-size: clamp(1.5rem, 2.5vw, 2rem);
   --readout-size: 2rem;
+  /* Type scale: every text size comes from here; do not add one-off sizes. */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
   --rack-gap: 0.5rem;
   --selected-edge: 2px;
 }
