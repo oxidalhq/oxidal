@@ -3355,3 +3355,54 @@ textarea {
   stroke-linecap: square;
   stroke-linejoin: miter;
 }
+
+/* Dialog anatomy: a fixed header, a scrolling body and a footer pinned to the
+   bottom edge, whatever the content. Later than the older padding rules above. */
+.adjustment-dialog {
+  --dialog-pad: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--popover);
+}
+.adjustment-dialog > .adjustment-heading {
+  flex: none;
+  align-items: flex-start;
+  margin: 0;
+  padding: 0.75rem 0.75rem 0.75rem var(--dialog-pad);
+  border-bottom: 1px solid var(--border);
+}
+.adjustment-title {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  padding-top: 0.5rem;
+}
+.adjustment-title [data-slot='dialog-description'],
+.adjustment-title p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+}
+.adjustment-dialog > .dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--dialog-pad);
+  overscroll-behavior: contain;
+}
+.adjustment-dialog .dialog-footer {
+  position: sticky;
+  bottom: calc(var(--dialog-pad) * -1);
+  z-index: 1;
+  margin: 0.5rem calc(var(--dialog-pad) * -1) calc(var(--dialog-pad) * -1);
+  padding: 0.75rem var(--dialog-pad);
+  border-top: 1px solid var(--border);
+  background: var(--popover);
+}
+@media (max-width: 600px) {
+  .adjustment-dialog {
+    --dialog-pad: 1rem;
+  }
+}

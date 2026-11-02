@@ -1,17 +1,27 @@
 import { X } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Dialog, DialogContent, DialogTitle } from './components/ui/dialog';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './components/ui/dialog';
 
 /** Shared modal adjustment surface. Radix modality keeps focus and touch events
  * inside the panel; the instrument stays visible behind it. */
 export function AdjustmentDialog({
   title,
+  description,
   onCancel,
   children,
   className = '',
 }: {
   title: string;
+  /** One quiet line under the title saying what the dialog is for. */
+  description?: string;
   onCancel: () => void;
   children: ReactNode;
   className?: string;
@@ -59,7 +69,7 @@ export function AdjustmentDialog({
       <DialogContent
         ref={setDialog}
         className={`adjustment-dialog ${className}`}
-        aria-describedby={undefined}
+        {...(description ? {} : { 'aria-describedby': undefined })}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           (event.currentTarget as HTMLElement | null)
@@ -70,10 +80,14 @@ export function AdjustmentDialog({
           event.preventDefault();
           previous.current?.focus({ preventScroll: true });
         }}
-        onInteractOutside={(event) => event.preventDefault()}
       >
-        <div className="adjustment-heading">
-          <DialogTitle tabIndex={-1}>{title}</DialogTitle>
+        <DialogHeader>
+          <div className="adjustment-title">
+            <DialogTitle tabIndex={-1}>{title}</DialogTitle>
+            {description && (
+              <DialogDescription>{description}</DialogDescription>
+            )}
+          </div>
           <Button
             variant="ghost"
             className="h-11 w-11 shrink-0 p-0"
@@ -82,8 +96,8 @@ export function AdjustmentDialog({
           >
             <X aria-hidden="true" />
           </Button>
-        </div>
-        <div className="dialog-body">{children}</div>
+        </DialogHeader>
+        <DialogBody>{children}</DialogBody>
       </DialogContent>
     </Dialog>
   );

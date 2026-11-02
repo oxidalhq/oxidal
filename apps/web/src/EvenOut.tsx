@@ -68,11 +68,6 @@ export function EvenOut({ connected }: { connected: boolean }) {
             Even out
           </Button>
         )}
-        {!running && entries.length > 0 && (
-          <Button variant="ghost" onClick={() => setDetails((v) => !v)}>
-            {details ? 'Hide levels' : 'Levels'}
-          </Button>
-        )}
       </div>
       {running ? (
         <>
@@ -113,6 +108,9 @@ export function EvenOut({ connected }: { connected: boolean }) {
           </details>
           {entries.length > 0 && (
             <div className="action-row">
+              <Button variant="ghost" onClick={() => setDetails((v) => !v)}>
+                {details ? 'Hide levels' : 'Levels'}
+              </Button>
               <Button
                 variant="ghost"
                 disabled={!connected}
