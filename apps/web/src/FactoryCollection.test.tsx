@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { FactoryCollection } from './FactoryCollection';
+import { FactoryCollection, SongbookShelf } from './FactoryCollection';
 import {
   downloadVoice,
   installedLv2,
@@ -248,4 +248,17 @@ it('uses a capture already on the device without downloading again', async () =>
     expect(screen.getByRole('button', { name: 'Build preset' })).toBeEnabled(),
   );
   expect(downloadVoice).not.toHaveBeenCalled();
+});
+
+it('opens Explore on an era from the Library shelf', async () => {
+  const user = userEvent.setup();
+  render(<SongbookShelf connected onChanged={() => {}} />);
+  await user.click(screen.getByRole('button', { name: '80s' }));
+  expect(
+    screen.getByRole('searchbox', { name: 'Find a factory sound' }),
+  ).toHaveValue('80s');
+  expect(
+    screen.getByRole('heading', { name: '80s sounds', level: 3 }),
+  ).toBeVisible();
+  expect(screen.queryByRole('heading', { name: '90s sounds' })).toBeNull();
 });

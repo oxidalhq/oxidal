@@ -96,12 +96,49 @@ export function FactoryCollection({
     </>
   );
 }
+/** Era shortcuts at the top of Library: each opens Explore on that era's sounds. */
+export function SongbookShelf({
+  connected,
+  onChanged,
+}: {
+  connected: boolean;
+  onChanged: () => void;
+}) {
+  const [query, setQuery] = useState<string | null>(null);
+  const eras = ['80s', '90s', '2000s', 'Modern'] as const;
+  return (
+    <section className="songbook-shelf" aria-label="Explore by era">
+      <h3>Explore by era</h3>
+      <div className="action-row">
+        {eras.map((era) => (
+          <Button
+            key={era}
+            variant="outline"
+            disabled={!connected}
+            onClick={() => setQuery(era)}
+          >
+            {era}
+          </Button>
+        ))}
+      </div>
+      {query !== null && (
+        <CollectionDialog
+          initialQuery={query}
+          onClose={() => setQuery(null)}
+          onChanged={onChanged}
+        />
+      )}
+    </section>
+  );
+}
 function CollectionDialog({
   onClose,
   onChanged,
+  initialQuery = '',
 }: {
   onClose: () => void;
   onChanged: () => void;
+  initialQuery?: string;
 }) {
   const [plugins, setPlugins] = useState<Lv2Plugin[]>([]);
   const [sources, setSources] = useState<RigNativeSource[]>([]);
@@ -116,7 +153,7 @@ function CollectionDialog({
   const [downloaded, setDownloaded] = useState<Record<string, RigNativeSource>>(
     {},
   );
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const visibleRecipes = factoryRecipes
     .filter((recipe) =>
       [recipe.name, ...recipe.categories, recipe.description]

@@ -22,7 +22,7 @@ import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
-import { FactoryCollection } from './FactoryCollection';
+import { FactoryCollection, SongbookShelf } from './FactoryCollection';
 import { EvenOut } from './EvenOut';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
@@ -354,6 +354,10 @@ export function Library({
                   onChanged={() => setRefresh((v) => v + 1)}
                 />
               )}
+              <SongbookShelf
+                connected={connected}
+                onChanged={() => setRefresh((v) => v + 1)}
+              />
               <EvenOut connected={connected} />
               <details className="control-help">
                 <summary>How live switching works</summary>

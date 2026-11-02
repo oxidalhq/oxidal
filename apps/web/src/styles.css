@@ -3496,3 +3496,14 @@ textarea {
 .voice-slot .oxidal-button {
   justify-self: start;
 }
+
+.songbook-shelf {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.songbook-shelf h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 650;
+}
