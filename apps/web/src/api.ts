@@ -540,14 +540,18 @@ export async function downloadVoice(
   name: string,
   signal?: AbortSignal,
 ): Promise<VoiceReady> {
-  const body = await presetResponse(
-    await fetch('/api/v1/tone3000/voice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tone_id: tone, model_id: model, name }),
-      signal,
-    }),
-  );
+  const response = await fetch('/api/v1/tone3000/voice', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tone_id: tone, model_id: model, name }),
+    signal,
+  });
+  // An older device has no such endpoint; say so instead of a bare failure.
+  if (response.status === 404 || response.status === 405)
+    throw new Error(
+      'This device needs a software update to download captures.',
+    );
+  const body = await presetResponse(response);
   if (
     !voiceReadyValidator(body) ||
     body.capture.tone_id !== tone ||
