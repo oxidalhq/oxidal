@@ -61,6 +61,27 @@ claiming a spring algorithm. Sub/tracker recipes require clear single notes; pit
 voices add algorithmic delay. Hold capture/release remains explicit in its blocks.
 These limitations are in the individual descriptions, not hidden by genre names.
 
+## Named voices and the era songbook
+
+Recipes choose a NAM sound through a **voice**: Oxidal's own id for a sound, such
+as a plexi-style crunch, an 800-style lead, a scooped modern high-gain or a
+blackface-style clean. `apps/web/src/factoryVoices.ts` lists each voice with a
+plain description and the TONE3000 tone and model ids to download for it. Only
+numeric ids are stored; titles, creators, licences and sizes are read from
+TONE3000 and shown as the provider presents them. No capture ships with Oxidal.
+The four original roles (`clean`, `crunch`, `heavy`, `bass`) still work as
+player-chosen bindings.
+
+`apps/web/src/songbookRecipes.ts` adds original presets tagged by era (`80s`,
+`90s`, `2000s`, `Modern`) and genre. Each preset has its own amp voice, so the
+bank no longer shares four amps. Songbook names stand alone, without the
+"Oxidal ·" prefix, and every preset uses the same scenes in the same order:
+Rhythm, Lead, Intro and Boost. Names, descriptions and tags describe the sound
+and never name an artist, song or trademarked product.
+
+Captures are downloaded by the player, one preset at a time, when they first use
+a preset that needs them; nothing is downloaded in bulk or ahead of use.
+
 ## Assets and dependencies
 
 The standard image contains the recipe settings, **not** third-party NAM/IR payloads or

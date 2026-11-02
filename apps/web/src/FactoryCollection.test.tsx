@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { FactoryCollection } from './FactoryCollection';
 import { installedLv2, publishRig, presetDetails } from './api';
 import catalog from './fixtures/factory-lv2.json';
+import { allFactoryRecipes } from './factoryCatalog';
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -79,7 +80,9 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   await user.click(
     screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
   );
-  expect(screen.getByText(/44 starting points/)).toBeVisible();
+  expect(
+    screen.getByText(new RegExp(`${allFactoryRecipes.length} starting points`)),
+  ).toBeVisible();
   for (const family of [
     'Space & ambience',
     'Bass',

@@ -26,7 +26,6 @@ import type {
   RigNativeSource,
 } from './generated/contract';
 import {
-  factoryRecipes,
   factoryRoles,
   factoryMissingPlugins,
   factoryTopologySummary,
@@ -34,6 +33,8 @@ import {
   type FactoryRole,
   type FactoryRecipe,
 } from './factoryRecipes';
+import { allFactoryRecipes as factoryRecipes } from './factoryCatalog';
+import { factoryVoices, isFactoryVoice } from './factoryVoices';
 
 const factoryFamilies: Record<string, string> = {
   A: 'Space & ambience',
@@ -49,8 +50,12 @@ const factoryFamilies: Record<string, string> = {
 function groupFactoryRecipes(recipes: FactoryRecipe[]) {
   const groups = new Map<string, { key: string; recipes: FactoryRecipe[] }>();
   for (const recipe of recipes) {
-    const key = recipe.id[0] ?? 'other';
-    const label = factoryFamilies[key] ?? 'Other';
+    const key = recipe.era ?? recipe.id[0] ?? 'other';
+    const label = recipe.era
+      ? recipe.era === 'Modern'
+        ? 'Modern sounds'
+        : `${recipe.era} sounds`
+      : (factoryFamilies[key] ?? 'Other');
     const group = groups.get(label) ?? { key, recipes: [] };
     group.recipes.push(recipe);
     groups.set(label, group);
@@ -196,7 +201,12 @@ function CollectionDialog({
             )}
             {factoryRoles(selected).map((role) => (
               <label key={role} className="field">
-                <span>{role[0]!.toUpperCase() + role.slice(1)} NAM voice</span>
+                <span>
+                  {isFactoryVoice(role)
+                    ? factoryVoices[role].character
+                    : role[0]!.toUpperCase() + role.slice(1)}{' '}
+                  NAM voice
+                </span>
                 <Select
                   disabled={busy}
                   value={bindings[role]?.preset.sha256}

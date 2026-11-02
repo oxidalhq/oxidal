@@ -5,6 +5,7 @@ import type {
   RigNativeSource,
 } from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft.ts';
+import type { FactoryVoiceId } from './factoryVoices.ts';
 
 const pluginUris: Record<string, string> = {
   'x42 Compressor Stereo': 'http://gareus.org/oss/lv2/darc#stereo',
@@ -44,14 +45,19 @@ const pluginUris: Record<string, string> = {
   'Oxidal Hold (Stereo)': 'urn:oxidal:plugin:hold#stereo',
 };
 
-export type FactoryRole = 'clean' | 'crunch' | 'heavy' | 'bass';
-type Effect =
+/** The original four shared roles, or one of the named factory voices. */
+export type FactoryRole =
+  'clean' | 'crunch' | 'heavy' | 'bass' | FactoryVoiceId;
+export type Effect =
   | { plugin: string; controls?: Record<string, number> }
   | { native: FactoryRole };
-type Voice = { name: string; effects: Effect[] };
+
+export type Voice = { name: string; effects: Effect[] };
 export type FactoryRecipe = {
   id: string;
   name: string;
+  /** Songbook presets carry an era and use their own name without a prefix. */
+  era?: '80s' | '90s' | '2000s' | 'Modern';
   description: string;
   categories: string[];
   /** Scene recipes split into voices; serial recipes run one ordered chain. */
@@ -98,14 +104,17 @@ function applyNativeBudget(
   };
   manifest.requiredExtensions.push('urn:oxidal:native-settings:1');
 }
-const fx = (plugin: string, controls: Record<string, number> = {}): Effect => ({
+export const fx = (
+  plugin: string,
+  controls: Record<string, number> = {},
+): Effect => ({
   plugin,
   controls,
 });
-const nam = (native: FactoryRole): Effect => ({ native });
-const room = () =>
+export const nam = (native: FactoryRole): Effect => ({ native });
+export const room = () =>
   fx('GxReverb-Stereo', { dry_wet: 12, roomsize: 0.35, damp: 0.55 });
-const hall = (dry = 100, decay = 3) =>
+export const hall = (dry = 100, decay = 3) =>
   fx('GxZita_rev1-Stereo', {
     DRY_WET_MIX: dry ? -0.65 : 1,
     MID_RT60: decay,
@@ -114,26 +123,27 @@ const hall = (dry = 100, decay = 3) =>
     LF_X: 180,
     IN_DELAY: 25,
   });
-const compressor = () =>
+export const compressor = () =>
   fx('GxCompressor', {
     THRESHOLD: -22,
     RATIO: 2.5,
     ATTACK: 0.012,
     RELEASE: 0.15,
   });
-const chorus = () =>
+export const chorus = () =>
   fx('GxChorus-Stereo', { level: 0.25, depth: 0.012, freq: 0.7 });
-const drive = () => fx('GxTubeScreamer', { fslider0_: -12, fslider2_: 0.2 });
-const echo = (wet = 0.25) =>
+export const drive = () =>
+  fx('GxTubeScreamer', { fslider0_: -12, fslider2_: 0.2 });
+export const echo = (wet = 0.25) =>
   fx('MDA DubDelay', {
     delay: 0.32,
     feedback: 0.45,
     fx_mix: wet,
     lfo_depth: 0.03,
   });
-const echoAt = (delay: number) =>
+export const echoAt = (delay: number) =>
   fx('MDA DubDelay', { delay, feedback: 0.3, fx_mix: 1, lfo_depth: 0 });
-const reverse = (seconds: number) =>
+export const reverse = (seconds: number) =>
   fx('Reverse Delay (5s max)', {
     delay_time: seconds,
     dry_level: -70,
@@ -141,22 +151,22 @@ const reverse = (seconds: number) =>
     feedback: 0.2,
     xfade_samp: 1250,
   });
-const pitch = (semitones: number) =>
+export const pitch = (semitones: number) =>
   fx('Oxidal Pitch (Stereo)', { semitones, window: 1, input_mode: 0 });
-const rotary = (speed: number) =>
+export const rotary = (speed: number) =>
   fx('MDA Leslie', { speed, mode: speed < 0.5 ? 0.2 : 0.8 });
-const sub = (level: number) =>
+export const sub = (level: number) =>
   fx('MDA SubSynth', { level, dry_mix: 0, thresh: 0.35 });
-const tape = () =>
+export const tape = () =>
   fx('GxTape', { drive: 0.25, hiss: 0, wowdepth: 0.006, flutdepth: 0.004 });
-const studioComp = (threshold = -24) =>
+export const studioComp = (threshold = -24) =>
   fx('x42 Compressor Stereo', {
     threshold,
     Ratio: 0.5,
     attack: 0.015,
     release: 0.25,
   });
-const silk = () =>
+export const silk = () =>
   fx('FOMP Chorus', {
     delay: 12,
     mod_freq_1: 0.23,
@@ -164,7 +174,7 @@ const silk = () =>
     mod_freq_2: 0.71,
     mod_amp_2: 0.4,
   });
-const orbit = (rate = 0.3, sections = 6) =>
+export const orbit = (rate = 0.3, sections = 6) =>
   fx('FOMP Phaser', {
     in_gain: -3,
     sections,
@@ -173,7 +183,7 @@ const orbit = (rate = 0.3, sections = 6) =>
     fb_gain: 0.35,
     out_mix: 0.5,
   });
-const flyHall = (decay = 4, wet = 24) =>
+export const flyHall = (decay = 4, wet = 24) =>
   fx('Dragonfly Hall', {
     dry_level: 100,
     early_level: 8,
@@ -186,7 +196,7 @@ const flyHall = (decay = 4, wet = 24) =>
     spin: 1.8,
     wander: 10,
   });
-const flyRoom = () =>
+export const flyRoom = () =>
   fx('Dragonfly Early Reflections', {
     dry_level: 100,
     early_level: 22,
@@ -203,11 +213,11 @@ const held = () =>
     focus: 85,
     width: 70,
   });
-const voice = (name: string, ...effects: Effect[]): Voice => ({
+export const voice = (name: string, ...effects: Effect[]): Voice => ({
   name,
   effects,
 });
-const selections = (names: [string, string, string, string]) =>
+export const selections = (names: [string, string, string, string]) =>
   names.map((name, i) => ({
     name,
     mix: [i === 0 ? 1 : 0, i === 1 || i === 3 ? 1 : 0, i === 2 ? 1 : 0],
@@ -1211,7 +1221,12 @@ export function buildFactoryRecipe(
   id = crypto.randomUUID(),
   defaults?: NativeDefaultSettings,
 ) {
-  const rig = rigBuilder(id, `Oxidal · ${recipe.name}`, profile, false);
+  const rig = rigBuilder(
+    id,
+    recipe.era ? recipe.name : `Oxidal · ${recipe.name}`,
+    profile,
+    false,
+  );
   let sequence = 0;
   const effect = (e: Effect): DraftEffect => {
     const id = `fx-${++sequence}`;

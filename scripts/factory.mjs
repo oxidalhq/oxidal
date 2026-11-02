@@ -4,10 +4,8 @@ import { parseArgs } from 'node:util';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import {
-  factoryRecipes,
-  buildFactoryRecipe,
-} from '../apps/web/src/factoryRecipes.ts';
+import { buildFactoryRecipe } from '../apps/web/src/factoryRecipes.ts';
+import { allFactoryRecipes as factoryRecipes } from '../apps/web/src/factoryCatalog.ts';
 const { values } = parseArgs({
   options: {
     api: { type: 'string', default: 'http://127.0.0.1:3230' },

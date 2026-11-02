@@ -6,7 +6,16 @@ import {
   buildFactoryRecipe,
   factoryRecipes,
   factoryMissingPlugins,
+  factoryRoles,
 } from './factoryRecipes';
+import { allFactoryRecipes } from './factoryCatalog';
+import { songbookRecipes } from './songbookRecipes';
+import {
+  factoryVoiceIds,
+  factoryVoices,
+  isFactoryVoice,
+  primaryCapture,
+} from './factoryVoices';
 import type { RigNativeSource } from './generated/contract';
 import type { Lv2Plugin } from './api';
 const plugins = catalog as Lv2Plugin[];
@@ -152,4 +161,65 @@ it('admits only the qualified Dragonfly scalar layouts, not changed message port
   expect(() => buildFactoryRecipe(recipe, changed, {}, 'profile')).toThrow(
     'Install Dragonfly Hall',
   );
+});
+
+it('builds every songbook preset from named voices and tags it by era', () => {
+  expect(songbookRecipes.length).toBeGreaterThanOrEqual(19);
+  expect(new Set(allFactoryRecipes.map((r) => r.id)).size).toBe(
+    allFactoryRecipes.length,
+  );
+  const all = Object.fromEntries(
+    [...factoryVoiceIds, 'clean', 'crunch', 'heavy', 'bass'].map((role) => [
+      role,
+      source,
+    ]),
+  );
+  for (const recipe of songbookRecipes) {
+    expect(recipe.era).toBeDefined();
+    expect(recipe.categories[0]).toBe(recipe.era);
+    expect(recipe.scenes.map((scene) => scene.name)).toEqual([
+      'Rhythm',
+      'Lead',
+      'Intro',
+      'Boost',
+    ]);
+    const roles = factoryRoles(recipe);
+    expect(roles.length).toBeGreaterThan(0);
+    expect(roles.every((role) => isFactoryVoice(role))).toBe(true);
+    const request = buildFactoryRecipe(
+      recipe,
+      plugins,
+      all,
+      'profile',
+      crypto.randomUUID(),
+      defaults,
+    );
+    const manifest = JSON.parse(request.manifest_json);
+    expect(validate(manifest), JSON.stringify(validate.errors)).toBe(true);
+    // Songbook names stand alone, without the example-collection prefix.
+    expect(manifest.name).toBe(recipe.name);
+    expect(manifest.name.startsWith('Oxidal')).toBe(false);
+  }
+});
+
+it('links every voice to numeric capture ids and covers more than four amps', () => {
+  for (const id of factoryVoiceIds) {
+    const voice = factoryVoices[id];
+    expect(voice.character.length).toBeGreaterThan(10);
+    expect(voice.captures.length).toBeGreaterThan(0);
+    for (const capture of voice.captures) {
+      expect(Number.isInteger(capture.tone) && capture.tone > 0).toBe(true);
+      expect(Number.isInteger(capture.model) && capture.model > 0).toBe(true);
+    }
+    expect(primaryCapture(id)).toEqual(voice.captures[0]);
+  }
+  // The point of the songbook: far more distinct amps than the four shared roles.
+  const used = new Set(songbookRecipes.flatMap((r) => factoryRoles(r)));
+  expect(used.size).toBeGreaterThanOrEqual(10);
+  // Every era and the dark, djent and brutal genres are present.
+  const eras = new Set(songbookRecipes.map((r) => r.era));
+  expect([...eras].sort()).toEqual(['2000s', '80s', '90s', 'Modern']);
+  const tags = new Set(songbookRecipes.flatMap((r) => r.categories));
+  for (const tag of ['Djent', 'Brutal', 'Goth', 'Dark', 'Death metal'])
+    expect(tags.has(tag)).toBe(true);
 });
