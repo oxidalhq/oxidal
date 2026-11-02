@@ -308,6 +308,20 @@
 }
 .chain-branch-number {
   min-width: 1.25rem;
+  /* Named lanes share one label width so every lane's blocks line up. */
+}
+.chain-branch-number:has(.chain-branch-name) {
+  width: 4.5rem;
+}
+@media (max-width: 480px) {
+  .chain-branch-number:has(.chain-branch-name) {
+    width: 3.25rem;
+  }
+  .chain-branch-name {
+    max-width: 3.25rem;
+  }
+}
+.chain-branch-number {
   flex-direction: column;
   justify-content: center;
 }

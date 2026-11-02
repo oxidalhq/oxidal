@@ -64,7 +64,11 @@ export function ScenePads({
       <h3>
         Scenes
         <span className="scene-pads-meta">
-          {fading ? 'fading…' : 'tap or press 1–9'}
+          {fading ? (
+            'fading…'
+          ) : (
+            <span className="scene-pads-hint">tap or press 1–9</span>
+          )}
           {extra}
         </span>
       </h3>
