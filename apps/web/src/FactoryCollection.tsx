@@ -20,6 +20,7 @@ import {
   publishRig,
   presetDetails,
   type Lv2Plugin,
+  voiceCaptures,
 } from './api';
 import type {
   NativeDefaultSettings,
@@ -35,6 +36,7 @@ import {
 } from './factoryRecipes';
 import { allFactoryRecipes as factoryRecipes } from './factoryCatalog';
 import { factoryVoices, isFactoryVoice } from './factoryVoices';
+import { VoiceSlot } from './VoiceSlot';
 
 const factoryFamilies: Record<string, string> = {
   A: 'Space & ambience',
@@ -110,6 +112,10 @@ function CollectionDialog({
     Partial<Record<FactoryRole, RigNativeSource>>
   >({});
   const [error, setError] = useState('');
+  // Captures already on this device, by `tone:model`.
+  const [downloaded, setDownloaded] = useState<Record<string, RigNativeSource>>(
+    {},
+  );
   const [query, setQuery] = useState('');
   const visibleRecipes = factoryRecipes
     .filter((recipe) =>
@@ -120,6 +126,27 @@ function CollectionDialog({
     )
     .sort((a, b) => a.id.localeCompare(b.id));
   const groupedRecipes = groupFactoryRecipes(visibleRecipes);
+  /** The saved source for a role: the player's choice, else a downloaded capture. */
+  const sourceFor = (role: FactoryRole) => {
+    const chosen = bindings[role];
+    if (chosen) return chosen;
+    if (!isFactoryVoice(role)) return undefined;
+    for (const capture of factoryVoices[role].captures) {
+      const found = downloaded[`${capture.tone}:${capture.model}`];
+      if (found) return found;
+    }
+    return undefined;
+  };
+  const missingRoles = (recipe: FactoryRecipe) =>
+    factoryRoles(recipe).filter((role) => !sourceFor(role));
+  function voiceReady(role: FactoryRole, source: RigNativeSource) {
+    setSources((list) =>
+      list.some((s) => s.preset.sha256 === source.preset.sha256)
+        ? list
+        : [...list, source],
+    );
+    setBindings((b) => ({ ...b, [role]: source }));
+  }
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   const [ids] = useState(() =>
@@ -132,11 +159,17 @@ function CollectionDialog({
       rigNativeSources(),
       rigLibrary(),
       nativeDefaults(),
+      voiceCaptures().catch(() => []),
     ])
-      .then(([p, s, l, d]) => {
+      .then(([p, s, l, d, captures]) => {
         if (alive) {
           setPlugins(p);
           setSources(s);
+          setDownloaded(
+            Object.fromEntries(
+              captures.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
+            ),
+          );
           setProfile(l.native_profile);
           setDefaults(d.settings);
         }
@@ -156,7 +189,12 @@ function CollectionDialog({
         buildFactoryRecipe(
           recipe,
           plugins,
-          bindings,
+          Object.fromEntries(
+            factoryRoles(recipe).flatMap((role) => {
+              const source = sourceFor(role);
+              return source ? [[role, source]] : [];
+            }),
+          ),
           profile,
           ids[recipe.id],
           defaults ?? undefined,
@@ -200,35 +238,50 @@ function CollectionDialog({
               </p>
             )}
             {factoryRoles(selected).map((role) => (
-              <label key={role} className="field">
-                <span>
-                  {isFactoryVoice(role)
-                    ? factoryVoices[role].character
-                    : role[0]!.toUpperCase() + role.slice(1)}{' '}
-                  NAM voice
-                </span>
-                <Select
-                  disabled={busy}
-                  value={bindings[role]?.preset.sha256}
-                  onValueChange={(value) =>
-                    setBindings((b) => ({
-                      ...b,
-                      [role]: sources.find((s) => s.preset.sha256 === value),
-                    }))
-                  }
-                >
-                  <SelectTrigger aria-label={`${role} NAM voice`}>
-                    <SelectValue placeholder="Choose a saved NAM preset…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sources.map((s) => (
-                      <SelectItem key={s.preset.sha256} value={s.preset.sha256}>
-                        {s.preset.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+              <div key={role} className="space-y-2">
+                {isFactoryVoice(role) && !sourceFor(role) && (
+                  <VoiceSlot
+                    voice={role}
+                    disabled={busy}
+                    onReady={(source) => voiceReady(role, source)}
+                  />
+                )}
+                <label className="field">
+                  <span>
+                    {isFactoryVoice(role)
+                      ? factoryVoices[role].character
+                      : role[0]!.toUpperCase() + role.slice(1)}{' '}
+                    NAM voice
+                    {isFactoryVoice(role) && !sourceFor(role)
+                      ? ' · or use a saved preset'
+                      : ''}
+                  </span>
+                  <Select
+                    disabled={busy}
+                    value={sourceFor(role)?.preset.sha256}
+                    onValueChange={(value) =>
+                      setBindings((b) => ({
+                        ...b,
+                        [role]: sources.find((s) => s.preset.sha256 === value),
+                      }))
+                    }
+                  >
+                    <SelectTrigger aria-label={`${role} NAM voice`}>
+                      <SelectValue placeholder="Choose a saved NAM preset…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sources.map((s) => (
+                        <SelectItem
+                          key={s.preset.sha256}
+                          value={s.preset.sha256}
+                        >
+                          {s.preset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
             ))}
             {factoryRoles(selected).length > 0 && (
               <p className="caption">
@@ -264,7 +317,7 @@ function CollectionDialog({
                   busy ||
                   !profile ||
                   factoryMissingPlugins(selected, plugins).length > 0 ||
-                  factoryRoles(selected).some((r) => !bindings[r])
+                  missingRoles(selected).length > 0
                 }
                 onClick={() => void build(selected)}
               >
@@ -340,6 +393,9 @@ function CollectionDialog({
                           <p className="caption">
                             {factoryTopologySummary(recipe)}
                           </p>
+                          {missingRoles(recipe).some(isFactoryVoice) && (
+                            <Badge>Needs download</Badge>
+                          )}
                         </div>
                         {saved[recipe.id] ? (
                           <Badge>Built</Badge>

@@ -522,6 +522,51 @@ export async function stageTone3000(
   return body;
 }
 
+export type VoiceReady = Contract['voice_ready'];
+export type VoiceCapture = Contract['voice_ready']['capture'];
+const voiceReadyValidator = ajv.compile<VoiceReady>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/VoiceReady',
+});
+const voiceListValidator = ajv.compile<Contract['voice_list']>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/VoiceList',
+});
+/** Download one capture the player asked for and make it a usable native preset.
+ * Asking again for a capture already on the device reuses it. */
+export async function downloadVoice(
+  tone: number,
+  model: number,
+  name: string,
+  signal?: AbortSignal,
+): Promise<VoiceReady> {
+  const body = await presetResponse(
+    await fetch('/api/v1/tone3000/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tone_id: tone, model_id: model, name }),
+      signal,
+    }),
+  );
+  if (
+    !voiceReadyValidator(body) ||
+    body.capture.tone_id !== tone ||
+    body.capture.model_id !== model
+  )
+    throw new Error('Downloaded capture identity differs');
+  return body;
+}
+/** Captures already downloaded to this device. */
+export async function voiceCaptures(
+  signal?: AbortSignal,
+): Promise<VoiceCapture[]> {
+  const body = await presetResponse(
+    await fetch('/api/v1/tone3000/voice', { signal, cache: 'no-store' }),
+  );
+  if (!voiceListValidator(body)) throw new Error('Incompatible capture list');
+  return body.captures;
+}
+
 export type GraphAudioState = Contract['graph_audio_state'];
 export type GraphAudioAction = Contract['graph_audio_command']['action'];
 export type GraphSettings = NonNullable<GraphAudioState['configured']>;
