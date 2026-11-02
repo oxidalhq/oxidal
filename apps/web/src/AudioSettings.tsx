@@ -89,7 +89,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       });
       setMessage(
         !devices.backend_available
-          ? devices.warnings.join(' ')
+          ? 'Audio interfaces cannot be listed on this device.'
           : devices.endpoints.length === 0
             ? 'No hardware audio endpoints found. Authoring remains available.'
             : `Found ${inputs.length} input${inputs.length === 1 ? '' : 's'} and ${outputs.length} output${outputs.length === 1 ? '' : 's'}. Check both before starting audio.`,
@@ -156,7 +156,6 @@ export function AudioSettings({ connected }: { connected: boolean }) {
   return (
     <section className="panel control-stack" aria-label="Audio devices">
       <h2>Audio</h2>
-      <MasterLevel />
       <section
         className="audio-diagnostics"
         aria-labelledby="audio-interface-setup"
@@ -354,14 +353,17 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             </fieldset>
           </>
         )}
-        {inventory?.backend_available &&
-          inventory.warnings.map((warning, index) => (
-            <p key={index} className="muted">
-              {warning}
-            </p>
-          ))}
         <p role="status">{busy ? 'Inspecting audio…' : message}</p>
+        {inventory && inventory.warnings.length > 0 && (
+          <details className="control-help">
+            <summary>Technical detail</summary>
+            {inventory.warnings.map((warning, index) => (
+              <p key={index}>{warning}</p>
+            ))}
+          </details>
+        )}
       </section>
+      <MasterLevel />
       <PlaybackSettings connected={connected} input={input} output={output} />
       <EngineSettings connected={connected} />
       <NativeDefaults connected={connected} />
