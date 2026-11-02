@@ -3452,3 +3452,13 @@ textarea {
 .audio-diagnostics > p[role='status'] {
   font-size: var(--text-sm);
 }
+
+/* Page titles keep their action (such as About) beside them on phones. */
+.app-shell:not([data-view='rig']) .page-heading {
+  flex-direction: row;
+  align-items: center;
+}
+.page-heading > .oxidal-button {
+  flex: none;
+  width: auto;
+}
