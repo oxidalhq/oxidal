@@ -113,8 +113,14 @@ export function ChainView({
                 data-side="split"
                 aria-hidden="true"
               />
-              <span className="chain-port chain-branch-number">
-                {lane.input}
+              <span
+                className="chain-port chain-branch-number"
+                title={lane.name}
+              >
+                <span>{lane.input}</span>
+                {lane.name && (
+                  <span className="chain-branch-name">{lane.name}</span>
+                )}
               </span>
               {tiles(lane, index)}
               <span className="chain-bus" data-side="sum" aria-hidden="true" />

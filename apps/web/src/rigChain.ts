@@ -28,6 +28,8 @@ export interface RigLaneVM {
   blocks: RigBlockVM[];
   /** Shown but not sounding, such as another scene's branch. */
   dim?: boolean;
+  /** A readable name for a branch lane, such as the scene it belongs to. */
+  name?: string;
 }
 
 /** LED family follows the block's glyph, so an LV2 delay lights like a delay. */

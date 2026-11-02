@@ -68,7 +68,8 @@ export function SceneChange({
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
-        {blend ? `Blend ${seconds(blend)}` : trails ? 'Trails' : 'Cut'}
+        Scene change ·{' '}
+        {blend ? `blend ${seconds(blend)}` : trails ? 'tails ring out' : 'cut'}
       </button>
       {open && (
         <AdjustmentDialog title="Scene change" onCancel={() => setOpen(false)}>

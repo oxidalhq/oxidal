@@ -39,6 +39,7 @@ export function NativeAuthoring({
   historyControls = true,
   scope = 'all',
   settingsScope = 'rig',
+  collapseSettings = false,
   onEngineSettings,
   selectedBlock,
   disabled,
@@ -52,6 +53,8 @@ export function NativeAuthoring({
   scope?: 'split' | 'all';
   /** Where engine settings live: this unit (native) or this rig (hybrid node). */
   settingsScope?: 'unit' | 'rig';
+  /** Keep Routing and Engine closed under one "Preset settings" row. */
+  collapseSettings?: boolean;
   /** Opens Settings → Audio, where unit-scope engine settings live. */
   onEngineSettings?: () => void;
   status: NonNullable<AudioState['authoring']>;
@@ -461,7 +464,7 @@ export function NativeAuthoring({
         </ToolSection>
       )}
       {layout && (scope === 'all' || !selectedBlock) && (
-        <>
+        <SettingsGroup collapsed={collapseSettings}>
           <ToolSection title="Routing" scope="Saved with this preset">
             <ToolRow
               title="Input"
@@ -589,7 +592,7 @@ export function NativeAuthoring({
               </div>
             </ToolSection>
           ) : null}
-        </>
+        </SettingsGroup>
       )}
       {confirm && (
         <AdjustmentDialog
@@ -642,5 +645,22 @@ export function NativeAuthoring({
         />
       )}
     </>
+  );
+}
+
+/** Rig setup that is rarely touched while playing: closed by default on Rig. */
+function SettingsGroup({
+  collapsed,
+  children,
+}: {
+  collapsed: boolean;
+  children: React.ReactNode;
+}) {
+  if (!collapsed) return <>{children}</>;
+  return (
+    <details className="control-help rig-preset-settings">
+      <summary>Preset settings · routing and engine</summary>
+      {children}
+    </details>
   );
 }

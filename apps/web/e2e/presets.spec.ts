@@ -2536,6 +2536,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
   await expect(rig.getByLabel('Tuner reading')).toHaveCount(0);
+  await rig.getByText('Preset settings · routing and engine').click();
   await rig
     .getByRole('button', { name: 'Use stereo chains', exact: true })
     .click();

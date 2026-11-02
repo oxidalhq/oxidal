@@ -308,7 +308,15 @@
 }
 .chain-branch-number {
   min-width: 1.25rem;
+  flex-direction: column;
   justify-content: center;
+}
+.chain-branch-name {
+  max-width: 4.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-2xs);
+  font-weight: 500;
 }
 
 /* Empty slot: a dashed outline on the wire, quieter than a block. */

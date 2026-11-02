@@ -1151,6 +1151,7 @@ export function MixedRig({
         ? ((snapshotLanes ? feedName(index) : null) ?? `Lane ${index + 1}`)
         : 'Chain',
     input: chainIds!.length > 1 ? String(index + 1) : 'IN',
+    name: snapshotLanes ? (feedName(index) ?? undefined) : undefined,
     dim: snapshotLanes ? !feedOpen(index) : undefined,
     blocks: ids
       .flatMap((id) => {
@@ -1444,24 +1445,6 @@ export function MixedRig({
             <strong>Preparing preset…</strong>
             <small>The chain will appear when its audio state is ready.</small>
           </span>
-        </div>
-      )}
-      {nativeLoad.engines > 0 && (
-        <div className="rig-load-summary" aria-label="Native processing load">
-          <Badge>
-            {nativeLoad.engines}{' '}
-            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
-          </Badge>
-          <Badge>{nativeLoad.blocks} chain blocks</Badge>
-          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
-            <Badge>
-              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
-              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
-            </Badge>
-          )}
-          {!!nativeLoad.oversampling.length && (
-            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
-          )}
         </div>
       )}
       {copyOnEdit && (
@@ -2185,6 +2168,24 @@ export function MixedRig({
           }}
         />
       )}
+      {nativeLoad.engines > 0 && (
+        <div className="rig-load-summary" aria-label="Native processing load">
+          <Badge>
+            {nativeLoad.engines}{' '}
+            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
+          </Badge>
+          <Badge>{nativeLoad.blocks} chain blocks</Badge>
+          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
+            <Badge>
+              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
+              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
+            </Badge>
+          )}
+          {!!nativeLoad.oversampling.length && (
+            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
+          )}
+        </div>
+      )}
       {running &&
         selectedView &&
         (selectedView.branch || selectedView.bypass) && (
@@ -2319,6 +2320,7 @@ export function MixedRig({
         selected &&
         state.control?.authoring?.find((row) => row.node === selected.id) && (
           <NativeAuthoring
+            collapseSettings
             key={`${state.control.session}:${selected.id}`}
             status={
               state.control.authoring.find((row) => row.node === selected.id)!
