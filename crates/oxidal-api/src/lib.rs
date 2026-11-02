@@ -124,6 +124,9 @@ pub struct Contract {
     pub calibration_coverage: calibration::CalibrationCoverage,
     pub scene_blends: blends::Blends,
     pub scene_blend_update: blends::BlendUpdate,
+    pub voice_request: provider::voice::VoiceRequest,
+    pub voice_ready: provider::voice::VoiceReady,
+    pub voice_list: provider::voice::VoiceList,
     pub calibration_command: calibration::CalibrationCommand,
     pub midi_devices: oxidal_audio::midi::Devices,
     pub midi_map: oxidal_presets::MidiMap,
@@ -345,6 +348,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/models/local/collection", post(local_models::collection))
         .route("/tone3000/stage", post(provider::download::stage))
+        .route(
+            "/tone3000/voice",
+            get(provider::voice::list).post(provider::voice::create),
+        )
         .route("/tone3000/tones", get(provider::catalog::tones))
         .route("/tone3000/tones/{id}", get(provider::catalog::tone))
         .route(

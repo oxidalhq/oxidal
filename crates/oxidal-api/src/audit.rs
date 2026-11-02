@@ -193,7 +193,7 @@ fn operation(path: &str) -> Option<Operation> {
         "/presets/rigs" => Operation::RigSave,
         "/models/local" => Operation::ModelImport,
         "/models/local/collection" => Operation::ModelCollection,
-        "/tone3000/stage" => Operation::ModelDownload,
+        "/tone3000/stage" | "/tone3000/voice" => Operation::ModelDownload,
         "/commands" => Operation::Controls,
         _ => return None,
     })

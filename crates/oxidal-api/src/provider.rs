@@ -24,6 +24,7 @@ pub(super) mod images;
 mod storage;
 #[cfg(test)]
 mod tests;
+pub(super) mod voice;
 
 const ORIGIN: &str = "https://www.tone3000.com";
 const MAX_REPLY: usize = 32 * 1024;

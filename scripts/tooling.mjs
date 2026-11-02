@@ -196,6 +196,27 @@ if (mode === 'bootstrap') {
     ],
     { env },
   );
+  // A staged model becomes a one-model owned preset in the isolated worker.
+  run(
+    'cargo',
+    [
+      'build',
+      '--locked',
+      '-p',
+      'oxidal-tone3000',
+      '--features',
+      'native',
+      '--bin',
+      'oxidal-native-worker',
+    ],
+    { env },
+  );
+  run('cargo', ['test', '--locked', '-p', 'oxidal-api', '--lib', 'voice'], {
+    env: {
+      ...env,
+      OXIDAL_TEST_NATIVE_WORKER: join(targetDir, 'debug/oxidal-native-worker'),
+    },
+  });
   if (process.platform === 'linux') {
     run(
       'cargo',

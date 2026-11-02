@@ -78,6 +78,18 @@ fill its next left-lane slot. IR listings omit the upstream NAM architecture fil
 typed local API uses `architecture=any` to request that behavior. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
 provider preset export remain unfinished.
 
+### Capture for a factory voice
+
+`POST /api/v1/tone3000/voice` (`tone_id`, `model_id`, `name`) downloads one model
+the player asked for, as `stage` does, then creates a one-model native preset from
+it in an isolated native worker (`oxidal-native-worker --create-from-model`) and
+returns it as an owned native source. The worker plays no audio and never touches
+the sounding rig. One request runs at a time. The device keeps
+`voice-captures.json` beside the library, mapping each downloaded capture to its
+owned preset, so asking again reuses it instead of downloading twice. `GET` on the
+same path lists the captures already on the device. The native check builds the
+worker and runs the voice tests against it.
+
 ### Live model artwork
 
 A confirmed native model replacement or insertion can show its own gear artwork

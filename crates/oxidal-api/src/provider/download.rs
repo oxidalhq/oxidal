@@ -38,7 +38,7 @@ struct DownloadModel {
     model_url: String,
 }
 impl Account {
-    async fn stage_model(
+    pub(super) async fn stage_model(
         &self,
         request: StageModel,
         root: PathBuf,

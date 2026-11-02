@@ -225,6 +225,15 @@
     },
     "validation": {
       "$ref": "#/$defs/Validation"
+    },
+    "voice_list": {
+      "$ref": "#/$defs/VoiceList"
+    },
+    "voice_ready": {
+      "$ref": "#/$defs/VoiceReady"
+    },
+    "voice_request": {
+      "$ref": "#/$defs/VoiceRequest"
     }
   },
   "required": [
@@ -281,6 +290,9 @@
     "calibration_coverage",
     "scene_blends",
     "scene_blend_update",
+    "voice_request",
+    "voice_ready",
+    "voice_list",
     "calibration_command",
     "midi_devices",
     "midi_map",
@@ -9863,6 +9875,87 @@
       "required": [
         "target",
         "value"
+      ]
+    },
+    "VoiceCapture": {
+      "type": "object",
+      "properties": {
+        "model_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/RigNativeSource"
+        },
+        "tone_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tone_id",
+        "model_id",
+        "source"
+      ]
+    },
+    "VoiceList": {
+      "type": "object",
+      "properties": {
+        "captures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VoiceCapture"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "captures"
+      ]
+    },
+    "VoiceReady": {
+      "type": "object",
+      "properties": {
+        "capture": {
+          "$ref": "#/$defs/VoiceCapture"
+        },
+        "downloaded": {
+          "description": "False when the device already held this capture and nothing was downloaded.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "capture",
+        "downloaded"
+      ]
+    },
+    "VoiceRequest": {
+      "type": "object",
+      "properties": {
+        "model_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "name": {
+          "description": "The name the player sees in their library, normally the capture's own title.",
+          "type": "string"
+        },
+        "tone_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tone_id",
+        "model_id",
+        "name"
       ]
     },
     "WavInfo": {

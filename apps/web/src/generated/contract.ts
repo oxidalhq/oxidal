@@ -785,6 +785,9 @@ export interface Contract {
   tone_query: ToneQuery;
   unit_levels: HostLevels;
   validation: Validation;
+  voice_list: VoiceList;
+  voice_ready: VoiceReady;
+  voice_request: VoiceRequest;
 }
 export interface AccountCommand {
   action: AccountAction;
@@ -2475,4 +2478,27 @@ export interface ToneQuery {
 export interface Validation {
   errors: string[];
   valid: boolean;
+}
+export interface VoiceList {
+  captures: VoiceCapture[];
+}
+export interface VoiceCapture {
+  model_id: number;
+  source: RigNativeSource;
+  tone_id: number;
+}
+export interface VoiceReady {
+  capture: VoiceCapture;
+  /**
+   * False when the device already held this capture and nothing was downloaded.
+   */
+  downloaded: boolean;
+}
+export interface VoiceRequest {
+  model_id: number;
+  /**
+   * The name the player sees in their library, normally the capture's own title.
+   */
+  name: string;
+  tone_id: number;
 }

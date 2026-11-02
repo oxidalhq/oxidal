@@ -366,6 +366,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     if arguments.as_slice() == ["--defaults"] {
         return qualify_device_defaults();
     }
+    if arguments.as_slice() == ["--factory-voice"] {
+        let root = std::path::PathBuf::from(std::env::var("OXIDAL_QUALIFICATION_DATA")?);
+        return qualify_factory_voice(&root);
+    }
     if arguments.as_slice() == ["--utilities"] {
         return qualify_utilities();
     }
@@ -710,6 +714,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     qualify_factories()?;
     qualify_empty_creation(&root, &preset)?;
     qualify_model_preparation(&root, &preset)?;
+    qualify_factory_voice(&root)?;
     qualify_ir_preparation(&root)?;
     qualify_engine_isolation(&preset)?;
     println!(
@@ -4015,5 +4020,51 @@ fn qualify_preset_settings() -> Result<(), Box<dyn Error>> {
     eprintln!(
         "preset settings: 36 tone IDs in native units import/save/reopen; all absent defaults; five legacy aliases/both duplicate orders; five instance settings retained passed"
     );
+    Ok(())
+}
+
+/// A downloaded model becomes a one-model owned preset without PCM or a sounding rig.
+fn qualify_factory_voice(root: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let path = root.join("voice-a2.nam");
+    std::fs::copy(std::env::var("OXIDAL_TONE3000_TEST_MODEL")?, &path)?;
+    let tone = serde_json::json!({"id":11,"title":"Voice fixture","format":"nam","gear":"amp-cab",
+        "models":[{"id":13,"name":"Voice A2","model_url":"oxidal-model://fixture/model.nam"}]});
+    let pins: Value = serde_json::from_str(include_str!("../../../native/tone3000/sources.json"))?;
+    let asset = oxidal_presets::ModelStore::new(root.join("audition-models")).stage(
+        &oxidal_presets::ModelAsset {
+            schema: 1,
+            tone_id: 11,
+            model_id: 13,
+            title: "Voice fixture".into(),
+            name: "Voice A2".into(),
+            format: "nam".into(),
+            sha256: pins["qualification_model"]["sha256"]
+                .as_str()
+                .unwrap()
+                .into(),
+            tone,
+        },
+        &std::fs::read(&path)?,
+    )?;
+    let owned = oxidal_presets::OwnedStore::new(root.join("owned"));
+    let before = owned.list()?.len();
+    let id = oxidal_tone3000::factory_voice::create(root, "Qualified voice", &asset)?;
+    let listed = owned.list()?;
+    assert_eq!(listed.len(), before + 1, "exactly one owned preset added");
+    let (info, bytes) = owned.read(&id)?;
+    assert_eq!(info.preset.name, "Qualified voice");
+    assert!(
+        info.source_sha256.is_none(),
+        "a created preset has no source"
+    );
+    let mut engine = Engine::new(48000.0, 128)?;
+    engine.load_preset(&bytes)?;
+    engine.wait_ready()?;
+    assert_eq!(engine.runtime()?["blocks"].as_array().unwrap().len(), 1);
+    // An unknown asset or bad name changes nothing.
+    assert!(oxidal_tone3000::factory_voice::create(root, "Missing", &"0".repeat(64)).is_err());
+    assert!(oxidal_tone3000::factory_voice::create(root, "", &asset).is_err());
+    assert_eq!(owned.list()?.len(), before + 1);
+    println!("qualify: factory voice creates a verified one-model owned preset");
     Ok(())
 }

@@ -10,6 +10,8 @@ pub use native::{
 #[cfg(feature = "native")]
 pub mod editor;
 #[cfg(feature = "native")]
+pub mod factory_voice;
+#[cfg(feature = "native")]
 pub mod model_preparation;
 pub mod protocol;
 
