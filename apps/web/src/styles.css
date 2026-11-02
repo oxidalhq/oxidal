@@ -3223,16 +3223,9 @@ textarea {
   flex: 1 1 12rem;
   min-width: 0;
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .rig-performance-header .preset-picker {
     flex-basis: 9rem;
-  }
-  .rig-editor .rig-performance-header {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(var(--touch-target), 1fr));
-  }
-  .rig-editor .rig-performance-header .preset-picker {
-    grid-column: 1 / -1;
   }
   /* Icon-only header buttons on phones; their names stay for screen readers. */
   .rig-performance-header .phone-hidden {
@@ -3246,9 +3239,6 @@ textarea {
   .rig-performance-header > .oxidal-button:has(.phone-hidden) {
     width: var(--touch-target);
     padding: 0;
-  }
-  .rig-editor .rig-performance-header > .oxidal-button {
-    width: 100%;
   }
   .rig-editor {
     border: 0;
@@ -3445,5 +3435,34 @@ textarea {
     min-height: 3.5rem;
     line-height: 1.15;
     text-align: center;
+  }
+}
+
+/* The strip is metrics only now: one full-width row, no reserved button column. */
+.resource-strip {
+  grid-template-columns: minmax(0, 1fr);
+}
+.resource-strip dl {
+  grid-column: 1;
+}
+
+/* Rig header up to tablet width: the preset name on its own row, then every
+   action in one even row (labels stay until the phone breakpoint hides them). */
+@media (max-width: 900px) {
+  .rig-editor .rig-performance-header {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+  }
+  .rig-editor .rig-performance-header .preset-picker {
+    flex: 1 1 100%;
+  }
+  .rig-editor .rig-performance-header > .oxidal-button,
+  .rig-editor .rig-performance-header > .preset-save-group {
+    flex: 1 1 0;
+    min-width: var(--touch-target);
+    width: auto;
+    padding-inline: 0.25rem;
   }
 }

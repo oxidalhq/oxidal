@@ -84,11 +84,9 @@ export function ResourceStrip({
       aria-label="DSP and system resources"
       data-connected={connected && !disconnected}
     >
-      <div className="resource-strip-state">
-        <span className="sr-only" data-testid="resource-state">
-          {status}
-        </span>
-      </div>
+      <span className="sr-only" data-testid="resource-state">
+        {status}
+      </span>
       <dl>
         <div
           data-warning={tight}

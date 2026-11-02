@@ -31,7 +31,7 @@
   flex-wrap: wrap;
   gap: 0 0.75rem;
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   /* The keypad hint is for a keyboard; a phone has no 1–9 keys. */
   .scene-pads-hint {
     display: none;
@@ -51,7 +51,7 @@
 .scene-pad-grid[data-few] {
   grid-template-columns: repeat(var(--pads), minmax(0, 1fr));
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .scene-pad-grid[data-few] .scene-pad {
     grid-template-columns: 1rem minmax(0, 1fr);
     padding: 0 0.5rem;
