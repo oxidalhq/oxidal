@@ -116,6 +116,17 @@ export const factoryVoices = {
       { tone: 105859, model: 869915 },
     ],
   },
+  // Bass.
+  'bass-vintage': {
+    character: 'Warm, round vintage bass stack with a tight low end',
+    gain: 'bass',
+    captures: [{ tone: 55, model: 420126 }],
+  },
+  'bass-grit': {
+    character: 'Gritty, driven bass for rock and heavy parts',
+    gain: 'bass',
+    captures: [{ tone: 6371, model: 402188 }],
+  },
 } as const satisfies Record<string, FactoryVoice>;
 
 export type FactoryVoiceId = keyof typeof factoryVoices;

@@ -10,6 +10,7 @@ import {
 } from './factoryRecipes';
 import { allFactoryRecipes } from './factoryCatalog';
 import { songbookRecipes } from './songbookRecipes';
+import { toolRecipes } from './toolRecipes';
 import {
   factoryVoiceIds,
   factoryVoices,
@@ -222,4 +223,39 @@ it('links every voice to numeric capture ids and covers more than four amps', ()
   const tags = new Set(songbookRecipes.flatMap((r) => r.categories));
   for (const tag of ['Djent', 'Brutal', 'Goth', 'Dark', 'Death metal'])
     expect(tags.has(tag)).toBe(true);
+});
+
+it('builds the guitar-as-bass and duo presets with octave-down pitch and bass voices', () => {
+  expect(toolRecipes.map((r) => r.id)).toEqual(['T01', 'T02', 'T03', 'T04']);
+  const all = Object.fromEntries(
+    [...factoryVoiceIds, 'clean', 'crunch', 'heavy', 'bass'].map((role) => [
+      role,
+      source,
+    ]),
+  );
+  for (const recipe of toolRecipes) {
+    expect(recipe.categories).toContain('Bass');
+    const request = buildFactoryRecipe(
+      recipe,
+      plugins,
+      all,
+      'profile',
+      crypto.randomUUID(),
+      defaults,
+    );
+    const manifest = JSON.parse(request.manifest_json);
+    expect(validate(manifest), JSON.stringify(validate.errors)).toBe(true);
+    const pitched = manifest.oxidal.lv2.filter(
+      (p: { pluginUri: string; controls: Record<string, number> }) =>
+        p.pluginUri === 'urn:oxidal:plugin:pitch#stereo' &&
+        p.controls.semitones === -12,
+    );
+    expect(pitched.length).toBeGreaterThan(0);
+    expect(factoryRoles(recipe).some((r) => r.startsWith('bass-'))).toBe(true);
+  }
+  // The two duo presets run a guitar amp and a bass amp together.
+  for (const id of ['T03', 'T04']) {
+    const recipe = toolRecipes.find((r) => r.id === id)!;
+    expect(factoryRoles(recipe)).toHaveLength(2);
+  }
 });
