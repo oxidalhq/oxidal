@@ -37,15 +37,7 @@
     display: none;
   }
 }
-/* Very narrow screens: two pads per row so scene names never break mid-word. */
-@media (max-width: 400px) {
-  .scene-pad-grid[data-few] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .scene-pad strong {
-    overflow-wrap: normal;
-  }
-}
+
 .scene-change {
   min-height: var(--touch-target);
   padding: 0 0.25rem;
@@ -110,4 +102,13 @@
 }
 [aria-busy='true'] .scene-pad[aria-pressed='true'] {
   opacity: 0.8;
+}
+/* Very narrow screens: two pads per row so scene names never break mid-word. */
+@media (max-width: 400px) {
+  .scene-pad-grid[data-few] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .scene-pad strong {
+    overflow-wrap: normal;
+  }
 }

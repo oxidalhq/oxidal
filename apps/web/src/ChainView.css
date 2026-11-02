@@ -282,6 +282,17 @@
   display: grid;
   gap: 0.5rem;
   min-width: 0;
+  /* Lanes scroll together, so the split and merge bars travel with their
+     blocks instead of cutting across a clipped tile. */
+  grid-auto-columns: max-content;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chain-parallel-lanes > .chain-branch {
+  min-width: max-content;
+}
+.chain-parallel-lanes .chain-blocks {
+  overflow: visible;
 }
 .chain-branch {
   grid-template-columns: auto minmax(0, 1fr);
