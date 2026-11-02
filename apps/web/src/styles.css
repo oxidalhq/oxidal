@@ -3113,6 +3113,10 @@ textarea {
   pointer-events: none;
   overflow: visible;
 }
+.mixed-routing-lines marker polygon {
+  fill: var(--wire);
+  stroke: none;
+}
 .mixed-routing-lines path {
   fill: none;
   stroke: var(--wire);

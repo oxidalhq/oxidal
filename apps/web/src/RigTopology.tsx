@@ -61,6 +61,19 @@ export function RigTopology({
             className="mixed-routing-lines"
             aria-hidden="true"
           >
+            <defs>
+              <marker
+                id="routing-arrow"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <polygon points="0,0 8,4 0,8" />
+              </marker>
+            </defs>
             {layout.links.map((link) => {
               const from = positions.get(link.from)!,
                 to = positions.get(link.to)!;
@@ -74,6 +87,7 @@ export function RigTopology({
                 <path
                   key={`${link.from}:${link.to}`}
                   d={`M ${x} ${y} H ${bend} V ${endY} H ${to.x}`}
+                  markerEnd="url(#routing-arrow)"
                 />
               );
             })}
