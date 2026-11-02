@@ -509,7 +509,9 @@ test('native preset upload, durable library, exact download and rejected replace
   await page
     .getByRole('button', { name: 'Import original', exact: true })
     .click();
-  await expect(page.getByRole('alert')).toContainText('Not a TONE3000 preset');
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Not a TONE3000 preset' }),
+  ).toContainText('Not a TONE3000 preset');
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
   await page.getByRole('button', { name: 'Author', exact: true }).click();

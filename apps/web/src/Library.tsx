@@ -333,13 +333,7 @@ export function Library({
                   <ToggleGroupItem value="list">List</ToggleGroupItem>
                   <ToggleGroupItem value="artwork">Artwork</ToggleGroupItem>
                 </ToggleGroup>
-                <div className="flex flex-wrap items-center gap-1">
-                  <Button variant="ghost" onClick={() => setPage('author')}>
-                    Author
-                  </Button>
-                  <Button variant="ghost" onClick={() => setPage('new')}>
-                    New preset
-                  </Button>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     className="library-manage"
                     variant="outline"
@@ -348,6 +342,10 @@ export function Library({
                   >
                     Manage library
                   </Button>
+                  <Button variant="outline" onClick={() => setPage('author')}>
+                    Author
+                  </Button>
+                  <Button onClick={() => setPage('new')}>New preset</Button>
                 </div>
               </div>
               {manage && (
@@ -357,12 +355,14 @@ export function Library({
                 />
               )}
               <EvenOut connected={connected} />
-              <p className="caption">
-                <strong>Live switching.</strong> Rigs with scenes or effects
-                load in adjacent groups of four. Changes inside that bank and
-                scenes on Rig are gapless. Direct TONE3000 presets and another
-                bank briefly interrupt audio.
-              </p>
+              <details className="control-help">
+                <summary>How live switching works</summary>
+                <p>
+                  Rigs with scenes or effects load in adjacent groups of four.
+                  Changes inside that bank and scenes on Rig are gapless. Direct
+                  TONE3000 presets and another bank briefly interrupt audio.
+                </p>
+              </details>
               <SavedRigs
                 connected={connected}
                 onOpenRig={onOpenRig}

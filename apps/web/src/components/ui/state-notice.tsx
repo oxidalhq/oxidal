@@ -27,7 +27,11 @@ export function StateNotice({
       className={twMerge('my-3', className)}
     >
       <AlertTitle>{title}</AlertTitle>
-      {children && <AlertDescription>{children}</AlertDescription>}
+      {children && (
+        <AlertDescription className={kind === 'error' ? 'text-current' : ''}>
+          {children}
+        </AlertDescription>
+      )}
       {action && <div className="col-start-2 mt-2">{action}</div>}
     </Alert>
   );
