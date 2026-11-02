@@ -96,35 +96,98 @@ export function FactoryCollection({
     </>
   );
 }
-/** Era shortcuts at the top of Library: each opens Explore on that era's sounds. */
-export function SongbookShelf({
+/** Songbook sounds not built yet, listed as rows under the Oxidal examples. Tapping
+ * one opens it in Explore for its one-time download and build. */
+export function UnbuiltSounds({
   connected,
+  query,
+  refresh,
   onChanged,
 }: {
   connected: boolean;
+  query: string;
+  refresh: number;
   onChanged: () => void;
 }) {
-  const [query, setQuery] = useState<string | null>(null);
-  const eras = ['80s', '90s', '2000s', 'Modern'] as const;
+  const [builtNames, setBuiltNames] = useState<Set<string> | null>(null);
+  const [onDevice, setOnDevice] = useState<Set<string>>(new Set());
+  const [open, setOpen] = useState<FactoryRecipe | null>(null);
+  const [count, setCount] = useState(12);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const names = new Set<string>();
+      let after: string | undefined;
+      for (let page = 0; page < 20; page++) {
+        const result = await rigLibrary(after);
+        for (const preset of result.presets) names.add(preset.name);
+        if (!result.next) break;
+        after = result.next;
+      }
+      const captures = await voiceCaptures().catch(() => []);
+      if (!alive) return;
+      setBuiltNames(names);
+      setOnDevice(new Set(captures.map((c) => `${c.tone_id}:${c.model_id}`)));
+    })().catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [refresh]);
+  if (!builtNames) return null;
+  const text = query.trim().toLowerCase();
+  const needs = (recipe: FactoryRecipe) =>
+    factoryRoles(recipe).some(
+      (role) =>
+        isFactoryVoice(role) &&
+        !factoryVoices[role].captures.some((c) =>
+          onDevice.has(`${c.tone}:${c.model}`),
+        ),
+    );
+  const rows = factoryRecipes
+    .filter(
+      (recipe) =>
+        !builtNames.has(recipe.era ? recipe.name : `Oxidal · ${recipe.name}`) &&
+        [recipe.name, ...recipe.categories, recipe.description]
+          .join(' ')
+          .toLowerCase()
+          .includes(text),
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!rows.length) return null;
   return (
-    <section className="songbook-shelf" aria-label="Explore by era">
-      <h3>Explore by era</h3>
-      <div className="action-row">
-        {eras.map((era) => (
-          <Button
-            key={era}
-            variant="outline"
-            disabled={!connected}
-            onClick={() => setQuery(era)}
-          >
-            {era}
-          </Button>
+    <section className="library-scenes" aria-label="More Oxidal sounds">
+      <p className="caption">
+        More sounds, not on your device yet. Tap one to download what it needs
+        and build it.
+      </p>
+      <ul className="preset-library">
+        {rows.slice(0, count).map((recipe) => (
+          <li key={recipe.id} className="library-row">
+            <button
+              type="button"
+              className="library-load"
+              disabled={!connected}
+              aria-label={`Get ${recipe.name}`}
+              onClick={() => setOpen(recipe)}
+            >
+              <span className="library-name">{recipe.name}</span>
+              <span className="library-meta">
+                {recipe.categories.join(' · ')} ·{' '}
+                {needs(recipe) ? 'Needs download' : 'Ready to build'}
+              </span>
+            </button>
+          </li>
         ))}
-      </div>
-      {query !== null && (
+      </ul>
+      {rows.length > count && (
+        <Button variant="outline" onClick={() => setCount((n) => n + 12)}>
+          Show {Math.min(12, rows.length - count)} more
+        </Button>
+      )}
+      {open && (
         <CollectionDialog
-          initialQuery={query}
-          onClose={() => setQuery(null)}
+          initialRecipe={open}
+          onClose={() => setOpen(null)}
           onChanged={onChanged}
         />
       )}
@@ -134,17 +197,19 @@ export function SongbookShelf({
 function CollectionDialog({
   onClose,
   onChanged,
-  initialQuery = '',
+  initialRecipe,
 }: {
   onClose: () => void;
   onChanged: () => void;
-  initialQuery?: string;
+  initialRecipe?: FactoryRecipe;
 }) {
   const [plugins, setPlugins] = useState<Lv2Plugin[]>([]);
   const [sources, setSources] = useState<RigNativeSource[]>([]);
   const [profile, setProfile] = useState('');
   const [defaults, setDefaults] = useState<NativeDefaultSettings | null>(null);
-  const [selected, setSelected] = useState<FactoryRecipe | null>(null);
+  const [selected, setSelected] = useState<FactoryRecipe | null>(
+    initialRecipe ?? null,
+  );
   const [bindings, setBindings] = useState<
     Partial<Record<FactoryRole, RigNativeSource>>
   >({});
@@ -153,7 +218,7 @@ function CollectionDialog({
   const [downloaded, setDownloaded] = useState<Record<string, RigNativeSource>>(
     {},
   );
-  const [query, setQuery] = useState(initialQuery);
+  const [query, setQuery] = useState('');
   const visibleRecipes = factoryRecipes
     .filter((recipe) =>
       [recipe.name, ...recipe.categories, recipe.description]

@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { FactoryCollection, SongbookShelf } from './FactoryCollection';
+import { FactoryCollection, UnbuiltSounds } from './FactoryCollection';
 import {
   downloadVoice,
   installedLv2,
@@ -36,7 +36,11 @@ vi.mock('./api', () => ({
     },
   })),
   rigNativeSources: vi.fn(async () => []),
-  rigLibrary: vi.fn(async () => ({ native_profile: 'profile' })),
+  rigLibrary: vi.fn(async () => ({
+    native_profile: 'profile',
+    presets: [],
+    next: null,
+  })),
   publishRig: vi.fn(async () => ({ revision: 'a'.repeat(64) })),
   presetDetails: vi.fn(async () => ({ revision: 'details-1', entries: [] })),
   voiceCaptures: vi.fn(async () => []),
@@ -250,15 +254,16 @@ it('uses a capture already on the device without downloading again', async () =>
   expect(downloadVoice).not.toHaveBeenCalled();
 });
 
-it('opens Explore on an era from the Library shelf', async () => {
+it('lists unbuilt sounds as rows and opens one at its download', async () => {
   const user = userEvent.setup();
-  render(<SongbookShelf connected onChanged={() => {}} />);
-  await user.click(screen.getByRole('button', { name: '80s' }));
-  expect(
-    screen.getByRole('searchbox', { name: 'Find a factory sound' }),
-  ).toHaveValue('80s');
-  expect(
-    screen.getByRole('heading', { name: '80s sounds', level: 3 }),
-  ).toBeVisible();
-  expect(screen.queryByRole('heading', { name: '90s sounds' })).toBeNull();
+  vi.mocked(tone3000Tone).mockResolvedValue(tone);
+  vi.mocked(voiceCaptures).mockResolvedValue([]);
+  render(
+    <UnbuiltSounds connected query="Brown" refresh={0} onChanged={() => {}} />,
+  );
+  const row = await screen.findByRole('button', { name: 'Get Brown Crunch' });
+  expect(row).toHaveTextContent('Needs download');
+  expect(screen.queryByRole('button', { name: /Get Tight Eight/ })).toBeNull();
+  await user.click(row);
+  expect(await screen.findByRole('button', { name: 'Download' })).toBeVisible();
 });
