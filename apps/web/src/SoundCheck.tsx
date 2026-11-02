@@ -326,6 +326,73 @@ export function SoundCheck({
 
         <TabsContent value="overview">
           <div className="sound-check-tab-panel">
+            <div
+              className="sound-check-meters"
+              role="group"
+              aria-label="Live levels"
+            >
+              <MeterTile
+                label="Input"
+                value={live ? dbfs(inputPeak) : '—'}
+                level={live ? dbToFraction(inputPeak) : null}
+                state={!live ? 'idle' : inputClips > 0 ? 'warn' : 'ok'}
+                note={live ? `${inputClips} clips` : 'No stream'}
+              />
+              <MeterTile
+                label="Output"
+                value={live ? dbfs(outputPeak) : '—'}
+                level={live ? dbToFraction(outputPeak) : null}
+                state={!live ? 'idle' : outputClips > 0 ? 'warn' : 'ok'}
+                note={live ? `${outputClips} clips` : 'No stream'}
+              />
+              <MeterTile
+                label="DSP load"
+                value={
+                  live && processing.p95 != null
+                    ? `${processing.p95.toFixed(0)}%`
+                    : '—'
+                }
+                level={
+                  live && processing.p95 != null ? processing.p95 / 100 : null
+                }
+                state={
+                  !live
+                    ? 'idle'
+                    : processing.tight || deadlineMisses > 0
+                      ? 'warn'
+                      : 'ok'
+                }
+                note={`${deadlineMisses} missed`}
+              />
+              <MeterTile
+                label="Loudness spread"
+                value={spread != null ? `${spread.toFixed(1)} LU` : '—'}
+                level={spread != null ? Math.min(1, spread / 24) : null}
+                state={spread == null ? 'idle' : spread > 6 ? 'warn' : 'ok'}
+                note={
+                  correctedSpread != null
+                    ? `${correctedSpread.toFixed(1)} LU after`
+                    : 'Not measured'
+                }
+              />
+              <MeterTile
+                label="Guitar"
+                value={activeGuitar?.name ?? '—'}
+                level={null}
+                state={
+                  !activeGuitar
+                    ? 'idle'
+                    : verification === 'current'
+                      ? 'ok'
+                      : 'warn'
+                }
+                note={
+                  activeGuitar
+                    ? `Trim ${(activeGuitar.trim_db ?? 0).toFixed(1)} dB`
+                    : 'None selected'
+                }
+              />
+            </div>
             <section className="sound-check-fixes" aria-label="Fix next">
               <div className="sound-check-section-heading">
                 <h2>Fix next</h2>
@@ -657,5 +724,49 @@ export function SoundCheck({
         </TabsContent>
       </Tabs>
     </section>
+  );
+}
+
+/** Map a dBFS peak onto a 0–1 meter, −60 dB to 0 dB. */
+function dbToFraction(db: number | null) {
+  if (db == null || !Number.isFinite(db)) return 0;
+  return Math.max(0, Math.min(1, (db + 60) / 60));
+}
+
+/** One at-a-glance reading: a name, a big value, a bar and a status LED. */
+function MeterTile({
+  label,
+  value,
+  level,
+  state,
+  note,
+}: {
+  label: string;
+  value: string;
+  level: number | null;
+  state: 'ok' | 'warn' | 'idle';
+  note: string;
+}) {
+  return (
+    <div className="meter-tile" data-state={state}>
+      <span className="meter-tile-label">
+        <i className="meter-tile-led" aria-hidden="true" />
+        {label}
+      </span>
+      <strong className="meter-tile-value">{value}</strong>
+      {level != null && (
+        <span
+          className="meter-tile-bar"
+          role="meter"
+          aria-label={`${label} level`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(level * 100)}
+        >
+          <span style={{ width: `${Math.round(level * 100)}%` }} />
+        </span>
+      )}
+      <span className="meter-tile-note">{note}</span>
+    </div>
   );
 }

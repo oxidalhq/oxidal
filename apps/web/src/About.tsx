@@ -1,18 +1,49 @@
-import { Badge } from './components/ui/badge';
+import { useEffect, useState } from 'react';
+import { capabilities } from './api';
 
 const features = [
-  'TONE3000 A2 NAM and local NAM/IR libraries',
-  'Serial, parallel and scene-based rigs with prepared live switching',
-  'LV2 effects, MIDI control, guitar profiles and a stage tuner',
-  'Sound Check, loudness matching and live device diagnostics',
+  {
+    title: 'Neural amps and cabs',
+    detail: 'TONE3000 A2 NAM captures and your own NAM and IR files.',
+  },
+  {
+    title: 'Rigs with scenes',
+    detail: 'Serial, parallel and scene rigs with prepared live switching.',
+  },
+  {
+    title: 'Made to play',
+    detail: 'LV2 effects, MIDI control, guitar profiles and a stage tuner.',
+  },
+  {
+    title: 'Sound Check',
+    detail: 'Loudness matching and live diagnostics for the whole unit.',
+  },
 ];
 
 /** Product identity and capability overview; licensing is intentionally deferred. */
 export function About() {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    capabilities()
+      .then((health) => {
+        if (active) setVersion(health.version);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   return (
     <section className="about-oxidal" aria-labelledby="about-oxidal-title">
       <div className="about-oxidal-intro">
-        <Badge>Device-local guitar and bass processor</Badge>
+        <span className="about-oxidal-mark" aria-hidden="true">
+          ø
+        </span>
+        <p className="about-oxidal-kind">
+          Device-local guitar and bass processor
+          {version ? ` · version ${version}` : ''}
+        </p>
         <h2 id="about-oxidal-title">An open instrument, not a preset player</h2>
         <p>
           Oxidal turns a Raspberry Pi 5 and your chosen audio interface into a
@@ -24,9 +55,12 @@ export function About() {
 
       <section aria-labelledby="about-capabilities">
         <h3 id="about-capabilities">What it does</h3>
-        <ul className="about-feature-list">
+        <ul className="about-feature-grid">
           {features.map((feature) => (
-            <li key={feature}>{feature}</li>
+            <li key={feature.title}>
+              <strong>{feature.title}</strong>
+              <span>{feature.detail}</span>
+            </li>
           ))}
         </ul>
       </section>

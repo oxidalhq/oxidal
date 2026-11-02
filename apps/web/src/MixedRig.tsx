@@ -2168,24 +2168,6 @@ export function MixedRig({
           }}
         />
       )}
-      {nativeLoad.engines > 0 && (
-        <div className="rig-load-summary" aria-label="Native processing load">
-          <Badge>
-            {nativeLoad.engines}{' '}
-            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
-          </Badge>
-          <Badge>{nativeLoad.blocks} chain blocks</Badge>
-          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
-            <Badge>
-              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
-              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
-            </Badge>
-          )}
-          {!!nativeLoad.oversampling.length && (
-            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
-          )}
-        </div>
-      )}
       {running &&
         selectedView &&
         (selectedView.branch || selectedView.bypass) && (
@@ -2472,6 +2454,24 @@ export function MixedRig({
           </div>
           {error && <p role="alert">{error}</p>}
         </AdjustmentDialog>
+      )}
+      {nativeLoad.engines > 0 && (
+        <div className="rig-load-summary" aria-label="Native processing load">
+          <Badge>
+            {nativeLoad.engines}{' '}
+            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
+          </Badge>
+          <Badge>{nativeLoad.blocks} chain blocks</Badge>
+          {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (
+            <Badge>
+              A2 size · {nativeLoad.full} Full · {nativeLoad.lite} Lite
+              {nativeLoad.scaled > 0 ? ` · ${nativeLoad.scaled} scaled` : ''}
+            </Badge>
+          )}
+          {!!nativeLoad.oversampling.length && (
+            <Badge>Oversampling · {nativeLoad.oversampling.join(' / ')}</Badge>
+          )}
+        </div>
       )}
       <SceneMidi
         state={state}

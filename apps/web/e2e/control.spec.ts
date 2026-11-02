@@ -363,7 +363,7 @@ test('about opens from settings and returns to the sections', async ({
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const tabs = page.getByRole('tablist', { name: 'Settings sections' });
   await expect(tabs.getByRole('tab', { name: 'About Oxidal' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'About Oxidal', exact: true }).click();
+  await page.getByRole('button', { name: 'About', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'About Oxidal', level: 1, exact: true }),
   ).toBeVisible();

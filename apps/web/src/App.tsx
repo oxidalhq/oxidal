@@ -445,6 +445,20 @@ function InstrumentApp() {
                         : settingsLabels[settingsSection]}
               </h1>
             </div>
+            {view === 'settings' && (
+              <Button
+                variant="outline"
+                aria-pressed={settingsSection === 'about'}
+                onClick={() => {
+                  setSettingsSection(
+                    settingsSection === 'about' ? 'audio' : 'about',
+                  );
+                  window.scrollTo({ top: 0 });
+                }}
+              >
+                {settingsSection === 'about' ? 'Back to settings' : 'About'}
+              </Button>
+            )}
             {state &&
               view === 'rig' &&
               developmentSimulator &&
@@ -1076,21 +1090,6 @@ function InstrumentApp() {
                   </>
                 )}
               </TabsContent>
-              <div className="settings-about-link">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setSettingsSection(
-                      settingsSection === 'about' ? 'audio' : 'about',
-                    );
-                    window.scrollTo({ top: 0 });
-                  }}
-                >
-                  {settingsSection === 'about'
-                    ? 'Back to settings'
-                    : 'About Oxidal'}
-                </Button>
-              </div>
             </Tabs>
           )}
         </main>

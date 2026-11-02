@@ -280,3 +280,78 @@
     grid-row: auto;
   }
 }
+
+/* At-a-glance meters: the instrument's vital signs before any explanation. */
+.sound-check-meters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.meter-tile {
+  display: grid;
+  align-content: start;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.meter-tile[data-state='idle'] {
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+.meter-tile-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--muted-foreground);
+  font: 600 var(--text-2xs) var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.meter-tile-led {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--wire);
+}
+.meter-tile[data-state='ok'] .meter-tile-led {
+  background: var(--led-pedal);
+}
+.meter-tile[data-state='warn'] .meter-tile-led {
+  background: var(--brand);
+}
+.meter-tile-value {
+  overflow: hidden;
+  font: 600 var(--text-lg) var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meter-tile-bar {
+  display: block;
+  height: 0.375rem;
+  border: 1px solid var(--wire);
+  border-radius: 1px;
+}
+.meter-tile-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--foreground);
+}
+.meter-tile[data-state='warn'] .meter-tile-bar > span {
+  background: var(--brand);
+}
+.meter-tile-note {
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+}
+@media (max-width: 760px) {
+  .sound-check-meters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sound-check-meters > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
