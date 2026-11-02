@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { StateNotice } from './components/ui/state-notice';
 import {
   CheckCircle,
   Guitar,
@@ -307,7 +308,11 @@ export function SoundCheck({
         </Button>
       </header>
 
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <StateNotice kind="error" title="Sound Check could not refresh">
+          {error}
+        </StateNotice>
+      )}
       <Tabs
         className="sound-check-tabs"
         value={view}
@@ -327,7 +332,10 @@ export function SoundCheck({
                 <span>Highest-value checks first</span>
               </div>
               {loading ? (
-                <p role="status">Reading instrument health…</p>
+                <StateNotice
+                  kind="loading"
+                  title="Reading instrument health…"
+                />
               ) : fixes.length ? (
                 fixes.slice(0, 5).map((fix) => (
                   <ToolRow

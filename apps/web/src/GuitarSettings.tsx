@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { StateNotice } from './components/ui/state-notice';
 import type { GuitarProfiles } from './api';
 import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -126,7 +127,12 @@ export function GuitarSettings() {
   });
 
   if (profiles === 'unsupported') return null;
-  if (profiles == null) return error ? <p role="alert">{error}</p> : null;
+  if (profiles == null)
+    return error ? (
+      <StateNotice kind="error" title="Guitar profiles unavailable">
+        {error}
+      </StateNotice>
+    ) : null;
   const edit = (next: Partial<GuitarProfiles>) =>
     void save({ ...profiles, ...next });
   const change = (id: string, next: Partial<Guitar>) =>
@@ -491,7 +497,11 @@ export function GuitarSettings() {
             </AdjustmentDialog>
           );
         })()}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <StateNotice kind="error" title="Guitar profile action failed">
+          {error}
+        </StateNotice>
+      )}
     </ToolSection>
   );
 }
