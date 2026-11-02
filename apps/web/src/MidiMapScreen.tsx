@@ -775,26 +775,28 @@ export function MidiMapScreen({
       </details>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto_auto] sm:items-center">
-        <label className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[12rem]">
-          <MagnifyingGlass
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            size={18}
-            aria-hidden="true"
-          />
-          <span className="sr-only">Search MIDI map</span>
-          <input
-            className="w-full pl-10"
-            type="search"
-            placeholder="Find preset, Program or CC…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+        {groups.length > 0 && (
+          <label className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[12rem]">
+            <MagnifyingGlass
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              size={18}
+              aria-hidden="true"
+            />
+            <span className="sr-only">Search MIDI map</span>
+            <input
+              className="w-full pl-10"
+              type="search"
+              placeholder="Find preset, Program or CC…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        )}
         <Button
           variant="outline"
           className="w-full sm:w-auto"
           onClick={exportMap}
-          disabled={busy}
+          disabled={busy || groups.length === 0}
         >
           <DownloadSimple size={18} aria-hidden="true" />
           Export
