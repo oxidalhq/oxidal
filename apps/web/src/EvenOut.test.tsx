@@ -6,11 +6,7 @@ import {
   screen,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import {
-  calibration,
-  calibrationCoverage,
-  type CalibrationState,
-} from './api';
+import { calibration, calibrationCoverage, type CalibrationState } from './api';
 import { EvenOut } from './EvenOut';
 vi.mock('./api', () => ({
   calibration: vi.fn(),
