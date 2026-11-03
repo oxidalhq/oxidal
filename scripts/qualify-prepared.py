@@ -60,6 +60,12 @@ def request(body=None):
         return json.load(response)
 
 
+def follow_output_offset():
+    """Let the daemon reconcile Even Out and intentional Boost after a start."""
+    with urllib.request.urlopen(args.api + '/api/v1/boosts', timeout=90) as response:
+        return json.load(response)
+
+
 def action(body):
     s = request()
     return request({'session': s['session'], 'expected_revision': s['revision'], 'action': body})
@@ -229,6 +235,10 @@ finally:
             print('Another rig is selected; leaving it unchanged', flush=True)
         else:
             restored = start(original['configured'])
+            # Playback start is confirmed before the API's preset/scene output
+            # follower runs. Trigger the same reconciliation as the player UI,
+            # then compare the final authoritative configuration.
+            follow_output_offset()
             restored = wait_for_configuration(original['configured'])
             result['restored_configuration'] = restored['configured'] == original['configured']
             print('Restored', restored['configured']['revision'], flush=True)
