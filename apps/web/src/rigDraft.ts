@@ -24,7 +24,9 @@ export type DraftEffect =
       controls: Record<string, number>;
     };
 
-export function lv2Effect(plugin: Lv2Plugin): DraftEffect {
+export function lv2Effect(
+  plugin: Lv2Plugin,
+): Extract<DraftEffect, { kind: 'lv2' }> {
   if (plugin.ports.some((port) => port.atom)) {
     throw new Error('Message and file controls are not available yet.');
   }
@@ -49,6 +51,23 @@ export function lv2Effect(plugin: Lv2Plugin): DraftEffect {
     mono: 'sum',
     controls,
   };
+}
+
+/**
+ * Creates an effect for the end of a chain. A terminal Hold captures the full
+ * processed spectrum by default instead of filtering upstream texture away.
+ * @see docs/native-hold.md
+ */
+export function terminalEffect(
+  plugin: Lv2Plugin,
+): Extract<DraftEffect, { kind: 'lv2' }> {
+  const effect = lv2Effect(plugin);
+  if (
+    plugin.uri.startsWith('urn:oxidal:plugin:hold#') &&
+    Object.hasOwn(effect.controls, 'focus')
+  )
+    effect.controls.focus = 0;
+  return effect;
 }
 
 export type NativeDraft = Extract<DraftEffect, { kind: 'native' }>;

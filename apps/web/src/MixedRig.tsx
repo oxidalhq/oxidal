@@ -3,7 +3,7 @@ import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
 import { SceneChange } from './SceneChange';
 import { SlotChooser } from './SlotChooser';
-import { lv2Effect } from './rigDraft';
+import { lv2Effect, terminalEffect } from './rigDraft';
 import {
   buildLanes,
   insertBlock,
@@ -1955,7 +1955,8 @@ export function MixedRig({
             const slot = laneSlot;
             setLaneSlot(null);
             void editChain((lanes) => {
-              const effect = lv2Effect(plugin);
+              const effect =
+                slot.node === END ? terminalEffect(plugin) : lv2Effect(plugin);
               if (slot.node === END)
                 return insertBlock(
                   lanes,
@@ -2006,7 +2007,15 @@ export function MixedRig({
                   : slot.node;
               if (!branch) return;
               void rebuild(({ opened, live, name }) =>
-                addSceneEffect(opened, branch, lv2Effect(plugin), live, name),
+                addSceneEffect(
+                  opened,
+                  branch,
+                  slot.node === END
+                    ? terminalEffect(plugin)
+                    : lv2Effect(plugin),
+                  live,
+                  name,
+                ),
               );
             }}
           />

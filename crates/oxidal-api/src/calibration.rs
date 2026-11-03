@@ -31,8 +31,10 @@ use std::{
 
 /// Seconds of riff measured per preset or scene, after the host's settling second.
 const MEASURE_SECONDS: f32 = 3.0;
-/// Offsets are kept within this, so one odd preset cannot swing the output.
-const MAX_OFFSET_DB: f32 = 12.0;
+/// Calibration uses the host's complete correction range. The target is moved
+/// down when necessary so the whole measured library remains reachable instead
+/// of leaving quiet sounds behind at a smaller arbitrary ceiling.
+const MAX_OFFSET_DB: f32 = oxidal_audio::tools::HostLevels::OFFSET_RANGE.1;
 /// Stable Oxidal factory riff level. It must not depend on one unit's guitar.
 const FACTORY_REFERENCE_PEAK_DB: f32 = -12.0;
 /// Changing the reference invalidates cached measurements without changing the file schema.
@@ -58,8 +60,11 @@ pub struct Calibration {
     pub measured: BTreeMap<String, Measured>,
 }
 impl Calibration {
-    /// The loudness every preset is evened out to: the median of all measured,
-    /// so the unit as a whole stays about as loud as it was.
+    /// The loudness every preset is evened out to. Prefer the median, then move
+    /// it into the range every measurement can reach with the host correction.
+    /// This normally lowers the target instead of adding unsafe gain to a quiet
+    /// outlier.
+    /// See `docs/audio.md` for the user-visible calibration policy.
     pub fn target(&self) -> Option<f32> {
         let mut values: Vec<f32> = self.measured.values().map(|m| m.lufs).collect();
         if values.is_empty() {
@@ -67,10 +72,26 @@ impl Calibration {
         }
         values.sort_by(f32::total_cmp);
         let middle = values.len() / 2;
-        Some(if values.len().is_multiple_of(2) {
+        let median = if values.len().is_multiple_of(2) {
             (values[middle - 1] + values[middle]) / 2.0
         } else {
             values[middle]
+        };
+        let lowest_target = values
+            .iter()
+            .map(|lufs| lufs - MAX_OFFSET_DB)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let highest_target = values
+            .iter()
+            .map(|lufs| lufs + MAX_OFFSET_DB)
+            .fold(f32::INFINITY, f32::min);
+        Some(if lowest_target <= highest_target {
+            median.clamp(lowest_target, highest_target)
+        } else {
+            // A library wider than the complete host range cannot share one
+            // reachable target. Centre the unavoidable residual error so Sound
+            // Check can identify both sides truthfully.
+            (lowest_target + highest_target) / 2.0
         })
     }
     pub fn offset(&self, key: &str) -> Option<f32> {
@@ -875,7 +896,7 @@ mod tests {
         }
     }
     #[test]
-    fn offsets_bring_every_preset_to_the_median() {
+    fn offsets_use_the_median_when_every_sound_can_reach_it() {
         let c = measured(&[("clean", -26.0), ("crunch", -20.0), ("heavy", -14.0)]);
         assert_eq!(c.target(), Some(-20.0));
         assert_eq!(c.offset("clean"), Some(6.0));
@@ -885,11 +906,28 @@ mod tests {
         assert_eq!(c.total(&["heavy".into(), "missing".into()]), -6.0);
         let even = measured(&[("a", -30.0), ("b", -20.0)]);
         assert_eq!(even.target(), Some(-25.0));
-        // A wild outlier is limited, never a huge jump.
+        // A wild outlier moves the target down and uses the full bounded host
+        // correction rather than claiming that the median was reached.
         let wild = measured(&[("quiet", -60.0), ("a", -20.0), ("b", -20.0)]);
+        assert_eq!(wild.target(), Some(-36.0));
         assert_eq!(wild.offset("quiet"), Some(MAX_OFFSET_DB));
+        assert_eq!(wild.offset("a"), Some(-16.0));
         assert_eq!(Calibration::default().target(), None);
         assert!(c.offset("crunch").unwrap().is_sign_positive());
+    }
+
+    #[test]
+    fn reachable_target_evens_a_wide_library_inside_the_host_range() {
+        let c = measured(&[
+            ("broken-radio", -46.5),
+            ("median", -17.9),
+            ("studio-glass", -8.6),
+        ]);
+        assert_eq!(c.target(), Some(-22.5));
+        for key in ["broken-radio", "median", "studio-glass"] {
+            let corrected = c.measured[key].lufs + c.offset(key).unwrap();
+            assert!((corrected + 22.5).abs() <= 0.25, "{key}: {corrected}");
+        }
     }
 
     #[test]

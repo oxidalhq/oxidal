@@ -5,10 +5,17 @@ import {
   render,
   screen,
 } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
-import { calibration, type CalibrationState } from './api';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import {
+  calibration,
+  calibrationCoverage,
+  type CalibrationState,
+} from './api';
 import { EvenOut } from './EvenOut';
-vi.mock('./api', () => ({ calibration: vi.fn() }));
+vi.mock('./api', () => ({
+  calibration: vi.fn(),
+  calibrationCoverage: vi.fn(),
+}));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -21,6 +28,15 @@ const idle: CalibrationState = {
   ],
   progress: { running: false, done: 0, total: 0, measured: 0 },
 };
+
+beforeEach(() => {
+  vi.mocked(calibrationCoverage).mockResolvedValue({
+    total: 2,
+    measured: 2,
+    stale: 0,
+    unmeasured: 0,
+  });
+});
 
 it('summarises the evened-out level, runs, and lists each offset', async () => {
   let current = idle;
@@ -63,4 +79,22 @@ it('hides itself on a daemon without calibration', async () => {
   const view = render(<EvenOut connected />);
   await act(async () => {});
   expect(view.container).toBeEmptyDOMElement();
+});
+
+it('does not claim newly built or changed sounds are already even', async () => {
+  vi.mocked(calibration).mockResolvedValue(idle);
+  vi.mocked(calibrationCoverage).mockResolvedValue({
+    total: 5,
+    measured: 2,
+    stale: 1,
+    unmeasured: 2,
+  });
+  render(<EvenOut connected />);
+  await act(async () => {});
+  expect(
+    screen.getByText(/3 new or changed sounds need Even Out/),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Even out 3 new or changed' }),
+  ).toBeVisible();
 });

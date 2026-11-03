@@ -4,6 +4,7 @@ import {
   lv2Effect,
   parallelRig,
   serialRig,
+  terminalEffect,
   type NativeDraft,
 } from './rigDraft';
 import {
@@ -48,14 +49,15 @@ const flanger: Lv2Plugin = {
 };
 const hold: Lv2Plugin = {
   name: 'Hold',
-  uri: 'urn:example:hold',
+  uri: 'urn:oxidal:plugin:hold#stereo',
   unsupported: null,
   ports: [
     port(0, 'hold', false, true),
-    port(1, 'in_l', true, true),
-    port(2, 'out_l', true, false),
-    port(3, 'in_r', true, true),
-    port(4, 'out_r', true, false),
+    { ...port(1, 'focus', false, true), default: 80 },
+    port(2, 'in_l', true, true),
+    port(3, 'out_l', true, false),
+    port(4, 'in_r', true, true),
+    port(5, 'out_r', true, false),
   ],
 };
 const amp: NativeDraft = {
@@ -74,6 +76,19 @@ const flange = {
 const document = (json: string): RigDocument => ({
   manifest: JSON.parse(json),
   revision: 'r'.repeat(64),
+});
+
+it('keeps an upstream flanger before a full-spectrum terminal Hold', () => {
+  const lanes = insertBlock([[amp, flange]], 0, Infinity, terminalEffect(hold));
+  const built = JSON.parse(
+    buildLanes('p', 'Rx Bogner + Retro Flanger + Hold', lanes, 'prof')
+      .manifest_json,
+  ) as RigDocument['manifest'];
+  expect(built.oxidal?.lv2.map((effect) => effect.pluginUri)).toEqual([
+    flanger.uri,
+    hold.uri,
+  ]);
+  expect(built.oxidal?.lv2[1]?.controls.focus).toBe(0);
 });
 const graph = (json: string) => JSON.parse(json).oxidal.graph;
 

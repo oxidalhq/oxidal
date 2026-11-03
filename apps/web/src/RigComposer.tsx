@@ -16,7 +16,7 @@ import { ChainView } from './ChainView';
 import { GearIcon } from './GearIcon';
 import { NativeSplitDialog } from './NativeSplitDialog';
 import {
-  lv2Effect,
+  terminalEffect,
   serialRig,
   sceneRig,
   canMoveEffect,
@@ -696,7 +696,7 @@ export function RigComposer({
                           }
                           onClick={() => {
                             try {
-                              const item = lv2Effect(plugin);
+                              const item = terminalEffect(plugin);
                               setEffects((old) => [...old, item]);
                               setSelected(item.id);
                               setPicker(null);

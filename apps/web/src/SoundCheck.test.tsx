@@ -336,8 +336,8 @@ it('calls out presets that hit the bounded loudness correction limit', async () 
       {
         key: 'very-quiet',
         name: 'Oxidal · Very Quiet · Clean',
-        lufs: -40,
-        offset_db: 12,
+        lufs: -60,
+        offset_db: 24,
       },
     ],
   });
@@ -355,15 +355,15 @@ it('calls out presets that hit the bounded loudness correction limit', async () 
 
   expect(screen.getByText('1 scene needs manual gain review')).toBeVisible();
   expect(
-    screen.queryByText('Automatic correction stopped at ±12 dB'),
+    screen.queryByText('Automatic correction stopped at ±24 dB'),
   ).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: 'Review loudness' }));
   expect(
-    screen.getByText('Automatic correction stopped at ±12 dB'),
+    screen.getByText('Automatic correction stopped at ±24 dB'),
   ).toBeVisible();
-  expect(screen.getByText(/protects gain structure/)).toBeVisible();
+  expect(screen.getByText(/outside the reachable common level/)).toBeVisible();
   fireEvent.click(screen.getByText('Show 1 preset'));
   expect(screen.getByText('Oxidal · Very Quiet')).toBeVisible();
-  expect(screen.getByText('Clean (+12.0 dB)')).toBeVisible();
+  expect(screen.getByText('Clean (+24.0 dB)')).toBeVisible();
 });

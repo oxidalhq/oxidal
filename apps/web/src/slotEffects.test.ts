@@ -8,6 +8,7 @@ const port = (
   symbol: string,
   audio: boolean,
   input: boolean,
+  initial = 0,
 ) => ({
   index,
   symbol,
@@ -22,7 +23,7 @@ const port = (
   latency: false,
   minimum: audio ? null : 0,
   maximum: audio ? null : 1,
-  default: audio ? null : 0,
+  default: audio ? null : initial,
 });
 const hold: Lv2Plugin = {
   name: 'Oxidal Hold (Stereo)',
@@ -30,10 +31,16 @@ const hold: Lv2Plugin = {
   unsupported: null,
   ports: [
     port(0, 'hold', false, true),
-    port(1, 'in_l', true, true),
-    port(2, 'out_l', true, false),
-    port(3, 'in_r', true, true),
-    port(4, 'out_r', true, false),
+    port(1, 'attack', false, true, 300),
+    port(2, 'release', false, true, 1500),
+    port(3, 'level', false, true),
+    port(4, 'dry', false, true, 1),
+    port(5, 'focus', false, true, 80),
+    port(6, 'width', false, true, 50),
+    port(7, 'in_l', true, true),
+    port(8, 'out_l', true, false),
+    port(9, 'in_r', true, true),
+    port(10, 'out_r', true, false),
   ],
 };
 const tone: RigNativeSource = {
@@ -97,4 +104,19 @@ it('puts the effect before, after or beside the TONE3000 chain in a finished pre
       'merge>output',
     ]),
   );
+});
+
+it('captures the full processed spectrum when Hold is last in the chain', () => {
+  const made = presetWithEffect({
+    tone,
+    name: 'Rx Bogner + Retro Flanger',
+    plugin: hold,
+    placement: 'after',
+    profile: 'tone3000-plugin:test',
+  });
+  const manifest = JSON.parse(made.publish.manifest_json);
+  expect(manifest.oxidal.lv2[0]).toMatchObject({
+    pluginUri: 'urn:oxidal:plugin:hold#stereo',
+    controls: { focus: 0 },
+  });
 });

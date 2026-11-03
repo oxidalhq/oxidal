@@ -4,6 +4,7 @@ import {
   lv2Effect,
   parallelRig,
   serialRig,
+  terminalEffect,
   type NativeDraft,
 } from './rigDraft';
 
@@ -44,7 +45,8 @@ export function presetWithEffect({
     preset: tone.preset,
     source: tone.source,
   };
-  const effect = lv2Effect(plugin);
+  const effect =
+    placement === 'after' ? terminalEffect(plugin) : lv2Effect(plugin);
   const title = `${name} + ${effectShortName(plugin)}`.slice(0, 80);
   const id = crypto.randomUUID();
   const publish =

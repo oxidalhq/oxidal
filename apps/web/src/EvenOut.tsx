@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { calibration, type CalibrationState } from './api';
+import {
+  calibration,
+  calibrationCoverage,
+  type CalibrationCoverage,
+  type CalibrationState,
+} from './api';
 import { Button } from './components/ui/button';
 import './Library.css';
 
@@ -17,6 +22,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
     null,
   );
   const [error, setError] = useState('');
+  const [coverage, setCoverage] = useState<CalibrationCoverage | null>(null);
   const [details, setDetails] = useState(false);
   const alive = useRef(true);
   const running = state !== 'unsupported' && !!state?.progress.running;
@@ -25,9 +31,13 @@ export function EvenOut({ connected }: { connected: boolean }) {
     let timer: ReturnType<typeof setTimeout>;
     const read = async () => {
       try {
-        const next = await calibration();
+        const [next, nextCoverage] = await Promise.all([
+          calibration(),
+          calibrationCoverage(),
+        ]);
         if (!alive.current) return;
         setState(next ?? 'unsupported');
+        setCoverage(nextCoverage);
         // Poll while a run is going; one read otherwise.
         if (next?.progress.running) timer = setTimeout(() => void read(), 500);
       } catch (cause) {
@@ -51,10 +61,13 @@ export function EvenOut({ connected }: { connected: boolean }) {
     }
   }
   const { progress, entries, target_lufs } = state;
+  const pending = (coverage?.stale ?? 0) + (coverage?.unmeasured ?? 0);
   const summary =
     target_lufs == null
       ? 'Not evened out yet: each preset plays at its own level.'
-      : `${entries.length} presets and scenes evened out to ${target_lufs.toFixed(1)} LUFS.`;
+      : pending
+        ? `${entries.length} measured at ${target_lufs.toFixed(1)} LUFS; ${pending} new or changed ${pending === 1 ? 'sound needs' : 'sounds need'} Even Out.`
+        : `${entries.length} presets and scenes evened out to ${target_lufs.toFixed(1)} LUFS.`;
   return (
     <section className="even-out" aria-label="Even out all">
       <div className="section-heading">
@@ -65,7 +78,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
             disabled={!connected}
             onClick={() => void send('run')}
           >
-            Even out
+            {pending ? `Even out ${pending} new or changed` : 'Even out'}
           </Button>
         )}
       </div>
@@ -103,7 +116,8 @@ export function EvenOut({ connected }: { connected: boolean }) {
               Plays a built-in riff through each new or changed preset and scene
               at Oxidal's fixed factory level for about four seconds, silently,
               then puts back what you were playing. Your guitar profile does not
-              change the result. Boost stays yours on top.
+              change the result. Oxidal chooses a reachable common level within
+              its correction range. Boost remains a separate control.
             </p>
           </details>
           {entries.length > 0 && (

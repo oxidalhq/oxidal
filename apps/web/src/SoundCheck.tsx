@@ -164,8 +164,11 @@ export function SoundCheck({
   const correctedSpread = corrected.length
     ? Math.max(0, corrected[0]! - corrected.at(-1)!)
     : null;
+  const targetLufs = data.calibration?.target_lufs;
   const limitedCorrections = entries.filter(
-    (entry) => Math.abs(entry.offset_db) >= 11.95,
+    (entry) =>
+      targetLufs != null &&
+      Math.abs(entry.lufs + entry.offset_db - targetLufs) >= 0.25,
   );
   const limitedGroups = limitedCorrections.reduce<
     { preset: string; scenes: { name: string; offset: number }[] }[]
@@ -276,7 +279,7 @@ export function SoundCheck({
     fixes.push({
       title: `${limitedCorrections.length} ${limitedCorrections.length === 1 ? 'scene needs' : 'scenes need'} manual gain review`,
       detail:
-        'Even Out stopped at its ±12 dB safety limit. The affected sounds are grouped in Loudness instead of adding more automatic gain.',
+        'The Library is wider than Oxidal’s complete ±24 dB correction range. The affected sounds are grouped in Loudness instead of claiming they reached the target.',
       action: { label: 'Review loudness', run: () => setView('loudness') },
     });
 
@@ -671,12 +674,11 @@ export function SoundCheck({
                   <div>
                     <Badge>{limitedCorrections.length} scenes</Badge>
                     <h3 id="sound-check-limit-title">
-                      Automatic correction stopped at ±12 dB
+                      Automatic correction stopped at ±24 dB
                     </h3>
                     <p>
-                      This ceiling protects gain structure. These sounds remain
-                      farther from the target and need manual preset-level
-                      review.
+                      These sounds remain outside the reachable common level and
+                      need manual preset-level review.
                     </p>
                   </div>
                   <Button variant="outline" onClick={onLibrary}>
