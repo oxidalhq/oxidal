@@ -2027,6 +2027,10 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     .getByRole('radio', { name: 'Artwork', exact: true })
     .click();
   await expect(image).toBeVisible();
+  // WebKit defers a lazy image until it enters the viewport. The fixture sits
+  // below the factory collection on phone profiles, so exercise its real load
+  // boundary before checking the decoded dimensions.
+  await image.scrollIntoViewIfNeeded();
   await expect
     .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
     .toBe(1);
