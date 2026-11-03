@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { chainLanes } from './rigChain';
+import { chainLanes, isRigBlockNode } from './rigChain';
 import {
   parallelRig,
   serialRig,
@@ -53,7 +53,11 @@ it('reads a straight preset as one lane in order, skipping mono adapters', () =>
 it('reads a split preset as one lane per side', () => {
   const pitch = { ...lv2Effect(plugin(1)), id: 'pitch' };
   const rig = parallelRig('id', 'x', [], [[amp], [pitch]], 'p', false);
-  expect(chainLanes(graph(rig.manifest_json))).toEqual([['amp'], ['pitch']]);
+  const routing = graph(rig.manifest_json);
+  expect(chainLanes(routing)).toEqual([['amp'], ['pitch']]);
+  expect(
+    routing.nodes.filter(isRigBlockNode).map((node: { id: string }) => node.id),
+  ).toEqual(['amp', 'pitch']);
 });
 
 it('gives up on shapes it cannot draw as lanes', () => {

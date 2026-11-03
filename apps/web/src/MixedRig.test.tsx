@@ -75,6 +75,7 @@ function setup(
     tail?: boolean;
   }> = [],
   withScenes = false,
+  withRoutingNodes = false,
 ) {
   const controls = [
     ['outputLevel', 'Output', '0 dB', false],
@@ -113,7 +114,21 @@ function setup(
     manifest: {
       name: 'Test rig',
       extensions: {
-        ...(origin === 'mine' ? {} : { 'urn:oxidal:authoring': { origin } }),
+        ...(origin === 'mine' && !withRoutingNodes
+          ? {}
+          : {
+              'urn:oxidal:authoring': {
+                ...(origin === 'mine' ? {} : { origin }),
+                ...(withRoutingNodes
+                  ? {
+                      labels: {
+                        'merge-left': 'Merge · L',
+                        'merge-right': 'Merge · R',
+                      },
+                    }
+                  : {}),
+              },
+            }),
         ...(withScenes
           ? {
               'urn:oxidal:scenes:1': {
@@ -127,7 +142,19 @@ function setup(
       tone3000: { instances: [{ id: 'native' }] },
       oxidal: {
         lv2: [],
-        graph: { nodes: [{ id: 'amp', kind: 'tone3000', instance: 'native' }] },
+        graph: {
+          nodes: [
+            { id: 'amp', kind: 'tone3000', instance: 'native' },
+            ...(withRoutingNodes
+              ? [
+                  { id: 'split-left', kind: 'split' },
+                  { id: 'merge-left', kind: 'merge', inputGains: [1, 1] },
+                  { id: 'merge-right', kind: 'merge', inputGains: [1, 1] },
+                  { id: 'lane-gain', kind: 'gain', inputGains: [1] },
+                ]
+              : []),
+          ],
+        },
       },
     },
   } as unknown as Awaited<ReturnType<typeof rigDocument>>);
@@ -187,6 +214,15 @@ it('reports native engines separately from actual blocks and A2 quality', async 
     screen.getByText('A2 size · 1 Full · 0 Lite · 1 scaled'),
   ).toBeVisible();
   expect(screen.getByText('Oversampling · 8x')).toBeVisible();
+});
+
+it('keeps internal split, merge and gain routing out of the player', async () => {
+  setup('mine', [], false, true);
+
+  await screen.findByRole('button', { name: 'TONE3000' });
+  expect(screen.queryByText('Merge · L')).not.toBeInTheDocument();
+  expect(screen.queryByText('Merge · R')).not.toBeInTheDocument();
+  expect(screen.queryByText('Input 1')).not.toBeInTheDocument();
 });
 it('keeps Perform mounted behind a clear loader while a preset switches', async () => {
   setPerform({ on: true, mode: 'presets' });

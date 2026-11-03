@@ -47,6 +47,16 @@ type Graph = {
     to: { node: string; port: number };
   }[];
 };
+
+/**
+ * True only for a player-facing sound block. Split, merge and gain nodes are
+ * routing machinery: the chain draws their wires but never offers them as gear.
+ * @see docs/interface.md
+ */
+export function isRigBlockNode(node: Graph['nodes'][number]): boolean {
+  return node.kind === 'tone3000' || node.kind === 'lv2';
+}
+
 /**
  * The blocks of a preset's graph as chain lanes, read along the left channel:
  * one lane for a straight chain, or one per side of a split (blocks shared

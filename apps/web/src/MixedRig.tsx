@@ -47,7 +47,7 @@ import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle, RigTile } from './ChainView';
 import type { RigBlockVM, RigLaneVM } from './rigChain';
-import { blockKind, chainLanes } from './rigChain';
+import { blockKind, chainLanes, isRigBlockNode } from './rigChain';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -721,25 +721,8 @@ export function MixedRig({
   )
     return null;
   const running = state.phase === 'running';
-  const selectorNodes = new Set(
-    state.control?.scenes?.scenes.flatMap((scene) =>
-      scene.gains.map((gain) => gain.node),
-    ) ?? [],
-  );
-  const internalNodes =
-    matching?.manifest.extensions['urn:oxidal:authoring']?.internal_nodes;
-  const hiddenNodes = new Set(
-    Array.isArray(internalNodes)
-      ? internalNodes.filter((id): id is string => typeof id === 'string')
-      : [],
-  );
   const nodes =
-    matching?.manifest.oxidal?.graph.nodes.filter(
-      (n) =>
-        !['input', 'output', 'split'].includes(n.kind) &&
-        !selectorNodes.has(n.id) &&
-        !(n.kind === 'merge' && hiddenNodes.has(n.id)),
-    ) ?? [];
+    matching?.manifest.oxidal?.graph.nodes.filter(isRigBlockNode) ?? [];
   const selected =
     nodes.find(
       (n) =>

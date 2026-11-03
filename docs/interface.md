@@ -75,6 +75,10 @@ unsaved mix for the selected scene. **Update scene** publishes that routing mix
 as a new preset revision, while **Save** remains the whole-preset action for
 shared block controls.
 
+Split, merge and gain nodes are internal routing machinery, not effects. The Rig
+view represents them as the wire splitting into lanes and joining at the output;
+it never exposes separate Merge L/Merge R tiles or removal controls.
+
 **Ready to switch** is a compact status for other loaded presets, not another
 scene selector. Playing is audible, Processing is still rendering a transition
 or tail, and Sleeping is loaded without current DSP work.
