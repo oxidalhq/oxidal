@@ -143,7 +143,7 @@ export const echo = (wet = 0.25) =>
   });
 export const echoAt = (delay: number) =>
   fx('MDA DubDelay', { delay, feedback: 0.3, fx_mix: 1, lfo_depth: 0 });
-export const reverse = (seconds: number) =>
+const reverse = (seconds: number) =>
   fx('Reverse Delay (5s max)', {
     delay_time: seconds,
     dry_level: -70,
@@ -153,13 +153,13 @@ export const reverse = (seconds: number) =>
   });
 export const pitch = (semitones: number) =>
   fx('Oxidal Pitch (Stereo)', { semitones, window: 1, input_mode: 0 });
-export const rotary = (speed: number) =>
+const rotary = (speed: number) =>
   fx('MDA Leslie', { speed, mode: speed < 0.5 ? 0.2 : 0.8 });
 export const sub = (level: number) =>
   fx('MDA SubSynth', { level, dry_mix: 0, thresh: 0.35 });
-export const tape = () =>
+const tape = () =>
   fx('GxTape', { drive: 0.25, hiss: 0, wowdepth: 0.006, flutdepth: 0.004 });
-export const studioComp = (threshold = -24) =>
+const studioComp = (threshold = -24) =>
   fx('x42 Compressor Stereo', {
     threshold,
     Ratio: 0.5,

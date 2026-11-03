@@ -6,8 +6,7 @@
  * @see docs/factory-collection.md
  */
 
-export type FactoryGain =
-  'clean' | 'crunch' | 'lead' | 'high' | 'modern' | 'bass';
+type FactoryGain = 'clean' | 'crunch' | 'lead' | 'high' | 'modern' | 'bass';
 
 /** One suggested capture: a TONE3000 tone and one of its A2 models. */
 export type VoiceCapture = { tone: number; model: number };
