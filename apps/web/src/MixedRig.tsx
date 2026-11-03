@@ -83,7 +83,12 @@ import {
   type Lv2Plugin,
 } from './api';
 import type { RigPublish } from './generated/contract';
-import { addSceneEffect, branchEffects, removeSceneEffect } from './sceneEdit';
+import {
+  addSceneEffect,
+  branchEffects,
+  removeSceneEffect,
+  updateScene,
+} from './sceneEdit';
 import { requestMidiAssignments } from './midiNavigation';
 import { TunerButton } from './TunerButton';
 
@@ -161,6 +166,10 @@ export function MixedRig({
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
   const [saveOpening, setSaveOpening] = useState<RigAudioState | null>(null);
+  const [sceneDraft, setSceneDraft] = useState<{
+    session: string;
+    scene: string;
+  } | null>(null);
   const [copyOnEdit, setCopyOnEdit] = useState<{
     copy: string;
     source: string;
@@ -380,6 +389,9 @@ export function MixedRig({
   }
   async function command(action: RigAudioAction) {
     if (!current.current || sending.current) return;
+    const control = current.current.control;
+    if (action.kind === 'branch' && control?.scene)
+      setSceneDraft({ session: control.session, scene: control.scene });
     generation.current++;
     sending.current = true;
     setBusy(true);
@@ -1002,12 +1014,37 @@ export function MixedRig({
   // of its own blocks, in scene order, with the sounding scene's lane bright.
   const sceneList = state.control?.scenes?.scenes ?? [];
   const soundingScene = sceneList.find((s) => s.id === state.control?.scene);
+  const draftScene =
+    sceneDraft && sceneDraft.session === state.control?.session
+      ? sceneDraft.scene
+      : null;
+  const editingScene =
+    soundingScene ??
+    (draftScene
+      ? sceneList.find((scene) => scene.id === draftScene)
+      : undefined);
+  const editingSceneGains =
+    editingScene?.gains.map((gain) => {
+      const control = state.control?.controls.find(
+        (candidate) =>
+          candidate.target.kind === 'merge' &&
+          candidate.target.node === gain.node &&
+          candidate.target.port === gain.port,
+      );
+      return { ...gain, value: control?.value ?? gain.value };
+    }) ?? [];
+  const sceneMixChanged =
+    !!editingScene &&
+    editingScene.gains.some(
+      (gain, index) =>
+        Math.abs(gain.value - (editingSceneGains[index]?.value ?? gain.value)) >
+        0.0001,
+    );
   const sceneMix = (() => {
-    if (!soundingScene) return [];
+    if (!editingScene) return [];
     const value = (node: string, port: number) =>
-      soundingScene.gains.find(
-        (gain) => gain.node === node && gain.port === port,
-      )?.value;
+      editingSceneGains.find((gain) => gain.node === node && gain.port === port)
+        ?.value;
     const branches = state.control?.scenes?.branches ?? [];
     if (branches.length)
       return branches.flatMap((branch) => {
@@ -1020,7 +1057,7 @@ export function MixedRig({
           : [];
       });
     const byName = new Map<string, number>();
-    for (const gain of soundingScene.gains) {
+    for (const gain of editingSceneGains) {
       const label = rigNodeLabel(matching, gain.node);
       if (!label?.endsWith(' send')) continue;
       const name = label.slice(0, -' send'.length);
@@ -1102,10 +1139,16 @@ export function MixedRig({
   const sceneEffectSet = new Set(sceneEffectIds.flat());
   const sceneLanes: RigLaneVM[] = sceneBranches.map((n, index) => {
     const scene = sceneList.find((candidate) => candidate.id === n.id);
+    const branch = state.control?.branches?.find(
+      (candidate) => candidate.id === n.id,
+    );
+    const active = branch?.enabled ?? state.control?.scene === scene?.id;
     return {
       id: scene?.name ?? n.id,
       input: String(index + 1),
-      dim: !!scene && state.control?.scene !== scene.id,
+      name: scene?.name,
+      active,
+      dim: !active,
       blocks: [
         ...nativeTiles(n),
         ...sceneEffectIds[index]!.flatMap((id) => {
@@ -1141,11 +1184,11 @@ export function MixedRig({
     return label?.endsWith(' send') ? label.slice(0, -' send'.length) : null;
   };
   const feedOpen = (index: number) =>
-    soundingScene?.gains.some(
+    editingSceneGains.some(
       (gain) => gain.value > 0 && gain.node.startsWith(`scene-feed-${index}-`),
-    ) ?? false;
+    );
   const snapshotLanes =
-    !!soundingScene && (chainIds?.length ?? 0) > 1 && feedName(0) !== null;
+    !!editingScene && (chainIds?.length ?? 0) > 1 && feedName(0) !== null;
   const effectLanes: RigLaneVM[] = (chainIds ?? []).map((ids, index) => ({
     id:
       chainIds!.length > 1
@@ -1153,6 +1196,7 @@ export function MixedRig({
         : 'Chain',
     input: chainIds!.length > 1 ? String(index + 1) : 'IN',
     name: snapshotLanes ? (feedName(index) ?? undefined) : undefined,
+    active: snapshotLanes ? feedOpen(index) : undefined,
     dim: snapshotLanes ? !feedOpen(index) : undefined,
     blocks: ids
       .flatMap((id) => {
@@ -1564,27 +1608,29 @@ export function MixedRig({
           <summary>
             <span>Ready to switch</span>
             <Badge>{state.control.prepared.length + 1} presets</Badge>
-            <span className="ready-presets-state">1 playing</span>
+            <span className="ready-presets-state">
+              {state.control.prepared.length + 1} loaded ·{' '}
+              {1 +
+                state.control.prepared.filter((preset) => preset.rendering)
+                  .length}{' '}
+              processing
+            </span>
           </summary>
           <p className="caption">
-            These are other presets kept ready for an instant switch. They are
-            not scenes. Quiet presets sleep until selected;{' '}
-            {1 +
-              state.control.prepared.filter((preset) => preset.rendering)
-                .length}{' '}
-            {1 +
-              state.control.prepared.filter((preset) => preset.rendering)
-                .length ===
-            1
-              ? 'preset is'
-              : 'presets are'}{' '}
-            processing now.
+            Loaded presets can switch without reopening audio. Playing is the
+            sound you hear; Processing is still rendering a tail; Sleeping is
+            loaded but using no DSP. These are presets, not scenes.
           </p>
           <div
             className="ready-presets-list"
             role="group"
             aria-label="Ready presets"
           >
+            <div className="ready-preset-current">
+              <strong>{matching?.manifest.name ?? 'Current preset'}</strong>
+              <Badge>Playing</Badge>
+              <Badge>Processing</Badge>
+            </div>
             {state.control.prepared.map((p) => (
               <Button
                 key={p.revision}
@@ -1597,6 +1643,9 @@ export function MixedRig({
                   {p.name}
                   {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
                 </span>
+                {!p.error && (
+                  <Badge>{p.rendering ? 'Processing' : 'Sleeping'}</Badge>
+                )}
               </Button>
             ))}
           </div>
@@ -1622,7 +1671,8 @@ export function MixedRig({
           disabled={disabled || !!edit}
           onSelect={(scene) => {
             const control = current.current?.control;
-            if (control)
+            if (control) {
+              setSceneDraft({ session: control.session, scene });
               void command({
                 kind: 'scene',
                 command: {
@@ -1631,31 +1681,39 @@ export function MixedRig({
                   scene,
                 },
               });
+            }
           }}
         />
       )}
-      {soundingScene && (
-        <details className="scene-context">
+      {editingScene && (
+        <details className="scene-context" open={sceneMixChanged || undefined}>
           <summary>
             <span>
-              Current scene · <strong>{soundingScene.name}</strong>
+              {sceneMixChanged ? 'Editing scene' : 'Current scene'} ·{' '}
+              <strong>{editingScene.name}</strong>
             </span>
-            {!!sceneMix.length && (
-              <span className="scene-context-mix">
-                {sceneMix
-                  .filter((branch) => branch.value > 0)
-                  .map(
-                    (branch) =>
-                      `${branch.name} ${Math.round(branch.value * 100)}%`,
-                  )
-                  .join(' · ') || 'All branches muted'}
-              </span>
+            {sceneMixChanged ? (
+              <Badge>Unsaved mix</Badge>
+            ) : (
+              !!sceneMix.length && (
+                <span className="scene-context-mix">
+                  {sceneMix
+                    .filter((branch) => branch.value > 0)
+                    .map(
+                      (branch) =>
+                        `${branch.name} ${Math.round(branch.value * 100)}%`,
+                    )
+                    .join(' · ') || 'All branches muted'}
+                </span>
+              )
             )}
           </summary>
           <p className="caption">
-            A scene recalls the branch levels shown here. Selecting blocks in
-            the chain below edits shared effects for every scene; use Save to
-            keep those edits with the preset.
+            {sceneMixChanged
+              ? 'Branch routing changed for this scene. Update scene writes this mix into a new preset revision.'
+              : 'A scene recalls the branch levels shown here.'}{' '}
+            Block controls are shared by every scene; use Save to keep those
+            whole-preset edits.
           </p>
           {!!sceneMix.length && (
             <div className="scene-context-levels" aria-label="Scene mix">
@@ -1667,6 +1725,29 @@ export function MixedRig({
                   {branch.name} · {Math.round(branch.value * 100)}%
                 </Badge>
               ))}
+            </div>
+          )}
+          {sceneMixChanged && (
+            <div className="scene-context-actions">
+              <Button
+                disabled={disabled || editing || !!edit || !!picker}
+                onClick={() =>
+                  void rebuild(({ opened, live, name }) =>
+                    updateScene(
+                      opened,
+                      editingScene.id,
+                      editingSceneGains,
+                      live,
+                      name,
+                    ),
+                  )
+                }
+              >
+                Update scene
+              </Button>
+              <span className="caption">
+                Saves the mix; shared block edits still use Save.
+              </span>
             </div>
           )}
         </details>

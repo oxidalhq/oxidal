@@ -3,7 +3,12 @@ import Ajv from 'ajv/dist/2020';
 import schema from '../../../docs/presets/manifest.schema.json';
 import type { Lv2Plugin, Preset, RigDocument } from './api';
 import { lv2Effect, sceneRig, type NativeDraft } from './rigDraft';
-import { addSceneEffect, branchEffects, removeSceneEffect } from './sceneEdit';
+import {
+  addSceneEffect,
+  branchEffects,
+  removeSceneEffect,
+  updateScene,
+} from './sceneEdit';
 
 const validator = new Ajv({ strict: false }).compile(schema);
 const port = (index: number, symbol: string, input: boolean, audio: boolean) =>
@@ -153,5 +158,34 @@ it('removes an effect and its mono adapters, joining the branch back up', () => 
 it('refuses a node that is not a scene', () => {
   expect(() => addSceneEffect(scenes(), 'missing', lv2Effect(stereo))).toThrow(
     'cannot take an effect',
+  );
+});
+
+it('updates one scene from the live mix and reopens on that routing', () => {
+  const document = scenes();
+  const extension = document.manifest.extensions['urn:oxidal:scenes:1'] as {
+    scenes: {
+      id: string;
+      gains: { node: string; port: number; value: number }[];
+    }[];
+  };
+  const scene = extension.scenes[1]!;
+  const changed = scene.gains.map((gain) => ({
+    ...gain,
+    value: gain.value ? 0.25 : 0.75,
+  }));
+  const request = updateScene(document, scene.id, changed);
+  const manifest = JSON.parse(request.manifest_json) as RigDocument['manifest'];
+  expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+  const next = manifest.extensions['urn:oxidal:scenes:1'] as typeof extension;
+  expect(next.scenes[1]!.gains).toEqual(changed);
+  expect(next.scenes[0]).toEqual(extension.scenes[0]);
+  for (const gain of changed)
+    expect(
+      manifest.oxidal!.graph.nodes.find((node) => node.id === gain.node)!
+        .inputGains![gain.port],
+    ).toBe(gain.value);
+  expect(document.manifest.extensions['urn:oxidal:scenes:1']).toEqual(
+    extension,
   );
 });

@@ -117,3 +117,24 @@ it('needs a hold on touch, so a swipe still scrolls', () => {
   fireEvent.pointerUp(window);
   expect(onMove).toHaveBeenCalledWith('flanger', 0, 'amp');
 });
+
+it('identifies the sounding lane while inactive lanes recede', () => {
+  render(
+    <ChainView
+      label="Scene branches"
+      parallel
+      lanes={[
+        { id: 'Clean', input: '1', active: true, blocks: [tile('clean')] },
+        { id: 'Lead', input: '2', dim: true, blocks: [tile('lead')] },
+      ]}
+      onSelect={() => {}}
+    />,
+  );
+  expect(
+    screen.getByRole('group', { name: 'Clean signal chain, sounding' }),
+  ).toHaveAttribute('aria-current', 'true');
+  expect(screen.getByText('Sounding')).toBeVisible();
+  expect(
+    screen.getByRole('group', { name: 'Lead signal chain' }),
+  ).toHaveAttribute('data-dim');
+});

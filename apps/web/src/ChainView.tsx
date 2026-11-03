@@ -106,7 +106,10 @@ export function ChainView({
               key={lane.id}
               className="chain-lane chain-branch"
               data-dim={lane.dim || undefined}
-              aria-label={`${lane.id} signal chain`}
+              data-active={lane.active || undefined}
+              role="group"
+              aria-current={lane.active ? 'true' : undefined}
+              aria-label={`${lane.id} signal chain${lane.active ? ', sounding' : ''}`}
             >
               <span
                 className="chain-bus"
@@ -120,6 +123,9 @@ export function ChainView({
                 <span>{lane.input}</span>
                 {lane.name && (
                   <span className="chain-branch-name">{lane.name}</span>
+                )}
+                {lane.active && (
+                  <span className="chain-branch-state">Sounding</span>
                 )}
               </span>
               {tiles(lane, index)}
@@ -145,7 +151,10 @@ export function ChainView({
           key={lane.id}
           className="chain-lane"
           data-dim={lane.dim || undefined}
-          aria-label={`${lane.id} signal chain`}
+          data-active={lane.active || undefined}
+          role="group"
+          aria-current={lane.active ? 'true' : undefined}
+          aria-label={`${lane.id} signal chain${lane.active ? ', sounding' : ''}`}
         >
           <span className="chain-port">{lane.input}</span>
           {tiles(lane, index)}

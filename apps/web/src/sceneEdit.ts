@@ -132,3 +132,48 @@ export function removeSceneEffect(
   for (const key of mine) if (labels) delete labels[key];
   return publish(manifest, document.revision);
 }
+
+/**
+ * Replaces one scene's routing snapshot with the currently sounding mix. The
+ * graph receives the same values so reopening the published revision starts
+ * on the scene the player just updated.
+ * @see docs/interface.md
+ */
+export function updateScene(
+  document: RigDocument,
+  sceneId: string,
+  gains: { node: string; port: number; value: number }[],
+  live: Record<string, Record<string, number>> = {},
+  name?: string,
+): RigPublish {
+  const manifest = clone(document, live, name);
+  const extension = manifest.extensions['urn:oxidal:scenes:1'] as
+    | {
+        scenes?: {
+          id: string;
+          gains: { node: string; port: number; value: number }[];
+        }[];
+      }
+    | undefined;
+  const scene = extension?.scenes?.find(
+    (candidate) => candidate.id === sceneId,
+  );
+  if (!scene || !manifest.oxidal)
+    throw new Error('This preset cannot update that scene.');
+  const values = new Map(
+    gains.map((gain) => [`${gain.node}:${gain.port}`, gain.value]),
+  );
+  scene.gains = scene.gains.map((gain) => ({
+    ...gain,
+    value: values.get(`${gain.node}:${gain.port}`) ?? gain.value,
+  }));
+  for (const gain of scene.gains) {
+    const node = manifest.oxidal.graph.nodes.find(
+      (candidate) => candidate.id === gain.node,
+    );
+    if (!node?.inputGains || gain.port >= node.inputGains.length)
+      throw new Error('This scene has an invalid routing target.');
+    node.inputGains[gain.port] = gain.value;
+  }
+  return publish(manifest, document.revision);
+}

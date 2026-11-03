@@ -65,3 +65,16 @@ Secondary setup explanations are collapsed under labelled help disclosures. Nati
 ## Mixed composition
 
 Library → New preset can combine saved native tones and installed scalar LV2 effects. A compatible saved tone can become linked amp/cab stages with explicit input and amp-head confirmation; effects can sit between them. The original tone stays unchanged. Failed preparation keeps the draft open, and pending preparation can be cancelled. Rig appears only after confirmed running state. Stage controls use the same touch adjustment surface and separate offline Save. See [mixed engine](mixed-engine.md) for the qualified source/rate limits and remaining live structural authoring work.
+
+## Scenes and ready presets
+
+Scene pads recall routing snapshots inside the playing preset. The routing view
+marks every sounding branch and dims inactive branches; selecting a scene
+updates both views from the engine's confirmed state. A branch toggle creates an
+unsaved mix for the selected scene. **Update scene** publishes that routing mix
+as a new preset revision, while **Save** remains the whole-preset action for
+shared block controls.
+
+**Ready to switch** is a compact status for other loaded presets, not another
+scene selector. Playing is audible, Processing is still rendering a transition
+or tail, and Sleeping is loaded without current DSP work.

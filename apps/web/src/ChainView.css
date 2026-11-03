@@ -258,6 +258,18 @@
   border-color: var(--wire);
   color: var(--muted-foreground);
 }
+.chain-lane[data-active] > .chain-port {
+  color: var(--foreground);
+  font-weight: 700;
+}
+.chain-branch-state {
+  padding: 0.125rem 0.25rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  font-size: 0.5625rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
 .chain-lane[data-dim] .rig-tile:not([aria-pressed='true']) .rig-tile-face > * {
   opacity: 0.55;
 }

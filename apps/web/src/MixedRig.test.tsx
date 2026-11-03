@@ -74,6 +74,7 @@ function setup(
     rendering?: boolean;
     tail?: boolean;
   }> = [],
+  withScenes = false,
 ) {
   const controls = [
     ['outputLevel', 'Output', '0 dB', false],
@@ -111,8 +112,18 @@ function setup(
     revision: 'rig',
     manifest: {
       name: 'Test rig',
-      extensions:
-        origin === 'mine' ? {} : { 'urn:oxidal:authoring': { origin } },
+      extensions: {
+        ...(origin === 'mine' ? {} : { 'urn:oxidal:authoring': { origin } }),
+        ...(withScenes
+          ? {
+              'urn:oxidal:scenes:1': {
+                fade_ms: 15,
+                branches: [{ id: 'amp', name: 'Amp', gains: [] }],
+                scenes: [],
+              },
+            }
+          : {}),
+      },
       tone3000: { instances: [{ id: 'native' }] },
       oxidal: {
         lv2: [],
@@ -146,9 +157,7 @@ it('keeps gapless-ready presets distinct from scenes in a compact disclosure', a
   expect(screen.getByText('2 presets')).toBeVisible();
   fireEvent.click(summary);
   expect(
-    screen.getByText(
-      /These are other presets kept ready for an instant switch/,
-    ),
+    screen.getByText(/Loaded presets can switch without reopening audio/),
   ).toBeVisible();
   expect(screen.getByRole('group', { name: 'Ready presets' })).toBeVisible();
 });
@@ -377,12 +386,70 @@ it('explains the sounding scene as a branch mix rather than another chain', asyn
   expect(screen.getByText('Live 40% · Held layer 100%')).toBeVisible();
   fireEvent.click(screen.getByText('Current scene ·'));
   expect(
-    screen.getByText(
-      /Selecting blocks in the chain below edits shared effects/,
-    ),
+    screen.getByText(/Block controls are shared by every scene/),
   ).toBeVisible();
   expect(screen.getByText('Live · 40%')).toBeVisible();
   expect(screen.getByText('Held layer · 100%')).toBeVisible();
+});
+
+it('keeps a custom branch mix attached to its scene and offers Update scene', async () => {
+  const state = setup('mine', [], true);
+  state.control!.scenes = {
+    fade_ms: 15,
+    scenes: [
+      {
+        id: 'scene-1',
+        name: 'Clean',
+        gains: [{ node: 'mix', port: 0, value: 1 }],
+      },
+      {
+        id: 'scene-2',
+        name: 'Stage mix',
+        gains: [{ node: 'mix', port: 0, value: 1 }],
+      },
+    ],
+    branches: [
+      {
+        id: 'amp',
+        name: 'Amp',
+        gains: [{ node: 'mix', port: 0, value: 1 }],
+      },
+    ],
+  };
+  state.control!.scene = 'scene-1';
+  state.control!.branches = [
+    { id: 'amp', name: 'Amp', enabled: true, partial: false },
+  ];
+  state.control!.controls.push({
+    target: { kind: 'merge', node: 'mix', port: 0 },
+    label: 'Amp level',
+    display: '100%',
+    toggle: false,
+    value: 1,
+    minimum: 0,
+    maximum: 1,
+    integer: false,
+    logarithmic: false,
+  });
+  const changed = structuredClone(state);
+  changed.control!.scene = null;
+  changed.control!.branches![0]!.enabled = false;
+  changed.control!.controls.find(
+    (control) => control.target.kind === 'merge',
+  )!.value = 0;
+  vi.mocked(rigAudioCommand).mockResolvedValue(changed);
+
+  const pad = await screen.findByRole('button', { name: 'Scene 2: Stage mix' });
+  await waitFor(() => expect(pad).toBeEnabled());
+  expect(pad).toHaveAttribute('aria-pressed', 'false');
+  vi.mocked(rigAudioState).mockResolvedValue(changed);
+  fireEvent.click(pad);
+
+  await waitFor(() => expect(rigAudioCommand).toHaveBeenCalled());
+  expect(await screen.findByText(/^Editing scene/)).toBeVisible();
+  expect(screen.getByText('Unsaved mix')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Update scene' })).toBeEnabled();
+  expect(screen.getByText(/shared block edits still use Save/)).toBeVisible();
 });
 
 it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {

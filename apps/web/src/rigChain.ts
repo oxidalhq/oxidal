@@ -28,6 +28,8 @@ export interface RigLaneVM {
   blocks: RigBlockVM[];
   /** Shown but not sounding, such as another scene's branch. */
   dim?: boolean;
+  /** This lane currently contributes signal to the sounding scene. */
+  active?: boolean;
   /** A readable name for a branch lane, such as the scene it belongs to. */
   name?: string;
 }
