@@ -19,6 +19,9 @@ The JUCE-linked boundary currently includes the native TONE3000 adapter and nati
 pitch component. See [`native/tone3000`](native/tone3000) and
 [`native/pitch`](native/pitch) for their build-specific notices.
 
+The repository includes patches with excerpts of JUCE source. Those excerpts
+remain subject to the applicable [JUCE licensing terms](https://juce.com/get-juce/).
+
 ## TONE3000 source code
 
 The native adapter builds against a pinned TONE3000 source revision licensed under
@@ -48,6 +51,10 @@ provider downloads. Users are responsible for the rights to assets they import.
 Project-authored binary parser fixtures under
 [`crates/oxidal-presets/tests/fixtures`](crates/oxidal-presets/tests/fixtures) contain
 no model weights, audio or playable tone.
+
+Local preset import and TONE3000 catalog access are separate features. Catalog
+access is governed by the [TONE3000 API terms](https://www.tone3000.com/api/terms),
+including requirements for attribution, authenticated delivery and commercial use.
 
 TONE3000, JUCE, NAM and other names belong to their respective owners. Inclusion of
 an integration or notice does not imply endorsement or affiliation.

@@ -1,47 +1,25 @@
 # Oxidal documentation
 
-Start with the page that matches what you are trying to do.
+## Set up and play
 
-## Use and understand Oxidal
+- [Build the Raspberry Pi image and connect to the hotspot](../os/README.md)
+- [Set up an audio interface and start playback](audio.md)
+- [Import captures and manage presets](library.md)
+- [Use the browser interface](interface.md) or [browse screenshots](screenshots.md)
+- [Check levels and audio health](monitoring.md)
+- [Explore the factory effects recipes](factory-collection.md)
+- [Connect a TONE3000 account](tone3000-account.md)
 
-- [Audio and live playback](audio.md) — device setup, audio ownership, playback,
-  scenes, levels and recovery.
-- [Library](library.md) — presets, owned copies, models, artwork and removal.
-- [Interface](interface.md) — navigation, responsive behavior and visual system.
-- [Sound Check and monitoring](monitoring.md) — meters, health information and
-  diagnostics.
-- [Factory collection](factory-collection.md) — Oxidal-authored recipes and the
-  third-party asset boundary.
-- [Screenshot gallery](screenshots.md) — the current device interface running on
-  the appliance.
+## Build and maintain
 
-## Build and contribute
+- [Architecture](architecture.md)
+- [Development setup](development.md) and [Rust daemon](core.md)
+- [Wi-Fi, effect packs and power settings](device-service.md)
+- [Maintenance console](debug-console.md)
 
-- [Development](development.md) — toolchains, checks and release preparation.
-- [Core service](core.md) — daemon setup and the portable Rust crates.
-- [Architecture](architecture.md) — process boundaries, APIs and control rules.
-- [OS image and installation](../os/README.md) — Linux bundles and Raspberry Pi
-  image assembly.
-- [Device service](device-service.md) — networking, power and the privileged helper
-  boundary.
-- [Debug console](debug-console.md) — explicitly enabled maintenance commands.
+## Reference
 
-## Audio engines and formats
-
-- [Mixed engine](mixed-engine.md) — native and LV2 processing in one prepared
-  signal graph.
-- [LV2 hosting](lv2.md) — supported plugin behavior and qualification.
-- [Native TONE3000 adapter](native-tone3000.md) — pinned native integration and
-  its qualification boundary.
-- [Native Hold](native-hold.md) and [native pitch](native-pitch.md) — standalone
-  native effects.
-- [Preset format](presets/format.md) — the draft portable preset contract.
-- [Storage locking](storage-lock.md) — library ownership and safe updates.
-- [TONE3000 account](tone3000-account.md) — optional device authorization.
-
-## Documentation rules
-
-Describe what the current code does first. Put limitations next to the feature they
-qualify, use one direct statement instead of repeated caveats, and link to the
-authoritative implementation document for detail. Private sprint plans and research
-do not belong in this repository.
+- [Mixed rigs and scenes](mixed-engine.md)
+- [Native preset and DSP adapter](native-tone3000.md)
+- [LV2 host](lv2.md), [Oxidal Hold](native-hold.md) and [Oxidal Pitch](native-pitch.md)
+- [Preset format](presets/format.md) and [storage locking](storage-lock.md)

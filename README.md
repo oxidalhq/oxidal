@@ -32,16 +32,14 @@ stay on the device.
   FOMP and Dragonfly, alongside Oxidal Hold and Oxidal Pitch. LV2 support is a
   qualified compatibility profile, not a claim that every LV2 plugin will work.
 
-## Made to play
+## Playing live
 
 - **Flexible rigs** — arrange native processors and supported LV2 effects in serial,
   parallel and scene-based signal paths.
-- **Performance-first switching** — prepare scenes and alternate rigs before the
-  show, with trails and blended changes where the processing graph supports them.
-- **A complete instrument** — guitar profiles, MIDI control, audio setup, loudness
-  matching and live processing health belong to the same device.
-- **Rust at the core** — typed contracts connect the web interface to Rust services
-  and an isolated Rust engine host, with native DSP kept behind explicit boundaries.
+- **Scenes and MIDI** — preload scenes and switch from the browser or a mapped
+  MIDI controller. Supported layouts can retain delay and reverb trails.
+- **Sound Check** — set up the audio interface, match levels and monitor live
+  audio and processing health.
 
 | Perform                                                                 | Sound Check                                                     |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -49,25 +47,32 @@ stay on the device.
 
 [See more screenshots](docs/screenshots.md)
 
-## Two repositories
+## Raspberry Pi appliance
 
-Oxidal is intentionally split into two repositories in the
-[oxidalhq organization](https://github.com/oxidalhq):
+Oxidal has a custom headless Linux image based on Raspberry Pi OS Lite. It sets
+up the audio services, supported effect packs and a password-protected Wi-Fi
+hotspot. Join the hotspot from a phone or tablet and open `https://oxidal.local`
+using the generated device credentials and certificate setup. Local playback
+works offline. You can also join an existing Wi-Fi network or use Ethernet.
 
-- **`oxidal`** — software, browser interface, appliance image recipes and product
-  documentation. This repository.
-- **`oxidal-controller`** — controller firmware, PCB design and enclosure files.
+Presets and device settings live on a separate data partition. Once you've
+checked your audio setup, you can choose a saved session to load at boot. See the
+[image build and setup guide](os/README.md#phone-access-and-first-sound).
 
-There is no separate documentation or preset repository. Documentation stays with
-the product it describes.
+## Repository scope
+
+This repository contains the Oxidal software, browser interface, appliance image
+recipes and documentation. The hardware controller is developed separately.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    UI[Browser controller] <-->|HTTPS + events| API[Rust control plane]
+    UI[Browser] <-->|HTTPS + events| Proxy[Appliance nginx]
+    Proxy <--> API[Rust daemon]
     API --> Store[Device-local library]
-    API --> DSP[Isolated Rust engine host]
+    API --> Device[Wi-Fi and device helper]
+    API --> DSP[Supervised audio worker]
     MIDI[MIDI controller] --> DSP
     Input[Audio in] --> DSP --> Output[Audio out]
     DSP --> Native[NAM and TONE3000-compatible rigs]
@@ -122,6 +127,8 @@ Start with the [documentation index](docs/README.md),
 [appliance image guide](os/README.md).
 
 ## License
+
+Copyright © 2026 Richard Sentino.
 
 Oxidal's original code is licensed under the [Apache License 2.0](LICENSE). Some
 optional native components use separately licensed dependencies; see
