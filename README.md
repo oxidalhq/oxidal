@@ -12,10 +12,25 @@
 
 ![Oxidal running the Afterlight example rig](docs/assets/screenshots/rig-afterlight.jpeg)
 
-Oxidal combines neural amp captures, impulse responses and LV2 effects in playable
-rigs with prepared scenes. Its Rust backend owns the control plane, library, device
-services and audio-engine supervision. The browser is the controller; processing,
-presets and account data stay on the device.
+Oxidal uses Neural Amp Modeler (NAM) captures as its primary tone source for amp
+heads, cabinets and complete captured rigs. TONE3000 preset compatibility and
+supported LV2 effects turn those tones into playable rigs with prepared scenes. Its
+Rust backend owns the control plane, library, device services and audio-engine
+supervision. The browser is the controller; processing, presets and account data
+stay on the device.
+
+## Tone and effects
+
+- **NAM first** — load licensed NAM captures for an amp head, cabinet or complete
+  signal chain, with impulse responses available for cabinet and room processing.
+- **TONE3000 preset compatibility** — import compatible `.t3kpreset` files and work
+  with their native rig structure. Oxidal does not bundle TONE3000 presets or their
+  associated captures.
+- **Supported LV2 effects** — build around the core NAM tone with selected
+  distortion, fuzz, compression, filtering, modulation, pitch, delay and reverb
+  plugins. Curated support includes effects from Guitarix, Invada, MDA, SWH, x42,
+  FOMP and Dragonfly, alongside Oxidal Hold and Oxidal Pitch. LV2 support is a
+  qualified compatibility profile, not a claim that every LV2 plugin will work.
 
 ## Made to play
 
@@ -55,8 +70,8 @@ flowchart LR
     API --> DSP[Isolated Rust engine host]
     MIDI[MIDI controller] --> DSP
     Input[Audio in] --> DSP --> Output[Audio out]
-    DSP --> Native[Native processors]
-    DSP --> LV2[LV2 effects]
+    DSP --> Native[NAM and TONE3000-compatible rigs]
+    DSP --> LV2[Supported LV2 effects]
 ```
 
 The control plane owns the API, library and device settings. A supervised worker is
@@ -65,10 +80,10 @@ the single owner of the audio interface. Read the
 
 ## Current status
 
-The working appliance runs live audio, supports prepared scene recall and supported
-LV2 effects, and exposes guitar, MIDI, audio and health workflows in the browser.
-Automated checks cover the Rust services, web application, contracts, packaging and
-isolated audio workers.
+The working appliance runs live NAM-based audio, supports compatible TONE3000 preset
+import, prepared scene recall and selected LV2 effects, and exposes guitar, MIDI,
+audio and health workflows in the browser. Automated checks cover the Rust services,
+web application, contracts, packaging and isolated audio workers.
 
 Oxidal targets x86-64 Linux and Raspberry Pi ARM64. Physical-interface coverage,
 real-time qualification, recovery and installation across supported hardware remain
