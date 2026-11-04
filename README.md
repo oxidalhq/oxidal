@@ -48,16 +48,15 @@ See Oxidal's [native preset adapter](docs/native-tone3000.md) and
 
 ## Raspberry Pi appliance
 
-Oxidal has a custom headless Linux image based on Raspberry Pi OS Lite. It sets
-up the audio services, supported effect packs and a password-protected Wi-Fi
-hotspot. Join the hotspot from a phone or tablet and open `https://oxidal.local`
-using the generated device credentials and certificate setup. Local playback
-works offline. You can also join an existing Wi-Fi network or use Ethernet.
+| Feature            | Details                                                                                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Custom Linux image | Headless Raspberry Pi 5 appliance based on [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/operating-systems/) (64-bit, Debian Trixie). The image sets up Oxidal, audio services, and supported effect packs. |
+| Wi-Fi and Ethernet | Join the built-in, password-protected hotspot directly from a phone or tablet. The appliance can also join an existing Wi-Fi network or use Ethernet.                                                                     |
+| Browser control    | Open `https://oxidal.local` after setting up the device certificate and sign in with the generated credentials. Local playback works offline.                                                                             |
+| Persistent storage | Presets and device settings live on a separate data partition.                                                                                                                                                            |
+| Boot playback      | After checking your audio setup, you can choose a saved session to load automatically at startup.                                                                                                                         |
 
-Presets and device settings live on a separate data partition. Once you've
-checked your audio setup, you can choose a saved session to load at boot. See the
-[image build and setup guide](os/README.md#phone-access-and-first-sound).
-The upstream base image comes from [Raspberry Pi OS](https://www.raspberrypi.com/software/operating-systems/).
+See the [image build and setup guide](os/README.md#phone-access-and-first-sound).
 
 ## Repository scope
 
@@ -91,6 +90,15 @@ flowchart LR
 The control plane owns the API, library and device settings. A supervised worker is
 the single owner of the audio interface. Read the
 [architecture guide](docs/architecture.md) for process boundaries and contracts.
+
+## Tech stack
+
+| Layer              | Technologies                                         | Role                                                                                 |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Web interface      | React, TypeScript, Vite, Tailwind CSS                | Browser controls for rig editing, performance, and device setup.                     |
+| Backend            | Rust, Axum, Tokio                                    | Local HTTP API, event streams, preset library, and worker supervision.               |
+| Audio and DSP      | ALSA, NAM, native TONE3000 integration, LV2          | Linux audio I/O, capture playback, compatible preset editing, and effect hosting.    |
+| Appliance services | Raspberry Pi OS Lite, systemd, NetworkManager, nginx | Headless boot, service management, Wi-Fi and hotspot setup, and authenticated HTTPS. |
 
 ## Rust crates
 
