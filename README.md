@@ -32,6 +32,11 @@ stay on the device.
   FOMP and Dragonfly, alongside Oxidal Hold and Oxidal Pitch. LV2 support is a
   qualified compatibility profile, not a claim that every LV2 plugin will work.
 
+Upstream projects: [Neural Amp Modeler](https://www.neuralampmodeler.com/),
+[TONE3000](https://www.tone3000.com/) and [LV2](https://lv2plug.in/).
+See Oxidal's [native preset adapter](docs/native-tone3000.md) and
+[LV2 compatibility notes](docs/lv2.md) for supported workflows.
+
 ## Playing live
 
 - **Flexible rigs** — arrange native processors and supported LV2 effects in serial,
@@ -58,11 +63,21 @@ works offline. You can also join an existing Wi-Fi network or use Ethernet.
 Presets and device settings live on a separate data partition. Once you've
 checked your audio setup, you can choose a saved session to load at boot. See the
 [image build and setup guide](os/README.md#phone-access-and-first-sound).
+The upstream base image comes from [Raspberry Pi OS](https://www.raspberrypi.com/software/operating-systems/).
 
 ## Repository scope
 
 This repository contains the Oxidal software, browser interface, appliance image
 recipes and documentation. The hardware controller is developed separately.
+
+## Acknowledgments
+
+Oxidal grew out of Richard Sentino's integration patches for
+[PiPedal](https://github.com/rerdavies/pipedal) and the
+[TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin).
+Thanks to both projects and their contributors. See Richard's
+[archived PiPedal integration](https://github.com/rixrix/pipedal/pull/1) and the
+[archived TONE3000 stage bridge](https://github.com/rixrix/tone3000-plugin/pull/1).
 
 ## Architecture
 

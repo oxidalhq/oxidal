@@ -1,5 +1,20 @@
 # Linux LV2 host
 
+To add an effect, install a supported pack from **Settings → Effects**, then
+choose the effect when building a preset in **Library**. See
+[effect packs](device-service.md#effect-packs) and [mixed rigs](mixed-engine.md).
+
+| If you are looking for            | Start here                                              |
+| --------------------------------- | ------------------------------------------------------- |
+| Plugin and port limits            | [Supported boundary](#supported-boundary)               |
+| Bundled Hold and Pitch effects    | [Oxidal plugins](#oxidal-plugins)                       |
+| Available effects and pack checks | [Installed effects catalog](#installed-effects-catalog) |
+| Saving plugin state and assets    | [State capture and restore](#state-capture-and-restore) |
+| Developer tests                   | [Repeatable qualification](#repeatable-qualification)   |
+
+The sections below are the engineering reference for the
+[LV2 host implementation](../crates/oxidal-lv2).
+
 The optional `oxidal-lv2/native` feature uses Lilv to discover and instantiate installed LV2 bundles. Default workspace builds remain portable and do not link Lilv. Native builds require Linux, a C compiler, pkg-config, liblilv-dev and lv2-dev; cross compilation is not yet supported.
 
 ## Supported boundary

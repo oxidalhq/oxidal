@@ -1,102 +1,30 @@
-# TONE3000 account
+# Connect a TONE3000 account
 
-Settings → Connections → TONE3000 account supports the provider's device authorization flow. Enter your application's **publishable API key (`client_id`)**, choose Connect TONE3000, open the displayed provider link on a phone/computer, and enter the code. Oxidal checks authorization automatically; returning to the page is enough. A secret `t3k_cs_…` key is rejected. The device needs internet access for this flow; existing local presets remain independent of the account service.
+You can use local presets, NAM captures and IRs offline. Connect an account
+when you want to browse and download models from TONE3000.
 
-The implementation follows [TONE3000's authentication and device authorization documentation](https://www.tone3000.com/api). The publishable key identifies the application; it is not the user's account authorization. Successful authorization supplies access and refresh tokens to the daemon. No borrowed reference application identity is bundled.
-
-## Current boundary
-
-This supplies account connection, cancellation, persistent sign-in, refresh and local disconnection. It does not yet provide an online tone browser, provider preset/model downloads, ownership/library synchronization, or remote authoring. Those must be integrated and qualified separately. Real account testing requires an application publishable key and user authorization. Local HTTP fixtures are protocol evidence, not proof of production account access.
-
-Disconnect removes saved tokens from this device. It does not delete local presets, delete the provider account, or promise remote token revocation. Disconnect does not interrupt audio. Reset connection is available after a saved-account or authorization error; a storage failure is surfaced rather than falsely confirming removal.
-
-## Runtime and storage
-
-- `GET /api/v1/account/tone3000` returns public connection state, revision, publishable key and the temporary user-facing code. Device codes, access tokens and refresh tokens are never returned.
-- `POST /api/v1/account/tone3000` accepts session/revision-checked `connect`, `cancel` or `disconnect`. The Rust contract generates browser types and validation. Lost replies should be resolved by refreshing state, not replaying a command with a stale revision.
-- A separate owner performs fixed-origin HTTPS requests with redirects disabled, a 15-second request deadline and 32 KiB response limit. No browser-supplied URL or arbitrary network proxy is accepted. Polling honors the returned interval, adds five seconds for `slow_down`, expires temporary codes and retries transient refresh failures independently of audio.
-- Cancellation drops the pending request before acknowledging disconnected state. Late network replies cannot complete a cancelled authorization. Backend work continues if the browser navigates away; opening Connections restores its current state.
-- The daemon stores `accounts/tone3000-account.json` below `OXIDAL_PRESET_DIR`. Writes use a new owner-only temporary file (0600 on Unix), sync, atomic rename and directory sync. Invalid schema, oversized data, symlinks and unsafe file permissions are rejected on load. Incomplete temporary files are never restored.
-- The account is revalidated through refresh after daemon restart. `invalid_grant` clears saved tokens; temporary network errors show reconnecting. Storage failure prevents a new connection from being reported as persisted and connected.
-- Do not distribute this runtime account directory. Preset exports and the maintained development image seeder do not include it; the seeder only accepts regular `.t3kpreset` inputs. Image builds must not copy a live device's state directory as factory content.
-- The service uses the existing loopback API and authenticated device proxy. Account tokens are unencrypted on local disk, protected by daemon ownership and file permissions; a device administrator can access them.
-
-## Repeatable checks
-
-`cargo test --locked -p oxidal-api` includes a local HTTP provider fixture for device authorization, persistence, refresh after restart, stale requests and cancellation during an outstanding HTTP request. It also covers polling/backoff/expiry, storage failure and private atomic records. The existing HTTP API suite verifies availability without audio and secret-key rejection without reflecting the key.
-
-`pnpm test:e2e --grep 'TONE3000 account'` covers the real disconnected API and browser-side secret-key rejection, then uses an explicitly labelled UI contract fixture for code/link presentation, cancellation, automatic connected state, disconnection and portrait/landscape layouts. The latter does not contact TONE3000. XR uses WebKit; Fold cover/open and BOOX use the maintained touch/e-paper profiles. Physical browser/authorization acceptance remains required.
+1. Open **Settings → Accounts → TONE3000**.
+2. Enter your application's publishable client ID and choose **Connect TONE3000**.
+   Keep the secret key private.
+3. Open the displayed provider link and enter the code. The device needs internet
+   access while it waits for authorization.
+4. Return to Oxidal. The connection status updates when authorization completes.
 
 ## Catalog selection
 
-The daemon exposes typed metadata at `GET /api/v1/tone3000/tones`
-(`collection=favorites|downloaded|created|trending|latest`, `page`, `query`),
-`GET /api/v1/tone3000/tones/{id}` and `GET /api/v1/tone3000/models`
-(`tone_id`, `page`, `architecture=1|2|custom`). Collections use 20-item pages;
-latest/trending are single provider feeds. A2 is explicit rather than silently
-omitted by the provider's legacy default. Model size labels may be absent.
+- Use **Library** to download a model for later.
+- Use **Change model** on a supported running block to audition a capture or IR.
+- Save a copy after auditioning if you want to recall the new tone offline.
 
-Requests use a short-lived internal authorization capability. No token, raw
-provider error or model download URL reaches the browser. Concurrent requests
-are bounded, redirects are rejected, responses are limited to 1 MiB and an
-account change invalidates an in-flight reply. HTTP provider fixtures cover
-pagination, encoded filters, nullable model size, account disconnect races,
-wrong-tone models, response limits and rate-limit errors.
+## Disconnect or move to another device
 
-These metadata endpoints do not yet change the sounding chain or establish
-live model audition/offline-save readiness. The selection transaction must prepare
-the requested model before changing its exact target and retain the previous
-sound on failure; the upstream replacement failure path can bypass that block.
+**Disconnect** clears the saved account tokens on this device. Local files
+remain available and playback continues. Tokens are stored on the device with
+owner-only file permissions and are excluded from library backups.
 
-`POST /api/v1/tone3000/stage` accepts only `tone_id` and `model_id`, verifies
-both against the connected account, and downloads the selected NAM/IR. It does
-not accept browser-supplied URLs or filesystem paths. The initial authenticated
-request must use the exact provider model-download path. Redirects allow only
-HTTPS on `api.tone3000.com`, without the account Bearer token. Interrupted,
-empty, oversized, unavailable and untrusted downloads do not publish an asset.
-Account changes invalidate transfer replies as well as catalog replies.
+## References
 
-Audition assets live under `OXIDAL_PRESET_DIR/audition-models`, separate from the
-saved-preset library. A content hash verifies model bytes; a second hash identifies
-metadata including creator/license/source information and the selected model.
-Atomic publication, file and directory sync, regular-file checks and verified
-reads support restart/offline reuse and reject tampering. Expiring download URLs
-and tokens are not persisted in asset metadata. Artwork URLs are retained but
-this slice does not yet download artwork. Native preparation must still validate
-model contents before applying them; cache integrity is not DSP readiness.
-
-While saved-preset audio is running, **Change model** on a sounding block opens the
-catalog and downloads the selected A2 NAM variant or IR for audition. It submits only the
-verified asset identity and target block to playback, never a provider URL or
-filesystem path. The browser's opening audio revision guards against concurrent
-session edits. Close cancels a pending download; once preparation is accepted,
-**Cancel model** targets that exact preparation. Save sounding copy embeds confirmed
-models for offline recall. See [audio lifecycle](audio.md#live-nam-audition-and-offline-copies)
-for the transition, persistence and qualification boundaries. Library → New preset also
-supports starting an empty native rig with a selected NAM model or IR; Add NAM and Add IR
-fill its next left-lane slot. IR listings omit the upstream NAM architecture filter; the
-typed local API uses `architecture=any` to request that behavior. Installed LV2 authoring is a separate flow. Mixed native/LV2 authoring and
-provider preset export remain unfinished.
-
-### Capture for a factory voice
-
-`POST /api/v1/tone3000/voice` (`tone_id`, `model_id`, `name`) downloads one model
-the player asked for, as `stage` does, then creates a one-model native preset from
-it in an isolated native worker (`oxidal-native-worker --create-from-model`) and
-returns it as an owned native source. The worker plays no audio and never touches
-the sounding rig. One request runs at a time. The device keeps
-`voice-captures.json` beside the library, mapping each downloaded capture to its
-owned preset, so asking again reuses it instead of downloading twice. `GET` on the
-same path lists the captures already on the device. The native check builds the
-worker and runs the voice tests against it.
-
-### Live model artwork
-
-A confirmed native model replacement or insertion can show its own gear artwork
-in Rig, including before the working tone is saved. `GET /api/v1/models/{id}/artwork`
-reads verified, bounded staged metadata without loading model weights. It does not
-admit a model for playback. Image reads and explicit offline downloads use the
-same source-bound device cache as preset artwork; URLs never become browser image
-sources. Missing images use the gear fallback, and source changes discard old
-artwork immediately. Save artwork offline saves the image, not the working tone.
-Catalog browse thumbnails and hybrid-node artwork remain separate work.
+- [TONE3000 API documentation](https://www.tone3000.com/api)
+- [TONE3000 API terms](https://www.tone3000.com/api/terms)
+- [Account and provider implementation](../crates/oxidal-api/src/provider)
+- [Local library](library.md)

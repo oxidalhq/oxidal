@@ -1,5 +1,16 @@
 # Device service and network setup
 
+| Task                                      | Where to go                                                     |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| Connect Oxidal to Wi-Fi                   | **Settings → Network**                                          |
+| Connect a phone directly to the appliance | [Hotspot welcome and discovery](#hotspot-welcome-and-discovery) |
+| Install effects                           | [Settings → Effects](#effect-packs)                             |
+| Change storage mode                       | [Storage lock](storage-lock.md)                                 |
+| Configure hotspot fallback or power off   | [Automatic hotspot and power](#automatic-hotspot-and-power)     |
+
+For first boot and the generated credentials, follow the
+[appliance setup guide](../os/README.md#phone-access-and-first-sound).
+
 `oxidald` stays unprivileged and serves `GET/POST /api/v1/device/network`. When `OXIDAL_DEVICE_SOCKET` is absent, it reports network administration unavailable without changing the host. The appliance enables a separate root `oxidal-device-service` over `/run/oxidal-device/control.sock`. Existing Linux installs are not automatically given an access point, group, helper or altered network settings.
 
 The helper uses a root-owned runtime directory and group-restricted socket, checks the connecting UID against the current `oxidald` DynamicUser via systemd NSS (or root), and admits only typed network, power and effect-pack commands. The HTTP bridge also verifies the server peer is root. JSON frames are limited to 64 KiB, reads/writes/commands have deadlines, and external commands use fixed absolute binaries and argument arrays. Package-manager stderr is retained in the service journal for diagnosis. There is no shell, caller-supplied executable, filesystem path, Debian package name or arbitrary command option. Network passwords are redacted from Debug, omitted from readback and never put on process command lines. Keyfiles and the temporary rollback journal are root-only. The existing authenticated HTTPS/origin boundary remains required; this endpoint does not make the loopback API a public service.

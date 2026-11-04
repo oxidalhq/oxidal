@@ -24,8 +24,10 @@ remain subject to the applicable [JUCE licensing terms](https://juce.com/get-juc
 
 ## TONE3000 source code
 
-The native adapter builds against a pinned TONE3000 source revision licensed under
-the MIT License. TONE3000 source is not relicensed by Oxidal. The retained licence
+The native adapter builds against a pinned revision of the
+[TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin), licensed under
+the MIT License. See the [source manifest](native/tone3000/sources.json) for the
+exact revision. TONE3000 source is not relicensed by Oxidal. The retained licence
 and contribution notices are in:
 
 - [`native/tone3000/LICENSE-TONE3000`](native/tone3000/LICENSE-TONE3000)

@@ -1,6 +1,18 @@
 # Oxidal preset format
 
-**Status:** draft proposal, revision 0.3. **Wire format:** `formatVersion: 1`, experimental until the native conformance gates below pass. The runtime stores immutable native `.t3kpreset` originals after bounded structural inspection (see [architecture](../architecture.md#native-original-library)). The portable manifest reader implements strict JSON/shape and graph/resource-reference semantics; `BundleStore` persists verified expanded documents in private local storage. ZIP interchange, runtime mixed authoring, export/stripping and sync are not yet implemented. Normative MUST/MUST NOT requirements describe the intended implementation.
+This is a developer reference for the version 1 preset manifest and the draft
+interchange format. For importing, saving and backing up presets, see the
+[Library guide](../library.md).
+
+| Area                                            | Status                                       |
+| ----------------------------------------------- | -------------------------------------------- |
+| Native `.t3kpreset` originals                   | Imported, checked and kept byte-for-byte.    |
+| Expanded Oxidal bundles                         | Used by the device for supported mixed rigs. |
+| `.oxpreset` ZIP interchange, stripping and sync | Draft requirements.                          |
+
+Start with the [manifest schema](manifest.schema.json), the
+[worked examples](#examples-and-conformance-gates), or the
+[preset storage implementation](../../crates/oxidal-presets).
 
 ## Purpose and choice
 

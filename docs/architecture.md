@@ -5,6 +5,9 @@ server-sent events. Audio runs on the device. On the Raspberry Pi image, nginx
 authenticates HTTPS requests and forwards them to the Rust daemon, `oxidald`,
 which listens on loopback.
 
+Source: [web app](../apps/web), [daemon and API routes](../crates/oxidal-api/src/lib.rs)
+and [nginx configuration](../os/config/oxidal-nginx.conf).
+
 ## Live audio
 
 The daemon starts and supervises separate workers. A shared device permit keeps
@@ -22,6 +25,10 @@ hosts installed effects. The workspace also has a separate Rust NAM inference
 crate. The browser displays confirmed worker state, including live controls and
 meters. Supported live sessions take device-local MIDI input for scene selection
 and mapped controls.
+
+Source: [mixed engine](../crates/oxidal-engine), [routing](../crates/oxidal-graph),
+[native adapter](../crates/oxidal-tone3000), [LV2 host](../crates/oxidal-lv2) and
+[Rust NAM inference](../crates/oxidal-nam).
 
 The offline native editor and the opt-in development simulator have separate
 state. Stopping live audio leaves the browser and editor available.
@@ -48,6 +55,10 @@ A separate privileged helper handles network changes, power actions and
 installation of supported effects packs over a restricted Unix socket.
 See [image setup](../os/README.md), [device settings](device-service.md) and
 [maintenance access](debug-console.md).
+
+Source: [base image manifest](../os/manifests/base.json),
+[hotspot welcome page](../os/config/oxidal-welcome.html) and
+[device helper](../crates/oxidal-device).
 
 ## API and development
 
