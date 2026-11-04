@@ -39,7 +39,10 @@ MIDI mappings persist with atomic file replacement. Rig/parameter/bypass state r
 
 The daemon accepts loopback listeners and loopback browser origins only. The experimental appliance puts nginx in front of it with per-device HTTPS and password authentication on every UI/API/event request, plus an explicit external Host/Origin allowlist before forwarding. The personal CA key remains outside the image. The image builder enables an unprivileged systemd daemon with audio-group access; staging alone does not activate services. See [OS build and access](../os/README.md). Provider device-code login and explicitly enabled maintenance PTYs use separate service boundaries; physical MIDI remains unqualified. This prototype uses generated device credentials rather than a browser pairing/revocation flow.
 
-Public package licensing and namespace checks are pending owner/release decisions. Cargo packages are unpublished; third-party Rust licenses/advisories are checked without assigning a new license to the owner's code.
+Oxidal's original code is Apache-2.0 and Cargo packages inherit that workspace
+licence while remaining unpublished. Third-party Rust licences and advisories are
+checked separately. Optional JUCE-linked artifacts keep their own distribution gate;
+the repository licence does not license JUCE.
 
 ## Owned control previews
 

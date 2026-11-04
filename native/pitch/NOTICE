@@ -7,6 +7,6 @@ from the pinned TONE3000 checkout: v0.0.12, commit ab5e5ae; Copyright (c)
 https://github.com/tone-3000/tone3000-plugin/tree/ab5e5ae
 
 JUCE 9.0.3 is a separate dependency, not covered by TONE3000's MIT licence.
-See JUCE-LICENSE.md and the module licence headers. Like the TONE3000
-adapter Oxidal already ships, this bundle links JUCE under its AGPLv3 path;
-commercial JUCE terms are an alternative, not inferred here.
+See JUCE-LICENSE.md and the module licence headers. Oxidal intends to use an
+appropriate commercial JUCE licence for non-AGPL binary distribution. No
+JUCE-linked Oxidal binary is published until that licence is in place.

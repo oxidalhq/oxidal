@@ -17,4 +17,8 @@
   `pitch-wrapper-upstream` checks the LV2 wrapper sample for sample against the engine compiled on its own, across controls, sample rates and block sizes; `pitch-bundle-load` loads both descriptors through `lv2_descriptor`.
 
 - **Install:** copy `build/pitch/oxidal-pitch.lv2` into a directory on the daemon's `LV2_PATH` (on the image, `/usr/local/lib/lv2`) and restart the daemon; Add effect then lists it.
-- **Licences:** the adapter is MIT (ported from a PiPedal fork), TONE3000 is MIT, and JUCE 9.0.3 links under its AGPLv3 path like the TONE3000 adapter. The bundle carries all three notices.
+- **Licences:** the adapter is MIT (ported from a PiPedal fork), TONE3000 is MIT and
+  JUCE 9.0.3 is separately licensed. Oxidal intends to use a commercial JUCE licence
+  for non-AGPL binary distribution; no JUCE-linked binary is published before that
+  licence is in place. The bundle must carry all applicable notices. See
+  [third-party licensing](../THIRD_PARTY.md).

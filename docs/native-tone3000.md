@@ -72,7 +72,14 @@ The normal `pnpm check` invokes this gate on macOS or Linux when the native depe
 
 `sources.json` pins TONE3000 v0.0.12, JUCE 9.0.3 and recursive AudioDSPTools/NAM dependencies. `patches/` retains the existing native stage extension and platform-specific qualification filesystem changes. The AudioDSPTools overlay qualifies a `LanczosResampler` alias with its namespace so GCC can compile the unchanged underlying type; no DSP algorithm is altered. Dependency edits remain restricted to exact before/after hashes. The standard Python suite checks repeat preparation, patch/artifact tampering, unreviewed dependency edits and external Git pointers. Stage-addon comments reference this public document instead of private development notes; code semantics are preserved. Patch inputs, outputs and addons are hashed. The original LV2 JUCE readback correction is not compiled by this direct-processor bridge: F18/F31 still require a real LV2-host test and cannot be inferred from direct parameter access.
 
-TONE3000 and the contributed stage bridge are MIT-licensed; accompanying notices are retained. JUCE and recursive dependencies retain their upstream licensing in the downloaded trees. JUCE licensing and complete distribution notices must be settled before publishing a native artifact; no binary publication is part of this spike. The non-A2 rejection fixture is project-authored. The A2 qualification model remains in the pinned upstream checkout and is hash-verified; no factory/model weights are copied into this repository.
+TONE3000 and the contributed stage bridge are MIT-licensed; accompanying notices
+are retained. JUCE and recursive dependencies retain their upstream licensing in
+the downloaded trees. Oxidal intends to use a commercial JUCE licence for non-AGPL
+binary distribution; no JUCE-linked binary is published until that licence and the
+complete distribution notices are in place. The non-A2 rejection fixture is
+project-authored. The A2 qualification model remains in the pinned upstream checkout
+and is hash-verified; no factory/model weights are copied into this repository. See
+[third-party licensing](../THIRD_PARTY.md).
 
 The native build record `qualification-build.json` in the selected output directory identifies host OS/architecture, source pins, overlay digest and library hash. Do not treat a successful build or finite audio as full TONE3000 compatibility. The full settings/operation inventory, exhaustive native preset/setting parity, real-time/physical Linux qualification and existing state/readiness regressions remain delivery gates.
 
