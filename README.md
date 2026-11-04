@@ -98,6 +98,22 @@ The control plane owns the API, library and device settings. A supervised worker
 the single owner of the audio interface. Read the
 [architecture guide](docs/architecture.md) for process boundaries and contracts.
 
+## Rust crates
+
+| Crate                                       | What it does                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`oxidal-api`](crates/oxidal-api)           | Runs the daemon, serves the web UI and API, and supervises audio workers.    |
+| [`oxidal-audio`](crates/oxidal-audio)       | Discovers and probes Linux audio devices and provides ALSA streaming.        |
+| [`oxidal-control`](crates/oxidal-control)   | Defines rig controls, MIDI mappings, and the control state machine.          |
+| [`oxidal-debug`](crates/oxidal-debug)       | Runs maintenance commands in a separate service.                             |
+| [`oxidal-device`](crates/oxidal-device)     | Handles Wi-Fi, hotspot, power, and effect-pack management on the appliance.  |
+| [`oxidal-engine`](crates/oxidal-engine)     | Runs mixed rigs with native tones, LV2 effects, and preloaded scenes.        |
+| [`oxidal-graph`](crates/oxidal-graph)       | Validates and prepares signal routing shared by the audio engines.           |
+| [`oxidal-lv2`](crates/oxidal-lv2)           | Discovers and hosts supported LV2 plugins on Linux.                          |
+| [`oxidal-nam`](crates/oxidal-nam)           | Implements NAM inference in Rust for supported model architectures.          |
+| [`oxidal-presets`](crates/oxidal-presets)   | Validates and stores presets, rig bundles, and local model assets.           |
+| [`oxidal-tone3000`](crates/oxidal-tone3000) | Wraps the native TONE3000 engine for compatible preset editing and playback. |
+
 ## Current status
 
 The working appliance runs live NAM-based audio, supports compatible TONE3000 preset
