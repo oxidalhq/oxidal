@@ -2,7 +2,67 @@
 
 ![Oxidal](apps/web/public/brand/wordmark.svg)
 
-Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control interface and OS recipes. The current build implements routing validation, shared web/MIDI control state and an immutable native preset library; the generic rig preview is silent. Opt-in Linux playback can run a saved native TONE3000 preset in a separate process, with Stop/Start/Restart preserving authoring. Its tests use ALSA null; physical audio and real-time performance remain unqualified. Owned NAM Linear/LSTM inference is tested separately; owned WaveNet/A2 and general LV2 hosting remain unimplemented.
+> **Active development:** Oxidal is an early, working prototype. APIs, preset formats,
+> installation steps and hardware support can change before the first stable release.
+
+Oxidal turns a Raspberry Pi 5 and a USB audio interface into a device-local guitar
+and bass processor. It combines neural amp captures, impulse responses and LV2
+effects in serial, parallel and scene-based rigs, controlled from a browser.
+
+![Oxidal running the Afterlight example rig](docs/assets/screenshots/rig-afterlight.jpeg)
+
+The current appliance runs live audio, recalls prepared scenes, hosts supported LV2
+effects, manages guitar profiles and MIDI mappings, and reports audio health through
+Sound Check. Hardware and real-time qualification are still in progress; see
+[Project status](#project-status) before using Oxidal on stage.
+
+## Repositories
+
+Oxidal is planned as **two repositories** in the
+[oxidalhq organization](https://github.com/oxidalhq):
+
+1. **`oxidal`** — this repository: software, web interface, appliance image recipes
+   and product documentation.
+2. **`oxidal-controller`** — controller firmware, PCB design and enclosure files.
+
+Documentation and example rigs stay with the product they describe. We do not plan
+separate documentation, preset or website repositories for the initial release.
+
+## What it does
+
+- Builds serial, parallel and scene-based signal paths from native processors and
+  supported LV2 effects.
+- Keeps audio processing, presets and account data on the device while the browser
+  acts as the controller.
+- Prepares scene changes before performance and supports trails or blended changes
+  without rebuilding the rig on each switch.
+- Provides guitar profiles, MIDI control, loudness matching, device setup and live
+  processing diagnostics.
+- Produces a relocatable Linux application bundle and an experimental Raspberry Pi
+  OS image from pinned inputs.
+
+Oxidal does **not** distribute TONE3000 presets, NAM captures, impulse responses or
+provider downloads. Factory images contain Oxidal-authored effects-only examples;
+players add assets they are licensed to use. The three `.t3kpreset` files in the test
+suite are tiny project-authored parser fixtures with no model weights or playable
+tone.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Browser controller] <-->|HTTPS + events| Daemon[oxidald control plane]
+    Daemon --> Library[Device-local library]
+    Daemon --> Engine[Isolated audio engine]
+    MIDI[MIDI controller] --> Engine
+    Engine --> Native[Native processors]
+    Engine --> LV2[LV2 effects]
+    AudioIn[Audio interface input] --> Engine --> AudioOut[Audio interface output]
+```
+
+The control plane handles the API, library and device settings. Audio runs in an
+isolated worker with one owner for the audio interface. See the
+[architecture guide](docs/architecture.md) for the contracts and process boundaries.
 
 | Path        | Content                                                                                      |
 | ----------- | -------------------------------------------------------------------------------------------- |
@@ -10,11 +70,21 @@ Native Rust foundation for a NAM/LV2 guitar appliance, with a browser control in
 | `apps/web/` | React/TypeScript interface and browser integration tests                                     |
 | `os/`       | Pinned Trixie base manifest and safe provisioning recipe                                     |
 | `scripts/`  | Reproducible development, verification and packaging commands                                |
-| `docs/`     | Product architecture and contributor documentation                                           |
+| `docs/`     | [Product architecture and contributor documentation](docs/README.md)                         |
 
-Oxidal targets existing **x86-64 Linux laptops/desktops** and **Raspberry Pi ARM64**, with **Orange Pi as a board-specific candidate**. The portable application and board images have separate installation and qualification paths; see the [Linux target plan](os/README.md#target-installation-routes). Live audio and installation support for these targets are not yet qualified.
+## Project status
 
-## Run the local PoC
+Oxidal targets **x86-64 Linux** and **Raspberry Pi ARM64**. Orange Pi remains a
+board-specific candidate. The portable application and board images have separate
+installation and qualification paths; see the
+[Linux target plan](os/README.md#target-installation-routes).
+
+Automated checks cover the Rust services, browser application, contracts, packaging
+and isolated native/LV2 workers. Physical audio interfaces, real-time performance,
+controller hardware, recovery and installation still need broader device testing.
+Use a fresh, separate SD card for Pi experiments; do not overwrite a working system.
+
+## Run locally
 
 Use Node **22.21.0**, pnpm **10.32.1**, and Rust **1.95.0**. On a fresh machine:
 
@@ -31,25 +101,19 @@ pnpm dev
 
 On Linux, install ShellCheck, shfmt, `libasound2-dev` and `pkg-config` with the distribution package manager (Debian/Ubuntu names). `pnpm bootstrap` performs locked dependency installation, installs workspace-local Rust dependency tools and Chromium, and fetches native dependencies. Browser system dependencies may also be needed on Linux (`pnpm --dir apps/web exec playwright install --with-deps chromium`).
 
-Open **http://127.0.0.1:5173**. Rust runs on port 3210; Vite proxies the versioned API. The service listens on loopback only. No Pi is needed. See [core](docs/core.md), [web](apps/web/README.md), [OS recipes](os/README.md), and [our NAM crate](crates/oxidal-nam/README.md).
+Open **http://127.0.0.1:5173**. Rust runs on port 3210 and Vite proxies the
+versioned API. The development service listens on loopback only; no Pi is needed.
+See [development](docs/development.md), [web](apps/web/README.md),
+[OS recipes](os/README.md) and [the NAM crate](crates/oxidal-nam/README.md).
 
-Try this:
+## Screenshots
 
-1. Select **Parallel** and inspect paths A/B merging into the shared wet section.
-2. Open **Settings → MIDI**, send MIDI value **127**, then return to the rig: NAM A becomes 100%. A second browser tab updates too.
-3. Change NAM A on the web; Settings → MIDI shows the confirmed MIDI feedback value.
-4. Try MIDI learn, pickup, range/scaling, or map a CC to bypass/preset selection. These are control-state operations; they process no audio.
-5. Use **Edit** beside a numeric control to preview an exact percentage, then **Commit** or **Cancel**. Another browser sees the preview and cannot overwrite its target.
-6. Open the rig validation inspector, remove the nodes, and validate: the Rust service rejects it.
-7. Disconnect/reconnect the browser: editing disables, and the current daemon snapshot returns. MIDI simulation can run through the API with no browser open.
+| Perform                                                                 | Sound Check                                                     |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| ![Oxidal Perform view](docs/assets/screenshots/perform-afterlight.jpeg) | ![Oxidal Sound Check](docs/assets/screenshots/sound-check.jpeg) |
 
-Open **Library** to import a `.t3kpreset`, retain its original bytes and download it unchanged. This does not load or play the preset.
-
-**Library → Explore Oxidal sounds** builds twelve original four-scene recipes from installed effects and your selected saved NAM voices. Three recipes work with effects alone; no third-party capture payloads are bundled. Prepared Preserve recalls keep outgoing effect histories, while Blend ramps scene input sends. See [factory collection](docs/factory-collection.md) for dependencies, assembly, real-device testing and the current processing-capacity limits.
-
-MIDI mappings and imported originals persist; rig/parameter state resets on restart. The MIDI device is a simulator. NAM inference is tested independently; ALSA/LV2 live hosting, WaveNet/A2, provider login/downloads, target-phone qualification, and physical controller feedback remain later work. **Use a fresh, separate SD card for all Pi provisioning; preserve the existing working installation.**
-
-The optional [native TONE3000 adapter](docs/native-tone3000.md) provides real offline authoring on macOS/Linux. `pnpm native:check` qualifies the processor and, on Linux, the isolated playback lifecycle against ALSA null. See [experimental Linux playback](docs/audio.md#experimental-linux-playback) for explicit opt-in and limitations; ordinary previews never start audio automatically.
+See the [screenshot gallery](docs/screenshots.md) for the full rig and effect-control
+views.
 
 ## Verify and prepare releases
 
@@ -72,4 +136,6 @@ Linux builds expose **Settings → Audio → Audio devices** for real ALSA disco
 
 The appliance’s [device service](docs/device-service.md) supplies web Wi-Fi/hotspot setup with rollback, fixed effect-package actions and separate system power controls. Its deliberate package-manager privilege exception and retained safeguards are documented in the [OS README](os/README.md#effect-installation-and-helper-hardening). [Monitoring](docs/monitoring.md) shows real worker levels, processing history and available Linux host readings. The optional [web debug console](docs/debug-console.md) runs bounded commands as a separate unprivileged account after explicit enablement.
 
-The interface keeps Rig, Library, Monitor and Settings as stable destinations. Settings separates Audio, Connections, MIDI, Display and Maintenance. See [interface theme and navigation](docs/interface.md).
+The interface keeps Rig, Guitars, Library, Sound Check and Settings as stable
+destinations. Settings separates Audio, Network, Accounts, MIDI, Effects, Display,
+Device and Maintenance. See [interface theme and navigation](docs/interface.md).

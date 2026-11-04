@@ -1,13 +1,22 @@
 # Architecture and control contract
 
-The control/runtime foundation has six crates with concrete jobs: `oxidal-graph` validates routing, `oxidal-control` owns commands/state/MIDI mappings, `oxidal-api` serves HTTP/SSE and the daemon, `oxidal-nam` owns bounded inference, `oxidal-presets` inspects and stores immutable native preset originals, and `oxidal-audio` provides Linux device inspection and experimental duplex transport. Full asset/catalog management remains a later layer; the optional native adapters below have separate qualification boundaries.
+Oxidal separates its browser and control plane from the process that owns the audio
+interface. `oxidal-api` serves the web application and versioned API; the graph,
+control, preset, NAM and audio crates provide reusable routing, state, storage,
+inference and device services. Blocking storage and device work stays outside the
+audio callback.
 
-The `oxidal-tone3000` crate contains the optional single-owner native FFI adapter for [offline qualification](native-tone3000.md). Its optional worker connects real native preset loading, bounded edits, and immutable owned-copy save/reload to the browser. A separate experimental audio worker runs one saved native preset through ALSA while preserving the offline editor. The optional `oxidal-lv2` crate now has a bounded Linux host, prepared graph and isolated experimental worker with daemon lifecycle/control endpoints; installed-effect browser authoring and offline scalar recall are available; the mixed whole-native/scalar-LV2 worker now has a daemon lifecycle, while its unified authoring UI and full LV2 compatibility remain pending. The adapter executes offline on macOS and ARM64 Linux without a display server; physical audio, real-time scheduling and appliance packaging remain unqualified.
+`oxidal-engine` owns native and LV2 processors in one prepared directed graph. The
+daemon supervises it through the isolated rig-audio worker, and the browser uses
+confirmed worker state for live authoring, scenes, MIDI, levels and recovery. See
+[mixed engine boundaries](mixed-engine.md) for DSP qualification, preserved effect
+histories and the remaining compatibility work.
 
-The optional `oxidal-engine` integration core owns native and LV2 processors in one
-prepared DAG using the shared routing scheduler. It is not yet connected to either
-worker or browser. See [mixed engine boundaries](mixed-engine.md) for actual DSP
-qualification, preserved histories and remaining persistence/transition work.
+`oxidal-tone3000` contains the single-owner native FFI boundary and supports native
+preset inspection, editing and playback. `oxidal-lv2` provides the bounded plugin
+host used by effect-only and mixed rigs. Both integrations have pinned inputs and
+their own qualification gates. Physical device coverage and real-time scheduling
+across supported hardware remain active work.
 
 Rust serde/schemars wire types generate JSON Schema and TypeScript. Browser payloads are runtime-validated with Ajv; `pnpm contract:check` fails if regenerated files differ. The transport is versioned JSON commands plus SSE snapshots for the first slice. SSE is adequate for daemon-to-browser state; WebSocket remains available when a measured bidirectional-stream need arises.
 
