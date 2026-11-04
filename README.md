@@ -46,12 +46,6 @@ See Oxidal's [native preset adapter](docs/native-tone3000.md) and
 - **Sound Check** — set up the audio interface, match levels and monitor live
   audio and processing health.
 
-| Perform                                                                 | Sound Check                                                     |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ![Oxidal Perform view](docs/assets/screenshots/perform-afterlight.jpeg) | ![Oxidal Sound Check](docs/assets/screenshots/sound-check.jpeg) |
-
-[See more screenshots](docs/screenshots.md)
-
 ## Raspberry Pi appliance
 
 Oxidal has a custom headless Linux image based on Raspberry Pi OS Lite. It sets
@@ -156,6 +150,49 @@ pnpm release:dry-run
 Start with the [documentation index](docs/README.md),
 [development guide](docs/development.md), [web interface](apps/web/README.md) or
 [appliance image guide](os/README.md).
+
+## Screenshot gallery
+
+Click a screenshot to see it at full size. The browser views were captured on a
+running appliance. The Wi-Fi network name is redacted.
+
+### Playing and monitoring
+
+| Perform                                                                                                        | Effect controls                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [![Perform](docs/assets/screenshots/perform-afterlight.jpeg)](docs/assets/screenshots/perform-afterlight.jpeg) | [![Effect controls](docs/assets/screenshots/rig-effect-controls.jpeg)](docs/assets/screenshots/rig-effect-controls.jpeg) |
+
+| Sound Check overview                                                                                          | Live diagnostics                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| [![Sound Check overview](docs/assets/screenshots/sound-check.jpeg)](docs/assets/screenshots/sound-check.jpeg) | [![Live diagnostics](docs/assets/screenshots/sound-check-diagnostics.jpeg)](docs/assets/screenshots/sound-check-diagnostics.jpeg) |
+
+### Settings
+
+| Audio setup                                                                                                | Running engine                                                                                                |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [![Audio setup](docs/assets/screenshots/settings-audio.jpeg)](docs/assets/screenshots/settings-audio.jpeg) | [![Running engine](docs/assets/screenshots/running-engine.jpeg)](docs/assets/screenshots/running-engine.jpeg) |
+
+| Network and hotspot                                                                                                    | TONE3000 account                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [![Network and hotspot](docs/assets/screenshots/settings-network.jpeg)](docs/assets/screenshots/settings-network.jpeg) | [![TONE3000 account](docs/assets/screenshots/settings-accounts.jpeg)](docs/assets/screenshots/settings-accounts.jpeg) |
+
+| MIDI mapping                                                                                              | Effect packs                                                                                                    |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [![MIDI mapping](docs/assets/screenshots/settings-midi.jpeg)](docs/assets/screenshots/settings-midi.jpeg) | [![Effect packs](docs/assets/screenshots/settings-effects.jpeg)](docs/assets/screenshots/settings-effects.jpeg) |
+
+| Display modes                                                                                                    | Device storage and power                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [![Display modes](docs/assets/screenshots/settings-display.jpeg)](docs/assets/screenshots/settings-display.jpeg) | [![Device storage and power](docs/assets/screenshots/settings-device.jpeg)](docs/assets/screenshots/settings-device.jpeg) |
+
+### Maintenance and startup
+
+| Expanded maintenance terminal                                                                                                            | Unprivileged CLI prompt                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [![Expanded maintenance terminal](docs/assets/screenshots/settings-maintenance.jpeg)](docs/assets/screenshots/settings-maintenance.jpeg) | [![Unprivileged CLI prompt](docs/assets/screenshots/terminal-prompt.jpeg)](docs/assets/screenshots/terminal-prompt.jpeg) |
+
+**Boot splash artwork** from the appliance image:
+
+[![Oxidal boot splash artwork](apps/web/public/brand/boot-splash.png)](apps/web/public/brand/boot-splash.png)
 
 ## License
 

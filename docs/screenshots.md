@@ -4,6 +4,10 @@ These screenshots show Oxidal running on a Raspberry Pi appliance with live audi
 The selected **Oxidal · Afterlight** example uses only installed LV2 effects; it has
 no bundled capture, model or impulse-response payload.
 
+The [full README gallery](../README.md#screenshot-gallery) also shows audio
+setup, the running engine, network, accounts, MIDI, effects, display, device
+settings, maintenance, and live diagnostics.
+
 ## Rig
 
 ![Afterlight rig with four prepared scenes](assets/screenshots/rig-afterlight.jpeg)
