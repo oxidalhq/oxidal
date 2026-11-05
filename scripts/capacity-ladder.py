@@ -19,13 +19,14 @@ p.add_argument('--restore', required=True, help='GET /api/v1/rig-audio snapshot 
 p.add_argument('--api', default='http://127.0.0.1:3210')
 p.add_argument('--frames', default='256,128,64')
 p.add_argument('--counts', default='2,3,4,6,8,10,12,16')
+p.add_argument('--order', choices=['heavy-first', 'light-first'], default='heavy-first')
 p.add_argument('--seconds', type=int, default=45)
 p.add_argument('--out', required=True)
 a = p.parse_args()
 out = Path(a.out)
 out.mkdir(parents=True, exist_ok=True)
 rigs = [r for r in json.loads(Path(a.rigs).read_text())['presets'] if r.get('native_instances', 0) > 0]
-rigs.sort(key=lambda r: -r['native_instances'])
+rigs.sort(key=lambda r: r['native_instances'] * (-1 if a.order == 'heavy-first' else 1))
 rows = []
 for frames in (int(x) for x in a.frames.split(',')):
     for count in (int(x) for x in a.counts.split(',')):
@@ -45,6 +46,7 @@ for frames in (int(x) for x in a.frames.split(',')):
             d = json.loads(dest.read_text())
             row.update({k: d.get(k) for k in ('passed', 'xruns', 'deadline_misses', 'invalid_samples',
                                               'observed_peak_us', 'lifetime_peak_us', 'switches')})
+        row['order'] = a.order
         row['ok'] = bool(row.get('passed')) and proc.returncode == 0
         rows.append(row)
         print(json.dumps(row), flush=True)
