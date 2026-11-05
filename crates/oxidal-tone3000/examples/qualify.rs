@@ -235,6 +235,11 @@ fn qualify_stage(engine: &mut Engine) -> Result<(), Box<dyn Error>> {
     recalled.load_preset(&saved)?;
     wait_loaded(&mut recalled)?;
     assert_eq!(recalled.chain()?["chain"][0]["params"]["eq"], edited);
+    // A recalled preset takes the machine oversampling default, which the live
+    // engine here did not; compare identical oversampling so the render is the EQ's.
+    for e in [&mut *engine, &mut recalled, &mut replayed] {
+        e.set_normalized("osEnabled", 0.0)?;
+    }
     engine.prepare_stream()?;
     recalled.prepare_stream()?;
     let mut changed_audio = Vec::new();
@@ -446,6 +451,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     assert!(engine.process(&mut [0.0; 1], &mut [0.0; 2]).is_err());
     engine.set_normalized("gateEnabled", 0.0)?;
     engine.set_normalized("toneEqEnabled", 0.0)?;
+    // Oversampling is on by default (Full A2 baseline) and its filters shape the
+    // signal; this check compares only the dry path with the documented DC blocker.
+    engine.set_normalized("osEnabled", 0.0)?;
     settle(&mut engine)?;
     let input: Vec<f32> = (0..128).map(|i| (i as f32 * 0.03).sin() * 0.1).collect();
     let mut left = input.clone();
@@ -3258,6 +3266,7 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
         },
     )?;
     assert!((scalar(&mut engine)? - 0.7).abs() < 1e-5);
+    owner.settle_writes();
     let receipt = owner
         .working_receipt()
         .ok_or("Missing scalar history receipt")?
@@ -3311,6 +3320,7 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     }
     assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
     assert!(!owner.snapshot(&mut engine)?.can_undo);
+    owner.settle_writes();
     let receipt = owner.working_receipt().unwrap().to_owned();
     owner = Authoring::for_source(&root, "gesture-qualification".into(), Some(receipt));
     assert!(owner.snapshot(&mut engine)?.can_redo);
@@ -3395,21 +3405,25 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
             value: 0.8,
         },
     )?;
-    assert!(
-        send(
-            &mut bad,
-            &mut engine,
-            G::Commit {
-                owner: "browser".into(),
-                token: "failed".into(),
-                sequence: 2,
-                value: 0.8
-            }
-        )
-        .is_err()
-    );
+    // The checkpoint is written in the background: the adjustment is kept and
+    // the failed write is reported as a history error, not rolled back.
+    send(
+        &mut bad,
+        &mut engine,
+        G::Commit {
+            owner: "browser".into(),
+            token: "failed".into(),
+            sequence: 2,
+            value: 0.8,
+        },
+    )?;
+    bad.settle_writes();
     assert!(!bad.failed() && !bad.gesture_pending());
-    assert!((scalar(&mut engine)? - 0.5).abs() < 1e-5);
+    assert!(
+        bad.snapshot(&mut engine)?.history_error.is_some(),
+        "A failed background history write is reported"
+    );
+    assert!((scalar(&mut engine)? - 0.8).abs() < 1e-5);
     engine.load_local_model(std::path::Path::new(&std::env::var(
         "OXIDAL_TONE3000_TEST_MODEL",
     )?))?;
@@ -3504,6 +3518,7 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
     );
     eq_owner.command(&mut engine, A::Undo)?;
     assert_eq!(engine.eq_snapshot()?, edited);
+    eq_owner.settle_writes();
     let receipt = eq_owner
         .working_receipt()
         .ok_or("Missing EQ history receipt")?
@@ -3540,26 +3555,29 @@ fn qualify_live_gestures() -> Result<(), Box<dyn Error>> {
             target,
         },
     )?;
-    assert!(
-        send(
-            &mut failed_eq,
-            &mut engine,
-            G::Commit {
-                owner: "eq".into(),
-                token: "disk-failure".into(),
-                sequence: 1,
-                value: 8.0
-            }
-        )
-        .is_err()
-    );
+    // Background checkpoint failure keeps the adjustment and reports the error.
+    send(
+        &mut failed_eq,
+        &mut engine,
+        G::Commit {
+            owner: "eq".into(),
+            token: "disk-failure".into(),
+            sequence: 1,
+            value: 8.0,
+        },
+    )?;
+    failed_eq.settle_writes();
     assert!(!failed_eq.failed() && !failed_eq.gesture_pending());
-    assert_eq!(engine.eq_snapshot()?, edited);
+    assert!(
+        failed_eq.snapshot(&mut engine)?.history_error.is_some(),
+        "A failed background EQ history write is reported"
+    );
+    assert_ne!(engine.eq_snapshot()?, edited);
     println!(
-        "native EQ gestures: actual A2 EQ previews, grouped undo/redo, cancel, native reset defaults, reset undo, standalone Save/reopen and failed-storage rollback passed"
+        "native EQ gestures: actual A2 EQ previews, grouped undo/redo, cancel, native reset defaults, reset undo, standalone Save/reopen and reported background history failure passed"
     );
     println!(
-        "native gestures: audible previews, one-entry undo/redo, ownership/sequence rejection, coupled-control cancel, late terminal safety and storage rollback passed"
+        "native gestures: audible previews, one-entry undo/redo, ownership/sequence rejection, coupled-control cancel, late terminal safety and reported background history failure passed"
     );
     Ok(())
 }

@@ -442,8 +442,9 @@ impl Authoring {
         }
     }
     /// Wait for background checkpoints before a synchronous one, so an older
-    /// receipt can never replace a newer one.
-    fn settle_writes(&mut self) {
+    /// receipt can never replace a newer one. Also lets callers that need the
+    /// current receipt (qualification, shutdown) read it deterministically.
+    pub fn settle_writes(&mut self) {
         while self.writer.as_ref().is_some_and(|w| w.in_flight > 0) {
             let writer = self.writer.as_mut().unwrap();
             match writer.receipts.recv() {
