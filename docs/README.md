@@ -7,6 +7,7 @@
 - [Import captures and manage presets](library.md)
 - [Use the browser interface](interface.md) or [browse screenshots](screenshots.md)
 - [Check levels and audio health](monitoring.md)
+- [Capacity and buffer size](capacity.md)
 - [Explore the factory effects recipes](factory-collection.md)
 - [Connect a TONE3000 account](tone3000-account.md)
 
