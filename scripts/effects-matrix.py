@@ -15,6 +15,7 @@ p.add_argument('--counts', default='2,4,8,12')
 p.add_argument('--frames', type=int, default=128)
 p.add_argument('--seconds', type=int, default=30)
 p.add_argument('--out', required=True)
+p.add_argument('--topology', choices=['serial', 'pre', 'reverb', 'parallel'], default='serial')
 p.add_argument('--publish-only', action='store_true')
 a = p.parse_args()
 out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
@@ -42,46 +43,83 @@ for r in rigs:
 uris = sorted(templates)
 print('stereo lv2 templates:', len(uris), flush=True)
 
-def build(count):
+REVERBS = [u for u in uris if 'reverb' in u or 'zita' in u]
+
+def build(count, topology):
     m = copy.deepcopy(base)
     ox = m['oxidal']
-    drop = {x['id'] for x in ox['lv2']}
-    ox['graph']['nodes'] = [n for n in ox['graph']['nodes'] if n['id'] not in drop and n['kind'] != 'merge' and n['id'] != 'out']
-    ox['graph']['edges'] = [e for e in ox['graph']['edges'] if e['from']['node'] not in drop | {'split-left', 'split-right'} or e['from']['node'].startswith('split') and e['to']['node'].startswith('native')]
-    ox['graph']['edges'] = [e for e in ox['graph']['edges'] if e['to']['node'] in {'split-left', 'split-right'} or e['to']['node'].startswith('native')]
-    ox['lv2'] = []
-    labels = m['extensions']['urn:oxidal:authoring']['labels']
+    nodes = {n['id']: n for n in ox['graph']['nodes']}
     nat = next(n['id'] for n in ox['graph']['nodes'] if n['kind'] == 'tone3000')
-    ox['graph']['nodes'] += [{'id': 'out', 'kind': 'output', 'audioInputs': 2, 'audioOutputs': 0}]
-    ox['graph']['nodes'] += [{'id': 'merge-left', 'kind': 'merge', 'audioInputs': 1, 'audioOutputs': 1},
-                             {'id': 'merge-right', 'kind': 'merge', 'audioInputs': 1, 'audioOutputs': 1}]
-    # NAM outputs go straight to the first effect (or output); merges keep a stable id per channel.
-    prev = [(nat, 0), (nat, 1)]
+    labels = m['extensions']['urn:oxidal:authoring']['labels']
+    ox['lv2'] = []
+    pool = REVERBS if topology == 'reverb' else uris
+    fx = []
     for i in range(count):
-        node_t, ctl_t = templates[uris[i % len(uris)]]
+        node_t, ctl_t = templates[pool[i % len(pool)]]
         nid = f'fx-{uuid.uuid4()}'
         n = copy.deepcopy(node_t); n['id'] = nid; n['instance'] = nid
         c = copy.deepcopy(ctl_t); c['id'] = nid
-        ox['graph']['nodes'].append(n); ox['lv2'].append(c); labels[nid] = f'Cap fx {i + 1}'
-        for ch in (0, 1):
-            ox['graph']['edges'].append({'from': {'node': prev[ch][0], 'port': prev[ch][1]}, 'to': {'node': nid, 'port': ch}})
-        prev = [(nid, 0), (nid, 1)]
-    for ch in (0, 1):
-        ox['graph']['edges'].append({'from': {'node': prev[ch][0], 'port': prev[ch][1]}, 'to': {'node': 'out', 'port': ch}})
-    ox['graph']['nodes'] = [n for n in ox['graph']['nodes'] if n['kind'] != 'merge']
-    m['id'] = str(uuid.uuid4()); m['name'] = f'Cap · fx {count}'
+        ox['lv2'].append(c); labels[nid] = f'Cap fx {i + 1}'; fx.append(n)
+    edges = []
+    def e(f, fp, t, tp): edges.append({'from': {'node': f, 'port': fp}, 'to': {'node': t, 'port': tp}})
+    def chain(src, nodes_):  # src: [(node, port)] x2 -> returns the final pair
+        for n in nodes_:
+            for ch in (0, 1): e(src[ch][0], src[ch][1], n['id'], ch)
+            src = [(n['id'], 0), (n['id'], 1)]
+        return src
+    keep = [nodes['in'], nodes['split-left'], nodes['split-right'], nodes[nat]]
+    out = {'id': 'out', 'kind': 'output', 'audioInputs': 2, 'audioOutputs': 0}
+    if topology == 'parallel':
+        # B = count + 1 branches (NAM + fx) per channel via nested binary split/merge.
+        branches = [nat] + [n['id'] for n in fx]
+        B = len(branches)
+        extra = []
+        for ch, side in ((0, 'L'), (1, 'R')):
+            src = ('in', ch)
+            for k in range(B - 1):
+                sid = f'split-{side}{k}'
+                extra.append({'id': sid, 'kind': 'split', 'audioInputs': 1, 'audioOutputs': 2})
+                e(src[0], src[1], sid, 0)
+                e(sid, 0, branches[k], ch)
+                src = (sid, 1)
+            e(src[0], src[1], branches[B - 1], ch)
+            nxt = (branches[B - 1], ch)
+            for k in range(B - 2, -1, -1):
+                mid = f'merge-{side}{k}'
+                extra.append({'id': mid, 'kind': 'merge', 'audioInputs': 2, 'audioOutputs': 1, 'inputGains': [1.0, 1.0]})
+                e(branches[k], ch, mid, 0)
+                e(nxt[0], nxt[1], mid, 1)
+                nxt = (mid, 0)
+            e(nxt[0], nxt[1], 'out', ch)
+        ox['graph']['nodes'] = [nodes['in'], nodes[nat]] + fx + extra + [out]
+    else:
+        e('in', 0, 'split-left', 0)  # placeholder replaced below
+        edges.clear()
+        if topology == 'pre':
+            end = chain([('in', 0), ('in', 1)], fx)
+            e(end[0][0], end[0][1], 'split-left', 0); e(end[1][0], end[1][1], 'split-right', 0)
+            e('split-left', 0, nat, 0); e('split-right', 0, nat, 1)
+            e(nat, 0, 'out', 0); e(nat, 1, 'out', 1)
+        else:
+            e('in', 0, 'split-left', 0); e('in', 1, 'split-right', 0)
+            e('split-left', 0, nat, 0); e('split-right', 0, nat, 1)
+            end = chain([(nat, 0), (nat, 1)], fx)
+            e(end[0][0], end[0][1], 'out', 0); e(end[1][0], end[1][1], 'out', 1)
+        ox['graph']['nodes'] = keep + fx + [out]
+    ox['graph']['edges'] = edges
+    m['id'] = str(uuid.uuid4()); m['name'] = f'Cap · {topology} {count}'
     return m
 
 rows = []
 for count in (int(x) for x in a.counts.split(',')):
-    m = build(count)
+    m = build(count, a.topology)
     bindings = {r['id']: {'kind': 'original', 'preset': r['sha256']} for r in base['resources']}
     try:
         doc = post('/presets/rigs', {'manifest_json': json.dumps(m), 'resources': bindings})
     except Exception as e:
         body = getattr(e, 'read', lambda: b'')().decode()[:300]
         rows.append(dict(fx=count, ok=False, error=f'publish: {e} {body}')); print(rows[-1], flush=True); break
-    row = dict(fx=count, revision=doc['revision'])
+    row = dict(topology=a.topology, fx=count, revision=doc['revision'])
     if not a.publish_only:
         dest = out / f'fx{count}.json'
         proc = subprocess.run([sys.executable, str(Path(__file__).with_name('qualify-prepared.py')), '--api', a.api,
