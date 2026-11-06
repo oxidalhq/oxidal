@@ -12,6 +12,8 @@ import {
   rigAudioState,
   rigLibrary,
   type AudioState,
+  keepReady,
+  setKeepReady,
 } from './api';
 
 /**
@@ -74,9 +76,9 @@ export const rigTopologyLabel = (rig: {
     rig.topology === 'scenes'
       ? `${rig.scenes.length} ${rig.scenes.length === 1 ? 'scene' : 'scenes'}`
       : rig.topology === 'parallel'
-        ? 'Parallel graph'
+        ? 'Parallel paths'
         : 'Serial chain',
-    `${rig.native_instances} native ${rig.native_instances === 1 ? 'engine' : 'engines'}`,
+    `${rig.native_instances} NAM ${rig.native_instances === 1 ? 'block' : 'blocks'}`,
     `${rig.lv2_instances} ${rig.lv2_instances === 1 ? 'effect' : 'effects'}`,
   ].join(' · ');
 
@@ -199,8 +201,9 @@ export async function loadPresetChoices(): Promise<{
 
 const KEEP_READY = 'oxidal.prepared-rigs';
 export const GAPLESS_BANK_SIZE = 4;
-/** Portable rigs the player keeps loaded for gapless switching. */
-export function readKeepReady(): string[] {
+const revisionPattern = /^[a-f0-9]{64}$/;
+/** What an older Oxidal kept in this browser; only an import source now. */
+function browserKeepReady(): string[] {
   try {
     const saved: unknown = JSON.parse(localStorage.getItem(KEEP_READY) ?? '[]');
     return Array.isArray(saved)
@@ -208,7 +211,7 @@ export function readKeepReady(): string[] {
           ...new Set(
             saved.filter(
               (v): v is string =>
-                typeof v === 'string' && /^[a-f0-9]{64}$/.test(v),
+                typeof v === 'string' && revisionPattern.test(v),
             ),
           ),
         ].slice(0, GAPLESS_BANK_SIZE)
@@ -217,19 +220,33 @@ export function readKeepReady(): string[] {
     return [];
   }
 }
-export function writeKeepReady(revisions: string[]) {
-  try {
-    localStorage.setItem(
-      KEEP_READY,
-      JSON.stringify(
-        [...new Set(revisions)]
-          .filter((revision) => /^[a-f0-9]{64}$/.test(revision))
-          .slice(0, GAPLESS_BANK_SIZE),
-      ),
-    );
-  } catch {
-    /* browser storage unavailable */
+/**
+ * Presets kept loaded for gapless switching, stored on the device (7.7). When
+ * the device has none, this browser's earlier choice is imported once; two
+ * browsers' lists are never merged.
+ */
+export async function readKeepReady(): Promise<string[]> {
+  const device = (await keepReady()).revisions;
+  const local = browserKeepReady();
+  if (!device.length && local.length) {
+    const imported = await setKeepReady(local).catch(() => null);
+    try {
+      localStorage.removeItem(KEEP_READY);
+    } catch {
+      /* browser storage unavailable */
+    }
+    return imported?.revisions ?? [];
   }
+  return device;
+}
+export async function writeKeepReady(revisions: string[]): Promise<string[]> {
+  return (
+    await setKeepReady(
+      [...new Set(revisions)]
+        .filter((revision) => revisionPattern.test(revision))
+        .slice(0, GAPLESS_BANK_SIZE),
+    )
+  ).revisions;
 }
 
 /** The bounded adjacent bank containing a selected Library rig. */
@@ -332,7 +349,7 @@ export async function playScenes(revision: string, adjacent: string[] = []) {
     throw new Error(
       'Choose the input, output and buffer in Settings → Audio first.',
     );
-  const keep = readKeepReady();
+  const keep = await readKeepReady().catch(() => []);
   const bank = keep.length
     ? keep
     : gaplessBank(revision, adjacent.length ? adjacent : [revision]);

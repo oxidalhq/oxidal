@@ -2526,7 +2526,7 @@ export function MixedRig({
         <div className="rig-load-summary" aria-label="Native processing load">
           <Badge>
             {nativeLoad.engines}{' '}
-            {nativeLoad.engines === 1 ? 'native engine' : 'native engines'}
+            {nativeLoad.engines === 1 ? 'NAM block' : 'NAM blocks'}
           </Badge>
           <Badge>{nativeLoad.blocks} chain blocks</Badge>
           {nativeLoad.full + nativeLoad.lite + nativeLoad.scaled > 0 && (

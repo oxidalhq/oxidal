@@ -403,7 +403,7 @@ export function PlaybackSettings({
                 }
                 onClick={() => void command({ kind: 'resume' })}
               >
-                Resume session
+                Resume audio
               </Button>
             ) : null}
           </div>
@@ -453,14 +453,14 @@ export function PlaybackSettings({
             </details>
           )}
           <details className="control-help" open={!state?.configured}>
-            <summary>New playback session</summary>
+            <summary>Start audio with…</summary>
             <fieldset
               className="control-stack"
               disabled={
                 !connected || busy || transitioning || state?.device_owned
               }
             >
-              <legend className="sr-only">New playback session</legend>
+              <legend className="sr-only">Start audio with…</legend>
               <p>
                 Check input and output, then choose a preset. Use matching
                 device, rate and buffer settings.

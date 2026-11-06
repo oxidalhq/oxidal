@@ -82,6 +82,9 @@
     "guitars": {
       "$ref": "#/$defs/Guitars"
     },
+    "keep_ready": {
+      "$ref": "#/$defs/KeepReady"
+    },
     "library": {
       "$ref": "#/$defs/Library"
     },
@@ -257,6 +260,7 @@
   "required": [
     "removal_preview",
     "protect_state",
+    "keep_ready",
     "startup_state",
     "startup_update",
     "model_removal_preview",
@@ -4642,6 +4646,21 @@
         "phase",
         "output",
         "elapsed_ms"
+      ]
+    },
+    "KeepReady": {
+      "type": "object",
+      "properties": {
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revisions"
       ]
     },
     "Library": {

@@ -3553,3 +3553,32 @@ textarea {
   margin: 0;
   text-align: right;
 }
+
+/* Preloader: delayed, labelled, static in e-paper mode (7.21). */
+.oxidal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 6rem;
+  color: var(--muted-foreground);
+}
+.oxidal-loading-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  animation: oxidal-spin 0.9s linear infinite;
+}
+[data-display='epaper'] .oxidal-loading-icon,
+.app-shell[data-display='epaper'] .oxidal-loading-icon {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .oxidal-loading-icon {
+    animation: none;
+  }
+}
+@keyframes oxidal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

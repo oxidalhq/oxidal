@@ -743,6 +743,7 @@ export interface Contract {
   graph_audio_state: GraphAudioState;
   graph_presets: SavedGraph[];
   guitars: Guitars;
+  keep_ready: KeepReady;
   library: Library;
   library_catalog: LibraryCatalog;
   library_update: LibraryUpdate;
@@ -1636,6 +1637,9 @@ export interface InputVerification {
   periods: number;
   sample_rate: number;
   verified_at_ms: number;
+}
+export interface KeepReady {
+  revisions: string[];
 }
 export interface Library {
   presets: Inspection[];

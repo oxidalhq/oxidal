@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
 import { PresetRow } from './features/library/PresetRow';
+import { friendlyError } from './lib/friendlyError';
 import { Checkbox } from './components/ui/checkbox';
 import { detailsMatch } from './presetMetadata';
 import {
@@ -52,9 +53,21 @@ export function SavedRigs({
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [prepared, setPrepared] = useState<string[]>(readKeepReady);
+  const [prepared, setPreparedState] = useState<string[]>([]);
   const [choosing, setChoosing] = useState(false);
-  useEffect(() => writeKeepReady(prepared), [prepared]);
+  /** The device stores the choice; the screen shows what it confirmed. */
+  function setPrepared(update: (old: string[]) => string[]) {
+    const next = update(prepared);
+    setPreparedState(next);
+    void writeKeepReady(next)
+      .then((saved) => alive.current && setPreparedState(saved))
+      .catch((cause: unknown) => {
+        if (alive.current) {
+          setError(friendlyError(cause, 'change Keep ready'));
+          void readKeepReady().then(setPreparedState, () => {});
+        }
+      });
+  }
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
@@ -68,6 +81,9 @@ export function SavedRigs({
       .catch((cause: unknown) => {
         if (alive.current) setError(String(cause));
       });
+    void readKeepReady()
+      .then((saved) => alive.current && setPreparedState(saved))
+      .catch(() => {});
     void rigAudioState()
       .then((rig) => {
         if (alive.current && rig.phase === 'running')
@@ -91,8 +107,8 @@ export function SavedRigs({
         ),
       );
       if (alive.current) {
-        // Starting may have added it to the ready set.
-        setPrepared(readKeepReady());
+        // Starting may have changed the ready set.
+        void readKeepReady().then(setPreparedState, () => {});
         if (openMidi) requestMidiAssignments();
         onOpenRig();
       }

@@ -7,6 +7,7 @@ import {
   DotsSixVertical,
   DownloadSimple,
 } from '@phosphor-icons/react';
+import { Loading } from './components/ui/loading';
 import { libraryCatalog, type LibraryCatalog, type LibraryUpdate } from './api';
 import { Button } from './components/ui/button';
 import { PresetManagement } from './PresetManagement';
@@ -83,8 +84,7 @@ export function LibraryManagement({
   }
   // Earlier revisions of presets saved again are history, not Removed items.
   const visible =
-    catalog?.items.filter((i) => !i.superseded && i.archived === removed) ??
-    [];
+    catalog?.items.filter((i) => !i.superseded && i.archived === removed) ?? [];
   const performance = visible.filter(
     (i) => i.kind !== 'graph' && originOf(i) === 'mine',
   );
@@ -118,7 +118,7 @@ export function LibraryManagement({
         this unit.
       </p>
       {error && <p role="alert">{error}</p>}
-      {!catalog && <p role="status">Loading library…</p>}
+      {!catalog && <Loading label="Loading the set list…" />}
       <div
         ref={root}
         className="set-list"

@@ -1793,7 +1793,7 @@ export function LiveRig({
               }
               onClick={() => void saveCopy()}
             >
-              {busy ? 'Saving…' : 'Save sounding copy'}
+              {busy ? 'Saving…' : 'Save a copy'}
             </Button>
           </div>
           {(state.session !== saveOpening.session ||

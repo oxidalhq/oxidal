@@ -10,6 +10,7 @@ mod debug;
 mod device;
 mod graph_playback;
 mod guitars;
+mod keep_ready;
 mod levels;
 mod library_removal;
 mod local_models;
@@ -74,6 +75,7 @@ pub struct ApiError {
 pub struct Contract {
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
+    pub keep_ready: keep_ready::KeepReady,
     pub startup_state: audio_boot::StartupState,
     pub startup_update: audio_boot::StartupUpdate,
     pub model_removal_preview: oxidal_presets::ModelRemovalPreview,
@@ -197,6 +199,7 @@ struct Shared {
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
     protect: protect::Protect,
+    keep_ready: keep_ready::Store,
     config: Config,
 }
 
@@ -268,6 +271,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let (midi_events, midi_event_rx) = tokio::sync::mpsc::channel(32);
     let shared = Arc::new(Shared {
         protect: protect::Protect::new(config.preset_dir.join("protect.json")),
+        keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
@@ -392,6 +396,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/audio", get(playback::state).post(playback::command))
         .route("/levels", get(levels::state).post(levels::update))
         .route("/protect", get(protect::state).post(protect::update))
+        .route(
+            "/presets/keep-ready",
+            get(keep_ready::state).post(keep_ready::update),
+        )
         .route(
             "/startup",
             get(audio_boot::startup).post(audio_boot::set_startup),

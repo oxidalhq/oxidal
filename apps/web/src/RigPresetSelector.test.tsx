@@ -327,7 +327,7 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   expect(groups).toEqual(['Mine', 'TONE3000']);
   fireEvent.click(
     screen.getByRole('button', {
-      name: /Clean to heavy.*Mine.*3 scenes.*3 native engines.*0 effects/,
+      name: /Clean to heavy.*Mine.*3 scenes.*3 NAM blocks.*0 effects/,
     }),
   );
   expect(select).toHaveBeenCalledWith(

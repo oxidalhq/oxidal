@@ -6,12 +6,14 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { rigAudioState, rigLibrary } from './api';
+import { keepReady, rigAudioState, rigLibrary, setKeepReady } from './api';
 import { SavedRigs } from './SavedRigs';
 
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigLibrary: vi.fn(),
+  keepReady: vi.fn(),
+  setKeepReady: vi.fn(),
 }));
 
 const revisions = ['a', 'b', 'c', 'd', 'e'].map((letter) => letter.repeat(64));
@@ -19,6 +21,10 @@ const revisions = ['a', 'b', 'c', 'd', 'e'].map((letter) => letter.repeat(64));
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(rigAudioState).mockResolvedValue({ phase: 'stopped' } as never);
+  vi.mocked(keepReady).mockResolvedValue({ revisions: [] });
+  vi.mocked(setKeepReady).mockImplementation(async (revisions) => ({
+    revisions,
+  }));
   vi.mocked(rigLibrary).mockResolvedValue({
     presets: revisions.map((revision, index) => ({
       revision,
@@ -55,7 +61,28 @@ it('offers a bounded custom gapless bank for factory rigs', async () => {
     fireEvent.click(screen.getByLabelText(`Keep Factory ${index} ready`));
   }
   expect(screen.getByLabelText('Keep Factory 5 ready')).toBeDisabled();
-  expect(
-    JSON.parse(localStorage.getItem('oxidal.prepared-rigs') ?? '[]'),
-  ).toEqual(revisions.slice(0, 4));
+  // The choice is stored on the device, not in this browser (7.7).
+  await waitFor(() =>
+    expect(setKeepReady).toHaveBeenLastCalledWith(revisions.slice(0, 4)),
+  );
+  expect(localStorage.getItem('oxidal.prepared-rigs')).toBeNull();
+});
+
+it("imports this browser's earlier Keep ready choice once when the device has none", async () => {
+  localStorage.setItem(
+    'oxidal.prepared-rigs',
+    JSON.stringify(revisions.slice(0, 2)),
+  );
+  render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      origin="oxidal_example"
+      title="Oxidal examples"
+    />,
+  );
+  await waitFor(() =>
+    expect(setKeepReady).toHaveBeenCalledWith(revisions.slice(0, 2)),
+  );
+  expect(localStorage.getItem('oxidal.prepared-rigs')).toBeNull();
 });

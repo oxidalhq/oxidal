@@ -455,13 +455,7 @@ test('shared surfaces retain their theme and width contracts', async ({
     name: 'Instrument navigation',
   });
   const modes = ['default', 'stage', 'sunlight', 'epaper'] as const;
-  const views = [
-    'Rig',
-    'Guitars',
-    'Library',
-    'Levels',
-    'Settings',
-  ] as const;
+  const views = ['Rig', 'Guitars', 'Library', 'Levels', 'Settings'] as const;
   const sizes = [
     { width: 390, height: 844 },
     { width: 844, height: 390 },

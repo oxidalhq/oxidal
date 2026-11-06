@@ -59,6 +59,7 @@ const WebTerminal = lazy(() =>
 import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
 import { StageControls } from './features/stage/StageControls';
+import { Loading } from './components/ui/loading';
 import { AudioSettings } from './AudioSettings';
 import { About } from './About';
 import { ControlEditor } from './ControlEditor';
@@ -524,11 +525,11 @@ function InstrumentApp() {
             </div>
           )}
           {!state ? (
-            <p className="empty">Waiting for Oxidal…</p>
+            <Loading label="Connecting to Oxidal…" />
           ) : view === 'guitars' ? (
             <GuitarSettings />
           ) : view === 'monitor' ? (
-            <Suspense fallback={<p>Loading Levels…</p>}>
+            <Suspense fallback={<Loading label="Loading Levels…" />}>
               <SoundCheck
                 connected={connected}
                 displayMode={displayMode}
@@ -541,7 +542,7 @@ function InstrumentApp() {
               />
             </Suspense>
           ) : view === 'library' ? (
-            <Suspense fallback={<p>Loading library…</p>}>
+            <Suspense fallback={<Loading label="Loading Library…" />}>
               <Library connected={connected} onOpenRig={() => setView('rig')} />
             </Suspense>
           ) : view === 'rig' ? (
@@ -559,7 +560,7 @@ function InstrumentApp() {
                   developmentSimulator || graphName !== null || mixedPresent
                 }
               />
-              <Suspense fallback={null}>
+              <Suspense fallback={<Loading label="Loading the rig…" />}>
                 <MixedRig
                   connected={connected}
                   onPlaying={setMixedName}
@@ -818,7 +819,7 @@ function InstrumentApp() {
                       Audio setup and monitoring remain available from their own
                       pages.
                     </p>
-                    <Suspense fallback={<p>Loading terminal…</p>}>
+                    <Suspense fallback={<Loading label="Loading terminal…" />}>
                       <WebTerminal />
                     </Suspense>
                     <DebugConsole />

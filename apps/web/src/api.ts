@@ -1142,6 +1142,30 @@ export async function setProtect(on: boolean): Promise<ProtectState> {
   return body;
 }
 
+export type KeepReady = Contract['keep_ready'];
+const keepReadyValidator = ajv.compile<KeepReady>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/KeepReady',
+});
+export async function keepReady(): Promise<KeepReady> {
+  const body = await presetResponse(await fetch('/api/v1/presets/keep-ready'));
+  if (!keepReadyValidator(body))
+    throw new Error('Incompatible Keep ready list');
+  return body;
+}
+export async function setKeepReady(revisions: string[]): Promise<KeepReady> {
+  const body = await presetResponse(
+    await fetch('/api/v1/presets/keep-ready', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revisions }),
+    }),
+  );
+  if (!keepReadyValidator(body))
+    throw new Error('Incompatible Keep ready list');
+  return body;
+}
+
 export type StartupState = Contract['startup_state'];
 const startupValidator = ajv.compile<StartupState>({
   $defs: schema.$defs,

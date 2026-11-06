@@ -351,7 +351,7 @@ test('rig controls follow the actual session without example effects', async ({
     .toBe(true);
   audio = { ...audio, revision: audio.revision + 1 };
   await expect(
-    saveDialog.getByRole('button', { name: 'Save sounding copy' }),
+    saveDialog.getByRole('button', { name: 'Save a copy' }),
   ).toBeDisabled();
   await expect(saveDialog.getByRole('status')).toContainText('The rig changed');
   expect(saves).toBe(0);
@@ -359,7 +359,7 @@ test('rig controls follow the actual session without example effects', async ({
   await page.setViewportSize(portrait);
   await rig.getByRole('button', { name: 'Save copy', exact: true }).click();
   await saveDialog.getByLabel('Name for sounding copy').fill('My live sound');
-  await saveDialog.getByRole('button', { name: 'Save sounding copy' }).click();
+  await saveDialog.getByRole('button', { name: 'Save a copy' }).click();
   await expect(saveDialog).toHaveCount(0);
   await expect(rig.getByTestId('live-saved')).toBeVisible();
   expect(saves).toBe(1);
@@ -1625,7 +1625,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByLabel('Name for sounding copy')
       .fill(`Live ${test.info().project.name}`);
     await sounding
-      .getByRole('button', { name: 'Save sounding copy', exact: true })
+      .getByRole('button', { name: 'Save a copy', exact: true })
       .click();
     await expect(sounding.getByTestId('live-saved')).toContainText(
       'Copy saved in Library',
@@ -1758,7 +1758,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       page.getByLabel('Example preset', { exact: true }),
     ).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await audio.getByRole('button', { name: 'Resume session' }).click();
+    await audio.getByRole('button', { name: 'Resume audio' }).click();
     await expect(audio.getByRole('status')).toContainText('Audio: running');
     expect(
       (await (await request.get('/api/v1/audio')).json()).controls,
@@ -1955,7 +1955,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByLabel('Name for sounding copy')
       .fill(`New NAM ${test.info().project.name}`);
     await sounding
-      .getByRole('button', { name: 'Save sounding copy', exact: true })
+      .getByRole('button', { name: 'Save a copy', exact: true })
       .click();
     await expect(sounding.getByTestId('live-saved')).toBeVisible();
     const createdCopy = await (await request.get('/api/v1/audio')).json();
@@ -2281,7 +2281,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
     playback.getByRole('heading', { name: 'Effects audio' }),
   ).toBeVisible();
   await playback
-    .getByRole('button', { name: 'Resume session', exact: true })
+    .getByRole('button', { name: 'Resume audio', exact: true })
     .click();
   await expect
     .poll(async () => (await read()).native_values[0]?.value)

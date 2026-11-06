@@ -208,7 +208,7 @@ it('reports native engines separately from actual blocks and A2 quality', async 
     },
   ] as unknown as NonNullable<typeof state.control>['authoring'];
 
-  expect(await screen.findByText('1 native engine')).toBeVisible();
+  expect(await screen.findByText('1 NAM block')).toBeVisible();
   expect(screen.getByText('2 chain blocks')).toBeVisible();
   expect(
     screen.getByText('A2 size · 1 Full · 0 Lite · 1 scaled'),

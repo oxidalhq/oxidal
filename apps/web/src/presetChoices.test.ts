@@ -70,7 +70,7 @@ it('describes routing and actual processor counts without treating scenes as lan
       native_instances: 2,
       lv2_instances: 6,
     }),
-  ).toBe('Serial chain · 2 native engines · 6 effects');
+  ).toBe('Serial chain · 2 NAM blocks · 6 effects');
   expect(
     rigTopologyLabel({
       topology: 'parallel',
@@ -78,7 +78,7 @@ it('describes routing and actual processor counts without treating scenes as lan
       native_instances: 2,
       lv2_instances: 1,
     }),
-  ).toBe('Parallel graph · 2 native engines · 1 effect');
+  ).toBe('Parallel paths · 2 NAM blocks · 1 effect');
   expect(
     rigTopologyLabel({
       topology: 'scenes',
@@ -86,7 +86,7 @@ it('describes routing and actual processor counts without treating scenes as lan
       native_instances: 3,
       lv2_instances: 0,
     }),
-  ).toBe('3 scenes · 3 native engines · 0 effects');
+  ).toBe('3 scenes · 3 NAM blocks · 0 effects');
 });
 
 it('asks before another scenes preset replaces unsaved edits, unless it is kept ready', () => {

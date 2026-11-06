@@ -75,7 +75,7 @@ export function EffectsPlaybackSettings({
           disabled={!connected || busy || transitioning || !resumeReady}
           onClick={() => void command({ kind: 'restart' })}
         >
-          {state.device_owned ? 'Restart audio' : 'Resume session'}
+          {state.device_owned ? 'Restart audio' : 'Resume audio'}
         </Button>
       </div>
       {!state.device_owned && !resumeReady && (

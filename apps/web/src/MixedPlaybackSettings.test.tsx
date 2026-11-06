@@ -59,7 +59,7 @@ it('keeps Resume disabled while the saved interface is absent', () => {
       boot={null}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Resume session' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Resume audio' })).toBeDisabled();
   expect(screen.getByText(/Reconnect and check this session/)).toBeVisible();
 });
 
@@ -74,5 +74,5 @@ it('enables Resume after both saved directions pass the exact check', () => {
       boot={null}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Resume session' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Resume audio' })).toBeEnabled();
 });

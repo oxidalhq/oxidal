@@ -466,6 +466,9 @@ pub async fn publish(
                     &source.id,
                     &revision,
                 )?;
+                super::keep_ready::Store::new(root.join("keep-ready.json"))
+                    .replace(&source.id, &revision)
+                    .map_err(|_| Error::Invalid("Keep ready could not follow the saved preset"))?;
             }
         }
         if let Some(source) = request.source {
