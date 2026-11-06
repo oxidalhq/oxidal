@@ -632,7 +632,10 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     );
     let failed = phase(&c, &url, "failed").await;
     assert_eq!(failed["device_owned"], false);
-    apply(&c, &url, json!({"kind":"restart"})).await;
+    // A lost running session restarts itself once the device is available again.
+    let resumed = phase(&c, &url, "running").await;
+    assert_eq!(resumed["device_owned"], true);
+    assert_eq!(pids(&executable).len(), 1);
     // A disconnected HTTP client does not own or cancel an accepted restart.
     apply(&c, &url, json!({"kind":"stop"})).await;
     let stopped_state = get(&c, &url, "rig-audio").await;

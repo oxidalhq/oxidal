@@ -117,9 +117,17 @@ struct Owner {
     recovery_path: PathBuf,
     confirmed: Option<StartRig>,
     recovery_due: Option<Instant>,
+    resume: Option<Resume>,
     state: RigAudioState,
     updates: watch::Sender<RigAudioState>,
 }
+/// Bounded automatic restart after a running session loses its audio device.
+struct Resume {
+    until: Instant,
+    next: Instant,
+}
+const RESUME_WINDOW: Duration = Duration::from_secs(300);
+const RESUME_INTERVAL: Duration = Duration::from_secs(2);
 impl Owner {
     fn forward_midi(&self, previous_events: u64) {
         let Some(control) = &self.state.control else {
@@ -305,6 +313,18 @@ impl Owner {
         Ok(self.worker.take().map(|worker| worker._permit))
     }
     async fn fault(&mut self, error: String) -> String {
+        if self.state.phase == AudioPhase::Running
+            && self.confirmed.is_some()
+            && self.resume.is_none()
+        {
+            // A device that returns (for example a replugged USB interface)
+            // restarts the last confirmed session without a manual Start.
+            let now = Instant::now();
+            self.resume = Some(Resume {
+                until: now + RESUME_WINDOW,
+                next: now + RESUME_INTERVAL,
+            });
+        }
         let error = match self.release().await {
             Ok(()) => error,
             Err(e) => format!("{error}; {e}"),
@@ -837,6 +857,8 @@ impl Owner {
         {
             return Err("Finish the active adjustment before changing sound".into());
         }
+        // Any owner command supersedes automatic resume.
+        self.resume = None;
         match command.action {
             RigAudioAction::Start { settings } => {
                 self.start(*settings).await?;
@@ -1199,7 +1221,36 @@ impl Owner {
         }
         Ok(self.state.clone())
     }
+    async fn resume_after_fault(&mut self) {
+        if self.state.phase == AudioPhase::Running {
+            self.resume = None;
+            return;
+        }
+        let Some(resume) = &self.resume else {
+            return;
+        };
+        let now = Instant::now();
+        if now >= resume.until {
+            self.resume = None;
+            return;
+        }
+        if self.worker.is_some() || self.state.phase != AudioPhase::Failed || now < resume.next {
+            return;
+        }
+        let Some(settings) = self.confirmed.clone() else {
+            self.resume = None;
+            return;
+        };
+        if let Some(resume) = &mut self.resume {
+            resume.next = now + RESUME_INTERVAL;
+        }
+        // Failure keeps the Failed phase and its error; the next interval retries.
+        if self.start(settings).await.is_err() && self.state.phase != AudioPhase::Failed {
+            self.fault("Automatic restart failed".into()).await;
+        }
+    }
     async fn poll(&mut self) {
+        self.resume_after_fault().await;
         if self.worker.is_some() {
             if self.state.phase == AudioPhase::Failed {
                 if self.release().await.is_ok() {
@@ -1341,6 +1392,7 @@ impl RigPlayback {
             recovery_path,
             confirmed: recovered,
             recovery_due: None,
+            resume: None,
             state: initial,
             updates,
         };
