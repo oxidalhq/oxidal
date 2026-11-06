@@ -52,6 +52,10 @@ pub(crate) fn prepare(
             })
             .map_err(|e| e.to_string())?;
         source.wait_ready().map_err(|e| e.to_string())?;
+        // Extraction needs the source without oversampling; the machine default is on.
+        source
+            .set_normalized("osEnabled", 0.0)
+            .map_err(|e| e.to_string())?;
         // The recipe is an explicit classified-amp confirmation. All source,
         // asset, routing and processing guards run again on every restoration.
         // Pitch stays in the amp; external pitch is a separate capability.
@@ -226,6 +230,9 @@ pub(crate) fn model_sources(
         }
         // Re-run the full guarded partition before publishing this replacement
         // source. It must still be a supported amp + short mono IR pair.
+        source
+            .set_normalized("osEnabled", 0.0)
+            .map_err(|e| e.to_string())?;
         source
             .split_amp_cab(&recipe.amp, &recipe.cab, true, false)
             .map_err(|e| e.to_string())?;

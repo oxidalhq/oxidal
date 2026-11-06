@@ -102,6 +102,8 @@ pub fn qualify(world: &World, root: &Path) -> Result<()> {
         } else {
             InputMode::Right
         })?;
+        // Extracted stages run without oversampling; match the reference.
+        whole.set_normalized("osEnabled", 0.0)?;
         whole.prepare_stream()?;
         let mut error = 0.0_f32;
         let mut peak = 0.0_f32;
