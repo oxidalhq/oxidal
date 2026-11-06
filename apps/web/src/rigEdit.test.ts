@@ -118,6 +118,61 @@ it('reads a preset back into its blocks and rebuilds the same routing', () => {
   expect(graph(rebuilt.manifest_json)).toEqual(graph(built.manifest_json));
 });
 
+it('adds a block to a split with shared blocks without duplicating them', () => {
+  // Sprint 07 7.16: a NAM block before the split and an effect after the merge
+  // were copied into both lanes, so saving the edit produced
+  // "Duplicate native instance".
+  const echo = { ...lv2Effect(hold), id: 'echo', name: 'Hold' };
+  const tail = { ...lv2Effect(hold), id: 'tail', name: 'Hold' };
+  // A NAM block shared before the split and an effect shared after the merge.
+  const built = buildLanes(
+    'p',
+    'x',
+    [
+      [amp, flange, tail],
+      [amp, echo, tail],
+    ],
+    'prof',
+  );
+  const lanes = readLanes(document(built.manifest_json), [flanger, hold], {});
+  expect(lanes.map((l) => l.map((b) => b.id))).toEqual([
+    ['amp', 'flange', 'tail'],
+    ['amp', 'echo', 'tail'],
+  ]);
+  const added = { ...lv2Effect(flanger), id: 'added', mono: 'sum' as const };
+  const edited = JSON.parse(
+    buildLanes('p', 'x', insertBlock(lanes, 1, 2, added), 'prof').manifest_json,
+  ) as RigDocument['manifest'];
+  expect(edited.tone3000.instances.map((i) => i.id)).toEqual(['amp']);
+  const ids = edited.oxidal!.graph.nodes.map((n) => n.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(
+    readLanes(
+      { manifest: edited, revision: 'r'.repeat(64) },
+      [flanger, hold],
+      {},
+    ).map((l) => l.map((b) => b.id)),
+  ).toEqual([
+    ['amp', 'flange', 'tail'],
+    ['amp', 'echo', 'added', 'tail'],
+  ]);
+});
+
+it('refuses a block that appears in both lanes outside the shared sections', () => {
+  const echo = { ...lv2Effect(hold), id: 'echo' };
+  expect(() =>
+    buildLanes(
+      'p',
+      'x',
+      [
+        [flange, echo],
+        [echo, flange],
+      ],
+      'prof',
+    ),
+  ).toThrow(/both sides/);
+});
+
 it('inserts, moves and removes blocks; an emptied split side becomes straight', () => {
   const extra = { ...lv2Effect(hold), id: 'hold' };
   const one: Lanes = [[amp, flange]];

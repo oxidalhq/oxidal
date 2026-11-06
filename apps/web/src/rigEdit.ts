@@ -95,9 +95,45 @@ export function buildLanes(
 ): RigPublish {
   const kept = lanes.filter((lane) => lane.length);
   if (!kept.length) throw new Error('A preset needs at least one block.');
-  return kept.length === 1
-    ? serialRig(id, name, kept[0]!, profile, false)
-    : parallelRig(id, name, [], [kept[0]!, kept[1]!], profile, false);
+  if (kept.length === 1) return serialRig(id, name, kept[0]!, profile, false);
+  const { before, sides, after } = splitSections(kept[0]!, kept[1]!);
+  return parallelRig(id, name, before, sides, profile, false, after);
+}
+
+/**
+ * `readLanes` repeats the blocks shared before a split and after its merge in
+ * both lanes. Rebuild them once, as shared sections, so no block is written
+ * twice. A block on both sides elsewhere cannot be routed and is refused.
+ */
+function splitSections(left: DraftEffect[], right: DraftEffect[]) {
+  let head = 0;
+  while (
+    head < left.length &&
+    head < right.length &&
+    left[head]!.id === right[head]!.id
+  )
+    head++;
+  let tail = 0;
+  while (
+    tail < left.length - head &&
+    tail < right.length - head &&
+    left[left.length - 1 - tail]!.id === right[right.length - 1 - tail]!.id
+  )
+    tail++;
+  const sides: [DraftEffect[], DraftEffect[]] = [
+    left.slice(head, left.length - tail),
+    right.slice(head, right.length - tail),
+  ];
+  const seen = new Set(sides[0].map((b) => b.id));
+  if (sides[1].some((b) => seen.has(b.id)))
+    throw new Error(
+      'A block cannot be on both sides of a split. Remove one copy first.',
+    );
+  return {
+    before: left.slice(0, head),
+    sides,
+    after: left.slice(left.length - tail),
+  };
 }
 
 /** Inserts `effect` into `lane` at `index` (clamped to the lane). */

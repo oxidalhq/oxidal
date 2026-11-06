@@ -327,8 +327,9 @@ export function parallelRig(
   lanes: [DraftEffect[], DraftEffect[]],
   profile: string,
   draft = true,
+  after: DraftEffect[] = [],
 ): RigPublish {
-  validateStages([...shared, ...lanes[0], ...lanes[1]]);
+  validateStages([...shared, ...lanes[0], ...lanes[1], ...after]);
   if (!lanes[0].length || !lanes[1].length)
     throw new Error('Each side of a split needs at least one block.');
   const rig = rigBuilder(id, name, profile, draft);
@@ -369,7 +370,7 @@ export function parallelRig(
     rig.labels[node] = `Merge · ${side === 'left' ? 'L' : 'R'}`;
     return { node, port: 0 };
   });
-  return rig.finish([merges[0]!, merges[1]!]);
+  return rig.finish(rig.chain(after, [merges[0]!, merges[1]!]));
 }
 
 /** Simple scenes: each saved native tone runs in parallel; scalar LV2 effects
