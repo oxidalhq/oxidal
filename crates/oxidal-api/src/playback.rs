@@ -1656,6 +1656,12 @@ impl Owner {
         {
             return Err("Finish the active adjustment before changing sound".into());
         }
+        let recall = matches!(
+            command.action,
+            AudioAction::Start { .. }
+                | AudioAction::LoadPreset { .. }
+                | AudioAction::SaveCopy { .. }
+        );
         let result = match command.action {
             AudioAction::HostUtility { command } => self.host_utility(command).await,
             AudioAction::Midi { settings } => {
@@ -1901,6 +1907,21 @@ impl Owner {
             return Err(error);
         }
         self.promote_original_edit().await?;
+        if recall
+            && self.state.phase == AudioPhase::Running
+            && !self.model_pending()
+            && let Some(settings) = self.state.configured.clone()
+            && !settings.draft
+        {
+            // Last played (7.25): an explicit, confirmed recall becomes the startup sound.
+            let _ = self.boot.follow(Choice::Native {
+                settings,
+                controls: self.resume_controls.clone(),
+                models: self.state.models.clone(),
+                eq: self.resume_eq.clone(),
+            });
+            self.state.start_on_boot = self.boot.enabled(Role::Native);
+        }
         Ok(self.state.clone())
     }
     fn check_exit(&mut self) {

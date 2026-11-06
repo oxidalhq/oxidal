@@ -859,7 +859,25 @@ impl Owner {
         }
         // Any owner command supersedes automatic resume.
         self.resume = None;
-        match command.action {
+        let recall = matches!(
+            command.action,
+            RigAudioAction::Start { .. }
+                | RigAudioAction::Switch { .. }
+                | RigAudioAction::Save { .. }
+        );
+        self.run_action(command.action).await?;
+        if recall
+            && self.state.phase == AudioPhase::Running
+            && let Some(settings) = self.confirmed.clone()
+        {
+            // Last played (7.25): an explicit, confirmed recall becomes the startup sound.
+            let _ = self.boot.follow(Choice::Mixed { settings });
+            self.state.start_on_boot = self.boot.enabled(Role::Mixed);
+        }
+        Ok(self.state.clone())
+    }
+    async fn run_action(&mut self, action: RigAudioAction) -> Result<(), String> {
+        match action {
             RigAudioAction::Start { settings } => {
                 self.start(*settings).await?;
                 self.rollback = None;
@@ -916,7 +934,7 @@ impl Owner {
                     oxidal_audio::structure::AuthoringAction::Parameter { .. }
                 ) {
                     self.prepare_native_setting(command).await?;
-                    return Ok(self.state.clone());
+                    return Ok(());
                 }
                 let reply = match self.exchange(&WorkerRequest::Authoring { command }).await {
                     Ok(r) => r,
@@ -1219,7 +1237,7 @@ impl Owner {
                 self.changed();
             }
         }
-        Ok(self.state.clone())
+        Ok(())
     }
     async fn resume_after_fault(&mut self) {
         if self.state.phase == AudioPhase::Running {

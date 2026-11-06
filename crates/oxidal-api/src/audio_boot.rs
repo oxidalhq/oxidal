@@ -121,6 +121,9 @@ fn read(path: &Path) -> Result<Option<Choice>, String> {
     choice.validate()?;
     Ok(Some(choice))
 }
+fn follow_path(path: &Path) -> PathBuf {
+    path.with_file_name("boot-follow.json")
+}
 fn write(path: &Path, choice: Option<&Choice>) -> Result<(), String> {
     // Validate before creating files or replacing the preceding boot choice.
     let bytes = choice
@@ -160,15 +163,107 @@ fn write(path: &Path, choice: Option<&Choice>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// What starts when Oxidal starts (7.25). `Pinned` keeps the exact saved
+/// session; `Follow` replaces it with each preset the player explicitly plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupPolicy {
+    Off,
+    Follow,
+    Pinned,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StartupState {
+    pub policy: StartupPolicy,
+    /// The library entry that will start, when one is chosen.
+    pub target: Option<oxidal_presets::LibraryReference>,
+    pub error: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StartupUpdate {
+    pub follow: bool,
+}
+
 #[derive(Debug)]
 pub(super) struct Policy {
     path: PathBuf,
     choice: Mutex<Result<Option<Choice>, String>>,
+    follow: std::sync::atomic::AtomicBool,
 }
 impl Policy {
     pub fn new(path: PathBuf) -> Self {
         let choice = Mutex::new(read(&path));
-        Self { path, choice }
+        let follow = std::fs::read(follow_path(&path))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<StartupUpdate>(&b).ok())
+            .is_some_and(|f| f.follow);
+        Self {
+            path,
+            choice,
+            follow: follow.into(),
+        }
+    }
+    pub fn follows(&self) -> bool {
+        self.follow.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    /// Follow is stored beside the boot choice; it only matters while one is set.
+    pub fn set_follow(&self, follow: bool) -> Result<(), String> {
+        let path = follow_path(&self.path);
+        let bytes = serde_json::to_vec(&StartupUpdate { follow }).map_err(|e| e.to_string())?;
+        let temporary = path.with_extension("tmp");
+        std::fs::write(&temporary, bytes).map_err(|e| e.to_string())?;
+        std::fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
+        self.follow
+            .store(follow, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+    /// After an explicit, confirmed recall: Follow points startup at it.
+    /// Never enables startup by itself and never picks a different sound.
+    pub fn follow(&self, choice: Choice) -> Result<(), String> {
+        if !self.follows() || !matches!(self.snapshot(), Ok(Some(_))) {
+            return Ok(());
+        }
+        self.set(choice)
+    }
+    pub fn startup(&self) -> StartupState {
+        let snapshot = self.snapshot();
+        let target = match &snapshot {
+            Ok(Some(Choice::Mixed { settings })) => Some(oxidal_presets::LibraryReference {
+                kind: oxidal_presets::LibraryKind::Rig,
+                id: settings.revision.clone(),
+            }),
+            Ok(Some(Choice::Native { settings, .. })) if !settings.draft => {
+                Some(oxidal_presets::LibraryReference {
+                    kind: if settings.owned {
+                        oxidal_presets::LibraryKind::Owned
+                    } else {
+                        oxidal_presets::LibraryKind::Original
+                    },
+                    id: settings.preset_id.clone(),
+                })
+            }
+            Ok(Some(Choice::Effects { settings })) => {
+                settings
+                    .library_id
+                    .clone()
+                    .map(|id| oxidal_presets::LibraryReference {
+                        kind: oxidal_presets::LibraryKind::Graph,
+                        id,
+                    })
+            }
+            _ => None,
+        };
+        StartupState {
+            policy: match &snapshot {
+                Ok(Some(_)) if self.follows() => StartupPolicy::Follow,
+                Ok(Some(_)) => StartupPolicy::Pinned,
+                _ => StartupPolicy::Off,
+            },
+            target,
+            error: snapshot.err(),
+        }
     }
     /// Refresh memory after an exclusive library transaction removed its boot record.
     pub fn reload(&self) -> Result<(), String> {
@@ -221,6 +316,23 @@ impl Policy {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn follow_never_enables_startup_and_persists() {
+        let root = std::env::temp_dir().join(format!("oxidal-follow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("boot-audio.json");
+        let policy = Policy::new(path.clone());
+        assert_eq!(policy.startup().policy, StartupPolicy::Off);
+        policy.set_follow(true).unwrap();
+        // Follow alone is not a startup sound: nothing plays at startup.
+        assert_eq!(policy.startup().policy, StartupPolicy::Off);
+        assert!(policy.startup().target.is_none());
+        assert!(Policy::new(path.clone()).follows());
+        policy.set_follow(false).unwrap();
+        assert!(!Policy::new(path).follows());
+        let _ = std::fs::remove_dir_all(root);
+    }
     #[test]
     fn boot_selection_is_exclusive_atomic_and_backward_compatible() {
         let root = std::env::temp_dir().join(format!(
@@ -396,5 +508,33 @@ mod tests {
             assert!(!path.exists());
         }
         std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+pub(super) async fn startup(
+    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    axum::Json(shared.boot.startup()).into_response()
+}
+/// Switches between Last played (follow) and Pinned for an enabled startup.
+/// Enabling or turning startup off stays with each owner's SetBoot command.
+pub(super) async fn set_startup(
+    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
+    body: Result<axum::Json<StartupUpdate>, axum::extract::rejection::JsonRejection>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let Ok(axum::Json(update)) = body else {
+        return crate::failure(
+            axum::http::StatusCode::BAD_REQUEST,
+            "Invalid startup policy",
+        );
+    };
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason);
+    }
+    match shared.boot.set_follow(update.follow) {
+        Ok(()) => axum::Json(shared.boot.startup()).into_response(),
+        Err(e) => crate::failure(axum::http::StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }

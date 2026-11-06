@@ -676,6 +676,11 @@ export type ResourceSource =
       resource: string;
       revision: string;
     };
+/**
+ * What starts when Oxidal starts (7.25). `Pinned` keeps the exact saved
+ * session; `Follow` replaces it with each preset the player explicitly plays.
+ */
+export type StartupPolicy = "off" | "follow" | "pinned";
 export type TerminalCommand =
   | {
       cursor: number;
@@ -781,6 +786,8 @@ export interface Contract {
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
+  startup_state: StartupState;
+  startup_update: StartupUpdate;
   storage_request: StorageRequest;
   storage_state: StorageState;
   terminal_command: TerminalCommand;
@@ -2465,6 +2472,17 @@ export interface StagedModel {
   sha256: string;
   title: string;
   tone_id: number;
+}
+export interface StartupState {
+  error?: string | null;
+  policy: StartupPolicy;
+  /**
+   * The library entry that will start, when one is chosen.
+   */
+  target?: LibraryReference | null;
+}
+export interface StartupUpdate {
+  follow: boolean;
 }
 export interface StorageRequest {
   mode: StorageMode;

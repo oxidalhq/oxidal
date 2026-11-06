@@ -1142,6 +1142,29 @@ export async function setProtect(on: boolean): Promise<ProtectState> {
   return body;
 }
 
+export type StartupState = Contract['startup_state'];
+const startupValidator = ajv.compile<StartupState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/StartupState',
+});
+/** What starts when Oxidal starts: Off, Last played or Pinned (7.25). */
+export async function startupState(): Promise<StartupState> {
+  const body = await presetResponse(await fetch('/api/v1/startup'));
+  if (!startupValidator(body)) throw new Error('Incompatible startup state');
+  return body;
+}
+export async function setStartupFollow(follow: boolean): Promise<StartupState> {
+  const body = await presetResponse(
+    await fetch('/api/v1/startup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ follow }),
+    }),
+  );
+  if (!startupValidator(body)) throw new Error('Incompatible startup state');
+  return body;
+}
+
 export type ModelRemovalPreview = Contract['model_removal_preview'];
 export type ModelRemovalResult = Contract['model_removal_result'];
 const modelRemovalPreviewValidator = ajv.compile<ModelRemovalPreview>({

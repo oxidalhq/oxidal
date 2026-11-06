@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from './components/ui/button';
 import {
   graphAudioCommand,
@@ -8,9 +8,13 @@ import {
   playbackState,
   rigAudioCommand,
   rigAudioState,
+  setStartupFollow,
+  startupState,
+  type StartupState,
   type AudioState,
   type RigAudioState,
 } from './api';
+import { friendlyError } from './lib/friendlyError';
 
 /** A single boot choice remains reachable regardless of the current audio owner. */
 export function BootPlayback({
@@ -32,6 +36,35 @@ export function BootPlayback({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [startup, setStartup] = useState<StartupState | null>(null);
+  const selectedNow =
+    native?.start_on_boot || mixed?.start_on_boot || effects?.start_on_boot;
+  useEffect(() => {
+    let alive = true;
+    void startupState()
+      .then((s) => alive && setStartup(s))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [selectedNow]);
+  /** Off, Last played (follows each preset you play) or Pinned (exact version). */
+  async function choose(policy: 'off' | 'follow' | 'pinned') {
+    if (busy) return;
+    if (policy === 'off') {
+      if (selectedNow) await toggle();
+      return;
+    }
+    if (!selectedNow) await toggle();
+    setBusy(true);
+    try {
+      setStartup(await setStartupFollow(policy === 'follow'));
+    } catch (cause) {
+      setError(friendlyError(cause, 'change what starts with Oxidal'));
+    } finally {
+      setBusy(false);
+    }
+  }
   const selected =
     native?.start_on_boot || mixed?.start_on_boot || effects?.start_on_boot;
   const invalid = !!native?.boot_error;
@@ -72,7 +105,7 @@ export function BootPlayback({
         );
       }
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change automatic startup'));
     } finally {
       try {
         const [audio, rig, graph] = await Promise.all([
@@ -90,26 +123,63 @@ export function BootPlayback({
     }
   }
   if (!selected && !invalid && !running) return null;
+  const policy = invalid
+    ? 'off'
+    : (startup?.policy ?? (selected ? 'pinned' : 'off'));
   return (
     <div className="control-stack">
-      <Button
-        variant="outline"
-        disabled={disabled || busy || (!selected && !invalid && !running)}
-        onClick={() => void toggle()}
-      >
-        {invalid
-          ? 'Clear invalid boot setup'
-          : selected
-            ? 'Disable boot playback'
-            : 'Start automatically on future boots'}
-      </Button>
+      {invalid ? (
+        <Button
+          variant="outline"
+          disabled={disabled || busy}
+          onClick={() => void toggle()}
+        >
+          Clear invalid startup setup
+        </Button>
+      ) : (
+        <fieldset className="space-y-2" disabled={disabled || busy}>
+          <legend className="mb-1 font-medium">When Oxidal starts</legend>
+          {(
+            [
+              ['off', 'Nothing plays', 'Start audio yourself.'],
+              [
+                'follow',
+                'Last played preset',
+                'Each preset you play becomes the startup sound.',
+              ],
+              [
+                'pinned',
+                'This exact version',
+                'Keeps the sound playing now, even after later edits.',
+              ],
+            ] as const
+          ).map(([value, label, help]) => (
+            <label key={value} className="flex items-start gap-2">
+              <input
+                type="radio"
+                name="startup-policy"
+                className="mt-1"
+                checked={policy === value}
+                disabled={value !== 'off' && !selected && !running}
+                onChange={() => void choose(value)}
+              />
+              <span>
+                {label}
+                <span className="caption block">{help}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {error && <p role="alert">{error}</p>}
       <details className="control-help">
         <summary>Automatic startup</summary>
         <p className="caption">
-          Captures the confirmed sound and device setup when enabled. Only one
-          session starts on boot. Later edits do not change it; disable and
-          enable again to replace it. Stop keeps this preference.
+          Startup uses the confirmed sound and audio setup. With Last played,
+          each preset you start or switch to replaces it; browsing does not.
+          With This exact version, later edits do not change it. Missing
+          hardware or files leave audio stopped with a message; Oxidal never
+          picks a different sound. Stop keeps this preference.
         </p>
         {native?.boot_error && <p role="alert">{native.boot_error}</p>}
       </details>

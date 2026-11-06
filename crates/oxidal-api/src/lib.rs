@@ -74,6 +74,8 @@ pub struct ApiError {
 pub struct Contract {
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
+    pub startup_state: audio_boot::StartupState,
+    pub startup_update: audio_boot::StartupUpdate,
     pub model_removal_preview: oxidal_presets::ModelRemovalPreview,
     pub model_removal_request: oxidal_presets::ModelRemovalRequest,
     pub model_removal_result: oxidal_presets::ModelRemovalResult,
@@ -390,6 +392,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/audio", get(playback::state).post(playback::command))
         .route("/levels", get(levels::state).post(levels::update))
         .route("/protect", get(protect::state).post(protect::update))
+        .route(
+            "/startup",
+            get(audio_boot::startup).post(audio_boot::set_startup),
+        )
         .route("/guitars", get(guitars::state).post(guitars::update))
         .route("/boosts", get(boosts::state).post(boosts::update))
         .route("/scene-blends", get(blends::state).post(blends::update))
