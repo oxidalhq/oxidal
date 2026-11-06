@@ -59,9 +59,14 @@ export function useSectionLocation<T extends string>(
   sections: readonly T[],
   initial: T,
 ): [T, (section: T) => void] {
+  const memory = useContext(WorkspaceMemory);
+  const key = `${view}-section`;
+  // The link wins; otherwise return to the section last used in this session.
   const read = () => {
     const found = locationSection() as T;
-    return sections.includes(found) ? found : initial;
+    if (sections.includes(found)) return found;
+    const remembered = memory?.get(key) as T | undefined;
+    return remembered && sections.includes(remembered) ? remembered : initial;
   };
   const [section, setSection] = useState<T>(read);
   useEffect(() => {
@@ -80,6 +85,7 @@ export function useSectionLocation<T extends string>(
       const url = new URL(window.location.href);
       url.hash = `${view}/${next}`;
       window.history.replaceState(null, '', url);
+      memory?.set(key, next);
       setSection(next);
     },
   ];
