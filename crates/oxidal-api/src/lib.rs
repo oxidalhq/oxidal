@@ -72,6 +72,9 @@ pub struct ApiError {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
     pub removal_preview: oxidal_presets::RemovalPreview,
+    pub model_removal_preview: oxidal_presets::ModelRemovalPreview,
+    pub model_removal_request: oxidal_presets::ModelRemovalRequest,
+    pub model_removal_result: oxidal_presets::ModelRemovalResult,
     pub removal_request: oxidal_presets::RemovalRequest,
     pub removal_result: oxidal_presets::RemovalResult,
     pub local_model: local_models::LocalModel,
@@ -347,6 +350,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 .layer(DefaultBodyLimit::max(oxidal_presets::MAX_FILE_BYTES)),
         )
         .route("/models/local/collection", post(local_models::collection))
+        .route(
+            "/models/local/removal",
+            get(library_removal::preview_model).post(library_removal::remove_model),
+        )
         .route("/tone3000/stage", post(provider::download::stage))
         .route(
             "/tone3000/voice",

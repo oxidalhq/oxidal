@@ -37,9 +37,52 @@ const views: WorkspaceView[] = [
   'monitor',
   'settings',
 ];
+/** Old and new names for the same workspace; `#monitor` stays a valid link. */
+const aliases: Record<string, WorkspaceView> = { levels: 'monitor' };
 function locationView(): WorkspaceView {
-  const value = window.location.hash.slice(1) as WorkspaceView;
+  const [first = ''] = window.location.hash.slice(1).split('/');
+  const value = (aliases[first] ?? first) as WorkspaceView;
   return views.includes(value) ? value : 'rig';
+}
+
+/** The section after the workspace, as in `#library/sounds`. */
+function locationSection(): string {
+  return window.location.hash.slice(1).split('/')[1] ?? '';
+}
+
+/**
+ * A workspace section that survives refresh and Back. Changing it replaces the
+ * history entry, so Back leaves the workspace instead of stepping sections.
+ */
+export function useSectionLocation<T extends string>(
+  view: WorkspaceView,
+  sections: readonly T[],
+  initial: T,
+): [T, (section: T) => void] {
+  const read = () => {
+    const found = locationSection() as T;
+    return sections.includes(found) ? found : initial;
+  };
+  const [section, setSection] = useState<T>(read);
+  useEffect(() => {
+    const restore = () => setSection(read());
+    window.addEventListener('hashchange', restore);
+    window.addEventListener('popstate', restore);
+    return () => {
+      window.removeEventListener('hashchange', restore);
+      window.removeEventListener('popstate', restore);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return [
+    section,
+    (next) => {
+      const url = new URL(window.location.href);
+      url.hash = `${view}/${next}`;
+      window.history.replaceState(null, '', url);
+      setSection(next);
+    },
+  ];
 }
 
 /** Browser history represents workspaces; it never replays an audio command. */

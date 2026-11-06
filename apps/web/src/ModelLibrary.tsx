@@ -6,8 +6,10 @@ import {
   UploadSimple,
   CloudArrowDown,
   MagnifyingGlass,
+  Trash,
   X,
 } from '@phosphor-icons/react';
+import { DeleteSoundDialog } from './features/library/DeleteSoundDialog';
 import { localModels, uploadLocalModel, type LocalModelPage } from './api';
 import { Button } from './components/ui/button';
 import { useWorkspaceState } from './workspaceMemory';
@@ -67,6 +69,7 @@ export function ModelLibrary({
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [preview, setPreview] = useState<LocalModel | null>(null);
+  const [deleting, setDeleting] = useState<LocalModel | null>(null);
   const cancel = useRef<AbortController | null>(null);
   const alive = useRef(false);
   const filesInput = useRef<HTMLInputElement>(null);
@@ -339,6 +342,14 @@ export function ModelLibrary({
                     <dt>Source</dt>
                     <dd>{model.tone_id ? 'TONE3000' : 'Uploaded'}</dd>
                   </dl>
+                  <Button
+                    variant="ghost"
+                    disabled={!connected}
+                    onClick={() => setDeleting(model)}
+                    aria-label={`Delete ${title}`}
+                  >
+                    <Trash aria-hidden="true" /> Delete
+                  </Button>
                 </details>
               ))}
             </section>
@@ -385,6 +396,16 @@ export function ModelLibrary({
                     )}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative z-10 ml-auto"
+                  disabled={!connected}
+                  onClick={() => setDeleting(model)}
+                  aria-label={`Delete ${model.nam?.name || model.title}`}
+                >
+                  <Trash aria-hidden="true" />
+                </Button>
               </article>
             ))}
           </div>
@@ -411,6 +432,14 @@ export function ModelLibrary({
             Next <ArrowRight aria-hidden="true" />
           </Button>
         </nav>
+      )}
+      {deleting && (
+        <DeleteSoundDialog
+          id={deleting.id}
+          name={deleting.nam?.name || deleting.title}
+          onCancel={() => setDeleting(null)}
+          onDeleted={() => setRefresh((n) => n + 1)}
+        />
       )}
       <input
         ref={filesInput}

@@ -751,6 +751,9 @@ export interface Contract {
   midi_test: MidiTest;
   model_page: Page2;
   model_query: ModelQuery;
+  model_removal_preview: ModelRemovalPreview;
+  model_removal_request: ModelRemovalRequest;
+  model_removal_result: ModelRemovalResult;
   monitoring: Monitoring;
   monitoring_history: History;
   native_command: EditorCommand;
@@ -1841,6 +1844,32 @@ export interface ModelQuery {
   page?: number;
   tone_id: number;
 }
+/**
+ * Direct deletion of one separate NAM/IR model file from Sounds.
+ */
+export interface ModelRemovalPreview {
+  /**
+   * Why this file cannot be deleted now, in plain words.
+   */
+  blocked?: string | null;
+  model: ModelRemoval;
+  token: string;
+}
+export interface ModelRemoval {
+  bytes: number;
+  format: string;
+  id: string;
+  name: string;
+  protected_by: string[];
+}
+export interface ModelRemovalRequest {
+  expected_preview: string;
+  id: string;
+}
+export interface ModelRemovalResult {
+  cleanup_pending: boolean;
+  deleted: string;
+}
 export interface Monitoring {
   audio?: Snapshot2 | null;
   audio_age_ms?: number | null;
@@ -2048,13 +2077,6 @@ export interface RemovalPreview {
   remembered_bytes: number;
   remembered_files: number;
   token: string;
-}
-export interface ModelRemoval {
-  bytes: number;
-  format: string;
-  id: string;
-  name: string;
-  protected_by: string[];
 }
 export interface RemovalRequest {
   delete_models: boolean;

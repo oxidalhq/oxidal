@@ -28,8 +28,8 @@ mod owned;
 mod removal;
 pub use owned::{OwnedPreset, OwnedStore};
 pub use removal::{
-    LibraryReference, ModelRemoval, PendingRemoval, RemovalPreview, RemovalReferences,
-    RemovalRequest, RemovalResult, RemovalStore,
+    LibraryReference, ModelRemoval, ModelRemovalPreview, ModelRemovalRequest, ModelRemovalResult,
+    PendingRemoval, RemovalPreview, RemovalReferences, RemovalRequest, RemovalResult, RemovalStore,
 };
 mod store;
 pub use native::{

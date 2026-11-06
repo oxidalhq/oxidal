@@ -12,7 +12,8 @@ use axum::{
 };
 use oxidal_audio::lifecycle::{AudioPhase, StartAudio};
 use oxidal_presets::{
-    Error, LibraryKind, LibraryReference, RemovalReferences, RemovalRequest, RemovalStore,
+    Error, LibraryKind, LibraryReference, ModelRemovalRequest, RemovalReferences, RemovalRequest,
+    RemovalStore,
 };
 use std::{collections::BTreeSet, sync::Arc};
 use tokio::sync::oneshot;
@@ -242,6 +243,95 @@ pub(super) async fn remove(
         failure(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Deletion interrupted; refresh the library before retrying",
+        )
+    })
+}
+
+/// Every model file a configured, playing, prepared or boot session names.
+/// Stopped sessions count: they can be resumed without asking.
+fn model_references(shared: &Shared) -> RemovalReferences {
+    let mut refs = RemovalReferences::default();
+    for value in [
+        serde_json::to_value(shared.playback.snapshot()),
+        serde_json::to_value(shared.rig_playback.snapshot()),
+        serde_json::to_value(shared.graph_playback.snapshot()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        assets(&value, &mut refs.model_assets);
+    }
+    if let Ok(Some(choice)) = shared.boot.snapshot()
+        && let Ok(value) = serde_json::to_value(&choice)
+    {
+        assets(&value, &mut refs.model_assets);
+    }
+    refs
+}
+#[derive(serde::Deserialize)]
+pub(super) struct ModelQuery {
+    id: String,
+}
+pub(super) async fn preview_model(
+    State(shared): State<Arc<Shared>>,
+    query: Result<Query<ModelQuery>, QueryRejection>,
+) -> Response {
+    let Ok(Query(ModelQuery { id })) = query else {
+        return failure(StatusCode::BAD_REQUEST, "Choose a model");
+    };
+    tokio::spawn(async move {
+        let _access = shared.library_access.clone().write_owned().await;
+        let references = model_references(&shared);
+        let root = shared.config.preset_dir.clone();
+        match tokio::task::spawn_blocking(move || {
+            RemovalStore::new(root).preview_model(&id, &references)
+        })
+        .await
+        {
+            Ok(Ok(preview)) => Json(preview).into_response(),
+            Ok(Err(e)) => error(e),
+            Err(_) => failure(StatusCode::INTERNAL_SERVER_ERROR, "Deletion preview failed"),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Deletion preview interrupted",
+        )
+    })
+}
+pub(super) async fn remove_model(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<ModelRemovalRequest>, JsonRejection>,
+) -> Response {
+    let Ok(Json(request)) = body else {
+        return failure(StatusCode::BAD_REQUEST, "Invalid deletion confirmation");
+    };
+    tokio::spawn(async move {
+        let _access = shared.library_access.clone().write_owned().await;
+        let references = model_references(&shared);
+        let root = shared.config.preset_dir.clone();
+        match tokio::task::spawn_blocking(move || {
+            RemovalStore::new(root)
+                .begin_model(&request, &references)?
+                .commit_model()
+        })
+        .await
+        {
+            Ok(Ok(result)) => Json(result).into_response(),
+            Ok(Err(e)) => error(e),
+            Err(_) => failure(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Deletion interrupted; refresh Sounds before retrying",
+            ),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        failure(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Deletion interrupted; refresh Sounds before retrying",
         )
     })
 }

@@ -82,13 +82,14 @@ it('builds an effect-only example without touching transport, then reports it bu
   await user.click(
     screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
   );
-  const explore = screen.getByRole('button', { name: 'Explore Afterlight' });
+  const explore = screen.getByRole('button', { name: 'Details: Afterlight' });
   await waitFor(() => expect(explore).toBeEnabled());
   await user.click(explore);
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Build preset' }));
   await user.click(await screen.findByRole('button', { name: 'Done' }));
-  await screen.findByText('Built');
+  // A built sound now plays in one tap from the list (7.8).
+  await screen.findByRole('button', { name: 'Play Afterlight' });
   expect(changed).toHaveBeenCalledOnce();
   expect(publishRig).toHaveBeenCalledOnce();
   const request = vi.mocked(publishRig).mock.calls[0]![0];
@@ -111,7 +112,9 @@ it('requires an explicit saved NAM source before enabling a native recipe', asyn
   await user.click(
     screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
   );
-  const explore = screen.getByRole('button', { name: 'Explore Clear Current' });
+  const explore = screen.getByRole('button', {
+    name: 'Details: Clear Current',
+  });
   await waitFor(() => expect(explore).toBeEnabled());
   await user.click(explore);
   expect(screen.getByRole('combobox')).toHaveValue('');
@@ -150,10 +153,10 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   expect(
     screen.queryByRole('heading', { name: 'Heavy', level: 3 }),
   ).not.toBeInTheDocument();
-  const explore = screen.getByRole('button', { name: 'Explore Soft Ruin' });
+  const explore = screen.getByRole('button', { name: 'Details: Soft Ruin' });
   await waitFor(() => expect(explore).toBeEnabled());
   expect(
-    screen.queryByRole('button', { name: 'Explore Clear Current' }),
+    screen.queryByRole('button', { name: 'Details: Clear Current' }),
   ).not.toBeInTheDocument();
   await user.click(explore);
   await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -161,7 +164,7 @@ it('finds the expanded bank by genre and retains the search after visiting a rec
   await user.clear(screen.getByRole('searchbox'));
   await user.type(screen.getByRole('searchbox'), 'serial chain');
   expect(
-    screen.getByRole('button', { name: 'Explore Night Conveyor' }),
+    screen.getByRole('button', { name: 'Details: Night Conveyor' }),
   ).toBeVisible();
   expect(screen.getByText('7 serial blocks · 0 NAM stages')).toBeVisible();
   await user.clear(screen.getByRole('searchbox'));
@@ -185,7 +188,7 @@ it('explains an unavailable catalog before the disabled recipe list', async () =
     'You can still browse and search these sounds',
   );
   expect(
-    screen.getByRole('button', { name: 'Explore Afterlight' }),
+    screen.getByRole('button', { name: 'Details: Afterlight' }),
   ).toBeDisabled();
 });
 
@@ -205,7 +208,7 @@ it('offers one download for a missing voice, then builds with the downloaded cap
     'Brown Crunch',
   );
   expect(screen.getByText('Needs download')).toBeVisible();
-  const explore = screen.getByRole('button', { name: 'Explore Brown Crunch' });
+  const explore = screen.getByRole('button', { name: 'Details: Brown Crunch' });
   await waitFor(() => expect(explore).toBeEnabled());
   await user.click(explore);
   // The capture is shown as TONE3000 presents it, and nothing downloads yet.
@@ -224,7 +227,7 @@ it('offers one download for a missing voice, then builds with the downloaded cap
   await waitFor(() => expect(build).toBeEnabled());
   await user.click(build);
   await user.click(await screen.findByRole('button', { name: 'Done' }));
-  await screen.findByText('Built');
+  await screen.findByRole('button', { name: 'Play Brown Crunch' });
   const request = vi.mocked(publishRig).mock.calls.at(-1)![0];
   const manifest = JSON.parse(request.manifest_json);
   expect(manifest.name).toBe('Brown Crunch');
@@ -246,7 +249,7 @@ it('uses a capture already on the device without downloading again', async () =>
     'Brown Crunch',
   );
   expect(screen.queryByText('Needs download')).not.toBeInTheDocument();
-  const explore = screen.getByRole('button', { name: 'Explore Brown Crunch' });
+  const explore = screen.getByRole('button', { name: 'Details: Brown Crunch' });
   await waitFor(() => expect(explore).toBeEnabled());
   await user.click(explore);
   expect(screen.queryByRole('button', { name: 'Download' })).toBeNull();

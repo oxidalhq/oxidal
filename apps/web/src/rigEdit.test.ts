@@ -199,9 +199,12 @@ it('inserts, moves and removes blocks; an emptied split side becomes straight', 
   expect(
     ids(readLanes(document(parallel.manifest_json), [flanger], {})),
   ).toEqual([['amp'], ['flange']]);
-  expect(() => buildLanes('p', 'x', [[]], 'prof')).toThrow(
-    /at least one block/,
-  );
+  // The last block can go: the preset becomes an empty input-to-output chain.
+  expect(
+    graph(buildLanes('p', 'x', [[]], 'prof').manifest_json).nodes.map(
+      (n: { kind: string }) => n.kind,
+    ),
+  ).toEqual(['input', 'output']);
   expect(() =>
     readLanes(
       document(serialRig('p', 'x', [flange], 'prof').manifest_json),

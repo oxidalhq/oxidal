@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { CircleNotch, PlugsConnected } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
+import { PresetRow } from './features/library/PresetRow';
 import { Checkbox } from './components/ui/checkbox';
 import { detailsMatch } from './presetMetadata';
 import {
@@ -157,75 +157,50 @@ export function SavedRigs({
           const active = playing === p.revision;
           const scenes = p.scenes ?? [];
           return (
-            <li key={p.revision} className="library-row">
-              <button
-                type="button"
-                className="library-load"
-                disabled={!connected || busy}
-                onClick={() => void play(p.revision)}
-                aria-label={`Load ${p.name}`}
-                aria-pressed={active}
-              >
-                <span className="library-name">{p.name}</span>
-                <span className="library-meta">
-                  {loadingId === p.revision ? (
-                    <>
-                      <CircleNotch aria-hidden="true" /> Loading…
-                    </>
-                  ) : (
-                    <>
-                      {active && (
-                        <span className="library-playing">Playing</span>
-                      )}
-                      {[rigTopologyLabel({ ...p, scenes }), scenes.join(', ')]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </>
-                  )}
-                </span>
-              </button>
-              <Button
-                variant="ghost"
-                className="library-midi"
-                aria-label={`MIDI: ${p.name}`}
-                disabled={!connected || busy}
-                onClick={() => void play(p.revision, true)}
-              >
-                <PlugsConnected aria-hidden="true" />
-                <span className="library-action-label">MIDI</span>
-              </Button>
-              {onDetails && (
-                <Button
-                  variant="ghost"
-                  className="library-details"
-                  aria-label={`Details: ${p.name}`}
-                  onClick={() => onDetails(p.revision, p.name)}
-                >
-                  Details
-                </Button>
-              )}
-              {choosing && (
-                <label className="library-ready">
-                  <Checkbox
-                    aria-label={`Keep ${p.name} ready`}
-                    checked={prepared.includes(p.revision)}
-                    disabled={
-                      busy ||
-                      (!prepared.includes(p.revision) &&
-                        prepared.length >= GAPLESS_BANK_SIZE)
-                    }
-                    onChange={(event) =>
-                      setPrepared((old) =>
-                        event.target.checked
-                          ? [...new Set([...old, p.revision])]
-                          : old.filter((id) => id !== p.revision),
-                      )
-                    }
-                  />
-                  Ready
-                </label>
-              )}
-            </li>
+            <PresetRow
+              key={p.revision}
+              name={p.name}
+              meta={[rigTopologyLabel({ ...p, scenes }), scenes.join(', ')]
+                .filter(Boolean)
+                .join(' · ')}
+              playing={active}
+              loading={loadingId === p.revision}
+              disabled={!connected || busy}
+              onPlay={() => void play(p.revision)}
+              onDetails={
+                onDetails ? () => onDetails(p.revision, p.name) : undefined
+              }
+              actions={[
+                {
+                  label: 'MIDI assignments…',
+                  onSelect: () => void play(p.revision, true),
+                  disabled: !connected || busy,
+                },
+              ]}
+              extra={
+                choosing && (
+                  <label className="library-ready">
+                    <Checkbox
+                      aria-label={`Keep ${p.name} ready`}
+                      checked={prepared.includes(p.revision)}
+                      disabled={
+                        busy ||
+                        (!prepared.includes(p.revision) &&
+                          prepared.length >= GAPLESS_BANK_SIZE)
+                      }
+                      onChange={(event) =>
+                        setPrepared((old) =>
+                          event.target.checked
+                            ? [...new Set([...old, p.revision])]
+                            : old.filter((id) => id !== p.revision),
+                        )
+                      }
+                    />
+                    Ready
+                  </label>
+                )
+              }
+            />
           );
         })}
       </ul>

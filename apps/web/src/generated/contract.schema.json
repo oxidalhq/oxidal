@@ -121,6 +121,15 @@
     "model_query": {
       "$ref": "#/$defs/ModelQuery"
     },
+    "model_removal_preview": {
+      "$ref": "#/$defs/ModelRemovalPreview"
+    },
+    "model_removal_request": {
+      "$ref": "#/$defs/ModelRemovalRequest"
+    },
+    "model_removal_result": {
+      "$ref": "#/$defs/ModelRemovalResult"
+    },
     "monitoring": {
       "$ref": "#/$defs/Monitoring"
     },
@@ -238,6 +247,9 @@
   },
   "required": [
     "removal_preview",
+    "model_removal_preview",
+    "model_removal_request",
+    "model_removal_result",
     "removal_request",
     "removal_result",
     "local_model",
@@ -5782,6 +5794,60 @@
         "format",
         "bytes",
         "protected_by"
+      ]
+    },
+    "ModelRemovalPreview": {
+      "description": "Direct deletion of one separate NAM/IR model file from Sounds.",
+      "type": "object",
+      "properties": {
+        "blocked": {
+          "description": "Why this file cannot be deleted now, in plain words.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRemoval"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "token"
+      ]
+    },
+    "ModelRemovalRequest": {
+      "type": "object",
+      "properties": {
+        "expected_preview": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "expected_preview"
+      ]
+    },
+    "ModelRemovalResult": {
+      "type": "object",
+      "properties": {
+        "cleanup_pending": {
+          "type": "boolean"
+        },
+        "deleted": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deleted",
+        "cleanup_pending"
       ]
     },
     "ModelVariant": {

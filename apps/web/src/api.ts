@@ -1119,6 +1119,46 @@ export async function removePreset(
   return body;
 }
 
+export type ModelRemovalPreview = Contract['model_removal_preview'];
+export type ModelRemovalResult = Contract['model_removal_result'];
+const modelRemovalPreviewValidator = ajv.compile<ModelRemovalPreview>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/ModelRemovalPreview',
+});
+const modelRemovalResultValidator = ajv.compile<ModelRemovalResult>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/ModelRemovalResult',
+});
+/** What deleting one NAM/IR file would affect; nothing is deleted. */
+export async function modelRemovalPreview(
+  id: string,
+): Promise<ModelRemovalPreview> {
+  const body = await presetResponse(
+    await fetch(`/api/v1/models/local/removal?${new URLSearchParams({ id })}`),
+  );
+  if (!modelRemovalPreviewValidator(body))
+    throw new Error('Incompatible deletion preview');
+  return body;
+}
+/** Deletes one unused NAM/IR file confirmed by its preview token. */
+export async function removeModel(
+  id: string,
+  expectedPreview: string,
+): Promise<ModelRemovalResult> {
+  const body = await presetResponse(
+    await fetch('/api/v1/models/local/removal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, expected_preview: expectedPreview }),
+    }),
+  );
+  if (!modelRemovalResultValidator(body))
+    throw new Error(
+      'Deletion outcome could not be read. Refresh Sounds before retrying.',
+    );
+  return body;
+}
+
 export type PresetDetails =
   Contract['preset_details']['entries'][number]['details'];
 export type DetailsCatalog = Contract['preset_details'];

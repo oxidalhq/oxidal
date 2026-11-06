@@ -94,7 +94,8 @@ export function buildLanes(
   profile: string,
 ): RigPublish {
   const kept = lanes.filter((lane) => lane.length);
-  if (!kept.length) throw new Error('A preset needs at least one block.');
+  // Removing the last block leaves an empty input-to-output preset (7.3).
+  if (!kept.length) return serialRig(id, name, [], profile, false);
   if (kept.length === 1) return serialRig(id, name, kept[0]!, profile, false);
   const { before, sides, after } = splitSections(kept[0]!, kept[1]!);
   return parallelRig(id, name, before, sides, profile, false, after);

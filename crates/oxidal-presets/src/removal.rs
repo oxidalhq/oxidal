@@ -116,6 +116,98 @@ mod tests {
     }
 
     #[test]
+    fn model_deletion_is_protected_by_presets_sessions_and_stale_previews() {
+        let f = Fixture::new();
+        let none = RemovalReferences::default();
+        let model = f.root.join("audition-models").join(&f.model);
+        // The imported preset carries the same bytes: the file is protected.
+        let preview = f.store().preview_model(&f.model, &none).unwrap();
+        assert_eq!(preview.model.protected_by.len(), 1);
+        assert!(preview.blocked.is_some());
+        let request = |token: String| ModelRemovalRequest {
+            id: f.model.clone(),
+            expected_preview: token,
+        };
+        assert!(
+            f.store()
+                .begin_model(&request(preview.token), &none)
+                .is_err()
+        );
+        // Without the preset, the playing session still protects it.
+        f.store()
+            .begin(&f.request(false), &none)
+            .unwrap()
+            .commit()
+            .unwrap();
+        let playing = RemovalReferences {
+            active: vec![],
+            model_assets: BTreeSet::from([f.model.clone()]),
+        };
+        let held = f.store().preview_model(&f.model, &playing).unwrap();
+        assert_eq!(held.model.protected_by, ["Current audio session"]);
+        // A preview taken before that change is stale.
+        let free = f.store().preview_model(&f.model, &none).unwrap();
+        assert!(free.blocked.is_none());
+        assert!(matches!(
+            f.store()
+                .begin_model(&request(free.token.clone()), &playing),
+            Err(Error::Conflict(_))
+        ));
+        // Interrupted before commit: the file returns.
+        drop(
+            f.store()
+                .begin_model(&request(free.token.clone()), &none)
+                .unwrap(),
+        );
+        assert!(model.exists());
+        let result = f
+            .store()
+            .begin_model(&request(free.token), &none)
+            .unwrap()
+            .commit_model()
+            .unwrap();
+        assert_eq!(result.deleted, f.model);
+        assert!(!result.cleanup_pending);
+        assert!(!model.exists());
+    }
+
+    #[test]
+    fn interrupted_model_deletion_recovers_from_its_journal() {
+        let f = Fixture::new();
+        let none = RemovalReferences::default();
+        f.store()
+            .begin(&f.request(false), &none)
+            .unwrap()
+            .commit()
+            .unwrap();
+        let model = f.root.join("audition-models").join(&f.model);
+        let token = f.store().preview_model(&f.model, &none).unwrap().token;
+        let request = ModelRemovalRequest {
+            id: f.model.clone(),
+            expected_preview: token,
+        };
+        // A crash after staging but before commit restores the file.
+        let mut pending = f.store().begin_model(&request, &none).unwrap();
+        pending.committed = true; // Simulate a crash: Drop does not roll back.
+        drop(pending);
+        assert!(!model.exists());
+        f.store().recover().unwrap();
+        assert!(model.exists());
+        // A crash after the committed marker finishes the deletion.
+        let mut pending = f.store().begin_model(&request, &none).unwrap();
+        pending.marker(true).unwrap();
+        drop(pending);
+        f.store().recover().unwrap();
+        assert!(!model.exists());
+        assert!(!fs::read_dir(&f.root).unwrap().any(|e| {
+            e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".remove-")
+        }));
+    }
+
+    #[test]
     fn explicit_cleanup_removes_only_unshared_files() {
         let f = Fixture::new();
         let result = f
@@ -465,6 +557,25 @@ pub struct RemovalRequest {
     pub expected_preview: String,
     pub delete_models: bool,
 }
+/// Direct deletion of one separate NAM/IR model file from Sounds.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ModelRemovalPreview {
+    pub model: ModelRemoval,
+    pub token: String,
+    /// Why this file cannot be deleted now, in plain words.
+    pub blocked: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModelRemovalRequest {
+    pub id: String,
+    pub expected_preview: String,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ModelRemovalResult {
+    pub deleted: String,
+    pub cleanup_pending: bool,
+}
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RemovalResult {
     pub deleted: LibraryReference,
@@ -497,7 +608,19 @@ struct Journal {
     schema: u8,
     committed: bool,
     paths: Vec<String>,
-    deleted: LibraryReference,
+    /// Schema 1: a library entry.
+    #[serde(default)]
+    deleted: Option<LibraryReference>,
+    /// Schema 2: one separate NAM/IR model file.
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// What a pending removal deletes: a library entry, or one model file.
+#[derive(Debug, Clone)]
+enum Target {
+    Entry(LibraryReference),
+    Model(String),
 }
 
 fn canonical_path(root: &Path, path: &str) -> Result<PathBuf> {
@@ -539,7 +662,7 @@ pub struct PendingRemoval {
     root: PathBuf,
     directory: PathBuf,
     paths: Vec<PathBuf>,
-    deleted: LibraryReference,
+    target: Target,
     model_files: usize,
     committed: bool,
 }
@@ -555,10 +678,16 @@ impl PendingRemoval {
             })
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|_| Error::Invalid("Invalid removal path"))?;
-        let bytes = serde_json::to_vec(
-            &serde_json::json!({"schema":1,"committed":committed,"paths":paths,"deleted":self.deleted}),
-        )
-        .map_err(|_| Error::Invalid("Invalid removal journal"))?;
+        let journal = match &self.target {
+            Target::Entry(deleted) => {
+                serde_json::json!({"schema":1,"committed":committed,"paths":paths,"deleted":deleted})
+            }
+            Target::Model(model) => {
+                serde_json::json!({"schema":2,"committed":committed,"paths":paths,"model":model})
+            }
+        };
+        let bytes =
+            serde_json::to_vec(&journal).map_err(|_| Error::Invalid("Invalid removal journal"))?;
         let mut file = fs::File::create(self.directory.join("intent.next"))?;
         file.write_all(&bytes)?;
         file.sync_all()?;
@@ -594,18 +723,39 @@ impl PendingRemoval {
     /// Canonical paths have all moved successfully. After this durable marker,
     /// interruption means cleanup is pending, never an implicit undelete.
     pub fn commit(mut self) -> Result<RemovalResult> {
+        let Target::Entry(deleted) = self.target.clone() else {
+            return Err(Error::Invalid("Use commit_model for a model removal"));
+        };
+        let cleanup_pending = self.finish()?;
+        Ok(RemovalResult {
+            deleted,
+            model_files_deleted: self.model_files,
+            cleanup_pending,
+        })
+    }
+    /// Commits a separate model removal; returns whether cleanup is pending.
+    pub fn commit_model(mut self) -> Result<ModelRemovalResult> {
+        let Target::Model(id) = self.target.clone() else {
+            return Err(Error::Invalid("Use commit for a library entry removal"));
+        };
+        let cleanup_pending = self.finish()?;
+        Ok(ModelRemovalResult {
+            deleted: id,
+            cleanup_pending,
+        })
+    }
+    fn finish(&mut self) -> Result<bool> {
         if let Err(error) = self.marker(true) {
             if !self.committed {
                 return Err(error);
             }
-            return Ok(RemovalResult {
-                deleted: self.deleted.clone(),
-                model_files_deleted: self.model_files,
-                cleanup_pending: true,
-            });
+            return Ok(true);
         }
-        let preferences = CatalogStore::open(self.root.clone())
-            .and_then(|mut c| c.forget(self.deleted.kind, &self.deleted.id));
+        let preferences = match &self.target {
+            Target::Entry(deleted) => CatalogStore::open(self.root.clone())
+                .and_then(|mut c| c.forget(deleted.kind, &deleted.id)),
+            Target::Model(_) => Ok(()),
+        };
         // Keep the committed journal until preferences are durable as well.
         let cleanup = if preferences.is_ok() {
             fs::remove_dir_all(&self.directory)
@@ -613,11 +763,7 @@ impl PendingRemoval {
         } else {
             Ok(())
         };
-        Ok(RemovalResult {
-            deleted: self.deleted.clone(),
-            model_files_deleted: self.model_files,
-            cleanup_pending: preferences.is_err() || cleanup.is_err(),
-        })
+        Ok(preferences.is_err() || cleanup.is_err())
     }
 }
 impl Drop for PendingRemoval {
@@ -806,11 +952,12 @@ impl RemovalStore {
             }
             let journal: Journal = serde_json::from_slice(&file(&intent, 4 * 1024 * 1024)?)
                 .map_err(|_| Error::Invalid("Unreadable removal recovery journal"))?;
-            if journal.schema != 1
-                || journal.paths.is_empty()
-                || journal.paths.len() > 22000
-                || !hash(&journal.deleted.id)
-            {
+            let target = match (journal.schema, journal.deleted, journal.model) {
+                (1, Some(deleted), None) if hash(&deleted.id) => Target::Entry(deleted),
+                (2, None, Some(model)) if hash(&model) => Target::Model(model),
+                _ => return Err(Error::Invalid("Invalid removal recovery journal")),
+            };
+            if journal.paths.is_empty() || journal.paths.len() > 22000 {
                 return Err(Error::Invalid("Invalid removal recovery journal"));
             }
             let paths = journal
@@ -821,16 +968,17 @@ impl RemovalStore {
             if paths.iter().collect::<BTreeSet<_>>().len() != paths.len() {
                 return Err(Error::Invalid("Duplicate removal recovery paths"));
             }
-            let expected = match journal.deleted.kind {
-                LibraryKind::Original => {
-                    self.root.join(format!("{}.t3kpreset", journal.deleted.id))
-                }
-                LibraryKind::Owned => self.root.join("owned").join(&journal.deleted.id),
-                LibraryKind::Graph => self
-                    .root
-                    .join("graphs")
-                    .join(format!("{}.json", journal.deleted.id)),
-                LibraryKind::Rig => self.root.join("bundles").join(&journal.deleted.id),
+            let expected = match &target {
+                Target::Entry(deleted) => match deleted.kind {
+                    LibraryKind::Original => self.root.join(format!("{}.t3kpreset", deleted.id)),
+                    LibraryKind::Owned => self.root.join("owned").join(&deleted.id),
+                    LibraryKind::Graph => self
+                        .root
+                        .join("graphs")
+                        .join(format!("{}.json", deleted.id)),
+                    LibraryKind::Rig => self.root.join("bundles").join(&deleted.id),
+                },
+                Target::Model(model) => self.root.join("audition-models").join(model),
             };
             if paths[0] != expected {
                 return Err(Error::Invalid("Removal journal identity differs"));
@@ -859,13 +1007,14 @@ impl RemovalStore {
                 root: self.root.clone(),
                 directory,
                 paths,
-                deleted: journal.deleted,
+                target,
                 model_files: 0,
                 committed: true,
             };
             if journal.committed {
-                CatalogStore::open(self.root.clone())?
-                    .forget(pending.deleted.kind, &pending.deleted.id)?;
+                if let Target::Entry(deleted) = &pending.target {
+                    CatalogStore::open(self.root.clone())?.forget(deleted.kind, &deleted.id)?;
+                }
                 fs::remove_dir_all(&pending.directory)?;
                 fs::File::open(&self.root)?.sync_all()?;
             } else {
@@ -1397,10 +1546,10 @@ impl RemovalStore {
             root: self.root.clone(),
             directory,
             paths,
-            deleted: LibraryReference {
+            target: Target::Entry(LibraryReference {
                 kind: request.entry_kind,
                 id: request.id.clone(),
-            },
+            }),
             model_files,
             committed: false,
         };
@@ -1417,6 +1566,160 @@ impl RemovalStore {
             .sync_all()?;
         }
         fs::File::open(&pending.directory)?.sync_all()?;
+        Ok(pending)
+    }
+    /// Everything that keeps one separate model file: playing or remembered
+    /// sessions, collections and presets carrying the same bytes. A file with
+    /// any such use is protected; nothing is deleted "anyway".
+    fn plan_model(
+        &self,
+        asset_id: &str,
+        references: &RemovalReferences,
+    ) -> Result<(ModelRemovalPreview, PathBuf)> {
+        if !hash(asset_id) {
+            return Err(Error::Invalid("Invalid model identifier"));
+        }
+        let store = ModelStore::new(self.root.join("audition-models"));
+        let asset = store.metadata(asset_id)?;
+        let mut protection = BTreeSet::new();
+        let mut unverified = None;
+        if references.model_assets.contains(asset_id) {
+            protection.insert("Current audio session".to_owned());
+        }
+        let sessions = self.sessions()?;
+        let mut fingerprints = Vec::new();
+        for session in &sessions {
+            fingerprints.push(session.fingerprint.clone());
+            if session.models.contains(asset_id) {
+                protect(&mut protection, "A remembered preset session".into());
+            }
+        }
+        let mut cursor = None;
+        let mut seen = 0usize;
+        loop {
+            let (page, next) = match store.page(cursor.as_deref(), true) {
+                Ok(page) => page,
+                Err(_) => {
+                    unverified = Some("Model references could not be checked.".to_owned());
+                    break;
+                }
+            };
+            for (_, other) in page {
+                seen += 1;
+                if seen > 131072 {
+                    unverified = Some("Model library exceeds the bounded review.".to_owned());
+                    break;
+                }
+                if other.tone["oxidal_collection"]
+                    .as_array()
+                    .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(asset_id)))
+                {
+                    protect(
+                        &mut protection,
+                        dependency_label("Collection", &other.title),
+                    );
+                }
+            }
+            cursor = next;
+            if cursor.is_none() || unverified.is_some() {
+                break;
+            }
+        }
+        let entries = self.entries()?;
+        for entry in &entries {
+            match &entry.digests {
+                Some(digests) if digests.contains(&asset.sha256) => protect(
+                    &mut protection,
+                    dependency_label("Preset", &entry.item.name),
+                ),
+                Some(_) => (),
+                None => {
+                    unverified =
+                        Some("Some preset model references could not be verified.".to_owned())
+                }
+            }
+        }
+        let path = self.root.join("audition-models").join(asset_id);
+        let model = ModelRemoval {
+            id: asset_id.into(),
+            name: asset.name.clone(),
+            format: asset.format.clone(),
+            bytes: tree_bytes(&path)?,
+            protected_by: protection.into_iter().collect(),
+        };
+        let blocked = unverified
+            .map(|reason| format!("{reason} Keep this file for now."))
+            .or_else(|| {
+                (!model.protected_by.is_empty()).then(|| {
+                    "This file is still used. Remove it from what uses it first.".to_owned()
+                })
+            });
+        let mut preview = ModelRemovalPreview {
+            model,
+            token: String::new(),
+            blocked,
+        };
+        let catalog = entries
+            .iter()
+            .map(|e| (&e.item.kind, &e.item.id, &e.digests))
+            .collect::<Vec<_>>();
+        preview.token = digest(
+            &serde_json::to_vec(&(&preview, catalog, fingerprints, references, &asset))
+                .map_err(|_| Error::Invalid("Could not encode deletion preview"))?,
+        );
+        Ok((preview, path))
+    }
+    pub fn preview_model(
+        &self,
+        asset_id: &str,
+        references: &RemovalReferences,
+    ) -> Result<ModelRemovalPreview> {
+        Ok(self.plan_model(asset_id, references)?.0)
+    }
+    /// Stages the model file under the same crash-safe journal as presets.
+    pub fn begin_model(
+        &self,
+        request: &ModelRemovalRequest,
+        references: &RemovalReferences,
+    ) -> Result<PendingRemoval> {
+        let (preview, path) = self.plan_model(&request.id, references)?;
+        if preview.token != request.expected_preview {
+            return Err(Error::Conflict("Deletion preview changed; review it again"));
+        }
+        if preview.blocked.is_some() {
+            return Err(Error::Conflict(
+                "This file is still used; remove it from what uses it first",
+            ));
+        }
+        canonical_path(&self.root, &format!("audition-models/{}", request.id))?;
+        let directory = self.root.join(format!(
+            ".remove-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| Error::Invalid("Invalid system clock"))?
+                .as_nanos()
+        ));
+        fs::create_dir(&directory)?;
+        let mut pending = PendingRemoval {
+            root: self.root.clone(),
+            directory,
+            paths: vec![path],
+            target: Target::Model(request.id.clone()),
+            model_files: 1,
+            committed: false,
+        };
+        pending.marker(false)?;
+        fs::File::open(&self.root)?.sync_all()?;
+        for (index, path) in pending.paths.iter().enumerate() {
+            fs::rename(path, pending.directory.join(index.to_string()))?;
+            fs::File::open(&pending.directory)?.sync_all()?;
+            fs::File::open(
+                path.parent()
+                    .ok_or(Error::Invalid("Invalid removal parent"))?,
+            )?
+            .sync_all()?;
+        }
         Ok(pending)
     }
 }
