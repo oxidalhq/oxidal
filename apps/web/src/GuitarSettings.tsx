@@ -152,8 +152,8 @@ export function GuitarSettings() {
     >
       <p className="caption">
         Choose the guitar you are holding. Its trim and gate apply immediately
-        to every rig, and Sound Check follows the selected profile automatically
-        — there is no separate Sound Check run. Remeasure only after changing
+        to every rig, and Levels follows the selected profile automatically
+        — there is no separate Levels run. Remeasure only after changing
         the guitar&apos;s output or the interface input/gain.
       </p>
       {profiles.guitars.map((g) => {

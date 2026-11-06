@@ -112,7 +112,7 @@ test('monitor shows measured stereo data, freezes, resets and marks stale readin
   ).toHaveText('—');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(strip).toBeVisible();
-  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await expect(page.getByText('Current input verified')).toBeVisible();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   const panel = page.getByRole('region', {
@@ -248,7 +248,7 @@ test('monitor shows device history after browser reload and exports retained sam
     .toBeGreaterThan(0);
   const initial = await (await request.get('/api/v1/monitor/history')).json();
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
@@ -293,7 +293,7 @@ test('monitor shows device history after browser reload and exports retained sam
   );
   await page.getByRole('button', { name: 'Reset view', exact: true }).click();
   await page.reload();
-  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Device history', { exact: true }).click();
   await expect(
@@ -333,7 +333,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     })
     .toBe(true);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Control request history' });
@@ -401,7 +401,7 @@ test('monitor shows redacted control audit with filters and reload persistence',
     fullPage: true,
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Sound Check', exact: true }).click();
+  await page.getByRole('button', { name: 'Levels', exact: true }).click();
   await page.getByRole('tab', { name: 'Diagnostics', exact: true }).click();
   await page.getByText('Control audit', { exact: true }).click();
   await expect(page.getByRole('list', { name: 'Audit entries' })).toContainText(

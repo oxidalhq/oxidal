@@ -3445,7 +3445,7 @@ textarea {
   width: auto;
 }
 
-/* Phone navigation: every icon sits on one line and the longer "Sound Check"
+/* Phone navigation: every icon sits on one line and the longer "Levels"
    label wraps below it, instead of pushing its own icon up. */
 @media (max-width: 600px) {
   .masthead nav {
@@ -3517,4 +3517,24 @@ textarea {
 }
 .voice-slot .oxidal-button {
   justify-self: start;
+}
+
+/* About: one aligned definition list, no decorative cards (7.18). */
+.about-facts {
+  display: grid;
+  margin: 0.5rem 0 1rem;
+}
+.about-facts > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.about-facts dt {
+  color: var(--muted-foreground);
+}
+.about-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }

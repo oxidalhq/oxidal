@@ -61,13 +61,16 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
       setDraft({ ...draft, parameters: { ...draft.parameters, [id]: value } });
   }
   return (
-    <details className="panel control-stack">
-      <summary>TONE3000 device defaults</summary>
+    <section
+      className="control-stack border-t border-border pt-4"
+      aria-labelledby="native-defaults"
+    >
+      <h3 id="native-defaults">Defaults for new NAM blocks</h3>
       <p className="text-muted-foreground">
-        New native instances use these defaults. Saved tone and session settings
-        take priority; playing audio stays unchanged. Oxidal starts new models
-        at Full A2 and 8×, then dense rigs can deliberately use Lite or lower
-        oversampling when the measured DSP budget requires it.
+        NAM blocks added from now on start with these settings. Presets keep
+        their own saved settings, and what is playing now does not change. The
+        factory default is Full A2 at 8× oversampling; dense presets can use
+        Lite or less oversampling when processing load requires it.
       </p>
       {draft && (
         <fieldset disabled={!connected || busy} className="control-stack">
@@ -168,6 +171,6 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
         </fieldset>
       )}
       <p role="status">{busy ? 'Saving…' : message}</p>
-    </details>
+    </section>
   );
 }

@@ -284,7 +284,7 @@ export function SoundCheck({
     });
 
   return (
-    <section className="sound-check" aria-label="Sound Check">
+    <section className="sound-check" aria-label="Levels">
       <header className="sound-check-intro">
         <div>
           <Badge data-state={fixes.length ? 'attention' : 'ready'}>
@@ -312,7 +312,7 @@ export function SoundCheck({
       </header>
 
       {error && (
-        <StateNotice kind="error" title="Sound Check could not refresh">
+        <StateNotice kind="error" title="Levels could not refresh">
           {error}
         </StateNotice>
       )}
@@ -321,7 +321,7 @@ export function SoundCheck({
         value={view}
         onValueChange={(value) => setView(value as SoundCheckView)}
       >
-        <TabsList aria-label="Sound Check sections">
+        <TabsList aria-label="Levels sections">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="loudness">Loudness</TabsTrigger>
           <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
@@ -506,7 +506,7 @@ export function SoundCheck({
                             ? 'Recheck input'
                             : 'Measurement needed'
                   }
-                  detail={`${guitarVerificationDetail(activeGuitar)} Sound Check follows the active profile automatically. Remeasure after changing the physical input-gain knob or the guitar's output level; Oxidal cannot read either control.`}
+                  detail={`${guitarVerificationDetail(activeGuitar)} Levels follows the active profile automatically. Remeasure after changing the physical input-gain knob or the guitar's output level; Oxidal cannot read either control.`}
                 />
               </ToolSection>
 

@@ -89,7 +89,7 @@ it('shows measured strum and noise levels on each profile row', async () => {
   render(<GuitarSettings />);
 
   expect(
-    await screen.findByText(/Sound Check follows the selected profile/),
+    await screen.findByText(/Levels follows the selected profile/),
   ).toBeVisible();
   expect(
     screen.getByText(

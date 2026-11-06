@@ -1079,7 +1079,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     id: 'X07',
     name: 'Cascade Engine',
     description:
-      'Experimental long serial chain: compression and a clean whole-rig NAM feed drive, a second crunch whole-rig NAM, modulation, echo and hall. This deliberately stacks complete captures; it is not a separate amp/cab/IR claim. Start quietly and use Sound Check before raising Master Level.',
+      'Experimental long serial chain: compression and a clean whole-rig NAM feed drive, a second crunch whole-rig NAM, modulation, echo and hall. This deliberately stacks complete captures; it is not a separate amp/cab/IR claim. Start quietly and use Levels before raising Master Level.',
     categories: ['Experimental', 'Dual NAM', 'Serial chain'],
     topology: 'serial',
     before: [studioComp(-26), nam('clean')],
@@ -1122,7 +1122,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     id: 'B06',
     name: 'Subcurrent',
     description:
-      'Experimental bass serial chain: a whole-rig bass NAM is peak-controlled, reinforced by a tracked sub, driven, filtered, widened and placed in a compact reflection space. Play clean single notes and check low-frequency headroom in Sound Check.',
+      'Experimental bass serial chain: a whole-rig bass NAM is peak-controlled, reinforced by a tracked sub, driven, filtered, widened and placed in a compact reflection space. Play clean single notes and check low-frequency headroom in Levels.',
     categories: ['Bass', 'Experimental', 'Serial chain'],
     topology: 'serial',
     before: [nam('bass'), studioComp(-24), sub(0.3)],

@@ -112,15 +112,15 @@ function InstrumentApp() {
     | 'about'
   >('audio');
   const settingsLabels = {
-    audio: 'Audio setup',
+    audio: 'Audio',
     connections: 'Network',
     accounts: 'Accounts',
-    midi: 'MIDI controls',
+    midi: 'MIDI',
     effects: 'Effects',
     display: 'Display',
     device: 'Device',
     maintenance: 'Maintenance',
-    about: 'About Oxidal',
+    about: 'About',
   };
   const [displayMode, setDisplayMode] = useState(() => {
     try {
@@ -385,7 +385,7 @@ function InstrumentApp() {
                     rig: 'Rig',
                     guitars: 'Guitars',
                     library: 'Library',
-                    monitor: 'Sound Check',
+                    monitor: 'Levels',
                     settings: 'Settings',
                   }[destination]
                 }
@@ -419,7 +419,7 @@ function InstrumentApp() {
                   : view === 'guitars'
                     ? 'Guitars'
                     : view === 'monitor'
-                      ? 'Sound Check'
+                      ? 'Levels'
                       : view === 'library'
                         ? 'Library'
                         : 'Settings'}
@@ -441,26 +441,12 @@ function InstrumentApp() {
                   : view === 'guitars'
                     ? 'Your guitars'
                     : view === 'monitor'
-                      ? 'Instrument health'
+                      ? 'Levels'
                       : view === 'library'
                         ? 'Library'
                         : settingsLabels[settingsSection]}
               </h1>
             </div>
-            {view === 'settings' && (
-              <Button
-                variant="outline"
-                aria-pressed={settingsSection === 'about'}
-                onClick={() => {
-                  setSettingsSection(
-                    settingsSection === 'about' ? 'audio' : 'about',
-                  );
-                  window.scrollTo({ top: 0 });
-                }}
-              >
-                {settingsSection === 'about' ? 'Back to settings' : 'About'}
-              </Button>
-            )}
             {state &&
               view === 'rig' &&
               developmentSimulator &&
@@ -541,7 +527,7 @@ function InstrumentApp() {
           ) : view === 'guitars' ? (
             <GuitarSettings />
           ) : view === 'monitor' ? (
-            <Suspense fallback={<p>Loading Sound Check…</p>}>
+            <Suspense fallback={<p>Loading Levels…</p>}>
               <SoundCheck
                 connected={connected}
                 displayMode={displayMode}
@@ -700,14 +686,9 @@ function InstrumentApp() {
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
                 )
-                  .filter((section) => section !== 'about')
                   .map((section) => (
                     <TabsTrigger key={section} value={section}>
-                      {section === 'audio'
-                        ? 'Audio'
-                        : section === 'midi'
-                          ? 'MIDI'
-                          : settingsLabels[section]}
+                      {settingsLabels[section]}
                     </TabsTrigger>
                   ))}
               </TabsList>

@@ -182,7 +182,7 @@ it('summarises measured loudness, guitar, interface and distinct level stages', 
   expect(screen.getByText(/Strum -11.5 dBFS · noise -68.5 dBFS/)).toBeVisible();
   expect(screen.getByText('Current input verified')).toBeVisible();
   expect(
-    screen.getByText(/Sound Check follows the active profile automatically/),
+    screen.getByText(/Levels follows the active profile automatically/),
   ).toBeVisible();
   expect(screen.getByText(/Jogg capture → Jogg playback/)).toBeVisible();
   fireEvent.click(

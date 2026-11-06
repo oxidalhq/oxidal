@@ -268,7 +268,7 @@ test('quiet interface has no detected WCAG AA violations', async ({
   });
 });
 
-test('guitar profiles explain automatic Sound Check use and guard removal', async ({
+test('guitar profiles explain automatic Levels use and guard removal', async ({
   page,
   request,
 }, testInfo) => {
@@ -304,7 +304,7 @@ test('guitar profiles explain automatic Sound Check use and guard removal', asyn
     page.getByRole('heading', { name: 'Your guitars', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText(/Sound Check follows the selected profile automatically/),
+    page.getByText(/Levels follows the selected profile automatically/),
   ).toBeVisible();
   await expect(
     page.locator('.ui-badge').filter({ hasText: /^Playing$/ }),
@@ -459,7 +459,7 @@ test('shared surfaces retain their theme and width contracts', async ({
     'Rig',
     'Guitars',
     'Library',
-    'Sound Check',
+    'Levels',
     'Settings',
   ] as const;
   const sizes = [
