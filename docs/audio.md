@@ -57,3 +57,29 @@ running the actual rig.
 - [Audio device API](../crates/oxidal-api/src/audio.rs) and
   [playback tests](../crates/oxidal-api/tests/playback.rs)
 - [Architecture](architecture.md) and [appliance setup](../os/README.md)
+
+## What starts with Oxidal
+
+**Last played preset** follows a successful explicit mixed Start or prepared
+Switch. A Start first reports preparation; only its confirmed Running result
+updates startup. Failure, cancellation, automatic recovery and Save alone do not
+retarget it. Startup must already be enabled for Follow to replace its target.
+The mixed startup recall uses the saved bundle defaults, excluding temporary
+live values, external model overrides and unsaved working receipts. A storage
+failure leaves the previous choice and reports that the new choice was not saved.
+
+**Pinned saved version** captures the saved version currently playing even when
+startup already names another preset. Save and play the saved version first if
+there are unsaved edits or pending model changes. Resolve any automatic copy's
+Keep/Discard decision before choosing startup. The UI shows the confirmed
+startup name and expandable version identifier. **Pin the playing saved version**
+can replace an existing pin; later playback does not change it.
+
+`POST /api/v1/startup` accepts `follow`, optional `expected` startup readback and
+optional `capture: {owner, session, revision}`. The daemon verifies the reviewed
+running session and stored preset, then persists target and policy together in
+one boot record. Stale reviews return 409, and Protect returns 423. Existing
+`{follow}` clients remain compatible. Schema-1 and schema-2 boot files remain
+readable; schema-2 records without an embedded policy use the legacy
+`boot-follow.json` preference. Owner `set_boot {enabled:false}` still clears
+startup without stopping audio.

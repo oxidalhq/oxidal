@@ -423,3 +423,17 @@ Permanent deletion includes only the selected entry's metadata. The metadata
 revision participates in deletion preview validation; interrupted committed
 cleanup retries metadata removal through the existing journal. Other presets'
 notes and their historical source credits remain intact.
+
+### Restoring a content revision and deleting independent sounds
+
+Saving the bytes of a previously superseded revision restores that revision in
+the current preset's position, with its current label and visibility. A visible
+A → B → A remains visible; an intentionally archived current preset stays
+archived. Earlier revisions remain on disk as history.
+
+Deleting a separate NAM/IR file checks actual model IDs in current, boot and
+remembered sessions and collection membership. A validated preset embedding the
+same bytes owns an independent copy and does not depend on the separate source
+file. Unverifiable references still block deletion, and stale previews must be
+reviewed again. Preset-deletion optional cleanup keeps its existing conservative
+shared-byte checks.

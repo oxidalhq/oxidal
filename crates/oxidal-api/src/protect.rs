@@ -38,6 +38,7 @@ pub struct Protect {
 }
 
 const LOCKED: &str = "Protect is on. Turn Protect off to change this.";
+pub(crate) type Update = (bool, tokio::sync::oneshot::Sender<Result<(), String>>);
 
 impl Protect {
     /// A missing or unreadable file means off; a damaged file never locks a
@@ -86,10 +87,20 @@ fn utility(command: &HostUtility) -> bool {
     )
 }
 
+fn tuner(action: &oxidal_audio::structure::AuthoringAction) -> bool {
+    matches!(
+        action,
+        oxidal_audio::structure::AuthoringAction::Utility {
+            command: oxidal_audio::tools::Command::Tuner { .. }
+        }
+    )
+}
+
 /// Prepared recall, scene and branch mixes, stomp bypass, mute and recovery of
 /// failed audio are performance actions; everything else changes the rig.
 pub fn rig(action: &RigAudioAction, phase: AudioPhase) -> bool {
     match action {
+        RigAudioAction::Authoring { command } => tuner(&command.action),
         RigAudioAction::HostUtility { command } => utility(command),
         RigAudioAction::Switch { .. }
         | RigAudioAction::Scene { .. }
@@ -102,6 +113,7 @@ pub fn rig(action: &RigAudioAction, phase: AudioPhase) -> bool {
 }
 pub fn native(action: &AudioAction, phase: AudioPhase) -> bool {
     match action {
+        AudioAction::Authoring { action } => tuner(action),
         AudioAction::HostUtility { command } => utility(command),
         AudioAction::CancelModel { .. }
         | AudioAction::SaveCopy { .. }
@@ -134,7 +146,48 @@ pub(super) async fn update(
     let Ok(Json(request)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid Protect request");
     };
-    match shared.protect.set(request.on) {
+    // Finish even if the browser loses its reply. Exclusive access drains existing
+    // owner commands and prevents a start/configuration race with worker acknowledgement.
+    let result = tokio::spawn(async move {
+        let _access = shared.library_access.clone().write_owned().await;
+        if [
+            shared.playback.snapshot().phase,
+            shared.rig_playback.snapshot().phase,
+        ]
+        .contains(&AudioPhase::Starting)
+        {
+            return Err("Wait for audio preparation before changing Protect".to_owned());
+        }
+        let previous = shared.protect.on();
+        if request.on {
+            // Lock the daemon before workers; an acknowledgement failure stays locked.
+            shared.protect.set(true)?;
+        }
+        let acknowledged = async {
+            shared.playback.set_protect(request.on).await?;
+            shared.rig_playback.set_protect(request.on).await
+        }
+        .await;
+        if let Err(error) = acknowledged {
+            if !request.on {
+                let _ = shared.playback.set_protect(previous).await;
+                let _ = shared.rig_playback.set_protect(previous).await;
+            }
+            return Err(error);
+        }
+        if !request.on
+            && let Err(error) = shared.protect.set(false)
+        {
+            // A failed unlock must restore the still-persisted lock at MIDI ingress.
+            let _ = shared.playback.set_protect(previous).await;
+            let _ = shared.rig_playback.set_protect(previous).await;
+            return Err(error);
+        }
+        Ok(shared.protect.state())
+    })
+    .await
+    .unwrap_or_else(|_| Err("Protect update interrupted; refresh its state".into()));
+    match result {
         Ok(state) => Json(state).into_response(),
         Err(e) => failure(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -152,6 +205,46 @@ mod tests {
         std::env::temp_dir().join(format!("oxidal-protect-{}-{name}.json", std::process::id()))
     }
 
+    #[test]
+    fn tuner_start_and_stop_are_allowed_but_other_authoring_utilities_stay_locked() {
+        use oxidal_audio::{structure::AuthoringAction, tools::Command};
+        use oxidal_engine::protocol::AuthoringCommand;
+        for command in [
+            Command::Tuner { enabled: true },
+            Command::Tuner { enabled: false },
+            Command::Balance,
+            Command::Align,
+            Command::Solo {
+                side: oxidal_audio::tools::Solo::Left,
+            },
+        ] {
+            let allowed = matches!(command, Command::Tuner { .. });
+            let action = AuthoringAction::Utility { command };
+            assert_eq!(
+                native(
+                    &AudioAction::Authoring {
+                        action: action.clone()
+                    },
+                    AudioPhase::Running
+                ),
+                allowed
+            );
+            assert_eq!(
+                rig(
+                    &RigAudioAction::Authoring {
+                        command: AuthoringCommand {
+                            session: "live".into(),
+                            expected_revision: 2,
+                            node: "amp".into(),
+                            action,
+                        }
+                    },
+                    AudioPhase::Running
+                ),
+                allowed
+            );
+        }
+    }
     #[test]
     fn protect_persists_across_restart_and_damaged_files_unlock() {
         let file = path("persist");

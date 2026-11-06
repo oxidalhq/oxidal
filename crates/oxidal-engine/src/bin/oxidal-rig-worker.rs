@@ -334,6 +334,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             };
             let what = match &request {
+                WorkerRequest::Protect { .. } => "protect",
                 WorkerRequest::HostUtility { .. } => "host utility",
                 WorkerRequest::Status => "status",
                 WorkerRequest::Authoring { .. } => "authoring",
@@ -348,6 +349,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             };
             let mut rig = shared.lock(what);
             let error = match request {
+                WorkerRequest::Protect { on } => {
+                    midi.protect(on);
+                    None
+                }
                 WorkerRequest::HostUtility { command } => {
                     drop(rig);
                     host_send.send(command)?;

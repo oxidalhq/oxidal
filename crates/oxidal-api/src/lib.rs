@@ -198,7 +198,7 @@ struct Shared {
     native: Arc<Mutex<Option<native_editor::Worker>>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
-    protect: protect::Protect,
+    protect: Arc<protect::Protect>,
     keep_ready: keep_ready::Store,
     config: Config,
 }
@@ -269,8 +269,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     ));
     let midi_map = Arc::new(oxidal_presets::MidiMapStore::new(config.preset_dir.clone()));
     let (midi_events, midi_event_rx) = tokio::sync::mpsc::channel(32);
+    let protect = Arc::new(protect::Protect::new(
+        config.preset_dir.join("protect.json"),
+    ));
     let shared = Arc::new(Shared {
-        protect: protect::Protect::new(config.preset_dir.join("protect.json")),
+        protect: protect.clone(),
         keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
         account: provider::Account::new(
@@ -289,6 +292,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         playback: playback::Playback::new(
             &config,
             boot.clone(),
+            protect.clone(),
             levels.clone(),
             library_access.clone(),
             midi_map.clone(),
@@ -303,6 +307,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         rig_playback: rig_playback::RigPlayback::new(
             &config,
             boot,
+            protect.clone(),
             levels.clone(),
             library_access.clone(),
             midi_map.clone(),

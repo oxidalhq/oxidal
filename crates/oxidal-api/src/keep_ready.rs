@@ -124,6 +124,8 @@ mod tests {
         assert_eq!(Store::new(path.clone()).read().revisions, [r("a"), r("b")]);
         store.replace(&r("a"), &r("c")).unwrap();
         assert_eq!(store.read().revisions, [r("c"), r("b")]);
+        store.replace(&r("c"), &r("a")).unwrap();
+        assert_eq!(Store::new(path.clone()).read().revisions, [r("a"), r("b")]);
         let _ = std::fs::remove_file(path);
     }
 }

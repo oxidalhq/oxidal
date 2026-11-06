@@ -78,6 +78,8 @@ impl Choice {
 struct Record {
     schema: u32,
     choice: Choice,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    follow: Option<bool>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -124,7 +126,7 @@ fn read(path: &Path) -> Result<Option<Choice>, String> {
 fn follow_path(path: &Path) -> PathBuf {
     path.with_file_name("boot-follow.json")
 }
-fn write(path: &Path, choice: Option<&Choice>) -> Result<(), String> {
+fn write(path: &Path, choice: Option<&Choice>, follow: bool) -> Result<(), String> {
     // Validate before creating files or replacing the preceding boot choice.
     let bytes = choice
         .map(|choice| -> Result<Vec<u8>, String> {
@@ -132,6 +134,7 @@ fn write(path: &Path, choice: Option<&Choice>) -> Result<(), String> {
             let bytes = serde_json::to_vec(&Record {
                 schema: 2,
                 choice: choice.clone(),
+                follow: Some(follow),
             })
             .map_err(|e| e.to_string())?;
             if bytes.len() >= REQUEST_LIMIT {
@@ -172,7 +175,7 @@ pub enum StartupPolicy {
     Follow,
     Pinned,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StartupState {
     pub policy: StartupPolicy,
@@ -184,6 +187,38 @@ pub struct StartupState {
 #[serde(deny_unknown_fields)]
 pub struct StartupUpdate {
     pub follow: bool,
+    #[serde(default)]
+    pub capture: Option<StartupCapture>,
+    #[serde(default)]
+    pub expected: Option<StartupState>,
+}
+/// Session cursor of the saved sound reviewed in the browser.
+/// @see docs/audio.md
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct StartupCapture {
+    pub owner: StartupOwner,
+    pub session: String,
+    pub revision: u64,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupOwner {
+    Native,
+    Mixed,
+    Effects,
+}
+fn read_follow(path: &Path) -> bool {
+    std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Record>(&b).ok())
+        .and_then(|r| r.follow)
+        .unwrap_or_else(|| {
+            std::fs::read(follow_path(path))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<StartupUpdate>(&b).ok())
+                .is_some_and(|f| f.follow)
+        })
 }
 
 #[derive(Debug)]
@@ -195,10 +230,7 @@ pub(super) struct Policy {
 impl Policy {
     pub fn new(path: PathBuf) -> Self {
         let choice = Mutex::new(read(&path));
-        let follow = std::fs::read(follow_path(&path))
-            .ok()
-            .and_then(|b| serde_json::from_slice::<StartupUpdate>(&b).ok())
-            .is_some_and(|f| f.follow);
+        let follow = read_follow(&path);
         Self {
             path,
             choice,
@@ -210,8 +242,20 @@ impl Policy {
     }
     /// Follow is stored beside the boot choice; it only matters while one is set.
     pub fn set_follow(&self, follow: bool) -> Result<(), String> {
+        let mut current = self.choice.lock().map_err(|_| "Boot policy unavailable")?;
+        if let Ok(Some(choice)) = &*current {
+            let result = write(&self.path, Some(choice), follow);
+            *current = read(&self.path);
+            self.follow
+                .store(read_follow(&self.path), std::sync::atomic::Ordering::SeqCst);
+            return result;
+        }
         let path = follow_path(&self.path);
-        let bytes = serde_json::to_vec(&StartupUpdate { follow }).map_err(|e| e.to_string())?;
+        let bytes = serde_json::to_vec(&serde_json::json!({ "follow": follow }))
+            .map_err(|e| e.to_string())?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
         let temporary = path.with_extension("tmp");
         std::fs::write(&temporary, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&temporary, &path).map_err(|e| e.to_string())?;
@@ -219,13 +263,26 @@ impl Policy {
             .store(follow, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
+    /// Publish the reviewed target and mode in one durable record.
+    pub fn select(&self, choice: Choice, follow: bool) -> Result<(), String> {
+        let mut current = self.choice.lock().map_err(|_| "Boot policy unavailable")?;
+        let result = write(&self.path, Some(&choice), follow);
+        *current = read(&self.path);
+        self.follow
+            .store(read_follow(&self.path), std::sync::atomic::Ordering::SeqCst);
+        result
+    }
+
     /// After an explicit, confirmed recall: Follow points startup at it.
     /// Never enables startup by itself and never picks a different sound.
     pub fn follow(&self, choice: Choice) -> Result<(), String> {
-        if !self.follows() || !matches!(self.snapshot(), Ok(Some(_))) {
+        let mut current = self.choice.lock().map_err(|_| "Boot policy unavailable")?;
+        if !self.follows() || !matches!(&*current, Ok(Some(_))) {
             return Ok(());
         }
-        self.set(choice)
+        let result = write(&self.path, Some(&choice), true);
+        *current = read(&self.path);
+        result
     }
     pub fn startup(&self) -> StartupState {
         let snapshot = self.snapshot();
@@ -293,7 +350,7 @@ impl Policy {
             .choice
             .lock()
             .map_err(|_| "Boot audio policy unavailable".to_owned())?;
-        let result = write(&self.path, Some(&choice));
+        let result = write(&self.path, Some(&choice), self.follows());
         // Even if directory fsync fails after rename, report what is actually published.
         *current = read(&self.path);
         result
@@ -306,12 +363,178 @@ impl Policy {
         if matches!(&*current, Ok(Some(c)) if c.role() != role) {
             return Ok(());
         }
-        let result = write(&self.path, None);
+        let result = write(&self.path, None, self.follows());
         *current = read(&self.path);
         result
     }
 }
 
+pub(super) async fn startup(
+    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    axum::Json(shared.boot.startup()).into_response()
+}
+/// Empty overrides load the immutable bundle defaults while retaining the required
+/// recovery envelope. Live controls, external models and working receipts are excluded.
+pub(super) fn saved_mixed(mut settings: StartRig) -> StartRig {
+    settings.recall = Some(oxidal_engine::protocol::Recall {
+        source_revision: settings.revision.clone(),
+        values: vec![],
+        eq: None,
+        models: vec![],
+        working: vec![],
+    });
+    for prepared in &mut settings.prepared {
+        prepared.recall = None;
+    }
+    settings
+}
+fn capture_saved(shared: &crate::Shared, capture: StartupCapture) -> Result<Choice, String> {
+    use oxidal_audio::lifecycle::AudioPhase;
+    let check = |session: &str, revision, phase| {
+        if session != capture.session
+            || revision != capture.revision
+            || phase != AudioPhase::Running
+        {
+            Err("The playing sound changed. Review startup again.".to_owned())
+        } else {
+            Ok(())
+        }
+    };
+    let dirty = "Save your changes and play that saved version before choosing startup.";
+    match capture.owner {
+        StartupOwner::Mixed => {
+            let state = shared.rig_playback.snapshot();
+            check(&state.session, state.revision, state.phase)?;
+            let control = state.control.as_ref().ok_or("No confirmed sound")?;
+            if control.modified
+                || !control.valid_model_state()
+                || control
+                    .model_change
+                    .as_ref()
+                    .is_some_and(|m| m.progress.phase.pending())
+            {
+                return Err(dirty.into());
+            }
+            let settings = state.configured.ok_or("No configured sound")?;
+            oxidal_presets::BundleStore::new(shared.config.preset_dir.join("bundles"))
+                .read(&settings.revision)
+                .map_err(|e| e.to_string())?;
+            Ok(Choice::Mixed {
+                settings: saved_mixed(settings),
+            })
+        }
+        StartupOwner::Native => {
+            let state = shared.playback.snapshot();
+            check(&state.session, state.revision, state.phase)?;
+            let mut settings = state.configured.ok_or("No configured sound")?;
+            if state.modified
+                || state.copy_on_edit.is_some()
+                || settings.draft
+                || state
+                    .model_change
+                    .as_ref()
+                    .is_some_and(|m| m.phase.pending())
+            {
+                return Err(dirty.into());
+            }
+            if settings.owned {
+                oxidal_presets::OwnedStore::new(shared.config.preset_dir.join("owned"))
+                    .read(&settings.preset_id)
+                    .map_err(|e| e.to_string())?;
+            } else {
+                oxidal_presets::Store::new(shared.config.preset_dir.clone())
+                    .original(&settings.preset_id)
+                    .map_err(|e| e.to_string())?;
+            }
+            // Pin the saved payload, never a session-local checkpoint.
+            settings.working = None;
+            Ok(Choice::Native {
+                settings,
+                controls: None,
+                models: vec![],
+                eq: None,
+            })
+        }
+        StartupOwner::Effects => {
+            let state = shared.graph_playback.snapshot();
+            check(&state.session, state.revision, state.phase)?;
+            let mut settings = state.configured.ok_or("No configured sound")?;
+            let id = settings.library_id.as_ref().ok_or(dirty)?;
+            let saved = oxidal_presets::GraphStore::new(shared.config.preset_dir.join("graphs"))
+                .read(id)
+                .map_err(|e| e.to_string())?
+                .preset;
+            let control = state.control.ok_or("No confirmed sound")?;
+            let recall = oxidal_lv2::protocol::GraphRecall::from_snapshot(&control)?;
+            if serde_json::to_value(&recall).ok() != serde_json::to_value(&saved.recall).ok()
+                || serde_json::to_value(&control.rig).ok() != serde_json::to_value(&saved.rig).ok()
+            {
+                return Err(dirty.into());
+            }
+            settings.rig = saved.rig;
+            settings.bindings = saved.bindings;
+            settings.recall = Some(saved.recall);
+            Ok(Choice::Effects { settings })
+        }
+    }
+}
+
+/// Captures a reviewed saved version and policy together; a stale cursor cannot retarget boot.
+pub(super) async fn set_startup(
+    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
+    body: Result<axum::Json<StartupUpdate>, axum::extract::rejection::JsonRejection>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let Ok(axum::Json(update)) = body else {
+        return crate::failure(
+            axum::http::StatusCode::BAD_REQUEST,
+            "Invalid startup policy",
+        );
+    };
+    let result = tokio::spawn(async move {
+        let _access = shared.library_access.clone().write_owned().await;
+        if let Some(reason) = shared.protect.refuse(false) {
+            return Err((axum::http::StatusCode::LOCKED, reason.to_owned()));
+        }
+        if update
+            .expected
+            .as_ref()
+            .is_some_and(|expected| expected != &shared.boot.startup())
+        {
+            return Err((
+                axum::http::StatusCode::CONFLICT,
+                "Startup changed in another client. Review it again.".into(),
+            ));
+        }
+        if let Some(capture) = update.capture {
+            let choice = capture_saved(&shared, capture)
+                .map_err(|e| (axum::http::StatusCode::CONFLICT, e))?;
+            shared
+                .boot
+                .select(choice, update.follow)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        } else {
+            shared
+                .boot
+                .set_follow(update.follow)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        }
+        Ok(shared.boot.startup())
+    })
+    .await
+    .unwrap_or_else(|_| {
+        Err((
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "Startup update interrupted; refresh its state".into(),
+        ))
+    });
+    match result {
+        Ok(state) => axum::Json(state).into_response(),
+        Err((status, e)) => crate::failure(status, &e),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,6 +622,56 @@ mod tests {
             panic!("Missing mixed boot choice")
         };
         assert_eq!(restored.midi, mixed.midi);
+        // A -> B pin captures B and the mode together, including after restart.
+        p.set_follow(true).unwrap();
+        let mut pinned = mixed.clone();
+        pinned.revision = "c".repeat(64);
+        let pinned = saved_mixed(pinned);
+        p.select(
+            Choice::Mixed {
+                settings: pinned.clone(),
+            },
+            false,
+        )
+        .unwrap();
+        let restarted = Policy::new(path.clone());
+        assert_eq!(restarted.startup().policy, StartupPolicy::Pinned);
+        assert_eq!(restarted.startup().target.unwrap().id, "c".repeat(64));
+        let before = std::fs::read(&path).unwrap();
+        std::fs::create_dir(path.with_extension("tmp")).unwrap();
+        assert!(
+            p.select(
+                Choice::Mixed {
+                    settings: mixed.clone()
+                },
+                true
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(p.startup().policy, StartupPolicy::Pinned);
+        assert_eq!(p.startup().target.unwrap().id, "c".repeat(64));
+        std::fs::remove_dir(path.with_extension("tmp")).unwrap();
+        // Existing schema-2 records still read their separate Follow preference.
+        let mut legacy_record: serde_json::Value = serde_json::from_slice(&before).unwrap();
+        legacy_record.as_object_mut().unwrap().remove("follow");
+        std::fs::write(&path, serde_json::to_vec(&legacy_record).unwrap()).unwrap();
+        std::fs::write(follow_path(&path), br#"{"follow":true}"#).unwrap();
+        assert_eq!(
+            Policy::new(path.clone()).startup().policy,
+            StartupPolicy::Follow
+        );
+        p.select(
+            Choice::Mixed {
+                settings: mixed.clone(),
+            },
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            Policy::new(path.clone()).startup().policy,
+            StartupPolicy::Pinned
+        );
 
         assert!(!p.enabled(Role::Native));
         let original = std::fs::read(&path).unwrap();
@@ -508,33 +781,5 @@ mod tests {
             assert!(!path.exists());
         }
         std::fs::remove_dir_all(root).unwrap();
-    }
-}
-
-pub(super) async fn startup(
-    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
-) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    axum::Json(shared.boot.startup()).into_response()
-}
-/// Switches between Last played (follow) and Pinned for an enabled startup.
-/// Enabling or turning startup off stays with each owner's SetBoot command.
-pub(super) async fn set_startup(
-    axum::extract::State(shared): axum::extract::State<std::sync::Arc<crate::Shared>>,
-    body: Result<axum::Json<StartupUpdate>, axum::extract::rejection::JsonRejection>,
-) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    let Ok(axum::Json(update)) = body else {
-        return crate::failure(
-            axum::http::StatusCode::BAD_REQUEST,
-            "Invalid startup policy",
-        );
-    };
-    if let Some(reason) = shared.protect.refuse(false) {
-        return crate::protect::locked(reason);
-    }
-    match shared.boot.set_follow(update.follow) {
-        Ok(()) => axum::Json(shared.boot.startup()).into_response(),
-        Err(e) => crate::failure(axum::http::StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }

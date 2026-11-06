@@ -29,6 +29,7 @@ pub(super) struct Playback {
     boot: Arc<Policy>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     forget: mpsc::Sender<crate::library_removal::Forget>,
+    protection: mpsc::Sender<crate::protect::Update>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(
         AudioCommand,
@@ -55,6 +56,7 @@ impl Drop for Worker {
     }
 }
 struct Owner {
+    protect: Arc<crate::protect::Protect>,
     last_tool_poll: std::time::Instant,
     levels: Arc<crate::levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
@@ -72,6 +74,24 @@ struct Owner {
     meters: watch::Sender<Option<(oxidal_audio::meter::Snapshot, std::time::Instant)>>,
 }
 impl Owner {
+    async fn set_protect(&mut self, on: bool) -> Result<(), String> {
+        if self.worker.is_none() {
+            return Ok(());
+        }
+        if self.state.phase != AudioPhase::Running {
+            return Err("Wait for audio preparation before changing Protect".into());
+        }
+        let result = self
+            .midi(oxidal_audio::lifecycle::MidiOperation::Protect { on })
+            .await;
+        if let Err(error) = &result {
+            // A worker that did not acknowledge the lock cannot keep accepting MIDI.
+            let _ = self.release().await;
+            self.publish(AudioPhase::Failed, Some(error.clone()));
+        }
+        result
+    }
+
     fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
         let matching =
             self.state.configured.as_ref().is_some_and(|s| {
@@ -240,6 +260,7 @@ impl Owner {
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(executable)
             .env("OXIDAL_PRESET_DIR", &root)
+            .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
             .env("OXIDAL_QUALIFICATION_DATA", &data)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -1599,6 +1620,12 @@ impl Owner {
         }
     }
     async fn command(&mut self, command: AudioCommand) -> Reply {
+        if let Some(reason) = self
+            .protect
+            .refuse(crate::protect::native(&command.action, self.state.phase))
+        {
+            return Err(reason.into());
+        }
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
             return Err("audio_state_conflict; refresh status before retrying".into());
@@ -1949,6 +1976,7 @@ impl Playback {
     pub fn new(
         config: &Config,
         policy: Arc<Policy>,
+        protect: Arc<crate::protect::Protect>,
         levels: Arc<crate::levels::Levels>,
         library_access: Arc<tokio::sync::RwLock<()>>,
         midi_map: Arc<oxidal_presets::MidiMapStore>,
@@ -2007,7 +2035,9 @@ impl Playback {
             tokio::sync::OwnedRwLockReadGuard<()>,
         )>(1);
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
+        let (protection, mut protection_updates) = mpsc::channel::<crate::protect::Update>(1);
         let mut owner = Owner {
+            protect,
             last_tool_poll: std::time::Instant::now(),
             levels,
             midi_map,
@@ -2053,6 +2083,7 @@ impl Playback {
                     biased;
                     _ = async { match shutdown.as_mut() { Some(s) => { if !*s.borrow() { let _ = s.changed().await; } }, None => std::future::pending::<()>().await } } => break,
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
+                    update = protection_updates.recv() => match update { Some((on, reply)) => { let _ = reply.send(owner.set_protect(on).await); }, None => break },
                     item = receiver.recv() => match item {
                         Some((command, response, _access)) => { let _ = response.send(owner.command(command).await); },
                         None => break,
@@ -2085,6 +2116,7 @@ impl Playback {
             boot: policy,
             library_access,
             forget,
+            protection,
             commands,
             state,
             finished,
@@ -2093,6 +2125,15 @@ impl Playback {
     }
     pub fn telemetry(&self) -> Option<(oxidal_audio::meter::Snapshot, std::time::Instant)> {
         *self.meters.borrow()
+    }
+    /// Called under exclusive library access: no concurrent start or control can race the lock.
+    pub async fn set_protect(&self, on: bool) -> Result<(), String> {
+        let (reply, receipt) = oneshot::channel();
+        self.protection
+            .send((on, reply))
+            .await
+            .map_err(|_| "Playback owner stopped")?;
+        receipt.await.map_err(|_| "Playback owner stopped")?
     }
     pub async fn forget(&self, entry: oxidal_presets::LibraryReference) -> Result<(), String> {
         let (reply, receipt) = oneshot::channel();

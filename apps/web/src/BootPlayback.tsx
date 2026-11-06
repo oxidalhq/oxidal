@@ -10,6 +10,7 @@ import {
   rigAudioState,
   setStartupFollow,
   startupState,
+  libraryCatalog,
   type StartupState,
   type AudioState,
   type RigAudioState,
@@ -37,17 +38,53 @@ export function BootPlayback({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [startup, setStartup] = useState<StartupState | null>(null);
+  const [namedTarget, setNamedTarget] = useState<{
+    id: string;
+    kind: string;
+    name: string;
+  } | null>(null);
+  const targetName =
+    namedTarget?.id === startup?.target?.id &&
+    namedTarget?.kind === startup?.target?.kind
+      ? namedTarget?.name
+      : '';
   const selectedNow =
     native?.start_on_boot || mixed?.start_on_boot || effects?.start_on_boot;
   useEffect(() => {
     let alive = true;
     void startupState()
       .then((s) => alive && setStartup(s))
-      .catch(() => {});
+      .catch((cause) => {
+        if (alive) setError(friendlyError(cause, 'read the startup choice'));
+      });
     return () => {
       alive = false;
     };
-  }, [selectedNow]);
+  }, [
+    selectedNow,
+    mixed?.configured?.revision,
+    native?.configured?.preset_id,
+    effects?.configured?.library_id,
+  ]);
+  useEffect(() => {
+    let alive = true;
+    const target = startup?.target;
+    if (target)
+      void libraryCatalog()
+        .then((catalog) => {
+          const item = catalog.items.find(
+            (item) => item.kind === target?.kind && item.id === target.id,
+          );
+          if (alive)
+            setNamedTarget({ ...target, name: item?.name ?? 'Saved preset' });
+        })
+        .catch(() => {
+          if (alive) setNamedTarget({ ...target, name: 'Saved preset' });
+        });
+    return () => {
+      alive = false;
+    };
+  }, [startup?.target]);
   /** Off, Last played (follows each preset you play) or Pinned (exact version). */
   async function choose(policy: 'off' | 'follow' | 'pinned') {
     if (busy) return;
@@ -55,12 +92,41 @@ export function BootPlayback({
       if (selectedNow) await toggle();
       return;
     }
-    if (!selectedNow) await toggle();
     setBusy(true);
+    setError('');
     try {
-      setStartup(await setStartupFollow(policy === 'follow'));
+      if (!startup)
+        throw new Error('Read the startup choice before changing it.');
+      const owner =
+        mixed?.phase === 'running'
+          ? 'mixed'
+          : native?.phase === 'running'
+            ? 'native'
+            : effects?.phase === 'running'
+              ? 'effects'
+              : null;
+      const current =
+        owner === 'mixed'
+          ? mixed
+          : owner === 'native'
+            ? native
+            : owner === 'effects'
+              ? effects
+              : null;
+      if (policy === 'pinned' && !current)
+        throw new Error('Play the saved version you want to pin first.');
+      setStartup(
+        await setStartupFollow(policy === 'follow', {
+          expected: startup,
+          capture:
+            current && owner
+              ? { owner, session: current.session, revision: current.revision }
+              : null,
+        }),
+      );
     } catch (cause) {
       setError(friendlyError(cause, 'change what starts with Oxidal'));
+      void startupState().then(setStartup, () => {});
     } finally {
       setBusy(false);
     }
@@ -137,7 +203,7 @@ export function BootPlayback({
           Clear invalid startup setup
         </Button>
       ) : (
-        <fieldset className="space-y-2" disabled={disabled || busy}>
+        <fieldset className="space-y-2" disabled={disabled || busy || !startup}>
           <legend className="mb-1 font-medium">When Oxidal starts</legend>
           {(
             [
@@ -149,8 +215,8 @@ export function BootPlayback({
               ],
               [
                 'pinned',
-                'This exact version',
-                'Keeps the sound playing now, even after later edits.',
+                'Pinned saved version',
+                'Pins the saved version playing now. Save and play it first if you have edits.',
               ],
             ] as const
           ).map(([value, label, help]) => (
@@ -160,7 +226,11 @@ export function BootPlayback({
                 name="startup-policy"
                 className="mt-1"
                 checked={policy === value}
-                disabled={value !== 'off' && !selected && !running}
+                disabled={
+                  value === 'pinned'
+                    ? !running
+                    : value !== 'off' && !selected && !running
+                }
                 onChange={() => void choose(value)}
               />
               <span>
@@ -171,13 +241,31 @@ export function BootPlayback({
           ))}
         </fieldset>
       )}
+      {startup?.target && (
+        <div className="caption">
+          Startup preset: {targetName || 'Reading name…'}
+          <details>
+            <summary>Saved version</summary>
+            <code>{startup.target.id}</code>
+          </details>
+        </div>
+      )}
+      {policy === 'pinned' && running && (
+        <Button
+          variant="outline"
+          disabled={disabled || busy || !startup}
+          onClick={() => void choose('pinned')}
+        >
+          Pin the playing saved version
+        </Button>
+      )}
       {error && <p role="alert">{error}</p>}
       <details className="control-help">
         <summary>Automatic startup</summary>
         <p className="caption">
           Startup uses the confirmed sound and audio setup. With Last played,
           each preset you start or switch to replaces it; browsing does not.
-          With This exact version, later edits do not change it. Missing
+          With Pinned saved version, later edits do not change it. Missing
           hardware or files leave audio stopped with a message; Oxidal never
           picks a different sound. Stop keeps this preference.
         </p>

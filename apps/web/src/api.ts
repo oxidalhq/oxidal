@@ -1177,12 +1177,18 @@ export async function startupState(): Promise<StartupState> {
   if (!startupValidator(body)) throw new Error('Incompatible startup state');
   return body;
 }
-export async function setStartupFollow(follow: boolean): Promise<StartupState> {
+/** Capture a reviewed saved target and policy atomically; reject stale reviews.
+ * @see docs/audio.md
+ */
+export async function setStartupFollow(
+  follow: boolean,
+  options: Pick<Contract['startup_update'], 'capture' | 'expected'> = {},
+): Promise<StartupState> {
   const body = await presetResponse(
     await fetch('/api/v1/startup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ follow }),
+      body: JSON.stringify({ follow, ...options }),
     }),
   );
   if (!startupValidator(body)) throw new Error('Incompatible startup state');

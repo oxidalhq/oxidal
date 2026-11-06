@@ -681,6 +681,7 @@ export type ResourceSource =
  * session; `Follow` replaces it with each preset the player explicitly plays.
  */
 export type StartupPolicy = "off" | "follow" | "pinned";
+export type StartupOwner = "native" | "mixed" | "effects";
 export type TerminalCommand =
   | {
       cursor: number;
@@ -2486,7 +2487,18 @@ export interface StartupState {
   target?: LibraryReference | null;
 }
 export interface StartupUpdate {
+  capture?: StartupCapture | null;
+  expected?: StartupState | null;
   follow: boolean;
+}
+/**
+ * Session cursor of the saved sound reviewed in the browser.
+ * @see docs/audio.md
+ */
+export interface StartupCapture {
+  owner: StartupOwner;
+  revision: number;
+  session: string;
 }
 export interface StorageRequest {
   mode: StorageMode;

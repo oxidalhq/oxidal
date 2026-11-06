@@ -90,6 +90,74 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
 }
 
 #[tokio::test]
+async fn startup_rejects_stale_capture_and_protect_without_replacing_the_choice() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let initial: Value = client
+        .get(format!("{url}/startup"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(initial["policy"], "off");
+    let audio: Value = client
+        .get(format!("{url}/audio"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    // Even a matching cursor cannot capture a stopped (unreviewed) sound.
+    let response = client.post(format!("{url}/startup")).json(&json!({"follow":false,"expected":initial,"capture":{"owner":"native","session":audio["session"],"revision":audio["revision"]}})).send().await.unwrap();
+    assert_eq!(response.status(), 409);
+    let stale = json!({"policy":"pinned","target":{"kind":"rig","id":"a".repeat(64)},"error":null});
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&json!({"follow":false,"expected":stale}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/protect"))
+            .json(&json!({"on":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&json!({"follow":true,"expected":initial}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        423
+    );
+    let after: Value = client
+        .get(format!("{url}/startup"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(after, initial);
+    task.abort();
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn midi_map_starts_disabled_and_is_never_cached() {
     let (url, task, mapping) = start(true).await;
     let response = reqwest::get(format!("{url}/midi/map")).await.unwrap();
@@ -1721,7 +1789,17 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     assert_eq!(page["presets"].as_array().unwrap().len(), 20);
     let next = page["next"].as_str().unwrap();
     let page2 = get(&c, &url, &format!("presets/rigs?after={next}")).await;
-    assert_eq!(page2["presets"].as_array().unwrap().len(), 3);
+    // The earlier native revision was superseded above: only its replacement
+    // and the initial empty preset join the twenty pagination fixtures.
+    assert_eq!(page2["presets"].as_array().unwrap().len(), 2);
+    let all = page["presets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(page2["presets"].as_array().unwrap());
+    let revisions: Vec<_> = all.map(|p| p["revision"].clone()).collect();
+    assert!(!revisions.contains(&native["revision"]));
+    assert!(revisions.contains(&changed["revision"]));
     assert!(page2["next"].is_null());
     task.abort();
     std::fs::remove_dir_all(path.with_extension("presets")).unwrap();

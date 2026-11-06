@@ -202,9 +202,13 @@ impl CatalogStore {
         }
         if let Some(label) = candidate.labels.get(&old).cloned() {
             candidate.labels.insert(new.clone(), label);
+        } else {
+            candidate.labels.remove(&new);
         }
         if candidate.archived.contains(&old) {
             candidate.archived.insert(new.clone());
+        } else {
+            candidate.archived.remove(&new);
         }
         candidate.archived.insert(old.clone());
         candidate.superseded.insert(old);
@@ -563,7 +567,7 @@ mod tests {
             .unwrap();
         let view = CatalogStore::open(root.clone())
             .unwrap()
-            .reconcile(rows)
+            .reconcile(rows.clone())
             .unwrap();
         let visible: Vec<_> = view
             .items
@@ -574,6 +578,44 @@ mod tests {
         assert_eq!(visible, [('d', "Lead"), ('b', "Rig b"), ('c', "Rig c")]);
         let earlier = view.items.iter().find(|i| i.id == "a".repeat(64)).unwrap();
         assert!(earlier.archived && earlier.superseded);
+        // Saving the original bytes again resurrects A in D's visible slot.
+        store
+            .supersede(LibraryKind::Rig, &"d".repeat(64), &"a".repeat(64))
+            .unwrap();
+        let view = CatalogStore::open(root.clone())
+            .unwrap()
+            .reconcile(rows.clone())
+            .unwrap();
+        let visible: Vec<_> = view
+            .items
+            .iter()
+            .filter(|i| !i.archived)
+            .map(|i| (i.id.chars().next().unwrap(), i.name.as_str()))
+            .collect();
+        assert_eq!(visible, [('a', "Lead"), ('b', "Rig b"), ('c', "Rig c")]);
+        assert!(!view.items[0].superseded);
+        // An intentionally archived current revision remains archived on return.
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: view.revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: "a".repeat(64),
+                    action: LibraryAction::Visibility { archived: true },
+                },
+            )
+            .unwrap();
+        store
+            .supersede(LibraryKind::Rig, &"a".repeat(64), &"d".repeat(64))
+            .unwrap();
+        let view = CatalogStore::open(root.clone())
+            .unwrap()
+            .reconcile(rows)
+            .unwrap();
+        let restored = view.items.iter().find(|i| i.id == "d".repeat(64)).unwrap();
+        assert!(restored.archived && !restored.superseded);
         let _ = fs::remove_dir_all(root);
     }
     #[test]

@@ -552,9 +552,194 @@ impl Input {
         Ok(count)
     }
 }
+/// Apply the device Protect policy before either hardware or test dispatch.
+/// Scene/branch mappings take precedence over parameter mappings, as in the engine.
+/// @see docs/interface.md
+pub fn dispatch_protected(
+    settings: &Settings,
+    message: Message,
+    protected: bool,
+    mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
+) -> Result<bool, String> {
+    if protected
+        && settings.scene(message).is_none()
+        && settings.branch(message).is_none()
+        && settings
+            .parameter(message)
+            .is_some_and(|(binding, _)| !matches!(binding.target, ControlTarget::Bypass { .. }))
+    {
+        return Err("Protect is on. Turn Protect off to change this parameter.".into());
+    }
+    receive(settings, message)
+}
+
+/// Device reads and retry state shared by workers; never called inside PCM.
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+#[derive(Debug)]
+pub struct Connection {
+    protected: bool,
+    settings: Option<Settings>,
+    pub status: Status,
+    port: Option<Input>,
+    retry: std::time::Instant,
+}
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+impl Connection {
+    pub fn new(settings: Option<Settings>) -> Self {
+        Self {
+            protected: std::env::var("OXIDAL_PROTECT").is_ok_and(|value| value == "1"),
+            settings,
+            status: Status::default(),
+            port: None,
+            retry: std::time::Instant::now() - std::time::Duration::from_secs(2),
+        }
+    }
+    pub fn configure(&mut self, settings: Option<Settings>) {
+        let protected = self.protected;
+        *self = Self::new(settings);
+        self.protected = protected;
+    }
+    pub fn protect(&mut self, on: bool) {
+        self.protected = on;
+    }
+    pub fn test(
+        &self,
+        message: Message,
+        mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
+    ) -> Result<bool, String> {
+        dispatch_protected(
+            self.settings
+                .as_ref()
+                .ok_or("MIDI is not configured for the playing preset")?,
+            message,
+            self.protected,
+            &mut receive,
+        )
+    }
+    pub fn poll(&mut self, mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>) {
+        let Some(settings) = &self.settings else {
+            return;
+        };
+        if self.port.is_none() && self.retry.elapsed() >= std::time::Duration::from_secs(2) {
+            self.retry = std::time::Instant::now();
+            match Input::open(&settings.input) {
+                Ok(port) => {
+                    self.port = Some(port);
+                    self.status.connected = true;
+                    self.status.error = None;
+                }
+                Err(error) => {
+                    self.status.connected = false;
+                    self.status.error = Some(error);
+                }
+            }
+        }
+        if let Some(port) = &mut self.port {
+            let mut messages = [None; 64];
+            let mut count = 0;
+            match port.read(|message| {
+                messages[count] = Some(message);
+                count += 1;
+            }) {
+                Ok(_) => {
+                    for message in messages.into_iter().flatten() {
+                        self.status.events = self.status.events.saturating_add(1);
+                        self.status.last = Some(message);
+                        match dispatch_protected(settings, message, self.protected, &mut receive) {
+                            Ok(true) => self.status.error = None,
+                            Ok(false) => {}
+                            Err(error) => self.status.error = Some(error),
+                        }
+                    }
+                }
+                Err(error) => {
+                    self.port = None;
+                    self.status.connected = false;
+                    self.status.error = Some(error);
+                    self.retry = std::time::Instant::now();
+                }
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn protect_filters_parameter_edits_before_dispatch_but_keeps_performance_actions() {
+        let mut settings = Settings {
+            input: "hw:Controller,0,0".into(),
+            channel: 1,
+            bindings: vec![Binding {
+                scene: "lead".into(),
+                program: Some(3),
+                controller: None,
+            }],
+            branch_bindings: vec![BranchBinding {
+                branch: "clean".into(),
+                controller: 23,
+                mode: BranchMode::Toggle,
+            }],
+            parameter_bindings: vec![],
+        };
+        let cc = |controller| Message::Control {
+            channel: 1,
+            controller,
+            value: 127,
+        };
+        for target in [
+            ControlTarget::Native {
+                node: "amp".into(),
+                parameter: "toneBass".into(),
+            },
+            ControlTarget::Lv2 {
+                node: "delay".into(),
+                symbol: "time".into(),
+            },
+            ControlTarget::Merge {
+                node: "mix".into(),
+                port: 0,
+            },
+        ] {
+            settings.parameter_bindings = vec![ParameterBinding {
+                target,
+                controller: 21,
+                mode: ControlMode::Absolute,
+            }];
+            let mut dispatched = false;
+            assert!(
+                dispatch_protected(&settings, cc(21), true, |_, _| {
+                    dispatched = true;
+                    Ok(true)
+                })
+                .unwrap_err()
+                .contains("Protect")
+            );
+            assert!(!dispatched);
+            assert!(
+                dispatch_protected(&settings, cc(21), false, |_, _| {
+                    dispatched = true;
+                    Ok(true)
+                })
+                .unwrap()
+            );
+            assert!(dispatched);
+        }
+        settings.parameter_bindings[0].target = ControlTarget::Bypass {
+            node: "delay".into(),
+        };
+        for message in [
+            cc(21),
+            cc(23),
+            Message::Program {
+                channel: 1,
+                program: 3,
+            },
+            cc(99),
+        ] {
+            assert!(dispatch_protected(&settings, message, true, |_, _| Ok(true)).unwrap());
+        }
+    }
     #[test]
     fn branch_gates_follow_both_values_and_toggles_ignore_release() {
         let mut settings = Settings {
@@ -748,86 +933,5 @@ mod tests {
                 }
             ]
         );
-    }
-}
-
-/// Device reads and retry state shared by workers; never called inside PCM.
-#[cfg(all(target_os = "linux", feature = "alsa"))]
-#[derive(Debug)]
-pub struct Connection {
-    settings: Option<Settings>,
-    pub status: Status,
-    port: Option<Input>,
-    retry: std::time::Instant,
-}
-#[cfg(all(target_os = "linux", feature = "alsa"))]
-impl Connection {
-    pub fn new(settings: Option<Settings>) -> Self {
-        Self {
-            settings,
-            status: Status::default(),
-            port: None,
-            retry: std::time::Instant::now() - std::time::Duration::from_secs(2),
-        }
-    }
-    pub fn configure(&mut self, settings: Option<Settings>) {
-        *self = Self::new(settings);
-    }
-    pub fn test(
-        &self,
-        message: Message,
-        mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
-    ) -> Result<bool, String> {
-        receive(
-            self.settings
-                .as_ref()
-                .ok_or("MIDI is not configured for the playing preset")?,
-            message,
-        )
-    }
-    pub fn poll(&mut self, mut receive: impl FnMut(&Settings, Message) -> Result<bool, String>) {
-        let Some(settings) = &self.settings else {
-            return;
-        };
-        if self.port.is_none() && self.retry.elapsed() >= std::time::Duration::from_secs(2) {
-            self.retry = std::time::Instant::now();
-            match Input::open(&settings.input) {
-                Ok(port) => {
-                    self.port = Some(port);
-                    self.status.connected = true;
-                    self.status.error = None;
-                }
-                Err(error) => {
-                    self.status.connected = false;
-                    self.status.error = Some(error);
-                }
-            }
-        }
-        if let Some(port) = &mut self.port {
-            let mut messages = [None; 64];
-            let mut count = 0;
-            match port.read(|message| {
-                messages[count] = Some(message);
-                count += 1;
-            }) {
-                Ok(_) => {
-                    for message in messages.into_iter().flatten() {
-                        self.status.events = self.status.events.saturating_add(1);
-                        self.status.last = Some(message);
-                        match receive(settings, message) {
-                            Ok(true) => self.status.error = None,
-                            Ok(false) => {}
-                            Err(error) => self.status.error = Some(error),
-                        }
-                    }
-                }
-                Err(error) => {
-                    self.port = None;
-                    self.status.connected = false;
-                    self.status.error = Some(error);
-                    self.retry = std::time::Instant::now();
-                }
-            }
-        }
     }
 }

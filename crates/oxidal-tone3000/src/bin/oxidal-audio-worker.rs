@@ -248,6 +248,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             oxidal_audio::lifecycle::MidiOperation::Test { .. }
                         );
                         let error = match request.midi {
+                            oxidal_audio::lifecycle::MidiOperation::Protect { on } => {
+                                midi.protect(on);
+                                None
+                            }
                             oxidal_audio::lifecycle::MidiOperation::Poll => None,
                             oxidal_audio::lifecycle::MidiOperation::Test { message } => {
                                 let blocked = models.pending()

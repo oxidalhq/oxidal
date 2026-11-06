@@ -1036,6 +1036,114 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
     )?;
     let configured = received.recv_timeout(Duration::from_secs(3))??;
     assert!(configured.error.is_none());
+    // Exercise the same Connection dispatch used by raw ALSA input, not HTTP guards.
+    send(&mut child, &WorkerRequest::Protect { on: true })?;
+    assert!(
+        received
+            .recv_timeout(Duration::from_secs(3))??
+            .error
+            .is_none()
+    );
+    // Changing/reconnecting MIDI configuration must not drop the device lock.
+    send(
+        &mut child,
+        &WorkerRequest::Midi {
+            settings: Some(missing.clone()),
+        },
+    )?;
+    assert!(
+        received
+            .recv_timeout(Duration::from_secs(3))??
+            .error
+            .is_none()
+    );
+    let parameter_message = oxidal_audio::midi::Message::Control {
+        channel: 1,
+        controller: 21,
+        value: 127,
+    };
+    send(
+        &mut child,
+        &WorkerRequest::MidiTest {
+            message: parameter_message,
+        },
+    )?;
+    let blocked = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(
+        blocked
+            .error
+            .as_deref()
+            .is_some_and(|e| e.contains("Protect"))
+    );
+    assert_eq!(
+        serde_json::to_value(&blocked.control.controls)?,
+        serde_json::to_value(&configured.control.controls)?
+    );
+    // Scene performance remains available while parameter edits are locked.
+    send(
+        &mut child,
+        &WorkerRequest::MidiTest {
+            message: oxidal_audio::midi::Message::Program {
+                channel: 1,
+                program: 1,
+            },
+        },
+    )?;
+    let scene = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(scene.error.is_none());
+    assert_eq!(scene.control.scene.as_deref(), Some("lead"));
+    send(
+        &mut child,
+        &WorkerRequest::Scene {
+            command: SceneCommand {
+                session: scene.control.session.clone(),
+                expected_revision: scene.control.revision,
+                scene: "clean".into(),
+                release_ms: None,
+            },
+        },
+    )?;
+    assert!(
+        received
+            .recv_timeout(Duration::from_secs(3))??
+            .error
+            .is_none()
+    );
+    send(&mut child, &WorkerRequest::Protect { on: false })?;
+    assert!(
+        received
+            .recv_timeout(Duration::from_secs(3))??
+            .error
+            .is_none()
+    );
+    send(
+        &mut child,
+        &WorkerRequest::MidiTest {
+            message: parameter_message,
+        },
+    )?;
+    let edited = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(edited.error.is_none());
+    // Restore the original control before continuing scene assertions below.
+    send(
+        &mut child,
+        &WorkerRequest::Control {
+            command: oxidal_engine::protocol::ControlCommand {
+                session: blocked.control.session.clone(),
+                expected_revision: edited.control.revision,
+                target: missing.parameter_bindings[0].target.clone(),
+                value: configured
+                    .control
+                    .controls
+                    .iter()
+                    .find(|c| c.target == missing.parameter_bindings[0].target)
+                    .unwrap()
+                    .value,
+            },
+        },
+    )?;
+    let restored = received.recv_timeout(Duration::from_secs(3))??;
+    assert!(restored.error.is_none());
     let mut disconnected = false;
     for _ in 0..100 {
         send(&mut child, &WorkerRequest::Status)?;
@@ -1071,7 +1179,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
     assert!(disabled.error.is_none() && disabled.control.midi.error.is_none());
     let command = SceneCommand {
         session: before.control.session.clone(),
-        expected_revision: before.control.revision,
+        expected_revision: restored.control.revision,
         scene: "lead".into(),
         release_ms: None,
     };

@@ -35,6 +35,16 @@ test('new preset creates an empty preset of your own without hardware', async ({
   page,
 }, info) => {
   const name = `Empty ${info.project.name} ${Date.now()}`;
+  const audioWrites: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      /\/api\/v1\/(audio|rig-audio|graph-audio)$/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      audioWrites.push(request.url());
+  });
   await page.goto('/#library/presets');
   await page.getByRole('button', { name: 'New preset' }).click();
   const dialog = page.getByRole('dialog', { name: 'New preset' });
@@ -46,7 +56,13 @@ test('new preset creates an empty preset of your own without hardware', async ({
   ).toBeEnabled();
   await dialog.getByRole('button', { name: 'Create preset' }).click();
   await expect(dialog).toHaveCount(0);
-  // Whether or not audio can start here, the preset exists in Mine.
+  await expect(
+    page.getByRole('button', { name: 'Play to edit…' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/#library\/presets$/);
+  await page.getByRole('button', { name: 'Keep in Library' }).click();
+  expect(audioWrites).toEqual([]);
+  // Creation publishes to Mine without any audio mutation.
   const listed = await page.request.get('/api/v1/presets/rigs');
   const presets = (await listed.json()).presets as {
     name: string;

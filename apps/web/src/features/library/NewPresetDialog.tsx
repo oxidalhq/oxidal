@@ -29,7 +29,7 @@ type Start = 'empty' | 'copy';
 /**
  * The single New preset entry (7.3): a name, then Empty or Copy of a saved
  * preset. Works without audio hardware; nothing starts playing. The result
- * opens in the common Rig editor, where blocks are added.
+ * stays in Library until the player explicitly chooses Play to edit.
  * @see docs/presets/format.md
  */
 export function NewPresetDialog({

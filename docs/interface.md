@@ -35,3 +35,26 @@ off changes the current mix. Use **Update scene** to keep that routing or
 **Ready to switch** lists other loaded presets. **Playing** is audible,
 **Processing** is still rendering a transition or tail, and **Sleeping** is
 loaded without current DSP work.
+
+## Creating without interrupting playback
+
+**New preset → Create preset** saves an Empty or Copy preset in **Mine** and
+leaves the current sound and unsaved work alone. Choose **Keep in Library** to
+continue playing. The current editor needs playback: **Play to edit…** opens a
+separate review of the interruption and possible loss of unsaved edits. Cancel
+and save your current work first, or confirm **Replace sound and play**. If the
+playing session changed during the review, review again before replacing it.
+
+## Protect during performance
+
+Protect is a device-wide setting that survives restart. It blocks parameter and
+structure edits from browsers and mapped MIDI input. Scenes, branch switches,
+supported stomp bypass, prepared preset switches, output mute and the native or
+mixed tuner remain available. Tuner start and stop do not grant permission for
+alignment, balance measurement or other authoring actions.
+
+Changing Protect waits for the playing worker to acknowledge it. A new worker
+inherits the saved setting, and MIDI reconnection or reconfiguration keeps it.
+Wait for audio preparation to finish before changing Protect. If a worker cannot
+acknowledge the setting, audio stops with an error instead of leaving an
+unprotected MIDI path running.

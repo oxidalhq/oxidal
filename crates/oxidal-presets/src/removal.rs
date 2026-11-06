@@ -120,25 +120,15 @@ mod tests {
         let f = Fixture::new();
         let none = RemovalReferences::default();
         let model = f.root.join("audition-models").join(&f.model);
-        // The imported preset carries the same bytes: the file is protected.
+        // The imported preset owns embedded bytes, not a reference to this file.
         let preview = f.store().preview_model(&f.model, &none).unwrap();
-        assert_eq!(preview.model.protected_by.len(), 1);
-        assert!(preview.blocked.is_some());
+        assert!(preview.model.protected_by.is_empty());
+        assert!(preview.blocked.is_none());
         let request = |token: String| ModelRemovalRequest {
             id: f.model.clone(),
             expected_preview: token,
         };
-        assert!(
-            f.store()
-                .begin_model(&request(preview.token), &none)
-                .is_err()
-        );
-        // Without the preset, the playing session still protects it.
-        f.store()
-            .begin(&f.request(false), &none)
-            .unwrap()
-            .commit()
-            .unwrap();
+        // A real live reference still protects the independent file.
         let playing = RemovalReferences {
             active: vec![],
             model_assets: BTreeSet::from([f.model.clone()]),
@@ -169,6 +159,12 @@ mod tests {
         assert_eq!(result.deleted, f.model);
         assert!(!result.cleanup_pending);
         assert!(!model.exists());
+        // A fresh read after removal still has every original embedded byte.
+        assert_eq!(
+            fs::read(f.root.join(format!("{}.t3kpreset", f.id))).unwrap(),
+            CURRENT
+        );
+        assert_eq!(Store::new(f.root.clone()).list().unwrap().presets.len(), 1);
     }
 
     #[test]
@@ -1570,8 +1566,8 @@ impl RemovalStore {
         Ok(pending)
     }
     /// Everything that keeps one separate model file: playing or remembered
-    /// sessions, collections and presets carrying the same bytes. A file with
-    /// any such use is protected; nothing is deleted "anyway".
+    /// sessions and collections. Embedded preset bytes are independent copies.
+    /// Any such use protects the file; nothing is deleted "anyway".
     fn plan_model(
         &self,
         asset_id: &str,
@@ -1629,10 +1625,8 @@ impl RemovalStore {
         let entries = self.entries()?;
         for entry in &entries {
             match &entry.digests {
-                Some(digests) if digests.contains(&asset.sha256) => protect(
-                    &mut protection,
-                    dependency_label("Preset", &entry.item.name),
-                ),
+                // A validated saved preset carries its own payload. Equal bytes
+                // do not make it depend on audition-models/<asset_id>.
                 Some(_) => (),
                 None => {
                     unverified =

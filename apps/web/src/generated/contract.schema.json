@@ -9084,6 +9084,37 @@
         "stream"
       ]
     },
+    "StartupCapture": {
+      "description": "Session cursor of the saved sound reviewed in the browser.\n@see docs/audio.md",
+      "type": "object",
+      "properties": {
+        "owner": {
+          "$ref": "#/$defs/StartupOwner"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "owner",
+        "session",
+        "revision"
+      ]
+    },
+    "StartupOwner": {
+      "type": "string",
+      "enum": [
+        "native",
+        "mixed",
+        "effects"
+      ]
+    },
     "StartupPolicy": {
       "description": "What starts when Oxidal starts (7.25). `Pinned` keeps the exact saved\nsession; `Follow` replaces it with each preset the player explicitly plays.",
       "type": "string",
@@ -9125,6 +9156,28 @@
     "StartupUpdate": {
       "type": "object",
       "properties": {
+        "capture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupCapture"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "expected": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StartupState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "follow": {
           "type": "boolean"
         }

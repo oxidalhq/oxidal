@@ -329,6 +329,9 @@ pub fn valid_revision(s: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerRequest {
+    Protect {
+        on: bool,
+    },
     HostUtility {
         command: oxidal_audio::tools::HostUtility,
     },

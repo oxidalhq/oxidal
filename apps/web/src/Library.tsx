@@ -18,7 +18,7 @@ import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
 import { DiscoverPage } from './FactoryCollection';
-import { playScenes, playTone3000 } from './presetChoices';
+import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
 import {
   Select,
@@ -35,6 +35,7 @@ import { ModelLibrary } from './ModelLibrary';
 import { requestMidiAssignments } from './midiNavigation';
 import { PresetRow } from './features/library/PresetRow';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
+import { CreatedPreset } from './features/library/CreatedPreset';
 import { friendlyError } from './lib/friendlyError';
 import './Library.css';
 
@@ -81,7 +82,10 @@ export function Library({
     null | 'effects' | 'tone3000'
   >('library-composer', null);
   const [creating, setCreating] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [created, setCreated] = useState<{
+    name: string;
+    revision: string;
+  } | null>(null);
   const [showArtwork, setShowArtwork] = useState(() => {
     try {
       return localStorage.getItem('oxidal-library-artwork') === 'true';
@@ -369,12 +373,14 @@ export function Library({
               </ToggleGroup>
             </div>
           </div>
-          {notice && (
-            <StateNotice kind="empty" title={notice}>
-              <Button variant="ghost" onClick={() => setNotice('')}>
-                Dismiss
-              </Button>
-            </StateNotice>
+          {created && (
+            <CreatedPreset
+              key={created.revision}
+              {...created}
+              connected={connected}
+              onOpenRig={onOpenRig}
+              onDismiss={() => setCreated(null)}
+            />
           )}
           {detailsError && (
             <StateNotice kind="error" title="Preset details unavailable">
@@ -406,13 +412,10 @@ export function Library({
                 setCreating(false);
                 setRefresh((v) => v + 1);
                 setSource('all');
-                void playScenes(created.revision)
-                  .then(() => onOpenRig())
-                  .catch((cause: unknown) =>
-                    setNotice(
-                      `Created ${created.manifest.name} in Mine. ${friendlyError(cause, 'open it in Rig')}`,
-                    ),
-                  );
+                setCreated({
+                  name: created.manifest.name,
+                  revision: created.revision,
+                });
               }}
             />
           )}

@@ -6,6 +6,203 @@ use serde_json::{Value, json};
 static QUALIFICATION_DEVICE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+#[ignore = "run on Linux with actual audio worker, ALSA null and embedded preset"]
+async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available() {
+    let _device = QUALIFICATION_DEVICE.lock().await;
+    let worker = std::path::PathBuf::from(
+        std::env::var_os("OXIDAL_TEST_AUDIO_WORKER").expect("audio worker"),
+    );
+    assert_eq!(std::env::var("OXIDAL_AUDIO_QUALIFY_NULL").unwrap(), "1");
+    let bytes =
+        std::fs::read(std::env::var_os("OXIDAL_NATIVE_TEST_PRESET").expect("preset")).unwrap();
+    let root = std::env::temp_dir().join(format!("oxidal-protected-native-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let preset = oxidal_presets::Store::new(root.join("presets"))
+        .import(&bytes)
+        .unwrap();
+    let input = json!({"endpoint":"hw:CARD=Qualification,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
+    let mut output = input.clone();
+    output["direction"] = json!("playback");
+    let settings = json!({"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"preset_id":preset.sha256,"owned":false});
+    qualify_large_frames(&worker, &root, &settings).await;
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let (app, stopped) = router_with_shutdown(Config {
+        debug_socket: None,
+        device_socket: None,
+        native_worker: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: Some(worker),
+        simulator: false,
+        mapping_path: root.join("mapping.json"),
+        preset_dir: root.join("presets"),
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    })
+    .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = reqwest::Client::new();
+    let initial = get(&client, &url, "audio").await;
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &initial,
+            json!({"kind":"start","settings":settings})
+        )
+        .await
+        .status(),
+        200
+    );
+    let mut state = wait_phase(&client, &url, "running").await;
+    let previous = get(&client, &url, "startup").await;
+    let request = json!({"follow":false,"expected":previous,"capture":{"owner":"native","session":state["session"],"revision":state["revision"]}});
+    let response = client
+        .post(format!("{url}/startup"))
+        .json(&request)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let pinned: Value = response.json().await.unwrap();
+    assert_eq!(pinned["target"]["id"], preset.sha256);
+    assert_eq!(pinned["policy"], "pinned");
+    let disk: Value =
+        serde_json::from_slice(&std::fs::read(root.join("presets/boot-audio.json")).unwrap())
+            .unwrap();
+    assert_eq!(disk["choice"]["settings"]["preset_id"], preset.sha256);
+    assert_eq!(disk["follow"], false);
+    assert!(disk["choice"]["settings"]["working"].is_null());
+    // Another review still naming Off cannot overwrite the confirmed pin.
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    state = get(&client, &url, "audio").await;
+    let changed = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"toneBass","value":0.25}),
+    )
+    .await;
+    assert_eq!(changed.status(), 200);
+    state = changed.json().await.unwrap();
+    // Originals create a saved copy immediately, but the player must still
+    // resolve Keep/Discard before that copy may become a startup selection.
+    assert!(state["copy_on_edit"].is_object());
+    let dirty = json!({"follow":false,"expected":pinned,"capture":{"owner":"native","session":state["session"],"revision":state["revision"]}});
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&dirty)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    let after: Value =
+        serde_json::from_slice(&std::fs::read(root.join("presets/boot-audio.json")).unwrap())
+            .unwrap();
+    assert_eq!(after, disk);
+    let resolved = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"resolve_copy","keep":true}),
+    )
+    .await;
+    assert_eq!(resolved.status(), 200);
+    state = resolved.json().await.unwrap();
+    let edited = send(
+        &client,
+        &url,
+        &state,
+        json!({"kind":"set_control","target":"toneBass","value":0.35}),
+    )
+    .await;
+    assert_eq!(edited.status(), 200);
+    state = edited.json().await.unwrap();
+    assert_eq!(state["modified"], true);
+    let dirty = json!({"follow":false,"expected":pinned,"capture":{"owner":"native","session":state["session"],"revision":state["revision"]}});
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&dirty)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        409
+    );
+    assert_eq!(get(&client, &url, "startup").await, pinned);
+    assert_eq!(
+        client
+            .post(format!("{url}/protect"))
+            .json(&json!({"on":true}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    for enabled in [true, false] {
+        state = get(&client, &url, "audio").await;
+        let response = send(&client, &url, &state, json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"tuner","enabled":enabled}}})).await;
+        assert_eq!(response.status(), 200);
+        let tuned: Value = response.json().await.unwrap();
+        assert_eq!(tuned["authoring"]["tools"]["tuner_enabled"], enabled);
+    }
+    state = get(&client, &url, "audio").await;
+    assert_eq!(
+        send(
+            &client,
+            &url,
+            &state,
+            json!({"kind":"authoring","action":{"kind":"utility","command":{"kind":"balance"}}})
+        )
+        .await
+        .status(),
+        423
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/startup"))
+            .json(&request)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        423
+    );
+    assert_eq!(
+        client
+            .post(format!("{url}/protect"))
+            .json(&json!({"on":false}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        200
+    );
+    shutdown.send_replace(true);
+    stopped.wait().await.unwrap();
+    server.abort();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
 #[ignore = "run by Linux native qualification with the actual audio/editor workers and preset fixture"]
 async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring() {
     let _device = QUALIFICATION_DEVICE.lock().await;
@@ -1393,6 +1590,31 @@ async fn qualify_created_rig(
     );
 }
 
+async fn worker_midi(
+    input: &mut tokio::process::ChildStdin,
+    output: &mut tokio::io::BufReader<tokio::process::ChildStdout>,
+    serial: u64,
+    operation: Value,
+) -> Value {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let mut bytes = serde_json::to_vec(&json!({"serial":serial,"midi":operation})).unwrap();
+    bytes.push(b'\n');
+    input.write_all(&bytes).await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let mut line = String::new();
+            assert!(output.read_line(&mut line).await.unwrap() > 0);
+            let reply: Value = serde_json::from_str(&line).unwrap();
+            if reply["kind"] == "midi" {
+                assert_eq!(reply["serial"], serial);
+                return reply;
+            }
+        }
+    })
+    .await
+    .unwrap()
+}
+
 // Exercise actual startup and separate export framing above the former 64 KiB
 // limit. Padding is valid JSON whitespace; dense state semantics are unit tested.
 async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, settings: &Value) {
@@ -1409,6 +1631,7 @@ async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, 
     std::fs::create_dir_all(root.join("frame-runtime")).unwrap();
     std::fs::create_dir_all(root.join("frame-export-runtime")).unwrap();
     let mut child = tokio::process::Command::new(worker)
+        .env("OXIDAL_PROTECT", "1")
         .env("OXIDAL_PRESET_DIR", root.join("presets"))
         .env("OXIDAL_QUALIFICATION_DATA", root.join("frame-runtime"))
         .stdin(Stdio::piped())
@@ -1431,6 +1654,55 @@ async fn qualify_large_frames(worker: &std::path::Path, root: &std::path::Path, 
         .unwrap();
     let ready: Value = serde_json::from_str(&reply).unwrap();
     assert_eq!(ready["kind"], "ready");
+    // Bypass HTTP deliberately: test the actual worker's hardware/test ingress,
+    // inherited lock, reconfiguration, unlock, and a subsequent lock.
+    let mapping = json!({"input":"hw:Unavailable,0,0","channel":1,"bindings":[],"parameter_bindings":[{"target":{"kind":"native","node":"native","parameter":"inputLevel"},"controller":21}]});
+    let configured = worker_midi(
+        &mut input,
+        &mut output,
+        1,
+        json!({"kind":"configure","settings":mapping}),
+    )
+    .await;
+    assert!(configured["error"].is_null());
+    let value = configured["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["target"] == "inputLevel")
+        .unwrap()["value"]
+        .as_f64()
+        .unwrap();
+    let message = json!({"kind":"test","message":{"kind":"control","channel":1,"controller":21,"value":if value < 0.5 {127} else {0}}});
+    let blocked = worker_midi(&mut input, &mut output, 2, message.clone()).await;
+    assert!(blocked["error"].as_str().unwrap().contains("Protect"));
+    assert_eq!(blocked["controls"], configured["controls"]);
+    assert!(
+        worker_midi(
+            &mut input,
+            &mut output,
+            3,
+            json!({"kind":"protect","on":false})
+        )
+        .await["error"]
+            .is_null()
+    );
+    let edited = worker_midi(&mut input, &mut output, 4, message.clone()).await;
+    assert!(edited["error"].is_null());
+    assert_ne!(edited["controls"], configured["controls"]);
+    assert!(
+        worker_midi(
+            &mut input,
+            &mut output,
+            5,
+            json!({"kind":"protect","on":true})
+        )
+        .await["error"]
+            .is_null()
+    );
+    let blocked = worker_midi(&mut input, &mut output, 6, message).await;
+    assert!(blocked["error"].as_str().unwrap().contains("Protect"));
+    assert_eq!(blocked["controls"], edited["controls"]);
     drop(input);
     assert!(
         tokio::time::timeout(Duration::from_secs(10), child.wait())

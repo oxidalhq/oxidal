@@ -26,6 +26,7 @@ pub(super) struct RigPlayback {
     boot: Arc<Policy>,
     library_access: Arc<tokio::sync::RwLock<()>>,
     forget: mpsc::Sender<crate::library_removal::Forget>,
+    protection: mpsc::Sender<crate::protect::Update>,
     pub(super) finished: watch::Receiver<bool>,
     commands: mpsc::Sender<(
         RigAudioCommand,
@@ -103,6 +104,7 @@ struct Export {
     source: String,
 }
 struct Owner {
+    protect: Arc<crate::protect::Protect>,
     levels: Arc<crate::levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
     midi_events: mpsc::Sender<crate::midi_recall::Event>,
@@ -116,6 +118,7 @@ struct Owner {
     restored_error: Option<String>,
     recovery_path: PathBuf,
     confirmed: Option<StartRig>,
+    follow_preparation: Option<String>,
     recovery_due: Option<Instant>,
     resume: Option<Resume>,
     state: RigAudioState,
@@ -129,6 +132,27 @@ struct Resume {
 const RESUME_WINDOW: Duration = Duration::from_secs(300);
 const RESUME_INTERVAL: Duration = Duration::from_secs(2);
 impl Owner {
+    async fn set_protect(&mut self, on: bool) -> Result<(), String> {
+        if self.worker.is_none() {
+            return Ok(());
+        }
+        if self.state.phase != AudioPhase::Running {
+            return Err("Wait for audio preparation before changing Protect".into());
+        }
+        let reply = match self.exchange(&WorkerRequest::Protect { on }).await {
+            Ok(reply) => reply,
+            Err(error) => return Err(self.fault(error).await),
+        };
+        let error = reply.error.clone();
+        if let Err(error) = self.readback(reply) {
+            return Err(self.fault(error).await);
+        }
+        if let Some(error) = error {
+            return Err(self.fault(error).await);
+        }
+        Ok(())
+    }
+
     fn forward_midi(&self, previous_events: u64) {
         let Some(control) = &self.state.control else {
             return;
@@ -284,6 +308,7 @@ impl Owner {
     async fn release_reserved(
         &mut self,
     ) -> Result<Option<tokio::sync::SemaphorePermit<'static>>, String> {
+        self.follow_preparation = None;
         let Some(worker) = self.worker.as_mut() else {
             return Ok(None);
         };
@@ -359,6 +384,7 @@ impl Owner {
         mut settings: StartRig,
         reserved: Option<tokio::sync::SemaphorePermit<'static>>,
     ) -> Result<(), String> {
+        self.follow_preparation = None;
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
         let entry = oxidal_presets::LibraryReference {
@@ -389,6 +415,7 @@ impl Owner {
         let runtime = self.runtime.join("playback");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(executable)
+            .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
             .env("OXIDAL_BUNDLE_STORE", &root)
             .env(
                 "OXIDAL_PRESET_DIR",
@@ -634,6 +661,11 @@ impl Owner {
                     self.rollback = None;
                     let error = self.restored_error.take();
                     self.phase(AudioPhase::Running, error);
+                    if self.follow_preparation.take().as_deref()
+                        == self.state.configured.as_ref().map(|s| s.revision.as_str())
+                    {
+                        self.follow_confirmed();
+                    }
                 }
             }
             Err(e) => {
@@ -818,6 +850,12 @@ impl Owner {
         self.publish();
     }
     async fn command(&mut self, command: RigAudioCommand) -> Reply {
+        if let Some(reason) = self
+            .protect
+            .refuse(crate::protect::rig(&command.action, self.state.phase))
+        {
+            return Err(reason.into());
+        }
         if command.session != self.state.session || command.expected_revision != self.state.revision
         {
             return Err("rig_audio_state_conflict; refresh status".into());
@@ -859,27 +897,31 @@ impl Owner {
         }
         // Any owner command supersedes automatic resume.
         self.resume = None;
-        let recall = matches!(
-            command.action,
-            RigAudioAction::Start { .. }
-                | RigAudioAction::Switch { .. }
-                | RigAudioAction::Save { .. }
-        );
+        let recall = matches!(command.action, RigAudioAction::Switch { .. });
         self.run_action(command.action).await?;
-        if recall
-            && self.state.phase == AudioPhase::Running
-            && let Some(settings) = self.confirmed.clone()
-        {
-            // Last played (7.25): an explicit, confirmed recall becomes the startup sound.
-            let _ = self.boot.follow(Choice::Mixed { settings });
-            self.state.start_on_boot = self.boot.enabled(Role::Mixed);
+        if recall && self.state.phase == AudioPhase::Running {
+            self.follow_confirmed();
         }
         Ok(self.state.clone())
+    }
+    fn follow_confirmed(&mut self) {
+        if let Some(settings) = self.confirmed.clone() {
+            let settings = crate::audio_boot::saved_mixed(settings);
+            if let Err(error) = self.boot.follow(Choice::Mixed { settings }) {
+                self.state.error = Some(format!(
+                    "Audio is playing, but startup could not be saved: {error}"
+                ));
+            }
+            self.state.start_on_boot = self.boot.enabled(Role::Mixed);
+            self.publish();
+        }
     }
     async fn run_action(&mut self, action: RigAudioAction) -> Result<(), String> {
         match action {
             RigAudioAction::Start { settings } => {
+                let revision = settings.revision.clone();
                 self.start(*settings).await?;
+                self.follow_preparation = Some(revision);
                 self.rollback = None;
                 self.restored_error = None;
             }
@@ -1346,6 +1388,7 @@ impl RigPlayback {
     pub fn new(
         config: &Config,
         policy: Arc<Policy>,
+        protect: Arc<crate::protect::Protect>,
         levels: Arc<crate::levels::Levels>,
         library_access: Arc<tokio::sync::RwLock<()>>,
         midi_map: Arc<oxidal_presets::MidiMapStore>,
@@ -1395,7 +1438,9 @@ impl RigPlayback {
             tokio::sync::OwnedRwLockReadGuard<()>,
         )>(1);
         let (forget, mut forgotten) = mpsc::channel::<crate::library_removal::Forget>(1);
+        let (protection, mut protection_updates) = mpsc::channel::<crate::protect::Update>(1);
         let mut owner = Owner {
+            protect,
             levels,
             midi_map,
             midi_events,
@@ -1409,6 +1454,7 @@ impl RigPlayback {
             restored_error: None,
             recovery_path,
             confirmed: recovered,
+            follow_preparation: None,
             recovery_due: None,
             resume: None,
             state: initial,
@@ -1438,6 +1484,7 @@ impl RigPlayback {
                 tokio::select! {biased;
                     _=async{match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
+                    update = protection_updates.recv() => match update { Some((on, reply)) => { let _ = reply.send(owner.set_protect(on).await); }, None => break },
                     item=receiver.recv()=>match item{Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
                     _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
                 }
@@ -1459,10 +1506,20 @@ impl RigPlayback {
             boot: policy,
             library_access,
             forget,
+            protection,
             finished,
             commands,
             state,
         })
+    }
+    /// Called under exclusive library access: no concurrent start or control can race the lock.
+    pub async fn set_protect(&self, on: bool) -> Result<(), String> {
+        let (reply, receipt) = oneshot::channel();
+        self.protection
+            .send((on, reply))
+            .await
+            .map_err(|_| "Playback owner stopped")?;
+        receipt.await.map_err(|_| "Playback owner stopped")?
     }
     pub async fn forget(&self, entry: oxidal_presets::LibraryReference) -> Result<(), String> {
         let (reply, receipt) = oneshot::channel();
@@ -1528,8 +1585,158 @@ pub(super) async fn command(
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+    static OWNER_TEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    #[tokio::test]
+    async fn last_played_follows_only_successful_explicit_async_start() {
+        use serde_json::json;
+        let _serial = OWNER_TEST.lock().await;
+        for mode in [
+            "follow",
+            "pinned",
+            "off",
+            "failed",
+            "cancelled",
+            "storage_failed",
+        ] {
+            let root = std::env::temp_dir()
+                .join(format!("oxidal-follow-start-{}-{mode}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            let input = json!({"endpoint":"hw:CARD=Test,DEV=0","direction":"capture","sample_rate":48000,"channels":2,"format":"s16","period_frames":128,"periods":3});
+            let mut output = input.clone();
+            output["direction"] = json!("playback");
+            let settings: StartRig = serde_json::from_value(json!({"revision":"b".repeat(64),"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]}})).unwrap();
+            let control: oxidal_engine::protocol::Snapshot = serde_json::from_value(json!({
+                "modified":false,"session":"worker","revision":1,"source_revision":settings.revision,
+                "controls":[],"buffer_bytes":0,"latency_frames":0
+            })).unwrap();
+            let reply = WorkerReply {
+                control,
+                telemetry: Default::default(),
+                processed_frames: 128,
+                error: (mode == "failed").then(|| "Candidate rejected".into()),
+            };
+            let executable = root.join("worker");
+            let reply = serde_json::to_string(&reply).unwrap();
+            // Real subprocess/IPC with delayed startup; no PCM or external runtime needed.
+            std::fs::write(&executable, format!("#!/bin/sh\nwhile IFS= read -r request; do\nsleep 0.3\nprintf '%s\\n' '{reply}'\ndone\n")).unwrap();
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+            let (shutdown, signal) = watch::channel(false);
+            let policy = Arc::new(Policy::new(root.join("presets/boot-audio.json")));
+            let rig = RigPlayback::new(
+                &Config {
+                    debug_socket: None,
+                    device_socket: None,
+                    simulator: false,
+                    native_worker: None,
+                    audio_worker: None,
+                    graph_worker: None,
+                    rig_worker: Some(executable),
+                    mapping_path: root.join("mapping"),
+                    preset_dir: root.join("presets"),
+                    ui_dir: root.join("ui"),
+                    shutdown: Some(signal),
+                },
+                policy.clone(),
+                Arc::new(crate::protect::Protect::new(root.join("protect.json"))),
+                Arc::new(crate::levels::Levels::load(root.join("levels.json"))),
+                Arc::new(tokio::sync::RwLock::new(())),
+                Arc::new(oxidal_presets::MidiMapStore::new(root.join("presets"))),
+                mpsc::channel(1).0,
+            )
+            .unwrap();
+            if mode != "off" {
+                let mut previous = settings.clone();
+                previous.revision = "a".repeat(64);
+                policy
+                    .select(
+                        Choice::Mixed {
+                            settings: crate::audio_boot::saved_mixed(previous),
+                        },
+                        mode != "pinned",
+                    )
+                    .unwrap();
+            } else {
+                policy.set_follow(true).unwrap();
+            }
+            let before = policy.startup();
+            if mode == "storage_failed" {
+                std::fs::create_dir(root.join("presets/boot-audio.tmp")).unwrap();
+            }
+            let current = rig.snapshot();
+            let starting = rig
+                .dispatch(RigAudioCommand {
+                    session: current.session,
+                    expected_revision: current.revision,
+                    action: RigAudioAction::Start {
+                        settings: Box::new(settings),
+                    },
+                })
+                .await
+                .unwrap();
+            assert_eq!(starting.phase, AudioPhase::Starting);
+            assert_eq!(policy.startup(), before);
+            if mode == "cancelled" {
+                rig.dispatch(RigAudioCommand {
+                    session: starting.session,
+                    expected_revision: starting.revision,
+                    action: RigAudioAction::Stop,
+                })
+                .await
+                .unwrap();
+            } else {
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    while rig.snapshot().phase == AudioPhase::Starting {
+                        tokio::time::sleep(Duration::from_millis(25)).await;
+                    }
+                })
+                .await
+                .unwrap();
+                assert_eq!(
+                    rig.snapshot().phase,
+                    if mode == "failed" {
+                        AudioPhase::Failed
+                    } else {
+                        AudioPhase::Running
+                    }
+                );
+            }
+            if mode == "follow" {
+                assert_eq!(policy.startup().target.unwrap().id, "b".repeat(64));
+                assert_eq!(
+                    Policy::new(root.join("presets/boot-audio.json")).startup(),
+                    policy.startup()
+                );
+                let Some(Choice::Mixed { settings }) = policy.snapshot().unwrap() else {
+                    panic!("Missing startup")
+                };
+                assert!(settings.recall.unwrap().values.is_empty());
+            } else {
+                assert_eq!(policy.startup(), before);
+            }
+            if mode == "storage_failed" {
+                assert!(
+                    rig.snapshot()
+                        .error
+                        .as_deref()
+                        .is_some_and(|e| e.contains("startup could not be saved"))
+                );
+            }
+            shutdown.send_replace(true);
+            let mut done = rig.finished.clone();
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !*done.borrow_and_update() {
+                    done.changed().await.unwrap();
+                }
+            })
+            .await
+            .unwrap();
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
     #[tokio::test]
     async fn preparation_is_cancellable_and_shutdown_reaps_before_releasing_device() {
+        let _serial = OWNER_TEST.lock().await;
         let root =
             std::env::temp_dir().join(format!("oxidal-prepare-cancel-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
@@ -1554,6 +1761,9 @@ mod tests {
                 shutdown: Some(signal),
             },
             Arc::new(Policy::new(root.join("presets/boot-audio.json"))),
+            Arc::new(crate::protect::Protect::new(
+                root.join("presets/protect.json"),
+            )),
             Arc::new(crate::levels::Levels::load(
                 root.join("presets/unit-levels.json"),
             )),
