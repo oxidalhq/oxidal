@@ -430,21 +430,48 @@ export function NativeAuthoring({
                   value={setting.display}
                   detail="Lite uses less DSP; Full runs the complete model. Changing it restarts audio briefly."
                 >
-                  <Button
-                    variant="outline"
-                    aria-label={`${setting.label} · ${setting.display}`}
-                    disabled={editingDisabled}
-                    onClick={() =>
-                      setSettingDraft({
-                        control: setting,
-                        value: setting.value,
-                        session,
-                        revision,
-                      })
-                    }
-                  >
-                    Change…
-                  </Button>
+                  {[
+                    { label: 'Lite', value: 0 },
+                    { label: 'Full', value: 1 },
+                  ].map((choice) => (
+                    <Button
+                      key={choice.label}
+                      variant={
+                        setting.value === choice.value ? 'default' : 'outline'
+                      }
+                      aria-pressed={setting.value === choice.value}
+                      aria-label={`${setting.label} · ${choice.label}`}
+                      disabled={
+                        editingDisabled || setting.value === choice.value
+                      }
+                      onClick={() =>
+                        void author({
+                          kind: 'parameter',
+                          parameter: setting.target,
+                          value: choice.value,
+                        })
+                      }
+                    >
+                      {choice.label}
+                    </Button>
+                  ))}
+                  {setting.value !== 0 && setting.value !== 1 && (
+                    <Button
+                      variant="outline"
+                      aria-label={`${setting.label} · ${setting.display}`}
+                      disabled={editingDisabled}
+                      onClick={() =>
+                        setSettingDraft({
+                          control: setting,
+                          value: setting.value,
+                          session,
+                          revision,
+                        })
+                      }
+                    >
+                      Scaled…
+                    </Button>
+                  )}
                 </ToolRow>
               ))}
             <ToolRow
