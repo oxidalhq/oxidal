@@ -3331,7 +3331,7 @@ for (const layout of ['serial', 'scenes'] as const) {
           },
         }),
       );
-      await rig.getByText('MIDI controls', { exact: true }).click();
+      await rig.getByRole('button', { name: 'MIDI assignments' }).click();
       await rig.getByLabel('MIDI input', { exact: true }).click();
       await page
         .getByRole('option', {
@@ -3432,7 +3432,7 @@ for (const layout of ['serial', 'scenes'] as const) {
         .getByRole('button', { name: 'Disable MIDI', exact: true })
         .click();
       await expect.poll(async () => (await state()).configured.midi).toBeNull();
-      await rig.getByText('MIDI controls', { exact: true }).click();
+      await rig.getByRole('button', { name: 'MIDI assignments' }).click();
       for (const viewport of [
         initialViewport,
         { width: initialViewport.height, height: initialViewport.width },
@@ -4047,7 +4047,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
         },
       }),
     );
-    await sounding.getByText('MIDI controls', { exact: true }).click();
+    await sounding.getByRole('button', { name: 'MIDI assignments' }).click();
     await sounding.getByLabel('MIDI input', { exact: true }).click();
     await page
       .getByRole('option', {
@@ -4100,7 +4100,7 @@ test('playback lifecycle applies live chain edits and prepared DSP settings befo
           (await (await request.get('/api/v1/audio')).json()).configured.midi,
       )
       .toBeUndefined();
-    await sounding.getByText('MIDI controls', { exact: true }).click();
+    await sounding.getByRole('button', { name: 'MIDI assignments' }).click();
     const actions = sounding.getByRole('group', { name: 'Live chain actions' });
     await actions
       .getByRole('button', { name: 'Duplicate block', exact: true })

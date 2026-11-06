@@ -40,13 +40,16 @@ export function SceneMidi({
   state,
   disabled,
   onCommand,
+  trigger = true,
 }: {
   state: RigAudioState;
   disabled: boolean;
   onCommand: (action: RigAudioAction) => Promise<void>;
+  trigger?: boolean;
 }) {
   return (
     <MidiControls
+      trigger={trigger}
       control={state.control ?? null}
       configured={state.configured?.midi ?? null}
       disabled={disabled}
@@ -66,12 +69,15 @@ export function MidiControls({
   disabled: ownerDisabled,
   preset,
   onApply,
+  trigger = true,
 }: {
   control: MidiView | null;
   configured: Settings | null;
   disabled: boolean;
   preset?: PresetIdentity;
   onApply: (settings: Settings | null) => Promise<void>;
+  /** False where the screen header already has the one MIDI entry (7.15). */
+  trigger?: boolean;
 }) {
   const [devices, setDevices] = useState<MidiDevices | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
@@ -263,17 +269,19 @@ export function MidiControls({
   if (!control) return null;
   return (
     <>
-      <Button variant="outline" aria-haspopup="dialog" onClick={openEditor}>
-        <PlugsConnected size={18} aria-hidden="true" />
-        MIDI controls
-        <span className="text-xs font-normal text-muted-foreground">
-          {configured
-            ? status?.connected
-              ? 'Connected'
-              : 'Disconnected'
-            : 'Not configured'}
-        </span>
-      </Button>
+      {trigger && (
+        <Button variant="outline" aria-haspopup="dialog" onClick={openEditor}>
+          <PlugsConnected size={18} aria-hidden="true" />
+          MIDI controls
+          <span className="text-xs font-normal text-muted-foreground">
+            {configured
+              ? status?.connected
+                ? 'Connected'
+                : 'Disconnected'
+              : 'Not configured'}
+          </span>
+        </Button>
+      )}
       {dialogOpen && (
         <AdjustmentDialog
           title="MIDI assignments"

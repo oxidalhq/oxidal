@@ -2549,6 +2549,7 @@ export function MixedRig({
         </div>
       )}
       <SceneMidi
+        trigger={false}
         state={state}
         disabled={disabled || !!edit}
         onCommand={async (action) => {

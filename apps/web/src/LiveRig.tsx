@@ -10,6 +10,7 @@ import { MidiControls } from './SceneMidi';
 import { NativeAuthoring } from './NativeAuthoring';
 import {
   ArrowRight,
+  Lightning,
   Plus,
   CaretDown,
   ArrowLeft,
@@ -921,6 +922,15 @@ export function LiveRig({
           <span className="phone-hidden">MIDI</span>
         </Button>
         <TunerButton />
+        <Button
+          variant="outline"
+          aria-label="Perform view"
+          disabled={disabled || !!draft || !!picker}
+          onClick={() => setPerformance(true)}
+        >
+          <Lightning aria-hidden="true" />
+          <span className="phone-hidden">Perform</span>
+        </Button>
         {/* Save and the preset actions form one split button. */}
         <div className="preset-save-group" role="group" aria-label="Save">
           <Button
@@ -940,7 +950,7 @@ export function LiveRig({
             variant={state.modified ? 'default' : 'outline'}
             aria-label="Preset actions"
             aria-haspopup="dialog"
-            title="Revert, Perform, Match level and appearance"
+            title="Revert, Match level and appearance"
             className="preset-actions"
             disabled={disabled || !!draft || !!picker}
             onClick={() => setActionsOpen(true)}
@@ -1094,16 +1104,6 @@ export function LiveRig({
                   <span className="caption">
                     Discards edits since the last save
                   </span>
-                </button>
-                <button
-                  type="button"
-                  disabled={disabled || !!draft || !!picker}
-                  onClick={() => {
-                    setActionsOpen(false);
-                    setPerformance(true);
-                  }}
-                >
-                  Perform view
                 </button>
                 <button
                   type="button"
@@ -1717,6 +1717,7 @@ export function LiveRig({
         </AdjustmentDialog>
       )}
       <MidiControls
+        trigger={false}
         configured={state.configured?.midi ?? null}
         disabled={disabled}
         preset={
