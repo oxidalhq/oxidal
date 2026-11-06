@@ -1,3 +1,4 @@
+import { openSounds } from './display';
 import { expect, test } from '@playwright/test';
 
 test('IR discovery keeps its empty state full width and returns keyboard focus', async ({
@@ -10,7 +11,7 @@ test('IR discovery keeps its empty state full width and returns keyboard focus',
   await expect(
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
-  await page.getByRole('tab', { name: 'IRs', exact: true }).click();
+  await openSounds(page, 'ir');
   const launch = page.getByRole('button', { name: 'TONE3000', exact: true });
   await launch.click();
   const dialog = page.getByRole('dialog', { name: 'Get IRs' });

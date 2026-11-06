@@ -106,6 +106,7 @@ export function Library({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(true);
   const [importMessage, setImportMessage] = useState('');
+  const [importError, setImportError] = useState('');
   const [error, setError] = useState('');
   const [copiesError, setCopiesError] = useState('');
   const generation = useRef(0);
@@ -228,7 +229,7 @@ export function Library({
     if (!file) return;
     const request = ++generation.current;
     setBusy(true);
-    setError('');
+    setImportError('');
     setImportMessage('Importing…');
     try {
       const imported = await importPreset(file);
@@ -240,7 +241,7 @@ export function Library({
       );
     } catch (cause) {
       if (request === generation.current) {
-        setError(friendlyError(cause, 'import the preset'));
+        setImportError(friendlyError(cause, 'import the preset'));
         setImportMessage('');
       }
     } finally {
@@ -397,9 +398,9 @@ export function Library({
             <NewPresetDialog
               connected={connected}
               onCancel={() => setCreating(false)}
-              onAdvanced={() => {
+              onAdvanced={(kind) => {
                 setCreating(false);
-                setComposer('effects');
+                setComposer(kind);
               }}
               onCreated={(created) => {
                 setCreating(false);
@@ -566,6 +567,7 @@ export function Library({
               </Button>
             </div>
             {importMessage && <p role="status">{importMessage}</p>}
+            {importError && <p role="alert">{importError}</p>}
           </section>
         </TabsContent>
         <TabsContent value="setlist">

@@ -362,14 +362,18 @@ test('about opens from settings and returns to the sections', async ({
   await page.goto('/?development=simulator');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const tabs = page.getByRole('tablist', { name: 'Settings sections' });
-  await expect(tabs.getByRole('tab', { name: 'About Oxidal' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'About', exact: true }).click();
+  // About is a normal Settings destination, not a header toggle (7.18).
   await expect(
-    page.getByRole('heading', { name: 'About Oxidal', level: 1, exact: true }),
+    page.getByRole('button', { name: 'About', exact: true }),
+  ).toHaveCount(0);
+  await tabs.getByRole('tab', { name: 'About', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'About', level: 1, exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Back to settings' }).click();
+  await expect(page.getByText('This device')).toBeVisible();
+  await tabs.getByRole('tab', { name: 'Audio', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Audio setup', level: 1, exact: true }),
+    page.getByRole('heading', { name: 'Audio', level: 1, exact: true }),
   ).toBeVisible();
 });
 
@@ -380,14 +384,15 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const tabs = page.getByRole('tablist', { name: 'Settings sections' });
   const sections = [
-    ['Audio', 'Audio setup'],
+    ['Audio', 'Audio'],
     ['Network', 'Network'],
     ['Accounts', 'Accounts'],
-    ['MIDI', 'MIDI controls'],
+    ['MIDI', 'MIDI'],
     ['Effects', 'Effects'],
     ['Display', 'Display'],
     ['Device', 'Device'],
     ['Maintenance', 'Maintenance'],
+    ['About', 'About'],
   ] as const;
 
   for (const size of [
@@ -406,7 +411,7 @@ test('settings navigation stays coherent across narrow and rotated layouts', asy
         return [...rows.values()];
       }),
       `balanced settings rows at ${size.width}px`,
-    ).toEqual(size.width <= 900 ? [4, 4] : [8]);
+    ).toEqual(size.width <= 900 ? [3, 3, 3] : [9]);
     for (const [tab, heading] of sections) {
       await tabs.getByRole('tab', { name: tab, exact: true }).click();
       await expect(
@@ -809,7 +814,7 @@ test('effect focus keeps quick controls reachable without changing the rig', asy
   }
   await page.getByRole('button', { name: 'Audio setup', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Audio setup', exact: true }),
+    page.getByRole('heading', { name: 'Audio', level: 1, exact: true }),
   ).toBeVisible();
 });
 
@@ -1008,10 +1013,13 @@ test('native device defaults save independently of the playing tone', async ({
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const panel = page.locator('details').filter({
-      has: page.locator('summary', { hasText: 'TONE3000 device defaults' }),
+    // Engine settings are their own Audio tab, peer of the device (7.17).
+    await page
+      .getByRole('tab', { name: 'TONE3000 engine', exact: true })
+      .click();
+    const panel = page.getByRole('region', {
+      name: 'Defaults for new NAM blocks',
     });
-    await panel.locator('summary').click();
     await panel.getByLabel('NAM size for new models').click();
     await page.getByRole('option', { name: '75%', exact: true }).click();
     const multiCore = panel.getByRole('switch', {
@@ -1025,7 +1033,9 @@ test('native device defaults save independently of the playing tone', async ({
     expect(saved.settings.multi_core).toBe(true);
     await page.reload();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await panel.locator('summary').click();
+    await page
+      .getByRole('tab', { name: 'TONE3000 engine', exact: true })
+      .click();
     await expect(panel.getByLabel('NAM size for new models')).toHaveText('75%');
     await panel
       .getByRole('button', { name: 'Reset defaults', exact: true })

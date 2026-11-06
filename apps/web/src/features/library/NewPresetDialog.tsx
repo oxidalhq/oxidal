@@ -41,8 +41,8 @@ export function NewPresetDialog({
   connected: boolean;
   onCreated: (created: RigDocument) => void;
   onCancel: () => void;
-  /** Opens the effects-only and TONE3000 chain composers kept for parity. */
-  onAdvanced: () => void;
+  /** Opens the effects-only or TONE3000 chain composer kept for parity. */
+  onAdvanced: (composer: 'effects' | 'tone3000') => void;
 }) {
   const [name, setName] = useState('');
   const [start, setStart] = useState<Start>('empty');
@@ -181,8 +181,19 @@ export function NewPresetDialog({
         </p>
         {error && <p role="alert">{error}</p>}
         <div className="action-row">
-          <Button type="button" variant="ghost" onClick={onAdvanced}>
-            Advanced composers…
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onAdvanced('effects')}
+          >
+            Effects chain composer
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onAdvanced('tone3000')}
+          >
+            TONE3000 chain editor
           </Button>
           <span className="flex-1" />
           <Button

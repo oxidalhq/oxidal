@@ -190,13 +190,12 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
-/* Eight settings destinations use two balanced rows before they fit as one
-   strip. Avoid an orphaned final tab at tablet and phone widths. About sits
-   below the content as a separate link. */
+/* Nine settings destinations, About included, use three balanced rows of
+   three before they fit as one strip; no orphaned final tab (7.18). */
 @media (max-width: 900px) {
   .settings-workspace > .ui-tabs-list {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
   .settings-workspace > .ui-tabs-list .ui-tabs-trigger {

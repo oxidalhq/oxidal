@@ -1,4 +1,4 @@
-import { setDisplayMode } from './display';
+import { openComposer, openSounds, setDisplayMode } from './display';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   test,
@@ -112,12 +112,12 @@ async function playSavedRig(page: Page, name: string) {
   });
   await expect(library).toBeVisible();
   const play = library.getByRole('button', {
-    name: `Load ${name}`,
+    name: `Play ${name}`,
     exact: true,
   });
   while ((await play.count()) === 0) {
     const more = library.getByRole('button', {
-      name: 'Load more',
+      name: 'Play more',
       exact: true,
     });
     await expect(more).toBeVisible();
@@ -437,7 +437,7 @@ test('native preset upload, durable library, exact download and rejected replace
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByText('Import preset', { exact: true }).click();
+  await page.getByRole('tab', { name: 'Discover', exact: true }).click();
   const fixtureNames = [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
@@ -451,27 +451,34 @@ test('native preset upload, durable library, exact download and rejected replace
     await page
       .getByLabel('TONE3000 preset file')
       .setInputFiles(fileURLToPath(new URL(name, fixtures)));
-    await page
-      .getByRole('button', { name: 'Import original', exact: true })
-      .click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     await expect(
-      page.getByRole('status').filter({ hasText: 'Original preserved.' }),
+      page
+        .getByRole('status')
+        .filter({ hasText: 'The original file is kept unchanged.' }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Import original', exact: true }),
+      page.getByRole('button', { name: 'Import', exact: true }),
     ).toBeEnabled();
   }
   const rowSelector = fixtureIds
     .map((id) => `[data-testid="preset-${id}"]`)
     .join(',');
   const rows = page.locator(rowSelector);
+  const presetsTab = page.getByRole('tab', { name: 'Presets', exact: true });
+  const discoverTab = page.getByRole('tab', { name: 'Discover', exact: true });
+  await presetsTab.click();
   await expect(rows).toHaveCount(2);
+  // Importing the same file again keeps one copy.
+  await discoverTab.click();
   await page
-    .getByRole('button', { name: 'Import original', exact: true })
-    .click();
+    .getByLabel('TONE3000 preset file')
+    .setInputFiles(fileURLToPath(new URL(fixtureNames[0]!, fixtures)));
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Import original', exact: true }),
+    page.getByRole('button', { name: 'Import', exact: true }),
   ).toBeEnabled();
+  await presetsTab.click();
   await expect(rows).toHaveCount(2);
   // Rows mark only the exception (legacy format); the current-format row has no tag.
   const current = page.locator(`[data-testid="preset-${fixtureIds[0]}"]`);
@@ -485,7 +492,8 @@ test('native preset upload, durable library, exact download and rejected replace
   await page.getByRole('button', { name: 'Clear preset search' }).click();
   await expect(rows).toHaveCount(2);
   const downloadEvent = page.waitForEvent('download');
-  await current.getByRole('link', { name: /Download original/ }).click();
+  await current.getByRole('button', { name: /^More for / }).click();
+  await page.getByRole('menuitem', { name: 'Download file' }).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toMatch(/\.t3kpreset$/);
   const path = await download.path();
@@ -499,22 +507,21 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(second.locator(rowSelector)).toHaveCount(2);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByText('Import preset', { exact: true }).click();
   await expect(rows).toHaveCount(2);
+  await page.getByRole('tab', { name: 'Discover', exact: true }).click();
   await page.getByLabel('TONE3000 preset file').setInputFiles({
     name: 'bad.t3kpreset',
     mimeType: 'application/octet-stream',
     buffer: Buffer.from('corrupt'),
   });
-  await page
-    .getByRole('button', { name: 'Import original', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Not a TONE3000 preset' }),
   ).toContainText('Not a TONE3000 preset');
+  await page.getByRole('tab', { name: 'Presets', exact: true }).click();
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
-  await page.getByRole('button', { name: 'Author', exact: true }).click();
+  await openComposer(page, 'tone3000');
   await expect(
     page.getByText(/Playback and editing are not available/),
   ).toBeVisible();
@@ -555,7 +562,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     await setDisplayMode(page, 'epaper');
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'Author', exact: true }).click();
+  await openComposer(page, 'tone3000');
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
   if (!(await editor.getByLabel('Preset to load').isVisible()))
@@ -565,7 +572,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Load draft' }).click();
+  await editor.getByRole('button', { name: 'Play draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(editor.getByLabel('Preset to load')).not.toBeVisible();
   // Direct tone targets use the same owned adjustment transaction as the full browser.
@@ -872,7 +879,7 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Load draft' }).click();
+  await editor.getByRole('button', { name: 'Play draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await chooseSelectValue(
     page,
@@ -882,14 +889,14 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
   await expect(page.getByTestId('native-readback')).toHaveText(before!);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'Author', exact: true }).click();
+  await openComposer(page, 'tone3000');
   await editor.getByTestId('native-preset-loader').locator('summary').click();
   await chooseSelectValue(
     page,
     editor.getByLabel('Preset to load'),
     `owned:${owned.id}`,
   );
-  await editor.getByRole('button', { name: 'Load draft' }).click();
+  await editor.getByRole('button', { name: 'Play draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   await expect(page.getByTestId('native-readback')).toHaveText(edited!);
   const restored = await (await request.get('/api/v1/native')).json();
@@ -950,11 +957,8 @@ test('native editor loads real A2, previews/cancels, commits, saves and reloads 
     .toBeNull();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   // Library remembers the open editor; otherwise open it from the Presets pane.
-  const authorButton = page.getByRole('button', {
-    name: 'Author',
-    exact: true,
-  });
-  if (await authorButton.count()) await authorButton.click();
+  if (!(await page.getByTestId('native-readback').count()))
+    await openComposer(page, 'tone3000');
   await expect(page.getByTestId('native-readback')).toHaveText(edited!);
   const original = await request.get(
     `/api/v1/presets/${preset.sha256}/original`,
@@ -1163,7 +1167,7 @@ test('playback lifecycle clears a corrupt boot preference without a worker', asy
   await page.getByRole('tab', { name: 'Audio', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Playback controls' });
   const clear = panel.getByRole('button', {
-    name: 'Clear invalid boot setup',
+    name: 'Clear invalid startup setup',
     exact: true,
   });
   await expect(clear).toBeEnabled();
@@ -1260,7 +1264,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .getByRole('button', { name: 'Library', exact: true })
       .click();
     await page
-      .getByRole('button', { name: 'Load Live recall test', exact: true })
+      .getByRole('button', { name: 'Play Live recall test', exact: true })
       .click();
     await expect(
       page.getByRole('region', { name: 'Sounding rig' }),
@@ -1722,7 +1726,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       page.getByRole('complementary', { name: 'DSP and system resources' }),
     ).toHaveAttribute('data-connected', 'true');
     await page.getByRole('button', { name: 'Library', exact: true }).click();
-    await page.getByRole('button', { name: 'Author', exact: true }).click();
+    await openComposer(page, 'tone3000');
     const editor = page.getByRole('region', { name: 'Native preset editor' });
     await expect(editor).toBeVisible();
     if (!(await editor.getByLabel('Preset to load').isVisible()))
@@ -1735,7 +1739,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       editor.getByLabel('Preset to load'),
       `original:${preset.sha256}`,
     );
-    await editor.getByRole('button', { name: 'Load draft' }).click();
+    await editor.getByRole('button', { name: 'Play draft' }).click();
     await expect(editor.getByRole('status')).toHaveText('Native preset ready');
     await editor
       .getByLabel('Owned preset name')
@@ -1806,7 +1810,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       await request.get('/api/v1/presets')
     ).json();
     await page.getByRole('button', { name: 'Library', exact: true }).click();
-    await page.getByRole('button', { name: 'New preset', exact: true }).click();
+    await openComposer(page, 'effects');
     const newRig = page.getByRole('region', { name: 'Effects authoring' });
     await newRig
       .getByLabel('Preset name', { exact: true })
@@ -2178,7 +2182,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   if (testInfo.project.name === 'boox-air3c')
     await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await openComposer(page, 'effects');
   const editor = page.getByRole('region', { name: 'Effects authoring' });
   const name = `Practice ${testInfo.project.name}`;
   // Wait for the stopped session to arrive; it must not rename a new draft.
@@ -2374,7 +2378,7 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect.poll(async () => (await read()).device_owned).toBe(false);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await openComposer(page, 'effects');
   await editor.getByRole('button', { name, exact: true }).click();
   await editor
     .getByRole('button', { name: 'Audition preset', exact: true })
@@ -2904,7 +2908,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   });
   while (!(await ready.count())) {
     const more = savedLibrary.getByRole('button', {
-      name: 'Load more',
+      name: 'Play more',
       exact: true,
     });
     await expect(more).toBeVisible();
@@ -3064,9 +3068,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     await request.get(`/api/v1/presets/rigs/${managedRevision}`)
   ).json();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Manage library', exact: true })
-    .click();
+  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const management = page.getByRole('region', {
     name: 'Manage library',
     exact: true,
@@ -3182,7 +3184,7 @@ for (const layout of ['serial', 'scenes'] as const) {
     if (info.project.name === 'boox-air3c')
       await setDisplayMode(page, 'epaper');
     await page.getByRole('button', { name: 'Library', exact: true }).click();
-    await page.getByRole('button', { name: 'New preset', exact: true }).click();
+    await openComposer(page, 'effects');
     await page
       .getByRole('button', { name: 'Add saved tone', exact: true })
       .click();
@@ -3564,7 +3566,7 @@ test('mixed rig authoring separates guarded amp/cab stages and saves their live 
   await page.goto('/');
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'New preset', exact: true }).click();
+  await openComposer(page, 'effects');
   await page
     .getByRole('button', { name: 'Add saved tone', exact: true })
     .click();
@@ -3918,7 +3920,7 @@ test('native editor loads draft structure commands and preserves history', async
   const preset = await imported.json();
   await page.goto('/');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('button', { name: 'Author', exact: true }).click();
+  await openComposer(page, 'tone3000');
   const editor = page.getByRole('region', { name: 'Native preset editor' });
   await expect(editor).toBeVisible();
   if (!(await editor.getByLabel('Preset to load').isVisible()))
@@ -3928,7 +3930,7 @@ test('native editor loads draft structure commands and preserves history', async
     editor.getByLabel('Preset to load'),
     `original:${preset.sha256}`,
   );
-  await editor.getByRole('button', { name: 'Load draft' }).click();
+  await editor.getByRole('button', { name: 'Play draft' }).click();
   await expect(editor.getByRole('status')).toHaveText('Native preset ready');
   const initial = await (await request.get('/api/v1/native')).json();
   const block = initial.block_controls.find(
@@ -4931,10 +4933,10 @@ test('native preset library keeps originals accessible when saved copies cannot 
     page.getByRole('searchbox', { name: 'Search presets' }),
   ).toBeEnabled();
   await expect(
-    page.getByRole('button', { name: 'Load Available original' }),
+    page.getByRole('button', { name: 'Play Available original' }),
   ).toBeEnabled();
   fail = false;
-  await page.getByRole('button', { name: 'Retry saved copies' }).click();
+  await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByText('Saved copies could not be read.')).toHaveCount(
     0,
   );
@@ -4958,7 +4960,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   }
   await page.goto('/');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('tab', { name: 'IRs', exact: true }).click();
+  await openSounds(page, 'ir');
   await page.getByRole('searchbox', { name: 'Search IRs' }).fill(prefix);
   await expect(page.getByRole('heading', { level: 4 })).toHaveCount(64);
   await page.screenshot({
@@ -4976,7 +4978,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   await expect(page.getByRole('navigation', { name: 'IRs pages' })).toHaveCount(
     0,
   );
-  await page.getByRole('tab', { name: 'NAM models', exact: true }).click();
+  await openSounds(page, 'nam');
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await page.screenshot({
     path: `test-results/model-library-import-${info.project.name}.png`,
@@ -5025,7 +5027,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
   expect(await (await page.request.get('/api/v1/audio')).json()).toEqual(
     audioBeforePreview,
   );
-  await page.getByRole('tab', { name: 'IRs', exact: true }).click();
+  await openSounds(page, 'ir');
   await expect(page.getByRole('searchbox', { name: 'Search IRs' })).toHaveValue(
     `${prefix} 65.wav`,
   );
@@ -5085,9 +5087,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   expect(independent.ok()).toBe(true);
   const asset = await independent.json();
   await page.goto('/#library');
-  await page
-    .getByRole('button', { name: 'Manage library', exact: true })
-    .click();
+  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const row = page.locator(
     `[data-library-kind="original"][data-library-entry="${preset.sha256}"]`,
   );
@@ -5233,9 +5233,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   await place('rig', second.revision, { kind: 'rig', id: rig.revision });
   const audioBefore = await (await request.get('/api/v1/audio')).json();
   await page.goto('/#library');
-  await page
-    .getByRole('button', { name: 'Manage library', exact: true })
-    .click();
+  await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const management = page.getByRole('region', {
     name: 'Manage library',
     exact: true,
@@ -5371,9 +5369,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   await picker
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: 'Preset actions', exact: true })
-    .click();
+  // Perform is a header button on every preset kind (7.15).
   await page.getByRole('button', { name: 'Perform view', exact: true }).click();
   await page
     .getByRole('group', { name: 'Perform view', exact: true })
@@ -5472,12 +5468,12 @@ test('device portrait preset details edit and category search never recall audio
     .getByRole('searchbox', { name: 'Search presets', exact: true })
     .fill('neck pickup');
   await expect(
-    page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
+    page.getByRole('button', { name: `Play ${imported.name}`, exact: true }),
   ).toBeVisible();
   await page.getByLabel('Category', { exact: true }).click();
   await page.getByRole('option', { name: 'Ambient', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: `Load ${imported.name}`, exact: true }),
+    page.getByRole('button', { name: `Play ${imported.name}`, exact: true }),
   ).toBeVisible();
   await page.reload();
   await page
