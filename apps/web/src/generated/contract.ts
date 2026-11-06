@@ -1658,6 +1658,11 @@ export interface LibraryItem {
   name: string;
   origin?: "tone3000" | "oxidal_example" | "mine";
   source_name: string;
+  /**
+   * An earlier saved revision of a preset that was saved again. It is kept
+   * as history and hidden from Library and the Removed list.
+   */
+  superseded?: boolean;
 }
 export interface LibraryUpdate {
   action: LibraryAction;

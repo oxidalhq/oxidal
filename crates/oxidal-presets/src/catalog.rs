@@ -89,6 +89,10 @@ pub struct LibraryItem {
     #[serde(default)]
     pub origin: LibraryOrigin,
     pub archived: bool,
+    /// An earlier saved revision of a preset that was saved again. It is kept
+    /// as history and hidden from Library and the Removed list.
+    #[serde(default)]
+    pub superseded: bool,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -127,6 +131,8 @@ struct Preferences {
     labels: BTreeMap<String, String>,
     archived: BTreeSet<String>,
     order: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    superseded: BTreeSet<String>,
 }
 #[derive(Debug)]
 pub struct CatalogStore {
@@ -180,6 +186,34 @@ impl CatalogStore {
             .and_then(|m| m.modified())
             .unwrap_or(std::time::UNIX_EPOCH)
     }
+    /// Saving an owned preset again (7.2): the new revision takes the earlier
+    /// one's set-list place, name and visibility. The earlier revision stays on
+    /// the device as hidden history, so references to it keep working.
+    pub fn supersede(&mut self, kind: LibraryKind, old: &str, new: &str) -> Result<()> {
+        let (old, new) = (kind.key(old)?, kind.key(new)?);
+        if old == new {
+            return Ok(());
+        }
+        let mut candidate = self.preferences.clone();
+        candidate.order.retain(|key| key != &new);
+        match candidate.order.iter().position(|key| key == &old) {
+            Some(place) => candidate.order[place] = new.clone(),
+            None => candidate.order.push(new.clone()),
+        }
+        if let Some(label) = candidate.labels.get(&old).cloned() {
+            candidate.labels.insert(new.clone(), label);
+        }
+        if candidate.archived.contains(&old) {
+            candidate.archived.insert(new.clone());
+        }
+        candidate.archived.insert(old.clone());
+        candidate.superseded.insert(old);
+        candidate.superseded.remove(&new);
+        if candidate.order.len() > 4096 || candidate.superseded.len() > 65536 {
+            return Err(Error::Invalid("Library preferences exceed limit"));
+        }
+        self.persist(candidate)
+    }
     /// Remove only the deleted entry's display preferences; no logical-ID fanout.
     pub fn forget(&mut self, kind: LibraryKind, id: &str) -> Result<()> {
         let key = kind.key(id)?;
@@ -187,6 +221,7 @@ impl CatalogStore {
         candidate.labels.remove(&key);
         candidate.archived.remove(&key);
         candidate.order.retain(|k| k != &key);
+        candidate.superseded.remove(&key);
         self.persist(candidate)?;
         crate::DetailsStore::new(self.root.clone()).forget(kind, id)
     }
@@ -204,7 +239,8 @@ impl CatalogStore {
             Err(e) => return Err(e.into()),
         };
         if preferences.labels.len() > 4096
-            || preferences.archived.len() > 4096
+            || preferences.superseded.len() > 65536
+            || preferences.archived.len() > 65536 + 4096
             || preferences.order.len() > 4096
         {
             return Err(Error::Invalid("Library preferences exceed limit"));
@@ -228,6 +264,7 @@ impl CatalogStore {
             .archived
             .iter()
             .chain(preferences.order.iter())
+            .chain(preferences.superseded.iter())
             .any(|k| !valid_key(k))
             || preferences.order.iter().collect::<BTreeSet<_>>().len() != preferences.order.len()
         {
@@ -268,6 +305,10 @@ impl CatalogStore {
         for item in &mut items {
             item.name = self.label(item.kind, &item.id, &item.source_name)?.into();
             item.archived = !self.visible(item.kind, &item.id)?;
+            item.superseded = self
+                .preferences
+                .superseded
+                .contains(&item.kind.key(&item.id)?);
         }
         items.sort_by(|a, b| {
             (a.kind == LibraryKind::Graph)
@@ -486,6 +527,56 @@ impl CatalogStore {
 mod tests {
     use super::*;
     #[test]
+    fn saving_again_keeps_the_place_name_and_hides_the_earlier_revision() {
+        let root = std::env::temp_dir().join(format!("oxidal-supersede-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let rig = |id: &str| LibraryItem {
+            kind: LibraryKind::Rig,
+            id: id.repeat(64),
+            name: format!("Rig {id}"),
+            source_name: format!("Rig {id}"),
+            origin: LibraryOrigin::Mine,
+            archived: false,
+            superseded: false,
+        };
+        let mut rows = vec![rig("a"), rig("b"), rig("c")];
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let first = store.reconcile(rows.clone()).unwrap();
+        let renamed = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: first.revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: "a".repeat(64),
+                    action: LibraryAction::Rename {
+                        name: "Lead".into(),
+                    },
+                },
+            )
+            .unwrap();
+        assert_eq!(renamed.items[0].name, "Lead");
+        // "a" is saved again as "d": same place, same name, no new row at the end.
+        rows.push(rig("d"));
+        store
+            .supersede(LibraryKind::Rig, &"a".repeat(64), &"d".repeat(64))
+            .unwrap();
+        let view = CatalogStore::open(root.clone())
+            .unwrap()
+            .reconcile(rows)
+            .unwrap();
+        let visible: Vec<_> = view
+            .items
+            .iter()
+            .filter(|i| !i.archived)
+            .map(|i| (i.id.chars().next().unwrap(), i.name.as_str()))
+            .collect();
+        assert_eq!(visible, [('d', "Lead"), ('b', "Rig b"), ('c', "Rig c")]);
+        let earlier = view.items.iter().find(|i| i.id == "a".repeat(64)).unwrap();
+        assert!(earlier.archived && earlier.superseded);
+        let _ = fs::remove_dir_all(root);
+    }
+    #[test]
     fn one_order_crosses_kinds_preserves_hidden_slots_and_appends_new_entries() {
         let root = std::env::temp_dir().join(format!("oxidal-global-order-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -496,6 +587,7 @@ mod tests {
             source_name: name.into(),
             origin: LibraryOrigin::Mine,
             archived: false,
+            superseded: false,
         };
         let mut rows = vec![
             item(LibraryKind::Original, "a", "Original"),
@@ -605,6 +697,7 @@ mod tests {
                 source_name: "Copy".into(),
                 origin: LibraryOrigin::Mine,
                 archived: false,
+                superseded: false,
             },
             LibraryItem {
                 kind: LibraryKind::Graph,
@@ -613,6 +706,7 @@ mod tests {
                 source_name: "Draft".into(),
                 origin: LibraryOrigin::Mine,
                 archived: false,
+                superseded: false,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -658,6 +752,7 @@ mod tests {
                 source_name: "A".into(),
                 origin: LibraryOrigin::Mine,
                 archived: false,
+                superseded: false,
             },
             LibraryItem {
                 kind: LibraryKind::Original,
@@ -666,6 +761,7 @@ mod tests {
                 source_name: "B".into(),
                 origin: LibraryOrigin::Mine,
                 archived: false,
+                superseded: false,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -743,6 +839,7 @@ mod tests {
             source_name: id.into(),
             origin,
             archived: false,
+            superseded: false,
         };
         let rows = vec![
             row("a", LibraryOrigin::Tone3000),
@@ -799,6 +896,7 @@ mod tests {
             source_name: "A".into(),
             origin: LibraryOrigin::Mine,
             archived: false,
+            superseded: false,
         }];
         let mut store = CatalogStore::open(root.clone()).unwrap();
         let revision = store.view(rows.clone()).unwrap().revision;

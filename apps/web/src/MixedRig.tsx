@@ -551,15 +551,7 @@ export function MixedRig({
         const published = await publishRig(request);
         await playScenes(published.revision);
         accept(await rigAudioState());
-        if (listed && origin === 'mine') {
-          const latest = await libraryCatalog();
-          await libraryCatalog({
-            expected_revision: latest.revision,
-            entry_kind: 'rig',
-            id: opened.revision,
-            action: { kind: 'visibility', archived: true },
-          });
-        }
+        // The daemon puts the new revision in the earlier one's place (7.2).
         if (origin !== 'mine')
           setCopyOnEdit({
             copy: published.revision,

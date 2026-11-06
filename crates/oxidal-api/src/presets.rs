@@ -166,6 +166,7 @@ pub(super) fn catalog_items(
             source_name: name,
             origin,
             archived: false,
+            superseded: false,
         })
     };
     for p in Store::new(root.into()).list()?.presets {

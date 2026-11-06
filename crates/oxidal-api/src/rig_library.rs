@@ -452,6 +452,22 @@ pub async fn publish(
         }
         let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
         let revision = store.save(&bundle)?;
+        // Saving your own preset again keeps its identity (manifest id) and its
+        // place: the new revision replaces the earlier one in the set list.
+        if let Some(source) = &request.source {
+            let earlier = store.manifest(&source.id)?;
+            let mine = |m: &Manifest| {
+                oxidal_presets::LibraryOrigin::from_manifest(m)
+                    .is_ok_and(|o| o == oxidal_presets::LibraryOrigin::Mine)
+            };
+            if earlier.id == manifest.id && mine(&earlier) && mine(&manifest) {
+                oxidal_presets::CatalogStore::open(root.clone())?.supersede(
+                    oxidal_presets::LibraryKind::Rig,
+                    &source.id,
+                    &revision,
+                )?;
+            }
+        }
         if let Some(source) = request.source {
             oxidal_presets::DetailsStore::new(root.clone()).inherit(
                 oxidal_presets::LibraryReference {

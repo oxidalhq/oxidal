@@ -81,7 +81,10 @@ export function LibraryManagement({
       if (alive.current) setBusy(false);
     }
   }
-  const visible = catalog?.items.filter((i) => i.archived === removed) ?? [];
+  // Earlier revisions of presets saved again are history, not Removed items.
+  const visible =
+    catalog?.items.filter((i) => !i.superseded && i.archived === removed) ??
+    [];
   const performance = visible.filter(
     (i) => i.kind !== 'graph' && originOf(i) === 'mine',
   );
@@ -164,7 +167,7 @@ export function LibraryManagement({
           Moving preset. Release to set its position.
         </p>
       )}
-      {catalog && !catalog.items.some((i) => i.archived === removed) && (
+      {catalog && !visible.length && (
         <p className="caption">
           {removed ? 'No removed entries.' : 'No saved entries.'}
         </p>

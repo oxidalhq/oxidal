@@ -4769,6 +4769,11 @@
         },
         "source_name": {
           "type": "string"
+        },
+        "superseded": {
+          "description": "An earlier saved revision of a preset that was saved again. It is kept\nas history and hidden from Library and the Removed list.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
