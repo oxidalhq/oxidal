@@ -58,6 +58,8 @@ See Oxidal's [native preset adapter](docs/native-tone3000.md) and
 
 See the [image build and setup guide](os/README.md#phone-access-and-first-sound).
 
+Measured limits for NAM models, effects and buffer sizes on a Pi 5 with a USB interface are in the [capacity guide](docs/capacity.md).
+
 ## Repository scope
 
 This repository contains the Oxidal software, browser interface, appliance image
