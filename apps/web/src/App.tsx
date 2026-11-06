@@ -58,6 +58,7 @@ const WebTerminal = lazy(() =>
 );
 import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
+import { StageControls } from './features/stage/StageControls';
 import { AudioSettings } from './AudioSettings';
 import { About } from './About';
 import { ControlEditor } from './ControlEditor';
@@ -545,6 +546,7 @@ function InstrumentApp() {
             </Suspense>
           ) : view === 'rig' ? (
             <>
+              {audioRunning && <StageControls connected={connected} />}
               <LiveRig
                 connected={connected}
                 onPlaying={setPlayingName}
@@ -685,12 +687,11 @@ function InstrumentApp() {
               <TabsList aria-label="Settings sections">
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
-                )
-                  .map((section) => (
-                    <TabsTrigger key={section} value={section}>
-                      {settingsLabels[section]}
-                    </TabsTrigger>
-                  ))}
+                ).map((section) => (
+                  <TabsTrigger key={section} value={section}>
+                    {settingsLabels[section]}
+                  </TabsTrigger>
+                ))}
               </TabsList>
               <TabsContent className="settings-content" value={settingsSection}>
                 {settingsSection === 'display' && (

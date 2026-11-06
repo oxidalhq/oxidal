@@ -202,6 +202,9 @@ pub(super) async fn remove(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<RemovalRequest>, JsonRejection>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let Ok(Json(request)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid deletion confirmation");
     };
@@ -305,6 +308,9 @@ pub(super) async fn remove_model(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<ModelRemovalRequest>, JsonRejection>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let Ok(Json(request)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid deletion confirmation");
     };

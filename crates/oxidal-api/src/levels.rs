@@ -110,6 +110,9 @@ pub(super) async fn update(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<HostLevels>, JsonRejection>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let Ok(Json(levels)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid levels");
     };

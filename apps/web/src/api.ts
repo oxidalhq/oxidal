@@ -1119,6 +1119,29 @@ export async function removePreset(
   return body;
 }
 
+export type ProtectState = Contract['protect_state'];
+const protectValidator = ajv.compile<ProtectState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/ProtectState',
+});
+/** The device-wide performance lock, stored by the daemon (7.22). */
+export async function protectState(): Promise<ProtectState> {
+  const body = await presetResponse(await fetch('/api/v1/protect'));
+  if (!protectValidator(body)) throw new Error('Incompatible Protect state');
+  return body;
+}
+export async function setProtect(on: boolean): Promise<ProtectState> {
+  const body = await presetResponse(
+    await fetch('/api/v1/protect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on }),
+    }),
+  );
+  if (!protectValidator(body)) throw new Error('Incompatible Protect state');
+  return body;
+}
+
 export type ModelRemovalPreview = Contract['model_removal_preview'];
 export type ModelRemovalResult = Contract['model_removal_result'];
 const modelRemovalPreviewValidator = ajv.compile<ModelRemovalPreview>({

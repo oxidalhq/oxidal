@@ -190,8 +190,12 @@ async fn recall_target(
     target: oxidal_presets::LibraryItem,
 ) -> Result<(), String> {
     let stream = stream(shared).ok_or("Choose an audio interface before MIDI recall")?;
+    const PROTECTED: &str = "Protect is on: MIDI can only switch to presets that are ready. Prepare it or turn Protect off.";
     match target.kind {
         LibraryKind::Owned => {
+            if shared.protect.on() {
+                return Err(PROTECTED.into());
+            }
             stop_mixed(shared).await?;
             stop_graph(shared).await?;
             let state = shared.playback.snapshot();
@@ -263,6 +267,9 @@ async fn recall_target(
                 .is_some_and(|control| control.modified)
             {
                 return Err("Save or discard mixed-rig edits before MIDI preset recall".into());
+            }
+            if shared.protect.on() {
+                return Err(PROTECTED.into());
             }
             stop_native(shared).await?;
             stop_graph(shared).await?;

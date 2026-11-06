@@ -765,6 +765,7 @@ export interface Contract {
   preset: Inspection;
   preset_details: DetailsCatalog;
   preset_details_update: DetailsUpdate;
+  protect_state: ProtectState;
   removal_preview: RemovalPreview;
   removal_request: RemovalRequest;
   removal_result: RemovalResult;
@@ -2066,6 +2067,9 @@ export interface DetailsUpdate {
   entry_kind: LibraryKind;
   expected_revision: string;
   id: string;
+}
+export interface ProtectState {
+  on: boolean;
 }
 export interface RemovalPreview {
   blocked?: string | null;

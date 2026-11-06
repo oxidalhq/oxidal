@@ -2117,6 +2117,12 @@ pub(super) async fn command(
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_audio_command");
     };
+    if let Some(reason) = shared.protect.refuse(crate::protect::native(
+        &command.action,
+        shared.playback.snapshot().phase,
+    )) {
+        return crate::protect::locked(reason);
+    }
     let result = shared.playback.dispatch(command).await;
     if result.is_ok() {
         // A preset or scene change brings its own boost.

@@ -42,6 +42,9 @@ pub(super) async fn update(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<Update>, JsonRejection>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     match body {
         Ok(Json(update)) => dispatch(shared, Some(update)).await,
         Err(_) => failure(StatusCode::BAD_REQUEST, "Invalid native defaults"),

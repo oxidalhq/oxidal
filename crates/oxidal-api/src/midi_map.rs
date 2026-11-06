@@ -37,6 +37,9 @@ pub(super) async fn replace(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<oxidal_presets::MidiMapUpdate>, JsonRejection>,
 ) -> impl IntoResponse {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let update = match body {
         Ok(Json(update)) => update,
         Err(error) => return crate::failure(error.status(), "Invalid MIDI map").into_response(),
@@ -59,6 +62,9 @@ pub(super) async fn apply_template(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<MidiTemplateApply>, JsonRejection>,
 ) -> impl IntoResponse {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let request = match body {
         Ok(Json(request)) => request,
         Err(error) => {

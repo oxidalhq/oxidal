@@ -682,6 +682,12 @@ pub(super) async fn command(
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_graph_audio_command");
     };
+    if let Some(reason) = shared.protect.refuse(crate::protect::graph(
+        &command.action,
+        shared.graph_playback.snapshot().phase,
+    )) {
+        return crate::protect::locked(reason);
+    }
     match shared.graph_playback.dispatch(command).await {
         Ok(state) => Json(state).into_response(),
         Err(e) => failure(StatusCode::CONFLICT, &e),

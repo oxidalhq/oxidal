@@ -66,6 +66,9 @@ pub(super) async fn change(
     State(shared): State<Arc<Shared>>,
     Path((id, action)): Path<(String, String)>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let action = match action.as_str() {
         "install" => PackAction::Install,
         "remove" => PackAction::Remove,

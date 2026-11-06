@@ -834,6 +834,9 @@ pub(super) async fn command(
     State(shared): State<Arc<Shared>>,
     body: Result<Json<CalibrationCommand>, JsonRejection>,
 ) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
     let Ok(Json(command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "Invalid calibration command");
     };

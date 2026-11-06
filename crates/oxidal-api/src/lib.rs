@@ -24,6 +24,7 @@ mod playback;
 mod playback_recovery;
 mod plugins;
 mod presets;
+pub mod protect;
 mod provider;
 mod rig_library;
 mod rig_playback;
@@ -72,6 +73,7 @@ pub struct ApiError {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
     pub removal_preview: oxidal_presets::RemovalPreview,
+    pub protect_state: protect::ProtectState,
     pub model_removal_preview: oxidal_presets::ModelRemovalPreview,
     pub model_removal_request: oxidal_presets::ModelRemovalRequest,
     pub model_removal_result: oxidal_presets::ModelRemovalResult,
@@ -192,6 +194,7 @@ struct Shared {
     native: Arc<Mutex<Option<native_editor::Worker>>>,
     presets: Arc<std::sync::Mutex<oxidal_presets::Store>>,
     events: watch::Sender<Snapshot>,
+    protect: protect::Protect,
     config: Config,
 }
 
@@ -262,6 +265,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let midi_map = Arc::new(oxidal_presets::MidiMapStore::new(config.preset_dir.clone()));
     let (midi_events, midi_event_rx) = tokio::sync::mpsc::channel(32);
     let shared = Arc::new(Shared {
+        protect: protect::Protect::new(config.preset_dir.join("protect.json")),
         boot: boot.clone(),
         account: provider::Account::new(
             config.preset_dir.join("accounts"),
@@ -385,6 +389,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/packs/{id}/{action}", post(packs::change))
         .route("/audio", get(playback::state).post(playback::command))
         .route("/levels", get(levels::state).post(levels::update))
+        .route("/protect", get(protect::state).post(protect::update))
         .route("/guitars", get(guitars::state).post(guitars::update))
         .route("/boosts", get(boosts::state).post(boosts::update))
         .route("/scene-blends", get(blends::state).post(blends::update))

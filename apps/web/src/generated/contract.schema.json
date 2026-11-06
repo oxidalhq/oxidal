@@ -163,6 +163,9 @@
     "preset_details_update": {
       "$ref": "#/$defs/DetailsUpdate"
     },
+    "protect_state": {
+      "$ref": "#/$defs/ProtectState"
+    },
     "removal_preview": {
       "$ref": "#/$defs/RemovalPreview"
     },
@@ -247,6 +250,7 @@
   },
   "required": [
     "removal_preview",
+    "protect_state",
     "model_removal_preview",
     "model_removal_request",
     "model_removal_result",
@@ -7366,6 +7370,18 @@
         "done",
         "total",
         "measured"
+      ]
+    },
+    "ProtectState": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "on"
       ]
     },
     "Radio": {

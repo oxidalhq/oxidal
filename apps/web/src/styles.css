@@ -3538,3 +3538,18 @@ textarea {
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Mute and Protect sit together above the rig; one row, no card (7.22). */
+.stage-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+.stage-controls-error {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: right;
+}

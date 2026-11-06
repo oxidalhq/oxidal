@@ -714,8 +714,9 @@ export function LiveRig({
     ['verifying', 'preparing', 'ready', 'applying'].includes(
       state.model_change.phase,
     );
-  const unavailable =
-    !connected || busy || eqEditing || !!error || modelPending;
+  // An unrelated error never locks the rig: commands carry their own session
+  // and revision checks, so a stale one fails safely (7.22).
+  const unavailable = !connected || busy || eqEditing || modelPending;
   const disabled =
     unavailable ||
     state.authoring?.tools?.balance.state === 'listening' ||

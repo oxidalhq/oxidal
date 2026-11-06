@@ -1487,6 +1487,12 @@ pub(super) async fn command(
     let Ok(Json(mut command)) = body else {
         return failure(StatusCode::BAD_REQUEST, "invalid_rig_audio_command");
     };
+    if let Some(reason) = shared.protect.refuse(crate::protect::rig(
+        &command.action,
+        shared.rig_playback.snapshot().phase,
+    )) {
+        return crate::protect::locked(reason);
+    }
     crate::blends::apply(&shared, &mut command).await;
     let result = shared.rig_playback.dispatch(command).await;
     if result.is_ok() {
