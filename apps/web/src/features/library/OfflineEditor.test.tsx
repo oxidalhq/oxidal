@@ -273,3 +273,39 @@ it('adds a saved TONE3000 tone and keeps an existing one’s bytes', async () =>
   expect(JSON.stringify(request)).toContain('"revision":"rev"');
   expect(JSON.stringify(request)).toContain('b'.repeat(64));
 });
+
+it('warns while editing when another browser saves the preset', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    open();
+    await screen.findByRole('button', { name: 'Remove first' });
+    vi.mocked(rigLibrary).mockResolvedValue({
+      native_profile: 'prof',
+      presets: [{ id: 'preset-id', revision: 'saved-elsewhere' }],
+    } as never);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(await screen.findByText(/saved from another browser/)).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Open the latest' }),
+    ).toBeVisible();
+    vi.mocked(rigLibrary).mockResolvedValue({
+      native_profile: 'prof',
+      presets: [{ id: 'preset-id', revision: 'rev' }],
+    } as never);
+    await vi.advanceTimersByTimeAsync(4100);
+    await waitFor(() =>
+      expect(screen.queryByText(/saved from another browser/)).toBeNull(),
+    );
+    // Taken off the set list is not an edit elsewhere.
+    vi.mocked(rigLibrary).mockResolvedValue({
+      native_profile: 'prof',
+      presets: [],
+    } as never);
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(
+      screen.queryByRole('button', { name: 'Open the latest' }),
+    ).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});

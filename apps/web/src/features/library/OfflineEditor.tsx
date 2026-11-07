@@ -88,6 +88,8 @@ export function OfflineEditor({
   const [blocked, setBlocked] = useState('');
   const [discarding, setDiscarding] = useState(false);
   const [recovery, setRecovery] = useState<Recovery>(null);
+  // Another browser saved or removed this preset while it is open here (7.26).
+  const [elsewhere, setElsewhere] = useState<'changed' | null>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -128,6 +130,33 @@ export function OfflineEditor({
       alive = false;
     };
   }, [revision]);
+  const presetId = opened?.document.manifest.id;
+  useEffect(() => {
+    if (!presetId) return;
+    let alive = true;
+    const check = async () => {
+      let after: string | undefined;
+      let listed = false;
+      let newer = false;
+      for (let page = 0; page < 50; page += 1) {
+        const next = await rigLibrary(after);
+        for (const p of next.presets) {
+          if (p.revision === revision) listed = true;
+          else if (p.id === presetId) newer = true;
+        }
+        if (!next.next) break;
+        after = next.next;
+      }
+      // Only a newer revision of this preset counts: a preset taken off the
+      // set list is also unlisted, and that is not an edit elsewhere.
+      if (alive) setElsewhere(!listed && newer ? 'changed' : null);
+    };
+    const timer = window.setInterval(() => void check().catch(() => {}), 4000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [presetId, revision]);
   function change(edit: (route: Route) => Route) {
     setError('');
     setRoute((current) => {
@@ -460,6 +489,18 @@ export function OfflineEditor({
               {addEffect()}
             </div>
           </div>
+          {elsewhere && (
+            <div role="alert" className="offline-elsewhere">
+              <p>
+                This preset was saved from another browser while you were
+                editing. Saving here would be refused; your edits here are not
+                saved.
+              </p>
+              <Button type="button" variant="outline" onClick={onRefresh}>
+                Open the latest
+              </Button>
+            </div>
+          )}
           {error && <p role="alert">{error}</p>}
           {recovery === 'retry' && (
             <Button
