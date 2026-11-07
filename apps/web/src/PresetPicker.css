@@ -181,6 +181,10 @@ ul.preset-picker-group {
 }
 .preset-picker-sources {
   display: flex;
+  flex: none;
+  /* A sideways scroller gets no automatic minimum height in the dialog grid. */
+  min-height: calc(var(--touch-target) + 2px);
+  overflow-y: hidden;
   gap: 0.25rem;
   overflow-x: auto;
 }

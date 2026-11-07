@@ -16,7 +16,16 @@ import { setOutputMute } from './outputMute';
  * Turning Protect off asks first; turning it on does not.
  * @see docs/interface.md
  */
-export function StageControls({ connected }: { connected: boolean }) {
+export function StageControls({
+  connected,
+  compact = false,
+}: {
+  connected: boolean;
+  /** Inside a Rig header (7.28): labels hide on phones like its other buttons. */
+  compact?: boolean;
+}) {
+  const label = (text: string) =>
+    compact ? <span className="phone-hidden">{text}</span> : text;
   const [protect, setProtectOn] = useState<boolean | null>(null);
   const [muted, setMuted] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,7 +67,12 @@ export function StageControls({ connected }: { connected: boolean }) {
     }
   }
   return (
-    <div className="stage-controls" role="group" aria-label="Stage controls">
+    <div
+      className="stage-controls"
+      data-compact={compact || undefined}
+      role="group"
+      aria-label="Stage controls"
+    >
       <Button
         variant={muted ? 'destructive' : 'outline'}
         aria-pressed={!!muted}
@@ -74,7 +88,7 @@ export function StageControls({ connected }: { connected: boolean }) {
         }
       >
         <SpeakerSlash aria-hidden="true" />
-        {muted ? 'Muted' : 'Mute'}
+        {label(muted ? 'Muted' : 'Mute')}
       </Button>
       <Button
         variant={protect ? 'default' : 'outline'}
@@ -98,7 +112,7 @@ export function StageControls({ connected }: { connected: boolean }) {
         ) : (
           <LockSimpleOpen aria-hidden="true" />
         )}
-        {protect ? 'Protected' : 'Protect'}
+        {label(protect ? 'Protected' : 'Protect')}
       </Button>
       {error && (
         <p role="alert" className="stage-controls-error">

@@ -559,7 +559,11 @@ function InstrumentApp() {
             </Suspense>
           ) : view === 'rig' ? (
             <>
-              {audioRunning && <StageControls connected={connected} />}
+              {/* Native and mixed Rig headers hold Mute/Protect (7.28); the
+                  effects-only view has no header, so it keeps this row. */}
+              {graphName !== null &&
+                playingName === null &&
+                mixedName === null && <StageControls connected={connected} />}
               <LiveRig
                 connected={connected}
                 onPlaying={setPlayingName}

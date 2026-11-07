@@ -84,7 +84,10 @@ export function ChainView({
       data-lane={index}
       tabIndex={0}
     >
-      {lane.blocks.map((b) => block(b, index))}
+      {/* A run of empty slots shows as one + (7.28); it adds at the first. */}
+      {lane.blocks
+        .filter((b, i) => !(b.empty && lane.blocks[i - 1]?.empty))
+        .map((b) => block(b, index))}
       {!lane.blocks.length && (
         <span className="chain-empty">Direct signal</span>
       )}

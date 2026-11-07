@@ -3650,3 +3650,118 @@ textarea {
 .discover-sources {
   margin-bottom: 0.75rem;
 }
+/* In a Rig header the stage controls are two ordinary header buttons (7.28). */
+.stage-controls[data-compact] {
+  flex: none;
+  flex-wrap: nowrap;
+  margin: 0;
+}
+/* Output row: level, guitar, boost and ready presets under the chain (7.28). */
+.rig-output-row {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Block controls sheet (7.28): under the chain, in flow. Docking it to the
+   bottom of the screen covered the chain itself on short windows. */
+.rig-sheet {
+  display: flex;
+  flex-direction: column;
+  margin-inline: -0.25rem;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: calc(var(--radius) * 2) calc(var(--radius) * 2) 0 0;
+  background: var(--background);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.12);
+}
+.rig-sheet-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--touch-target);
+  padding: 0.75rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.rig-sheet:not([data-open]) .rig-sheet-header {
+  border-bottom: 0;
+}
+.rig-sheet-handle {
+  position: absolute;
+  top: 0.3rem;
+  left: 50%;
+  width: 2.5rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+.rig-sheet-title {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.rig-sheet-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rig-sheet-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+}
+.rig-sheet-body {
+  padding: 0.75rem;
+}
+.rig-sheet-body > * + * {
+  margin-top: 0.75rem;
+}
+:root[data-display='epaper'] .rig-sheet {
+  box-shadow: none;
+  border: 2px solid var(--foreground);
+}
+
+/* Phones (7.28): the preset name takes the first row; Mute, Protect and the
+   header actions share the second row as equal icon buttons. */
+@media (max-width: 640px) {
+  .rig-performance-header .preset-picker {
+    flex-basis: 100%;
+  }
+  .rig-performance-header > .oxidal-button,
+  .rig-performance-header > .preset-save-group,
+  .rig-performance-header .stage-controls[data-compact] > .oxidal-button {
+    flex: 1 1 0;
+    width: auto;
+    min-width: var(--touch-target);
+    padding: 0;
+  }
+  .rig-performance-header .stage-controls[data-compact] {
+    display: contents;
+  }
+  /* Save and its ⋯ are one group of two buttons: give it room for both so
+     Save never overlaps ⋯ on the narrowest phones. */
+  .rig-performance-header > .preset-save-group {
+    display: flex;
+    flex: 2 1 0;
+    min-width: calc(2 * var(--touch-target));
+    padding: 0;
+  }
+  .rig-performance-header > .preset-save-group > .oxidal-button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0;
+  }
+  /* Seven 44 px buttons fit a 345 px row only with narrow gaps. */
+  .rig-performance-header {
+    column-gap: 0.25rem;
+  }
+}

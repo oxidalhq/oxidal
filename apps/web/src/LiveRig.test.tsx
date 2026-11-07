@@ -17,6 +17,10 @@ import {
   removePreset,
   type AudioState,
 } from './api';
+// Mute/Protect have their own tests; the Rig header only places them.
+vi.mock('./features/stage/StageControls', () => ({
+  StageControls: () => null,
+}));
 vi.mock('./api', () => ({
   presetArtwork: vi.fn(),
   playbackCommand: vi.fn(),

@@ -112,3 +112,12 @@
     overflow-wrap: normal;
   }
 }
+
+/* In Rig the pads are a compact row above the chain (7.28); Perform keeps the
+   large pads. */
+.rig-editor > .scene-pads .scene-pad {
+  min-height: var(--touch-target);
+}
+.rig-editor > .scene-pads .scene-pad strong {
+  font-size: var(--text-base);
+}

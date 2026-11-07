@@ -1,4 +1,8 @@
 import { WAITING_FOR_DEVICE } from './lib/deviceWait';
+import { StageControls } from './features/stage/StageControls';
+import { MaybeSheet } from './components/RigSheet';
+import { RouteTree } from './components/RouteTree';
+import { useNarrow } from './lib/useNarrow';
 import { friendlyError, errorDetails } from './lib/friendlyError';
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
@@ -34,7 +38,7 @@ import {
   CaretRight,
   Trash,
   Lightning,
-  PlugsConnected,
+  DotsThree,
   ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { RigTopology } from './RigTopology';
@@ -172,6 +176,9 @@ export function MixedRig({
     format: 'nam' | 'ir';
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [routingSplit, setRoutingSplit] = useState<string | null>(null);
+  const narrow = useNarrow();
   const [switching, setSwitching] = useState(false);
   // A scenes preset waiting on the player: opening it drops unsaved edits here.
   const [discarding, setDiscarding] = useState<PresetChoice | null>(null);
@@ -1191,6 +1198,18 @@ export function MixedRig({
     };
   };
   const selectedView = selected && describeNode(selected);
+  /** Title for the controls sheet of the selected block (7.28). */
+  const selectedSheet = selectedView
+    ? {
+        label: selectedView.label,
+        detail:
+          selectedView.branch && selectedView.branch.name !== selectedView.label
+            ? `Path · ${selectedView.branch.name}`
+            : selectedView.branch
+              ? 'Path'
+              : undefined,
+      }
+    : null;
   // Scenes rigs: each branch is a whole native preset. Draw it as a chain lane
   // of its own blocks, in scene order, with the sounding scene's lane bright.
   const sceneList = state.control?.scenes?.scenes ?? [];
@@ -1464,6 +1483,29 @@ export function MixedRig({
         }
       : null;
   };
+  const selectedLaneTile =
+    selected && lanedNodes.has(selected.id)
+      ? laneBlockId(
+          selected.id,
+          selected.kind === 'tone3000' ? nativeTarget : '',
+        )
+      : undefined;
+  function selectLaneTile(laneBlock: string) {
+    const at = laneTarget(laneBlock);
+    if (!revision || !at) return;
+    setSelection({ revision, node: at.node });
+    if (at.block) setNativeSelection({ node: at.node, target: at.block });
+  }
+  // Phones read split routing as a vertical tree (7.28).
+  const fullRoute = matching?.manifest.oxidal
+    ? chainRoute(matching.manifest.oxidal.graph)
+    : null;
+  const routeTree =
+    narrow &&
+    !sceneLanes.length &&
+    fullRoute?.some((step) => typeof step !== 'string')
+      ? fullRoute
+      : null;
   // Perform: the sounding scene's blocks and effects as switches, scene pads
   // above, the preset pads below. A Hold effect's tile engages and releases the
   // hold; any other effect's tile switches it in and out.
@@ -1610,15 +1652,15 @@ export function MixedRig({
           }
           onSelect={(choice) => void choose(choice)}
         />
+        <StageControls connected={connected} compact />
         <Button
-          variant="outline"
-          aria-label="MIDI assignments"
-          title="Assign this preset's scenes, switches and controls"
-          disabled={disabled || busy || switching || !!edit || !!picker}
-          onClick={requestMidiAssignments}
+          aria-label="Perform view"
+          title="Scene pads and effect switches for playing live"
+          disabled={!running || disabled || !!edit || editing}
+          onClick={() => setPerforming(true)}
         >
-          <PlugsConnected aria-hidden="true" />
-          <span className="phone-hidden">MIDI</span>
+          <Lightning aria-hidden="true" />
+          <span className="phone-hidden">Perform</span>
         </Button>
         <Button
           variant="outline"
@@ -1645,16 +1687,38 @@ export function MixedRig({
             {state.save?.running ? 'Saving…' : 'Save'}
           </span>
         </Button>
-        <Button
-          aria-label="Perform view"
-          title="Scene pads and effect switches for playing live"
-          disabled={!running || disabled || !!edit || editing}
-          onClick={() => setPerforming(true)}
-        >
-          <Lightning aria-hidden="true" />
-          <span className="phone-hidden">Perform</span>
-        </Button>
         <TunerButton disabled={!running} />
+        <Button
+          variant="outline"
+          aria-label="Preset actions"
+          aria-haspopup="dialog"
+          title="MIDI assignments"
+          disabled={disabled || busy || switching || !!edit || !!picker}
+          onClick={() => setActionsOpen(true)}
+        >
+          <DotsThree aria-hidden="true" weight="bold" />
+        </Button>
+        {actionsOpen && (
+          <AdjustmentDialog
+            title="Preset actions"
+            onCancel={() => setActionsOpen(false)}
+          >
+            <div className="menu-list">
+              <button
+                type="button"
+                onClick={() => {
+                  setActionsOpen(false);
+                  requestMidiAssignments();
+                }}
+              >
+                MIDI assignments…
+                <span className="caption">
+                  Assign this preset&apos;s scenes, switches and controls
+                </span>
+              </button>
+            </div>
+          </AdjustmentDialog>
+        )}
         {state.device_owned ? (
           <Button
             variant="outline"
@@ -1772,82 +1836,6 @@ export function MixedRig({
                   ? 'Audio needs attention'
                   : 'Audio stopped'}
         </p>
-      )}
-      <MasterLevel
-        extra={
-          <>
-            <GuitarPicker />
-            {matching && (
-              <BoostControl
-                targets={[
-                  {
-                    key: boostKey.scenes(matching.manifest.id),
-                    label: matching.manifest.name,
-                  },
-                  ...(soundingScene
-                    ? [
-                        {
-                          key: boostKey.scene(
-                            matching.manifest.id,
-                            soundingScene.id,
-                          ),
-                          label: `Scene · ${soundingScene.name}`,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            )}
-          </>
-        }
-      />
-      {!!state.control?.prepared?.length && (
-        <details className="ready-presets">
-          <summary>
-            <span>Ready to switch</span>
-            <Badge>{state.control.prepared.length + 1} presets</Badge>
-            <span className="ready-presets-state">
-              {state.control.prepared.length + 1} loaded ·{' '}
-              {1 +
-                state.control.prepared.filter((preset) => preset.rendering)
-                  .length}{' '}
-              processing
-            </span>
-          </summary>
-          <p className="caption">
-            Loaded presets can switch without reopening audio. Playing is the
-            sound you hear; Processing is still rendering a tail; Sleeping is
-            loaded but using no DSP. These are presets, not scenes.
-          </p>
-          <div
-            className="ready-presets-list"
-            role="group"
-            aria-label="Ready presets"
-          >
-            <div className="ready-preset-current">
-              <strong>{matching?.manifest.name ?? 'Current preset'}</strong>
-              <Badge>Playing</Badge>
-              <Badge>Processing</Badge>
-            </div>
-            {state.control.prepared.map((p) => (
-              <Button
-                key={p.revision}
-                className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
-                variant="outline"
-                disabled={disabled || !!edit || !!p.error}
-                onClick={() => void switchPrepared(p.revision)}
-              >
-                <span className="min-w-0 break-words">
-                  {p.name}
-                  {p.error ? ' · Unavailable' : p.modified ? ' · Modified' : ''}
-                </span>
-                {!p.error && (
-                  <Badge>{p.rendering ? 'Processing' : 'Sleeping'}</Badge>
-                )}
-              </Button>
-            ))}
-          </div>
-        </details>
       )}
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
@@ -2093,41 +2081,53 @@ export function MixedRig({
           void rigAudioState().then(accept, () => {});
         }}
       />
-      {(sceneLanes.length > 0 || effectLanes.length > 0) && (
-        <ChainView
-          label={sceneLanes.length ? 'Scene branches' : 'Chain'}
-          parallel={sceneLanes.length > 0 || effectLanes.length > 1}
-          onAdd={(laneBlock) => {
-            const at = laneTarget(laneBlock);
-            if (at?.block) setLaneSlot({ node: at.node, target: at.block });
-          }}
-          lanes={sceneLanes.length ? sceneLanes : effectLanes}
-          movable={
-            editable && !editing
-              ? (tile) =>
-                  nodes.find((n) => n.id === laneTarget(tile)?.node)?.kind ===
-                  'lv2'
-              : undefined
-          }
-          onMove={editable ? dropBlock : undefined}
-          selected={
-            selected && lanedNodes.has(selected.id)
-              ? laneBlockId(
-                  selected.id,
-                  selected.kind === 'tone3000' ? nativeTarget : '',
-                )
-              : undefined
-          }
-          disabled={!!edit || !!picker}
-          onSelect={(laneBlock) => {
-            const at = laneTarget(laneBlock);
-            if (!revision || !at) return;
-            setSelection({ revision, node: at.node });
-            if (at.block)
-              setNativeSelection({ node: at.node, target: at.block });
-          }}
-        />
-      )}
+      {(sceneLanes.length > 0 || effectLanes.length > 0) &&
+        (routeTree ? (
+          <RouteTree
+            route={routeTree}
+            tiles={(id) => {
+              const n = nodes.find((node) => node.id === id);
+              if (!n) return null;
+              const blocks =
+                n.kind === 'tone3000'
+                  ? nativeTiles(n)
+                  : [{ ...describeNode(n).block, id: laneBlockId(n.id, '') }];
+              return blocks.map((b) => (
+                <RigTile
+                  key={b.id}
+                  block={b}
+                  selected={b.id === selectedLaneTile}
+                  disabled={!!edit || !!picker}
+                  onSelect={() => selectLaneTile(b.id)}
+                />
+              ));
+            }}
+            onSplit={
+              running ? (split) => setRoutingSplit(split.split) : undefined
+            }
+          />
+        ) : (
+          <ChainView
+            label={sceneLanes.length ? 'Scene branches' : 'Chain'}
+            parallel={sceneLanes.length > 0 || effectLanes.length > 1}
+            onAdd={(laneBlock) => {
+              const at = laneTarget(laneBlock);
+              if (at?.block) setLaneSlot({ node: at.node, target: at.block });
+            }}
+            lanes={sceneLanes.length ? sceneLanes : effectLanes}
+            movable={
+              editable && !editing
+                ? (tile) =>
+                    nodes.find((n) => n.id === laneTarget(tile)?.node)?.kind ===
+                    'lv2'
+                : undefined
+            }
+            onMove={editable ? dropBlock : undefined}
+            selected={selectedLaneTile}
+            disabled={!!edit || !!picker}
+            onSelect={selectLaneTile}
+          />
+        ))}
       <RigTopology
         graph={matching?.manifest.oxidal?.graph ?? { nodes: [], edges: [] }}
         visible={nodes.filter((n) => !lanedNodes.has(n.id)).map((n) => n.id)}
@@ -2160,140 +2160,89 @@ export function MixedRig({
           );
         }}
       </RigTopology>
-      {running && selected && wholeNative && (
-        <div
-          className="flex flex-wrap items-center gap-2"
-          aria-label="Native model controls"
-        >
-          {(
-            [
-              ['global', 'Tone', SlidersHorizontal],
-              ['gate', 'Gate', Waveform],
-              ['pitch', 'Pitch', MusicNotes],
-              ['stereo', 'Stereo', ArrowsSplit],
-            ] as const
-          )
-            .filter(([target]) =>
-              controls.some(
-                (c) =>
-                  c.target.kind === 'native' &&
-                  !c.target.parameter.startsWith('block:') &&
-                  controlGroup(c.target.parameter) ===
-                    (target === 'global' ? 'tone' : target),
-              ),
-            )
-            .map(([target, title, Icon]) => (
-              <Button
-                key={target}
-                variant="ghost"
-                aria-pressed={nativeTarget === target}
-                disabled={disabled || !!edit}
-                onClick={() =>
-                  setNativeSelection({ node: selected.id, target })
-                }
-              >
-                <Icon aria-hidden="true" />
-                {title}
-              </Button>
-            ))}
-          {/* Scene lanes select models by their tiles; other rigs list them here. */}
-          {!inLane &&
-            eqBlocks.map((block, index) => {
-              const control = controls.find(
-                (c) =>
-                  c.target.kind === 'native' &&
-                  c.target.parameter === `block:${block.block_id}:enabled`,
-              );
-              const title =
-                control?.label.replace(
-                  /(?: · (?:left|right))? · enabled$/,
-                  '',
-                ) ?? 'Model';
-              return (
+      {/* Output row under the chain (7.28). */}
+      <div className="rig-output-row">
+        <MasterLevel
+          extra={
+            <>
+              <GuitarPicker />
+              {matching && (
+                <BoostControl
+                  targets={[
+                    {
+                      key: boostKey.scenes(matching.manifest.id),
+                      label: matching.manifest.name,
+                    },
+                    ...(soundingScene
+                      ? [
+                          {
+                            key: boostKey.scene(
+                              matching.manifest.id,
+                              soundingScene.id,
+                            ),
+                            label: `Scene · ${soundingScene.name}`,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              )}
+            </>
+          }
+        />
+        {!!state.control?.prepared?.length && (
+          <details className="ready-presets">
+            <summary>
+              <span>Ready to switch</span>
+              <Badge>{state.control.prepared.length + 1} presets</Badge>
+              <span className="ready-presets-state">
+                {state.control.prepared.length + 1} loaded ·{' '}
+                {1 +
+                  state.control.prepared.filter((preset) => preset.rendering)
+                    .length}{' '}
+                processing
+              </span>
+            </summary>
+            <p className="caption">
+              Loaded presets can switch without reopening audio. Playing is the
+              sound you hear; Processing is still rendering a tail; Sleeping is
+              loaded but using no DSP. These are presets, not scenes.
+            </p>
+            <div
+              className="ready-presets-list"
+              role="group"
+              aria-label="Ready presets"
+            >
+              <div className="ready-preset-current">
+                <strong>{matching?.manifest.name ?? 'Current preset'}</strong>
+                <Badge>Playing</Badge>
+                <Badge>Processing</Badge>
+              </div>
+              {state.control.prepared.map((p) => (
                 <Button
-                  key={block.block_id}
+                  key={p.revision}
+                  className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
                   variant="outline"
-                  aria-label={`Select model ${index + 1}`}
-                  aria-pressed={nativeTarget === block.block_id}
-                  disabled={disabled || !!edit}
-                  className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
-                  onClick={() =>
-                    setNativeSelection({
-                      node: selected.id,
-                      target: block.block_id,
-                    })
-                  }
+                  disabled={disabled || !!edit || !!p.error}
+                  onClick={() => void switchPrepared(p.revision)}
                 >
                   <span className="min-w-0 break-words">
-                    {index + 1} · {title}
+                    {p.name}
+                    {p.error
+                      ? ' · Unavailable'
+                      : p.modified
+                        ? ' · Modified'
+                        : ''}
                   </span>
+                  {!p.error && (
+                    <Badge>{p.rendering ? 'Processing' : 'Sleeping'}</Badge>
+                  )}
                 </Button>
-              );
-            })}
-          <div className="ml-auto flex flex-wrap gap-2">
-            {eqBlock && (
-              <Button
-                variant="outline"
-                disabled={disabled || !!edit}
-                onClick={() =>
-                  setPicker({
-                    opening: state,
-                    node: selected.id,
-                    target: eqBlock.block_id,
-                    name: 'Selected model',
-                    insert: false,
-                  })
-                }
-              >
-                Change model
-              </Button>
-            )}
-            {slots.length > 0 && (
-              <Button
-                variant="outline"
-                aria-label="Add block"
-                disabled={disabled || !!edit}
-                onClick={() => setAdding(true)}
-              >
-                Add
-              </Button>
-            )}
-          </div>
-          {adding && selected && (
-            <AddBlockChooser
-              onCancel={() => setAdding(false)}
-              onChoose={(format) => {
-                setAdding(false);
-                setInsertion({ opening: state, node: selected.id, format });
-              }}
-            />
-          )}
-        </div>
-      )}
-      {running && selectedModel && (
-        <ArtworkDeck model id={selectedModel.asset} />
-      )}
-      {running && selectedToneId != null && (
-        <ToneDetails toneId={selectedToneId} />
-      )}
-      {running && selected && nativeModels && !wholeNative && eqBlock && (
-        <Button
-          variant="outline"
-          disabled={disabled || !!edit}
-          onClick={() =>
-            setPicker({
-              opening: state,
-              node: selected.id,
-              target: eqBlock.block_id,
-              name: stageRole === 'cab' ? 'Cab IR' : 'Amp capture',
-              insert: false,
-              allowedFormat: stageRole === 'cab' ? 'ir' : 'nam',
-            })
-          }
-        >
-          {stageRole === 'cab' ? 'Change cab IR' : 'Change amp capture'}
-        </Button>
-      )}
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
       {modelPending && (
         <div className="flex flex-wrap items-center gap-2" role="status">
           <span>
@@ -2597,323 +2546,465 @@ export function MixedRig({
           }}
         />
       )}
-      {running &&
-        selectedView &&
-        (selectedView.branch || selectedView.bypass) && (
-          <div className="selected-node" aria-label="Selected block">
-            <h3 className="selected-node-title">{selectedView.label}</h3>
-            {sceneEffectSet.has(selected.id) && (
-              <div className="action-row" role="group" aria-label="Arrange">
+      <MaybeSheet sheet={running && selected ? selectedSheet : null}>
+        {running && selected && wholeNative && (
+          <div
+            className="flex flex-wrap items-center gap-2"
+            aria-label="Native model controls"
+          >
+            {(
+              [
+                ['global', 'Tone', SlidersHorizontal],
+                ['gate', 'Gate', Waveform],
+                ['pitch', 'Pitch', MusicNotes],
+                ['stereo', 'Stereo', ArrowsSplit],
+              ] as const
+            )
+              .filter(([target]) =>
+                controls.some(
+                  (c) =>
+                    c.target.kind === 'native' &&
+                    !c.target.parameter.startsWith('block:') &&
+                    controlGroup(c.target.parameter) ===
+                      (target === 'global' ? 'tone' : target),
+                ),
+              )
+              .map(([target, title, Icon]) => (
                 <Button
+                  key={target}
                   variant="ghost"
-                  disabled={disabled || !!edit || editing}
+                  aria-pressed={nativeTarget === target}
+                  disabled={disabled || !!edit}
                   onClick={() =>
-                    void rebuild(({ opened, live, name }) =>
-                      removeSceneEffect(opened, selected.id, live, name),
-                    )
+                    setNativeSelection({ node: selected.id, target })
                   }
                 >
-                  <Trash aria-hidden="true" /> Remove
+                  <Icon aria-hidden="true" />
+                  {title}
                 </Button>
-              </div>
-            )}
-            {editable && selected.kind === 'lv2' && (
-              <div className="action-row" role="group" aria-label="Arrange">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Move ${selectedView.label} left`}
-                  disabled={disabled || !!edit || editing || place.first}
-                  onClick={() => void shift(selected.id, -1)}
-                >
-                  <CaretLeft aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Move ${selectedView.label} right`}
-                  disabled={disabled || !!edit || editing || place.last}
-                  onClick={() => void shift(selected.id, 1)}
-                >
-                  <CaretRight aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={disabled || !!edit || editing}
-                  onClick={() =>
-                    void editChain((route) => routeRemove(route, selected.id))
-                  }
-                >
-                  <Trash aria-hidden="true" /> Remove
-                </Button>
-              </div>
-            )}
-            {inLane &&
-              editable &&
-              !sceneLanes.length &&
-              selectedBranch.paths > 0 &&
-              (() => {
-                const sides = ['left', 'right'].map((side) =>
-                  state.control?.controls.find(
-                    (c) =>
-                      c.target.kind === 'merge' &&
-                      c.target.node === `${selectedBranch.merge}-${side}` &&
-                      c.target.port === selectedBranch.port,
-                  ),
+              ))}
+            {/* Scene lanes select models by their tiles; other rigs list them here. */}
+            {!inLane &&
+              eqBlocks.map((block, index) => {
+                const control = controls.find(
+                  (c) =>
+                    c.target.kind === 'native' &&
+                    c.target.parameter === `block:${block.block_id}:enabled`,
                 );
-                if (!sides[0] || !sides[1]) return null;
+                const title =
+                  control?.label.replace(
+                    /(?: · (?:left|right))? · enabled$/,
+                    '',
+                  ) ?? 'Model';
                 return (
-                  <PathLevel
-                    key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}`}
-                    path={selectedBranch.port + 1}
-                    value={sides[0].value}
-                    disabled={disabled || !!edit || editing || busy}
-                    onCommit={(value) =>
-                      setPathLevel(
-                        sides.map((side) => side!.target),
-                        value,
-                      )
+                  <Button
+                    key={block.block_id}
+                    variant="outline"
+                    aria-label={`Select model ${index + 1}`}
+                    aria-pressed={nativeTarget === block.block_id}
+                    disabled={disabled || !!edit}
+                    className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
+                    onClick={() =>
+                      setNativeSelection({
+                        node: selected.id,
+                        target: block.block_id,
+                      })
                     }
-                  />
+                  >
+                    <span className="min-w-0 break-words">
+                      {index + 1} · {title}
+                    </span>
+                  </Button>
                 );
-              })()}
-            {inLane && editable && !sceneLanes.length && (
-              <div
-                className="action-row"
-                role="group"
-                aria-label={`Routing for ${selectedView.label}`}
-              >
+              })}
+            <div className="ml-auto flex flex-wrap gap-2">
+              {eqBlock && (
                 <Button
                   variant="outline"
-                  disabled={disabled || !!edit || editing}
+                  disabled={disabled || !!edit}
                   onClick={() =>
-                    void editChain((route) => routeAddPath(route, selected.id))
+                    setPicker({
+                      opening: state,
+                      node: selected.id,
+                      target: eqBlock.block_id,
+                      name: 'Selected model',
+                      insert: false,
+                    })
                   }
                 >
-                  {selectedView.block.kind === 'cab'
-                    ? 'Dual cab: add a cab path'
-                    : 'Add parallel path'}
+                  Change model
                 </Button>
-                {selectedBranch.found && selectedBranch.paths > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeAddBranch(route, selected.id),
-                        )
-                      }
-                    >
-                      Add branch
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeCopyBranch(route, selected.id),
-                        )
-                      }
-                    >
-                      Copy branch
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeRemoveBranch(route, selected.id),
-                        )
-                      }
-                    >
-                      Remove branch
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
-            {selectedView.branch ? (
-              <LedToggle
-                on={selectedView.branch.enabled}
-                kind={selectedView.block.kind}
-                state={selectedView.branch.partial ? 'Mixed' : undefined}
-                label={`Toggle branch ${selectedView.branch.name}`}
-                disabled={disabled || !!edit}
-                onToggle={() =>
-                  void command({
-                    kind: 'branch',
-                    command: {
-                      session: state.control!.session,
-                      expected_revision: state.control!.revision,
-                      branch: selectedView.branch!.id,
-                      enabled: !selectedView.branch!.enabled,
-                    },
-                  })
-                }
-              />
-            ) : (
-              <LedToggle
-                on={selectedView.bypass!.value !== 1}
-                kind={selectedView.block.kind}
-                label={`${selectedView.label} on`}
-                disabled={disabled || !!edit}
-                onToggle={() =>
-                  void command({
-                    kind: 'control',
-                    command: {
-                      session: state.control!.session,
-                      expected_revision: state.control!.revision,
-                      target: selectedView.bypass!.target,
-                      value: selectedView.bypass!.value === 1 ? 0 : 1,
-                    },
-                  })
-                }
+              )}
+              {slots.length > 0 && (
+                <Button
+                  variant="outline"
+                  aria-label="Add block"
+                  disabled={disabled || !!edit}
+                  onClick={() => setAdding(true)}
+                >
+                  Add
+                </Button>
+              )}
+            </div>
+            {adding && selected && (
+              <AddBlockChooser
+                onCancel={() => setAdding(false)}
+                onChoose={(format) => {
+                  setAdding(false);
+                  setInsertion({ opening: state, node: selected.id, format });
+                }}
               />
             )}
           </div>
         )}
-      {running && (
-        <div
-          className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
-          aria-label="Selected effect controls"
-        >
-          {visibleControls.map((c) => (
-            <Button
-              key={key(c)}
-              className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
-              variant="outline"
-              disabled={disabled || !!edit}
-              onClick={() => {
-                if (c.toggle && state.control) {
-                  void command({
-                    kind: 'control',
-                    command: {
-                      session: state.control.session,
-                      expected_revision: state.control.revision,
-                      target: c.target,
-                      value: c.value === c.minimum ? c.maximum : c.minimum,
-                    },
-                  });
-                } else open(c);
-              }}
-              aria-pressed={c.toggle ? c.value !== c.minimum : undefined}
-              aria-haspopup={c.toggle ? undefined : 'dialog'}
-              aria-label={`Adjust ${controlLabel(c.label)}`}
-            >
-              <span className="break-words">{controlLabel(c.label)}</span>
-              <strong className="font-mono">{controlDisplay(c)}</strong>
-            </Button>
-          ))}
-          {!matching ? (
-            <p>Reading chain…</p>
-          ) : (
-            !nodes.length && <p>Input → Output</p>
-          )}
-        </div>
-      )}
-      {running &&
-        selected &&
-        state.control?.authoring?.find((row) => row.node === selected.id) && (
-          <NativeAuthoring
-            collapseSettings
-            key={`${state.control.session}:${selected.id}`}
-            status={
-              state.control.authoring.find((row) => row.node === selected.id)!
-                .status
-            }
-            selectedBlock={eqBlock?.block_id}
-            disabled={unavailable || !!edit}
-            busy={busy}
-            session={state.control.session}
-            revision={state.control.revision}
-            author={async (action) => {
-              const cursor = current.current?.control;
-              if (!cursor) return;
-              await command({
-                kind: 'authoring',
-                command: {
-                  session: cursor.session,
-                  expected_revision: cursor.revision,
-                  node: selected.id,
-                  action,
-                },
-              });
-            }}
-          />
+        {running && selectedModel && (
+          <ArtworkDeck model id={selectedModel.asset} />
         )}
-      {running && selected && eqBlock && (
-        <div className="space-y-2">
-          <LiveEq
-            key={`${state.control!.session}:${selected.id}:${eqBlock.block_id}`}
-            state={{ ...state, eq: eqBlocks }}
-            blockId={eqBlock.block_id}
-            disabled={
-              !connected ||
-              busy ||
-              !!edit ||
-              !!readError ||
-              modelPending ||
-              !!measuring
+        {running && selectedToneId != null && (
+          <ToneDetails toneId={selectedToneId} />
+        )}
+        {running && selected && nativeModels && !wholeNative && eqBlock && (
+          <Button
+            variant="outline"
+            disabled={disabled || !!edit}
+            onClick={() =>
+              setPicker({
+                opening: state,
+                node: selected.id,
+                target: eqBlock.block_id,
+                name: stageRole === 'cab' ? 'Cab IR' : 'Amp capture',
+                insert: false,
+                allowedFormat: stageRole === 'cab' ? 'ir' : 'nam',
+              })
             }
-            onEditing={(editing) => {
-              generation.current++;
-              sending.current = editing;
-              setEqBusy(editing);
-            }}
-            onChange={accept}
-            gesture={
-              wholeNative
-                ? async (current, edit) => {
-                    const next = await rigAudioCommand(current, {
+          >
+            {stageRole === 'cab' ? 'Change cab IR' : 'Change amp capture'}
+          </Button>
+        )}
+        {running &&
+          selectedView &&
+          (selectedView.branch || selectedView.bypass) && (
+            <div className="selected-node" aria-label="Selected block">
+              <h3 className="selected-node-title">{selectedView.label}</h3>
+              {sceneEffectSet.has(selected.id) && (
+                <div className="action-row" role="group" aria-label="Arrange">
+                  <Button
+                    variant="ghost"
+                    disabled={disabled || !!edit || editing}
+                    onClick={() =>
+                      void rebuild(({ opened, live, name }) =>
+                        removeSceneEffect(opened, selected.id, live, name),
+                      )
+                    }
+                  >
+                    <Trash aria-hidden="true" /> Remove
+                  </Button>
+                </div>
+              )}
+              {editable && selected.kind === 'lv2' && (
+                <div className="action-row" role="group" aria-label="Arrange">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Move ${selectedView.label} left`}
+                    disabled={disabled || !!edit || editing || place.first}
+                    onClick={() => void shift(selected.id, -1)}
+                  >
+                    <CaretLeft aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Move ${selectedView.label} right`}
+                    disabled={disabled || !!edit || editing || place.last}
+                    onClick={() => void shift(selected.id, 1)}
+                  >
+                    <CaretRight aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={disabled || !!edit || editing}
+                    onClick={() =>
+                      void editChain((route) => routeRemove(route, selected.id))
+                    }
+                  >
+                    <Trash aria-hidden="true" /> Remove
+                  </Button>
+                </div>
+              )}
+              {inLane &&
+                editable &&
+                !sceneLanes.length &&
+                selectedBranch.paths > 0 &&
+                (() => {
+                  const sides = ['left', 'right'].map((side) =>
+                    state.control?.controls.find(
+                      (c) =>
+                        c.target.kind === 'merge' &&
+                        c.target.node === `${selectedBranch.merge}-${side}` &&
+                        c.target.port === selectedBranch.port,
+                    ),
+                  );
+                  if (!sides[0] || !sides[1]) return null;
+                  return (
+                    <PathLevel
+                      key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}`}
+                      path={selectedBranch.port + 1}
+                      value={sides[0].value}
+                      disabled={disabled || !!edit || editing || busy}
+                      onCommit={(value) =>
+                        setPathLevel(
+                          sides.map((side) => side!.target),
+                          value,
+                        )
+                      }
+                    />
+                  );
+                })()}
+              {inLane && editable && !sceneLanes.length && (
+                <div
+                  className="action-row"
+                  role="group"
+                  aria-label={`Routing for ${selectedView.label}`}
+                >
+                  <Button
+                    variant="outline"
+                    disabled={disabled || !!edit || editing}
+                    onClick={() =>
+                      void editChain((route) =>
+                        routeAddPath(route, selected.id),
+                      )
+                    }
+                  >
+                    {selectedView.block.kind === 'cab'
+                      ? 'Dual cab: add a cab path'
+                      : 'Add parallel path'}
+                  </Button>
+                  {selectedBranch.found && selectedBranch.paths > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        disabled={disabled || !!edit || editing}
+                        onClick={() =>
+                          void editChain((route) =>
+                            routeAddBranch(route, selected.id),
+                          )
+                        }
+                      >
+                        Add branch
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={disabled || !!edit || editing}
+                        onClick={() =>
+                          void editChain((route) =>
+                            routeCopyBranch(route, selected.id),
+                          )
+                        }
+                      >
+                        Copy branch
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={disabled || !!edit || editing}
+                        onClick={() =>
+                          void editChain((route) =>
+                            routeRemoveBranch(route, selected.id),
+                          )
+                        }
+                      >
+                        Remove branch
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              {selectedView.branch ? (
+                <LedToggle
+                  on={selectedView.branch.enabled}
+                  kind={selectedView.block.kind}
+                  state={selectedView.branch.partial ? 'Mixed' : undefined}
+                  label={`Toggle branch ${selectedView.branch.name}`}
+                  disabled={disabled || !!edit}
+                  onToggle={() =>
+                    void command({
+                      kind: 'branch',
+                      command: {
+                        session: state.control!.session,
+                        expected_revision: state.control!.revision,
+                        branch: selectedView.branch!.id,
+                        enabled: !selectedView.branch!.enabled,
+                      },
+                    })
+                  }
+                />
+              ) : (
+                <LedToggle
+                  on={selectedView.bypass!.value !== 1}
+                  kind={selectedView.block.kind}
+                  label={`${selectedView.label} on`}
+                  disabled={disabled || !!edit}
+                  onToggle={() =>
+                    void command({
+                      kind: 'control',
+                      command: {
+                        session: state.control!.session,
+                        expected_revision: state.control!.revision,
+                        target: selectedView.bypass!.target,
+                        value: selectedView.bypass!.value === 1 ? 0 : 1,
+                      },
+                    })
+                  }
+                />
+              )}
+            </div>
+          )}
+        {running && (
+          <div
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
+            aria-label="Selected effect controls"
+          >
+            {visibleControls.map((c) => (
+              <Button
+                key={key(c)}
+                className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
+                variant="outline"
+                disabled={disabled || !!edit}
+                onClick={() => {
+                  if (c.toggle && state.control) {
+                    void command({
+                      kind: 'control',
+                      command: {
+                        session: state.control.session,
+                        expected_revision: state.control.revision,
+                        target: c.target,
+                        value: c.value === c.minimum ? c.maximum : c.minimum,
+                      },
+                    });
+                  } else open(c);
+                }}
+                aria-pressed={c.toggle ? c.value !== c.minimum : undefined}
+                aria-haspopup={c.toggle ? undefined : 'dialog'}
+                aria-label={`Adjust ${controlLabel(c.label)}`}
+              >
+                <span className="break-words">{controlLabel(c.label)}</span>
+                <strong className="font-mono">{controlDisplay(c)}</strong>
+              </Button>
+            ))}
+            {!matching ? (
+              <p>Reading chain…</p>
+            ) : (
+              !nodes.length && <p>Input → Output</p>
+            )}
+          </div>
+        )}
+        {running &&
+          selected &&
+          state.control?.authoring?.find((row) => row.node === selected.id) && (
+            <NativeAuthoring
+              collapseSettings
+              key={`${state.control.session}:${selected.id}`}
+              status={
+                state.control.authoring.find((row) => row.node === selected.id)!
+                  .status
+              }
+              selectedBlock={eqBlock?.block_id}
+              disabled={unavailable || !!edit}
+              busy={busy}
+              session={state.control.session}
+              revision={state.control.revision}
+              author={async (action) => {
+                const cursor = current.current?.control;
+                if (!cursor) return;
+                await command({
+                  kind: 'authoring',
+                  command: {
+                    session: cursor.session,
+                    expected_revision: cursor.revision,
+                    node: selected.id,
+                    action,
+                  },
+                });
+              }}
+            />
+          )}
+        {running && selected && eqBlock && (
+          <div className="space-y-2">
+            <LiveEq
+              key={`${state.control!.session}:${selected.id}:${eqBlock.block_id}`}
+              state={{ ...state, eq: eqBlocks }}
+              blockId={eqBlock.block_id}
+              disabled={
+                !connected ||
+                busy ||
+                !!edit ||
+                !!readError ||
+                modelPending ||
+                !!measuring
+              }
+              onEditing={(editing) => {
+                generation.current++;
+                sending.current = editing;
+                setEqBusy(editing);
+              }}
+              onChange={accept}
+              gesture={
+                wholeNative
+                  ? async (current, edit) => {
+                      const next = await rigAudioCommand(current, {
+                        kind: 'authoring',
+                        command: {
+                          session: current.control!.session,
+                          expected_revision: current.control!.revision,
+                          node: selected.id,
+                          action: { kind: 'gesture', edit },
+                        },
+                      });
+                      return {
+                        ...next,
+                        eq:
+                          next.control?.eq?.find((e) => e.node === selected.id)
+                            ?.blocks ?? [],
+                      };
+                    }
+                  : undefined
+              }
+              send={async (current, edit) => {
+                const next = wholeNative
+                  ? await rigAudioCommand(current, {
                       kind: 'authoring',
                       command: {
                         session: current.control!.session,
                         expected_revision: current.control!.revision,
                         node: selected.id,
-                        action: { kind: 'gesture', edit },
+                        action: {
+                          kind: 'eq',
+                          block_id: eqBlock.block_id,
+                          edit,
+                        },
+                      },
+                    })
+                  : await rigAudioCommand(current, {
+                      kind: 'eq',
+                      command: {
+                        session: current.control!.session,
+                        expected_revision: current.control!.revision,
+                        node: selected.id,
+                        block_id: eqBlock.block_id,
+                        edit,
                       },
                     });
-                    return {
-                      ...next,
-                      eq:
-                        next.control?.eq?.find((e) => e.node === selected.id)
-                          ?.blocks ?? [],
-                    };
-                  }
-                : undefined
-            }
-            send={async (current, edit) => {
-              const next = wholeNative
-                ? await rigAudioCommand(current, {
-                    kind: 'authoring',
-                    command: {
-                      session: current.control!.session,
-                      expected_revision: current.control!.revision,
-                      node: selected.id,
-                      action: { kind: 'eq', block_id: eqBlock.block_id, edit },
-                    },
-                  })
-                : await rigAudioCommand(current, {
-                    kind: 'eq',
-                    command: {
-                      session: current.control!.session,
-                      expected_revision: current.control!.revision,
-                      node: selected.id,
-                      block_id: eqBlock.block_id,
-                      edit,
-                    },
-                  });
-              return {
-                ...next,
-                eq:
-                  next.control?.eq?.find((e) => e.node === selected.id)
-                    ?.blocks ?? [],
-              };
-            }}
-          />
-        </div>
-      )}
+                return {
+                  ...next,
+                  eq:
+                    next.control?.eq?.find((e) => e.node === selected.id)
+                      ?.blocks ?? [],
+                };
+              }}
+            />
+          </div>
+        )}
+      </MaybeSheet>
       {edit && (
         <AdjustmentDialog
           title={edit.control.label}
@@ -2995,6 +3086,62 @@ export function MixedRig({
           await command(action);
         }}
       />
+      {routingSplit &&
+        (() => {
+          const split = (function find(
+            steps: typeof fullRoute,
+          ): Exclude<NonNullable<typeof fullRoute>[number], string> | null {
+            for (const step of steps ?? []) {
+              if (typeof step === 'string') continue;
+              if (step.split === routingSplit) return step;
+              for (const branch of step.branches) {
+                const inner = find(branch);
+                if (inner) return inner;
+              }
+            }
+            return null;
+          })(fullRoute);
+          if (!split) return null;
+          return (
+            <AdjustmentDialog
+              title={`Split · ${split.branches.length} paths`}
+              description="Each path's level into the merge. Changes are live; Save keeps them."
+              onCancel={() => setRoutingSplit(null)}
+            >
+              <div className="control-stack" aria-label="Path levels">
+                {split.branches.map((_, port) => {
+                  const sides = ['left', 'right'].map((side) =>
+                    state.control?.controls.find(
+                      (c) =>
+                        c.target.kind === 'merge' &&
+                        c.target.node === `${split.merge}-${side}` &&
+                        c.target.port === port,
+                    ),
+                  );
+                  if (!sides[0] || !sides[1]) return null;
+                  return (
+                    <PathLevel
+                      key={`${split.merge}:${port}:${sides[0].value}`}
+                      path={port + 1}
+                      value={sides[0].value}
+                      disabled={disabled || !!edit || editing || busy}
+                      onCommit={(value) =>
+                        setPathLevel(
+                          sides.map((side) => side!.target),
+                          value,
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
+              <p className="caption">
+                To add, copy or remove a path, select a block on it and use its
+                Routing actions.
+              </p>
+            </AdjustmentDialog>
+          );
+        })()}
       {saveOpening && (
         <AdjustmentDialog
           title="Save copy"

@@ -25,6 +25,10 @@ import {
 import { lv2Effect } from './rigDraft';
 import { buildRoute } from './rigRoute';
 import { chainLanes } from './rigChain';
+// Mute/Protect have their own tests; the Rig header only places them.
+vi.mock('./features/stage/StageControls', () => ({
+  StageControls: () => null,
+}));
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
