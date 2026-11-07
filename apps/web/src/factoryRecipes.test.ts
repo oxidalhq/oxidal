@@ -1,3 +1,4 @@
+import { chainRoute } from './rigChain';
 import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
 import schema from '../../../docs/presets/manifest.schema.json';
@@ -48,7 +49,7 @@ const defaults = {
 };
 const validate = new Ajv({ strict: false }).compile(schema);
 it('builds portable scene instruments and complex serial chains from installed metadata', () => {
-  expect(factoryRecipes).toHaveLength(44);
+  expect(factoryRecipes).toHaveLength(50);
   for (const recipe of factoryRecipes) {
     const request = buildFactoryRecipe(
       recipe,
@@ -73,6 +74,14 @@ it('builds portable scene instruments and complex serial chains from installed m
       expect(m.extensions['urn:oxidal:authoring'].factory_topology).toBe(
         'serial',
       );
+    } else if (recipe.topology === 'routed') {
+      // Routed presets open in the routing editor and scenes mix their paths.
+      expect(chainRoute(m.oxidal.graph)).not.toBeNull();
+      const scenes = m.extensions['urn:oxidal:scenes:1'].scenes;
+      expect(scenes).toHaveLength(recipe.scenes.length);
+      const keys = (scene: { gains: { node: string; port: number }[] }) =>
+        scene.gains.map((g) => `${g.node}:${g.port}`).sort();
+      for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
     } else {
       expect(m.extensions['urn:oxidal:scenes:1'].scenes).toHaveLength(4);
       // Every scene covers the same full gain set; recalls cannot leak a prior mix.
@@ -258,4 +267,41 @@ it('builds the guitar-as-bass and duo presets with octave-down pitch and bass vo
     const recipe = toolRecipes.find((r) => r.id === id)!;
     expect(factoryRoles(recipe)).toHaveLength(2);
   }
+});
+
+it('builds routed genre presets with nested splits, pan, polarity and path scenes', () => {
+  const recipe = factoryRecipes.find((item) => item.id === 'P02')!;
+  const m = JSON.parse(
+    buildFactoryRecipe(recipe, plugins, { crunch: source }, 'profile')
+      .manifest_json,
+  );
+  const node = (id: string) =>
+    m.oxidal.graph.nodes.find((n: { id: string }) => n.id === id);
+  // Verse mixes the octaves out; the nested octave-down path is inverted.
+  expect(node('merge-r1-left').inputGains).toEqual([1, 0]);
+  expect(node('merge-r2-left').inputGains).toEqual([0.4, -0.6]);
+  const route = chainRoute(m.oxidal.graph)!;
+  expect(route.filter((s) => typeof s !== 'string')).toHaveLength(1);
+  const solo = m.extensions['urn:oxidal:scenes:1'].scenes[2];
+  expect(solo.name).toBe('Solo');
+  expect(solo.gains).toContainEqual({
+    node: 'merge-r1-right',
+    port: 1,
+    value: 0.7,
+  });
+  // Panned paths write unequal sides: Two Rooms' clean amp sits left.
+  const rooms = JSON.parse(
+    buildFactoryRecipe(
+      factoryRecipes.find((item) => item.id === 'P01')!,
+      plugins,
+      { clean: source, crunch: source },
+      'profile',
+    ).manifest_json,
+  );
+  const merge = (side: string) =>
+    rooms.oxidal.graph.nodes.find(
+      (n: { id: string }) => n.id === `merge-r1-${side}`,
+    ).inputGains;
+  expect(merge('left')[0]).toBe(1);
+  expect(merge('right')[0]).toBe(0.5);
 });

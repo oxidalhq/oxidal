@@ -55,6 +55,7 @@ const factoryFamilies: Record<string, string> = {
   C: 'Clean & studio',
   H: 'Heavy',
   K: 'Rock & drive',
+  P: 'Parallel routing',
   R: 'Roots & rhythm',
   S: 'Synth & pitch',
   X: 'Experimental',

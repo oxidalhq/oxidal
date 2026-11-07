@@ -374,7 +374,7 @@
                         "type": "array",
                         "items": {
                           "type": "number",
-                          "minimum": 0,
+                          "minimum": -4,
                           "maximum": 4
                         },
                         "minItems": 1,
@@ -409,7 +409,7 @@
                         "type": "array",
                         "items": {
                           "type": "number",
-                          "minimum": 0,
+                          "minimum": -4,
                           "maximum": 4
                         },
                         "minItems": 1,

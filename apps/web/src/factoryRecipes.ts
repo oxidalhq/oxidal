@@ -53,6 +53,25 @@ export type Effect =
   | { native: FactoryRole };
 
 export type Voice = { name: string; effects: Effect[] };
+/** One path of a routed recipe's split: its blocks and its level, pan and
+ * polarity into the merge (7.26). An empty path is a dry path. */
+export type RoutedPath = {
+  name: string;
+  level?: number;
+  pan?: number;
+  invert?: boolean;
+  steps: RoutedStep[];
+};
+/** A routed recipe is a tree: blocks in order, and splits holding paths. */
+export type RoutedStep = Effect | { paths: RoutedPath[] };
+const isRoutedSplit = (step: RoutedStep): step is { paths: RoutedPath[] } =>
+  'paths' in step;
+/** Every block of a routed tree, in order. */
+function routedEffects(steps: RoutedStep[]): Effect[] {
+  return steps.flatMap((s) =>
+    isRoutedSplit(s) ? s.paths.flatMap((p) => routedEffects(p.steps)) : [s],
+  );
+}
 export type FactoryRecipe = {
   id: string;
   name: string;
@@ -60,8 +79,10 @@ export type FactoryRecipe = {
   era?: '80s' | '90s' | '2000s' | 'Modern';
   description: string;
   categories: string[];
-  /** Scene recipes split into voices; serial recipes run one ordered chain. */
-  topology?: 'scenes' | 'serial';
+  /** Scene recipes split into voices; serial recipes run one ordered chain;
+   * routed recipes are a tree of splits whose top-level paths scenes mix. */
+  topology?: 'scenes' | 'serial' | 'routed';
+  route?: RoutedStep[];
   before: Effect[];
   voices: Voice[];
   after: Effect[];
@@ -1137,21 +1158,245 @@ export const factoryRecipes: FactoryRecipe[] = [
     after: [flyRoom()],
     scenes: [],
   },
+  // Parallel routing (7.26): one per genre plus synth, each with scenes that
+  // mix its top-level paths. Pan, polarity and nested splits are deliberate.
+  {
+    id: 'P01',
+    name: 'Two Rooms',
+    description:
+      'Blues: a clean amp panned left and a crunch amp panned right play in parallel, with a little dry signal under both. Scenes move between the rooms.',
+    categories: ['Blues', 'Parallel routing'],
+    topology: 'routed',
+    before: [],
+    voices: [],
+    after: [echo(0.18), flyRoom()],
+    route: [
+      studioComp(-24),
+      {
+        paths: [
+          { name: 'Clean', pan: -0.5, steps: [nam('clean'), silk()] },
+          { name: 'Crunch', pan: 0.5, steps: [nam('crunch')] },
+          { name: 'Dry', level: 0.3, steps: [] },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Rhythm', mix: [1, 0.6, 1] },
+      { name: 'Lead', mix: [0.5, 1, 0] },
+      { name: 'Clean', mix: [1, 0, 1] },
+      { name: 'Wide', mix: [1, 1, 0.6] },
+    ],
+  },
+  {
+    id: 'P02',
+    name: 'Octave Stack',
+    description:
+      'Rock: a driven amp in parallel with an octave path that splits again into an octave up and an inverted octave down, so the low voice tightens rather than doubles the amp.',
+    categories: ['Rock', 'Parallel routing'],
+    topology: 'routed',
+    before: [],
+    voices: [],
+    after: [flyHall(3, 16)],
+    route: [
+      drive(),
+      {
+        paths: [
+          { name: 'Amp', steps: [nam('crunch')] },
+          {
+            name: 'Octaves',
+            level: 0.7,
+            steps: [
+              {
+                paths: [
+                  { name: 'Up', level: 0.4, steps: [pitch(12)] },
+                  {
+                    name: 'Down',
+                    level: 0.6,
+                    invert: true,
+                    steps: [pitch(-12)],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Verse', mix: [1, 0] },
+      { name: 'Chorus', mix: [1, 0.6] },
+      { name: 'Solo', mix: [1, 1] },
+    ],
+  },
+  {
+    id: 'P03',
+    name: 'Wide Wall',
+    description:
+      'Metal: a heavy amp panned hard left and a crunch amp panned hard right for a double-tracked width, plus a tracked sub path for weight. Scenes narrow it, widen it or lean on one side.',
+    categories: ['Metal', 'Parallel routing'],
+    topology: 'routed',
+    before: [fx('Invada High Pass Filter (stereo)', { freq: 85 })],
+    voices: [],
+    after: [flyRoom()],
+    route: [
+      studioComp(-28),
+      {
+        paths: [
+          { name: 'Left amp', pan: -0.8, steps: [nam('heavy')] },
+          { name: 'Right amp', pan: 0.8, steps: [nam('crunch')] },
+          { name: 'Sub', level: 0.5, steps: [sub(0.3)] },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Tight', mix: [1, 1, 0] },
+      { name: 'Huge', mix: [1, 1, 1] },
+      { name: 'Left lead', mix: [1, 0.35, 0.5] },
+    ],
+  },
+  {
+    id: 'P04',
+    name: 'Three Skies',
+    description:
+      'Ambient: a dry path, a reverse-delay wash panned left and an octave-up shimmer panned right. No amp captures needed. Scenes fade between dry, wash and shimmer.',
+    categories: ['Ambient', 'Parallel routing'],
+    topology: 'routed',
+    before: [],
+    voices: [],
+    after: [echo(0.2)],
+    route: [
+      {
+        paths: [
+          { name: 'Dry', steps: [] },
+          {
+            name: 'Reverse',
+            pan: -0.6,
+            steps: [reverse(0.6), flyHall(6, 30)],
+          },
+          { name: 'Shimmer', pan: 0.6, steps: [pitch(12), flyHall(8, 40)] },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Dry', mix: [1, 0, 0] },
+      { name: 'Wash', mix: [0.8, 0.7, 0.3] },
+      { name: 'Shimmer', mix: [0.6, 0.3, 0.9] },
+    ],
+  },
+  {
+    id: 'P05',
+    name: 'Pocket Split',
+    description:
+      'Funk: a clean amp in the middle with an envelope-filter path on the right and a phaser path on the left. Scenes add quack or swirl without losing the clean pocket.',
+    categories: ['Funk', 'Parallel routing'],
+    topology: 'routed',
+    before: [compressor()],
+    voices: [],
+    after: [flyRoom()],
+    route: [
+      {
+        paths: [
+          { name: 'Clean', steps: [nam('clean')] },
+          {
+            name: 'Quack',
+            pan: 0.5,
+            steps: [
+              fx('FOMP Auto-wah', {
+                drive: 3,
+                decay: 0.22,
+                range: 0.65,
+                freq: 0.35,
+                mix: 0.6,
+              }),
+            ],
+          },
+          { name: 'Swirl', pan: -0.5, steps: [orbit(0.6, 4)] },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Pocket', mix: [1, 0, 0] },
+      { name: 'Quack', mix: [0.6, 1, 0] },
+      { name: 'Swirl', mix: [0.7, 0, 1] },
+      { name: 'Both', mix: [0.6, 0.7, 0.7] },
+    ],
+  },
+  {
+    id: 'P06',
+    name: 'Synth Lanes',
+    description:
+      'Synth: four parallel lanes from one guitar: a tracked sub synth, a ring modulator panned left, a bit-crusher panned right and an inverted octave down. No amp captures needed. Scenes pick a synth voice.',
+    categories: ['Synth', 'Parallel routing'],
+    topology: 'routed',
+    before: [],
+    voices: [],
+    after: [silk(), flyHall(3, 20)],
+    route: [
+      {
+        paths: [
+          { name: 'Sub synth', steps: [sub(0.6)] },
+          {
+            name: 'Ring',
+            pan: -0.5,
+            steps: [fx('MDA RingMod', { freq: 0.11, feedback: 0.15 })],
+          },
+          {
+            name: 'Crush',
+            pan: 0.5,
+            steps: [
+              fx('MDA Degrade', {
+                quant: 0.35,
+                rate: 0.4,
+                headroom: 0.85,
+                output: 0.4,
+              }),
+            ],
+          },
+          { name: 'Octave down', invert: true, steps: [pitch(-12)] },
+        ],
+      },
+    ],
+    scenes: [
+      { name: 'Bass synth', mix: [1, 0, 0, 0.8] },
+      { name: 'Ring', mix: [0.3, 1, 0, 0] },
+      { name: 'Lo-fi', mix: [0.3, 0, 1, 0.4] },
+      { name: 'All', mix: [0.6, 0.5, 0.5, 0.5] },
+    ],
+  },
 ];
+
+/** Every block a recipe uses, whatever its topology. */
+function recipeEffects(recipe: FactoryRecipe): Effect[] {
+  return [
+    ...recipe.before,
+    ...recipe.voices.flatMap((v) => v.effects),
+    ...routedEffects(recipe.route ?? []),
+    ...recipe.after,
+  ];
+}
 
 export function factoryRoles(recipe: FactoryRecipe): FactoryRole[] {
   return [
     ...new Set(
-      [
-        ...recipe.before,
-        ...recipe.voices.flatMap((v) => v.effects),
-        ...recipe.after,
-      ].flatMap((e) => ('native' in e ? [e.native] : [])),
+      recipeEffects(recipe).flatMap((e) => ('native' in e ? [e.native] : [])),
     ),
   ];
 }
 
 export function factoryTopologySummary(recipe: FactoryRecipe) {
+  if (recipe.topology === 'routed') {
+    const splits = (steps: RoutedStep[]): number =>
+      steps.reduce(
+        (n, s) =>
+          isRoutedSplit(s)
+            ? n + 1 + s.paths.reduce((m, p) => m + splits(p.steps), 0)
+            : n,
+        0,
+      );
+    const top = (recipe.route ?? []).find(isRoutedSplit)?.paths.length ?? 1;
+    const nested = splits(recipe.route ?? []) - 1;
+    return `${recipe.scenes.length} scenes · ${top} parallel paths${nested > 0 ? ` · ${nested} nested ${nested === 1 ? 'split' : 'splits'}` : ''} · ${recipeEffects(recipe).length} blocks`;
+  }
   const blocks =
     recipe.before.length +
     recipe.voices.reduce((count, item) => count + item.effects.length, 0) +
@@ -1193,11 +1438,7 @@ export function factoryMissingPlugins(
 ) {
   return [
     ...new Set(
-      [
-        ...recipe.before,
-        ...recipe.voices.flatMap((v) => v.effects),
-        ...recipe.after,
-      ]
+      recipeEffects(recipe)
         .filter((e): e is Extract<Effect, { plugin: string }> => 'plugin' in e)
         .filter(
           (e) =>
@@ -1208,6 +1449,142 @@ export function factoryMissingPlugins(
         .map((e) => e.plugin),
     ),
   ];
+}
+
+/** Left and right merge gains for a path: panning only lowers one side, and
+ * an inverted path is negative on both (7.26). Matches the editor's mixGains. */
+function routedGains(level: number, pan: number, invert: boolean) {
+  const sign = invert ? -1 : 1;
+  return [
+    level * (pan > 0 ? 1 - pan : 1) * sign || 0,
+    level * (pan < 0 ? 1 + pan : 1) * sign || 0,
+  ];
+}
+
+/**
+ * A routed recipe (7.26): the same routing tree the editor writes, with each
+ * path's level, pan and polarity, and scenes as mixes of the top-level paths
+ * written to that split's merges.
+ */
+function buildRouted(
+  recipe: FactoryRecipe,
+  effect: (e: Effect) => DraftEffect,
+  profile: string,
+  id: string,
+  defaults?: NativeDefaultSettings,
+) {
+  const name = recipe.era ? recipe.name : `Oxidal · ${recipe.name}`;
+  const rig = rigBuilder(id, name, profile, false);
+  type At = Parameters<typeof rig.chain>[1];
+  const first = recipe.scenes[0]?.mix;
+  let splits = 0;
+  // Same node shapes as the routing editor (C9): `-left`/`-right` split and
+  // merge twins, so the preset opens in the editor like any routed preset.
+  function place(steps: RoutedStep[], from: At, top: boolean): At {
+    let run: DraftEffect[] = [];
+    let at = from;
+    for (const step of steps) {
+      if (!isRoutedSplit(step)) {
+        run.push(effect(step));
+        continue;
+      }
+      at = rig.chain(run, at);
+      run = [];
+      const tag = `r${++splits}`;
+      const n = step.paths.length;
+      const gains = step.paths.map((path, index) =>
+        routedGains(
+          (path.level ?? 1) * (top && first ? (first[index] ?? 1) : 1),
+          path.pan ?? 0,
+          !!path.invert,
+        ),
+      );
+      const splitNodes = (['left', 'right'] as const).map((side, port) => {
+        const node = `split-${tag}-${side}`;
+        rig.host.graph.nodes.push({
+          id: node,
+          kind: 'split',
+          audioInputs: 1,
+          audioOutputs: n,
+        });
+        rig.host.graph.edges.push({ from: at[port]!, to: { node, port: 0 } });
+        rig.labels[node] = `Split · ${side === 'left' ? 'L' : 'R'}`;
+        return node;
+      });
+      const ends = step.paths.map((path, index) =>
+        place(
+          path.steps,
+          [
+            { node: splitNodes[0]!, port: index },
+            { node: splitNodes[1]!, port: index },
+          ],
+          false,
+        ),
+      );
+      const merges = (['left', 'right'] as const).map((side, port) => {
+        const node = `merge-${tag}-${side}`;
+        rig.host.graph.nodes.push({
+          id: node,
+          kind: 'merge',
+          audioInputs: n,
+          audioOutputs: 1,
+          inputGains: gains.map((g) => g[port]!),
+        });
+        ends.forEach((end, index) =>
+          rig.host.graph.edges.push({
+            from: end[port]!,
+            to: { node, port: index },
+          }),
+        );
+        rig.labels[node] = `Merge · ${side === 'left' ? 'L' : 'R'}`;
+        return { node, port: 0 };
+      });
+      at = [merges[0]!, merges[1]!];
+    }
+    return rig.chain(run, at);
+  }
+  const result = rig.finish(
+    place(
+      [...recipe.before, ...(recipe.route ?? []), ...recipe.after],
+      rig.input,
+      true,
+    ),
+  );
+  const manifest: RigDocument['manifest'] = JSON.parse(result.manifest_json);
+  manifest.oxidal!.recall.tails = 'preserve';
+  applyNativeBudget(manifest, defaults);
+  const outer = (recipe.route ?? []).find(isRoutedSplit);
+  if (recipe.scenes.length && outer) {
+    if (recipe.scenes.some((scene) => scene.mix.length !== outer.paths.length))
+      throw new Error(`${recipe.name}: each scene mixes every top-level path.`);
+    manifest.requiredExtensions.push('urn:oxidal:scenes:1');
+    manifest.extensions['urn:oxidal:scenes:1'] = {
+      fade_ms: 15,
+      scenes: recipe.scenes.map((scene, index) => ({
+        id: `scene-${index + 1}`,
+        name: scene.name,
+        gains: (['left', 'right'] as const).flatMap((side, s) =>
+          outer.paths.map((path, port) => ({
+            node: `merge-r1-${side}`,
+            port,
+            value: routedGains(
+              (path.level ?? 1) * (scene.mix[port] ?? 0),
+              path.pan ?? 0,
+              !!path.invert,
+            )[s]!,
+          })),
+        ),
+      })),
+    };
+  }
+  Object.assign(manifest.extensions['urn:oxidal:authoring']!, {
+    origin: 'oxidal_example',
+    scene_tails: 'preserve',
+    factory_recipe: recipe.id,
+    factory_version: 1,
+    factory_topology: 'routed',
+  });
+  return { ...result, manifest_json: JSON.stringify(manifest) };
 }
 
 /** Build from explicit local bindings; never match captures by a guessed name.
@@ -1273,6 +1650,8 @@ export function buildFactoryRecipe(
       controls: controls as Record<string, number>,
     };
   };
+  if (recipe.topology === 'routed')
+    return buildRouted(recipe, effect, profile, id, defaults);
   if (recipe.topology === 'serial') {
     if (recipe.voices.length !== 1 || recipe.scenes.length !== 0)
       throw new Error(
