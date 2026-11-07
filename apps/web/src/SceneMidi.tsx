@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
@@ -164,7 +165,7 @@ export function MidiControls({
       setDialogOpen(false);
       initialized.current = false;
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change scene MIDI assignments'));
     } finally {
       setSaving(false);
     }
@@ -175,7 +176,7 @@ export function MidiControls({
     try {
       setDevices(await midiDevices());
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change scene MIDI assignments'));
     } finally {
       setLoading(false);
     }
@@ -233,7 +234,9 @@ export function MidiControls({
     setError('');
     void midiDevices()
       .then(setDevices)
-      .catch((cause: unknown) => setError(String(cause)))
+      .catch((cause: unknown) =>
+        setError(friendlyError(cause, 'change scene MIDI assignments')),
+      )
       .finally(() => setLoading(false));
   }, [configured, control, dialogOpen]);
   useEffect(() => {

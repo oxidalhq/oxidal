@@ -1,3 +1,4 @@
+import { friendlyError, errorDetails } from './lib/friendlyError';
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle } from './ChainView';
 import { GuitarPicker } from './GuitarSettings';
@@ -212,7 +213,7 @@ export function LiveRig({
           );
         }
       } catch (cause) {
-        if (alive.current) setError(String(cause));
+        if (alive.current) setError(friendlyError(cause, 'update the rig'));
       } finally {
         if (alive.current)
           timer = setTimeout(() => void refresh(), toolActive ? 150 : 1000);
@@ -255,7 +256,7 @@ export function LiveRig({
       }
     } catch (cause) {
       if (alive.current) {
-        setError(String(cause));
+        setError(friendlyError(cause, 'update the rig'));
         setDraft(null);
       }
       // A lost response is refreshed, never replayed into a newer sounding session.
@@ -305,7 +306,7 @@ export function LiveRig({
       }
     } catch (cause) {
       if (alive.current) {
-        setError(String(cause));
+        setError(friendlyError(cause, 'update the rig'));
         const next = await playbackState().catch(() => null);
         if (next) setState(next);
       }
@@ -339,7 +340,7 @@ export function LiveRig({
       const document = await publishRig(made.publish);
       await playScenes(document.revision);
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
     } finally {
       if (alive.current) setMaking(false);
     }
@@ -375,7 +376,7 @@ export function LiveRig({
     } catch (cause) {
       // A lost response may already have applied: refresh, never repeat Stop/Start.
       if (alive.current) {
-        setError(String(cause));
+        setError(friendlyError(cause, 'update the rig'));
         const next = await playbackState().catch(() => null);
         if (next) setState(next);
       }
@@ -397,7 +398,7 @@ export function LiveRig({
       if (alive.current) setState(next);
     } catch (cause) {
       if (alive.current) {
-        setError(String(cause));
+        setError(friendlyError(cause, 'update the rig'));
         const latest = await playbackState().catch(() => null);
         if (latest) setState(latest);
       }
@@ -421,7 +422,7 @@ export function LiveRig({
         setDraft(null);
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
       // Never replay a structural write after a lost reply.
       try {
         const next = await playbackState();
@@ -473,7 +474,7 @@ export function LiveRig({
       );
     });
     void ready.catch((cause) => {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
     });
     adjustment.current = new EditQueue<AudioState>(
       'live',
@@ -517,7 +518,7 @@ export function LiveRig({
       },
       (cause) => {
         if (!alive.current) return;
-        setError(String(cause));
+        setError(friendlyError(cause, 'update the rig'));
         void playbackState()
           .then((next) => {
             if (alive.current) setState(next);
@@ -534,7 +535,7 @@ export function LiveRig({
       if (cancel) await queue.cancel();
       else await queue.finish(latestValue.current);
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
     } finally {
       if (adjustment.current === queue) adjustment.current = null;
       if (alive.current) {
@@ -568,7 +569,7 @@ export function LiveRig({
         setSaveOpening(null);
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
       // Do not repeat a write after a lost response. Polling retrieves its saved identity.
     } finally {
       sending.current = false;
@@ -611,8 +612,8 @@ export function LiveRig({
       if (alive.current) {
         setError(
           sourceRestored
-            ? `The original is playing, but the copy remains in Mine: ${String(cause)}`
-            : String(cause),
+            ? `The original is playing, but the copy remains in Mine: ${errorDetails(cause)}`
+            : friendlyError(cause, 'update the rig'),
         );
         const next = await playbackState().catch(() => null);
         if (next) setState(next);
@@ -668,7 +669,8 @@ export function LiveRig({
                   const next = await playbackCommand(state, { kind: 'resume' });
                   if (alive.current) setState(next);
                 } catch (cause) {
-                  if (alive.current) setError(String(cause));
+                  if (alive.current)
+                    setError(friendlyError(cause, 'update the rig'));
                 } finally {
                   if (alive.current) setBusy(false);
                 }
@@ -1364,7 +1366,8 @@ export function LiveRig({
                     });
                     if (alive.current) setState(next);
                   } catch (cause) {
-                    if (alive.current) setError(String(cause));
+                    if (alive.current)
+                      setError(friendlyError(cause, 'update the rig'));
                   } finally {
                     sending.current = false;
                     if (alive.current) setBusy(false);

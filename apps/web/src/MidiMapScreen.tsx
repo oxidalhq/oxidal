@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
@@ -176,7 +177,7 @@ export function MidiMapScreen({
         setDevices(nextDevices);
       })
       .catch((cause: unknown) => {
-        if (active) setError(String(cause));
+        if (active) setError(friendlyError(cause, 'read MIDI assignments'));
       });
     return () => {
       active = false;
@@ -200,7 +201,7 @@ export function MidiMapScreen({
       setMap(updated);
       await onMapApplied(updated);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change MIDI assignments'));
       throw cause;
     } finally {
       setBusy(false);
@@ -220,7 +221,7 @@ export function MidiMapScreen({
       setPendingTemplate('');
       await onMapApplied(updated);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change MIDI assignments'));
     } finally {
       setBusy(false);
     }
@@ -465,7 +466,9 @@ export function MidiMapScreen({
       setLearning(null);
       void learnHandler
         .current(learned, lastMessage)
-        .catch((cause: unknown) => setError(String(cause)));
+        .catch((cause: unknown) =>
+          setError(friendlyError(cause, 'change MIDI assignments')),
+        );
     }, 0);
     return () => window.clearTimeout(timer);
   }, [eventCount, lastMessage, learning]);
@@ -517,7 +520,7 @@ export function MidiMapScreen({
     try {
       await testMidi({ entry, message });
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change MIDI assignments'));
     } finally {
       setBusy(false);
     }
@@ -826,7 +829,9 @@ export function MidiMapScreen({
             void file
               .text()
               .then((text) => setPendingImport(importFile(JSON.parse(text))))
-              .catch((cause: unknown) => setError(String(cause)));
+              .catch((cause: unknown) =>
+                setError(friendlyError(cause, 'change MIDI assignments')),
+              );
           }}
         />
       </div>

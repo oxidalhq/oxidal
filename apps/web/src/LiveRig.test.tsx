@@ -164,7 +164,7 @@ it('never starts or retries after a failed stop', async () => {
   fireEvent.click(
     screen.getByRole('button', { name: 'Discard edits and reload' }),
   );
-  await screen.findByText('Error: Session changed');
+  await screen.findByText('Could not update the rig. Session changed.');
   expect(playbackCommand).toHaveBeenCalledTimes(1);
 });
 

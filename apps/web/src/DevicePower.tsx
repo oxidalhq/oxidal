@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { ArrowClockwise, Power } from '@phosphor-icons/react';
 import { deviceNetwork, type NetworkState } from './api';
@@ -44,7 +45,7 @@ export function DevicePower({ connected }: { connected: boolean }) {
       setSent(true);
       setAction(null);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change device power'));
     } finally {
       setBusy(false);
     }

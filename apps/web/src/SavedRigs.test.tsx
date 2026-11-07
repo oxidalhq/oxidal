@@ -63,7 +63,9 @@ it('offers a bounded custom gapless bank for factory rigs', async () => {
   );
   await waitFor(() => expect(screen.getByText('Factory 1')).toBeVisible());
   fireEvent.click(screen.getByRole('button', { name: 'Keep ready' }));
-  expect(screen.getByText(/Choose up to 4 additional rigs/)).toBeVisible();
+  expect(
+    screen.getByText(/Choose up to 4 more presets to keep ready/),
+  ).toBeVisible();
   for (let index = 1; index <= 4; index += 1) {
     fireEvent.click(screen.getByLabelText(`Keep Factory ${index} ready`));
   }

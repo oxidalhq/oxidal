@@ -1,3 +1,4 @@
+import { friendlyError, errorDetails } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -99,7 +100,11 @@ export function ModelLibrary({
         })
         .catch((cause: unknown) => {
           if (!controller.signal.aborted) {
-            setResult({ key: requestKey, page: null, error: String(cause) });
+            setResult({
+              key: requestKey,
+              page: null,
+              error: friendlyError(cause, 'read your sounds'),
+            });
           }
         })
         .finally(() => {
@@ -154,7 +159,7 @@ export function ModelLibrary({
           state.failed++;
           // Keep the DOM and error history bounded even for thousands of files.
           if (state.errors.length < 20)
-            state.errors.push(`${state.current}: ${String(cause)}`);
+            state.errors.push(`${state.current}: ${errorDetails(cause)}`);
         }
         state.complete++;
         state.doneBytes += file.size;

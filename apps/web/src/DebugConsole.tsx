@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
   Copy,
@@ -65,7 +66,7 @@ export function DebugConsole() {
         setLogMessage('Select the text below, or download the logs.');
       }
     } catch (cause) {
-      setLogMessage(String(cause));
+      setLogMessage(friendlyError(cause, 'read the debug log'));
     } finally {
       setCopying(false);
     }

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { installedLv2, type Lv2Plugin } from './api';
@@ -69,7 +70,8 @@ export function SlotChooser({
         );
       })
       .catch((cause) => {
-        if (!abort.signal.aborted) setError(String(cause));
+        if (!abort.signal.aborted)
+          setError(friendlyError(cause, 'read the available blocks'));
       });
     return () => abort.abort();
   }, [step, plugins, sampleRate]);

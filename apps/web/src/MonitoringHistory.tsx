@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { historyPoints, historyCsv } from './historyData';
 import { useEffect, useState } from 'react';
 import { ArrowClockwise, DownloadSimple } from '@phosphor-icons/react';
@@ -37,7 +38,8 @@ export function MonitoringHistory() {
         if (!controller.signal.aborted) setState(next);
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'read the level history'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);

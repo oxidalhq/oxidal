@@ -1,3 +1,4 @@
+import { friendlyError, errorDetails } from './lib/friendlyError';
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
 import { ScenePads } from './ScenePads';
@@ -251,7 +252,7 @@ export function MixedRig({
           setReadError('');
         }
       } catch (cause) {
-        if (alive.current) setReadError(String(cause));
+        if (alive.current) setReadError(friendlyError(cause, 'read the rig'));
       } finally {
         if (alive.current)
           timer = setTimeout(
@@ -287,7 +288,7 @@ export function MixedRig({
           }
         })
         .catch((e: unknown) => {
-          if (active) setError(String(e));
+          if (active) setError(friendlyError(e, 'update the rig'));
         });
     return () => {
       active = false;
@@ -468,7 +469,7 @@ export function MixedRig({
         await promoteMixedEdit(next);
       return true;
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'update the rig'));
       try {
         accept(await rigAudioState());
       } catch {
@@ -540,7 +541,7 @@ export function MixedRig({
     try {
       await playChoice(choice);
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
     } finally {
       if (alive.current) setSwitching(false);
     }
@@ -615,7 +616,7 @@ export function MixedRig({
             sourceName: listed?.name ?? opened.manifest.name,
           });
       } catch (cause) {
-        if (alive.current) setError(String(cause));
+        if (alive.current) setError(friendlyError(cause, 'update the rig'));
       } finally {
         if (alive.current) setEditing(false);
       }
@@ -695,7 +696,7 @@ export function MixedRig({
         })
       : Promise.resolve();
     void ready.catch((cause) => {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'update the rig'));
     });
     queue.current = new EditQueue<RigAudioState>(
       'mixed',
@@ -739,7 +740,7 @@ export function MixedRig({
       },
       accept,
       (e) => {
-        if (alive.current) setError(String(e));
+        if (alive.current) setError(friendlyError(e, 'update the rig'));
       },
     );
   }
@@ -754,7 +755,7 @@ export function MixedRig({
         if (current.current) await promoteMixedEdit(current.current);
       }
     } catch (e) {
-      if (alive.current) setError(String(e));
+      if (alive.current) setError(friendlyError(e, 'update the rig'));
     } finally {
       queue.current = null;
       if (alive.current) {
@@ -977,7 +978,7 @@ export function MixedRig({
       setCopyOnEdit(null);
     } catch (cause) {
       setError(
-        `The original is playing, but the copy remains in Mine: ${String(cause)}`,
+        `The original is playing, but the copy remains in Mine: ${errorDetails(cause)}`,
       );
     } finally {
       resolvingCopy.current = false;
@@ -2074,7 +2075,8 @@ export function MixedRig({
                   }),
                 );
               } catch (cause) {
-                if (alive.current) setError(String(cause));
+                if (alive.current)
+                  setError(friendlyError(cause, 'update the rig'));
               } finally {
                 sending.current = false;
                 if (alive.current) setBusy(false);

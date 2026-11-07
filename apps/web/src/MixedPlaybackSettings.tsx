@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
@@ -39,7 +40,7 @@ export function MixedPlaybackSettings({
     try {
       onState(await rigAudioCommand(state, action));
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change playback'));
       try {
         onState(await rigAudioState());
       } catch {

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { unitLevels, type UnitLevels } from './api';
 import {
@@ -42,7 +43,8 @@ export function MasterLevel({
         else setSupported(false);
       })
       .catch((cause) => {
-        if (!abort.signal.aborted) setError(String(cause));
+        if (!abort.signal.aborted)
+          setError(friendlyError(cause, 'read the output level'));
       });
     return () => abort.abort();
   }, []);
@@ -62,7 +64,7 @@ export function MasterLevel({
       }
       setError('');
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change the output level'));
       // Show what the unit actually has after a refused change.
       unitLevels()
         .then((current) => {

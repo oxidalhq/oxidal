@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { WorkspaceMemory, useWorkspaceNavigation } from './workspaceMemory';
 import { GuitarSettings } from './GuitarSettings';
 import { MidiSettings } from './MidiSettings';
@@ -220,7 +221,7 @@ function InstrumentApp() {
           if (active) setSimulator(info.midi_transport === 'simulator');
         })
         .catch((e: unknown) => {
-          if (active) setError(String(e));
+          if (active) setError(friendlyError(e, 'reach Oxidal'));
         });
     };
     const offline = () => {

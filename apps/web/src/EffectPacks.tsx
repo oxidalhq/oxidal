@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -33,8 +34,7 @@ export function EffectPacks({
           }
         })
         .catch((cause: unknown) => {
-          if (active)
-            setError(cause instanceof Error ? cause.message : String(cause));
+          if (active) setError(friendlyError(cause, 'change effect packs'));
         });
     return () => {
       active = false;
@@ -53,8 +53,7 @@ export function EffectPacks({
           }
         })
         .catch((cause: unknown) => {
-          if (active)
-            setError(cause instanceof Error ? cause.message : String(cause));
+          if (active) setError(friendlyError(cause, 'change effect packs'));
         });
     }, 1000);
     return () => {
@@ -70,7 +69,7 @@ export function EffectPacks({
       setState(await changeEffectPack(id, action));
       setConfirmRemove(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(friendlyError(cause, 'change effect packs'));
     } finally {
       setBusy(null);
     }

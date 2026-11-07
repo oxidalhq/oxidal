@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { sceneBlends, type SceneBlends } from './api';
@@ -54,7 +55,7 @@ export function SceneChange({
       const next = await sceneBlends({ preset, blend_ms });
       if (next) setBlends(next);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change the scene'));
     } finally {
       setBusy(false);
     }

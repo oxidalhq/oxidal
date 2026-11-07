@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
   presetDetails,
@@ -51,7 +52,7 @@ export function PresetDetailsDialog({
         setEditing(false);
       })
       .catch((e: unknown) => {
-        if (active) setError(String(e));
+        if (active) setError(friendlyError(e, 'read the preset details'));
       });
     return () => {
       active = false;
@@ -80,7 +81,7 @@ export function PresetDetailsDialog({
       setEditing(false);
       onChanged?.();
     } catch (e) {
-      setError(String(e));
+      setError(friendlyError(e, 'update the preset details'));
       setCatalog(null);
     } finally {
       setBusy(false);

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { useWorkspaceState } from './workspaceMemory';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -102,7 +103,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
             : `Found ${inputs.length} input${inputs.length === 1 ? '' : 's'} and ${outputs.length} output${outputs.length === 1 ? '' : 's'}. Check both before starting audio.`,
       );
     } catch (error) {
-      setMessage(String(error));
+      setMessage(friendlyError(error, 'change the audio settings'));
     } finally {
       refreshing.current = false;
       setBusy(false);
@@ -143,7 +144,7 @@ export function AudioSettings({ connected }: { connected: boolean }) {
         `Input and output accepted at ${request.sample_rate} Hz · ${request.period_frames} × ${request.periods}. Interface released; choose a preset and start audio below.`,
       );
     } catch (error) {
-      setMessage(String(error));
+      setMessage(friendlyError(error, 'change the audio settings'));
     } finally {
       setBusy(false);
     }

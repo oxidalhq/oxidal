@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useState } from 'react';
 import {
   ArrowClockwise,
@@ -29,7 +30,7 @@ export function StorageLock({
     try {
       onState(await changeStorage({ mode }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(friendlyError(cause, 'change storage protection'));
     } finally {
       setBusy(false);
     }
@@ -49,7 +50,7 @@ export function StorageLock({
       setSent(true);
       setConfirmReboot(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(friendlyError(cause, 'change storage protection'));
     } finally {
       setBusy(false);
     }

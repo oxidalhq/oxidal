@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import {
   CaretRight,
   ArrowLeft,
@@ -164,7 +165,8 @@ export function ModelPicker({
           if (!controller.signal.aborted) setTones(page);
         }
       } catch (cause) {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'read the sounds'));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -198,7 +200,8 @@ export function ModelPicker({
         if (!comparison) onClose();
       }
     } catch (cause) {
-      if (!controller.signal.aborted && alive.current) setError(String(cause));
+      if (!controller.signal.aborted && alive.current)
+        setError(friendlyError(cause, 'read the sounds'));
     } finally {
       if (alive.current) setBusy(null);
     }
@@ -251,7 +254,8 @@ export function ModelPicker({
         if (!comparison) onClose();
       }
     } catch (cause) {
-      if (!controller.signal.aborted && alive.current) setError(String(cause));
+      if (!controller.signal.aborted && alive.current)
+        setError(friendlyError(cause, 'read the sounds'));
     } finally {
       if (alive.current) setBusy(null);
     }

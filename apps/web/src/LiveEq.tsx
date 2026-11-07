@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import './RigControls.css';
 import { useEffect, useRef, useState } from 'react';
 import { type AudioAction, type AudioState } from './api';
@@ -92,7 +93,7 @@ export function LiveEq<S extends EqSession>({
     try {
       accept(await send(state, edit));
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'read the EQ'));
     } finally {
       setBusy(false);
       onEditing(false);
@@ -123,7 +124,7 @@ export function LiveEq<S extends EqSession>({
         }).then(accept)
       : Promise.resolve();
     void ready.catch((cause) => {
-      if (mounted.current) setError(String(cause));
+      if (mounted.current) setError(friendlyError(cause, 'change the EQ'));
     });
     queue.current = new EditQueue<S>(
       'eq',
@@ -150,7 +151,7 @@ export function LiveEq<S extends EqSession>({
       },
       accept,
       (cause) => {
-        if (mounted.current) setError(String(cause));
+        if (mounted.current) setError(friendlyError(cause, 'change the EQ'));
       },
     );
   }
@@ -162,7 +163,7 @@ export function LiveEq<S extends EqSession>({
       if (cancel) await active.cancel();
       else await active.finish(latest.current);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change the EQ'));
     } finally {
       queue.current = null;
       setBusy(false);

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { nativeDefaults, type NativeDefaults as Defaults } from './api';
 import { Button } from './components/ui/button';
@@ -30,7 +31,7 @@ export function NativeDefaults({ connected }: { connected: boolean }) {
         }
       })
       .catch((e) => {
-        if (active) setMessage(String(e));
+        if (active) setMessage(friendlyError(e, 'read the NAM block defaults'));
       });
     return () => {
       active = false;

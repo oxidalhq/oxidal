@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import type { ControlScale } from './lv2Control';
 import { useEffect, useRef, useState } from 'react';
 import { sendCommand, type Snapshot } from './api';
@@ -54,7 +55,7 @@ export function ControlEditor({
       if (alive.current) accept(next, session);
     };
     const fail = (cause: unknown) => {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'change this control'));
     };
     const ready = send(
       {
@@ -102,7 +103,7 @@ export function ControlEditor({
         queue.current = null;
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'change this control'));
     } finally {
       if (alive.current) setBusy(false);
     }

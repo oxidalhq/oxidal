@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUp,
@@ -43,7 +44,7 @@ export function LibraryManagement({
         if (alive.current) setCatalog(s);
       })
       .catch((e: unknown) => {
-        if (alive.current) setError(String(e));
+        if (alive.current) setError(friendlyError(e, 'read the set list'));
       });
     return () => {
       alive.current = false;
@@ -70,7 +71,7 @@ export function LibraryManagement({
       }
     } catch (e) {
       if (alive.current) {
-        setError(String(e));
+        setError(friendlyError(e, 'update the set list'));
         try {
           setCatalog(await libraryCatalog());
         } catch {
@@ -154,7 +155,8 @@ export function LibraryManagement({
                     if (alive.current) setCatalog(c);
                   })
                   .catch((e: unknown) => {
-                    if (alive.current) setError(String(e));
+                    if (alive.current)
+                      setError(friendlyError(e, 'update the set list'));
                   });
               }}
               onEdit={(action) => void edit(item, action)}

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { Plus, Stop, FloppyDisk, Eraser } from '@phosphor-icons/react';
 import { ChainView, LedToggle } from './ChainView';
 import { GearIcon } from './GearIcon';
@@ -112,7 +113,8 @@ export function GraphAuthor({
           setAudio(native);
         }
       } catch (cause) {
-        if (active && !liveOnly) setError(String(cause));
+        if (active && !liveOnly)
+          setError(friendlyError(cause, 'read installed effects'));
       } finally {
         if (active) timer = setTimeout(() => void tick(), 750);
       }
@@ -123,7 +125,8 @@ export function GraphAuthor({
         if (active) setLibrary(items);
       })
       .catch((cause: unknown) => {
-        if (active && !liveOnly) setError(String(cause));
+        if (active && !liveOnly)
+          setError(friendlyError(cause, 'read installed effects'));
       });
     return () => {
       active = false;
@@ -154,7 +157,8 @@ export function GraphAuthor({
         if (alive.current) setLibrary(items);
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current)
+        setError(friendlyError(cause, 'build the effects chain'));
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
@@ -170,7 +174,8 @@ export function GraphAuthor({
       const plugins = await installedLv2(sampleRate);
       if (alive.current && scan.current === controller) setCatalog(plugins);
     } catch (cause) {
-      if (!controller.signal.aborted && alive.current) setError(String(cause));
+      if (!controller.signal.aborted && alive.current)
+        setError(friendlyError(cause, 'build the effects chain'));
     } finally {
       if (alive.current && scan.current === controller) setScanning(false);
     }
@@ -354,7 +359,8 @@ export function GraphAuthor({
       });
       if (alive.current) setMixedDraft(effects);
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current)
+        setError(friendlyError(cause, 'build the effects chain'));
     } finally {
       if (alive.current) setBusy(false);
     }

@@ -1,3 +1,4 @@
+import { friendlyError, errorDetails } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
   libraryCatalog,
@@ -82,7 +83,7 @@ function ManagementDialog({
         setName(item.name);
       })
       .catch((e: unknown) => {
-        if (alive) setError(String(e));
+        if (alive) setError(friendlyError(e, 'read the preset'));
       });
     return () => {
       alive = false;
@@ -102,7 +103,7 @@ function ManagementDialog({
       onChanged();
       onCancel();
     } catch (e) {
-      setError(String(e));
+      setError(friendlyError(e, 'update this preset'));
       setCatalog(null);
     } finally {
       setBusy(false);
@@ -207,7 +208,7 @@ export function DeletePresetDialog({
         if (alive) setPreview(p);
       })
       .catch((e: unknown) => {
-        if (alive) setError(String(e));
+        if (alive) setError(friendlyError(e, 'review the deletion'));
       });
     return () => {
       alive = false;
@@ -233,7 +234,7 @@ export function DeletePresetDialog({
       setPreview(null);
     } catch (e) {
       setError(
-        `Deletion was not confirmed: ${String(e)}. Refresh the preview or Library before trying again.`,
+        `Deletion was not confirmed: ${errorDetails(e)}. Refresh the preview or Library before trying again.`,
       );
       setPreview(null);
       setCleanup(false);

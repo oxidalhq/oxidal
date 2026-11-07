@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { WarningCircle } from '@phosphor-icons/react';
@@ -53,7 +54,8 @@ export function NativeSplitDialog({
             'This tone needs separately classified amp and cab blocks. Keep it whole.',
           );
       } catch (cause) {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'read the amp and cab blocks'));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }

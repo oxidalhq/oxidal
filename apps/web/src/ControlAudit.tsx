@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { ArrowClockwise, DownloadSimple, FunnelX } from '@phosphor-icons/react';
 import { controlAudit, type ControlAudit as History } from './api';
@@ -47,7 +48,8 @@ export function ControlAudit() {
         if (!controller.signal.aborted) setHistory(data);
       })
       .catch((cause) => {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'read the controls'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);

@@ -118,7 +118,7 @@ it('rejects a different mixed worker before sending an audition', async () => {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Audition' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'playing rig changed',
+    'playing preset changed',
   );
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import './ToneDetails.css';
 import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
@@ -65,7 +66,8 @@ function ToneCard({
         if (!abort.signal.aborted) setTone(found);
       })
       .catch((cause) => {
-        if (!abort.signal.aborted) setError(String(cause));
+        if (!abort.signal.aborted)
+          setError(friendlyError(cause, 'read the tone details'));
       });
     return () => abort.abort();
   }, [toneId, initialTone]);

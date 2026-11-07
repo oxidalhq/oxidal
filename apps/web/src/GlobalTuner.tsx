@@ -1,3 +1,4 @@
+import { friendlyError, errorDetails } from './lib/friendlyError';
 import {
   useEffect,
   useEffectEvent,
@@ -109,7 +110,7 @@ export function GlobalTuner({
         setError('');
       } catch (cause) {
         if (active) {
-          setError(String(cause));
+          setError(friendlyError(cause, 'use the tuner'));
           setReady(false);
           setTools(null);
         }
@@ -166,7 +167,7 @@ export function GlobalTuner({
       started.current = true;
       setError('');
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'use the tuner'));
     } finally {
       setBusy(false);
     }
@@ -207,7 +208,7 @@ export function GlobalTuner({
       await monitor(enabled);
       setError('');
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'use the tuner'));
     } finally {
       setBusy(false);
     }
@@ -222,7 +223,7 @@ export function GlobalTuner({
       }
       onClose();
     } catch (cause) {
-      setError(`${String(cause)} Close again to leave this view.`);
+      setError(`${errorDetails(cause)} Close again to leave this view.`);
       started.current = false;
     } finally {
       setBusy(false);

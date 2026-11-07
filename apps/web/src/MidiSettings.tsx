@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { MidiControls } from './SceneMidi';
 import { MidiMapScreen } from './MidiMapScreen';
@@ -39,7 +40,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
           setError('');
         }
       } catch (cause) {
-        if (active) setError(String(cause));
+        if (active) setError(friendlyError(cause, 'read MIDI settings'));
       } finally {
         if (active) timer = setTimeout(() => void refresh(), nextDelay);
       }
@@ -92,7 +93,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         setMixed(await rigAudioCommand(mixed, { kind: 'midi', settings }));
       }
     } catch (cause) {
-      setApplyError(String(cause));
+      setApplyError(friendlyError(cause, 'change MIDI settings'));
       throw cause;
     } finally {
       sending.current = false;
@@ -159,7 +160,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
                   await playbackCommand(native, { kind: 'midi', settings }),
                 );
               } catch (cause) {
-                setApplyError(String(cause));
+                setApplyError(friendlyError(cause, 'change MIDI settings'));
               } finally {
                 sending.current = false;
                 setBusy(false);
@@ -188,7 +189,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
                   await rigAudioCommand(mixed, { kind: 'midi', settings }),
                 );
               } catch (cause) {
-                setApplyError(String(cause));
+                setApplyError(friendlyError(cause, 'change MIDI settings'));
               } finally {
                 sending.current = false;
                 setBusy(false);

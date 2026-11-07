@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { NativeTools } from './NativeTools';
 import { ToolRow, ToolSection } from './ToolRow';
@@ -225,7 +226,10 @@ export function NativeAuthoring({
                   tone,
                 });
               } catch (error) {
-                if (!abort.signal.aborted) setMetadataError(String(error));
+                if (!abort.signal.aborted)
+                  setMetadataError(
+                    friendlyError(error, 'read the block details'),
+                  );
               } finally {
                 setRefreshing(false);
               }

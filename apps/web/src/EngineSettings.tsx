@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
   nativeDefaults,
@@ -140,7 +141,7 @@ export function EngineSettings({ connected }: { connected: boolean }) {
               );
               setEditing(null);
             } catch (cause) {
-              setError(String(cause));
+              setError(friendlyError(cause, 'change TONE3000 engine settings'));
               try {
                 setState(await playbackState());
               } catch {

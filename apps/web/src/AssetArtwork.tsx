@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { GearIcon, GearLabel } from './GearIcon';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -64,8 +65,7 @@ function ArtworkContent({
       for (const item of pending)
         await saveArtwork(id, owned, item.key!, signal, model);
     } catch (cause) {
-      if (!signal.aborted)
-        setError(cause instanceof Error ? cause.message : String(cause));
+      if (!signal.aborted) setError(friendlyError(cause, 'load the artwork'));
     } finally {
       if (!signal.aborted) {
         try {

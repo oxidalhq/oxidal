@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import {
   calibration,
@@ -41,7 +42,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
         // Poll while a run is going; one read otherwise.
         if (next?.progress.running) timer = setTimeout(() => void read(), 500);
       } catch (cause) {
-        if (alive.current) setError(String(cause));
+        if (alive.current) setError(friendlyError(cause, 'measure the levels'));
       }
     };
     void read();
@@ -57,7 +58,7 @@ export function EvenOut({ connected }: { connected: boolean }) {
       const next = await calibration(action);
       if (next && alive.current) setState(next);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'even out the levels'));
     }
   }
   const { progress, entries, target_lufs } = state;

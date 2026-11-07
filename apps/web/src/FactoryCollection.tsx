@@ -327,7 +327,7 @@ function CollectionDialog({
         }
       })
       .catch((e) => {
-        if (alive) setError(String(e));
+        if (alive) setError(friendlyError(e, 'read the collection'));
       });
     return () => {
       alive = false;
@@ -431,7 +431,7 @@ function CollectionDialog({
                   onOpenRig?.();
                   onClose();
                 } catch (cause) {
-                  setError(String(cause));
+                  setError(friendlyError(cause, 'build this preset'));
                   setBusy(false);
                 }
               }}

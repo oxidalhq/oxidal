@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
@@ -112,7 +113,8 @@ export function RigComposer({
           if (!controller.signal.aborted) setCatalog(plugins);
         }
       } catch (cause) {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'read installed effects'));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -261,7 +263,7 @@ export function RigComposer({
         next = await rigAudioState();
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'build the chain'));
     } finally {
       preparation.current = null;
       if (alive.current) {
@@ -285,7 +287,7 @@ export function RigComposer({
       await rigAudioCommand(state, { kind: 'stop' });
     } catch (cause) {
       expected.cancelRequested = false;
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'build the chain'));
     } finally {
       if (alive.current) setCancelling(false);
     }
@@ -701,7 +703,7 @@ export function RigComposer({
                               setSelected(item.id);
                               setPicker(null);
                             } catch (cause) {
-                              setError(String(cause));
+                              setError(friendlyError(cause, 'build the chain'));
                             }
                           }}
                         >

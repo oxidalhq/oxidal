@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { HostAudioControls } from './HostAudioControls';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { BootPlayback } from './BootPlayback';
@@ -110,7 +111,8 @@ export function PlaybackSettings({
           setReadError('');
         }
       } catch (cause) {
-        if (active) setReadError(String(cause));
+        if (active)
+          setReadError(friendlyError(cause, 'read playback settings'));
       } finally {
         if (active) timer = setTimeout(() => void refresh(), 1500);
       }
@@ -136,7 +138,7 @@ export function PlaybackSettings({
         })),
       ]);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change playback'));
     } finally {
       setBusy(false);
     }
@@ -153,7 +155,7 @@ export function PlaybackSettings({
     try {
       accept(await playbackCommand(state, action));
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change playback'));
     } finally {
       try {
         accept(await playbackState());
@@ -235,7 +237,7 @@ export function PlaybackSettings({
               }),
             );
         } catch (cause) {
-          setError(String(cause));
+          setError(friendlyError(cause, 'change playback'));
         } finally {
           setBusy(false);
         }
@@ -346,7 +348,7 @@ export function PlaybackSettings({
                 );
                 setGraphMessage('Audio setup ready for New preset.');
               } catch (cause) {
-                setError(String(cause));
+                setError(friendlyError(cause, 'change playback'));
               } finally {
                 setBusy(false);
               }

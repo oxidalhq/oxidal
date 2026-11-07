@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { DownloadSimple, WarningCircle } from '@phosphor-icons/react';
 import { downloadVoice, tone3000Tone, toneImage, type TonePage } from './api';
@@ -36,7 +37,8 @@ export function VoiceSlot({
     tone3000Tone(capture.tone, controller.signal)
       .then(setTone)
       .catch((cause) => {
-        if (!controller.signal.aborted) setError(String(cause));
+        if (!controller.signal.aborted)
+          setError(friendlyError(cause, 'load this sound'));
       });
     return () => controller.abort();
   }, [capture.tone]);
@@ -52,7 +54,7 @@ export function VoiceSlot({
       );
       onReady(ready.capture.source);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'load this sound'));
     } finally {
       setBusy(false);
     }

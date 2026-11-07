@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { ArtworkDeck } from './AssetArtwork';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -94,7 +95,7 @@ export function NativeEditor({
         }
       })
       .catch((e: unknown) => {
-        if (active) setError(String(e));
+        if (active) setError(friendlyError(e, 'change the TONE3000 preset'));
       });
     return () => {
       active = false;
@@ -135,7 +136,7 @@ export function NativeEditor({
   }
   function fail(cause: unknown) {
     if (!alive.current) return;
-    setError(String(cause));
+    setError(friendlyError(cause, 'change the TONE3000 preset'));
     void nativeState()
       .then(publish)
       .catch(() => {

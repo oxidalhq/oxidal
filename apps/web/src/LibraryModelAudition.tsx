@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import {
   playbackState,
@@ -88,7 +89,8 @@ export function LibraryModelAudition({
         setChoice('');
       })
       .catch((cause: unknown) => {
-        if (alive.current) setError(String(cause));
+        if (alive.current)
+          setError(friendlyError(cause, 'prepare the audition'));
       })
       .finally(() => {
         if (alive.current) setLoading(false);
@@ -116,7 +118,7 @@ export function LibraryModelAudition({
         );
         if (current.phase !== 'running')
           throw new Error(
-            'The playing rig changed. Close and reopen this preview.',
+            'The playing preset changed. Close and reopen this preview.',
           );
         const next = await playbackCommand(current, {
           kind: 'replace_model',
@@ -137,7 +139,7 @@ export function LibraryModelAudition({
           current.control.session !== owner.state.control?.session
         )
           throw new Error(
-            'The playing rig changed. Close and reopen this preview.',
+            'The playing preset changed. Close and reopen this preview.',
           );
         const next = await rigAudioCommand(current, {
           kind: 'model',
@@ -154,7 +156,7 @@ export function LibraryModelAudition({
         request = next.control?.model_change?.progress.request;
       }
       if (request == null)
-        throw new Error('The rig did not accept this audition.');
+        throw new Error('The playing preset did not accept this audition.');
       for (let i = 0; i < 150 && alive.current; i++) {
         const current =
           owner.kind === 'native'
@@ -171,7 +173,7 @@ export function LibraryModelAudition({
           progress?.request !== request
         )
           throw new Error(
-            'The playing rig changed. Open Rig to check its current sound.',
+            'The playing preset changed. Open Rig to check its current sound.',
           );
         if (progress.phase === 'applied') {
           if (alive.current) {
@@ -190,7 +192,7 @@ export function LibraryModelAudition({
         setMessage('Preparation is still running. Open Rig to check progress.');
     } catch (cause) {
       if (alive.current) {
-        setError(String(cause));
+        setError(friendlyError(cause, 'audition this sound'));
         setMessage('');
       }
     } finally {
@@ -201,12 +203,12 @@ export function LibraryModelAudition({
     <section className="library-audition" aria-label="Audio audition">
       <h3>Audio audition</h3>
       {loading ? (
-        <p className="caption">Reading the playing rig…</p>
+        <p className="caption">Reading the playing preset…</p>
       ) : options.length ? (
         <>
           <p className="caption">
-            Choose a block in the playing rig. Audition changes that block; Undo
-            in Rig restores it.
+            Choose a block in the playing preset. Audition changes that block;
+            Undo in Rig restores it.
           </p>
           <label className="field">
             Replace block

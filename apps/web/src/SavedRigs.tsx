@@ -117,7 +117,7 @@ export function SavedRigs({
         }
       })
       .catch((cause: unknown) => {
-        if (alive.current) setError(String(cause));
+        if (alive.current) setError(friendlyError(cause, 'play this preset'));
       });
     void readKeepReady()
       .then((saved) => alive.current && setPreparedState(saved))
@@ -147,7 +147,7 @@ export function SavedRigs({
         onOpenRig();
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'load more presets'));
     } finally {
       if (alive.current) {
         setBusy(false);
@@ -171,7 +171,7 @@ export function SavedRigs({
         setNext(page.next ?? null);
       }
     } catch (cause) {
-      if (alive.current) setError(String(cause));
+      if (alive.current) setError(friendlyError(cause, 'play this preset'));
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -244,9 +244,9 @@ export function SavedRigs({
       )}
       {choosing && (
         <p className="caption">
-          Choose up to {GAPLESS_BANK_SIZE} additional rigs to keep ready. They
-          stay loaded, so switching between them has no gap. Without custom
-          choices, each adjacent group of {GAPLESS_BANK_SIZE} loads together.
+          Choose up to {GAPLESS_BANK_SIZE} more presets to keep ready. They stay
+          loaded, so switching between them has no gap. Without custom choices,
+          each adjacent group of {GAPLESS_BANK_SIZE} loads together.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -323,7 +323,7 @@ export function SavedRigs({
         <p role="status" className="caption">
           {next
             ? 'No matches yet. Load more to search further.'
-            : 'No saved rigs match these filters.'}
+            : 'No saved presets match these filters.'}
         </p>
       )}
       {next && (

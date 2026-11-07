@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { guitarProfiles, type GuitarProfiles } from './api';
 
@@ -13,7 +14,8 @@ export function useGuitars() {
     guitarProfiles(undefined, abort.signal)
       .then((current) => setProfiles(current ?? 'unsupported'))
       .catch((cause) => {
-        if (!abort.signal.aborted) setError(String(cause));
+        if (!abort.signal.aborted)
+          setError(friendlyError(cause, 'read your guitars'));
       });
     return () => abort.abort();
   }, []);
@@ -24,7 +26,7 @@ export function useGuitars() {
       const saved = await guitarProfiles(next);
       if (saved) setProfiles(saved);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'read your guitars'));
     } finally {
       setBusy(false);
     }

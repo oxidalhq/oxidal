@@ -117,7 +117,7 @@ it('reports individual failures and keeps successfully imported files', async ()
   );
   expect(uploadLocalModel).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByText('Import failures'));
-  expect(screen.getByText(/Huge.nam: Error: Each file/)).toBeVisible();
+  expect(screen.getByText(/Huge.nam: Each file/)).toBeVisible();
 });
 it('cancels the in-flight upload and does not start remaining files', async () => {
   vi.mocked(uploadLocalModel).mockImplementation(

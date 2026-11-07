@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
@@ -38,7 +39,7 @@ export function EffectsPlaybackSettings({
     try {
       onState(await graphAudioCommand(state, action));
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change effects playback'));
       try {
         onState(await graphAudioState());
       } catch {

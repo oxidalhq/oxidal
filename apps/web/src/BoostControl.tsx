@@ -1,3 +1,4 @@
+import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -48,7 +49,7 @@ export function BoostControl({
       const next = await boostApi({ key, boost_db: clamp(boost_db) });
       if (next) setState(next);
     } catch (cause) {
-      setError(String(cause));
+      setError(friendlyError(cause, 'change the boost'));
     } finally {
       setBusy(false);
     }
