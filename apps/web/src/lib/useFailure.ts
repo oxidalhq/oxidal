@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
-import { errorRecovery, friendlyError, type Recovery } from './friendlyError';
+import {
+  errorDetails,
+  errorRecovery,
+  friendlyError,
+  type Recovery,
+} from './friendlyError';
 
 /**
  * One failed operation: the plain message, the single recovery its error code
@@ -8,6 +13,8 @@ import { errorRecovery, friendlyError, type Recovery } from './friendlyError';
  */
 export type Failure = {
   message: string;
+  /** The device's own text, for a Details disclosure. */
+  details: string;
   recovery: Recovery;
   retry?: () => void;
 };
@@ -19,6 +26,7 @@ export function useFailure() {
     (cause: unknown, action: string, retry?: () => void) =>
       setFailure({
         message: friendlyError(cause, action),
+        details: errorDetails(cause),
         recovery: errorRecovery(cause),
         retry,
       }),

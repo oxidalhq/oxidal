@@ -525,9 +525,27 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
     await screen.findByText('1 scene updated · not saved yet.'),
   ).toBeVisible();
   expect(screen.getByText('Updated · not saved')).toBeVisible();
+  // A reload of this tab keeps the unsaved update for the same audio session.
+  expect(
+    JSON.parse(sessionStorage.getItem('oxidal.mixed.scene-draft')!).gains,
+  ).toHaveProperty('scene-2');
+  cleanup();
+  render(
+    <MixedRig
+      connected
+      onPlaying={() => {}}
+      onPresent={() => {}}
+      otherPlaying={false}
+    />,
+  );
+  expect(
+    await screen.findByText('1 scene updated · not saved yet.'),
+  ).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Save copy' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Save preset' })).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save preset' })).toBeEnabled(),
+  );
   fireEvent.click(
     screen.getByRole('button', { name: 'Discard scene updates' }),
   );

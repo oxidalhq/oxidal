@@ -49,6 +49,12 @@ export function FailureNotice({
   return (
     <div className="failure-notice" role="alert">
       <p>{failure.message}</p>
+      {!failure.message.includes(failure.details) && (
+        <details className="failure-details">
+          <summary>Details</summary>
+          <code>{failure.details}</code>
+        </details>
+      )}
       <RecoveryAction failure={failure} onRefresh={onRefresh} busy={busy} />
     </div>
   );

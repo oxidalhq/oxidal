@@ -62,3 +62,22 @@ it('offers exactly the recovery the error code allows', () => {
   );
   expect(screen.queryByRole('alert')).toBeNull();
 });
+
+it('keeps the device text in Details when the message rewords it', () => {
+  const { result } = renderHook(() => useFailure());
+  act(() =>
+    result.current.fail(
+      new DeviceError(
+        'Preset library operation already in progress',
+        'busy',
+        409,
+      ),
+      'save',
+    ),
+  );
+  render(<FailureNotice failure={result.current.failure} />);
+  fireEvent.click(screen.getByText('Details'));
+  expect(
+    screen.getByText('Preset library operation already in progress'),
+  ).toBeVisible();
+});

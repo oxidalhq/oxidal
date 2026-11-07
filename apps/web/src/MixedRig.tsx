@@ -190,13 +190,11 @@ export function MixedRig({
   const [sceneDraft, setSceneDraft] = useState<{
     session: string;
     scene: string;
-  } | null>(null);
+  } | null>(readSceneEdit);
   /** Update scene writes here; Save persists it (7.7). Bound to one session. */
-  const [sceneUpdates, setSceneUpdates] = useState<{
-    session: string;
-    gains: Record<string, { node: string; port: number; value: number }[]>;
-    added?: NewScene[];
-  } | null>(null);
+  const [sceneUpdates, setSceneUpdates] = useState<SceneDraft | null>(
+    readSceneDraft,
+  );
   const [namingScene, setNamingScene] = useState<string | null>(null);
   /** Save while the heard mix differs from its scene asks what to keep (V37). */
   const [saveReview, setSaveReview] = useState(false);
@@ -312,6 +310,26 @@ export function MixedRig({
     const value = matching?.manifest.extensions['urn:oxidal:authoring']?.origin;
     return value === 'tone3000' || value === 'oxidal_example' ? value : 'mine';
   })();
+  // Unsaved scene updates survive a reload of this tab; they stay bound to
+  // the audio session, so a restarted or different preset ignores them.
+  useEffect(() => {
+    try {
+      if (sceneUpdates)
+        sessionStorage.setItem(SCENE_DRAFT_KEY, JSON.stringify(sceneUpdates));
+      else sessionStorage.removeItem(SCENE_DRAFT_KEY);
+    } catch {
+      /* storage unavailable: the draft lives only in this page */
+    }
+  }, [sceneUpdates]);
+  useEffect(() => {
+    try {
+      if (sceneDraft)
+        sessionStorage.setItem(SCENE_EDIT_KEY, JSON.stringify(sceneDraft));
+      else sessionStorage.removeItem(SCENE_EDIT_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [sceneDraft]);
   useEffect(() => {
     if (copyOnEdit)
       sessionStorage.setItem(
@@ -2988,4 +3006,66 @@ function PathLevel({
       />
     </label>
   );
+}
+
+type SceneGain = { node: string; port: number; value: number };
+type SceneDraft = {
+  session: string;
+  gains: Record<string, SceneGain[]>;
+  added?: NewScene[];
+};
+const SCENE_DRAFT_KEY = 'oxidal.mixed.scene-draft';
+const isGains = (value: unknown): value is SceneGain[] =>
+  Array.isArray(value) &&
+  value.every(
+    (g) =>
+      typeof g === 'object' &&
+      g !== null &&
+      typeof (g as SceneGain).node === 'string' &&
+      typeof (g as SceneGain).port === 'number' &&
+      typeof (g as SceneGain).value === 'number',
+  );
+/** The scene draft this tab kept, if it is well formed. */
+function readSceneDraft(): SceneDraft | null {
+  try {
+    const value: unknown = JSON.parse(
+      sessionStorage.getItem(SCENE_DRAFT_KEY) ?? 'null',
+    );
+    if (typeof value !== 'object' || value === null) return null;
+    const draft = value as SceneDraft;
+    if (
+      typeof draft.session !== 'string' ||
+      typeof draft.gains !== 'object' ||
+      draft.gains === null ||
+      !Object.values(draft.gains).every(isGains) ||
+      !(draft.added ?? []).every(
+        (scene) =>
+          typeof scene?.id === 'string' &&
+          typeof scene.name === 'string' &&
+          isGains(scene.gains),
+      )
+    )
+      return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+const SCENE_EDIT_KEY = 'oxidal.mixed.scene-edit';
+/** The scene this tab was editing, so its panel returns after a reload. */
+function readSceneEdit(): { session: string; scene: string } | null {
+  try {
+    const value: unknown = JSON.parse(
+      sessionStorage.getItem(SCENE_EDIT_KEY) ?? 'null',
+    );
+    const edit = value as { session?: unknown; scene?: unknown } | null;
+    return edit &&
+      typeof edit.session === 'string' &&
+      typeof edit.scene === 'string'
+      ? { session: edit.session, scene: edit.scene }
+      : null;
+  } catch {
+    return null;
+  }
 }
