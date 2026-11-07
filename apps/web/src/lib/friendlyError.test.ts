@@ -113,3 +113,65 @@ describe('device error codes', () => {
     );
   });
 });
+
+describe('every failure kind maps to one plain sentence and a fitting recovery (7.24)', () => {
+  const coded = (
+    code: ConstructorParameters<typeof DeviceError>[1],
+    text = 'x',
+  ) => new DeviceError(text, code, 500);
+  it('storage: full, locked and read-only devices', () => {
+    expect(friendlyError(coded('storage'), 'save')).toBe(
+      'Could not save. Device storage is full or locked. Free space or unlock storage, then try again.',
+    );
+    expect(friendlyError(new Error('No space left on device'), 'save')).toMatch(
+      /out of storage space/,
+    );
+    expect(friendlyError(new Error('Read-only file system'), 'save')).toMatch(
+      /storage is locked/,
+    );
+    expect(errorRecovery(coded('storage'))).toBeNull();
+  });
+  it('capacity and engine: busy, timeout and a missing interface', () => {
+    expect(errorRecovery(coded('busy'))).toBe('retry');
+    expect(friendlyError(coded('timeout'), 'start audio')).toMatch(
+      /took too long/,
+    );
+    expect(errorRecovery(coded('timeout'))).toBe('retry');
+    expect(
+      friendlyError(
+        new Error(
+          'Audio endpoint missing or direction unavailable; refresh devices',
+        ),
+        'start audio',
+      ),
+    ).toMatch(/audio interface is not available/);
+  });
+  it('provider and network: unavailable services retry, sign-in passes through', () => {
+    expect(errorRecovery(coded('unavailable'))).toBe('retry');
+    expect(
+      friendlyError(
+        new Error('Cannot reach TONE3000; local presets remain available'),
+        'read the sounds',
+      ),
+    ).toBe(
+      'Could not read the sounds. Cannot reach TONE3000; local presets remain available.',
+    );
+    expect(
+      friendlyError(
+        coded(
+          'unavailable',
+          'TONE3000 authorization expired; reconnect your account',
+        ),
+        'read the sounds',
+      ),
+    ).toMatch(/authorization expired; reconnect your account\.$/);
+    expect(errorRecovery(new TypeError('Failed to fetch'))).toBeNull();
+  });
+  it('conflict and internal: refresh, and nothing pretends to be fixable', () => {
+    expect(errorRecovery(coded('conflict'))).toBe('refresh');
+    expect(errorRecovery(coded('internal'))).toBeNull();
+    expect(friendlyError(coded('internal', 'worker panicked'), 'save')).toBe(
+      'Could not save. Worker panicked.',
+    );
+  });
+});
