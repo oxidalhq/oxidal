@@ -198,3 +198,54 @@ export function updateScene(
 ): RigPublish {
   return updateScenes(document, { [sceneId]: gains }, sceneId, live, name);
 }
+
+/**
+ * A routing change rebuilt from the route keeps the preset's scenes (7.26).
+ * Levels for merges that no longer exist are dropped, and every merge input
+ * that no scene names yet (a new split or path) is added to each scene at the
+ * level the rebuilt graph gives it, so a scene change sets the whole mix.
+ * Presets whose scenes are separate TONE3000 branches are not rebuilt this way.
+ * @see docs/interface.md
+ */
+export function keepScenes(
+  document: RigDocument,
+  request: RigPublish,
+): RigPublish {
+  const before = document.manifest.extensions['urn:oxidal:scenes:1'] as
+    { branches?: unknown[]; scenes?: { gains: Gain[] }[] } | undefined;
+  if (!before) return request;
+  if (before.branches?.length)
+    throw new Error('Change the routing of scene branches in the scene lanes.');
+  const manifest = JSON.parse(request.manifest_json) as Manifest;
+  const nodes = manifest.oxidal?.graph.nodes ?? [];
+  const inputs = nodes.flatMap((node) =>
+    node.kind === 'merge' && node.inputGains
+      ? node.inputGains.map((value, port) => ({ node: node.id, port, value }))
+      : [],
+  );
+  const valid = new Set(
+    nodes.flatMap((node) =>
+      (node.kind === 'merge' || node.kind === 'gain') && node.inputGains
+        ? node.inputGains.map((_, port) => `${node.id}:${port}`)
+        : [],
+    ),
+  );
+  const scenes = JSON.parse(JSON.stringify(before)) as typeof before;
+  for (const scene of scenes.scenes ?? []) {
+    const kept = scene.gains.filter((g) => valid.has(`${g.node}:${g.port}`));
+    const named = new Set(kept.map((g) => `${g.node}:${g.port}`));
+    scene.gains = [
+      ...kept,
+      ...inputs.filter((g) => !named.has(`${g.node}:${g.port}`)),
+    ];
+  }
+  // Scenes switch levels; with no split left there is nothing to switch.
+  if (scenes.scenes?.some((scene) => !scene.gains.length))
+    throw new Error(
+      'A preset with scenes needs a split. Keep at least one parallel path.',
+    );
+  manifest.extensions['urn:oxidal:scenes:1'] = scenes;
+  if (!manifest.requiredExtensions.includes('urn:oxidal:scenes:1'))
+    manifest.requiredExtensions.push('urn:oxidal:scenes:1');
+  return { ...request, manifest_json: JSON.stringify(manifest) };
+}

@@ -21,6 +21,7 @@ import {
   routeRemoveBranch,
   type Route,
 } from './rigRoute';
+import { keepScenes } from './sceneEdit';
 
 const port = (
   index: number,
@@ -321,4 +322,57 @@ it('sets one path level and keeps it through build and reopen', () => {
       graph(built).nodes.find((n) => n.id === `merge-s-${side}`)!.inputGains,
     ).toEqual([1, 1, 0.4]);
   expect(reopen(next)[0]).toMatchObject({ gains: [1, 1, 0.4] });
+});
+
+it('keeps scene levels through a routing change and maps new paths (C9)', () => {
+  const route: Route = [split('s', [[fx('a')], [fx('b')]])];
+  const document = doc(buildRoute('p', 'x', route, 'prof'));
+  const merges = document.manifest.oxidal!.graph.nodes.filter(
+    (n) => n.kind === 'merge',
+  );
+  const all = (value: (port: number) => number) =>
+    merges.flatMap((n) =>
+      n.inputGains!.map((_, port) => ({
+        node: n.id,
+        port,
+        value: value(port),
+      })),
+    );
+  document.manifest.requiredExtensions.push('urn:oxidal:scenes:1');
+  document.manifest.extensions['urn:oxidal:scenes:1'] = {
+    fade_ms: 10,
+    scenes: [
+      { id: 'one', name: 'A only', gains: all((p) => (p === 0 ? 1 : 0)) },
+      { id: 'two', name: 'B only', gains: all((p) => (p === 1 ? 1 : 0)) },
+    ],
+  };
+  const next = keepScenes(
+    document,
+    buildRoute('p', 'x', routeAddBranch(route, 'a'), 'prof'),
+  );
+  const manifest = JSON.parse(next.manifest_json);
+  const scenes = manifest.extensions['urn:oxidal:scenes:1'].scenes;
+  expect(manifest.requiredExtensions).toContain('urn:oxidal:scenes:1');
+  for (const scene of scenes) {
+    // Every scene names all three inputs of each merge, as the device requires.
+    for (const merge of merges)
+      expect(
+        scene.gains.filter((g: { node: string }) => g.node === merge.id),
+      ).toHaveLength(3);
+  }
+  // Old levels stay; the new path comes in at its routing level.
+  const level = (scene: number, port: number) =>
+    scenes[scene].gains.find(
+      (g: { node: string; port: number }) =>
+        g.node === merges[0]!.id && g.port === port,
+    ).value;
+  expect([level(0, 0), level(0, 1), level(0, 2)]).toEqual([1, 0, 1]);
+  expect([level(1, 0), level(1, 1)]).toEqual([0, 1]);
+  // With no split left there is nothing for the scenes to switch.
+  expect(() =>
+    keepScenes(
+      document,
+      buildRoute('p', 'x', routeRemoveBranch(route, 'a'), 'prof'),
+    ),
+  ).toThrow(/needs a split/);
 });

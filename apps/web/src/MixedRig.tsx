@@ -101,6 +101,7 @@ import type { RigPublish } from './generated/contract';
 import {
   addSceneEffect,
   branchEffects,
+  keepScenes,
   removeSceneEffect,
   updateScenes,
   type NewScene,
@@ -769,11 +770,14 @@ export function MixedRig({
   /** Rebuilds this preset with a change to its chain of blocks. */
   function editChain(change: (route: Route) => Route) {
     return rebuild(({ opened, plugins, live, name, profile }) =>
-      buildRoute(
-        opened.manifest.id,
-        name,
-        change(readRoute(opened, plugins, live)),
-        profile,
+      keepScenes(
+        opened,
+        buildRoute(
+          opened.manifest.id,
+          name,
+          change(readRoute(opened, plugins, live)),
+          profile,
+        ),
       ),
     );
   }

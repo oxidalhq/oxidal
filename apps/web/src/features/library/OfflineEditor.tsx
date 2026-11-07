@@ -39,6 +39,7 @@ import {
   type Route,
   type RouteSplit,
 } from '../../rigRoute';
+import { keepScenes } from '../../sceneEdit';
 import { presetNameError } from './newPreset';
 
 /** The scan rate for plugin metadata; nothing is processed here. */
@@ -59,8 +60,8 @@ type Opened = {
  * their settings change in a draft held here, and only Save publishes a new
  * revision. Nothing starts, stops or switches audio. A preset of your own keeps
  * its identity (the saved revision replaces it in the Set list); any other
- * preset is saved as a copy in Mine. Scene presets are edited in Rig, where
- * their scene snapshots stay consistent with the routing.
+ * preset is saved as a copy in Mine. Scene levels follow routing changes;
+ * presets whose scenes are separate TONE3000 chains are edited in Rig.
  * @see docs/presets/format.md
  */
 export function OfflineEditor({
@@ -104,9 +105,11 @@ export function OfflineEditor({
         (i) => i.kind === 'rig' && i.id === revision,
       );
       setName(listed?.name ?? document.manifest.name);
-      if (document.manifest.extensions['urn:oxidal:scenes:1']) {
+      const scenes = document.manifest.extensions['urn:oxidal:scenes:1'] as
+        { branches?: unknown[] } | undefined;
+      if (scenes?.branches?.length) {
         setBlocked(
-          'This preset has scenes. Edit it in Rig, where each scene’s mix stays matched to its routing.',
+          'Each scene of this preset is its own TONE3000 chain. Edit it in Rig, where the scene lanes keep each chain matched to its scene.',
         );
         return;
       }
@@ -152,7 +155,11 @@ export function OfflineEditor({
       const id = opened.mine
         ? opened.document.manifest.id
         : crypto.randomUUID();
-      const request = buildRoute(id, name, route, opened.profile);
+      // Scene levels follow the new routing (C9).
+      const request = keepScenes(
+        opened.document,
+        buildRoute(id, name, route, opened.profile),
+      );
       request.source = { kind: 'rig', id: opened.document.revision };
       onSaved(await publishRig(request));
     } catch (cause) {

@@ -71,7 +71,11 @@ function open(origin: 'mine' | 'oxidal_example' = 'mine', scenes = false) {
     buildRoute('preset-id', 'Two verbs', [fx('first'), fx('second')], 'prof')
       .manifest_json,
   );
-  if (scenes) manifest.extensions['urn:oxidal:scenes:1'] = { scenes: [] };
+  if (scenes)
+    manifest.extensions['urn:oxidal:scenes:1'] = {
+      scenes: [],
+      branches: [{ id: 'first' }],
+    };
   vi.mocked(rigDocument).mockResolvedValue({ revision: 'rev', manifest });
   vi.mocked(installedLv2).mockResolvedValue([verb]);
   vi.mocked(rigLibrary).mockResolvedValue({
@@ -136,7 +140,7 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
   expect(merge.inputGains).toEqual([1, 0.5]);
 });
 
-it('saves a preset that is not yours as a copy, and refuses scene presets', async () => {
+it('saves a preset that is not yours as a copy, and refuses scene-branch presets', async () => {
   open('oxidal_example');
   expect(await screen.findByText(/as your own copy in Mine/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Move first later' }));
