@@ -7,9 +7,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 
 fn bundle(left: [f64; 2], right: [f64; 2]) -> Bundle {
-    let edge = |a: &str, ap: u8, b: &str, bp: u8| {
-        json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}})
-    };
+    let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
     let value = json!({"format":"oxidal.preset","formatVersion":1,
         "id":"0b8e6a43-5f4e-4b9e-9a61-2a7b7f0c9d11","name":"Polarity",
         "tone3000":{"instances":[]},"resources":[],"extensions":{},"requiredExtensions":[],
@@ -31,8 +29,7 @@ fn bundle(left: [f64; 2], right: [f64; 2]) -> Bundle {
 
 fn render(left: [f64; 2], right: [f64; 2]) -> (f32, f32) {
     let mut graph =
-        PreparedPorts::new(&bundle(left, right), BTreeMap::new(), 48000.0, 64, 1 << 20)
-            .unwrap();
+        PreparedPorts::new(&bundle(left, right), BTreeMap::new(), 48000.0, 64, 1 << 20).unwrap();
     let input = [0.5f32; 64];
     let (mut l, mut r) = ([0.0f32; 64], [0.0f32; 64]);
     graph

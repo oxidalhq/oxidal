@@ -75,7 +75,11 @@ mod tests {
     fn starts_only_when_the_interface_is_present_and_at_intervals() {
         let mut wait = Wait::new(7, &stream(), true);
         let start = Instant::now();
-        assert_eq!(wait.due(start, |_| true), None, "not due before the interval");
+        assert_eq!(
+            wait.due(start, |_| true),
+            None,
+            "not due before the interval"
+        );
         let later = start + INTERVAL * 2;
         assert_eq!(wait.due(later, |_| false), None);
         assert!(wait.missing);

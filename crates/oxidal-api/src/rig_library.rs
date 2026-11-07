@@ -383,7 +383,9 @@ pub async fn import_resource(
             .find(|r| r.id == resource)
             .ok_or(Error::Invalid("Unknown preset resource"))?;
         if declared.kind != oxidal_presets::manifest::ResourceKind::Tone3000Preset {
-            return Err(Error::Invalid("Only TONE3000 preset resources can be edited"));
+            return Err(Error::Invalid(
+                "Only TONE3000 preset resources can be edited",
+            ));
         }
         let bytes = bundle
             .resource(&resource)

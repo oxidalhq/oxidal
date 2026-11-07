@@ -3040,8 +3040,7 @@ async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_othe
 }
 
 #[tokio::test]
-async fn permanent_removal_waits_for_startup_then_clears_resume_without_recreating_recovery()
-{
+async fn permanent_removal_waits_for_startup_then_clears_resume_without_recreating_recovery() {
     let root = std::env::temp_dir().join(format!(
         "oxidal-delete-resume-{}-{}",
         std::process::id(),

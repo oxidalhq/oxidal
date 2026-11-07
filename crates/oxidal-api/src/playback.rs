@@ -2132,7 +2132,12 @@ impl Playback {
                     models,
                     eq,
                 })) if owner.executable.is_some() => {
-                    let start = (settings.clone(), controls.clone(), models.clone(), eq.clone());
+                    let start = (
+                        settings.clone(),
+                        controls.clone(),
+                        models.clone(),
+                        eq.clone(),
+                    );
                     if let Err(error) = owner.start(settings, controls, models, eq).await {
                         if crate::device_wait::present(&start.0.stream.output.endpoint) {
                             owner.publish(AudioPhase::Failed, Some(error));
