@@ -36,6 +36,24 @@ state. Stopping live audio leaves the browser and editor available.
 See [audio setup](audio.md), [mixed rigs](mixed-engine.md) and
 [LV2 compatibility](lv2.md) for the limits of each path.
 
+### MIDI input events
+
+The shared byte decoder offers an unmapped `InputEvent` path for PC/CC, note
+press/release and defined real-time bytes. Zero-velocity Note On is exposed as
+Note Off. Running status and incomplete messages survive interleaved real-time
+bytes; system-common and SysEx cancel running status. The event types are separate
+from the serialized PC/CC `Message` contract. The existing worker mappings and
+hardware reader's `read` method still dispatch only PC/CC.
+
+The optional Linux `Input::read_events` method exposes the same decoder through
+one nonblocking read of at most 64 bytes. Consumers own timestamps, passive
+learning, capability checks, disconnect cleanup and bounded action scheduling.
+This decoder foundation does not enable note mappings, hold actions, MIDI clock
+following or controller feedback in the current workers.
+
+Source: [MIDI decoder and input](../crates/oxidal-audio/src/midi.rs), with wire
+message identifiers from the [MIDI Association](https://midi.org/summary-of-midi-1-0-messages).
+
 ## Native original library
 
 Imported `.t3kpreset` files are structurally checked and stored by SHA-256.

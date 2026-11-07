@@ -363,6 +363,31 @@ pub struct Status {
     pub last: Option<Message>,
     pub error: Option<String>,
 }
+/// Unmapped wire events for passive learning and future transport consumers.
+/// These are not serialized commands: observing a note or clock never dispatches
+/// an action through the existing PC/CC control path.
+/// @see docs/architecture.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputEvent {
+    Message(Message),
+    NoteOn { channel: u8, note: u8, velocity: u8 },
+    NoteOff { channel: u8, note: u8, velocity: u8 },
+    Realtime(Realtime),
+}
+
+/// Defined MIDI real-time bytes. Undefined bytes are ignored without disturbing
+/// an incomplete channel message. Reset is surfaced for consumer-owned cleanup.
+/// @see docs/architecture.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Realtime {
+    Clock,
+    Start,
+    Continue,
+    Stop,
+    ActiveSensing,
+    Reset,
+}
+
 /// Keeps running status across read boundaries and real-time messages. SysEx and
 /// system-common cancel it; unsupported channel messages are consumed correctly.
 #[derive(Debug, Default)]
@@ -371,9 +396,30 @@ pub struct Decoder {
     first: Option<u8>,
 }
 impl Decoder {
+    /// Compatibility path for existing scene/branch/parameter mappings.
+    /// @see docs/architecture.md
     pub fn push(&mut self, byte: u8) -> Option<Message> {
+        match self.push_event(byte) {
+            Some(InputEvent::Message(message)) => Some(message),
+            _ => None,
+        }
+    }
+
+    /// Decode one byte without allocating, preserving notes and real-time events
+    /// separately from mapped PC/CC messages. Zero-velocity Note On is a release.
+    /// @see docs/architecture.md
+    pub fn push_event(&mut self, byte: u8) -> Option<InputEvent> {
         if byte >= 0xf8 {
-            return None;
+            let realtime = match byte {
+                0xf8 => Realtime::Clock,
+                0xfa => Realtime::Start,
+                0xfb => Realtime::Continue,
+                0xfc => Realtime::Stop,
+                0xfe => Realtime::ActiveSensing,
+                0xff => Realtime::Reset,
+                _ => return None,
+            };
+            return Some(InputEvent::Realtime(realtime));
         }
         if byte >= 0x80 {
             self.status = if byte < 0xf0 { byte } else { 0 };
@@ -382,24 +428,33 @@ impl Decoder {
         }
         let channel = (self.status & 15) + 1;
         match self.status & 0xf0 {
-            0xc0 => Some(Message::Program {
+            0xc0 => Some(InputEvent::Message(Message::Program {
                 channel,
                 program: byte,
-            }),
+            })),
             0xd0 | 0 => None,
             kind => {
                 let Some(first) = self.first.take() else {
                     self.first = Some(byte);
                     return None;
                 };
-                if kind == 0xb0 {
-                    Some(Message::Control {
+                match kind {
+                    0x90 if byte != 0 => Some(InputEvent::NoteOn {
+                        channel,
+                        note: first,
+                        velocity: byte,
+                    }),
+                    0x80 | 0x90 => Some(InputEvent::NoteOff {
+                        channel,
+                        note: first,
+                        velocity: byte,
+                    }),
+                    0xb0 => Some(InputEvent::Message(Message::Control {
                         channel,
                         controller: first,
                         value: byte,
-                    })
-                } else {
-                    None
+                    })),
+                    _ => None,
                 }
             }
         }
@@ -538,6 +593,18 @@ impl Input {
     /// One bounded, non-blocking read, called outside PCM. The caller owns error
     /// reporting and reconnection; losing MIDI must never stop the audio stream.
     pub fn read(&mut self, mut receive: impl FnMut(Message)) -> Result<usize, String> {
+        self.read_events(|event| {
+            if let InputEvent::Message(message) = event {
+                receive(message);
+            }
+        })
+    }
+
+    /// One bounded read for passive observation or explicit event consumers.
+    /// Callers supply timestamping, mapping and scheduling outside the decoder;
+    /// no event here directly changes audio or claims controller capabilities.
+    /// @see docs/architecture.md
+    pub fn read_events(&mut self, mut receive: impl FnMut(InputEvent)) -> Result<usize, String> {
         let mut bytes = [0; 64];
         let count = match self.port.read(&mut bytes) {
             Ok(count) => count,
@@ -545,8 +612,8 @@ impl Input {
             Err(error) => return Err(error.to_string()),
         };
         for byte in &bytes[..count] {
-            if let Some(message) = self.decoder.push(*byte) {
-                receive(message);
+            if let Some(event) = self.decoder.push_event(*byte) {
+                receive(event);
             }
         }
         Ok(count)
@@ -932,6 +999,166 @@ mod tests {
                     program: 0
                 }
             ]
+        );
+    }
+
+    #[test]
+    fn note_press_and_both_release_forms_keep_channel_and_running_status() {
+        for channel in 1..=16 {
+            let mut decoder = Decoder::default();
+            let events: Vec<_> = [
+                0x90 | (channel - 1),
+                60,
+                127,
+                60,
+                0,
+                0x80 | (channel - 1),
+                61,
+                23,
+                62,
+                0,
+            ]
+            .into_iter()
+            .filter_map(|byte| decoder.push_event(byte))
+            .collect();
+            assert_eq!(
+                events,
+                [
+                    InputEvent::NoteOn {
+                        channel,
+                        note: 60,
+                        velocity: 127,
+                    },
+                    InputEvent::NoteOff {
+                        channel,
+                        note: 60,
+                        velocity: 0,
+                    },
+                    InputEvent::NoteOff {
+                        channel,
+                        note: 61,
+                        velocity: 23,
+                    },
+                    InputEvent::NoteOff {
+                        channel,
+                        note: 62,
+                        velocity: 0,
+                    },
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn realtime_at_every_byte_boundary_preserves_notes_pc_cc_and_legacy_filtering() {
+        let bytes = [0x9f, 60, 127, 60, 0, 0xbf, 21, 127, 0xcf, 7];
+        let messages = [
+            Message::Control {
+                channel: 16,
+                controller: 21,
+                value: 127,
+            },
+            Message::Program {
+                channel: 16,
+                program: 7,
+            },
+        ];
+        let expected = [
+            InputEvent::NoteOn {
+                channel: 16,
+                note: 60,
+                velocity: 127,
+            },
+            InputEvent::NoteOff {
+                channel: 16,
+                note: 60,
+                velocity: 0,
+            },
+            InputEvent::Message(messages[0]),
+            InputEvent::Message(messages[1]),
+        ];
+        for (byte, realtime) in [
+            (0xf8, Realtime::Clock),
+            (0xfa, Realtime::Start),
+            (0xfb, Realtime::Continue),
+            (0xfc, Realtime::Stop),
+            (0xfe, Realtime::ActiveSensing),
+            (0xff, Realtime::Reset),
+        ] {
+            for offset in 0..=bytes.len() {
+                let mut stream = bytes.to_vec();
+                stream.insert(offset, byte);
+                let mut decoder = Decoder::default();
+                let mut legacy = Decoder::default();
+                let events: Vec<_> = stream
+                    .iter()
+                    .filter_map(|byte| decoder.push_event(*byte))
+                    .collect();
+                assert_eq!(
+                    events
+                        .iter()
+                        .filter(|e| matches!(e, InputEvent::Realtime(_)))
+                        .copied()
+                        .collect::<Vec<_>>(),
+                    [InputEvent::Realtime(realtime)],
+                );
+                assert_eq!(
+                    events
+                        .into_iter()
+                        .filter(|e| !matches!(e, InputEvent::Realtime(_)))
+                        .collect::<Vec<_>>(),
+                    expected,
+                );
+                assert_eq!(
+                    stream
+                        .into_iter()
+                        .filter_map(|byte| legacy.push(byte))
+                        .collect::<Vec<_>>(),
+                    messages,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn event_decoder_cancels_partial_notes_for_system_common_and_sysex() {
+        let mut decoder = Decoder::default();
+        let events: Vec<_> = [
+            0x90, 60, 0xf2, 1, 2, 127, 0x90, 61, 0xf0, 1, 2, 0xf8, 0xf7, 127, 0xa0, 60, 80, 61, 90,
+            0xe0, 0, 64, 0xd0, 22, 23, 0x91, 62, 0xf9, 0xfd, 100,
+        ]
+        .into_iter()
+        .filter_map(|byte| decoder.push_event(byte))
+        .collect();
+        assert_eq!(
+            events,
+            [
+                InputEvent::Realtime(Realtime::Clock),
+                InputEvent::NoteOn {
+                    channel: 2,
+                    note: 62,
+                    velocity: 100,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn fresh_connection_does_not_complete_an_old_partial_press() {
+        let mut decoder = Decoder::default();
+        assert_eq!(decoder.push_event(0x90), None);
+        assert_eq!(decoder.push_event(60), None);
+        decoder = Decoder::default();
+        assert_eq!(decoder.push_event(127), None);
+        assert_eq!(decoder.push_event(60), None);
+        assert_eq!(decoder.push_event(0), None);
+        assert_eq!(decoder.push_event(0xc0), None);
+        assert_eq!(
+            decoder.push_event(7),
+            Some(InputEvent::Message(Message::Program {
+                channel: 1,
+                program: 7,
+            }))
         );
     }
 }
