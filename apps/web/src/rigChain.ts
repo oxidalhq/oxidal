@@ -41,7 +41,7 @@ export function blockKind(gear: string, name = '', format?: string): BlockKind {
 }
 
 type Graph = {
-  nodes: { id: string; kind: string }[];
+  nodes: { id: string; kind: string; inputGains?: number[] | null }[];
   edges?: {
     from: { node: string; port: number };
     to: { node: string; port: number };
@@ -57,62 +57,132 @@ export function isRigBlockNode(node: Graph['nodes'][number]): boolean {
   return node.kind === 'tone3000' || node.kind === 'lv2';
 }
 
+/** A graph read as a routing tree of block ids (7.26). */
+export type IdStep =
+  | string
+  | {
+      /** Shared id of the `-left`/`-right` split and merge node pairs. */
+      split: string;
+      merge: string;
+      /** Merge input gains per branch, read from the left merge. */
+      gains: number[];
+      branches: IdStep[][];
+    };
+
 /**
- * The blocks of a preset's graph as chain lanes, read along the left channel:
- * one lane for a straight chain, or one per side of a split (blocks shared
- * before the split or after the merge join each lane). Mono adapters are
- * skipped. Null when the graph is not one of these shapes.
+ * A preset's graph as a routing tree, read along the left channel: blocks in
+ * order, with each split holding its branches (any number, nested, or empty for
+ * a dry path) until the merge they all join. Mono adapters are skipped. Null for
+ * any other shape, or when a split/merge lacks its right-channel twin, so an
+ * imported topology is never rewritten by an editor that cannot represent it.
  * @see docs/interface.md
  */
-export function chainLanes(graph: Graph): string[][] | null {
-  const kind = new Map(graph.nodes.map((n) => [n.id, n.kind]));
+export function chainRoute(graph: Graph): IdStep[] | null {
+  const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+  const kind = (id: string) => nodes.get(id)?.kind;
   const edges = graph.edges ?? [];
   const from = (id: string) => edges.filter((e) => e.from.node === id);
   const sources = (id: string) =>
     new Set(edges.filter((e) => e.to.node === id).map((e) => e.from.node));
-  // Mono adapters (`<effect>-mono`, `<effect>-stereo`) pass a lane through.
   const adapter = (id: string) => /-(mono|stereo)$/.test(id);
   const branches = (id: string) =>
-    kind.get(id) === 'split' &&
-    !adapter(id) &&
-    new Set(from(id).map((e) => e.to.node)).size > 1;
+    kind(id) === 'split' && !adapter(id) && from(id).length > 1;
   const joins = (id: string) =>
-    kind.get(id) === 'merge' && !adapter(id) && sources(id).size > 1;
-  const block = (id: string) =>
-    ['tone3000', 'lv2'].includes(kind.get(id) ?? '');
-  /** Follows port 0 from `start` to the output, a branching split or a join. */
-  function walk(start: string | undefined) {
-    const path: string[] = [];
-    let id = start;
-    for (let guard = 0; id && guard < 512; guard++) {
-      if (
-        id === 'out' ||
-        kind.get(id) === 'output' ||
-        joins(id) ||
-        branches(id)
-      )
-        return { path, stop: id };
-      if (block(id)) path.push(id);
-      id = from(id).find((e) => e.from.port === 0)?.to.node;
-    }
-    return { path, stop: undefined };
-  }
+    kind(id) === 'merge' && !adapter(id) && sources(id).size > 1;
+  const block = (id: string) => ['tone3000', 'lv2'].includes(kind(id) ?? '');
   const next = (id: string) => from(id).find((e) => e.from.port === 0)?.to.node;
-  const head = walk(next('in'));
-  if (!head.stop) return null;
-  if (!branches(head.stop)) return [head.path];
-  const targets = [
-    ...new Set(
-      from(head.stop)
-        .sort((a, b) => a.from.port - b.from.port)
-        .map((e) => e.to.node),
-    ),
-  ];
-  const lanes = targets.map((t) => walk(t));
-  const join = lanes[0]?.stop;
-  if (!join || !joins(join) || lanes.some((l) => l.stop !== join)) return null;
-  const tail = walk(next(join));
-  if (tail.stop !== 'out' && kind.get(tail.stop ?? '') !== 'output')
+  const pair = (id: string) => {
+    const base = id.endsWith('-left') ? id.slice(0, -'-left'.length) : null;
+    return base && nodes.has(`${base}-right`) ? base : null;
+  };
+  let guard = 0;
+  function seq(
+    start: string | undefined,
+  ): { steps: IdStep[]; stop: string } | null {
+    const steps: IdStep[] = [];
+    let id = start;
+    while (id && guard++ < 4096) {
+      if (id === 'out' || kind(id) === 'output' || joins(id))
+        return { steps, stop: id };
+      if (branches(id)) {
+        const split = pair(id);
+        const ports = from(id).sort((a, b) => a.from.port - b.from.port);
+        const read = ports.map((e) => seq(e.to.node));
+        const join = read[0]?.stop;
+        if (!split || !join || read.some((r) => !r || r.stop !== join))
+          return null;
+        const merge = pair(join);
+        if (!merge || !joins(join)) return null;
+        const gains = nodes.get(join)?.inputGains ?? [];
+        steps.push({
+          split,
+          merge,
+          gains: ports.map((_, i) => gains[i] ?? 1),
+          branches: read.map((r) => r!.steps),
+        });
+        id = next(join);
+        continue;
+      }
+      if (block(id)) steps.push(id);
+      id = next(id);
+    }
     return null;
-  return lanes.map((l) => [...head.path, ...l.path, ...tail.path]);
+  }
+  const top = seq(next('in'));
+  return top && (top.stop === 'out' || kind(top.stop) === 'output')
+    ? top.steps
+    : null;
+}
+
+/** Every input-to-output path through a routing tree, as lanes of block ids. */
+export function routePaths<T>(
+  steps: (T | { branches: (T | object)[][] })[],
+  isSplit: (step: unknown) => step is { branches: unknown[][] },
+): T[][] {
+  let acc: T[][] = [[]];
+  for (const step of steps) {
+    if (isSplit(step)) {
+      const sub = step.branches.flatMap((b) =>
+        routePaths(b as typeof steps, isSplit),
+      );
+      acc = acc.flatMap((p) => sub.map((s) => [...p, ...s]));
+    } else acc = acc.map((p) => [...p, step as T]);
+  }
+  return acc;
+}
+
+const isIdSplit = (step: unknown): step is Exclude<IdStep, string> =>
+  typeof step === 'object' && step !== null && 'branches' in step;
+
+/** Lanes the chain view can draw: at most this many paths. */
+const MAX_CHAIN_LANES = 16;
+
+/**
+ * The blocks of a preset's graph as chain lanes: one per input-to-output path
+ * through its routing tree (shared blocks repeat in each lane). Null when the
+ * graph is not a routing tree or has too many paths to draw as lanes.
+ * @see docs/interface.md
+ */
+export function chainLanes(graph: Graph): string[][] | null {
+  const route = chainRoute(graph);
+  if (!route) return null;
+  const lanes = routePaths<string>(route, isIdSplit);
+  return lanes.length <= MAX_CHAIN_LANES ? lanes : null;
+}
+
+/** Whether block `id` sits inside a split's branch, and that split's path count. */
+export function routeBranchOf(route: IdStep[] | null, id: string) {
+  const look = (steps: IdStep[], owner?: number): number | null | undefined => {
+    for (const s of steps) {
+      if (s === id) return owner ?? null;
+      if (typeof s !== 'string')
+        for (const b of s.branches) {
+          const found = look(b, s.branches.length);
+          if (found !== undefined) return found;
+        }
+    }
+    return undefined;
+  };
+  const paths = route ? look(route) : undefined;
+  return { found: paths !== undefined, paths: paths ?? 0 };
 }

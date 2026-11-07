@@ -123,7 +123,7 @@ export function canMoveEffect(
   return !pair || pair !== stagePair(effects[next]!);
 }
 
-function validateStages(effects: DraftEffect[]) {
+export function validateStages(effects: DraftEffect[]) {
   const pairs = new Map<string, NativeDraft[]>();
   for (const effect of effects) {
     if (effect.kind !== 'native' || !effect.stage) continue;
@@ -150,9 +150,9 @@ function validateStages(effects: DraftEffect[]) {
   }
 }
 
-type Port = { node: string; port: number };
+export type Port = { node: string; port: number };
 /** The two sides of a stereo signal at one point of the graph. */
-type Stereo = [Port, Port];
+export type Stereo = [Port, Port];
 
 /** A preset manifest under construction: blocks are chained from stereo points.
  * `base` continues an existing manifest, such as a preset with scenes. */
@@ -324,13 +324,13 @@ export function parallelRig(
   id: string,
   name: string,
   shared: DraftEffect[],
-  lanes: [DraftEffect[], DraftEffect[]],
+  lanes: DraftEffect[][],
   profile: string,
   draft = true,
   after: DraftEffect[] = [],
 ): RigPublish {
-  validateStages([...shared, ...lanes[0], ...lanes[1], ...after]);
-  if (!lanes[0].length || !lanes[1].length)
+  validateStages([...shared, ...lanes.flat(), ...after]);
+  if (lanes.length < 2 || lanes.some((lane) => !lane.length))
     throw new Error('Each side of a split needs at least one block.');
   const rig = rigBuilder(id, name, profile, draft);
   const before = rig.chain(shared, rig.input);
@@ -340,7 +340,7 @@ export function parallelRig(
       id: node,
       kind: 'split',
       audioInputs: 1,
-      audioOutputs: 2,
+      audioOutputs: lanes.length,
     });
     rig.host.graph.edges.push({ from: before[port]!, to: { node, port: 0 } });
     rig.labels[node] = `Split · ${side === 'left' ? 'L' : 'R'}`;
@@ -357,9 +357,9 @@ export function parallelRig(
     rig.host.graph.nodes.push({
       id: node,
       kind: 'merge',
-      audioInputs: 2,
+      audioInputs: lanes.length,
       audioOutputs: 1,
-      inputGains: [1, 1],
+      inputGains: lanes.map(() => 1),
     });
     ends.forEach((end, index) =>
       rig.host.graph.edges.push({

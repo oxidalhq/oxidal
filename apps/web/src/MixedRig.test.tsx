@@ -5,17 +5,32 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MixedRig } from './MixedRig';
 import { setPerform } from './performState';
 import { playScenes } from './presetChoices';
-import { publishRig, rigAudioState, rigAudioCommand, rigDocument } from './api';
+import {
+  installedLv2,
+  libraryCatalog,
+  publishRig,
+  rigAudioState,
+  rigAudioCommand,
+  rigDocument,
+  rigLibrary,
+} from './api';
+import { lv2Effect } from './rigDraft';
+import { buildRoute } from './rigRoute';
+import { chainLanes } from './rigChain';
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
   rigDocument: vi.fn(),
   publishRig: vi.fn(),
+  installedLv2: vi.fn(),
+  rigLibrary: vi.fn(),
+  libraryCatalog: vi.fn(),
   sceneBlends: vi.fn(async () => null),
 }));
 vi.mock('./presetChoices', async (importOriginal) => ({
@@ -653,4 +668,118 @@ it('copies a read-only example on its first confirmed control edit', async () =>
   expect(
     screen.queryByText('Editing a copy of Test rig'),
   ).not.toBeInTheDocument();
+});
+
+it('copies a branch into a third parallel path through the routing tree (7.26)', async () => {
+  const plugin = {
+    name: 'Verb',
+    uri: 'urn:example:verb',
+    unsupported: null,
+    ports: [
+      ['in_l', true, true],
+      ['out_l', true, false],
+      ['in_r', true, true],
+      ['out_r', true, false],
+    ].map(([symbol, audio, input], index) => ({
+      index,
+      symbol,
+      audio,
+      control: false,
+      atom: false,
+      input,
+      output: !input,
+      integer: false,
+      toggled: false,
+      logarithmic: false,
+      latency: false,
+      minimum: null,
+      maximum: null,
+      default: null,
+    })),
+  } as never;
+  const effect = (id: string) => ({ ...lv2Effect(plugin), id, name: id });
+  const built = buildRoute(
+    'preset',
+    'Two paths',
+    [
+      {
+        kind: 'split',
+        split: 'split',
+        merge: 'merge',
+        gains: [1, 1],
+        branches: [[effect('clean')], [effect('dirt')]],
+      },
+    ],
+    'prof',
+  );
+  const manifest = JSON.parse(built.manifest_json);
+  const state = {
+    phase: 'running',
+    session: 'daemon',
+    revision: 2,
+    configured: { revision: 'rig', stream: { input: { sample_rate: 48000 } } },
+    control: {
+      session: 'audio',
+      revision: 3,
+      modified: false,
+      eq: [],
+      controls: ['clean', 'dirt'].map((node) => ({
+        target: { kind: 'bypass', node },
+        label: 'Bypass',
+        display: '',
+        toggle: true,
+        value: 0,
+        minimum: 0,
+        maximum: 1,
+        integer: false,
+        logarithmic: false,
+      })),
+    },
+  } as never;
+  vi.mocked(rigAudioState).mockResolvedValue(state);
+  vi.mocked(rigAudioCommand).mockResolvedValue(state);
+  vi.mocked(rigDocument).mockResolvedValue({
+    revision: 'rig',
+    manifest,
+  } as never);
+  vi.mocked(installedLv2).mockResolvedValue([plugin]);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [],
+    native_profile: 'prof',
+  } as never);
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    items: [{ kind: 'rig', id: 'rig', origin: 'mine', name: 'Two paths' }],
+  } as never);
+  vi.mocked(publishRig).mockReset();
+  vi.mocked(publishRig).mockResolvedValue({ revision: 'next' } as never);
+  render(
+    <MixedRig
+      connected
+      onPlaying={() => {}}
+      onPresent={() => {}}
+      otherPlaying={false}
+    />,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  const routing = await screen.findByRole('group', {
+    name: 'Routing for dirt',
+  });
+  expect(
+    within(routing).getByRole('button', { name: 'Remove branch' }),
+  ).toBeVisible();
+  fireEvent.click(within(routing).getByRole('button', { name: 'Copy branch' }));
+  await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  const request = vi.mocked(publishRig).mock.calls[0]![0];
+  const next = JSON.parse(request.manifest_json);
+  // Same identity and split node ids; the copy is a third path.
+  expect(next.id).toBe(manifest.id);
+  expect(chainLanes(next.oxidal.graph)).toEqual([
+    ['clean'],
+    ['dirt'],
+    [expect.stringMatching(/^effect-/)],
+  ]);
+  expect(
+    next.oxidal.graph.nodes.find((n: { id: string }) => n.id === 'merge-left')
+      .inputGains,
+  ).toEqual([1, 1, 1]);
 });

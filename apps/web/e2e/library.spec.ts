@@ -129,3 +129,89 @@ test('protect refuses edits from any client until turned off', async ({
     ).ok(),
   ).toBe(true);
 });
+
+test('the daemon stores and reopens a four-voice route with a dry path and nested split', async ({
+  request,
+}) => {
+  const { buildRoute } = await import('../src/rigRoute');
+  const { chainLanes } = await import('../src/rigChain');
+  const { lv2Effect } = await import('../src/rigDraft');
+  const port = (index: number, symbol: string, input: boolean) => ({
+    index,
+    symbol,
+    audio: true,
+    control: false,
+    atom: false,
+    input,
+    output: !input,
+    integer: false,
+    toggled: false,
+    logarithmic: false,
+    latency: false,
+    minimum: null,
+    maximum: null,
+    default: null,
+  });
+  const plugin = {
+    name: 'Route test',
+    uri: 'urn:example:route-test',
+    unsupported: null,
+    ports: [
+      port(0, 'in_l', true),
+      port(1, 'out_l', false),
+      port(2, 'in_r', true),
+      port(3, 'out_r', false),
+    ],
+  };
+  const fx = (id: string) => ({ ...lv2Effect(plugin), id, name: id });
+  const split = (tag: string, branches: unknown[][], gains?: number[]) => ({
+    kind: 'split' as const,
+    split: `split-${tag}`,
+    merge: `merge-${tag}`,
+    gains: gains ?? branches.map(() => 1),
+    branches,
+  });
+  const route = [
+    fx('input-fx'),
+    split(
+      'voices',
+      [
+        [fx('clean')],
+        [fx('rhythm'), split('inner', [[fx('octave')], [fx('fuzz')]])],
+        [fx('lead')],
+        [],
+      ],
+      [1, 0.8, 0.5, 0.25],
+    ),
+    fx('room'),
+  ];
+  const publish = buildRoute(
+    crypto.randomUUID(),
+    'Four voices',
+    route as never,
+    'prof',
+  );
+  const published = await request.post('/api/v1/presets/rigs', {
+    data: publish,
+  });
+  expect(published.ok(), await published.text()).toBe(true);
+  const { revision } = await published.json();
+  const reopened = await (
+    await request.get(`/api/v1/presets/rigs/${revision}`)
+  ).json();
+  const graph = reopened.manifest.oxidal.graph;
+  expect(chainLanes(graph)).toEqual([
+    ['input-fx', 'clean', 'room'],
+    ['input-fx', 'rhythm', 'octave', 'room'],
+    ['input-fx', 'rhythm', 'fuzz', 'room'],
+    ['input-fx', 'lead', 'room'],
+    ['input-fx', 'room'],
+  ]);
+  const node = (id: string) =>
+    graph.nodes.find((n: { id: string }) => n.id === id);
+  expect(node('merge-voices-right').inputGains).toEqual([1, 0.8, 0.5, 0.25]);
+  expect(node('split-inner-left').audioOutputs).toBe(2);
+  expect(JSON.parse(publish.manifest_json).oxidal.graph.edges.length).toBe(
+    graph.edges.length,
+  );
+});

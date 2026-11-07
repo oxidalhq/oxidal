@@ -4,14 +4,6 @@ import { ScenePads } from './ScenePads';
 import { SceneChange } from './SceneChange';
 import { SlotChooser } from './SlotChooser';
 import { lv2Effect, terminalEffect } from './rigDraft';
-import {
-  buildLanes,
-  insertBlock,
-  moveBlock,
-  readLanes,
-  removeBlock,
-  type Lanes,
-} from './rigEdit';
 import { BoostControl } from './BoostControl';
 import { GuitarPicker } from './GuitarSettings';
 import { RigPresetSelector } from './RigPresetSelector';
@@ -47,7 +39,26 @@ import { RigTopology } from './RigTopology';
 import { GearIcon } from './GearIcon';
 import { ChainView, LedToggle, RigTile } from './ChainView';
 import type { RigBlockVM, RigLaneVM } from './rigChain';
-import { blockKind, chainLanes, isRigBlockNode } from './rigChain';
+import {
+  blockKind,
+  chainLanes,
+  chainRoute,
+  isRigBlockNode,
+  routeBranchOf,
+} from './rigChain';
+import {
+  buildRoute,
+  readRoute,
+  routeAddBranch,
+  routeAddPath,
+  routeCopyBranch,
+  routeInsert,
+  routeLanes,
+  routeMove,
+  routeRemove,
+  routeRemoveBranch,
+  type Route,
+} from './rigRoute';
 import { NativeAuthoring } from './NativeAuthoring';
 import { SceneMidi } from './SceneMidi';
 import { ModelPicker } from './ModelPicker';
@@ -613,21 +624,23 @@ export function MixedRig({
     else return run();
   }
   /** Rebuilds this preset with a change to its chain of blocks. */
-  function editChain(change: (lanes: Lanes) => Lanes) {
+  function editChain(change: (route: Route) => Route) {
     return rebuild(({ opened, plugins, live, name, profile }) =>
-      buildLanes(
+      buildRoute(
         opened.manifest.id,
         name,
-        change(readLanes(opened, plugins, live)),
+        change(readRoute(opened, plugins, live)),
         profile,
       ),
     );
   }
   /** One place left or right within the block's lane. */
   function shift(id: string, step: -1 | 1) {
-    return editChain((lanes) => {
-      const lane = lanes.find((l) => l.some((b) => b.id === id)) ?? [];
-      return moveBlock(lanes, id, lane.findIndex((b) => b.id === id) + step);
+    return editChain((route) => {
+      const lanes = routeLanes(route);
+      const lane = lanes.findIndex((l) => l.some((b) => b.id === id));
+      const at = lanes[lane]?.findIndex((b) => b.id === id) ?? -1;
+      return routeMove(route, id, at + step, lane);
     });
   }
   async function switchPrepared(revision: string) {
@@ -1254,6 +1267,12 @@ export function MixedRig({
     ).map((n) => n.id),
   ]);
   const inLane = !!selected && lanedNodes.has(selected.id);
+  const selectedBranch = routeBranchOf(
+    matching?.manifest.oxidal
+      ? chainRoute(matching.manifest.oxidal.graph)
+      : null,
+    selected?.id ?? '',
+  );
   /** A dragged effect dropped before tile `before` in `lane` (null: the end). */
   function dropBlock(tile: string, lane: number, before: string | null) {
     const id = laneTarget(tile)?.node;
@@ -1272,7 +1291,7 @@ export function MixedRig({
     }
     if (chainIds?.findIndex((l) => l.includes(id)) === lane)
       if (ids.indexOf(id) === index) return;
-    void editChain((lanes) => moveBlock(lanes, id, index, lane));
+    void editChain((route) => routeMove(route, id, index, lane));
   }
   const editable = effectLanes.length > 0;
   /** Where the selected block sits in its lane, to stop moves at the ends. */
@@ -2094,22 +2113,23 @@ export function MixedRig({
           onEffect={(plugin) => {
             const slot = laneSlot;
             setLaneSlot(null);
-            void editChain((lanes) => {
+            void editChain((route) => {
               const effect =
                 slot.node === END ? terminalEffect(plugin) : lv2Effect(plugin);
               if (slot.node === END)
-                return insertBlock(
-                  lanes,
+                return routeInsert(
+                  route,
                   Number(slot.target),
                   Infinity,
                   effect,
                 );
               // An empty slot inside a TONE3000 chain: the effect goes after it.
+              const lanes = routeLanes(route);
               const lane = lanes.findIndex((l) =>
                 l.some((b) => b.id === slot.node),
               );
               const at = lanes[lane]!.findIndex((b) => b.id === slot.node);
-              return insertBlock(lanes, lane, at + 1, effect);
+              return routeInsert(route, lane, at + 1, effect);
             });
           }}
         />
@@ -2363,11 +2383,67 @@ export function MixedRig({
                   variant="ghost"
                   disabled={disabled || !!edit || editing}
                   onClick={() =>
-                    void editChain((lanes) => removeBlock(lanes, selected.id))
+                    void editChain((route) => routeRemove(route, selected.id))
                   }
                 >
                   <Trash aria-hidden="true" /> Remove
                 </Button>
+              </div>
+            )}
+            {inLane && editable && !sceneLanes.length && (
+              <div
+                className="action-row"
+                role="group"
+                aria-label={`Routing for ${selectedView.label}`}
+              >
+                <Button
+                  variant="outline"
+                  disabled={disabled || !!edit || editing}
+                  onClick={() =>
+                    void editChain((route) => routeAddPath(route, selected.id))
+                  }
+                >
+                  {selectedView.block.kind === 'cab'
+                    ? 'Dual cab: add a cab path'
+                    : 'Add parallel path'}
+                </Button>
+                {selectedBranch.found && selectedBranch.paths > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled={disabled || !!edit || editing}
+                      onClick={() =>
+                        void editChain((route) =>
+                          routeAddBranch(route, selected.id),
+                        )
+                      }
+                    >
+                      Add branch
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={disabled || !!edit || editing}
+                      onClick={() =>
+                        void editChain((route) =>
+                          routeCopyBranch(route, selected.id),
+                        )
+                      }
+                    >
+                      Copy branch
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={disabled || !!edit || editing}
+                      onClick={() =>
+                        void editChain((route) =>
+                          routeRemoveBranch(route, selected.id),
+                        )
+                      }
+                    >
+                      Remove branch
+                    </Button>
+                  </>
+                )}
               </div>
             )}
             {selectedView.branch ? (
