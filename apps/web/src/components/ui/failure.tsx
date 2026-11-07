@@ -1,11 +1,23 @@
 import type { Failure } from '../../lib/useFailure';
 import { Button } from './button';
 
+/** The device's own words, when the message on screen rewords them. */
+function FailureDetails({ failure }: { failure: Failure }) {
+  if (!failure.details || failure.message.includes(failure.details))
+    return null;
+  return (
+    <details className="failure-details">
+      <summary>Details</summary>
+      <code>{failure.details}</code>
+    </details>
+  );
+}
+
 /**
- * Only the recovery button, for screens that already show their message.
- * Refresh reloads what the screen shows; Try again repeats the failed
- * operation; Protect has no button because turning it off is a deliberate
- * stage action.
+ * The details and recovery button, for screens that already show their
+ * message. Refresh reloads what the screen shows; Try again repeats the
+ * failed operation; Protect has no button because turning it off is a
+ * deliberate stage action.
  */
 export function RecoveryAction({
   failure,
@@ -16,22 +28,27 @@ export function RecoveryAction({
   onRefresh?: () => void;
   busy?: boolean;
 }) {
+  if (!failure) return null;
   const action =
-    failure?.recovery === 'retry' && failure.retry
+    failure.recovery === 'retry' && failure.retry
       ? { label: 'Try again', run: failure.retry }
-      : failure?.recovery === 'refresh' && onRefresh
+      : failure.recovery === 'refresh' && onRefresh
         ? { label: 'Refresh', run: onRefresh }
         : null;
-  if (!action) return null;
   return (
-    <Button
-      type="button"
-      variant="outline"
-      disabled={busy}
-      onClick={action.run}
-    >
-      {action.label}
-    </Button>
+    <>
+      <FailureDetails failure={failure} />
+      {action && (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={action.run}
+        >
+          {action.label}
+        </Button>
+      )}
+    </>
   );
 }
 
@@ -49,12 +66,6 @@ export function FailureNotice({
   return (
     <div className="failure-notice" role="alert">
       <p>{failure.message}</p>
-      {!failure.message.includes(failure.details) && (
-        <details className="failure-details">
-          <summary>Details</summary>
-          <code>{failure.details}</code>
-        </details>
-      )}
       <RecoveryAction failure={failure} onRefresh={onRefresh} busy={busy} />
     </div>
   );

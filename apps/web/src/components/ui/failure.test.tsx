@@ -9,7 +9,7 @@ import {
 import { afterEach, expect, it, vi } from 'vitest';
 import { DeviceError } from '../../lib/friendlyError';
 import { useFailure } from '../../lib/useFailure';
-import { FailureNotice } from './failure';
+import { FailureNotice, RecoveryAction } from './failure';
 
 afterEach(cleanup);
 
@@ -80,4 +80,19 @@ it('keeps the device text in Details when the message rewords it', () => {
   expect(
     screen.getByText('Preset library operation already in progress'),
   ).toBeVisible();
+});
+
+it('shows the device’s words beside a screen’s own message', () => {
+  const { result } = renderHook(() => useFailure());
+  act(() =>
+    result.current.fail(
+      new DeviceError('worker queue full', 'busy', 409),
+      'start the tuner',
+      () => {},
+    ),
+  );
+  render(<RecoveryAction failure={result.current.failure} />);
+  fireEvent.click(screen.getByText('Details'));
+  expect(screen.getByText('worker queue full')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
 });
