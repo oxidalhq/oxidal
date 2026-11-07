@@ -3822,3 +3822,12 @@ textarea {
     gap: 1rem;
   }
 }
+.effects-preset-name {
+  display: grid;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.effects-preset-name h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

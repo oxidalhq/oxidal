@@ -8,6 +8,7 @@ import { lv2Effect, type DraftEffect } from './rigDraft';
 import { rigAudioState } from './api';
 import { lv2Control } from './lv2Control';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { StageControls } from './features/stage/StageControls';
 import { Button } from './components/ui/button';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { ControlEditor } from './ControlEditor';
@@ -388,14 +389,28 @@ export function GraphAuthor({
       className={liveOnly ? 'panel space-y-3' : 'space-y-3'}
       aria-label="Effects authoring"
     >
-      <div className="section-heading">
-        <h2>{running ? 'Live controls' : 'New preset'}</h2>
-        {running && (
-          <span role="status">
-            {state.saved_copy ? 'Saved copy' : 'Live session'}
-          </span>
-        )}
-      </div>
+      {liveOnly && running ? (
+        // The same header as native and mixed presets (7.15, 7.28).
+        <div className="rig-performance-header">
+          <div className="effects-preset-name">
+            <h2>{configured?.name ?? 'Effects preset'}</h2>
+            <span className="caption" role="status">
+              Effects preset ·{' '}
+              {state.saved_copy ? 'saved copy' : 'live session'}
+            </span>
+          </div>
+          <StageControls connected={connected} compact />
+        </div>
+      ) : (
+        <div className="section-heading">
+          <h2>{running ? 'Live controls' : 'New preset'}</h2>
+          {running && (
+            <span role="status">
+              {state.saved_copy ? 'Saved copy' : 'Live session'}
+            </span>
+          )}
+        </div>
+      )}
       {error && <p role="alert">{error}</p>}
       {!liveOnly && !running && (
         <>

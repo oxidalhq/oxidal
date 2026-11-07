@@ -63,7 +63,6 @@ const WebTerminal = lazy(() =>
 );
 import { Tone3000Account } from './Tone3000Account';
 import { NetworkSettings } from './NetworkSettings';
-import { StageControls } from './features/stage/StageControls';
 import { Loading } from './components/ui/loading';
 import { AudioSettings } from './AudioSettings';
 import { About } from './About';
@@ -559,11 +558,7 @@ function InstrumentApp() {
             </Suspense>
           ) : view === 'rig' ? (
             <>
-              {/* Native and mixed Rig headers hold Mute/Protect (7.28); the
-                  effects-only view has no header, so it keeps this row. */}
-              {graphName !== null &&
-                playingName === null &&
-                mixedName === null && <StageControls connected={connected} />}
+              {/* Every Rig view's header holds Mute/Protect (7.28). */}
               <LiveRig
                 connected={connected}
                 onPlaying={setPlayingName}
