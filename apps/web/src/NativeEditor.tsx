@@ -132,13 +132,6 @@ export function NativeEditor({
       clearInterval(timer);
     };
   }, [available]);
-  // Load the requested preset once the editor is ready (7.3).
-  useEffect(() => {
-    if (!open || opened.current || !state || busy) return;
-    opened.current = true;
-    void send({ kind: 'load', id: open.id, owned: open.owned });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, state, busy]);
   function publish(next: NativeSnapshot, expectedSession?: string) {
     if (alive.current)
       setState((previous) =>
@@ -180,6 +173,13 @@ export function NativeEditor({
       if (alive.current) setBusy(false);
     }
   }
+  // Load the requested preset once the editor is ready (7.3).
+  useEffect(() => {
+    if (!open || opened.current || !state || busy) return;
+    opened.current = true;
+    void send({ kind: 'load', id: open.id, owned: open.owned });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, state, busy]);
   async function begin(controlTarget = target) {
     if (!state || running.current || state.edit) return;
     setError('');
