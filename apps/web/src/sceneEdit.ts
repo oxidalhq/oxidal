@@ -134,6 +134,8 @@ export function removeSceneEffect(
 }
 
 type Gain = { node: string; port: number; value: number };
+/** Save as new scene: a new stable id and the current mix, in the draft. */
+export type NewScene = { id: string; name: string; gains: Gain[] };
 
 /**
  * Writes scene updates held in the editor draft into one publish request
@@ -149,12 +151,25 @@ export function updateScenes(
   start: string | undefined,
   live: Record<string, Record<string, number>> = {},
   name?: string,
+  added: NewScene[] = [],
 ): RigPublish {
   const manifest = clone(document, live, name);
   const extension = manifest.extensions['urn:oxidal:scenes:1'] as
-    { scenes?: { id: string; gains: Gain[] }[] } | undefined;
-  if (!manifest.oxidal || !Object.keys(updates).length)
+    { scenes?: { id: string; name: string; gains: Gain[] }[] } | undefined;
+  if (!manifest.oxidal || (!Object.keys(updates).length && !added.length))
     throw new Error('There are no scene updates to save.');
+  for (const scene of added) {
+    const label = scene.name.trim();
+    if (!extension?.scenes || !label || [...label].length > 128)
+      throw new Error('Give the new scene a name.');
+    if (extension.scenes.some((s) => s.id === scene.id))
+      throw new Error('That scene already exists.');
+    extension.scenes.push({
+      id: scene.id,
+      name: label,
+      gains: scene.gains.map((g) => ({ ...g })),
+    });
+  }
   for (const [sceneId, gains] of Object.entries(updates)) {
     const scene = extension?.scenes?.find((s) => s.id === sceneId);
     if (!scene) throw new Error('This preset cannot update that scene.');

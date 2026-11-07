@@ -520,6 +520,20 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
     expect(screen.queryByText(/not saved yet/)).not.toBeInTheDocument(),
   );
   expect(publishRig).not.toHaveBeenCalled();
+  // Save as new scene keeps the heard mix as a new draft scene (7.7).
+  fireEvent.click(screen.getByRole('button', { name: 'Save as new scene…' }));
+  const naming = await screen.findByRole('dialog', {
+    name: 'Save as new scene',
+  });
+  expect(
+    within(naming).getByRole('button', { name: 'Add scene' }),
+  ).toBeDisabled();
+  fireEvent.change(within(naming).getByLabelText('Scene name'), {
+    target: { value: 'Amp off' },
+  });
+  fireEvent.click(within(naming).getByRole('button', { name: 'Add scene' }));
+  expect(await screen.findByText(/New: Amp off\./)).toBeVisible();
+  expect(publishRig).not.toHaveBeenCalled();
 });
 
 it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {

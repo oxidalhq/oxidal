@@ -100,6 +100,7 @@ import {
   branchEffects,
   removeSceneEffect,
   updateScenes,
+  type NewScene,
 } from './sceneEdit';
 import { requestMidiAssignments } from './midiNavigation';
 import { TunerButton } from './TunerButton';
@@ -186,7 +187,9 @@ export function MixedRig({
   const [sceneUpdates, setSceneUpdates] = useState<{
     session: string;
     gains: Record<string, { node: string; port: number; value: number }[]>;
+    added?: NewScene[];
   } | null>(null);
+  const [namingScene, setNamingScene] = useState<string | null>(null);
   const [copyOnEdit, setCopyOnEdit] = useState<{
     copy: string;
     source: string;
@@ -1090,7 +1093,11 @@ export function MixedRig({
     sceneUpdates && sceneUpdates.session === state.control?.session
       ? sceneUpdates.gains
       : {};
-  const draftCount = Object.keys(drafts).length;
+  const addedScenes =
+    sceneUpdates && sceneUpdates.session === state.control?.session
+      ? (sceneUpdates.added ?? [])
+      : [];
+  const draftCount = Object.keys(drafts).length + addedScenes.length;
   const editingBase = editingScene
     ? (drafts[editingScene.id] ?? editingScene.gains)
     : [];
@@ -1806,12 +1813,76 @@ export function MixedRig({
                   setSceneUpdates({
                     session,
                     gains: { ...drafts, [editingScene.id]: editingSceneGains },
+                    added: addedScenes,
                   });
                 }}
               >
                 Update scene
               </Button>
+              <Button
+                variant="outline"
+                disabled={disabled || editing || !!edit || !!picker}
+                onClick={() => setNamingScene('')}
+              >
+                Save as new scene…
+              </Button>
             </div>
+          )}
+          {namingScene !== null && (
+            <AdjustmentDialog
+              title="Save as new scene"
+              onCancel={() => setNamingScene(null)}
+            >
+              <form
+                className="control-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const session = state.control?.session;
+                  const label = namingScene.trim();
+                  if (!session || !label) return;
+                  setSceneUpdates({
+                    session,
+                    gains: drafts,
+                    added: [
+                      ...addedScenes,
+                      {
+                        id: `scene-${crypto.randomUUID().slice(0, 8)}`,
+                        name: label,
+                        gains: editingSceneGains,
+                      },
+                    ],
+                  });
+                  setNamingScene(null);
+                }}
+              >
+                <label className="field">
+                  <span>Scene name</span>
+                  <input
+                    className="h-11 w-full rounded-md border border-input bg-card px-3"
+                    value={namingScene}
+                    maxLength={128}
+                    autoFocus
+                    onChange={(event) => setNamingScene(event.target.value)}
+                  />
+                </label>
+                <p className="caption">
+                  Keeps the mix you hear now as a new scene. {editingScene.name}{' '}
+                  stays as it was. Save keeps it in the preset.
+                </p>
+                <div className="action-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setNamingScene(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={!namingScene.trim()}>
+                    Add scene
+                  </Button>
+                </div>
+              </form>
+            </AdjustmentDialog>
           )}
           {draftCount > 0 && (
             <div className="scene-context-actions" aria-label="Scene edits">
@@ -1819,6 +1890,8 @@ export function MixedRig({
                 {draftCount === 1
                   ? '1 scene updated · not saved yet.'
                   : `${draftCount} scenes updated · not saved yet.`}
+                {addedScenes.length > 0 &&
+                  ` New: ${addedScenes.map((scene) => scene.name).join(', ')}.`}
               </span>
               <Button
                 variant="outline"
@@ -1840,6 +1913,7 @@ export function MixedRig({
                       state.control?.scene ?? undefined,
                       live,
                       name,
+                      addedScenes,
                     ),
                   )
                 }

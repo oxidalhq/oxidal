@@ -227,3 +227,40 @@ it('saves several drafted scenes and starts only on the named one', () => {
     'no scene updates',
   );
 });
+
+it('saves a new scene from the live mix with its own id, beside the others', () => {
+  const document = scenes();
+  const extension = document.manifest.extensions['urn:oxidal:scenes:1'] as {
+    scenes: {
+      id: string;
+      name: string;
+      gains: { node: string; port: number; value: number }[];
+    }[];
+  };
+  const gains = extension.scenes[0]!.gains.map((g) => ({ ...g, value: 0.5 }));
+  const request = updateScenes(document, {}, undefined, {}, undefined, [
+    { id: 'scene-new', name: '  Lead + clean ', gains },
+  ]);
+  const manifest = JSON.parse(request.manifest_json) as RigDocument['manifest'];
+  expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+  const next = manifest.extensions['urn:oxidal:scenes:1'] as typeof extension;
+  expect(next.scenes.map((s) => s.id)).toEqual([
+    ...extension.scenes.map((s) => s.id),
+    'scene-new',
+  ]);
+  expect(next.scenes.at(-1)).toEqual({
+    id: 'scene-new',
+    name: 'Lead + clean',
+    gains,
+  });
+  expect(() =>
+    updateScenes(document, {}, undefined, {}, undefined, [
+      { id: extension.scenes[0]!.id, name: 'x', gains },
+    ]),
+  ).toThrow('already exists');
+  expect(() =>
+    updateScenes(document, {}, undefined, {}, undefined, [
+      { id: 'scene-x', name: ' ', gains },
+    ]),
+  ).toThrow('name');
+});
