@@ -3,6 +3,13 @@ import { Loading } from './components/ui/loading';
 import { useEffect, useRef, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { friendlyError } from './lib/friendlyError';
+import {
+  setReturnTarget,
+  useScrollMemory,
+  useSessionState,
+} from './lib/sessionState';
+import { ModelPicker } from './ModelPicker';
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
 import { WarningCircle } from '@phosphor-icons/react';
 import { Alert, AlertDescription, AlertTitle } from './components/ui/alert';
 import { Button } from './components/ui/button';
@@ -215,14 +222,53 @@ export function DiscoverPage({
   onChanged: () => void;
   onOpenRig?: () => void;
 }) {
+  const [source, setSource] = useSessionState<'oxidal' | 'tone3000'>(
+    'discover-source',
+    'oxidal',
+  );
+  useScrollMemory(`discover-${source}`, true);
   return (
-    <CollectionDialog
-      inline
-      connected={connected}
-      onClose={() => {}}
-      onChanged={onChanged}
-      onOpenRig={onOpenRig}
-    />
+    <>
+      <ToggleGroup
+        type="single"
+        value={source}
+        aria-label="Discover source"
+        className="discover-sources"
+        onValueChange={(value) => {
+          if (value === 'oxidal' || value === 'tone3000') setSource(value);
+        }}
+      >
+        <ToggleGroupItem value="oxidal">Oxidal recipes</ToggleGroupItem>
+        <ToggleGroupItem value="tone3000">TONE3000</ToggleGroupItem>
+      </ToggleGroup>
+      {source === 'oxidal' ? (
+        <CollectionDialog
+          inline
+          connected={connected}
+          onClose={() => {}}
+          onChanged={onChanged}
+          onOpenRig={onOpenRig}
+        />
+      ) : (
+        <>
+          <p className="caption">
+            NAM captures and cabinet IRs from TONE3000, with each creator shown.
+            Downloads go to Sounds and never change what is playing.
+          </p>
+          <ModelPicker
+            inline
+            name="Sounds"
+            intent="download"
+            onClose={() => {}}
+            onAudition={async () => onChanged()}
+            onSignIn={() => {
+              setReturnTarget({ hash: '#library/discover', label: 'Discover' });
+              window.location.hash = 'settings/accounts';
+            }}
+          />
+        </>
+      )}
+    </>
   );
 }
 function CollectionDialog({
@@ -258,7 +304,10 @@ function CollectionDialog({
   const [downloaded, setDownloaded] = useState<Record<string, RigNativeSource>>(
     {},
   );
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useSessionState(
+    inline ? 'discover-query' : null,
+    '',
+  );
   const visibleRecipes = factoryRecipes
     .filter((recipe) =>
       [recipe.name, ...recipe.categories, recipe.description]

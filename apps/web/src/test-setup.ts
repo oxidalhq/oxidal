@@ -15,3 +15,14 @@ vi.mock('./GuitarSettings', () => ({
   GuitarSettings: () => null,
   GuitarSwitch: () => null,
 }));
+
+// Page memory (search, scroll, return target) is per tab; start each test clean.
+import { beforeEach } from 'vitest';
+beforeEach(() => {
+  try {
+    sessionStorage.clear();
+  } catch {
+    /* no storage */
+  }
+});
+window.scrollTo = () => {};

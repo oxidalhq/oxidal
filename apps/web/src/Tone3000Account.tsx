@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { tone3000Account, type AccountAction, type AccountState } from './api';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
+import { clearReturnTarget, readReturnTarget } from './lib/sessionState';
 
 /** Device authorization stays on the daemon; only its public sign-in code reaches this view. */
 export function Tone3000Account({ connected }: { connected: boolean }) {
@@ -9,6 +10,8 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
   const [key, setKey] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // The page that sent the player here to sign in, such as Discover (7.5).
+  const [returnTo, setReturnTo] = useState(readReturnTarget);
   const epoch = useRef(0);
   useEffect(() => {
     let active = true;
@@ -174,6 +177,17 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
       )}
       {signedIn && (
         <div className="action-row">
+          {returnTo && (
+            <Button
+              onClick={() => {
+                clearReturnTarget();
+                setReturnTo(null);
+                window.location.hash = returnTo.hash.slice(1);
+              }}
+            >
+              Back to {returnTo.label}
+            </Button>
+          )}
           <Button
             variant="outline"
             disabled={!connected || busy}
@@ -183,6 +197,11 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
           </Button>
         </div>
       )}
+      {returnTo && !signedIn && (
+        <p className="caption">
+          After connecting, you can go back to {returnTo.label}.
+        </p>
+      )}
       <details className="control-help">
         <summary>Account help</summary>
         <div className="control-stack">
@@ -190,9 +209,6 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
             Oxidal needs internet access to sign in. Account tokens stay on this
             device. Disconnect removes its saved sign-in; it does not delete
             your TONE3000 account or local presets.
-          </p>
-          <p className="caption">
-            Online tone browsing is not available in this build yet.
           </p>
         </div>
       </details>

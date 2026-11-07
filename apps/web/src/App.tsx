@@ -1,5 +1,9 @@
 import { friendlyError } from './lib/friendlyError';
-import { WorkspaceMemory, useWorkspaceNavigation } from './workspaceMemory';
+import {
+  WorkspaceMemory,
+  useSectionLocation,
+  useWorkspaceNavigation,
+} from './workspaceMemory';
 import { GuitarSettings } from './GuitarSettings';
 import { MidiSettings } from './MidiSettings';
 import { GlobalTuner } from './GlobalTuner';
@@ -78,6 +82,19 @@ import {
 /** Quiet rig control over a single authoritative Rust state model.
  * @see docs/architecture.md
  */
+/** Settings destinations, each with its own link such as `#settings/accounts`. */
+const settingsSections = [
+  'audio',
+  'connections',
+  'accounts',
+  'midi',
+  'effects',
+  'display',
+  'device',
+  'maintenance',
+  'about',
+] as const;
+
 function InstrumentApp() {
   const screen = useScreenSession();
   const [playingName, setPlayingName] = useState<string | null>(null);
@@ -103,17 +120,11 @@ function InstrumentApp() {
     window.addEventListener(OPEN_TUNER_EVENT, open);
     return () => window.removeEventListener(OPEN_TUNER_EVENT, open);
   }, []);
-  const [settingsSection, setSettingsSection] = useState<
-    | 'audio'
-    | 'connections'
-    | 'accounts'
-    | 'midi'
-    | 'effects'
-    | 'display'
-    | 'device'
-    | 'maintenance'
-    | 'about'
-  >('audio');
+  const [settingsSection, setSettingsSection] = useSectionLocation(
+    'settings',
+    settingsSections,
+    'audio',
+  );
   const settingsLabels = {
     audio: 'Audio',
     connections: 'Network',
@@ -512,8 +523,8 @@ function InstrumentApp() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setSettingsSection('audio');
                   showSettings();
+                  setSettingsSection('audio');
                 }}
               >
                 Audio setup
@@ -537,8 +548,8 @@ function InstrumentApp() {
                 onGuitars={() => setView('guitars')}
                 onLibrary={() => setView('library')}
                 onAudioSetup={() => {
-                  setSettingsSection('audio');
                   showSettings();
+                  setSettingsSection('audio');
                 }}
               />
             </Suspense>
@@ -554,8 +565,8 @@ function InstrumentApp() {
                 onPlaying={setPlayingName}
                 onLibrary={() => setView('library')}
                 onAudioSetup={() => {
-                  setSettingsSection('audio');
                   showSettings();
+                  setSettingsSection('audio');
                 }}
                 hideInactive={
                   developmentSimulator || graphName !== null || mixedPresent

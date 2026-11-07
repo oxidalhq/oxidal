@@ -31,6 +31,43 @@ test('library sections have their own links and Discover is a page', async ({
   ).toHaveAttribute('aria-current', 'page');
 });
 
+test('Discover keeps its search and source on refresh and returns after TONE3000 sign-in', async ({
+  page,
+}) => {
+  await page.goto('/#library/discover');
+  const search = page.getByPlaceholder('Find a sound or genre…');
+  await expect(search).toBeVisible();
+  await page.evaluate(() => window.scrollTo({ top: 600 }));
+  await page.waitForTimeout(200);
+  await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(400);
+  await search.fill('doom');
+  await page.reload();
+  await expect(search).toHaveValue('doom');
+  await page.getByRole('radio', { name: 'TONE3000' }).click();
+  const remote = page.getByRole('region', { name: 'TONE3000 sounds' });
+  // No account on the test device: remote content asks for sign-in, local stays usable.
+  await expect(
+    remote.getByText(/already on this device still work/),
+  ).toBeVisible();
+  await remote.getByRole('button', { name: 'Connect TONE3000' }).click();
+  await expect(page).toHaveURL(/#settings\/accounts$/);
+  await expect(
+    page.getByRole('tab', { name: 'Accounts', selected: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('After connecting, you can go back to Discover.'),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/#library\/discover$/);
+  await expect(page.getByRole('radio', { name: 'TONE3000' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+});
+
 test('new preset creates an empty preset of your own without hardware', async ({
   page,
 }, info) => {

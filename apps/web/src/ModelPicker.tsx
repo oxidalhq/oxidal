@@ -22,6 +22,7 @@ import {
 } from './components/ui/select';
 import { DialogFooter } from './components/ui/dialog';
 import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group';
+import { remoteProblem, useSessionState } from './lib/sessionState';
 import {
   stageTone3000,
   localModels,
@@ -88,8 +89,14 @@ export function ModelPicker({
   onClose,
   onAudition,
   comparison,
+  inline = false,
+  onSignIn,
 }: {
   name: string;
+  /** Shown in a page (Discover) instead of a dialog; keeps its browsing for this tab. */
+  inline?: boolean;
+  /** Opens Accounts when browsing needs a TONE3000 sign-in. */
+  onSignIn?: () => void;
   comparison?: {
     pending: boolean;
     appliedAsset?: string;
@@ -115,16 +122,26 @@ export function ModelPicker({
   const [files, setFiles] = useState<File[]>([]);
   const [local, setLocal] = useState<LocalModelPage | null>(null);
   const [localAfter, setLocalAfter] = useState<string | null>(null);
-  const [query, setQuery] = useState<ToneQuery>({
+  const memory = (key: string) => (inline ? `discover-tone3000-${key}` : null);
+  const [query, setQuery] = useSessionState<ToneQuery>(memory('query'), {
     collection: 'latest',
     page: 1,
   });
-  const [format, setFormat] = useState(allowedFormat ?? initialFormat);
-  const [search, setSearch] = useState('');
+  const [format, setFormat] = useSessionState(
+    memory('format'),
+    allowedFormat ?? initialFormat,
+  );
+  const [search, setSearch] = useSessionState(
+    memory('search'),
+    query.query ?? '',
+  );
   const [tones, setTones] = useState<TonePage | null>(null);
-  const [tone, setTone] = useState<TonePage['data'][number] | null>(null);
+  const [tone, setTone] = useSessionState<TonePage['data'][number] | null>(
+    memory('tone'),
+    null,
+  );
   const [models, setModels] = useState<ModelPage | null>(null);
-  const [modelPage, setModelPage] = useState(1);
+  const [modelPage, setModelPage] = useSessionState(memory('model-page'), 1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'download' | 'assign' | null>(null);
   const [error, setError] = useState('');
@@ -269,16 +286,13 @@ export function ModelPicker({
     if (tone) setModelPage(next);
     else setQuery({ ...query, page: next });
   }
-  return (
-    <AdjustmentDialog
-      title={
-        intent === 'download'
-          ? `Get ${format === 'nam' ? 'NAM models' : 'IRs'}`
-          : 'Choose model'
-      }
-      onCancel={close}
-      className="model-picker"
-    >
+  const problem = error ? remoteProblem(error) : null;
+  const title =
+    intent === 'download'
+      ? `Get ${format === 'nam' ? 'NAM models' : 'IRs'}`
+      : 'Choose model';
+  const body = (
+    <>
       <div className="control-stack">
         {intent !== 'download' && (
           <p className="truncate text-sm text-muted-foreground">
@@ -673,6 +687,24 @@ export function ModelPicker({
               : error || comparison?.error}
           </p>
         )}
+        {problem && (
+          <div className="action-row">
+            <span className="caption">
+              {problem === 'account'
+                ? 'Browsing TONE3000 needs your account.'
+                : 'TONE3000 needs internet access.'}{' '}
+              Presets and sounds already on this device still work.
+            </span>
+            {problem === 'account' && onSignIn && (
+              <Button variant="outline" onClick={onSignIn}>
+                Connect TONE3000
+              </Button>
+            )}
+          </div>
+        )}
+        {inline && choice && !busy && (
+          <p role="status">{choice.label} is saved in Sounds.</p>
+        )}
         {busy && (
           <p role="status">
             {busy === 'download'
@@ -708,19 +740,33 @@ export function ModelPicker({
               </Button>
             </>
           )}
-          <Button
-            variant="outline"
-            disabled={busy === 'assign'}
-            onClick={close}
-          >
-            {busy === 'download'
-              ? source === 'local'
-                ? 'Cancel upload'
-                : 'Cancel download'
-              : 'Close'}
-          </Button>
+          {(!inline || busy === 'download') && (
+            <Button
+              variant="outline"
+              disabled={busy === 'assign'}
+              onClick={inline ? () => download.current?.abort() : close}
+            >
+              {busy === 'download'
+                ? source === 'local'
+                  ? 'Cancel upload'
+                  : 'Cancel download'
+                : 'Close'}
+            </Button>
+          )}
         </DialogFooter>
       </div>
+    </>
+  );
+  return inline ? (
+    <section
+      className="model-picker discover-tone3000"
+      aria-label="TONE3000 sounds"
+    >
+      {body}
+    </section>
+  ) : (
+    <AdjustmentDialog title={title} onCancel={close} className="model-picker">
+      {body}
     </AdjustmentDialog>
   );
 }

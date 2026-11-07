@@ -185,3 +185,102 @@ it('downloads to the independent library without presenting a live audition', as
   expect(stageTone3000).toHaveBeenCalledWith(42, 7, expect.any(AbortSignal));
   expect(close).toHaveBeenCalledTimes(1);
 });
+
+it('browses inline in Discover, keeps the opened tone across a remount and offers sign-in when the account expired', async () => {
+  vi.mocked(tone3000Tones).mockResolvedValue({
+    data: [
+      {
+        id: 42,
+        title: 'Page amp',
+        format: 'nam',
+        gear: 'amp',
+        user: { username: 'author' },
+        license: 't3k',
+        url: '',
+        models_count: 1,
+      },
+    ],
+    total_pages: 1,
+  } as Awaited<ReturnType<typeof tone3000Tones>>);
+  vi.mocked(tone3000Models).mockResolvedValue({
+    data: [{ id: 7, name: 'Page model' }],
+    total_pages: 1,
+  } as Awaited<ReturnType<typeof tone3000Models>>);
+  vi.mocked(stageTone3000).mockResolvedValue({
+    id: 'page-asset',
+  } as Awaited<ReturnType<typeof stageTone3000>>);
+  const view = render(
+    <ModelPicker
+      inline
+      name="Sounds"
+      intent="download"
+      onClose={() => {}}
+      onAudition={async () => {}}
+    />,
+  );
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('region', { name: 'TONE3000 sounds' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  fireEvent.click(await screen.findByRole('button', { name: /Page amp/ }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: /Page model.*Download/ }),
+  );
+  expect(
+    await screen.findByText('Page model is saved in Sounds.'),
+  ).toBeVisible();
+  view.unmount();
+  // Refresh or Back returns to the same opened tone.
+  render(
+    <ModelPicker
+      inline
+      name="Sounds"
+      intent="download"
+      onClose={() => {}}
+      onAudition={async () => {}}
+    />,
+  );
+  expect(
+    await screen.findByRole('button', { name: /Page model.*Download/ }),
+  ).toBeVisible();
+  cleanup();
+  sessionStorage.clear();
+  vi.mocked(tone3000Tones).mockRejectedValue(
+    new Error('TONE3000 authorization expired; reconnect your account'),
+  );
+  const signIn = vi.fn();
+  render(
+    <ModelPicker
+      inline
+      name="Sounds"
+      intent="download"
+      onClose={() => {}}
+      onAudition={async () => {}}
+      onSignIn={signIn}
+    />,
+  );
+  expect(
+    await screen.findByText(/already on this device still work/),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Connect TONE3000' }));
+  expect(signIn).toHaveBeenCalledTimes(1);
+});
+
+it('says only the internet is missing when TONE3000 cannot be reached', async () => {
+  vi.mocked(tone3000Tones).mockRejectedValue(
+    new Error('Cannot reach TONE3000; local presets remain available'),
+  );
+  render(
+    <ModelPicker
+      inline
+      name="Sounds"
+      intent="download"
+      onClose={() => {}}
+      onAudition={async () => {}}
+      onSignIn={() => {}}
+    />,
+  );
+  expect(
+    await screen.findByText(/TONE3000 needs internet access/),
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Connect TONE3000' })).toBeNull();
+});
