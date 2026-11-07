@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError, errorDetails } from './lib/friendlyError';
 import {
   useEffect,
@@ -31,6 +33,7 @@ export function GlobalTuner({
   onClose: () => void;
   slow?: boolean;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [tools, setTools] = useState<Tools | null>(null);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -111,6 +114,7 @@ export function GlobalTuner({
       } catch (cause) {
         if (active) {
           setError(friendlyError(cause, 'use the tuner'));
+          recoverFail(cause, 'use the tuner');
           setReady(false);
           setTools(null);
         }
@@ -123,7 +127,7 @@ export function GlobalTuner({
       active = false;
       clearTimeout(timer);
     };
-  }, [slow]);
+  }, [slow, recoverFail]);
   async function command(enabled: boolean) {
     const target = owner.current;
     if (!target) throw new Error('No tuner source available.');
@@ -168,6 +172,7 @@ export function GlobalTuner({
       setError('');
     } catch (cause) {
       setError(friendlyError(cause, 'use the tuner'));
+      recoverFail(cause, 'use the tuner', () => void command(true));
     } finally {
       setBusy(false);
     }
@@ -209,6 +214,7 @@ export function GlobalTuner({
       setError('');
     } catch (cause) {
       setError(friendlyError(cause, 'use the tuner'));
+      recoverFail(cause, 'use the tuner', () => void setMonitoring(enabled));
     } finally {
       setBusy(false);
     }
@@ -351,6 +357,7 @@ export function GlobalTuner({
             </AlertDescription>
           </Alert>
         )}
+        {error && <RecoveryAction failure={recoverFailure} />}
       </div>
     </AdjustmentDialog>
   );

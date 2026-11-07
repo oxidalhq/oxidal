@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { errorRecovery, friendlyError, type Recovery } from './friendlyError';
 
 /**
@@ -25,5 +25,5 @@ export function useFailure() {
     [],
   );
   const clear = useCallback(() => setFailure(null), []);
-  return { failure, fail, clear };
+  return useMemo(() => ({ failure, fail, clear }), [failure, fail, clear]);
 }

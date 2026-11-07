@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { EffectPacks } from './EffectPacks';
+import { DeviceError } from './lib/friendlyError';
 import {
   changeEffectPack,
   effectPacks,
@@ -119,4 +120,21 @@ it('keeps apt actions unavailable while the active system root is locked', async
   expect(await screen.findByRole('button', { name: 'Install' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
   expect(screen.getByRole('status')).toHaveTextContent('Unlock system storage');
+});
+
+it('offers Try again when an install fails because the device is busy', async () => {
+  vi.mocked(effectPacks).mockResolvedValue(inventory);
+  vi.mocked(changeEffectPack).mockRejectedValueOnce(
+    new DeviceError('Another pack change is already in progress', 'busy', 409),
+  );
+  vi.mocked(changeEffectPack).mockResolvedValue(inventory);
+  render(<EffectPacks connected audioRunning={false} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Install' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not change effect packs. Another change is still running on the device.',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(changeEffectPack).toHaveBeenCalledTimes(2));
+  expect(changeEffectPack).toHaveBeenLastCalledWith('dragonfly', 'install');
+  await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
 });

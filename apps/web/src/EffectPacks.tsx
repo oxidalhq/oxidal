@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { ArrowSquareOut } from '@phosphor-icons/react';
@@ -18,6 +20,7 @@ export function EffectPacks({
   connected: boolean;
   audioRunning: boolean;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [state, setState] = useState<EffectPacksState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
@@ -70,6 +73,7 @@ export function EffectPacks({
       setConfirmRemove(null);
     } catch (cause) {
       setError(friendlyError(cause, 'change effect packs'));
+      recoverFail(cause, 'change effect packs', () => void change(id, action));
     } finally {
       setBusy(null);
     }
@@ -107,6 +111,7 @@ export function EffectPacks({
         </p>
       )}
       {error && <p role="alert">{error}</p>}
+      {error && <RecoveryAction failure={recoverFailure} />}
       {state?.message && !state.job && (
         <p className="caption" role="status">
           {state.message}

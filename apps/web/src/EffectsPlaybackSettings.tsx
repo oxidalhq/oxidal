@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
@@ -28,6 +30,7 @@ export function EffectsPlaybackSettings({
   onState: (state: GraphAudioState) => void;
   boot: ReactNode;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const transitioning =
@@ -40,6 +43,7 @@ export function EffectsPlaybackSettings({
       onState(await graphAudioCommand(state, action));
     } catch (cause) {
       setError(friendlyError(cause, 'change effects playback'));
+      recoverFail(cause, 'change effects playback', () => void command(action));
       try {
         onState(await graphAudioState());
       } catch {
@@ -84,6 +88,7 @@ export function EffectsPlaybackSettings({
       )}
       {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
+      {error && <RecoveryAction failure={recoverFailure} />}
       <p className="caption">
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods

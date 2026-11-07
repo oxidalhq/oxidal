@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
@@ -80,6 +82,7 @@ export function MidiControls({
   /** False where the screen header already has the one MIDI entry (7.15). */
   trigger?: boolean;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [devices, setDevices] = useState<MidiDevices | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -166,6 +169,11 @@ export function MidiControls({
       initialized.current = false;
     } catch (cause) {
       setError(friendlyError(cause, 'change scene MIDI assignments'));
+      recoverFail(
+        cause,
+        'change scene MIDI assignments',
+        () => void apply(settings),
+      );
     } finally {
       setSaving(false);
     }
@@ -177,6 +185,7 @@ export function MidiControls({
       setDevices(await midiDevices());
     } catch (cause) {
       setError(friendlyError(cause, 'change scene MIDI assignments'));
+      recoverFail(cause, 'change scene MIDI assignments', () => void scan());
     } finally {
       setLoading(false);
     }
@@ -996,6 +1005,7 @@ export function MidiControls({
             </DialogFooter>
             {saving && <p role="status">Saving controller settings…</p>}
             {error && <p role="alert">{error}</p>}
+            {error && <RecoveryAction failure={recoverFailure} />}
           </div>
         </AdjustmentDialog>
       )}

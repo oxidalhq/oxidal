@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useState } from 'react';
 import {
@@ -18,6 +20,7 @@ export function StorageLock({
   state: StorageState | null;
   onState: (state: StorageState) => void;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
   const [confirmReboot, setConfirmReboot] = useState(false);
   const [sent, setSent] = useState(false);
@@ -31,6 +34,7 @@ export function StorageLock({
       onState(await changeStorage({ mode }));
     } catch (cause) {
       setError(friendlyError(cause, 'change storage protection'));
+      recoverFail(cause, 'change storage protection', () => void choose(mode));
     } finally {
       setBusy(false);
     }
@@ -158,6 +162,7 @@ export function StorageLock({
         </p>
       )}
       {error && !confirmReboot && <p role="alert">{error}</p>}
+      {error && <RecoveryAction failure={recoverFailure} />}
 
       {confirmReboot && (
         <AdjustmentDialog

@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -141,6 +143,7 @@ export function MidiMapScreen({
   mixed: RigAudioState | null;
   onMapApplied: (map: MidiMap) => Promise<void>;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [map, setMap] = useState<MidiMap | null>(null);
   const [catalog, setCatalog] = useState<LibraryCatalog | null>(null);
   const [devices, setDevices] = useState<MidiDevices | null>(null);
@@ -177,12 +180,15 @@ export function MidiMapScreen({
         setDevices(nextDevices);
       })
       .catch((cause: unknown) => {
-        if (active) setError(friendlyError(cause, 'read MIDI assignments'));
+        if (active) {
+          setError(friendlyError(cause, 'read MIDI assignments'));
+          recoverFail(cause, 'read MIDI assignments');
+        }
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [recoverFail]);
 
   async function replaceMap(
     content: Pick<MidiMap, 'input' | 'channel' | 'template' | 'entries'>,
@@ -202,6 +208,11 @@ export function MidiMapScreen({
       await onMapApplied(updated);
     } catch (cause) {
       setError(friendlyError(cause, 'change MIDI assignments'));
+      recoverFail(
+        cause,
+        'change MIDI assignments',
+        () => void replaceMap(content),
+      );
       throw cause;
     } finally {
       setBusy(false);
@@ -222,6 +233,11 @@ export function MidiMapScreen({
       await onMapApplied(updated);
     } catch (cause) {
       setError(friendlyError(cause, 'change MIDI assignments'));
+      recoverFail(
+        cause,
+        'change MIDI assignments',
+        () => void applyTemplateToPreset(entry),
+      );
     } finally {
       setBusy(false);
     }
@@ -521,6 +537,11 @@ export function MidiMapScreen({
       await testMidi({ entry, message });
     } catch (cause) {
       setError(friendlyError(cause, 'change MIDI assignments'));
+      recoverFail(
+        cause,
+        'change MIDI assignments',
+        () => void runTest(entry, row),
+      );
     } finally {
       setBusy(false);
     }
@@ -563,6 +584,7 @@ export function MidiMapScreen({
   return (
     <div className="space-y-4">
       {error && <p role="alert">{error}</p>}
+      {error && <RecoveryAction failure={recoverFailure} />}
       <div className="grid gap-3 rounded-lg bg-muted/45 p-3 md:grid-cols-[minmax(0,1fr)_10rem]">
         <label className="field min-w-0">
           MIDI input

@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { MidiControls } from './SceneMidi';
@@ -14,6 +16,7 @@ import {
 
 /** Settings and Rig configure the same sounding MIDI owner. */
 export function MidiSettings({ connected }: { connected: boolean }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [native, setNative] = useState<AudioState | null>(null);
   const [mixed, setMixed] = useState<RigAudioState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +43,10 @@ export function MidiSettings({ connected }: { connected: boolean }) {
           setError('');
         }
       } catch (cause) {
-        if (active) setError(friendlyError(cause, 'read MIDI settings'));
+        if (active) {
+          setError(friendlyError(cause, 'read MIDI settings'));
+          recoverFail(cause, 'read MIDI settings', () => void refresh());
+        }
       } finally {
         if (active) timer = setTimeout(() => void refresh(), nextDelay);
       }
@@ -50,7 +56,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
       active = false;
       clearTimeout(timer);
     };
-  }, []);
+  }, [recoverFail]);
   const activeNative = native?.phase === 'running';
   const activeMixed = mixed?.phase === 'running' && mixed.control;
   async function syncPlayingMap(map: MidiMap) {
@@ -94,6 +100,11 @@ export function MidiSettings({ connected }: { connected: boolean }) {
       }
     } catch (cause) {
       setApplyError(friendlyError(cause, 'change MIDI settings'));
+      recoverFail(
+        cause,
+        'change MIDI settings',
+        () => void syncPlayingMap(map),
+      );
       throw cause;
     } finally {
       sending.current = false;
@@ -110,6 +121,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
         </p>
       </div>
       {(applyError || error) && <p role="alert">{applyError || error}</p>}
+      {(applyError || error) && <RecoveryAction failure={recoverFailure} />}
       <MidiMapScreen
         connected={connected && !busy && !error}
         native={native}
@@ -161,6 +173,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
                 );
               } catch (cause) {
                 setApplyError(friendlyError(cause, 'change MIDI settings'));
+                recoverFail(cause, 'change MIDI settings');
               } finally {
                 sending.current = false;
                 setBusy(false);
@@ -190,6 +203,7 @@ export function MidiSettings({ connected }: { connected: boolean }) {
                 );
               } catch (cause) {
                 setApplyError(friendlyError(cause, 'change MIDI settings'));
+                recoverFail(cause, 'change MIDI settings');
               } finally {
                 sending.current = false;
                 setBusy(false);

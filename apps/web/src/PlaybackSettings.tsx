@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { HostAudioControls } from './HostAudioControls';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
@@ -54,6 +56,7 @@ export function PlaybackSettings({
   input: AudioProbe | null;
   output: AudioProbe | null;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [state, setState] = useState<AudioState | null>(null);
   const [mixed, setMixed] = useState<RigAudioState | null>(null);
   const [effects, setEffects] = useState<GraphAudioState | null>(null);
@@ -113,6 +116,7 @@ export function PlaybackSettings({
       } catch (cause) {
         if (active)
           setReadError(friendlyError(cause, 'read playback settings'));
+        recoverFail(cause, 'read playback settings', () => void refresh());
       } finally {
         if (active) timer = setTimeout(() => void refresh(), 1500);
       }
@@ -122,7 +126,7 @@ export function PlaybackSettings({
       active = false;
       clearTimeout(timer);
     };
-  }, []);
+  }, [recoverFail]);
   const loadPresets = useCallback(async () => {
     setBusy(true);
     setError('');
@@ -139,10 +143,11 @@ export function PlaybackSettings({
       ]);
     } catch (cause) {
       setError(friendlyError(cause, 'change playback'));
+      recoverFail(cause, 'change playback');
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [recoverFail]);
   useEffect(() => {
     if (!connected) return;
     const request = window.setTimeout(() => void loadPresets(), 0);
@@ -156,6 +161,7 @@ export function PlaybackSettings({
       accept(await playbackCommand(state, action));
     } catch (cause) {
       setError(friendlyError(cause, 'change playback'));
+      recoverFail(cause, 'change playback', () => void command(action));
     } finally {
       try {
         accept(await playbackState());
@@ -550,6 +556,7 @@ export function PlaybackSettings({
       {(error || readError || state?.error) && (
         <p role="alert">{error || readError || state?.error}</p>
       )}
+      {(error || readError) && <RecoveryAction failure={recoverFailure} />}
     </section>
   );
 }

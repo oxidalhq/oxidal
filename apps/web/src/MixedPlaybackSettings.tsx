@@ -1,3 +1,5 @@
+import { RecoveryAction } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { RecoveryNotice } from './RecoveryNotice';
 import { useState, type ReactNode } from 'react';
@@ -29,6 +31,7 @@ export function MixedPlaybackSettings({
   output: AudioProbe | null;
   onState: (state: RigAudioState) => void;
 }) {
+  const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const transitioning =
@@ -41,6 +44,7 @@ export function MixedPlaybackSettings({
       onState(await rigAudioCommand(state, action));
     } catch (cause) {
       setError(friendlyError(cause, 'change playback'));
+      recoverFail(cause, 'change playback', () => void command(action));
       try {
         onState(await rigAudioState());
       } catch {
@@ -85,6 +89,7 @@ export function MixedPlaybackSettings({
       )}
       {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
+      {error && <RecoveryAction failure={recoverFailure} />}
       <RecoveryNotice message={state.recovery_error} />
       <p className="caption">
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
