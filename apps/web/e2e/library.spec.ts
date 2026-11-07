@@ -68,6 +68,25 @@ test('Discover keeps its search and source on refresh and returns after TONE3000
   );
 });
 
+test('Settings sections have links and Effects shows which presets need a pack', async ({
+  page,
+}) => {
+  await page.goto('/#settings/effects');
+  await expect(
+    page.getByRole('tab', { name: 'Effects', selected: true }),
+  ).toBeVisible();
+  const effects = page.getByRole('region', { name: 'Effects' });
+  await expect(
+    effects.getByRole('list', { name: 'Curated packs' }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'About', exact: true }).click();
+  await expect(page).toHaveURL(/#settings\/about$/);
+  await page.reload();
+  await expect(
+    page.getByRole('tab', { name: 'About', selected: true }),
+  ).toBeVisible();
+});
+
 test('new preset creates an empty preset of your own without hardware', async ({
   page,
 }, info) => {

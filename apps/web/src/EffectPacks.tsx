@@ -10,8 +10,10 @@ import { DialogFooter } from './components/ui/dialog';
 import {
   changeEffectPack,
   effectPacks,
+  rigLibrary,
   type EffectPacks as EffectPacksState,
 } from './api';
+import { presetsUsingPack, type PresetPlugins } from './lib/effectPackUsage';
 
 /** Curated packs only: package names and qualification counts come from the device. */
 export function EffectPacks({
@@ -26,6 +28,40 @@ export function EffectPacks({
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+  // Saved presets and the LV2 effects they need, to protect removal (7.17).
+  const [presets, setPresets] = useState<PresetPlugins[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function read() {
+      const found: PresetPlugins[] = [];
+      let after: string | undefined;
+      for (let page = 0; page < 100; page += 1) {
+        const next = await rigLibrary(after);
+        found.push(
+          ...next.presets.map((p) => ({
+            name: p.name,
+            plugins: p.lv2_plugins ?? [],
+          })),
+        );
+        if (!next.next) break;
+        after = next.next;
+      }
+      return found;
+    }
+    if (connected)
+      void read()
+        .then((found) => {
+          if (active) setPresets(found);
+        })
+        .catch(() => {
+          if (active) setPresets(null);
+        });
+    return () => {
+      active = false;
+    };
+  }, [connected]);
 
   useEffect(() => {
     let active = true;
@@ -83,6 +119,10 @@ export function EffectPacks({
   const playing = audioRunning || Boolean(state?.audio_running);
   const locked = Boolean(state?.job) || busy !== null;
   const removal = state?.packs.find((pack) => pack.id === confirmRemove);
+  const usedBy = (id: string) =>
+    presets ? presetsUsingPack(id, presets) : null;
+  const removalUsers = removal ? usedBy(removal.id) : null;
+  const installed = state?.packs.filter((pack) => pack.installed).length ?? 0;
 
   return (
     <section className="panel effect-packs" aria-label="Effects">
@@ -120,6 +160,18 @@ export function EffectPacks({
       )}
 
       {!state && !error && <Loading label="Reading installed effects…" />}
+      {state && installed === 0 && (
+        <p role="status" className="effect-packs-empty">
+          No effect packs installed yet. Install one to add its effects to
+          presets. Nothing is installed automatically.
+        </p>
+      )}
+      {state && !state.available && (
+        <p role="status" className="caption">
+          This device cannot install packages, so effect packs are shown for
+          reference only.
+        </p>
+      )}
       {state && (
         <ul className="effect-pack-list" aria-label="Curated packs">
           {state.packs.map((pack) => {
@@ -146,6 +198,14 @@ export function EffectPacks({
                   <p className="caption effect-pack-meta">
                     {pack.usable_plugins} usable effects · about {pack.size_mib}{' '}
                     MiB · {pack.qualification}
+                    {pack.installed &&
+                      (() => {
+                        const users = usedBy(pack.id);
+                        if (!users) return null;
+                        return users.length
+                          ? ` · Used by ${users.length} ${users.length === 1 ? 'preset' : 'presets'}`
+                          : ' · Not used by saved presets';
+                      })()}
                   </p>
                 </div>
                 <div className="effect-pack-action">
@@ -160,7 +220,10 @@ export function EffectPacks({
                         playing ||
                         locked
                       }
-                      onClick={() => setConfirmRemove(pack.id)}
+                      onClick={() => {
+                        setAcknowledged(false);
+                        setConfirmRemove(pack.id);
+                      }}
                     >
                       {active ? 'Working…' : 'Remove'}
                     </Button>
@@ -197,6 +260,39 @@ export function EffectPacks({
             one of its effects will need the collection installed again before
             they can play completely.
           </p>
+          {removalUsers === null ? (
+            <p className="caption">
+              Oxidal could not check which saved presets use these effects.
+            </p>
+          ) : removalUsers.length > 0 ? (
+            <>
+              <p>
+                Used by {removalUsers.length}{' '}
+                {removalUsers.length === 1 ? 'saved preset' : 'saved presets'}:
+              </p>
+              <ul aria-label="Presets that use these effects">
+                {removalUsers.slice(0, 8).map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+                {removalUsers.length > 8 && (
+                  <li>and {removalUsers.length - 8} more</li>
+                )}
+              </ul>
+            </>
+          ) : (
+            <p className="caption">No saved preset uses these effects.</p>
+          )}
+          {removalUsers?.length !== 0 && (
+            <label className="flex min-h-11 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+              />
+              I understand these presets will not play completely until I
+              install it again
+            </label>
+          )}
           <p className="caption">
             Local presets and their settings are not deleted.
           </p>
@@ -210,7 +306,9 @@ export function EffectPacks({
             </Button>
             <Button
               variant="destructive"
-              disabled={busy !== null}
+              disabled={
+                busy !== null || (removalUsers?.length !== 0 && !acknowledged)
+              }
               onClick={() => void change(removal.id, 'remove')}
             >
               Remove effects

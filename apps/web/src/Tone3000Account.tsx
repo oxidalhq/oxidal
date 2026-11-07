@@ -88,13 +88,24 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
   };
   return (
     <section
-      className="panel control-stack"
+      className="panel control-stack tone3000-account"
       aria-labelledby="tone3000-account-heading"
     >
-      <h2 id="tone3000-account-heading">TONE3000 account</h2>
-      <Badge role="status">
-        {state ? labels[state.phase] : 'Loading account…'}
-      </Badge>
+      <header className="tone3000-account-header">
+        <span className="tone3000-wordmark" aria-hidden="true">
+          TONE3000
+        </span>
+        <div className="tone3000-account-title">
+          <h2 id="tone3000-account-heading">TONE3000 account</h2>
+          <p className="caption">
+            Browse and download NAM captures and cabinet IRs in Discover. Sounds
+            already on this device never need it.
+          </p>
+        </div>
+        <Badge role="status">
+          {state ? labels[state.phase] : 'Loading account…'}
+        </Badge>
+      </header>
       {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
       {state && !waiting && !signedIn && (
         <>

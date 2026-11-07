@@ -1,7 +1,9 @@
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
+  graphAudioState,
   nativeDefaults,
+  rigAudioState,
   playbackCommand,
   playbackState,
   type AudioState,
@@ -20,6 +22,8 @@ import { ToolRow, ToolSection } from './ToolRow';
 export function EngineSettings({ connected }: { connected: boolean }) {
   const [state, setState] = useState<AudioState | null>(null);
   const [defaults, setDefaults] = useState<NativeDefaults | null>(null);
+  // Mixed and effects presets play in their own engine (7.17).
+  const [other, setOther] = useState<'mixed' | 'effects' | null>(null);
   const [editing, setEditing] = useState<{
     control: AudioState['controls'][number];
     session: string;
@@ -36,6 +40,18 @@ export function EngineSettings({ connected }: { connected: boolean }) {
       .catch(() => {
         /* Shown as unavailable below. */
       });
+    void Promise.allSettled([rigAudioState(), graphAudioState()]).then(
+      ([rig, graph]) => {
+        if (!active) return;
+        if (rig.status === 'fulfilled' && rig.value?.phase === 'running')
+          setOther(rig.value.control?.authoring?.length ? 'mixed' : 'effects');
+        else if (
+          graph.status === 'fulfilled' &&
+          graph.value?.phase === 'running'
+        )
+          setOther('effects');
+      },
+    );
     void nativeDefaults()
       .then((next) => {
         if (active) setDefaults(next);
@@ -107,10 +123,17 @@ export function EngineSettings({ connected }: { connected: boolean }) {
             })}
           </div>
         </>
+      ) : other ? (
+        <p className="tool-row-detail" role="status">
+          {other === 'mixed'
+            ? 'A mixed preset with TONE3000 blocks is playing. Its NAM blocks use the settings saved in the preset; change them on each block in Rig.'
+            : 'An effects preset is playing. It has no TONE3000 blocks, so there is no engine setting to change.'}{' '}
+          The device defaults below apply at the next audio start.
+        </p>
       ) : (
         <p className="tool-row-detail">
-          Play a TONE3000 preset to change the running engine. The device
-          defaults below apply whenever audio starts.
+          Audio is stopped. Play a TONE3000 preset to change the running engine;
+          the device defaults below apply whenever audio starts.
         </p>
       )}
       {error && <p role="alert">{error}</p>}

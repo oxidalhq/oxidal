@@ -3618,3 +3618,35 @@ textarea {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* TONE3000 account panel (7.17): a restrained wordmark, purpose and state. */
+.tone3000-account-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 0.75rem;
+}
+.tone3000-wordmark {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0.25rem 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.tone3000-account-title h2 {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .tone3000-account-header {
+    grid-template-columns: 1fr auto;
+  }
+  .tone3000-wordmark {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+.discover-sources {
+  margin-bottom: 0.75rem;
+}

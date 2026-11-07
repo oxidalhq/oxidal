@@ -1688,6 +1688,7 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
     assert_eq!(listed["presets"][0]["topology"], "serial");
     assert_eq!(listed["presets"][0]["native_instances"], 0);
     assert_eq!(listed["presets"][0]["lv2_instances"], 0);
+    assert_eq!(listed["presets"][0]["lv2_plugins"], json!([]));
     let bad = m.to_string().replace(
         "\"formatVersion\":1",
         "\"formatVersion\":1,\"formatVersion\":1",

@@ -11,6 +11,7 @@ import {
   nativeDefaults,
   playbackCommand,
   playbackState,
+  rigAudioState,
   type AudioState,
   type NativeDefaults,
 } from './api';
@@ -18,6 +19,8 @@ vi.mock('./api', () => ({
   nativeDefaults: vi.fn(),
   playbackCommand: vi.fn(),
   playbackState: vi.fn(),
+  rigAudioState: vi.fn(() => Promise.reject(new Error('none'))),
+  graphAudioState: vi.fn(() => Promise.reject(new Error('none'))),
 }));
 // jsdom has no modal dialog.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -88,8 +91,22 @@ it('explains that a native rig must be running', async () => {
   vi.mocked(nativeDefaults).mockRejectedValue(new Error('offline'));
   render(<EngineSettings connected />);
   expect(
-    await screen.findByText(
-      /Play a TONE3000 preset to change the running engine/,
-    ),
+    await screen.findByText(/Audio is stopped. Play a TONE3000 preset/),
   ).toBeInTheDocument();
+});
+
+it('recognises a mixed preset with TONE3000 blocks as the audio owner', async () => {
+  vi.mocked(playbackState).mockResolvedValue({
+    ...running,
+    phase: 'stopped',
+  } as AudioState);
+  vi.mocked(nativeDefaults).mockRejectedValue(new Error('offline'));
+  vi.mocked(rigAudioState).mockResolvedValue({
+    phase: 'running',
+    control: { authoring: [{ node: 'amp' }] },
+  } as unknown as Awaited<ReturnType<typeof rigAudioState>>);
+  render(<EngineSettings connected />);
+  expect(
+    await screen.findByText(/A mixed preset with TONE3000 blocks is playing/),
+  ).toBeVisible();
 });

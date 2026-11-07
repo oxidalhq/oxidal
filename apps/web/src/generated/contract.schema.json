@@ -8228,6 +8228,14 @@
           "format": "uint",
           "minimum": 0
         },
+        "lv2_plugins": {
+          "description": "Distinct LV2 plugin URIs the preset needs, so Effects can tell which\npresets an effect-pack removal would leave unplayable (7.17).",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
         "name": {
           "type": "string"
         },

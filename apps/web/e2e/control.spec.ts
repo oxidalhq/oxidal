@@ -1026,17 +1026,29 @@ test('native device defaults save independently of the playing tone', async ({
       name: 'Native multi-core processing',
     });
     if (!(await multiCore.isChecked())) await multiCore.click();
+    // A switch keeps its 44px target and its thumb no longer fills the track.
+    const track = await multiCore.boundingBox();
+    const thumb = await multiCore.locator('span').boundingBox();
+    expect(track!.height).toBeGreaterThanOrEqual(44);
+    expect(thumb!.width).toBeLessThan(track!.width / 2);
+    await panel.getByRole('combobox', { name: 'Oversampling' }).click();
+    await page.getByRole('option', { name: 'Off', exact: true }).click();
+    await expect(panel.getByText(/Unsaved changes/)).toBeVisible();
     await panel.getByRole('button', { name: 'Save device defaults' }).click();
     await expect(panel.getByRole('status')).toContainText('Defaults saved');
     const saved = await (await request.get(endpoint)).json();
     expect(saved.settings.nam_size).toBe(0.75);
     expect(saved.settings.multi_core).toBe(true);
+    expect(saved.settings.parameters.osEnabled).toBe(0);
     await page.reload();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page
       .getByRole('tab', { name: 'TONE3000 engine', exact: true })
       .click();
     await expect(panel.getByLabel('NAM size for new models')).toHaveText('75%');
+    await expect(
+      panel.getByRole('combobox', { name: 'Oversampling' }),
+    ).toHaveText('Off');
     await panel
       .getByRole('button', { name: 'Reset defaults', exact: true })
       .click();

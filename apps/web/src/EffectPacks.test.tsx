@@ -9,6 +9,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { EffectPacks } from './EffectPacks';
 import { DeviceError } from './lib/friendlyError';
 import {
+  rigLibrary,
   changeEffectPack,
   effectPacks,
   type EffectPacks as EffectPacksState,
@@ -17,6 +18,7 @@ import {
 vi.mock('./api', () => ({
   changeEffectPack: vi.fn(),
   effectPacks: vi.fn(),
+  rigLibrary: vi.fn(),
 }));
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -105,6 +107,10 @@ it('refuses changes while audio plays and confirms removal in a dialog', async (
   expect(
     screen.getByRole('dialog', { name: 'Remove SWH?' }),
   ).toBeInTheDocument();
+  // Without the preset list Oxidal cannot tell, so removal needs a confirmation.
+  expect(screen.getByText(/could not check which saved presets/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Remove effects' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', { name: 'Remove effects' }));
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('swh', 'remove'),
@@ -137,4 +143,66 @@ it('offers Try again when an install fails because the device is busy', async ()
   await waitFor(() => expect(changeEffectPack).toHaveBeenCalledTimes(2));
   expect(changeEffectPack).toHaveBeenLastCalledWith('dragonfly', 'install');
   await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+});
+
+it('names the saved presets a removal would leave unplayable', async () => {
+  vi.mocked(effectPacks).mockResolvedValue(inventory);
+  vi.mocked(rigLibrary)
+    .mockResolvedValueOnce({
+      native_profile: 'p',
+      next: 'r1',
+      presets: [
+        {
+          id: 'a',
+          revision: 'r1',
+          name: 'Swh Phaser',
+          origin: 'mine',
+          native_instances: 0,
+          lv2_instances: 1,
+          topology: 'serial',
+          lv2_plugins: ['http://plugin.org.uk/swh-plugins/phasers'],
+        },
+      ],
+    } as Awaited<ReturnType<typeof rigLibrary>>)
+    .mockResolvedValueOnce({
+      native_profile: 'p',
+      next: null,
+      presets: [
+        {
+          id: 'b',
+          revision: 'r2',
+          name: 'Clean',
+          origin: 'mine',
+          native_instances: 1,
+          lv2_instances: 0,
+          topology: 'serial',
+          lv2_plugins: [],
+        },
+      ],
+    } as Awaited<ReturnType<typeof rigLibrary>>);
+  render(<EffectPacks connected audioRunning={false} />);
+  expect(await screen.findByText(/Used by 1 preset/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+  const users = screen.getByRole('list', {
+    name: 'Presets that use these effects',
+  });
+  expect(users).toHaveTextContent('Swh Phaser');
+  expect(users).not.toHaveTextContent('Clean');
+  expect(screen.getByRole('button', { name: 'Remove effects' })).toBeDisabled();
+});
+
+it('says when no effect pack is installed', async () => {
+  vi.mocked(effectPacks).mockResolvedValue({
+    ...inventory,
+    packs: inventory.packs.map((p) => ({ ...p, installed: false })),
+  });
+  vi.mocked(rigLibrary).mockResolvedValue({
+    native_profile: 'p',
+    next: null,
+    presets: [],
+  } as Awaited<ReturnType<typeof rigLibrary>>);
+  render(<EffectPacks connected audioRunning={false} />);
+  expect(
+    await screen.findByText(/No effect packs installed yet/),
+  ).toBeVisible();
 });

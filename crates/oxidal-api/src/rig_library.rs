@@ -44,6 +44,10 @@ pub struct RigEntry {
     /// Scene names in pad order; empty for a preset without scenes.
     #[serde(default)]
     pub scenes: Vec<String>,
+    /// Distinct LV2 plugin URIs the preset needs, so Effects can tell which
+    /// presets an effect-pack removal would leave unplayable (7.17).
+    #[serde(default)]
+    pub lv2_plugins: Vec<String>,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -300,6 +304,18 @@ pub async fn list(
                 origin,
                 native_instances: m.tone3000.instances.len(),
                 lv2_instances: m.oxidal.as_ref().map_or(0, |h| h.lv2.len()),
+                lv2_plugins: m
+                    .oxidal
+                    .as_ref()
+                    .map(|h| {
+                        h.lv2
+                            .iter()
+                            .map(|i| i.plugin_uri.clone())
+                            .collect::<BTreeSet<_>>()
+                            .into_iter()
+                            .collect()
+                    })
+                    .unwrap_or_default(),
                 topology,
                 scenes,
             });

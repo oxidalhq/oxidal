@@ -2427,6 +2427,11 @@ export interface RigPage {
 export interface RigEntry {
   id: string;
   lv2_instances: number;
+  /**
+   * Distinct LV2 plugin URIs the preset needs, so Effects can tell which
+   * presets an effect-pack removal would leave unplayable (7.17).
+   */
+  lv2_plugins?: string[];
   name: string;
   native_instances: number;
   origin: LibraryOrigin;
