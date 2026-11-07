@@ -1278,6 +1278,7 @@ test('playback lifecycle keeps native authoring available after stop and restart
       .toBe(running.saved_copy);
     // Recall directly from Rig without returning to Library or audio settings.
     await page.getByRole('button', { name: /^Playing preset/ }).click();
+    await page.getByRole('tab', { name: /TONE3000/ }).click();
     await page
       .locator(`.preset-picker-row[data-preset="original:${preset.sha256}"]`)
       .click();
@@ -5339,7 +5340,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
     })
     .click();
   const picker = page.getByRole('dialog', {
-    name: 'Switch preset',
+    name: 'Choose a preset',
     exact: true,
   });
   await expect

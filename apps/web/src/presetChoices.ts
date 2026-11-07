@@ -82,15 +82,36 @@ export const rigTopologyLabel = (rig: {
     `${rig.lv2_instances} ${rig.lv2_instances === 1 ? 'effect' : 'effects'}`,
   ].join(' · ');
 
-export const choiceTopologyLabel = (choice: PresetChoice) =>
-  choice.kind === 'scenes'
-    ? rigTopologyLabel({
-        scenes: choice.scenes,
-        topology: choice.topology,
-        native_instances: choice.nativeInstances,
-        lv2_instances: choice.lv2Instances,
-      })
-    : '';
+/**
+ * One short line for a preset everywhere it is listed (7.27):
+ * `{routing} · {contents}`, zero counts dropped. TONE3000 presets are a NAM chain.
+ */
+export function choiceSummary(choice: PresetChoice): string {
+  if (choice.kind === 'tone3000') return 'NAM chain';
+  const routing =
+    choice.topology === 'scenes'
+      ? `${choice.scenes.length} ${choice.scenes.length === 1 ? 'scene' : 'scenes'}`
+      : choice.topology === 'parallel'
+        ? 'Parallel paths'
+        : 'Serial';
+  const nam =
+    choice.nativeInstances === 0
+      ? ''
+      : choice.nativeInstances === 1
+        ? 'NAM'
+        : `${choice.nativeInstances} NAM`;
+  const fx = choice.lv2Instances ? `${choice.lv2Instances} fx` : '';
+  const contents = [nam, fx].filter(Boolean).join(' + ');
+  return contents ? `${routing} · ${contents}` : routing;
+}
+
+/** Where a preset came from, in the words the chooser tabs use. */
+export const choiceSource = (choice: PresetChoice) =>
+  choice.origin === 'mine'
+    ? 'Set list'
+    : choice.origin === 'oxidal_example'
+      ? 'Oxidal'
+      : 'TONE3000';
 
 /** One device set list; source failures remain visible and do not hide other formats. */
 export async function loadPresetChoices(): Promise<{

@@ -14,23 +14,19 @@ import './PresetPicker.css';
 import { Button } from './components/ui/button';
 import {
   choiceKey as key,
-  choiceTopologyLabel,
+  choiceSource,
+  choiceSummary,
   loadPresetChoices,
   type PresetChoice as Choice,
 } from './presetChoices';
+import { useSessionState } from './lib/sessionState';
 
-const sourceLabel = (item: Choice) =>
-  item.origin === 'mine'
-    ? item.kind === 'scenes'
-      ? 'Mine'
-      : 'My copy'
-    : item.origin === 'oxidal_example'
-      ? 'Oxidal example'
-      : 'TONE3000';
-const originLabel = (item: Choice) =>
-  item.kind === 'scenes'
-    ? `${sourceLabel(item)} · ${choiceTopologyLabel(item)}`
-    : sourceLabel(item);
+type Source = Choice['origin'];
+const SOURCES: [Source, string][] = [
+  ['mine', 'Set list'],
+  ['oxidal_example', 'Oxidal'],
+  ['tone3000', 'TONE3000'],
+];
 
 /** One preset picker for every engine: the playing name opens a searchable list
  * of all presets, those with scenes first; a row plays it. Scenes are switched
@@ -67,6 +63,11 @@ export function RigPresetSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState<Choice | null>(null);
+  // The chooser's source tab, kept for this browser tab (7.27).
+  const [source, setSource] = useSessionState<Source | null>(
+    'preset-chooser-source',
+    null,
+  );
   useEffect(() => {
     let active = true;
     void loadPresetChoices()
@@ -159,7 +160,7 @@ export function RigPresetSelector({
                         ? 'Playing'
                         : upcoming
                           ? 'Next'
-                          : originLabel(item)}
+                          : choiceSummary(item)}
                     </span>
                   </span>
                 </button>
@@ -223,21 +224,29 @@ export function RigPresetSelector({
     current?.name ??
     playing.name ??
     (loading ? 'Loading presets…' : 'Unsaved preset');
+  const setList = items.filter((item) => item.origin === 'mine');
+  /** Set-list number (1-based) of a preset, or 0 when it is not in the set list. */
+  const number = (item: Choice | undefined) =>
+    item ? setList.findIndex((p) => key(p) === key(item)) + 1 : 0;
+  const playingNumber = number(current);
   const found = query.trim().toLowerCase();
   const foundItems = items.filter((item) =>
     detailsMatch(item.name, item.details, found),
   );
-  const groups = (
-    [
-      ['mine', 'Mine'],
-      ['oxidal_example', 'Oxidal examples'],
-      ['tone3000', 'TONE3000'],
-    ] as const
-  ).map(([origin, label]) => ({
-    origin,
-    label,
-    items: foundItems.filter((item) => item.origin === origin),
-  }));
+  const shownSource: Source = source ?? current?.origin ?? 'mine';
+  const shown = found
+    ? foundItems
+    : items.filter((item) => item.origin === shownSource);
+  const entryOf = (item: Choice) => ({
+    kind:
+      item.kind === 'scenes'
+        ? ('rig' as const)
+        : item.owned
+          ? ('owned' as const)
+          : ('original' as const),
+    id: item.kind === 'scenes' ? item.revision : item.id,
+    name: item.name,
+  });
   return (
     <div className="preset-picker" aria-label="Preset navigation">
       <button
@@ -252,27 +261,33 @@ export function RigPresetSelector({
           setOpen(true);
         }}
       >
+        {playingNumber > 0 && (
+          <span className="preset-picker-number" aria-hidden="true">
+            {playingNumber}
+          </span>
+        )}
         <span className="preset-picker-text">
           <span className="preset-picker-title">
             <span className="preset-picker-label">{name}</span>
             {playing.modified && (
-              <span
-                className="preset-modified"
-                role="img"
-                aria-label="Modified preset"
-                title="This playing sound has unsaved edits"
-              />
+              <span className="preset-picker-edited">
+                <span
+                  className="preset-modified"
+                  role="img"
+                  aria-label="Modified preset"
+                  title="This playing sound has unsaved edits"
+                />
+                edited
+              </span>
             )}
           </span>
           <span className="preset-picker-meta">
-            {playing.modified ? (
-              <span className="preset-picker-edited">edited, not saved</span>
-            ) : (
-              'saved'
-            )}
-            {' · '}
-            {current ? originLabel(current) : 'not in the list'}
-            {index >= 0 && ` · ${index + 1} of ${pickerItems.length}`}
+            {current ? choiceSummary(current) : 'Not saved yet'}
+            {playingNumber > 0
+              ? ` · Set list ${playingNumber} of ${setList.length}`
+              : current
+                ? ` · ${choiceSource(current)}`
+                : ''}
           </span>
         </span>
         <CaretDown aria-hidden="true" />
@@ -293,103 +308,120 @@ export function RigPresetSelector({
       )}
       {preview && (
         <PresetDetailsDialog
-          entry={{
-            kind:
-              preview.kind === 'scenes'
-                ? 'rig'
-                : preview.owned
-                  ? 'owned'
-                  : 'original',
-            id: preview.kind === 'scenes' ? preview.revision : preview.id,
-            name: preview.name,
-          }}
+          entry={entryOf(preview)}
           onCancel={() => setPreview(null)}
-        />
-      )}
-      {open && !preview && (
-        <AdjustmentDialog
-          title="Switch preset"
-          className="preset-picker-dialog"
-          onCancel={() => setOpen(false)}
         >
-          {current && (
+          {current && key(preview) === key(current) && (
             <PresetManagement
-              entry={{
-                kind:
-                  current.kind === 'scenes'
-                    ? 'rig'
-                    : current.owned
-                      ? 'owned'
-                      : 'original',
-                id: current.kind === 'scenes' ? current.revision : current.id,
-                name: current.name,
-              }}
+              entry={entryOf(current)}
               disabled={disabled}
-              label="Manage current preset"
+              label="Manage preset"
               onChanged={() => setRefresh((v) => v + 1)}
             />
           )}
+        </PresetDetailsDialog>
+      )}
+      {open && !preview && (
+        <AdjustmentDialog
+          title="Choose a preset"
+          className="preset-picker-dialog"
+          onCancel={() => setOpen(false)}
+        >
           <input
             type="search"
             className="preset-picker-search"
             aria-label="Find a preset"
-            placeholder="Find a preset"
+            placeholder="Find a preset or sound…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <p className="caption">
-            Mine is your set list. Editing a TONE3000 preset or Oxidal example
-            makes a copy in Mine; the original stays unchanged.
-          </p>
-          {groups.map(
-            (group) =>
-              group.items.length > 0 && (
-                <section
-                  key={group.origin}
-                  className="preset-picker-group"
-                  aria-label={group.label}
+          {!found && (
+            <div
+              className="preset-picker-sources"
+              role="tablist"
+              aria-label="Preset source"
+            >
+              {SOURCES.map(([origin, label]) => (
+                <button
+                  key={origin}
+                  type="button"
+                  role="tab"
+                  aria-selected={shownSource === origin}
+                  onClick={() => setSource(origin)}
                 >
-                  <h3>{group.label}</h3>
-                  {group.items.map((p) => (
-                    <div key={key(p)} className="preset-picker-entry">
-                      <button
-                        type="button"
-                        className="preset-picker-row"
-                        data-preset={key(p)}
-                        aria-pressed={key(p) === selected}
-                        disabled={disabled || loading}
-                        onClick={() => {
-                          setOpen(false);
-                          if (key(p) !== selected) choose(p);
-                        }}
-                      >
-                        <span>{p.name}</span>
-                        <span
-                          className={
-                            key(p) === selected
-                              ? 'preset-picker-playing'
-                              : 'preset-picker-scenes'
-                          }
-                        >
-                          {key(p) === selected ? 'Playing' : originLabel(p)}
-                        </span>
-                      </button>
-                      <Button
-                        variant="ghost"
-                        className="shrink-0 px-2"
-                        aria-label={`Details: ${p.name}`}
-                        onClick={() => setPreview(p)}
-                      >
-                        Details
-                      </Button>
-                    </div>
-                  ))}
-                </section>
-              ),
+                  {label}{' '}
+                  <span className="preset-picker-count">
+                    {items.filter((item) => item.origin === origin).length}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
-          {!loading && !foundItems.length && (
-            <p role="status">No presets match.</p>
+          <ul
+            className="preset-picker-group"
+            aria-label={
+              found
+                ? 'Matching presets'
+                : (SOURCES.find(([o]) => o === shownSource)?.[1] ?? '')
+            }
+          >
+            {shown.map((p) => {
+              const playingRow = key(p) === selected;
+              const n = number(p);
+              return (
+                <li key={key(p)} className="preset-picker-entry">
+                  <span className="preset-picker-number" aria-hidden="true">
+                    {n || ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="preset-picker-row"
+                    data-preset={key(p)}
+                    aria-pressed={playingRow}
+                    disabled={disabled || loading}
+                    ref={(element) => {
+                      if (playingRow && element)
+                        element.scrollIntoView({ block: 'center' });
+                    }}
+                    onClick={() => {
+                      setOpen(false);
+                      if (!playingRow) choose(p);
+                    }}
+                  >
+                    <span>{p.name}</span>
+                    <span
+                      className={
+                        playingRow
+                          ? 'preset-picker-playing'
+                          : 'preset-picker-scenes'
+                      }
+                    >
+                      {playingRow ? 'Playing · ' : ''}
+                      {choiceSummary(p)}
+                      {found && ` · ${choiceSource(p)}`}
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    className="shrink-0 px-2"
+                    aria-label={`Details: ${p.name}`}
+                    onClick={() => setPreview(p)}
+                  >
+                    Details
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+          {!loading && !shown.length && (
+            <p role="status">
+              {found ? 'No presets match.' : 'Nothing here yet.'}
+            </p>
           )}
+          <p className="caption">
+            Oxidal and TONE3000 presets open as they are; editing one saves a
+            copy to your set list.
+          </p>
         </AdjustmentDialog>
       )}
     </div>

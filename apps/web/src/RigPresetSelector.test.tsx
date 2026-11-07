@@ -1,3 +1,4 @@
+import { choiceSummary } from './presetChoices';
 import {
   cleanup,
   fireEvent,
@@ -76,21 +77,31 @@ it('selects original and owned identities without optimistically changing the so
     screen.queryByRole('button', { name: 'Next preset' }),
   ).not.toBeInTheDocument();
   fireEvent.click(picker);
+  // Opens on the playing preset's source; every row has one summary form.
+  expect(screen.getByRole('tab', { name: /TONE3000/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   expect(
-    screen.getByRole('button', { name: /^Amp A\s*Playing$/ }),
+    screen.getByRole('button', { name: /^Amp A\s*Playing · NAM chain$/ }),
   ).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByText(/Mine is your set list/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /^My A\s*My copy$/ }));
+  expect(screen.getByText(/editing one saves a copy/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName('Playing preset: Amp A');
   fireEvent.click(picker);
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a preset' }), {
     target: { value: 'b' },
   });
+  // Search covers every source and names the source of each hit.
+  expect(screen.queryByRole('tab', { name: /Set list/ })).toBeNull();
   expect(
-    screen.queryByRole('button', { name: /^My A\s*My copy$/ }),
+    screen.queryByRole('button', { name: /^My A/ }),
   ).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }));
+  fireEvent.click(
+    screen.getByRole('button', { name: /^Amp B\s*NAM chain · TONE3000$/ }),
+  );
   expect(select).toHaveBeenLastCalledWith(tone('b', false));
   view.rerender(
     <RigPresetSelector current={state} disabled onSelect={select} />,
@@ -129,7 +140,7 @@ it('keeps the current rig visible when the library fails, and permits retry', as
   );
   fireEvent.click(picker);
   expect(
-    screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }),
+    screen.getByRole('button', { name: /^Amp B\s*NAM chain$/ }),
   ).toBeEnabled();
 });
 it('groups imaging separately and never substitutes normalized percentages for physical readback', () => {
@@ -278,7 +289,7 @@ it('keeps available originals selectable when saved copies cannot be read', asyn
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*TONE3000$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Amp B\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('b', false));
 });
 it('keeps saved copies selectable when originals cannot be read', async () => {
@@ -292,7 +303,7 @@ it('keeps saved copies selectable when originals cannot be read', async () => {
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
-  fireEvent.click(screen.getByRole('button', { name: /^My A\s*My copy$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
 });
 
@@ -321,15 +332,16 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
   await waitFor(() => expect(picker).toBeEnabled());
   fireEvent.click(picker);
-  const groups = screen
-    .getAllByRole('region')
-    .map((g) => g.getAttribute('aria-label'));
-  expect(groups).toEqual(['Mine', 'TONE3000']);
-  fireEvent.click(
-    screen.getByRole('button', {
-      name: /Clean to heavy.*Mine.*3 scenes.*3 NAM blocks.*0 effects/,
-    }),
-  );
+  expect(
+    screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\s+/g, ' ')),
+  ).toEqual(['Set list 2', 'Oxidal 0', 'TONE3000 2']);
+  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
+  const row = screen.getByRole('button', {
+    name: /^Clean to heavy\s*3 scenes · 3 NAM$/,
+  });
+  // Set-list rows carry their number; zero counts are not listed.
+  expect(row.closest('li')).toHaveTextContent(/^1Clean to heavy/);
+  fireEvent.click(row);
   expect(select).toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'scenes', revision }),
   );
@@ -360,8 +372,12 @@ it('renames from the rig header and refreshes its device label without recalling
   fireEvent.click(
     screen.getByRole('button', { name: 'Playing preset: Amp A' }),
   );
+  // Manage lives in the playing preset's Details.
   fireEvent.click(
-    await screen.findByRole('button', { name: 'Manage current preset: Amp A' }),
+    await screen.findByRole('button', { name: 'Details: Amp A' }),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Manage preset: Amp A' }),
   );
   const name = await screen.findByRole('textbox', {
     name: 'Name on this device',
@@ -423,11 +439,43 @@ it('searches descriptions and opens preset details without recalling it', async 
   fireEvent.click(detail);
   await screen.findByText('Use a neck pickup');
   expect(
-    screen.queryByRole('dialog', { name: 'Switch preset' }),
+    screen.queryByRole('dialog', { name: 'Choose a preset' }),
   ).not.toBeInTheDocument();
   expect(select).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
   expect(
-    screen.getByRole('dialog', { name: 'Switch preset' }),
+    screen.getByRole('dialog', { name: 'Choose a preset' }),
   ).toBeInTheDocument();
+});
+
+it('summarises every preset in one form with zero counts left out', () => {
+  const rig = (
+    topology: 'serial' | 'parallel' | 'scenes',
+    nativeInstances: number,
+    lv2Instances: number,
+    scenes: string[] = [],
+  ) =>
+    choiceSummary({
+      kind: 'scenes',
+      origin: 'mine',
+      revision: 'r',
+      name: 'x',
+      scenes,
+      topology,
+      nativeInstances,
+      lv2Instances,
+    });
+  expect(rig('serial', 1, 1)).toBe('Serial · NAM + 1 fx');
+  expect(rig('parallel', 2, 0)).toBe('Parallel paths · 2 NAM');
+  expect(rig('scenes', 3, 0, ['a', 'b', 'c'])).toBe('3 scenes · 3 NAM');
+  expect(rig('serial', 0, 0)).toBe('Serial');
+  expect(
+    choiceSummary({
+      kind: 'tone3000',
+      origin: 'tone3000',
+      id: 'a',
+      owned: false,
+      name: 'A',
+    }),
+  ).toBe('NAM chain');
 });

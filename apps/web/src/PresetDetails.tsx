@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
@@ -23,11 +24,14 @@ export function PresetDetailsDialog({
   onCancel,
   onChanged,
   editable = false,
+  children,
 }: {
   entry: Entry;
   onCancel: () => void;
   onChanged?: () => void;
   editable?: boolean;
+  /** Extra actions for this preset, such as Manage on the playing preset. */
+  children?: ReactNode;
 }) {
   const [catalog, setCatalog] = useState<DetailsCatalog | null>(null);
   const [details, setDetails] = useState<PresetDetails>(emptyDetails);
@@ -201,6 +205,7 @@ export function PresetDetailsDialog({
             </>
           )
         )}
+        {children && <div className="action-row">{children}</div>}
       </div>
     </AdjustmentDialog>
   );
