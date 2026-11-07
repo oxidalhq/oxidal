@@ -190,6 +190,8 @@ export function MixedRig({
     added?: NewScene[];
   } | null>(null);
   const [namingScene, setNamingScene] = useState<string | null>(null);
+  /** Save while the heard mix differs from its scene asks what to keep (V37). */
+  const [saveReview, setSaveReview] = useState(false);
   const [copyOnEdit, setCopyOnEdit] = useState<{
     copy: string;
     source: string;
@@ -483,6 +485,25 @@ export function MixedRig({
       sending.current = false;
       if (alive.current) setBusy(false);
     }
+  }
+  /** Saves the scene draft in one publish; `withMix` also updates the scene
+   * being edited to the mix heard now. */
+  function saveScenes(withMix: boolean) {
+    setSaveReview(false);
+    const gains =
+      withMix && editingScene
+        ? { ...drafts, [editingScene.id]: editingSceneGains }
+        : drafts;
+    return rebuild(({ opened, live, name }) =>
+      updateScenes(
+        opened,
+        gains,
+        current.current?.control?.scene ?? undefined,
+        live,
+        name,
+        addedScenes,
+      ),
+    );
   }
   /** Sets one path's merge level on both channels, one confirmed command each. */
   async function setPathLevel(targets: RigControl['target'][], value: number) {
@@ -1828,6 +1849,41 @@ export function MixedRig({
               </Button>
             </div>
           )}
+          {saveReview && (
+            <AdjustmentDialog
+              title="Save this preset?"
+              onCancel={() => setSaveReview(false)}
+            >
+              <p>
+                The mix you hear differs from {editingScene.name}. Choose what
+                the preset keeps. Shared block settings are saved either way.
+              </p>
+              <div className="control-stack">
+                <Button onClick={() => void saveScenes(true)}>
+                  Update {editingScene.name} and save
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSaveReview(false);
+                    setNamingScene('');
+                  }}
+                >
+                  Save as new scene…
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={draftCount === 0}
+                  onClick={() => void saveScenes(false)}
+                >
+                  Save without this mix
+                </Button>
+                <Button variant="ghost" onClick={() => setSaveReview(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </AdjustmentDialog>
+          )}
           {namingScene !== null && (
             <AdjustmentDialog
               title="Save as new scene"
@@ -1884,12 +1940,14 @@ export function MixedRig({
               </form>
             </AdjustmentDialog>
           )}
-          {draftCount > 0 && (
+          {(draftCount > 0 || sceneMixChanged) && (
             <div className="scene-context-actions" aria-label="Scene edits">
               <span className="caption" role="status">
-                {draftCount === 1
-                  ? '1 scene updated · not saved yet.'
-                  : `${draftCount} scenes updated · not saved yet.`}
+                {draftCount === 0
+                  ? 'The mix you hear is not saved in a scene yet.'
+                  : draftCount === 1
+                    ? '1 scene updated · not saved yet.'
+                    : `${draftCount} scenes updated · not saved yet.`}
                 {addedScenes.length > 0 &&
                   ` New: ${addedScenes.map((scene) => scene.name).join(', ')}.`}
               </span>
@@ -1906,16 +1964,7 @@ export function MixedRig({
               <Button
                 disabled={disabled || editing || !!edit || !!picker}
                 onClick={() =>
-                  void rebuild(({ opened, live, name }) =>
-                    updateScenes(
-                      opened,
-                      drafts,
-                      state.control?.scene ?? undefined,
-                      live,
-                      name,
-                      addedScenes,
-                    ),
-                  )
+                  sceneMixChanged ? setSaveReview(true) : void saveScenes(false)
                 }
               >
                 Save preset

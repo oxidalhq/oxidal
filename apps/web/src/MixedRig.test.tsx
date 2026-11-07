@@ -503,6 +503,21 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
   const update = screen.getByRole('button', { name: 'Update scene' });
   expect(update).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
+  // Save while the heard mix differs from its scene asks what to keep (V37).
+  fireEvent.click(screen.getByRole('button', { name: 'Save preset' }));
+  const review = await screen.findByRole('dialog', {
+    name: 'Save this preset?',
+  });
+  expect(
+    within(review).getByRole('button', { name: 'Update Stage mix and save' }),
+  ).toBeEnabled();
+  expect(
+    within(review).getByRole('button', { name: 'Save without this mix' }),
+  ).toBeDisabled();
+  fireEvent.click(within(review).getByRole('button', { name: 'Cancel' }));
+  expect(
+    screen.queryByRole('dialog', { name: 'Save this preset?' }),
+  ).toBeNull();
   vi.mocked(publishRig).mockClear();
   fireEvent.click(update);
   // Update scene changes the draft only; nothing is published until Save.
