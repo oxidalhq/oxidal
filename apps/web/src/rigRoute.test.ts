@@ -11,6 +11,7 @@ import {
   routeAppend,
   routeControl,
   routePath,
+  routePathGain,
   routeShift,
   routeCopyBranch,
   routeInsert,
@@ -306,4 +307,18 @@ it('edits offline by path: append, copy and remove paths, shift and set controls
   expect(
     (route[0] as { controls: Record<string, number> }).controls.mix,
   ).not.toBe(7);
+});
+
+it('sets one path level and keeps it through build and reopen', () => {
+  const route: Route = [split('s', [[fx('a')], [fx('b')], []])];
+  const next = routePathGain(route, 'split-s', 2, 0.4);
+  expect(routePathGain(route, 'split-s', 0, 9)[0]).toMatchObject({
+    gains: [4, 1, 1],
+  });
+  const built = buildRoute('p', 'x', next, 'prof');
+  for (const side of ['left', 'right'])
+    expect(
+      graph(built).nodes.find((n) => n.id === `merge-s-${side}`)!.inputGains,
+    ).toEqual([1, 1, 0.4]);
+  expect(reopen(next)[0]).toMatchObject({ gains: [1, 1, 0.4] });
 });

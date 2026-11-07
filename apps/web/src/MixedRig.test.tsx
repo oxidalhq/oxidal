@@ -723,17 +723,30 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
       revision: 3,
       modified: false,
       eq: [],
-      controls: ['clean', 'dirt'].map((node) => ({
-        target: { kind: 'bypass', node },
-        label: 'Bypass',
-        display: '',
-        toggle: true,
-        value: 0,
-        minimum: 0,
-        maximum: 1,
-        integer: false,
-        logarithmic: false,
-      })),
+      controls: [
+        ...['left', 'right'].map((side) => ({
+          target: { kind: 'merge', node: `merge-${side}`, port: 1 },
+          label: 'Level',
+          display: '100%',
+          toggle: false,
+          value: 1,
+          minimum: 0,
+          maximum: 4,
+          integer: false,
+          logarithmic: false,
+        })),
+        ...['clean', 'dirt'].map((node) => ({
+          target: { kind: 'bypass', node },
+          label: 'Bypass',
+          display: '',
+          toggle: true,
+          value: 0,
+          minimum: 0,
+          maximum: 1,
+          integer: false,
+          logarithmic: false,
+        })),
+      ],
     },
   } as never;
   vi.mocked(rigAudioState).mockResolvedValue(state);
@@ -767,6 +780,27 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
   expect(
     within(routing).getByRole('button', { name: 'Remove branch' }),
   ).toBeVisible();
+  // The selected path's level is set live on both channels when released.
+  const level = screen.getByLabelText('Path 2 level');
+  fireEvent.change(level, { target: { value: '0.5' } });
+  fireEvent.pointerUp(level);
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(rigAudioCommand)
+        .mock.calls.filter(
+          ([, action]) =>
+            action.kind === 'control' &&
+            action.command.target.kind === 'merge' &&
+            action.command.value === 0.5,
+        )
+        .map(([, action]) =>
+          action.kind === 'control' && action.command.target.kind === 'merge'
+            ? action.command.target.node
+            : '',
+        ),
+    ).toEqual(['merge-left', 'merge-right']),
+  );
   fireEvent.click(within(routing).getByRole('button', { name: 'Copy branch' }));
   await waitFor(() => expect(publishRig).toHaveBeenCalled());
   const request = vi.mocked(publishRig).mock.calls[0]![0];

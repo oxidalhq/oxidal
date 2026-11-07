@@ -170,19 +170,30 @@ export function chainLanes(graph: Graph): string[][] | null {
   return lanes.length <= MAX_CHAIN_LANES ? lanes : null;
 }
 
-/** Whether block `id` sits inside a split's branch, and that split's path count. */
+/** Whether block `id` sits inside a split's branch: that split's path count,
+ * its merge node base and the path's merge port. */
 export function routeBranchOf(route: IdStep[] | null, id: string) {
-  const look = (steps: IdStep[], owner?: number): number | null | undefined => {
+  type Found = { paths: number; merge: string; port: number } | null;
+  const look = (steps: IdStep[], owner: Found): Found | undefined => {
     for (const s of steps) {
-      if (s === id) return owner ?? null;
+      if (s === id) return owner;
       if (typeof s !== 'string')
-        for (const b of s.branches) {
-          const found = look(b, s.branches.length);
+        for (const [port, b] of s.branches.entries()) {
+          const found = look(b, {
+            paths: s.branches.length,
+            merge: s.merge,
+            port,
+          });
           if (found !== undefined) return found;
         }
     }
     return undefined;
   };
-  const paths = route ? look(route) : undefined;
-  return { found: paths !== undefined, paths: paths ?? 0 };
+  const owner = route ? look(route, null) : undefined;
+  return {
+    found: owner !== undefined,
+    paths: owner?.paths ?? 0,
+    merge: owner?.merge ?? '',
+    port: owner?.port ?? 0,
+  };
 }

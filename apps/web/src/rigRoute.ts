@@ -425,3 +425,17 @@ export function routeControl(
   };
   return next;
 }
+
+/** One path's level into its merge (0–4, as the daemon validates). */
+export function routePathGain(
+  route: Route,
+  split: string,
+  path: number,
+  gain: number,
+): Route {
+  const next = clone(route);
+  const s = findSplit(next, split);
+  if (!s || path >= s.branches.length) return route;
+  s.gains[path] = Math.max(0, Math.min(4, gain));
+  return next;
+}

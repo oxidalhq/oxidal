@@ -28,6 +28,7 @@ import {
   routeAppend,
   routeControl,
   routePath,
+  routePathGain,
   routeRemove,
   routeShift,
   type Route,
@@ -319,6 +320,31 @@ export function OfflineEditor({
                   Remove
                 </Button>
               </div>
+              <label className="field">
+                <span>
+                  Path {path + 1} level ·{' '}
+                  {Math.round((step.gains[path] ?? 1) * 100)}%
+                </span>
+                <input
+                  type="range"
+                  aria-label={`Path ${path + 1} level`}
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={step.gains[path] ?? 1}
+                  disabled={busy}
+                  onChange={(event) =>
+                    change((r) =>
+                      routePathGain(
+                        r,
+                        step.split,
+                        path,
+                        Number(event.target.value),
+                      ),
+                    )
+                  }
+                />
+              </label>
               {steps(branch)}
             </li>
           ))}

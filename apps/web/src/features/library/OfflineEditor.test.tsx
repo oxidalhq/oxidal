@@ -108,6 +108,9 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
   fireEvent.change(screen.getByLabelText('second mix'), {
     target: { value: '4' },
   });
+  fireEvent.change(screen.getByLabelText('Path 2 level'), {
+    target: { value: '0.5' },
+  });
   expect(screen.getByText('Dry · no blocks')).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -119,6 +122,11 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
   expect(request.source).toEqual({ kind: 'rig', id: 'rev' });
   expect(chainLanes(manifest.oxidal.graph)).toEqual([['second'], []]);
   expect(manifest.oxidal.lv2[0].controls.mix).toBe(4);
+  const merge = manifest.oxidal.graph.nodes.find(
+    (n: { kind: string; id: string }) =>
+      n.kind === 'merge' && n.id.endsWith('-left'),
+  );
+  expect(merge.inputGains).toEqual([1, 0.5]);
 });
 
 it('saves a preset that is not yours as a copy, and refuses scene presets', async () => {

@@ -481,6 +481,25 @@ export function MixedRig({
       if (alive.current) setBusy(false);
     }
   }
+  /** Sets one path's merge level on both channels, one confirmed command each. */
+  async function setPathLevel(targets: RigControl['target'][], value: number) {
+    for (const target of targets) {
+      const cursor = current.current?.control;
+      if (
+        !cursor ||
+        !(await command({
+          kind: 'control',
+          command: {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            target,
+            value,
+          },
+        }))
+      )
+        return;
+    }
+  }
   /** Recalls a scene; a drafted update then replaces its saved snapshot live. */
   async function recallScene(scene: string) {
     const control = current.current?.control;
@@ -2392,6 +2411,35 @@ export function MixedRig({
                 </Button>
               </div>
             )}
+            {inLane &&
+              editable &&
+              !sceneLanes.length &&
+              selectedBranch.paths > 0 &&
+              (() => {
+                const sides = ['left', 'right'].map((side) =>
+                  state.control?.controls.find(
+                    (c) =>
+                      c.target.kind === 'merge' &&
+                      c.target.node === `${selectedBranch.merge}-${side}` &&
+                      c.target.port === selectedBranch.port,
+                  ),
+                );
+                if (!sides[0] || !sides[1]) return null;
+                return (
+                  <PathLevel
+                    key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}`}
+                    path={selectedBranch.port + 1}
+                    value={sides[0].value}
+                    disabled={disabled || !!edit || editing || busy}
+                    onCommit={(value) =>
+                      setPathLevel(
+                        sides.map((side) => side!.target),
+                        value,
+                      )
+                    }
+                  />
+                );
+              })()}
             {inLane && editable && !sceneLanes.length && (
               <div
                 className="action-row"
@@ -2759,5 +2807,44 @@ export function MixedRig({
         </p>
       )}
     </section>
+  );
+}
+
+/** A path's level into its merge, set on both channels when released (7.26).
+ * Live and unsaved until Save, like every other control. */
+function PathLevel({
+  path,
+  value,
+  disabled,
+  onCommit,
+}: {
+  path: number;
+  value: number;
+  disabled: boolean;
+  onCommit: (value: number) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const commit = () => {
+    if (Math.abs(draft - value) > 0.0001) void onCommit(draft);
+  };
+  return (
+    <label className="field">
+      <span>
+        Path {path} level · {Math.round(draft * 100)}%
+      </span>
+      <input
+        type="range"
+        aria-label={`Path ${path} level`}
+        min={0}
+        max={2}
+        step={0.05}
+        value={draft}
+        disabled={disabled}
+        onChange={(event) => setDraft(Number(event.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+      />
+    </label>
   );
 }
