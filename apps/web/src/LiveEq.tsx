@@ -93,7 +93,7 @@ export function LiveEq<S extends EqSession>({
     try {
       accept(await send(state, edit));
     } catch (cause) {
-      setError(friendlyError(cause, 'read the EQ'));
+      setError(friendlyError(cause, 'change the EQ'));
     } finally {
       setBusy(false);
       onEditing(false);

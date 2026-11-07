@@ -13,6 +13,7 @@ import {
   rigLibrary,
   setKeepReady,
 } from './api';
+import { DeviceError } from './lib/friendlyError';
 import { SavedRigs } from './SavedRigs';
 
 vi.mock('./api', () => ({
@@ -145,5 +146,35 @@ it('reports only worker-confirmed Ready and restarts to prepare after confirmati
   expect(action.settings.revision).toBe(revisions[0]);
   expect(action.settings.prepared.map((p) => p.revision)).toEqual(
     revisions.slice(1, 4),
+  );
+});
+
+it('offers Try again when playing fails because the device is busy', async () => {
+  render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      origin="oxidal_example"
+      title="Oxidal"
+    />,
+  );
+  await waitFor(() => expect(screen.getByText('Factory 1')).toBeVisible());
+  vi.mocked(rigAudioState).mockRejectedValue(
+    new DeviceError(
+      'Preset library operation already in progress',
+      'busy',
+      409,
+    ),
+  );
+  const calls = vi.mocked(rigAudioState).mock.calls.length;
+  fireEvent.click(screen.getAllByRole('button', { name: /^Play/ })[0]!);
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not play this preset. Another change is still running on the device.',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await waitFor(() =>
+    expect(vi.mocked(rigAudioState).mock.calls.length).toBeGreaterThan(
+      calls + 1,
+    ),
   );
 });

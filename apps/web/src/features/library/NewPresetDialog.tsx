@@ -8,6 +8,8 @@ import {
 } from '../../api';
 import type { RigEntry, RigNativeSource } from '../../generated/contract';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
+import { FailureNotice } from '../../components/ui/failure';
+import { useFailure } from '../../lib/useFailure';
 import { Button } from '../../components/ui/button';
 import {
   Select,
@@ -16,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
-import { friendlyError } from '../../lib/friendlyError';
 import {
   emptyPreset,
   presetCopy,
@@ -53,6 +54,7 @@ export function NewPresetDialog({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const { failure, fail, clear } = useFailure();
   const [touched, setTouched] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -72,7 +74,7 @@ export function NewPresetDialog({
       setProfile(native);
     })()
       .catch((e: unknown) => {
-        if (alive) setError(friendlyError(e, 'read your presets'));
+        if (alive) fail(e, 'read your presets');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -80,7 +82,7 @@ export function NewPresetDialog({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [fail]);
   const nameError = presetNameError(name);
   const options = [
     ...rigs.map((r) => ({ value: `rig:${r.revision}`, label: r.name })),
@@ -98,6 +100,7 @@ export function NewPresetDialog({
     }
     setBusy(true);
     setError('');
+    clear();
     try {
       let request;
       if (start === 'empty') request = emptyPreset(name, profile);
@@ -110,7 +113,7 @@ export function NewPresetDialog({
       }
       onCreated(await publishRig(request));
     } catch (e) {
-      setError(friendlyError(e, 'create the preset'));
+      fail(e, 'create the preset', () => void create());
     } finally {
       setBusy(false);
     }
@@ -180,6 +183,7 @@ export function NewPresetDialog({
           Nothing starts playing. The original stays unchanged.
         </p>
         {error && <p role="alert">{error}</p>}
+        <FailureNotice failure={failure} busy={busy} />
         <div className="action-row">
           <Button
             type="button"

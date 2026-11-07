@@ -74,6 +74,8 @@ import { rigNodeLabel } from './rigDraft';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
 import { AdjustmentDialog } from './AdjustmentDialog';
+import { FailureNotice } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { TouchAdjust } from './TouchAdjust';
 import { EditQueue } from './editQueue';
 import { controlDisplay, controlLabel, lv2Control } from './lv2Control';
@@ -176,6 +178,12 @@ export function MixedRig({
     target: string;
   } | null>(null);
   const [error, setError] = useState('');
+  /** Failed chain edits keep their recovery action (7.24). */
+  const {
+    failure: editFailure,
+    fail: failEdit,
+    clear: clearEdit,
+  } = useFailure();
   const [readError, setReadError] = useState('');
   const [name, setName] = useState('');
   const [saveOpening, setSaveOpening] = useState<RigAudioState | null>(null);
@@ -611,6 +619,7 @@ export function MixedRig({
     const run = async () => {
       const opened = document?.revision === revision ? document : null;
       if (!opened || editing) return;
+      clearEdit();
       setEditing(true);
       setError('');
       try {
@@ -659,7 +668,8 @@ export function MixedRig({
             sourceName: listed?.name ?? opened.manifest.name,
           });
       } catch (cause) {
-        if (alive.current) setError(friendlyError(cause, 'update the rig'));
+        if (alive.current)
+          failEdit(cause, 'change the preset', () => void run());
       } finally {
         if (alive.current) setEditing(false);
       }
@@ -1979,6 +1989,14 @@ export function MixedRig({
           {error || readError || state.error}
         </p>
       )}
+      <FailureNotice
+        failure={editFailure}
+        busy={editing}
+        onRefresh={() => {
+          clearEdit();
+          void rigAudioState().then(accept, () => {});
+        }}
+      />
       {(sceneLanes.length > 0 || effectLanes.length > 0) && (
         <ChainView
           label={sceneLanes.length ? 'Scene branches' : 'Chain'}

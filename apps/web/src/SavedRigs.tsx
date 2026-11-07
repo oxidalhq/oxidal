@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './components/ui/button';
 import { PresetRow } from './features/library/PresetRow';
-import { friendlyError } from './lib/friendlyError';
+import { FailureNotice } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { Checkbox } from './components/ui/checkbox';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { detailsMatch } from './presetMetadata';
@@ -58,7 +59,8 @@ export function SavedRigs({
   const [busy, setBusy] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const { failure, fail, clear } = useFailure();
+  const [reload, setReload] = useState(0);
   const [prepared, setPreparedState] = useState<string[]>([]);
   const [choosing, setChoosing] = useState(false);
   /** Worker-confirmed loaded revisions; empty when audio is not running. */
@@ -82,12 +84,12 @@ export function SavedRigs({
   async function prepare() {
     setConfirming(false);
     setBusy(true);
-    setError('');
+    clear();
     try {
       await prepareKeepReady();
     } catch (cause) {
       if (alive.current)
-        setError(friendlyError(cause, 'prepare these presets'));
+        fail(cause, 'prepare these presets', () => void prepare());
     } finally {
       if (alive.current) setBusy(false);
       await readRig();
@@ -101,7 +103,7 @@ export function SavedRigs({
       .then((saved) => alive.current && setPreparedState(saved))
       .catch((cause: unknown) => {
         if (alive.current) {
-          setError(friendlyError(cause, 'change Keep ready'));
+          fail(cause, 'change Keep ready');
           void readKeepReady().then(setPreparedState, () => {});
         }
       });
@@ -117,7 +119,7 @@ export function SavedRigs({
         }
       })
       .catch((cause: unknown) => {
-        if (alive.current) setError(friendlyError(cause, 'play this preset'));
+        if (alive.current) fail(cause, 'read your presets');
       });
     void readKeepReady()
       .then((saved) => alive.current && setPreparedState(saved))
@@ -126,11 +128,11 @@ export function SavedRigs({
     return () => {
       alive.current = false;
     };
-  }, [refresh]);
+  }, [refresh, reload, fail]);
   async function play(revision: string, openMidi = false) {
     setBusy(true);
     setLoadingId(revision);
-    setError('');
+    clear();
     try {
       await playScenes(
         revision,
@@ -147,7 +149,8 @@ export function SavedRigs({
         onOpenRig();
       }
     } catch (cause) {
-      if (alive.current) setError(friendlyError(cause, 'load more presets'));
+      if (alive.current)
+        fail(cause, 'play this preset', () => void play(revision, openMidi));
     } finally {
       if (alive.current) {
         setBusy(false);
@@ -158,7 +161,7 @@ export function SavedRigs({
   async function more() {
     if (!next) return;
     setBusy(true);
-    setError('');
+    clear();
     try {
       const page = await rigLibrary(next);
       if (alive.current) {
@@ -171,7 +174,7 @@ export function SavedRigs({
         setNext(page.next ?? null);
       }
     } catch (cause) {
-      if (alive.current) setError(friendlyError(cause, 'play this preset'));
+      if (alive.current) fail(cause, 'load more presets', () => void more());
     } finally {
       if (alive.current) setBusy(false);
     }
@@ -180,7 +183,7 @@ export function SavedRigs({
   const shown = originItems.filter((item) =>
     detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
-  if (!originItems.length && !error) return null;
+  if (!originItems.length && !failure) return null;
   const readyCount = shown.filter((p) => ready.includes(p.revision)).length;
   // Selected but not loaded beside the playing preset: needs a restart.
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
@@ -249,7 +252,14 @@ export function SavedRigs({
           each adjacent group of {GAPLESS_BANK_SIZE} loads together.
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      <FailureNotice
+        failure={failure}
+        busy={busy}
+        onRefresh={() => {
+          clear();
+          setReload((n) => n + 1);
+        }}
+      />
       <ul className="preset-library">
         {shown.map((p) => {
           const active = playing === p.revision;

@@ -1,4 +1,5 @@
-import { friendlyError } from './lib/friendlyError';
+import { FailureNotice } from './components/ui/failure';
+import { useFailure } from './lib/useFailure';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUp,
@@ -25,7 +26,8 @@ export function LibraryManagement({
   onChanged: () => void;
 }) {
   const [catalog, setCatalog] = useState<LibraryCatalog | null>(null);
-  const [error, setError] = useState('');
+  const { failure, fail, clear } = useFailure();
+  const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [removed, setRemoved] = useState(false);
   const alive = useRef(false);
@@ -44,12 +46,12 @@ export function LibraryManagement({
         if (alive.current) setCatalog(s);
       })
       .catch((e: unknown) => {
-        if (alive.current) setError(friendlyError(e, 'read the set list'));
+        if (alive.current) fail(e, 'read the set list');
       });
     return () => {
       alive.current = false;
     };
-  }, []);
+  }, [reload, fail]);
   async function edit(
     item: LibraryCatalog['items'][number],
     action: LibraryUpdate['action'],
@@ -57,7 +59,7 @@ export function LibraryManagement({
     if (!catalog || writing.current) return;
     writing.current = true;
     setBusy(true);
-    setError('');
+    clear();
     try {
       const result = await libraryCatalog({
         expected_revision: catalog.revision,
@@ -71,7 +73,8 @@ export function LibraryManagement({
       }
     } catch (e) {
       if (alive.current) {
-        setError(friendlyError(e, 'update the set list'));
+        // The list is read again below, so the next try uses current data.
+        fail(e, 'update the set list');
         try {
           setCatalog(await libraryCatalog());
         } catch {
@@ -118,7 +121,14 @@ export function LibraryManagement({
         separate NAM/IR files. Account sign-in and diagnostic history stay on
         this unit.
       </p>
-      {error && <p role="alert">{error}</p>}
+      <FailureNotice
+        failure={failure}
+        busy={busy}
+        onRefresh={() => {
+          clear();
+          setReload((n) => n + 1);
+        }}
+      />
       {!catalog && <Loading label="Loading the set list…" />}
       <div
         ref={root}
@@ -155,8 +165,7 @@ export function LibraryManagement({
                     if (alive.current) setCatalog(c);
                   })
                   .catch((e: unknown) => {
-                    if (alive.current)
-                      setError(friendlyError(e, 'update the set list'));
+                    if (alive.current) fail(e, 'read the set list');
                   });
               }}
               onEdit={(action) => void edit(item, action)}
