@@ -1747,6 +1747,7 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
             .to_string()
             .contains("saved again from another screen")
     );
+    assert_eq!(message["code"], "conflict");
     assert!(
         get(&c, &url, "presets/rigs").await["presets"]
             .as_array()

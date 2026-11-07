@@ -18,7 +18,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
-import { friendlyError } from '../../lib/friendlyError';
+import {
+  errorRecovery,
+  friendlyError,
+  type Recovery,
+} from '../../lib/friendlyError';
 import { lv2Effect, type DraftEffect } from '../../rigDraft';
 import {
   buildRoute,
@@ -60,11 +64,14 @@ export function OfflineEditor({
   connected,
   onSaved,
   onCancel,
+  onRefresh = onCancel,
 }: {
   revision: string;
   connected: boolean;
   onSaved: (saved: RigDocument) => void;
   onCancel: () => void;
+  /** Closes the editor and reloads the Library after a conflict. */
+  onRefresh?: () => void;
 }) {
   const [opened, setOpened] = useState<Opened | null>(null);
   const [route, setRoute] = useState<Route>([]);
@@ -75,6 +82,7 @@ export function OfflineEditor({
   const [error, setError] = useState('');
   const [blocked, setBlocked] = useState('');
   const [discarding, setDiscarding] = useState(false);
+  const [recovery, setRecovery] = useState<Recovery>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -132,6 +140,7 @@ export function OfflineEditor({
     }
     setBusy(true);
     setError('');
+    setRecovery(null);
     try {
       const id = opened.mine
         ? opened.document.manifest.id
@@ -142,6 +151,7 @@ export function OfflineEditor({
     } catch (cause) {
       // The draft stays open so nothing is lost.
       setError(friendlyError(cause, 'save the preset'));
+      setRecovery(errorRecovery(cause));
     } finally {
       setBusy(false);
     }
@@ -419,6 +429,26 @@ export function OfflineEditor({
             </div>
           </div>
           {error && <p role="alert">{error}</p>}
+          {recovery === 'retry' && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void save()}
+            >
+              Try again
+            </Button>
+          )}
+          {recovery === 'refresh' && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={onRefresh}
+            >
+              Close and show the latest version
+            </Button>
+          )}
           <div className="action-row">
             <span className="flex-1" />
             <Button

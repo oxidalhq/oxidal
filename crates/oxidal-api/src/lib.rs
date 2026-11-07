@@ -67,6 +67,55 @@ pub struct Capabilities {
 #[serde(deny_unknown_fields)]
 pub struct ApiError {
     pub error: String,
+    /// What kind of failure this is, so a client can choose one recovery
+    /// action without parsing the sentence (Sprint 07 7.24).
+    pub code: ErrorCode,
+}
+
+/// Stable failure kinds shared by every endpoint.
+/// @see docs/architecture.md
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCode {
+    /// The request itself is wrong; changing it is the only fix.
+    Invalid,
+    /// The target no longer exists; refresh to see what does.
+    NotFound,
+    /// Something changed since the client read it; check again, then retry.
+    Conflict,
+    /// Another operation is still running; retry when it finishes.
+    Busy,
+    /// Protect is on; turn it off to change this.
+    Locked,
+    /// A service or device is not available now; retry later.
+    Unavailable,
+    /// The device took too long.
+    Timeout,
+    /// Device storage is full or unwritable.
+    Storage,
+    /// Anything else; the sentence and Details explain.
+    Internal,
+}
+
+impl ErrorCode {
+    /// One mapping for every handler: the status decides, with the few
+    /// statuses that carry two meanings split by their wording.
+    pub fn of(status: StatusCode, error: &str) -> Self {
+        let lower = error.to_ascii_lowercase();
+        match status.as_u16() {
+            400 | 413 | 415 | 422 => Self::Invalid,
+            404 | 410 => Self::NotFound,
+            409 if lower.contains("in progress") || lower.contains("already") => Self::Busy,
+            409 | 412 => Self::Conflict,
+            423 => Self::Locked,
+            429 => Self::Busy,
+            408 | 504 => Self::Timeout,
+            507 => Self::Storage,
+            502 | 503 => Self::Unavailable,
+            _ if lower.contains("no space") || lower.contains("read-only") => Self::Storage,
+            _ => Self::Internal,
+        }
+    }
 }
 
 /// Schema generation root. Rust wire types are the contract source of truth.
@@ -559,6 +608,7 @@ fn failure(status: StatusCode, error: &str) -> Response {
         status,
         Json(ApiError {
             error: error.into(),
+            code: ErrorCode::of(status, error),
         }),
     )
         .into_response()
@@ -672,4 +722,26 @@ pub fn validate_address(address: SocketAddr) -> Result<SocketAddr, String> {
         return Err("PoC listens on loopback only; LAN authorization is not implemented".into());
     }
     Ok(address)
+}
+
+#[cfg(test)]
+mod error_code_tests {
+    use super::{ErrorCode, StatusCode};
+
+    #[test]
+    fn every_failure_gets_one_stable_kind() {
+        let of = |code: u16, text: &str| ErrorCode::of(StatusCode::from_u16(code).unwrap(), text);
+        assert_eq!(of(422, "Invalid rig"), ErrorCode::Invalid);
+        assert_eq!(of(404, "Missing"), ErrorCode::NotFound);
+        assert_eq!(of(409, "Session changed"), ErrorCode::Conflict);
+        assert_eq!(
+            of(409, "Preset library operation already in progress"),
+            ErrorCode::Busy
+        );
+        assert_eq!(of(423, "Protect is on."), ErrorCode::Locked);
+        assert_eq!(of(503, "Monitoring unavailable"), ErrorCode::Unavailable);
+        assert_eq!(of(504, "Worker timed out"), ErrorCode::Timeout);
+        assert_eq!(of(500, "No space left on device"), ErrorCode::Storage);
+        assert_eq!(of(500, "Worker crashed"), ErrorCode::Internal);
+    }
 }

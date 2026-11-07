@@ -252,13 +252,10 @@ async fn read(shared: Arc<Shared>, export: bool) -> Response {
             }
             response
         }
-        _ => (
+        _ => crate::failure(
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::ApiError {
-                error: "Control audit is unavailable".into(),
-            }),
-        )
-            .into_response(),
+            "Control audit is unavailable",
+        ),
     }
 }
 

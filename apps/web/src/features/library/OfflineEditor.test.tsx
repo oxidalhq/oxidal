@@ -17,6 +17,7 @@ import {
 import { chainLanes } from '../../rigChain';
 import { lv2Effect } from '../../rigDraft';
 import { buildRoute } from '../../rigRoute';
+import { DeviceError } from '../../lib/friendlyError';
 import { OfflineEditor } from './OfflineEditor';
 
 vi.mock('../../api', () => ({
@@ -170,4 +171,44 @@ it('opens a preset without effects when effect discovery is unavailable', async 
   expect(
     screen.getByRole('combobox', { name: 'Add an effect at the end' }),
   ).toBeDisabled();
+});
+
+it('keeps the draft on a save conflict and offers the latest version', async () => {
+  const refresh = vi.fn();
+  const manifest = JSON.parse(
+    buildRoute('id', 'Mine', [fx('first')], 'prof').manifest_json,
+  );
+  vi.mocked(rigDocument).mockResolvedValue({ revision: 'rev', manifest });
+  vi.mocked(installedLv2).mockResolvedValue([verb]);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    native_profile: 'prof',
+    presets: [],
+  } as never);
+  vi.mocked(libraryCatalog).mockResolvedValue({ items: [] } as never);
+  vi.mocked(publishRig).mockRejectedValue(
+    new DeviceError(
+      'This preset was saved again from another screen. Reopen it to see the latest version, then make your change again.',
+      'conflict',
+      409,
+    ),
+  );
+  render(
+    <OfflineEditor
+      revision="rev"
+      connected
+      onSaved={() => {}}
+      onCancel={() => {}}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Remove first' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Could not save the preset. This preset was saved again from another screen.',
+  );
+  expect(screen.getByText('Input straight to output.')).toBeVisible();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Close and show the latest version' }),
+  );
+  expect(refresh).toHaveBeenCalledOnce();
 });

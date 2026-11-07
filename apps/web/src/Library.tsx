@@ -393,6 +393,10 @@ export function Library({
               revision={editing}
               connected={connected}
               onCancel={() => setEditing(null)}
+              onRefresh={() => {
+                setEditing(null);
+                setRefresh((v) => v + 1);
+              }}
               onSaved={() => {
                 setEditing(null);
                 setRefresh((v) => v + 1);

@@ -1,3 +1,4 @@
+import { deviceError } from './lib/friendlyError';
 import Ajv2020 from 'ajv/dist/2020';
 import schema from './generated/contract.schema.json';
 import type { Contract } from './generated/contract';
@@ -58,11 +59,7 @@ export async function sendCommand(
   });
   const body: unknown = await response.json();
   if (!response.ok)
-    throw new Error(
-      typeof body === 'object' && body !== null && 'error' in body
-        ? String(body.error)
-        : `Device error ${response.status}`,
-    );
+    throw deviceError(body, response.status, `Device error ${response.status}`);
   return parseSnapshot(body);
 }
 
@@ -87,13 +84,9 @@ const presetValidator = ajv.compile<Preset>({
   $ref: '#/$defs/Inspection',
 });
 async function presetResponse(response: Response): Promise<unknown> {
-  const body: unknown = await response.json();
+  const body: unknown = await response.json().catch(() => null);
   if (!response.ok)
-    throw new Error(
-      typeof body === 'object' && body !== null && 'error' in body
-        ? String(body.error)
-        : 'Preset operation failed',
-    );
+    throw deviceError(body, response.status, 'Preset operation failed');
   return body;
 }
 export async function presetLibrary(): Promise<Preset[]> {
@@ -374,8 +367,8 @@ export async function saveArtwork(
     signal,
   });
   if (!response.ok) {
-    const body = (await response.json()) as { error?: string };
-    throw new Error(body.error ?? 'Artwork download failed');
+    const body: unknown = await response.json().catch(() => null);
+    throw deviceError(body, response.status, 'Artwork download failed');
   }
 }
 

@@ -206,13 +206,10 @@ pub(super) async fn state(State(shared): State<Arc<Shared>>) -> impl IntoRespons
     let result = tokio::task::spawn_blocking(move || journal.read()).await;
     match result {
         Ok(Ok(history)) => ([(header::CACHE_CONTROL, "no-store")], Json(history)).into_response(),
-        _ => (
+        _ => crate::failure(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::ApiError {
-                error: "Monitoring history is unavailable; live audio is unaffected".into(),
-            }),
-        )
-            .into_response(),
+            "Monitoring history is unavailable; live audio is unaffected",
+        ),
     }
 }
 
@@ -232,13 +229,10 @@ pub(super) async fn export(State(shared): State<Arc<Shared>>) -> impl IntoRespon
             Json(history),
         )
             .into_response(),
-        _ => (
+        _ => crate::failure(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Json(crate::ApiError {
-                error: "Monitoring history export is unavailable".into(),
-            }),
-        )
-            .into_response(),
+            "Monitoring history export is unavailable",
+        ),
     }
 }
 

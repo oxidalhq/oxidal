@@ -1372,6 +1372,11 @@ export interface EffectPack {
   website: string;
 }
 export interface ApiError {
+  /**
+   * What kind of failure this is, so a client can choose one recovery
+   * action without parsing the sentence (Sprint 07 7.24).
+   */
+  code: "invalid" | "not_found" | "conflict" | "busy" | "locked" | "unavailable" | "timeout" | "storage" | "internal";
   error: string;
 }
 export interface GraphAudioCommand {

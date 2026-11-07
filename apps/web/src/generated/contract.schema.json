@@ -647,13 +647,18 @@
     "ApiError": {
       "type": "object",
       "properties": {
+        "code": {
+          "description": "What kind of failure this is, so a client can choose one recovery\naction without parsing the sentence (Sprint 07 7.24).",
+          "$ref": "#/$defs/ErrorCode"
+        },
         "error": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "required": [
-        "error"
+        "error",
+        "code"
       ]
     },
     "Architecture": {
@@ -3734,6 +3739,56 @@
         "bell",
         "highshelf",
         "highcut"
+      ]
+    },
+    "ErrorCode": {
+      "description": "Stable failure kinds shared by every endpoint.\n@see docs/architecture.md",
+      "oneOf": [
+        {
+          "description": "The request itself is wrong; changing it is the only fix.",
+          "type": "string",
+          "const": "invalid"
+        },
+        {
+          "description": "The target no longer exists; refresh to see what does.",
+          "type": "string",
+          "const": "not_found"
+        },
+        {
+          "description": "Something changed since the client read it; check again, then retry.",
+          "type": "string",
+          "const": "conflict"
+        },
+        {
+          "description": "Another operation is still running; retry when it finishes.",
+          "type": "string",
+          "const": "busy"
+        },
+        {
+          "description": "Protect is on; turn it off to change this.",
+          "type": "string",
+          "const": "locked"
+        },
+        {
+          "description": "A service or device is not available now; retry later.",
+          "type": "string",
+          "const": "unavailable"
+        },
+        {
+          "description": "The device took too long.",
+          "type": "string",
+          "const": "timeout"
+        },
+        {
+          "description": "Device storage is full or unwritable.",
+          "type": "string",
+          "const": "storage"
+        },
+        {
+          "description": "Anything else; the sentence and Details explain.",
+          "type": "string",
+          "const": "internal"
+        }
       ]
     },
     "Framing": {
