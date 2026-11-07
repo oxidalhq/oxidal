@@ -346,6 +346,8 @@ function CollectionDialog({
   } | null>(null);
   // Cancel stops before the next step; the running one finishes (7.21).
   const cancelled = useRef(false);
+  // The build request in flight, so Cancel can stop it (7.21).
+  const building = useRef<AbortController | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   // Built examples already in Library, by name: Play needs no rebuild.
@@ -401,6 +403,8 @@ function CollectionDialog({
     }
     const steps = ['Building the preset', 'Saving its description', ...then];
     setProgress({ label: builtName(recipe), steps, current: 0 });
+    const controller = new AbortController();
+    building.current = controller;
     try {
       const document = await publishRig(
         buildFactoryRecipe(
@@ -416,6 +420,7 @@ function CollectionDialog({
           ids[recipe.id],
           defaults ?? undefined,
         ),
+        controller.signal,
       );
       if (cancelled.current) {
         setSaved((s) => ({ ...s, [recipe.id]: document.revision }));
@@ -444,9 +449,16 @@ function CollectionDialog({
       setSelected(null);
       return document.revision;
     } catch (e) {
-      setError(friendlyError(e, `build ${recipe.name}`));
+      if (controller.signal.aborted) {
+        // The device may have finished saving before the stop reached it.
+        onChanged();
+        setError(
+          `Stopped. If the device had already saved ${builtName(recipe)}, it is in Library.`,
+        );
+      } else setError(friendlyError(e, `build ${recipe.name}`));
       setProgress(null);
     } finally {
+      if (building.current === controller) building.current = null;
       setBusy(false);
       if (!then.length) setProgress(null);
     }
@@ -512,6 +524,7 @@ function CollectionDialog({
           onCancel={() => {
             cancelled.current = true;
             setCancelling(true);
+            building.current?.abort();
           }}
         />
       )}

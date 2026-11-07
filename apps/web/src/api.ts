@@ -94,7 +94,10 @@ export async function presetLibrary(): Promise<Preset[]> {
   if (!libraryValidator(body)) throw new Error('Incompatible preset library');
   return body.presets;
 }
-export async function importPreset(file: File): Promise<Preset> {
+export async function importPreset(
+  file: File,
+  signal?: AbortSignal,
+): Promise<Preset> {
   if (file.size > 32 * 1024 * 1024)
     throw new Error('Preset exceeds the 32 MiB limit');
   const body = await presetResponse(
@@ -102,6 +105,7 @@ export async function importPreset(file: File): Promise<Preset> {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: file,
+      signal,
     }),
   );
   if (!presetValidator(body)) throw new Error('Incompatible preset response');
@@ -689,12 +693,14 @@ export async function rigLibrary(after?: string): Promise<RigPage> {
 
 export async function publishRig(
   request: Contract['rig_publish'],
+  signal?: AbortSignal,
 ): Promise<RigDocument> {
   const body = await presetResponse(
     await fetch('/api/v1/presets/rigs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      signal,
     }),
   );
   if (!rigDocumentValidator(body)) throw new Error('Incompatible saved rig');

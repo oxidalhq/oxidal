@@ -332,14 +332,43 @@ it('cancels before the next step and says what was kept', async () => {
   await user.click(explore);
   await user.click(screen.getByRole('button', { name: 'Build preset' }));
   await user.click(await screen.findByRole('button', { name: 'Cancel' }));
-  // The running step finishes; nothing after it starts.
-  expect(
-    screen.getByRole('button', { name: 'Stopping after this step…' }),
-  ).toBeDisabled();
+  // A device that finishes the running request anyway keeps its result;
+  // nothing after it starts.
+  expect(screen.getByRole('button', { name: 'Stopping…' })).toBeDisabled();
   vi.mocked(presetDetails).mockClear();
   publish();
   expect(
     await screen.findByText(/saved in Library without its description/),
   ).toBeVisible();
   expect(presetDetails).not.toHaveBeenCalled();
+});
+
+it('stops the build request itself when Cancel is pressed during it', async () => {
+  const user = userEvent.setup();
+  let signal: AbortSignal | undefined;
+  vi.mocked(publishRig).mockImplementationOnce(
+    (_request, abort) =>
+      new Promise((_, reject) => {
+        signal = abort;
+        abort?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      }),
+  );
+  const changed = vi.fn();
+  render(<FactoryCollection connected onChanged={changed} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
+  );
+  const explore = screen.getByRole('button', { name: 'Details: Afterlight' });
+  await waitFor(() => expect(explore).toBeEnabled());
+  await user.click(explore);
+  await user.click(screen.getByRole('button', { name: 'Build preset' }));
+  await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+  expect(signal?.aborted).toBe(true);
+  expect(
+    await screen.findByText(/Stopped\. If the device had already saved/),
+  ).toBeVisible();
+  // The Library is re-read in case the device finished first.
+  expect(changed).toHaveBeenCalled();
 });

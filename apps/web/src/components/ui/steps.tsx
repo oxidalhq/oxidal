@@ -38,7 +38,7 @@ export function StepProgress({
           disabled={cancelling}
           onClick={onCancel}
         >
-          {cancelling ? 'Stopping after this step…' : 'Cancel'}
+          {cancelling ? 'Stopping…' : 'Cancel'}
         </Button>
       )}
     </div>

@@ -116,6 +116,7 @@ export function Library({
   const [error, setError] = useState('');
   const [copiesError, setCopiesError] = useState('');
   const generation = useRef(0);
+  const importing = useRef<AbortController | null>(null);
   const loading = useRef(false);
   const [playing, setPlaying] = useState<AudioState | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -234,11 +235,13 @@ export function Library({
   async function upload() {
     if (!file) return;
     const request = ++generation.current;
+    const controller = new AbortController();
+    importing.current = controller;
     setBusy(true);
     setImportError('');
     setImportMessage('Importing…');
     try {
-      const imported = await importPreset(file);
+      const imported = await importPreset(file, controller.signal);
       const items = await presetLibrary();
       if (request !== generation.current) return;
       setPresets(items);
@@ -247,10 +250,22 @@ export function Library({
       );
     } catch (cause) {
       if (request === generation.current) {
-        setImportError(friendlyError(cause, 'import the preset'));
+        // A device that already had the whole file may still finish (7.21).
+        setImportError(
+          controller.signal.aborted
+            ? 'Import stopped. If the device had already received the whole file, the preset may still appear in Presets.'
+            : friendlyError(cause, 'import the preset'),
+        );
+        if (controller.signal.aborted)
+          void presetLibrary()
+            .then((items) => {
+              if (request === generation.current) setPresets(items);
+            })
+            .catch(() => {});
         setImportMessage('');
       }
     } finally {
+      if (importing.current === controller) importing.current = null;
       if (request === generation.current) setBusy(false);
     }
   }
@@ -593,6 +608,14 @@ export function Library({
               </Button>
             </div>
             {importMessage && <p role="status">{importMessage}</p>}
+            {importMessage === 'Importing…' && (
+              <Button
+                variant="outline"
+                onClick={() => importing.current?.abort()}
+              >
+                Cancel import
+              </Button>
+            )}
             {importError && <p role="alert">{importError}</p>}
           </section>
         </TabsContent>
