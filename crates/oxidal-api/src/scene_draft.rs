@@ -72,7 +72,7 @@ fn gains(list: &[SceneGain]) -> bool {
     list.len() <= MAX_GAINS
         && list
             .iter()
-            .all(|g| text(&g.node) && g.value.is_finite() && (0.0..=4.0).contains(&g.value))
+            .all(|g| text(&g.node) && g.value.is_finite() && (-4.0..=4.0).contains(&g.value))
 }
 fn valid(draft: &SceneDraft) -> bool {
     text(&draft.session)

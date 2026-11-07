@@ -146,7 +146,7 @@ impl Session {
                     },
                     label: format!("Input {}", port + 1),
                     value: f64::from(*g as f32),
-                    minimum: 0.0,
+                    minimum: -4.0,
                     maximum: 4.0,
                     integer: false,
                     toggle: false,

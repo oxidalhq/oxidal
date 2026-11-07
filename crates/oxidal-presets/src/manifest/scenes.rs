@@ -71,7 +71,7 @@ impl Manifest {
                     })
                     .ok_or_else(bad)?;
                 if !gain.value.is_finite()
-                    || !(0.0..=4.0).contains(&gain.value)
+                    || !(-4.0..=4.0).contains(&gain.value)
                     || usize::from(gain.port) >= node.input_gains.as_ref().ok_or_else(bad)?.len()
                     || !targets.insert((&gain.node, gain.port))
                 {
@@ -117,7 +117,7 @@ impl Manifest {
             }
             for gain in &branch.gains {
                 if !gain.value.is_finite()
-                    || !(0.0..=4.0).contains(&gain.value)
+                    || !(-4.0..=4.0).contains(&gain.value)
                     || gain.value == 0.0
                     || !expected
                         .as_ref()

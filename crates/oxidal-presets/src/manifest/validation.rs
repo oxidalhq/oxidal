@@ -180,7 +180,7 @@ impl Manifest {
                                 && gains.len() <= 64
                                 && gains
                                     .iter()
-                                    .all(|g| g.is_finite() && (0.0..=4.0).contains(g))
+                                    .all(|g| g.is_finite() && (-4.0..=4.0).contains(g))
                         }),
                     "Invalid host node shape",
                 )?;

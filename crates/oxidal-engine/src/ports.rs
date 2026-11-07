@@ -500,7 +500,7 @@ impl PreparedPorts {
                     .find(|n| &n.id == node && matches!(n.kind, NodeKind::Merge | NodeKind::Gain))
                     .ok_or("Unknown merge")?;
                 let gain = n.gains.get_mut(*port).ok_or("Unknown merge port")?;
-                if !value.is_finite() || !(0.0..=4.0).contains(&value) {
+                if !value.is_finite() || !(-4.0..=4.0).contains(&value) {
                     return Err("Invalid merge gain".into());
                 }
                 gain.set(value as f32, 0);
@@ -524,7 +524,7 @@ impl PreparedPorts {
         }
         for (i, value) in values.iter().enumerate() {
             if !value.value.is_finite()
-                || !(0.0..=4.0).contains(&value.value)
+                || !(-4.0..=4.0).contains(&value.value)
                 || values[..i]
                     .iter()
                     .any(|v| v.node == value.node && v.port == value.port)
@@ -540,7 +540,8 @@ impl PreparedPorts {
         for value in values {
             let node = self.nodes.iter_mut().find(|n| n.id == value.node).unwrap();
             let gain = &mut node.gains[usize::from(value.port)];
-            let closing = (value.value as f32) < gain.target;
+            // A path closes when its level falls, whatever its polarity.
+            let closing = (value.value as f32).abs() < gain.target.abs();
             gain.set(value.value as f32, if closing { release } else { frames });
         }
         Ok(())

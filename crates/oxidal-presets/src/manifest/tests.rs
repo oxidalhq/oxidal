@@ -165,8 +165,12 @@ fn explicit_split_merge_is_order_independent_and_cycles_gains_and_islands_fail()
     let mut bad = value.clone();
     bad["oxidal"]["graph"]["nodes"][0]["inputGains"] = json!([1]);
     assert!(parse(&bad).is_err());
+    // A negative gain inverts polarity (7.26); beyond ±4 is refused.
+    let mut inverted = value.clone();
+    inverted["oxidal"]["graph"]["nodes"][0]["inputGains"] = json!([1, -1]);
+    parse(&inverted).unwrap();
     let mut bad = value.clone();
-    bad["oxidal"]["graph"]["nodes"][0]["inputGains"] = json!([1, -1]);
+    bad["oxidal"]["graph"]["nodes"][0]["inputGains"] = json!([1, -4.5]);
     assert!(parse(&bad).is_err());
     let mut cycle = value.clone();
     // Fully connected input ports can still contain a feedback cycle.
