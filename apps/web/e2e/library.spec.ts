@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { openSounds } from './display';
 
 /**
@@ -157,6 +158,58 @@ test('new preset creates an empty preset of your own without hardware', async ({
     native_instances: 0,
     lv2_instances: 0,
   });
+});
+
+test('the same TONE3000 tone added twice saves as two NAM blocks (7.16)', async ({
+  page,
+}, info) => {
+  const bytes = readFileSync(
+    new URL(
+      '../../../crates/oxidal-presets/tests/fixtures/authored-current.t3kpreset',
+      import.meta.url,
+    ),
+  );
+  const imported = await (
+    await page.request.post('/api/v1/presets', {
+      data: bytes,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    })
+  ).json();
+  const name = `Two NAM ${info.project.name} ${Date.now()}`;
+  await page.goto('/#library/presets');
+  await page.getByRole('button', { name: 'New preset' }).click();
+  const create = page.getByRole('dialog', { name: 'New preset' });
+  await create.getByLabel('Name').fill(name);
+  await create.getByRole('button', { name: 'Create preset' }).click();
+  await expect(create).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit without playing' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit without playing' });
+  for (let i = 0; i < 2; i += 1) {
+    await editor
+      .getByRole('combobox', { name: 'Add a block at the end' })
+      .click();
+    await page
+      .getByRole('option', { name: `${imported.name} · TONE3000` })
+      .click();
+  }
+  await expect(editor.getByText('TONE3000', { exact: true })).toHaveCount(2);
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toHaveCount(0);
+  const presets = (
+    await (await page.request.get('/api/v1/presets/rigs')).json()
+  ).presets as { name: string; revision: string; native_instances: number }[];
+  const saved = presets.find((p) => p.name === name)!;
+  expect(saved.native_instances).toBe(2);
+  // Both blocks share one stored file; the original stays unchanged.
+  const document = await (
+    await page.request.get(`/api/v1/presets/rigs/${saved.revision}`)
+  ).json();
+  expect(document.manifest.resources).toHaveLength(1);
+  expect(document.manifest.resources[0].sha256).toBe(imported.sha256);
+  const original = await page.request.get(
+    `/api/v1/presets/${imported.sha256}/original`,
+  );
+  expect(Buffer.from(await original.body())).toEqual(bytes);
 });
 
 test('sounds deletes an unused NAM file after reviewing its uses', async ({
