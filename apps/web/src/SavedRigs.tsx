@@ -3,6 +3,7 @@ import { Button } from './components/ui/button';
 import { PresetRow } from './features/library/PresetRow';
 import { friendlyError } from './lib/friendlyError';
 import { Checkbox } from './components/ui/checkbox';
+import { AdjustmentDialog } from './AdjustmentDialog';
 import { detailsMatch } from './presetMetadata';
 import {
   rigLibrary,
@@ -14,7 +15,9 @@ import {
   GAPLESS_BANK_SIZE,
   gaplessBank,
   playScenes,
+  prepareKeepReady,
   readKeepReady,
+  readyRevisions,
   rigTopologyLabel,
   writeKeepReady,
 } from './presetChoices';
@@ -55,6 +58,38 @@ export function SavedRigs({
   const [error, setError] = useState('');
   const [prepared, setPreparedState] = useState<string[]>([]);
   const [choosing, setChoosing] = useState(false);
+  /** Worker-confirmed loaded revisions; empty when audio is not running. */
+  const [ready, setReady] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
+  const [modified, setModified] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  function readRig() {
+    return rigAudioState()
+      .then((rig) => {
+        if (!alive.current) return;
+        setRunning(rig.phase === 'running');
+        setModified(!!rig.control?.modified);
+        setReady(readyRevisions(rig));
+        setPlaying(
+          rig.phase === 'running' ? (rig.configured?.revision ?? null) : null,
+        );
+      })
+      .catch(() => {});
+  }
+  async function prepare() {
+    setConfirming(false);
+    setBusy(true);
+    setError('');
+    try {
+      await prepareKeepReady();
+    } catch (cause) {
+      if (alive.current)
+        setError(friendlyError(cause, 'prepare these presets'));
+    } finally {
+      if (alive.current) setBusy(false);
+      await readRig();
+    }
+  }
   /** The device stores the choice; the screen shows what it confirmed. */
   function setPrepared(update: (old: string[]) => string[]) {
     const next = update(prepared);
@@ -84,12 +119,7 @@ export function SavedRigs({
     void readKeepReady()
       .then((saved) => alive.current && setPreparedState(saved))
       .catch(() => {});
-    void rigAudioState()
-      .then((rig) => {
-        if (alive.current && rig.phase === 'running')
-          setPlaying(rig.configured?.revision ?? null);
-      })
-      .catch(() => {});
+    void readRig();
     return () => {
       alive.current = false;
     };
@@ -109,6 +139,7 @@ export function SavedRigs({
       if (alive.current) {
         // Starting may have changed the ready set.
         void readKeepReady().then(setPreparedState, () => {});
+        void readRig();
         if (openMidi) requestMidiAssignments();
         onOpenRig();
       }
@@ -147,6 +178,9 @@ export function SavedRigs({
     detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
   if (!originItems.length && !error) return null;
+  const readyCount = shown.filter((p) => ready.includes(p.revision)).length;
+  // Selected but not loaded beside the playing preset: needs a restart.
+  const pending = prepared.some((id) => id !== playing && !ready.includes(id));
   return (
     <section className="library-scenes" aria-label="Saved rigs">
       <div className="section-heading">
@@ -160,6 +194,51 @@ export function SavedRigs({
           Keep ready{prepared.length ? ` · ${prepared.length}` : ''}
         </Button>
       </div>
+      <p className="caption" role="status">
+        {running
+          ? `${readyCount} of ${shown.length}${next ? '+' : ''} presets ready`
+          : 'Nothing is ready while audio is stopped.'}
+      </p>
+      {choosing && running && pending && (
+        <div className="action-row">
+          <span className="caption">
+            Selected presets load when audio restarts.
+          </span>
+          <Button
+            variant="outline"
+            disabled={busy || !connected}
+            onClick={() => setConfirming(true)}
+          >
+            Prepare &amp; restart audio…
+          </Button>
+        </div>
+      )}
+      {choosing && !running && !!prepared.length && (
+        <p className="caption">
+          Your selection is prepared the next time a preset plays.
+        </p>
+      )}
+      {confirming && (
+        <AdjustmentDialog
+          title="Prepare & restart audio?"
+          onCancel={() => setConfirming(false)}
+        >
+          <p>
+            Audio stops briefly while the playing preset restarts with your Keep
+            ready selection loaded beside it.
+            {modified &&
+              ' Unsaved edits to the playing preset are not kept; save them first to keep them.'}
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void prepare()}>
+              Prepare &amp; restart
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
       {choosing && (
         <p className="caption">
           Choose up to {GAPLESS_BANK_SIZE} additional rigs to keep ready. They
@@ -176,7 +255,15 @@ export function SavedRigs({
             <PresetRow
               key={p.revision}
               name={p.name}
-              meta={[rigTopologyLabel({ ...p, scenes }), scenes.join(', ')]
+              meta={[
+                rigTopologyLabel({ ...p, scenes }),
+                scenes.join(', '),
+                ready.includes(p.revision)
+                  ? 'Ready'
+                  : prepared.includes(p.revision)
+                    ? 'Selected · not ready yet'
+                    : '',
+              ]
                 .filter(Boolean)
                 .join(' · ')}
               playing={active}
@@ -212,7 +299,7 @@ export function SavedRigs({
                         )
                       }
                     />
-                    Ready
+                    Keep ready
                   </label>
                 )
               }

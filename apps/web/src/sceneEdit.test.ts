@@ -8,6 +8,7 @@ import {
   branchEffects,
   removeSceneEffect,
   updateScene,
+  updateScenes,
 } from './sceneEdit';
 
 const validator = new Ajv({ strict: false }).compile(schema);
@@ -187,5 +188,42 @@ it('updates one scene from the live mix and reopens on that routing', () => {
     ).toBe(gain.value);
   expect(document.manifest.extensions['urn:oxidal:scenes:1']).toEqual(
     extension,
+  );
+});
+
+it('saves several drafted scenes and starts only on the named one', () => {
+  const document = scenes();
+  type Extension = {
+    scenes: {
+      id: string;
+      gains: { node: string; port: number; value: number }[];
+    }[];
+  };
+  const extension = document.manifest.extensions[
+    'urn:oxidal:scenes:1'
+  ] as Extension;
+  const [a, b] = extension.scenes;
+  const draft = (scene: typeof a) =>
+    scene!.gains.map((gain) => ({ ...gain, value: 0.5 }));
+  const before = new Map(
+    document.manifest.oxidal!.graph.nodes.map((n) => [
+      n.id,
+      [...(n.inputGains ?? [])],
+    ]),
+  );
+  const request = updateScenes(
+    document,
+    { [a!.id]: draft(a), [b!.id]: draft(b) },
+    undefined,
+  );
+  const manifest = JSON.parse(request.manifest_json) as RigDocument['manifest'];
+  expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+  const next = manifest.extensions['urn:oxidal:scenes:1'] as Extension;
+  expect(next.scenes[0]!.gains).toEqual(draft(a));
+  expect(next.scenes[1]!.gains).toEqual(draft(b));
+  for (const node of manifest.oxidal!.graph.nodes)
+    expect(node.inputGains ?? []).toEqual(before.get(node.id));
+  expect(() => updateScenes(document, {}, undefined)).toThrow(
+    'no scene updates',
   );
 });

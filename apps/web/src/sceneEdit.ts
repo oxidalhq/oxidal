@@ -133,47 +133,53 @@ export function removeSceneEffect(
   return publish(manifest, document.revision);
 }
 
+type Gain = { node: string; port: number; value: number };
+
 /**
- * Replaces one scene's routing snapshot with the currently sounding mix. The
- * graph receives the same values so reopening the published revision starts
- * on the scene the player just updated.
+ * Writes scene updates held in the editor draft into one publish request
+ * (7.7: Update scene changes the draft, Save persists). Each listed scene's
+ * snapshot takes its drafted gains; the graph's starting mix only follows the
+ * scene named `start`, so the preset reopens where the player left it without
+ * a different scene silently becoming the starting one.
  * @see docs/interface.md
  */
-export function updateScene(
+export function updateScenes(
   document: RigDocument,
-  sceneId: string,
-  gains: { node: string; port: number; value: number }[],
+  updates: Record<string, Gain[]>,
+  start: string | undefined,
   live: Record<string, Record<string, number>> = {},
   name?: string,
 ): RigPublish {
   const manifest = clone(document, live, name);
   const extension = manifest.extensions['urn:oxidal:scenes:1'] as
-    | {
-        scenes?: {
-          id: string;
-          gains: { node: string; port: number; value: number }[];
-        }[];
-      }
-    | undefined;
-  const scene = extension?.scenes?.find(
-    (candidate) => candidate.id === sceneId,
-  );
-  if (!scene || !manifest.oxidal)
-    throw new Error('This preset cannot update that scene.');
-  const values = new Map(
-    gains.map((gain) => [`${gain.node}:${gain.port}`, gain.value]),
-  );
-  scene.gains = scene.gains.map((gain) => ({
-    ...gain,
-    value: values.get(`${gain.node}:${gain.port}`) ?? gain.value,
-  }));
-  for (const gain of scene.gains) {
-    const node = manifest.oxidal.graph.nodes.find(
-      (candidate) => candidate.id === gain.node,
-    );
-    if (!node?.inputGains || gain.port >= node.inputGains.length)
-      throw new Error('This scene has an invalid routing target.');
-    node.inputGains[gain.port] = gain.value;
+    { scenes?: { id: string; gains: Gain[] }[] } | undefined;
+  if (!manifest.oxidal || !Object.keys(updates).length)
+    throw new Error('There are no scene updates to save.');
+  for (const [sceneId, gains] of Object.entries(updates)) {
+    const scene = extension?.scenes?.find((s) => s.id === sceneId);
+    if (!scene) throw new Error('This preset cannot update that scene.');
+    const values = new Map(gains.map((g) => [`${g.node}:${g.port}`, g.value]));
+    scene.gains = scene.gains.map((gain) => ({
+      ...gain,
+      value: values.get(`${gain.node}:${gain.port}`) ?? gain.value,
+    }));
+    for (const gain of scene.gains) {
+      const node = manifest.oxidal.graph.nodes.find((n) => n.id === gain.node);
+      if (!node?.inputGains || gain.port >= node.inputGains.length)
+        throw new Error('This scene has an invalid routing target.');
+      if (sceneId === start) node.inputGains[gain.port] = gain.value;
+    }
   }
   return publish(manifest, document.revision);
+}
+
+/** One scene's update, starting on that scene when reopened. */
+export function updateScene(
+  document: RigDocument,
+  sceneId: string,
+  gains: Gain[],
+  live: Record<string, Record<string, number>> = {},
+  name?: string,
+): RigPublish {
+  return updateScenes(document, { [sceneId]: gains }, sceneId, live, name);
 }

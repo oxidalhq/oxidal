@@ -10,11 +10,12 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { MixedRig } from './MixedRig';
 import { setPerform } from './performState';
 import { playScenes } from './presetChoices';
-import { rigAudioState, rigAudioCommand, rigDocument } from './api';
+import { publishRig, rigAudioState, rigAudioCommand, rigDocument } from './api';
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
   rigAudioCommand: vi.fn(),
   rigDocument: vi.fn(),
+  publishRig: vi.fn(),
   sceneBlends: vi.fn(async () => null),
 }));
 vi.mock('./presetChoices', async (importOriginal) => ({
@@ -483,9 +484,27 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
 
   await waitFor(() => expect(rigAudioCommand).toHaveBeenCalled());
   expect(await screen.findByText(/^Editing scene/)).toBeVisible();
-  expect(screen.getByText('Unsaved mix')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Update scene' })).toBeEnabled();
-  expect(screen.getByText(/shared block edits still use Save/)).toBeVisible();
+  expect(screen.getByText('Modified mix')).toBeVisible();
+  const update = screen.getByRole('button', { name: 'Update scene' });
+  expect(update).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
+  vi.mocked(publishRig).mockClear();
+  fireEvent.click(update);
+  // Update scene changes the draft only; nothing is published until Save.
+  expect(
+    await screen.findByText('1 scene updated · not saved yet.'),
+  ).toBeVisible();
+  expect(screen.getByText('Updated · not saved')).toBeVisible();
+  expect(publishRig).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Save copy' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save preset' })).toBeEnabled();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Discard scene updates' }),
+  );
+  await waitFor(() =>
+    expect(screen.queryByText(/not saved yet/)).not.toBeInTheDocument(),
+  );
+  expect(publishRig).not.toHaveBeenCalled();
 });
 
 it('performs a preset with effects: a Hold tile engages the hold, other tiles switch in and out', async () => {

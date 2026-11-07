@@ -6,11 +6,18 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { keepReady, rigAudioState, rigLibrary, setKeepReady } from './api';
+import {
+  keepReady,
+  rigAudioCommand,
+  rigAudioState,
+  rigLibrary,
+  setKeepReady,
+} from './api';
 import { SavedRigs } from './SavedRigs';
 
 vi.mock('./api', () => ({
   rigAudioState: vi.fn(),
+  rigAudioCommand: vi.fn(),
   rigLibrary: vi.fn(),
   keepReady: vi.fn(),
   setKeepReady: vi.fn(),
@@ -85,4 +92,56 @@ it("imports this browser's earlier Keep ready choice once when the device has no
     expect(setKeepReady).toHaveBeenCalledWith(revisions.slice(0, 2)),
   );
   expect(localStorage.getItem('oxidal.prepared-rigs')).toBeNull();
+});
+
+it('reports only worker-confirmed Ready and restarts to prepare after confirmation', async () => {
+  const running = {
+    phase: 'running',
+    configured: { revision: revisions[0], stream: {}, prepared: [] },
+    control: {
+      modified: true,
+      prepared: [
+        { revision: revisions[1], name: 'Factory 2', modified: false },
+        {
+          revision: revisions[2],
+          name: 'Factory 3',
+          modified: false,
+          error: 'Not enough memory',
+        },
+      ],
+    },
+  };
+  vi.mocked(rigAudioState).mockResolvedValue(running as never);
+  vi.mocked(keepReady).mockResolvedValue({
+    revisions: [revisions[1]!, revisions[2]!, revisions[3]!],
+  });
+  vi.mocked(rigAudioCommand).mockResolvedValue(running as never);
+  render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      origin="oxidal_example"
+      title="Oxidal examples"
+    />,
+  );
+  // Playing + one confirmed alternative; the failed one is not Ready.
+  expect(await screen.findByText('2 of 5 presets ready')).toBeVisible();
+  expect(screen.getAllByText(/Selected · not ready yet/)).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: /^Keep ready/ }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Prepare & restart audio…' }),
+  );
+  expect(screen.getByText(/Unsaved edits to the playing preset/)).toBeVisible();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare & restart' }));
+  await waitFor(() => expect(rigAudioCommand).toHaveBeenCalled());
+  const action = vi.mocked(rigAudioCommand).mock.calls[0]![1] as {
+    kind: string;
+    settings: { revision: string; prepared: { revision: string }[] };
+  };
+  expect(action.kind).toBe('start');
+  expect(action.settings.revision).toBe(revisions[0]);
+  expect(action.settings.prepared.map((p) => p.revision)).toEqual(
+    revisions.slice(1, 4),
+  );
 });

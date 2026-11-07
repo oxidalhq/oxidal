@@ -87,7 +87,7 @@ import {
   addSceneEffect,
   branchEffects,
   removeSceneEffect,
-  updateScene,
+  updateScenes,
 } from './sceneEdit';
 import { requestMidiAssignments } from './midiNavigation';
 import { TunerButton } from './TunerButton';
@@ -169,6 +169,11 @@ export function MixedRig({
   const [sceneDraft, setSceneDraft] = useState<{
     session: string;
     scene: string;
+  } | null>(null);
+  /** Update scene writes here; Save persists it (7.7). Bound to one session. */
+  const [sceneUpdates, setSceneUpdates] = useState<{
+    session: string;
+    gains: Record<string, { node: string; port: number; value: number }[]>;
   } | null>(null);
   const [copyOnEdit, setCopyOnEdit] = useState<{
     copy: string;
@@ -462,6 +467,46 @@ export function MixedRig({
     } finally {
       sending.current = false;
       if (alive.current) setBusy(false);
+    }
+  }
+  /** Recalls a scene; a drafted update then replaces its saved snapshot live. */
+  async function recallScene(scene: string) {
+    const control = current.current?.control;
+    if (!control) return;
+    const recalled = await command({
+      kind: 'scene',
+      command: {
+        session: control.session,
+        expected_revision: control.revision,
+        scene,
+      },
+    });
+    const draft =
+      sceneUpdates?.session === control.session
+        ? sceneUpdates.gains[scene]
+        : undefined;
+    for (const gain of recalled ? (draft ?? []) : []) {
+      const cursor = current.current?.control;
+      if (!cursor || cursor.scene !== scene) return;
+      const live = cursor.controls.find(
+        (c) =>
+          c.target.kind === 'merge' &&
+          c.target.node === gain.node &&
+          c.target.port === gain.port,
+      );
+      if (live && Math.abs(live.value - gain.value) <= 0.0001) continue;
+      if (
+        !(await command({
+          kind: 'control',
+          command: {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            target: { kind: 'merge', node: gain.node, port: gain.port },
+            value: gain.value,
+          },
+        }))
+      )
+        return;
     }
   }
   /** Any preset from the picker: scene presets stay here, TONE3000 ones hand over. */
@@ -1008,9 +1053,17 @@ export function MixedRig({
       );
       return { ...gain, value: control?.value ?? gain.value };
     }) ?? [];
+  const drafts =
+    sceneUpdates && sceneUpdates.session === state.control?.session
+      ? sceneUpdates.gains
+      : {};
+  const draftCount = Object.keys(drafts).length;
+  const editingBase = editingScene
+    ? (drafts[editingScene.id] ?? editingScene.gains)
+    : [];
   const sceneMixChanged =
     !!editingScene &&
-    editingScene.gains.some(
+    editingBase.some(
       (gain, index) =>
         Math.abs(gain.value - (editingSceneGains[index]?.value ?? gain.value)) >
         0.0001,
@@ -1328,18 +1381,7 @@ export function MixedRig({
                 active={state.control.scene}
                 fading={!!state.control.scene_transitioning}
                 disabled={disabled || !!edit}
-                onSelect={(scene) => {
-                  const control = current.current?.control;
-                  if (control)
-                    void command({
-                      kind: 'scene',
-                      command: {
-                        session: control.session,
-                        expected_revision: control.revision,
-                        scene,
-                      },
-                    });
-                }}
+                onSelect={(scene) => void recallScene(scene)}
               />
             )
           }
@@ -1410,8 +1452,16 @@ export function MixedRig({
         <Button
           variant="outline"
           aria-label="Save copy"
+          title={
+            draftCount ? 'Save or discard your scene updates first' : undefined
+          }
           disabled={
-            disabled || !matching || !!edit || !!picker || !!state.save?.running
+            disabled ||
+            !matching ||
+            !!edit ||
+            !!picker ||
+            !!state.save?.running ||
+            draftCount > 0
           }
           onClick={() => {
             setName(matching!.manifest.name);
@@ -1648,27 +1698,25 @@ export function MixedRig({
             const control = current.current?.control;
             if (control) {
               setSceneDraft({ session: control.session, scene });
-              void command({
-                kind: 'scene',
-                command: {
-                  session: control.session,
-                  expected_revision: control.revision,
-                  scene,
-                },
-              });
+              void recallScene(scene);
             }
           }}
         />
       )}
       {editingScene && (
-        <details className="scene-context" open={sceneMixChanged || undefined}>
+        <details
+          className="scene-context"
+          open={sceneMixChanged || draftCount > 0 || undefined}
+        >
           <summary>
             <span>
               {sceneMixChanged ? 'Editing scene' : 'Current scene'} ·{' '}
               <strong>{editingScene.name}</strong>
             </span>
             {sceneMixChanged ? (
-              <Badge>Unsaved mix</Badge>
+              <Badge>Modified mix</Badge>
+            ) : drafts[editingScene.id] ? (
+              <Badge>Updated · not saved</Badge>
             ) : (
               !!sceneMix.length && (
                 <span className="scene-context-mix">
@@ -1685,7 +1733,7 @@ export function MixedRig({
           </summary>
           <p className="caption">
             {sceneMixChanged
-              ? 'Branch routing changed for this scene. Update scene writes this mix into a new preset revision.'
+              ? 'Branch routing changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
               : 'A scene recalls the branch levels shown here.'}{' '}
             Block controls are shared by every scene; use Save to keep those
             whole-preset edits.
@@ -1705,24 +1753,60 @@ export function MixedRig({
           {sceneMixChanged && (
             <div className="scene-context-actions">
               <Button
+                variant="outline"
+                disabled={disabled || editing || !!edit || !!picker || busy}
+                onClick={() => void recallScene(editingScene.id)}
+              >
+                Discard changes
+              </Button>
+              <Button
+                disabled={disabled || editing || !!edit || !!picker}
+                onClick={() => {
+                  const session = state.control?.session;
+                  if (!session) return;
+                  setSceneUpdates({
+                    session,
+                    gains: { ...drafts, [editingScene.id]: editingSceneGains },
+                  });
+                }}
+              >
+                Update scene
+              </Button>
+            </div>
+          )}
+          {draftCount > 0 && (
+            <div className="scene-context-actions" aria-label="Scene edits">
+              <span className="caption" role="status">
+                {draftCount === 1
+                  ? '1 scene updated · not saved yet.'
+                  : `${draftCount} scenes updated · not saved yet.`}
+              </span>
+              <Button
+                variant="outline"
+                disabled={disabled || editing || !!edit || !!picker || busy}
+                onClick={() => {
+                  setSceneUpdates(null);
+                  void recallScene(editingScene.id);
+                }}
+              >
+                Discard scene updates
+              </Button>
+              <Button
                 disabled={disabled || editing || !!edit || !!picker}
                 onClick={() =>
                   void rebuild(({ opened, live, name }) =>
-                    updateScene(
+                    updateScenes(
                       opened,
-                      editingScene.id,
-                      editingSceneGains,
+                      drafts,
+                      state.control?.scene ?? undefined,
                       live,
                       name,
                     ),
                   )
                 }
               >
-                Update scene
+                Save preset
               </Button>
-              <span className="caption">
-                Saves the mix; shared block edits still use Save.
-              </span>
             </div>
           )}
         </details>

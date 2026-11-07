@@ -366,6 +366,45 @@ export async function playScenes(revision: string, adjacent: string[] = []) {
   });
 }
 
+/**
+ * Prepare & restart audio (7.7): restarts the playing preset so the device's
+ * Keep ready selection is loaded beside it. Unsaved edits are not carried over;
+ * the caller confirms first. Only the worker's readback then reports Ready.
+ * @see docs/audio.md
+ */
+export async function prepareKeepReady() {
+  const rig = await rigAudioState();
+  const revision = rig.configured?.revision;
+  if (rig.phase !== 'running' || !revision)
+    throw new Error('Play a preset first.');
+  const keep = await readKeepReady();
+  await rigAudioCommand(rig, {
+    kind: 'start',
+    settings: {
+      ...rig.configured!,
+      recall: null,
+      prepared: keep
+        .filter((id) => id !== revision)
+        .map((id) => ({ revision: id, recall: null })),
+    },
+  });
+}
+
+/** Revisions the worker confirms are loaded now: the playing one and its bank. */
+export function readyRevisions(rig: {
+  phase: string;
+  configured?: { revision: string } | null;
+  control?: { prepared?: { revision: string; error?: string | null }[] } | null;
+}) {
+  if (rig.phase !== 'running' || !rig.configured) return [];
+  return [
+    rig.configured.revision,
+    ...(rig.control?.prepared ?? [])
+      .filter((p) => !p.error)
+      .map((p) => p.revision),
+  ];
+}
+
 /** Whether opening `choice` discards unsaved edits to the playing scenes preset. */
 export function discardsSceneEdits(
   choice: PresetChoice,
