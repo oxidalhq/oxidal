@@ -1061,6 +1061,11 @@ export interface AudioState {
    * Explicitly opt in to restoring the captured confirmed session after daemon startup.
    */
   start_on_boot: boolean;
+  /**
+   * Startup or a lost session is waiting for its audio interface to be
+   * connected; audio starts by itself when it appears (Sprint 07).
+   */
+  waiting_for_device?: boolean;
 }
 export interface AuthoringStatus {
   can_paste?: boolean;
@@ -1430,6 +1435,11 @@ export interface GraphAudioState {
   session: string;
   start_on_boot: boolean;
   telemetry?: Snapshot2 | null;
+  /**
+   * Startup or a lost session is waiting for its audio interface to be
+   * connected; audio starts by itself when it appears (Sprint 07).
+   */
+  waiting_for_device?: boolean;
 }
 /**
  * Every subscriber receives a complete, revisioned snapshot; dropped intermediates resync safely.
@@ -2225,6 +2235,11 @@ export interface RigAudioState {
   session: string;
   start_on_boot: boolean;
   telemetry?: Snapshot2 | null;
+  /**
+   * Startup or a lost session is waiting for its audio interface to be
+   * connected; audio starts by itself when it appears (Sprint 07).
+   */
+  waiting_for_device?: boolean;
 }
 export interface Snapshot3 {
   authoring?: NodeAuthoring[];

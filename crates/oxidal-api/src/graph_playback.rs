@@ -71,8 +71,44 @@ struct Owner {
     worker: Option<Worker>,
     state: GraphAudioState,
     updates: watch::Sender<GraphAudioState>,
+    /// Startup playback waiting for its interface (device_wait).
+    wait: Option<crate::device_wait::Wait<StartGraph>>,
 }
 impl Owner {
+    fn cancel_wait(&mut self) {
+        self.wait = None;
+        self.state.waiting_for_device = false;
+    }
+    /// Starts the saved startup sound once its interface is listed.
+    async fn retry_device(&mut self) {
+        if self.worker.is_some() {
+            if self.wait.is_some() {
+                self.cancel_wait();
+            }
+            return;
+        }
+        let Some(wait) = self.wait.as_mut() else {
+            return;
+        };
+        let due = wait.due(std::time::Instant::now(), crate::device_wait::present);
+        if wait.missing != self.state.waiting_for_device {
+            self.state.waiting_for_device = wait.missing;
+            self.publish();
+        }
+        let Some(settings) = due else {
+            return;
+        };
+        self.state.waiting_for_device = false;
+        match self.start(settings).await {
+            Ok(()) => self.cancel_wait(),
+            Err(error) => {
+                if !self.wait.as_mut().is_some_and(|w| w.failed()) {
+                    self.cancel_wait();
+                }
+                self.phase(AudioPhase::Failed, Some(error));
+            }
+        }
+    }
     fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
         if entry.kind != oxidal_presets::LibraryKind::Graph {
             return Ok(());
@@ -250,6 +286,8 @@ impl Owner {
         {
             return Err("graph_audio_state_conflict; refresh status".into());
         }
+        // A player's command takes over from any automatic start.
+        self.cancel_wait();
         if self.executable.is_none()
             && !matches!(command.action, GraphAudioAction::SetBoot { enabled: false })
         {
@@ -555,6 +593,7 @@ impl GraphPlayback {
         let boot = policy.snapshot();
         let initial = GraphAudioState {
             start_on_boot: policy.enabled(Role::Effects),
+            waiting_for_device: false,
             telemetry: None,
             session: format!(
                 "graph-{}-{}",
@@ -595,6 +634,7 @@ impl GraphPlayback {
             worker: None,
             state: initial,
             updates,
+            wait: None,
         };
         let mut shutdown = config.shutdown.clone();
         let (done, finished) = watch::channel(false);
@@ -606,9 +646,19 @@ impl GraphPlayback {
         tokio::spawn(async move {
             if let Ok(Some(Choice::Effects { settings })) = boot
                 && owner.executable.is_some()
-                && let Err(error) = owner.start(settings).await
             {
-                owner.phase(AudioPhase::Failed, Some(error));
+                let saved = settings.clone();
+                if let Err(error) = owner.start(settings).await {
+                    if crate::device_wait::present(&saved.stream.output.endpoint) {
+                        owner.phase(AudioPhase::Failed, Some(error));
+                    } else {
+                        // Not a fault: the interface is not connected yet.
+                        let stream = saved.stream.clone();
+                        owner.wait = Some(crate::device_wait::Wait::new(saved, &stream, true));
+                        owner.state.waiting_for_device = true;
+                        owner.phase(AudioPhase::Stopped, None);
+                    }
+                }
             }
             drop(boot_access);
             let mut interval = tokio::time::interval(Duration::from_millis(200));
@@ -619,7 +669,7 @@ impl GraphPlayback {
                     _=async {match shutdown.as_mut(){Some(s)=>{if !*s.borrow(){let _=s.changed().await;}},None=>std::future::pending::<()>().await}}=>break,
                     request = forgotten.recv() => match request { Some((entry, reply)) => { let _ = reply.send(owner.forget(&entry)); }, None => break },
                     item=receiver.recv()=>match item {Some((command,response,_access))=>{let _=response.send(owner.command(command).await);},None=>break},
-                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.poll().await; }},
+                    _=interval.tick()=>{if let Ok(_access) = owner_access.clone().try_read_owned() { owner.retry_device().await; owner.poll().await; }},
                 }
             }
             drop(receiver);

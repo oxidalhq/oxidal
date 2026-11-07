@@ -90,6 +90,10 @@ pub struct CopyOnEdit {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AudioState {
+    /// Startup or a lost session is waiting for its audio interface to be
+    /// connected; audio starts by itself when it appears (Sprint 07).
+    #[serde(default)]
+    pub waiting_for_device: bool,
     #[serde(default)]
     pub midi: crate::midi::Status,
     pub session: String,

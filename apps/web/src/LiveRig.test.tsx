@@ -228,6 +228,21 @@ it('offers Resume after audio stops so unsaved edits come back without a library
     expect(playbackCommand).toHaveBeenCalledWith(stopped, { kind: 'resume' }),
   );
 });
+it('says it is waiting for the interface instead of asking for a Resume', async () => {
+  vi.mocked(playbackState).mockResolvedValue({
+    ...opening,
+    phase: 'stopped',
+    configured: null,
+    waiting_for_device: true,
+  } as AudioState);
+  show();
+  expect(
+    await screen.findByRole('heading', {
+      name: 'Waiting for your audio interface',
+    }),
+  ).toBeVisible();
+  expect(screen.getByText(/Audio starts by itself/)).toBeVisible();
+});
 it('keeps an adjustment usable when beginning it advances the session revision', async () => {
   // The real engine moves the revision forward on gesture begin; the dialog
   // must follow it instead of reporting a changed session (regression).

@@ -55,6 +55,13 @@ impl Drop for Worker {
         }
     }
 }
+/// Everything `Owner::start` needs, kept while waiting for an interface.
+type NativeStart = (
+    StartAudio,
+    Option<Vec<LiveControl>>,
+    Vec<ModelAssignment>,
+    Option<Vec<BlockEqState>>,
+);
 struct Owner {
     protect: Arc<crate::protect::Protect>,
     last_tool_poll: std::time::Instant,
@@ -68,6 +75,8 @@ struct Owner {
     state: AudioState,
     resume_controls: Option<Vec<LiveControl>>,
     resume_eq: Option<Vec<BlockEqState>>,
+    /// Startup or a lost session waiting for its interface (device_wait).
+    wait: Option<crate::device_wait::Wait<NativeStart>>,
     recovery_due: Option<std::time::Instant>,
     recovery_error: Option<String>,
     updates: watch::Sender<AudioState>,
@@ -1630,6 +1639,8 @@ impl Owner {
         {
             return Err("audio_state_conflict; refresh status before retrying".into());
         }
+        // A player's command takes over from any automatic start.
+        self.cancel_wait();
         // Drain current hardware edits before taking a snapshot or replacing its
         // owner. A periodic status sample alone can miss the last controller turn.
         if self.state.phase == AudioPhase::Running
@@ -1951,11 +1962,61 @@ impl Owner {
         }
         Ok(self.state.clone())
     }
+    fn wait_for_device(&mut self, start: NativeStart) {
+        let missing = !crate::device_wait::present(&start.0.stream.output.endpoint);
+        let stream = start.0.stream.clone();
+        self.wait = Some(crate::device_wait::Wait::new(start, &stream, missing));
+        self.state.waiting_for_device = missing;
+    }
+    fn cancel_wait(&mut self) {
+        self.wait = None;
+        self.state.waiting_for_device = false;
+    }
+    /// Starts the waiting session once its interface is listed again.
+    async fn retry_device(&mut self) {
+        if self.worker.is_some() {
+            if self.wait.is_some() {
+                self.cancel_wait();
+            }
+            return;
+        }
+        let Some(wait) = self.wait.as_mut() else {
+            return;
+        };
+        let due = wait.due(std::time::Instant::now(), crate::device_wait::present);
+        let missing = wait.missing;
+        if missing != self.state.waiting_for_device {
+            self.state.waiting_for_device = missing;
+            self.publish(self.state.phase, self.state.error.clone());
+        }
+        let Some((settings, controls, models, eq)) = due else {
+            return;
+        };
+        self.state.waiting_for_device = false;
+        if let Err(error) = self.start(settings, controls, models, eq).await {
+            if !self.wait.as_mut().is_some_and(|w| w.failed()) {
+                self.cancel_wait();
+            }
+            self.publish(AudioPhase::Failed, Some(error));
+        } else {
+            self.cancel_wait();
+        }
+    }
     fn check_exit(&mut self) {
         if let Some(worker) = self.worker.as_mut() {
             match worker.child.try_wait() {
                 Ok(Some(status)) => {
                     self.worker = None;
+                    if self.state.phase == AudioPhase::Running
+                        && let Some(settings) = self.state.configured.clone()
+                    {
+                        self.wait_for_device((
+                            settings,
+                            self.resume_controls.clone(),
+                            self.state.models.clone(),
+                            self.resume_eq.clone(),
+                        ));
+                    }
                     self.publish(
                         AudioPhase::Failed,
                         Some(format!(
@@ -2026,6 +2087,7 @@ impl Playback {
             device_owned: false,
             experimental: true,
             start_on_boot: policy.enabled(Role::Native),
+            waiting_for_device: false,
         };
         let (updates, state) = watch::channel(initial.clone());
         let (meters, meter_state) = watch::channel(None);
@@ -2049,6 +2111,7 @@ impl Playback {
             state: initial,
             resume_eq: recovery.as_ref().and_then(|r| r.eq.clone()),
             resume_controls: recovery.and_then(|r| r.controls),
+            wait: None,
             recovery_due: None,
             recovery_error,
             updates,
@@ -2069,8 +2132,15 @@ impl Playback {
                     models,
                     eq,
                 })) if owner.executable.is_some() => {
+                    let start = (settings.clone(), controls.clone(), models.clone(), eq.clone());
                     if let Err(error) = owner.start(settings, controls, models, eq).await {
-                        owner.publish(AudioPhase::Failed, Some(error));
+                        if crate::device_wait::present(&start.0.stream.output.endpoint) {
+                            owner.publish(AudioPhase::Failed, Some(error));
+                        } else {
+                            // Not a fault: the interface is not connected yet.
+                            owner.wait_for_device(start);
+                            owner.publish(AudioPhase::Stopped, None);
+                        }
                     }
                 }
                 // A corrupt preference is reported separately; audio was never started.
@@ -2091,6 +2161,7 @@ impl Playback {
                     _ = interval.tick() => {
                         let Ok(_access) = owner_access.clone().try_read_owned() else { continue; };
                         owner.check_exit();
+                        owner.retry_device().await;
                         owner.advance_model().await;
                         owner.poll_tools().await;
                         owner.poll_midi().await;

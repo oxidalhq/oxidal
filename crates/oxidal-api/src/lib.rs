@@ -30,6 +30,7 @@ mod provider;
 mod rig_library;
 mod rig_playback;
 mod rig_recovery;
+mod device_wait;
 mod scene_draft;
 mod storage_lock;
 mod terminal;

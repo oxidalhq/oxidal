@@ -1,3 +1,4 @@
+import { WAITING_FOR_DEVICE } from './lib/deviceWait';
 import { friendlyError, errorDetails } from './lib/friendlyError';
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
@@ -1763,11 +1764,13 @@ export function MixedRig({
         <p role="status" className="caption">
           {switching
             ? 'Changing preset…'
-            : state.phase === 'starting'
-              ? 'Preparing sound…'
-              : state.phase === 'failed'
-                ? 'Audio needs attention'
-                : 'Audio stopped'}
+            : state.waiting_for_device
+              ? WAITING_FOR_DEVICE
+              : state.phase === 'starting'
+                ? 'Preparing sound…'
+                : state.phase === 'failed'
+                  ? 'Audio needs attention'
+                  : 'Audio stopped'}
         </p>
       )}
       <MasterLevel

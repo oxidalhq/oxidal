@@ -1329,6 +1329,11 @@
         "start_on_boot": {
           "description": "Explicitly opt in to restoring the captured confirmed session after daemon startup.",
           "type": "boolean"
+        },
+        "waiting_for_device": {
+          "description": "Startup or a lost session is waiting for its audio interface to be\nconnected; audio starts by itself when it appears (Sprint 07).",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -4109,6 +4114,11 @@
               "type": "null"
             }
           ]
+        },
+        "waiting_for_device": {
+          "description": "Startup or a lost session is waiting for its audio interface to be\nconnected; audio starts by itself when it appears (Sprint 07).",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -8189,6 +8199,11 @@
               "type": "null"
             }
           ]
+        },
+        "waiting_for_device": {
+          "description": "Startup or a lost session is waiting for its audio interface to be\nconnected; audio starts by itself when it appears (Sprint 07).",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,

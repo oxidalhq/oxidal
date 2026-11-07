@@ -120,17 +120,10 @@ struct Owner {
     confirmed: Option<StartRig>,
     follow_preparation: Option<String>,
     recovery_due: Option<Instant>,
-    resume: Option<Resume>,
+    resume: Option<crate::device_wait::Wait<StartRig>>,
     state: RigAudioState,
     updates: watch::Sender<RigAudioState>,
 }
-/// Bounded automatic restart after a running session loses its audio device.
-struct Resume {
-    until: Instant,
-    next: Instant,
-}
-const RESUME_WINDOW: Duration = Duration::from_secs(300);
-const RESUME_INTERVAL: Duration = Duration::from_secs(2);
 impl Owner {
     async fn set_protect(&mut self, on: bool) -> Result<(), String> {
         if self.worker.is_none() {
@@ -344,11 +337,9 @@ impl Owner {
         {
             // A device that returns (for example a replugged USB interface)
             // restarts the last confirmed session without a manual Start.
-            let now = Instant::now();
-            self.resume = Some(Resume {
-                until: now + RESUME_WINDOW,
-                next: now + RESUME_INTERVAL,
-            });
+            if let Some(confirmed) = self.confirmed.clone() {
+                self.wait_for_device(confirmed);
+            }
         }
         let error = match self.release().await {
             Ok(()) => error,
@@ -896,7 +887,7 @@ impl Owner {
             return Err("Finish the active adjustment before changing sound".into());
         }
         // Any owner command supersedes automatic resume.
-        self.resume = None;
+        self.cancel_wait();
         let recall = matches!(command.action, RigAudioAction::Switch { .. });
         self.run_action(command.action).await?;
         if recall && self.state.phase == AudioPhase::Running {
@@ -1281,31 +1272,46 @@ impl Owner {
         }
         Ok(())
     }
+    fn wait_for_device(&mut self, settings: StartRig) {
+        let missing = !crate::device_wait::present(&settings.stream.output.endpoint);
+        let stream = settings.stream.clone();
+        self.resume = Some(crate::device_wait::Wait::new(settings, &stream, missing));
+        self.state.waiting_for_device = missing;
+    }
+    fn cancel_wait(&mut self) {
+        self.resume = None;
+        self.state.waiting_for_device = false;
+    }
+    /// Starts the waiting session once its interface is listed again.
     async fn resume_after_fault(&mut self) {
-        if self.state.phase == AudioPhase::Running {
-            self.resume = None;
+        if self.state.phase == AudioPhase::Running || self.worker.is_some() {
+            if self.resume.is_some() {
+                self.cancel_wait();
+            }
             return;
         }
-        let Some(resume) = &self.resume else {
+        let Some(wait) = self.resume.as_mut() else {
             return;
         };
-        let now = Instant::now();
-        if now >= resume.until {
-            self.resume = None;
-            return;
+        let due = wait.due(Instant::now(), crate::device_wait::present);
+        if wait.missing != self.state.waiting_for_device {
+            self.state.waiting_for_device = wait.missing;
+            self.changed();
         }
-        if self.worker.is_some() || self.state.phase != AudioPhase::Failed || now < resume.next {
-            return;
-        }
-        let Some(settings) = self.confirmed.clone() else {
-            self.resume = None;
+        let Some(settings) = due else {
             return;
         };
-        if let Some(resume) = &mut self.resume {
-            resume.next = now + RESUME_INTERVAL;
+        self.state.waiting_for_device = false;
+        if self.start(settings).await.is_ok() {
+            self.cancel_wait();
+            return;
+        }
+        if !self.resume.as_mut().is_some_and(|w| w.failed()) {
+            self.cancel_wait();
+            self.changed();
         }
         // Failure keeps the Failed phase and its error; the next interval retries.
-        if self.start(settings).await.is_err() && self.state.phase != AudioPhase::Failed {
+        if self.state.phase != AudioPhase::Failed {
             self.fault("Automatic restart failed".into()).await;
         }
     }
@@ -1408,6 +1414,7 @@ impl RigPlayback {
         let recovered = recovery.ok().flatten().map(|r| r.settings);
         let initial = RigAudioState {
             start_on_boot: policy.enabled(Role::Mixed),
+            waiting_for_device: false,
             session: format!(
                 "rig-owner-{}-{}",
                 std::process::id(),
@@ -1470,8 +1477,14 @@ impl RigPlayback {
         tokio::spawn(async move {
             match boot {
                 Ok(Some(Choice::Mixed { settings })) if owner.executable.is_some() => {
+                    let saved = settings.clone();
                     if let Err(error) = owner.start(settings).await {
                         owner.fault(error).await;
+                        if !crate::device_wait::present(&saved.stream.output.endpoint) {
+                            // Not a fault: the interface is not connected yet.
+                            owner.wait_for_device(saved);
+                            owner.phase(AudioPhase::Stopped, None);
+                        }
                     }
                 }
                 // The shared boot error remains recoverable without changing PCM state.

@@ -177,6 +177,10 @@ pub struct WorkerReply {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GraphAudioState {
+    /// Startup or a lost session is waiting for its audio interface to be
+    /// connected; audio starts by itself when it appears (Sprint 07).
+    #[serde(default)]
+    pub waiting_for_device: bool,
     pub start_on_boot: bool,
     pub telemetry: Option<oxidal_audio::meter::Snapshot>,
     pub session: String,

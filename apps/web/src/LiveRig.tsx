@@ -40,6 +40,7 @@ import { LiveEq } from './LiveEq';
 import { ArtworkDeck } from './AssetArtwork';
 import { ToneDetails } from './ToneDetails';
 import { ModelPicker } from './ModelPicker';
+import { WAITING_FOR_DEVICE } from './lib/deviceWait';
 import { useEffect, useRef, useState } from 'react';
 import {
   presetArtwork,
@@ -630,18 +631,22 @@ export function LiveRig({
         <h2>
           {!state
             ? 'Checking audio…'
-            : state.phase === 'unavailable'
-              ? 'Audio playback unavailable'
-              : state.phase === 'starting'
-                ? 'Preparing sound…'
-                : state.phase === 'stopping'
-                  ? 'Stopping audio…'
-                  : state.phase === 'failed'
-                    ? 'Audio needs attention'
-                    : 'Audio stopped'}
+            : state.waiting_for_device
+              ? 'Waiting for your audio interface'
+              : state.phase === 'unavailable'
+                ? 'Audio playback unavailable'
+                : state.phase === 'starting'
+                  ? 'Preparing sound…'
+                  : state.phase === 'stopping'
+                    ? 'Stopping audio…'
+                    : state.phase === 'failed'
+                      ? 'Audio needs attention'
+                      : 'Audio stopped'}
         </h2>
         {(error || state?.error) && <p role="alert">{error || state?.error}</p>}
-        {state?.phase === 'stopped' && state.configured ? (
+        {state?.waiting_for_device ? (
+          <p role="status">{WAITING_FOR_DEVICE}</p>
+        ) : state?.phase === 'stopped' && state.configured ? (
           <p>
             Resume picks up where you left off
             {state.preset_name ? ` with ${state.preset_name}` : ''}, including
