@@ -1,6 +1,6 @@
 import { StepProgress } from './components/ui/steps';
 import { Loading } from './components/ui/loading';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { friendlyError } from './lib/friendlyError';
 import { WarningCircle } from '@phosphor-icons/react';
@@ -295,6 +295,9 @@ function CollectionDialog({
     steps: string[];
     current: number;
   } | null>(null);
+  // Cancel stops before the next step; the running one finishes (7.21).
+  const cancelled = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
   const [saved, setSaved] = useState<Record<string, string>>({});
   // Built examples already in Library, by name: Play needs no rebuild.
   const [library, setLibrary] = useState<Record<string, string>>({});
@@ -343,6 +346,10 @@ function CollectionDialog({
   async function build(recipe: FactoryRecipe, then: string[] = []) {
     setBusy(true);
     setError('');
+    if (!then.length) {
+      cancelled.current = false;
+      setCancelling(false);
+    }
     const steps = ['Building the preset', 'Saving its description', ...then];
     setProgress({ label: builtName(recipe), steps, current: 0 });
     try {
@@ -361,6 +368,15 @@ function CollectionDialog({
           defaults ?? undefined,
         ),
       );
+      if (cancelled.current) {
+        setSaved((s) => ({ ...s, [recipe.id]: document.revision }));
+        onChanged();
+        setError(
+          `Stopped. ${builtName(recipe)} is saved in Library without its description.`,
+        );
+        setProgress(null);
+        return undefined;
+      }
       setProgress({ label: builtName(recipe), steps, current: 1 });
       const details = await presetDetails();
       await presetDetails({
@@ -401,10 +417,17 @@ function CollectionDialog({
     if (busy) return;
     setPlayingId(recipe.id);
     setError('');
+    cancelled.current = false;
+    setCancelling(false);
     try {
       const reused = builtRevision(recipe);
       const revision = reused ?? (await build(recipe, ['Starting audio']));
       if (!revision) return;
+      if (cancelled.current) {
+        // The built notice stays, so Play is one tap away.
+        setError('Stopped before starting audio.');
+        return;
+      }
       setBusy(true);
       setProgress(
         reused
@@ -433,7 +456,16 @@ function CollectionDialog({
   }
   const body = (
     <div className="control-stack">
-      {progress && <StepProgress {...progress} />}
+      {progress && (
+        <StepProgress
+          {...progress}
+          cancelling={cancelling}
+          onCancel={() => {
+            cancelled.current = true;
+            setCancelling(true);
+          }}
+        />
+      )}
       {built ? (
         <>
           <p>

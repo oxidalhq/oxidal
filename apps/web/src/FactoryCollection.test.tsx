@@ -313,3 +313,33 @@ it('reports each building step while it runs', async () => {
   await screen.findByRole('button', { name: 'Done' });
   expect(screen.queryByText(/Step \d of/)).toBeNull();
 });
+
+it('cancels before the next step and says what was kept', async () => {
+  const user = userEvent.setup();
+  let publish!: () => void;
+  vi.mocked(publishRig).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        publish = () => resolve({ revision: 'b'.repeat(64) } as never);
+      }),
+  );
+  render(<FactoryCollection connected onChanged={() => {}} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
+  );
+  const explore = screen.getByRole('button', { name: 'Details: Afterlight' });
+  await waitFor(() => expect(explore).toBeEnabled());
+  await user.click(explore);
+  await user.click(screen.getByRole('button', { name: 'Build preset' }));
+  await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+  // The running step finishes; nothing after it starts.
+  expect(
+    screen.getByRole('button', { name: 'Stopping after this step…' }),
+  ).toBeDisabled();
+  vi.mocked(presetDetails).mockClear();
+  publish();
+  expect(
+    await screen.findByText(/saved in Library without its description/),
+  ).toBeVisible();
+  expect(presetDetails).not.toHaveBeenCalled();
+});
