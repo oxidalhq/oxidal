@@ -3603,3 +3603,18 @@ textarea {
   gap: 0.25rem 0.5rem;
   min-height: 2.75rem;
 }
+
+/* Long work in known steps (7.21): a plain bar that moves per finished step. */
+.step-progress {
+  display: grid;
+  gap: 0.25rem;
+}
+.step-progress progress {
+  width: 100%;
+  height: 0.5rem;
+}
+.failure-details code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

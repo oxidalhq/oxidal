@@ -1,3 +1,4 @@
+import { StepProgress } from './components/ui/steps';
 import { Loading } from './components/ui/loading';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -289,6 +290,11 @@ function CollectionDialog({
     setBindings((b) => ({ ...b, [role]: source }));
   }
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{
+    label: string;
+    steps: string[];
+    current: number;
+  } | null>(null);
   const [saved, setSaved] = useState<Record<string, string>>({});
   // Built examples already in Library, by name: Play needs no rebuild.
   const [library, setLibrary] = useState<Record<string, string>>({});
@@ -334,9 +340,11 @@ function CollectionDialog({
       alive = false;
     };
   }, []);
-  async function build(recipe: FactoryRecipe) {
+  async function build(recipe: FactoryRecipe, then: string[] = []) {
     setBusy(true);
     setError('');
+    const steps = ['Building the preset', 'Saving its description', ...then];
+    setProgress({ label: builtName(recipe), steps, current: 0 });
     try {
       const document = await publishRig(
         buildFactoryRecipe(
@@ -353,6 +361,7 @@ function CollectionDialog({
           defaults ?? undefined,
         ),
       );
+      setProgress({ label: builtName(recipe), steps, current: 1 });
       const details = await presetDetails();
       await presetDetails({
         expected_revision: details.revision,
@@ -371,8 +380,10 @@ function CollectionDialog({
       return document.revision;
     } catch (e) {
       setError(friendlyError(e, `build ${recipe.name}`));
+      setProgress(null);
     } finally {
       setBusy(false);
+      if (!then.length) setProgress(null);
     }
     return undefined;
   }
@@ -391,9 +402,23 @@ function CollectionDialog({
     setPlayingId(recipe.id);
     setError('');
     try {
-      const revision = builtRevision(recipe) ?? (await build(recipe));
+      const reused = builtRevision(recipe);
+      const revision = reused ?? (await build(recipe, ['Starting audio']));
       if (!revision) return;
       setBusy(true);
+      setProgress(
+        reused
+          ? { label: builtName(recipe), steps: ['Starting audio'], current: 0 }
+          : {
+              label: builtName(recipe),
+              steps: [
+                'Building the preset',
+                'Saving its description',
+                'Starting audio',
+              ],
+              current: 2,
+            },
+      );
       await playScenes(revision);
       setBuilt(null);
       onOpenRig?.();
@@ -403,10 +428,12 @@ function CollectionDialog({
     } finally {
       setBusy(false);
       setPlayingId(null);
+      setProgress(null);
     }
   }
   const body = (
     <div className="control-stack">
+      {progress && <StepProgress {...progress} />}
       {built ? (
         <>
           <p>

@@ -272,3 +272,44 @@ it('lists unbuilt sounds as rows and opens one at its download', async () => {
   await user.click(row);
   expect(await screen.findByRole('button', { name: 'Download' })).toBeVisible();
 });
+
+it('reports each building step while it runs', async () => {
+  const user = userEvent.setup();
+  let publish!: () => void;
+  vi.mocked(publishRig).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        publish = () => resolve({ revision: 'a'.repeat(64) } as never);
+      }),
+  );
+  let describe!: () => void;
+  vi.mocked(presetDetails)
+    .mockImplementationOnce(
+      async () => ({ revision: 'details-1', entries: [] }) as never,
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          describe = () =>
+            resolve({ revision: 'details-2', entries: [] } as never);
+        }),
+    );
+  render(<FactoryCollection connected onChanged={() => {}} />);
+  await user.click(
+    screen.getByRole('button', { name: 'Explore Oxidal sounds' }),
+  );
+  const explore = screen.getByRole('button', { name: 'Details: Afterlight' });
+  await waitFor(() => expect(explore).toBeEnabled());
+  await user.click(explore);
+  await user.click(screen.getByRole('button', { name: 'Build preset' }));
+  expect(
+    await screen.findByText(/Step 1 of 2 · Building the preset/),
+  ).toBeVisible();
+  publish();
+  expect(
+    await screen.findByText(/Step 2 of 2 · Saving its description/),
+  ).toBeVisible();
+  describe();
+  await screen.findByRole('button', { name: 'Done' });
+  expect(screen.queryByText(/Step \d of/)).toBeNull();
+});
