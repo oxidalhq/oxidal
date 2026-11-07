@@ -5,6 +5,7 @@ import {
   rigBuilder,
   validateStages,
   type DraftEffect,
+  type NativeDraft,
   type Stereo,
 } from './rigDraft';
 import { readBlock } from './rigEdit';
@@ -346,6 +347,29 @@ export function routeRemoveBranch(route: Route, id: string): Route {
   at.owner.branches[at.branch!]!.length = 0;
   dry.delete(at.owner.branches[at.branch!]!);
   return tidy(next, dry);
+}
+
+/**
+ * Points TONE3000 block `id` at edited preset bytes (7.3): its settings were
+ * changed in the native editor and saved as an owned copy. The block keeps its
+ * id and place; an extracted amp/cab stage cannot be re-pointed this way.
+ */
+export function routeReplaceNative(
+  route: Route,
+  id: string,
+  tone: Pick<NativeDraft, 'name' | 'preset' | 'source'>,
+): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  const block = at?.list[at.index];
+  if (!block || isSplit(block) || block.kind !== 'native')
+    throw new Error('That TONE3000 block is no longer in this preset.');
+  if (block.stage)
+    throw new Error(
+      'An extracted amp or cab stage is edited with its whole tone in Rig.',
+    );
+  at!.list[at!.index] = { ...block, preset: tone.preset, source: tone.source };
+  return next;
 }
 
 /* ---------- Offline editing by split id and path index (7.3). ---------- */

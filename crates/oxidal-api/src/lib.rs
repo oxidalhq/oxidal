@@ -498,6 +498,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
                 .layer(DefaultBodyLimit::max(rig_library::PUBLISH_LIMIT)),
         )
         .route("/presets/rigs/{revision}", get(rig_library::read))
+        .route(
+            "/presets/rigs/{revision}/resources/{resource}/import",
+            post(rig_library::import_resource),
+        )
         .route("/audio/devices", get(audio::devices))
         .route("/midi/devices", get(audio::midi_devices))
         .route("/midi/map", get(midi_map::state).post(midi_map::replace))

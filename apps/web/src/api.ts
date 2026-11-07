@@ -691,6 +691,21 @@ export async function rigLibrary(after?: string): Promise<RigPage> {
   return body;
 }
 
+/** Copies one TONE3000 file of a saved preset into the library (7.3). */
+export async function importRigResource(
+  revision: string,
+  resource: string,
+): Promise<Preset> {
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/presets/rigs/${encodeURIComponent(revision)}/resources/${encodeURIComponent(resource)}/import`,
+      { method: 'POST' },
+    ),
+  );
+  if (!presetValidator(body)) throw new Error('Incompatible preset response');
+  return body;
+}
+
 export async function publishRig(
   request: Contract['rig_publish'],
   signal?: AbortSignal,

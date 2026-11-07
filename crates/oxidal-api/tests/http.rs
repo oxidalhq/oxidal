@@ -1746,6 +1746,25 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
         r.text().await.unwrap_or_default()
     );
     let native: Value = r.json().await.unwrap();
+    // A saved rig's TONE3000 file can be copied into the library for offline
+    // settings edits (7.3); the same bytes resolve to the same original.
+    let rev = native["revision"].as_str().unwrap();
+    let copied = c
+        .post(format!("{url}/presets/rigs/{rev}/resources/payload/import"))
+        .send()
+        .await
+        .unwrap();
+    assert!(copied.status().is_success());
+    let copied: Value = copied.json().await.unwrap();
+    assert_eq!(copied["sha256"], id);
+    assert_eq!(
+        c.post(format!("{url}/presets/rigs/{rev}/resources/missing/import"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        422
+    );
     let from_native =
         json!({"payload":{"kind":"bundle","revision":native["revision"],"resource":"payload"}});
     let details = get(&c, &url, "presets/details").await;

@@ -43,9 +43,15 @@ function controlValue(state: NativeSnapshot | null, target: string) {
 export function NativeEditor({
   presets,
   connected,
+  open,
+  onSaved,
 }: {
   presets: Preset[];
   connected: boolean;
+  /** A preset to load as soon as the editor is ready (7.3 offline edits). */
+  open?: { id: string; owned: boolean; name: string };
+  /** Called with the owned copy Save created. */
+  onSaved?: (copy: { id: string; name: string }) => void;
 }) {
   const [state, setState] = useState<NativeSnapshot | null>(null);
   const [available, setAvailable] = useState(false);
@@ -63,13 +69,16 @@ export function NativeEditor({
         editableParameters[0]?.id ??
         '');
   const [value, setValue] = useState('0.5');
-  const [name, setName] = useState('My preset');
+  const [name, setName] = useState(
+    open ? `${open.name} (edited)`.slice(0, 100) : 'My preset',
+  );
   const [owner] = useState(() => crypto.randomUUID());
   const queue = useRef<EditQueue<NativeSnapshot> | null>(null);
   const loader = useRef<HTMLDetailsElement>(null);
   const alive = useRef(false);
   const [baseline, setBaseline] = useState(0.5);
   const running = useRef(false);
+  const opened = useRef(false);
   useEffect(() => {
     alive.current = true;
     const pending = queue;
@@ -123,6 +132,13 @@ export function NativeEditor({
       clearInterval(timer);
     };
   }, [available]);
+  // Load the requested preset once the editor is ready (7.3).
+  useEffect(() => {
+    if (!open || opened.current || !state || busy) return;
+    opened.current = true;
+    void send({ kind: 'load', id: open.id, owned: open.owned });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, state, busy]);
   function publish(next: NativeSnapshot, expectedSession?: string) {
     if (alive.current)
       setState((previous) =>
@@ -148,8 +164,14 @@ export function NativeEditor({
     running.current = true;
     setBusy(true);
     setError('');
+    const ownedBefore = new Set(state.owned.map((o) => o.id));
     try {
-      publish(await nativeCommand(state, action), state.session);
+      const next = await nativeCommand(state, action);
+      publish(next, state.session);
+      if (action.kind === 'save') {
+        const copy = next.owned.find((o) => !ownedBefore.has(o.id));
+        if (copy) onSaved?.({ id: copy.id, name: copy.preset.name });
+      }
       if (action.kind === 'load' && loader.current) loader.current.open = false;
     } catch (cause) {
       fail(cause);

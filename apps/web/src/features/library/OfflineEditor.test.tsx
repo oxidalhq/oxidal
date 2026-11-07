@@ -15,6 +15,7 @@ import {
   rigLibrary,
   rigNativeSources,
   type Lv2Plugin,
+  importRigResource,
 } from '../../api';
 import { chainLanes } from '../../rigChain';
 import { lv2Effect } from '../../rigDraft';
@@ -22,6 +23,26 @@ import { buildRoute } from '../../rigRoute';
 import { DeviceError } from '../../lib/friendlyError';
 import { OfflineEditor } from './OfflineEditor';
 
+// The native editor has its own tests; here it opens, then saves a copy.
+vi.mock('../../NativeEditor', () => ({
+  NativeEditor: ({
+    open,
+    onSaved,
+  }: {
+    open: { id: string };
+    onSaved: (copy: { id: string; name: string }) => void;
+  }) => (
+    <div>
+      <p>Editing {open.id}</p>
+      <button
+        type="button"
+        onClick={() => onSaved({ id: 'owned-1', name: 'Amp (edited)' })}
+      >
+        Save edited copy
+      </button>
+    </div>
+  ),
+}));
 vi.mock('../../api', () => ({
   installedLv2: vi.fn(),
   libraryCatalog: vi.fn(),
@@ -29,6 +50,7 @@ vi.mock('../../api', () => ({
   rigDocument: vi.fn(),
   rigLibrary: vi.fn(),
   rigNativeSources: vi.fn(),
+  importRigResource: vi.fn(),
 }));
 
 const port = (
@@ -140,7 +162,7 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
   expect(merge.inputGains).toEqual([1, 0.5]);
 });
 
-it('saves a preset that is not yours as a copy, and refuses scene-branch presets', async () => {
+it('saves a preset that is not yours as a copy', async () => {
   open('oxidal_example');
   expect(await screen.findByText(/as your own copy in Mine/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Move first later' }));
@@ -151,9 +173,6 @@ it('saves a preset that is not yours as a copy, and refuses scene-branch presets
   );
   expect(manifest.id).not.toBe('preset-id');
   expect(chainLanes(manifest.oxidal.graph)).toEqual([['second', 'first']]);
-  cleanup();
-  open('mine', true);
-  expect(await screen.findByRole('alert')).toHaveTextContent(/Edit it in Rig/);
 });
 
 it('opens a preset without effects when effect discovery is unavailable', async () => {
@@ -308,4 +327,102 @@ it('warns while editing when another browser saves the preset', async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+const amp = {
+  id: 'amp',
+  kind: 'native' as const,
+  name: 'Amp',
+  preset: { sha256: 'a'.repeat(64), size_bytes: 10, name: 'Amp' } as never,
+  source: { kind: 'original' as const, preset: 'a'.repeat(64) },
+};
+const edited = {
+  preset: { sha256: 'c'.repeat(64), size_bytes: 5, name: 'Amp (edited)' },
+  source: { kind: 'owned', preset: 'owned-1' },
+};
+function openNative(scenes: boolean) {
+  const manifest = JSON.parse(
+    buildRoute('preset-id', 'Amp rig', [amp, fx('verb')], 'prof').manifest_json,
+  );
+  if (scenes)
+    manifest.extensions['urn:oxidal:scenes:1'] = {
+      scenes: [],
+      branches: [{ id: 'amp' }],
+    };
+  vi.mocked(rigDocument).mockResolvedValue({ revision: 'rev', manifest });
+  vi.mocked(installedLv2).mockResolvedValue([verb]);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    native_profile: 'prof',
+    presets: [],
+  } as never);
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    items: [{ kind: 'rig', id: 'rev', origin: 'mine', name: 'Amp rig' }],
+  } as never);
+  vi.mocked(importRigResource).mockResolvedValue({
+    sha256: 'a'.repeat(64),
+  } as never);
+  vi.mocked(rigNativeSources).mockResolvedValue([edited] as never);
+  vi.mocked(publishRig).mockImplementation(async (request) => ({
+    revision: 'next',
+    manifest: JSON.parse(request.manifest_json),
+  }));
+  render(
+    <OfflineEditor
+      revision="rev"
+      connected
+      onSaved={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+}
+
+it('edits a TONE3000 block’s settings without playing and saves the edited copy', async () => {
+  openNative(false);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Edit Amp settings' }),
+  );
+  // A file kept only inside the saved preset is copied to the library first.
+  await waitFor(() =>
+    expect(importRigResource).toHaveBeenCalledWith('rev', expect.any(String)),
+  );
+  expect(await screen.findByText(`Editing ${'a'.repeat(64)}`)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Save edited copy' }));
+  await waitFor(() =>
+    expect(screen.queryByText(/^Editing /)).not.toBeInTheDocument(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  const request = vi.mocked(publishRig).mock.calls.at(-1)![0];
+  const manifest = JSON.parse(request.manifest_json);
+  expect(manifest.resources.map((r: { sha256: string }) => r.sha256)).toEqual([
+    'c'.repeat(64),
+  ]);
+  expect(Object.values(request.resources)).toContainEqual(edited.source);
+});
+
+it('changes block settings of a scene-chain preset and keeps its graph and scenes', async () => {
+  openNative(true);
+  expect(await screen.findByText(/its routing and scenes are/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Amp settings' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Save edited copy' }),
+  );
+  expect(await screen.findByText('Edited · not saved')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  const request = vi.mocked(publishRig).mock.calls.at(-1)![0];
+  const manifest = JSON.parse(request.manifest_json);
+  const before = JSON.parse(
+    buildRoute('preset-id', 'Amp rig', [amp, fx('verb')], 'prof').manifest_json,
+  );
+  expect(manifest.oxidal.graph).toEqual(before.oxidal.graph);
+  expect(manifest.extensions['urn:oxidal:scenes:1'].branches).toEqual([
+    { id: 'amp' },
+  ]);
+  expect(manifest.tone3000.instances[0].preset).not.toBe(
+    before.tone3000.instances[0].preset,
+  );
+  expect(request.resources).toMatchObject({
+    [manifest.tone3000.instances[0].preset]: edited.source,
+  });
 });

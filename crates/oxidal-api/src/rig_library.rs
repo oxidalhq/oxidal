@@ -360,6 +360,42 @@ pub async fn list(
     })
     .await
 }
+/// Copies one TONE3000 preset file of a saved rig into the originals library,
+/// so the native editor can open it and save edited settings as an owned copy
+/// (7.3). The rig itself is unchanged; the same bytes import once.
+pub async fn import_resource(
+    State(shared): State<Arc<Shared>>,
+    Path((revision, resource)): Path<(String, String)>,
+) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason);
+    }
+    if !valid_revision(&revision) || resource.is_empty() || resource.len() > 128 {
+        return failure(StatusCode::UNPROCESSABLE_ENTITY, "Invalid preset resource");
+    }
+    let presets = shared.presets.clone();
+    job(shared, true, move |root| {
+        let bundle = BundleStore::new(root.join("bundles")).read(&revision)?;
+        let declared = bundle
+            .manifest()
+            .resources
+            .iter()
+            .find(|r| r.id == resource)
+            .ok_or(Error::Invalid("Unknown preset resource"))?;
+        if declared.kind != oxidal_presets::manifest::ResourceKind::Tone3000Preset {
+            return Err(Error::Invalid("Only TONE3000 preset resources can be edited"));
+        }
+        let bytes = bundle
+            .resource(&resource)
+            .ok_or(Error::Invalid("Unknown preset resource"))?
+            .to_vec();
+        let mut store = presets
+            .lock()
+            .map_err(|_| Error::Io(std::io::Error::other("store lock failed")))?;
+        store.import(&bytes)
+    })
+    .await
+}
 pub async fn read(State(shared): State<Arc<Shared>>, Path(revision): Path<String>) -> Response {
     job(shared, true, move |root| {
         let b = BundleStore::new(root.join("bundles")).read(&revision)?;

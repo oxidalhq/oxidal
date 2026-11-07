@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { NativeEditor } from '../../NativeEditor';
+import { replaceNativeFiles } from '../../nativeResourceEdit';
+import { readBlock } from '../../rigEdit';
 import {
   installedLv2,
   libraryCatalog,
@@ -6,6 +9,7 @@ import {
   rigDocument,
   rigLibrary,
   rigNativeSources,
+  importRigResource,
   type Lv2Plugin,
   type RigDocument,
 } from '../../api';
@@ -24,7 +28,7 @@ import {
   friendlyError,
   type Recovery,
 } from '../../lib/friendlyError';
-import { lv2Effect, type DraftEffect } from '../../rigDraft';
+import { lv2Effect, type DraftEffect, type NativeDraft } from '../../rigDraft';
 import {
   buildRoute,
   isSplit,
@@ -36,6 +40,7 @@ import {
   routePathGain,
   routeRemove,
   routeShift,
+  routeReplaceNative,
   type Route,
   type RouteSplit,
 } from '../../rigRoute';
@@ -53,6 +58,9 @@ type Opened = {
   tones: Tone[];
   profile: string;
   mine: boolean;
+  /** Scenes are separate TONE3000 chains: only block settings change here,
+   * keyed by native instance id (7.3). Routing stays with Rig. */
+  chains?: { instance: string; block: NativeDraft }[];
 };
 
 /**
@@ -61,7 +69,7 @@ type Opened = {
  * revision. Nothing starts, stops or switches audio. A preset of your own keeps
  * its identity (the saved revision replaces it in the Set list); any other
  * preset is saved as a copy in Mine. Scene levels follow routing changes;
- * presets whose scenes are separate TONE3000 chains are edited in Rig.
+ * presets whose scenes are separate TONE3000 chains change block settings only.
  * @see docs/presets/format.md
  */
 export function OfflineEditor({
@@ -88,6 +96,34 @@ export function OfflineEditor({
   const [blocked, setBlocked] = useState('');
   const [discarding, setDiscarding] = useState(false);
   const [recovery, setRecovery] = useState<Recovery>(null);
+  // The TONE3000 block whose settings are open in the native editor (7.3).
+  // Edited TONE3000 files of a scene-chain preset, by native instance id.
+  const [chainEdits, setChainEdits] = useState<
+    Record<string, Pick<NativeDraft, 'preset' | 'source'>>
+  >({});
+  const [tuning, setTuning] = useState<{
+    block: NativeDraft;
+    open: { id: string; owned: boolean; name: string };
+  } | null>(null);
+  /** Opens a TONE3000 block's settings; a file stored only in the saved
+   * preset is copied into the library first so the editor can open it. */
+  async function tune(block: NativeDraft) {
+    setError('');
+    try {
+      const source = block.source;
+      const open =
+        source.kind === 'bundle'
+          ? {
+              id: (await importRigResource(source.revision, source.resource))
+                .sha256,
+              owned: false,
+            }
+          : { id: source.preset, owned: source.kind === 'owned' };
+      setTuning({ block, open: { ...open, name: block.name } });
+    } catch (cause) {
+      setError(friendlyError(cause, 'open the TONE3000 settings'));
+    }
+  }
   // Another browser saved or removed this preset while it is open here (7.26).
   const [elsewhere, setElsewhere] = useState<'changed' | null>(null);
   useEffect(() => {
@@ -109,20 +145,25 @@ export function OfflineEditor({
       setName(listed?.name ?? document.manifest.name);
       const scenes = document.manifest.extensions['urn:oxidal:scenes:1'] as
         { branches?: unknown[] } | undefined;
-      if (scenes?.branches?.length) {
-        setBlocked(
-          'Each scene of this preset is its own TONE3000 chain. Edit it in Rig, where the scene lanes keep each chain matched to its scene.',
-        );
-        return;
-      }
-      setRoute(readRoute(document, plugins, {}));
-      setOpened({
+      const base = {
         document,
         plugins,
         tones,
         profile: library.native_profile,
         mine: (listed?.origin ?? 'mine') === 'mine',
-      });
+      };
+      if (scenes?.branches?.length) {
+        const chains = (document.manifest.oxidal?.graph.nodes ?? [])
+          .filter((n) => n.kind === 'tone3000' && n.instance)
+          .map((n) => ({
+            instance: n.instance!,
+            block: readBlock(document, plugins, {}, n.id) as NativeDraft,
+          }));
+        setOpened({ ...base, chains });
+        return;
+      }
+      setRoute(readRoute(document, plugins, {}));
+      setOpened(base);
     })().catch((cause: unknown) => {
       if (alive) setBlocked(friendlyError(cause, 'open this preset'));
     });
@@ -184,11 +225,14 @@ export function OfflineEditor({
       const id = opened.mine
         ? opened.document.manifest.id
         : crypto.randomUUID();
-      // Scene levels follow the new routing (C9).
-      const request = keepScenes(
-        opened.document,
-        buildRoute(id, name, route, opened.profile),
-      );
+      // Scene levels follow the new routing (C9); scene-chain presets keep
+      // their graph and only swap edited TONE3000 files.
+      const request = opened.chains
+        ? replaceNativeFiles(opened.document, chainEdits, id, name)
+        : keepScenes(
+            opened.document,
+            buildRoute(id, name, route, opened.profile),
+          );
       request.source = { kind: 'rig', id: opened.document.revision };
       onSaved(await publishRig(request));
     } catch (cause) {
@@ -314,6 +358,23 @@ export function OfflineEditor({
             Remove
           </Button>
         </div>
+        {block.kind === 'native' &&
+          (block.stage ? (
+            <p className="caption">
+              Settings of an extracted amp or cab stage are changed with its
+              whole tone in Rig.
+            </p>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              aria-label={`Edit ${block.name} settings`}
+              disabled={busy || !connected}
+              onClick={() => void tune(block)}
+            >
+              Edit settings…
+            </Button>
+          ))}
         {!!ports.length && block.kind === 'lv2' && (
           <details>
             <summary>Settings</summary>
@@ -474,21 +535,61 @@ export function OfflineEditor({
             Nothing plays while you edit. Save keeps the changes
             {opened.mine ? '.' : ' as your own copy in Mine.'}
           </p>
-          <div aria-label="Routing" role="group">
-            <div className="offline-row">
-              <span className="caption">Input</span>
+          {opened.chains ? (
+            <div aria-label="Scene chains" role="group">
+              <p className="caption">
+                Each scene of this preset is its own TONE3000 chain. Change each
+                block&apos;s settings here; its routing and scenes are edited in
+                Rig.
+              </p>
+              <ul className="offline-blocks">
+                {opened.chains.map(({ instance, block }) => (
+                  <li key={block.id} className="offline-block">
+                    <div className="offline-row">
+                      <strong>{block.name}</strong>
+                      <span className="caption">
+                        {chainEdits[instance]
+                          ? 'Edited · not saved'
+                          : 'TONE3000'}
+                      </span>
+                      <span className="flex-1" />
+                      {block.stage ? (
+                        <span className="caption">
+                          Edited with its tone in Rig
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          aria-label={`Edit ${block.name} settings`}
+                          disabled={busy || !connected}
+                          onClick={() => void tune(block)}
+                        >
+                          Edit settings…
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-            {route.length ? (
-              steps(route)
-            ) : (
-              <p className="caption">Input straight to output.</p>
-            )}
-            <div className="offline-row">
-              <span className="caption">Output</span>
-              <span className="flex-1" />
-              {addEffect()}
+          ) : (
+            <div aria-label="Routing" role="group">
+              <div className="offline-row">
+                <span className="caption">Input</span>
+              </div>
+              {route.length ? (
+                steps(route)
+              ) : (
+                <p className="caption">Input straight to output.</p>
+              )}
+              <div className="offline-row">
+                <span className="caption">Output</span>
+                <span className="flex-1" />
+                {addEffect()}
+              </div>
             </div>
-          </div>
+          )}
           {elsewhere && (
             <div role="alert" className="offline-elsewhere">
               <p>
@@ -537,6 +638,54 @@ export function OfflineEditor({
             </Button>
           </div>
         </form>
+      )}
+      {tuning && (
+        <AdjustmentDialog
+          title={`Settings · ${tuning.block.name}`}
+          description="Saved as your own copy of this tone; the block then uses it. Nothing plays."
+          className="offline-native-settings"
+          onCancel={() => setTuning(null)}
+        >
+          <NativeEditor
+            presets={[]}
+            connected={connected}
+            open={tuning.open}
+            onSaved={(copy) =>
+              void rigNativeSources()
+                .then((tones) => {
+                  const tone = tones.find(
+                    (t) =>
+                      t.source.kind === 'owned' && t.source.preset === copy.id,
+                  );
+                  if (!tone) throw new Error('The edited copy is not listed.');
+                  const chain = opened?.chains?.find(
+                    (c) => c.block.id === tuning.block.id,
+                  );
+                  if (chain) {
+                    setChainEdits((edits) => ({
+                      ...edits,
+                      [chain.instance]: {
+                        preset: tone.preset,
+                        source: tone.source,
+                      },
+                    }));
+                    setDirty(true);
+                  } else
+                    change((r) =>
+                      routeReplaceNative(r, tuning.block.id, {
+                        name: tuning.block.name,
+                        preset: tone.preset,
+                        source: tone.source,
+                      }),
+                    );
+                  setTuning(null);
+                })
+                .catch((cause: unknown) =>
+                  setError(friendlyError(cause, 'use the edited settings')),
+                )
+            }
+          />
+        </AdjustmentDialog>
       )}
       {discarding && (
         <AdjustmentDialog
