@@ -208,6 +208,12 @@
     "scene_blends": {
       "$ref": "#/$defs/Blends"
     },
+    "scene_draft": {
+      "$ref": "#/$defs/SceneDraftState"
+    },
+    "scene_draft_update": {
+      "$ref": "#/$defs/SceneDraftUpdate"
+    },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
     },
@@ -318,6 +324,8 @@
     "calibration_coverage",
     "scene_blends",
     "scene_blend_update",
+    "scene_draft",
+    "scene_draft_update",
     "voice_request",
     "voice_ready",
     "voice_list",
@@ -3011,6 +3019,30 @@
       "enum": [
         "capture",
         "playback"
+      ]
+    },
+    "DraftScene": {
+      "description": "A scene drafted with Save as new scene.",
+      "type": "object",
+      "properties": {
+        "gains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneGain2"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "gains"
       ]
     },
     "Edge": {
@@ -8453,6 +8485,78 @@
         "scene"
       ]
     },
+    "SceneDraft": {
+      "description": "Scene levels changed with Update scene, by scene id, plus new scenes.",
+      "type": "object",
+      "properties": {
+        "added": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DraftScene"
+          }
+        },
+        "gains": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SceneGain2"
+            }
+          }
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "session",
+        "gains"
+      ]
+    },
+    "SceneDraftState": {
+      "description": "The shared draft; `revision` moves on every change so clients notice.",
+      "type": "object",
+      "properties": {
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneDraft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision"
+      ]
+    },
+    "SceneDraftUpdate": {
+      "description": "Replaces the draft; None clears it after Save or Discard.",
+      "type": "object",
+      "properties": {
+        "draft": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneDraft"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "SceneGain": {
       "type": "object",
       "properties": {
@@ -8463,6 +8567,30 @@
           "type": "integer",
           "format": "uint8",
           "maximum": 255,
+          "minimum": 0
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "port",
+        "value"
+      ]
+    },
+    "SceneGain2": {
+      "description": "One merge input level kept for a scene.",
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint32",
           "minimum": 0
         },
         "value": {

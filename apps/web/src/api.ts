@@ -903,6 +903,36 @@ export async function sceneBlends(
   return body;
 }
 
+export type SharedSceneDraft = Contract['scene_draft'];
+const sceneDraftValidator = ajv.compile<SharedSceneDraft>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SceneDraftState',
+});
+/**
+ * The unsaved scene draft the device holds for every browser (7.7): read it,
+ * or replace it (null clears it). Older daemons without one return null.
+ */
+export async function sceneDraft(
+  update?: Contract['scene_draft_update'],
+  signal?: AbortSignal,
+): Promise<SharedSceneDraft | null> {
+  const response = await fetch(
+    '/api/v1/scene-draft',
+    update
+      ? {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404 || response.status === 405) return null;
+  const body = await presetResponse(response);
+  if (!sceneDraftValidator(body)) throw new Error('Incompatible scene draft');
+  return body;
+}
+
 export type CalibrationState = Contract['calibration'];
 export type CalibrationCoverage = Contract['calibration_coverage'];
 const calibrationValidator = ajv.compile<CalibrationState>({

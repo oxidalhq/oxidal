@@ -30,6 +30,7 @@ mod provider;
 mod rig_library;
 mod rig_playback;
 mod rig_recovery;
+mod scene_draft;
 mod storage_lock;
 mod terminal;
 use axum::{
@@ -182,6 +183,8 @@ pub struct Contract {
     pub calibration_coverage: calibration::CalibrationCoverage,
     pub scene_blends: blends::Blends,
     pub scene_blend_update: blends::BlendUpdate,
+    pub scene_draft: scene_draft::SceneDraftState,
+    pub scene_draft_update: scene_draft::SceneDraftUpdate,
     pub voice_request: provider::voice::VoiceRequest,
     pub voice_ready: provider::voice::VoiceReady,
     pub voice_list: provider::voice::VoiceList,
@@ -241,6 +244,7 @@ struct Shared {
     guitars: Arc<guitars::Store>,
     boosts: Arc<boosts::Store>,
     blends: Arc<blends::Store>,
+    scene_draft: scene_draft::Store,
     calibration: Arc<calibration::Store>,
     rig_playback: rig_playback::RigPlayback,
     control: Mutex<Control>,
@@ -368,6 +372,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         boosts: Arc::new(boosts::Store::load(config.preset_dir.join("boosts.json"))),
         blends: Arc::new(blends::Store::load(config.preset_dir.join("blends.json"))),
+        scene_draft: scene_draft::Store::default(),
         calibration: Arc::new(calibration::Store::load(
             config.preset_dir.join("calibration.json"),
         )),
@@ -495,6 +500,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/audio/devices", get(audio::devices))
         .route("/midi/devices", get(audio::midi_devices))
         .route("/midi/map", get(midi_map::state).post(midi_map::replace))
+        .route(
+            "/scene-draft",
+            get(scene_draft::state).put(scene_draft::replace),
+        )
         .route("/midi/template", post(midi_map::apply_template))
         .route("/midi/test", post(midi_map::test))
         .route("/audio/probe", post(audio::probe))

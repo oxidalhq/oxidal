@@ -158,6 +158,56 @@ async fn startup_rejects_stale_capture_and_protect_without_replacing_the_choice(
 }
 
 #[tokio::test]
+async fn scene_draft_is_shared_by_every_client_until_cleared() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let empty: Value = client
+        .get(format!("{url}/scene-draft"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(empty, json!({"revision": 0, "draft": null}));
+    let draft = json!({"session": "s1", "gains": {"a": [{"node": "m", "port": 1, "value": 0.5}]},
+        "added": [{"id": "new", "name": "Lead", "gains": []}]});
+    let put = client
+        .put(format!("{url}/scene-draft"))
+        .json(&json!({"draft": draft}))
+        .send()
+        .await
+        .unwrap();
+    assert!(put.status().is_success());
+    // Another client reads the same draft.
+    let seen: Value = reqwest::get(format!("{url}/scene-draft"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(seen["revision"], 1);
+    assert_eq!(seen["draft"], draft);
+    let bad = client.put(format!("{url}/scene-draft"))
+        .json(&json!({"draft": {"session": "s1", "gains": {"a": [{"node": "m", "port": 1, "value": 99.0}]}}}))
+        .send().await.unwrap();
+    assert_eq!(bad.status(), 422);
+    let cleared: Value = client
+        .put(format!("{url}/scene-draft"))
+        .json(&json!({"draft": null}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(cleared, json!({"revision": 2, "draft": null}));
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn midi_map_starts_disabled_and_is_never_cached() {
     let (url, task, mapping) = start(true).await;
     let response = reqwest::get(format!("{url}/midi/map")).await.unwrap();

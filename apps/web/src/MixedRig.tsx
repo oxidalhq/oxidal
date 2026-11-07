@@ -81,6 +81,7 @@ import { EditQueue } from './editQueue';
 import { controlDisplay, controlLabel, lv2Control } from './lv2Control';
 import {
   rigAudioState,
+  sceneDraft as sharedSceneDraft,
   presetArtwork,
   installedLv2,
   libraryCatalog,
@@ -320,6 +321,76 @@ export function MixedRig({
     } catch {
       /* storage unavailable: the draft lives only in this page */
     }
+  }, [sceneUpdates]);
+  // The device holds the same draft for every browser (7.7): another tab or
+  // device sees Update scene at once, and a new tab picks it up. An older
+  // daemon without it leaves the draft to this tab, as before.
+  const draftRevision = useRef<number | null>(null);
+  const draftFromDevice = useRef(false);
+  const draftPushes = useRef(0);
+  const draftShared = useRef(true);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const remote = await sharedSceneDraft();
+        if (!active) return;
+        if (!remote) {
+          draftShared.current = false;
+          return;
+        }
+        if (draftPushes.current || remote.revision === draftRevision.current)
+          return;
+        const first = draftRevision.current === null;
+        draftRevision.current = remote.revision;
+        if (first && !remote.draft) {
+          // This tab kept a draft from before; share it.
+          setSceneUpdates((local) => {
+            if (local) void pushDraft(local);
+            return local;
+          });
+          return;
+        }
+        const next = (remote.draft as SceneDraft | null) ?? null;
+        setSceneUpdates((local) => {
+          if (JSON.stringify(local) === JSON.stringify(next)) return local;
+          draftFromDevice.current = true;
+          return next;
+        });
+      } catch {
+        /* unreachable for now; the next poll tries again */
+      } finally {
+        if (active && draftShared.current)
+          timer = setTimeout(() => void poll(), 1500);
+      }
+    };
+    void poll();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, []);
+  async function pushDraft(draft: SceneDraft | null) {
+    if (!draftShared.current) return;
+    draftPushes.current++;
+    try {
+      const saved = await sharedSceneDraft({
+        draft: draft && { ...draft, added: draft.added ?? [] },
+      });
+      if (saved) draftRevision.current = saved.revision;
+    } catch {
+      /* kept in this tab; the next change shares it again */
+    } finally {
+      draftPushes.current--;
+    }
+  }
+  useEffect(() => {
+    if (draftFromDevice.current) {
+      draftFromDevice.current = false;
+      return;
+    }
+    if (draftRevision.current !== null) void pushDraft(sceneUpdates);
   }, [sceneUpdates]);
   useEffect(() => {
     try {

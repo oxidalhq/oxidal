@@ -19,6 +19,8 @@ import {
   rigAudioCommand,
   rigDocument,
   rigLibrary,
+  sceneDraft,
+  type SharedSceneDraft,
 } from './api';
 import { lv2Effect } from './rigDraft';
 import { buildRoute } from './rigRoute';
@@ -32,6 +34,7 @@ vi.mock('./api', () => ({
   rigLibrary: vi.fn(),
   libraryCatalog: vi.fn(),
   sceneBlends: vi.fn(async () => null),
+  sceneDraft: vi.fn(async () => null),
 }));
 vi.mock('./presetChoices', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./presetChoices')>()),
@@ -445,6 +448,13 @@ it('explains the sounding scene as a branch mix rather than another chain', asyn
 });
 
 it('keeps a custom branch mix attached to its scene and offers Update scene', async () => {
+  // The device's shared copy of the draft (7.7).
+  let device: SharedSceneDraft = { revision: 0, draft: null };
+  vi.mocked(sceneDraft).mockImplementation(async (update) => {
+    if (update && JSON.stringify(update.draft) !== JSON.stringify(device.draft))
+      device = { revision: device.revision + 1, draft: update.draft };
+    return device;
+  });
   const state = setup('mine', [], true);
   state.control!.scenes = {
     fade_ms: 15,
@@ -529,7 +539,11 @@ it('keeps a custom branch mix attached to its scene and offers Update scene', as
   expect(
     JSON.parse(sessionStorage.getItem('oxidal.mixed.scene-draft')!).gains,
   ).toHaveProperty('scene-2');
+  // Another browser sees it too: a new tab with nothing stored reads the
+  // draft the device holds.
+  await waitFor(() => expect(device.draft?.gains).toHaveProperty('scene-2'));
   cleanup();
+  sessionStorage.removeItem('oxidal.mixed.scene-draft');
   render(
     <MixedRig
       connected

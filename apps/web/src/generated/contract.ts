@@ -785,6 +785,8 @@ export interface Contract {
   rig_publish: RigPublish;
   scene_blend_update: BlendUpdate;
   scene_blends: Blends;
+  scene_draft: SceneDraftState;
+  scene_draft_update: SceneDraftUpdate;
   snapshot: Snapshot;
   stage_model: StageModel;
   staged_model: StagedModel;
@@ -2470,6 +2472,45 @@ export interface Blends {
   blends: {
     [k: string]: number;
   };
+}
+/**
+ * The shared draft; `revision` moves on every change so clients notice.
+ */
+export interface SceneDraftState {
+  draft?: SceneDraft | null;
+  revision: number;
+}
+/**
+ * Scene levels changed with Update scene, by scene id, plus new scenes.
+ */
+export interface SceneDraft {
+  added?: DraftScene[];
+  gains: {
+    [k: string]: SceneGain2[];
+  };
+  session: string;
+}
+/**
+ * A scene drafted with Save as new scene.
+ */
+export interface DraftScene {
+  gains: SceneGain2[];
+  id: string;
+  name: string;
+}
+/**
+ * One merge input level kept for a scene.
+ */
+export interface SceneGain2 {
+  node: string;
+  port: number;
+  value: number;
+}
+/**
+ * Replaces the draft; None clears it after Save or Discard.
+ */
+export interface SceneDraftUpdate {
+  draft?: SceneDraft | null;
 }
 export interface StageModel {
   model_id: number;
