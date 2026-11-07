@@ -14,6 +14,7 @@ export function RouteTree({
   route,
   tiles,
   onSplit,
+  onAddToPath,
   label = 'Signal chain',
 }: {
   route: IdStep[];
@@ -21,28 +22,41 @@ export function RouteTree({
   tiles: (id: string) => ReactNode;
   /** Opens the routing controls of a split, when the preset can be edited. */
   onSplit?: (split: Split) => void;
+  /** Adds a block at the end of path `index` of `split` (7.28). */
+  onAddToPath?: (split: Split, index: number) => void;
   label?: string;
 }) {
   return (
     <div className="route-tree" role="group" aria-label={label}>
       <span className="route-port">IN</span>
-      <Steps steps={route} tiles={tiles} onSplit={onSplit} prefix="" />
+      <Steps
+        steps={route}
+        tiles={tiles}
+        onSplit={onSplit}
+        onAddToPath={onAddToPath}
+        prefix=""
+      />
       <span className="route-port">OUT</span>
     </div>
   );
 }
 
+type Actions = {
+  onSplit?: (split: Split) => void;
+  onAddToPath?: (split: Split, index: number) => void;
+};
+
 function Steps({
   steps,
   tiles,
   onSplit,
+  onAddToPath,
   prefix,
 }: {
   steps: IdStep[];
   tiles: (id: string) => ReactNode;
-  onSplit?: (split: Split) => void;
   prefix: string;
-}) {
+} & Actions) {
   // Consecutive blocks share one wrapping row; each split is its own group.
   const groups: (string[] | Split)[] = [];
   for (const step of steps) {
@@ -65,6 +79,7 @@ function Steps({
             split={group}
             tiles={tiles}
             onSplit={onSplit}
+            onAddToPath={onAddToPath}
             prefix={prefix}
           />
         ),
@@ -77,13 +92,13 @@ function SplitGroup({
   split,
   tiles,
   onSplit,
+  onAddToPath,
   prefix,
 }: {
   split: Split;
   tiles: (id: string) => ReactNode;
-  onSplit?: (split: Split) => void;
   prefix: string;
-}) {
+} & Actions) {
   const name = (i: number) =>
     prefix ? `${prefix}${String.fromCharCode(97 + i)}` : String(i + 1);
   const title = `Split · ${split.branches.length} paths`;
@@ -120,10 +135,21 @@ function SplitGroup({
                 steps={branch}
                 tiles={tiles}
                 onSplit={onSplit}
+                onAddToPath={onAddToPath}
                 prefix={name(i)}
               />
             ) : (
               <span className="route-dry">dry</span>
+            )}
+            {onAddToPath && (
+              <button
+                type="button"
+                className="route-add"
+                aria-label={`Add a block to path ${name(i)}`}
+                onClick={() => onAddToPath(split, i)}
+              >
+                +
+              </button>
             )}
           </li>
         ))}

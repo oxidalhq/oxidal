@@ -59,6 +59,7 @@ import {
   routeAddBranch,
   routeSplitAddPath,
   routePath,
+  routeAppend,
   pathMix,
   mixGains,
   type PathMix,
@@ -126,6 +127,8 @@ const key = (c: RigControl) => JSON.stringify(c.target);
 const laneBlockId = (node: string, block: string) => `${node}::${block}`;
 /** The node part of an end-of-lane + tile. */
 const END = 'end';
+/** A lane slot at the end of one path of a split: target `split:index`. */
+const PATH = 'path';
 
 export function MixedRig({
   connected,
@@ -2123,6 +2126,15 @@ export function MixedRig({
             onSplit={
               running ? (split) => setRoutingSplit(split.split) : undefined
             }
+            onAddToPath={
+              editable && !editing
+                ? (split, index) =>
+                    setLaneSlot({
+                      node: PATH,
+                      target: `${split.split}:${index}`,
+                    })
+                : undefined
+            }
           />
         ) : (
           <ChainView
@@ -2336,7 +2348,7 @@ export function MixedRig({
           presetName={matching?.manifest.name ?? 'this preset'}
           modified={!!changed}
           allowEffects
-          modelsAllowed={laneSlot.node !== END}
+          modelsAllowed={laneSlot.node !== END && laneSlot.node !== PATH}
           placement="here"
           onCancel={() => setLaneSlot(null)}
           onModel={(format) => {
@@ -2354,6 +2366,13 @@ export function MixedRig({
             const slot = laneSlot;
             setLaneSlot(null);
             void editChain((route) => {
+              if (slot.node === PATH) {
+                const cut = slot.target.lastIndexOf(':');
+                return routeAppend(route, lv2Effect(plugin), {
+                  split: slot.target.slice(0, cut),
+                  path: Number(slot.target.slice(cut + 1)),
+                });
+              }
               const effect =
                 slot.node === END ? terminalEffect(plugin) : lv2Effect(plugin);
               if (slot.node === END)

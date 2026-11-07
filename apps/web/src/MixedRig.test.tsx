@@ -26,6 +26,9 @@ import { lv2Effect } from './rigDraft';
 import { buildRoute } from './rigRoute';
 import { chainLanes } from './rigChain';
 // Mute/Protect have their own tests; the Rig header only places them.
+// Phone layout is switched per test; most tests use the wide layout.
+let narrow = false;
+vi.mock('./lib/useNarrow', () => ({ useNarrow: () => narrow }));
 vi.mock('./features/stage/StageControls', () => ({
   StageControls: () => null,
 }));
@@ -923,4 +926,14 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
   expect(
     within(dialog).getByRole('button', { name: '+ Add dry path' }),
   ).toBeVisible();
+  // On a phone the same routing reads as a tree with a + at the end of each
+  // path, which opens the block chooser for that path (7.28).
+  narrow = true;
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+  const tree = await screen.findByRole('group', { name: 'Signal chain' });
+  fireEvent.click(
+    within(tree).getByRole('button', { name: 'Add a block to path 2' }),
+  );
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  narrow = false;
 });

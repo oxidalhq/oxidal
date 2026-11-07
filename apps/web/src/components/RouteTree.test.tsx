@@ -49,6 +49,7 @@ it('reads split routing top to bottom with nested paths, dry paths and levels', 
   fireEvent.click(
     screen.getByRole('button', { name: 'Split · 2 paths: path levels' }),
   );
+  expect(screen.queryByRole('button', { name: /Add a block/ })).toBeNull();
   expect(onSplit).toHaveBeenCalledWith(
     expect.objectContaining({ split: 'split-b' }),
   );
@@ -58,4 +59,19 @@ it('shows splits as plain labels when routing cannot be changed', () => {
   render(<RouteTree route={route} tiles={() => null} />);
   expect(screen.queryByRole('button', { name: /path levels/ })).toBeNull();
   expect(screen.getAllByText(/Split · /)).toHaveLength(2);
+});
+
+it('ends every path, dry ones included, with a + that adds to that path', () => {
+  const add = vi.fn();
+  render(<RouteTree route={route} tiles={() => null} onAddToPath={add} />);
+  expect(
+    screen.getAllByRole('button', { name: /^Add a block to path / }),
+  ).toHaveLength(5);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add a block to path 2b' }),
+  );
+  expect(add).toHaveBeenCalledWith(
+    expect.objectContaining({ split: 'split-b' }),
+    1,
+  );
 });
