@@ -3778,3 +3778,47 @@ textarea {
     gap: 0.75rem;
   }
 }
+
+/* Audio device screen (7.29). */
+.audio-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.audio-card-heading h3 {
+  margin: 0;
+}
+.audio-check-result {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.applied-settings,
+.audio-test {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.applied-settings h4 {
+  margin: 0;
+}
+.startup-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-height: var(--touch-target);
+}
+.startup-option > input {
+  margin-top: 0.3rem;
+}
+.startup-option-text {
+  display: grid;
+  gap: 0.125rem;
+}
+@media (min-width: 641px) {
+  .startup-option-text {
+    grid-template-columns: 12rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 1rem;
+  }
+}

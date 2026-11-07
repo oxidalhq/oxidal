@@ -56,7 +56,6 @@ it('keeps Resume disabled while the saved interface is absent', () => {
       input={null}
       output={null}
       onState={vi.fn()}
-      boot={null}
     />,
   );
   expect(screen.getByRole('button', { name: 'Resume audio' })).toBeDisabled();
@@ -71,7 +70,6 @@ it('enables Resume after both saved directions pass the exact check', () => {
       input={input}
       output={output}
       onState={vi.fn()}
-      boot={null}
     />,
   );
   expect(screen.getByRole('button', { name: 'Resume audio' })).toBeEnabled();

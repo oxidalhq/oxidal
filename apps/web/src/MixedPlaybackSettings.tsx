@@ -2,7 +2,7 @@ import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { RecoveryNotice } from './RecoveryNotice';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
 import { BufferFinder } from './BufferFinder';
@@ -22,9 +22,7 @@ export function MixedPlaybackSettings({
   input,
   output,
   onState,
-  boot,
 }: {
-  boot: ReactNode;
   state: RigAudioState;
   connected: boolean;
   input: AudioProbe | null;
@@ -61,7 +59,7 @@ export function MixedPlaybackSettings({
   return (
     <section className="control-stack" aria-label="Playback controls">
       <div className="section-heading">
-        <h3>Portable rigs</h3>
+        <h3>Now playing</h3>
         <span role="status">
           {state.phase === 'starting' ? 'Preparing…' : state.phase}
         </span>
@@ -87,7 +85,6 @@ export function MixedPlaybackSettings({
       {!state.device_owned && !resumeReady && (
         <p className="caption">{resumeUnavailable}</p>
       )}
-      {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
       <RecoveryNotice message={state.recovery_error} />
@@ -95,11 +92,11 @@ export function MixedPlaybackSettings({
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods
       </p>
-      <details
-        className="control-help"
+      <section
+        className="control-stack applied-settings"
         aria-label="Playback session configuration"
       >
-        <summary>Current device &amp; buffers</summary>
+        <h4>Applied settings</h4>
         <p className="caption">
           Confirmed edits are kept for Resume after a restart. Save creates a
           separate preset copy.
@@ -119,7 +116,7 @@ export function MixedPlaybackSettings({
           disabled={!connected || busy || transitioning}
           apply={(stream) => command({ kind: 'reconfigure', stream })}
         />
-      </details>
+      </section>
     </section>
   );
 }

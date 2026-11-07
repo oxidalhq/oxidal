@@ -1660,7 +1660,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     const audio = page.getByRole('region', { name: 'Playback controls' });
     await expect(audio.getByRole('status')).toContainText('Audio: running');
-    await audio.getByText('Current device & buffers', { exact: true }).click();
     const currentBuffers = audio.getByRole('group', {
       name: 'Adjust current session',
     });
@@ -1700,7 +1699,6 @@ test('playback lifecycle keeps native authoring available after stop and restart
       path: test.info().outputPath('audio-apply.png'),
       fullPage: true,
     });
-    await audio.getByText('Current device & buffers', { exact: true }).click();
     await audio
       .getByRole('button', { name: 'Start automatically on future boots' })
       .click();
@@ -2291,7 +2289,6 @@ test('graph authoring creates an installed effect rig and saves live controls', 
   await expect
     .poll(async () => (await read()).native_values[0]?.value)
     .toBe(-35);
-  await playback.getByText('Current device & buffers', { exact: true }).click();
   await playback
     .getByLabel('Session sample rate (Hz)', { exact: true })
     .click();
@@ -2802,11 +2799,8 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const audioSettings = page.getByRole('region', { name: 'Playback controls' });
   await expect(
-    audioSettings.getByRole('heading', { name: 'Portable rigs' }),
+    audioSettings.getByRole('heading', { name: 'Now playing' }),
   ).toBeVisible();
-  await audioSettings
-    .getByText('Current device & buffers', { exact: true })
-    .click();
   const buffers = audioSettings.getByRole('group', {
     name: 'Adjust current session',
   });
@@ -4855,7 +4849,6 @@ test('playback lifecycle distinguishes loading and offers readable buffer choice
   await expect(
     page.getByRole('button', { name: 'Stop audio', exact: true }),
   ).toBeVisible();
-  await page.getByText('Current device & buffers', { exact: true }).click();
   const group = page.getByRole('group', { name: 'Adjust current session' });
   const buffer = group.getByRole('combobox', {
     name: 'Session buffer (samples)',

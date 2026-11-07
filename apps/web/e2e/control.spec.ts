@@ -748,9 +748,9 @@ test('audio inspection keeps the authoring service connected', async ({
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
-  const setup = panel.getByRole('region', { name: 'Audio interface setup' });
+  const setup = panel.getByRole('region', { name: 'Interface and buffers' });
   await expect(
-    setup.getByRole('heading', { name: 'Audio interface setup' }),
+    setup.getByRole('heading', { name: 'Interface and buffers' }),
   ).toBeVisible();
   await expect(
     setup.getByRole('button', { name: 'Refresh audio devices' }),
@@ -868,7 +868,7 @@ test('audio setup recovers a late USB interface without losing its draft', async
   );
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const setup = page.getByRole('region', { name: 'Audio interface setup' });
+  const setup = page.getByRole('region', { name: 'Interface and buffers' });
   await expect(setup.getByLabel('Input', { exact: true })).toBeDisabled();
   await expect(setup).toContainText('playback-only devices');
   await setup.getByLabel('Sample rate (Hz)').fill('44100');
@@ -954,9 +954,9 @@ test('audio configuration exposes buffers and discards changed or failed checks'
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Audio devices' });
-  const setup = panel.getByRole('region', { name: 'Audio interface setup' });
+  const setup = panel.getByRole('region', { name: 'Interface and buffers' });
   await expect(
-    setup.getByRole('heading', { name: 'Audio interface setup' }),
+    setup.getByRole('heading', { name: 'Interface and buffers' }),
   ).toBeVisible();
   await expect(
     setup.getByRole('combobox', { name: 'Input', exact: true }),
@@ -971,6 +971,11 @@ test('audio configuration exposes buffers and discards changed or failed checks'
     panel.getByLabel('Buffer size (samples per period)'),
   ).toHaveValue('128');
   await expect(panel.getByLabel('Buffer periods')).toHaveValue('3');
+  // Rate and buffer are visible with their queued time, never collapsed (7.29).
+  await expect(setup.getByLabel('Queued audio')).toHaveText(
+    /≈ 8\.0 ms queued \(128 × 3 at 48\.0 kHz\)/,
+  );
+  await expect(setup.locator('details')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Check input and output' }).click();
   const checked = panel.getByLabel('Checked audio configuration');
   await expect(checked).toContainText('128 samples × 3 = 8.0 ms');

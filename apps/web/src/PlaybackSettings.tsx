@@ -5,7 +5,7 @@ import { HostAudioControls } from './HostAudioControls';
 import { EffectsPlaybackSettings } from './EffectsPlaybackSettings';
 import { BootPlayback } from './BootPlayback';
 import { RecoveryNotice } from './RecoveryNotice';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   playbackState,
   rigAudioState,
@@ -46,15 +46,26 @@ function configurationLabel(configuration: AudioProbe) {
   return `${configuration.endpoint} · ${configuration.sample_rate} Hz · ${channels} · ${configuration.period_frames} samples × ${configuration.periods} = ${bufferMs(configuration).toFixed(1)} ms`;
 }
 
+/** Rate, buffer and queued time in a few words, for the status line. */
+function shortConfiguration(configuration: AudioProbe) {
+  return `${(configuration.sample_rate / 1000).toFixed(1)} kHz · ${configuration.period_frames} × ${configuration.periods} · ≈ ${bufferMs(configuration).toFixed(1)} ms`;
+}
+
 /** Audio ownership is independent of silent authoring. @see docs/audio.md */
 export function PlaybackSettings({
   connected,
   input,
   output,
+  interfaceCard,
+  level,
 }: {
   connected: boolean;
   input: AudioProbe | null;
   output: AudioProbe | null;
+  /** The interface and buffer check, placed after what is playing (7.29). */
+  interfaceCard?: ReactNode;
+  /** Master level, shown with the monitor and output tests. */
+  level?: ReactNode;
 }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [state, setState] = useState<AudioState | null>(null);
@@ -284,6 +295,14 @@ export function PlaybackSettings({
         {readError && <p role="alert">{readError}</p>}
       </section>
     );
+  // Monitor and output tests with Master level, one row (7.29).
+  const test = (
+    <section className="control-stack audio-test" aria-label="Test">
+      <h3>Test</h3>
+      {hostControls}
+      {level}
+    </section>
+  );
   if (
     effects?.configured &&
     effects.phase !== 'unavailable' &&
@@ -295,15 +314,16 @@ export function PlaybackSettings({
   )
     return (
       <>
-        {hostControls}
         <EffectsPlaybackSettings
           state={effects}
           connected={connected}
           input={input}
           output={output}
           onState={acceptEffects}
-          boot={boot}
         />
+        {interfaceCard}
+        {test}
+        {boot}
       </>
     );
   if (
@@ -314,57 +334,22 @@ export function PlaybackSettings({
   )
     return (
       <>
-        {hostControls}
         <MixedPlaybackSettings
           state={mixed}
           connected={connected}
           input={input}
           output={output}
           onState={acceptMixed}
-          boot={boot}
         />
+        {interfaceCard}
+        {test}
+        {boot}
       </>
     );
   return (
     <section className="control-stack" aria-label="Playback controls">
-      {hostControls}
-      <h3>Audio playback</h3>
+      <h3>Now playing</h3>
       <RecoveryNotice message={mixed?.recovery_error} />
-      {input && output && (
-        <div className="action-row">
-          <Button
-            variant="outline"
-            disabled={!connected || busy}
-            onClick={async () => {
-              setBusy(true);
-              setError('');
-              setGraphMessage('');
-              try {
-                const graph = await graphAudioState();
-                acceptEffects(
-                  await graphAudioCommand(graph, {
-                    kind: 'configure',
-                    stream: {
-                      input,
-                      output,
-                      input_map: inputMap,
-                      output_map: outputMap,
-                    },
-                  }),
-                );
-                setGraphMessage('Audio setup ready for New preset.');
-              } catch (cause) {
-                setError(friendlyError(cause, 'change playback'));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            Use for new rigs
-          </Button>
-          {graphMessage && <p role="status">{graphMessage}</p>}
-        </div>
-      )}
 
       <p
         role="status"
@@ -373,6 +358,9 @@ export function PlaybackSettings({
       >
         Audio: {state?.phase ?? 'checking'}
         {state?.device_owned ? ' · interface reserved' : ''}
+        {state?.configured && state.phase !== 'stopped'
+          ? ` · ${shortConfiguration(state.configured.stream.input)}`
+          : ''}
       </p>
       {unavailable ? (
         <>
@@ -380,6 +368,8 @@ export function PlaybackSettings({
             Audio playback is unavailable on this device. Saved tones can still
             be edited.
           </p>
+          {interfaceCard}
+          {test}
           {boot}
         </>
       ) : (
@@ -418,25 +408,12 @@ export function PlaybackSettings({
           {state?.configured && !state.device_owned && !nativeResumeReady && (
             <p className="caption">{resumeUnavailable}</p>
           )}
-          {boot}
-          <details className="control-help">
-            <summary>Playback help</summary>
-            <p>
-              Stop releases the interface and keeps Oxidal open. Resume and
-              Restart retain live adjustments. The last confirmed session is
-              checkpointed so it can be recovered if Oxidal restarts.
-            </p>
-            <p>
-              To use another audio app, stop here first. Close that app’s audio
-              session before resuming.
-            </p>
-          </details>
           {state?.configured && (
-            <details
-              className="control-help"
+            <section
+              className="control-stack applied-settings"
               aria-label="Playback session configuration"
             >
-              <summary>Current device &amp; buffers</summary>
+              <h4>Applied settings</h4>
               <p>Input: {configurationLabel(state.configured.stream.input)}</p>
               <p>
                 Output: {configurationLabel(state.configured.stream.output)}
@@ -458,8 +435,46 @@ export function PlaybackSettings({
                 disabled={!connected || busy || transitioning}
                 apply={(stream) => command({ kind: 'reconfigure', stream })}
               />
-            </details>
+            </section>
           )}
+          {interfaceCard}
+          {test}
+          {input && output && (
+            <div className="action-row">
+              <Button
+                variant="outline"
+                disabled={!connected || busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  setGraphMessage('');
+                  try {
+                    const graph = await graphAudioState();
+                    acceptEffects(
+                      await graphAudioCommand(graph, {
+                        kind: 'configure',
+                        stream: {
+                          input,
+                          output,
+                          input_map: inputMap,
+                          output_map: outputMap,
+                        },
+                      }),
+                    );
+                    setGraphMessage('Audio setup ready for New preset.');
+                  } catch (cause) {
+                    setError(friendlyError(cause, 'change playback'));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Use for new rigs
+              </Button>
+              {graphMessage && <p role="status">{graphMessage}</p>}
+            </div>
+          )}
+          {boot}
           <details className="control-help" open={!state?.configured}>
             <summary>Start audio with…</summary>
             <fieldset
@@ -550,6 +565,18 @@ export function PlaybackSettings({
                 Start audio
               </Button>
             </fieldset>{' '}
+          </details>
+          <details className="control-help">
+            <summary>Playback help</summary>
+            <p>
+              Stop releases the interface and keeps Oxidal open. Resume and
+              Restart retain live adjustments. The last confirmed session is
+              checkpointed so it can be recovered if Oxidal restarts.
+            </p>
+            <p>
+              To use another audio app, stop here first. Close that app’s audio
+              session before resuming.
+            </p>
           </details>
         </>
       )}

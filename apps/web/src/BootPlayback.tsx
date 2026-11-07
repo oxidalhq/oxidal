@@ -220,7 +220,7 @@ export function BootPlayback({
               ],
             ] as const
           ).map(([value, label, help]) => (
-            <label key={value} className="flex items-start gap-2">
+            <label key={value} className="startup-option">
               <input
                 type="radio"
                 name="startup-policy"
@@ -233,9 +233,11 @@ export function BootPlayback({
                 }
                 onChange={() => void choose(value)}
               />
-              <span>
-                {label}
-                <span className="caption block">{help}</span>
+              <span className="startup-option-text">
+                <span>{label}</span>
+                {/* Not Tailwind's `block`: the project `.block` class draws a
+                    tile and made each description a tall empty box (7.29). */}
+                <span className="caption">{help}</span>
               </span>
             </label>
           ))}

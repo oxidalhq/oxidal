@@ -181,222 +181,261 @@ export function AudioSettings({ connected }: { connected: boolean }) {
       <TabsContent value="device">
         <section className="panel control-stack" aria-label="Audio devices">
           <h2 className="sr-only">Audio device</h2>
-          <section
-            className="audio-diagnostics"
-            aria-labelledby="audio-interface-setup"
-          >
-            <h3 id="audio-interface-setup">Audio interface setup</h3>
-            <p className="caption">
-              Connected interfaces appear automatically. Check input and output
-              here before starting a new playback session.
-            </p>
-            <Button
-              variant="outline"
-              disabled={busy || !connected}
-              onClick={() => void refresh()}
-            >
-              Refresh audio devices
-            </Button>
-            {inventory?.backend_available && (
-              <>
-                <fieldset
-                  disabled={busy || !connected}
-                  className="audio-probe-fields"
-                >
-                  <legend>Configuration check</legend>
-                  <div className="form-grid">
-                    <label className="field">
-                      Input
-                      <Select
-                        value={selectedInput || undefined}
-                        disabled={inputEndpoints.length === 0}
-                        onValueChange={(value) => {
-                          setSelectedInput(value);
-                          invalidate();
-                          setMessage('');
-                        }}
-                      >
-                        <SelectTrigger aria-label="Input">
-                          <SelectValue
-                            placeholder={
-                              inputEndpoints.length === 0
-                                ? 'No input detected'
-                                : 'Choose an input'
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inputEndpoints.map((endpoint) => (
-                            <SelectItem key={endpoint.id} value={endpoint.id}>
-                              {endpoint.name} · {endpoint.id}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {inputEndpoints.length === 0 && (
-                        <span className="caption">
-                          {outputEndpoints.length > 0
-                            ? 'HDMI and other playback-only devices cannot receive your guitar. Connect or reconnect a USB audio interface, then refresh.'
-                            : 'No audio input is connected. Connect or reconnect a USB audio interface, then refresh.'}
-                        </span>
-                      )}
-                    </label>
-                    <label className="field">
-                      Output
-                      <Select
-                        value={selectedOutput || undefined}
-                        disabled={outputEndpoints.length === 0}
-                        onValueChange={(value) => {
-                          setSelectedOutput(value);
-                          invalidate();
-                          setMessage('');
-                        }}
-                      >
-                        <SelectTrigger aria-label="Output">
-                          <SelectValue
-                            placeholder={
-                              outputEndpoints.length === 0
-                                ? 'No output detected'
-                                : 'Choose an output'
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {outputEndpoints.map((endpoint) => (
-                            <SelectItem key={endpoint.id} value={endpoint.id}>
-                              {endpoint.name} · {endpoint.id}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {outputEndpoints.length === 0 && (
-                        <span className="caption">
-                          Connect an audio output, then refresh.
-                        </span>
-                      )}
-                    </label>
-                    <label className="field">
-                      Sample rate (Hz)
-                      <input
-                        type="number"
-                        min={8000}
-                        max={192000}
-                        value={request.sample_rate}
-                        onChange={(e) =>
-                          update('sample_rate', Number(e.target.value))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Input channels
-                      <input
-                        type="number"
-                        min={1}
-                        max={64}
-                        value={request.input_channels}
-                        onChange={(e) =>
-                          update('input_channels', Number(e.target.value))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Output channels
-                      <input
-                        type="number"
-                        min={1}
-                        max={64}
-                        value={request.output_channels}
-                        onChange={(e) =>
-                          update('output_channels', Number(e.target.value))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Sample format
-                      <Select
-                        value={request.format}
-                        onValueChange={(value) =>
-                          update('format', value as AudioProbe['format'])
-                        }
-                      >
-                        <SelectTrigger aria-label="Sample format">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="s16">16-bit integer</SelectItem>
-                          <SelectItem value="s24">
-                            24-bit in 32-bit container
-                          </SelectItem>
-                          <SelectItem value="s24_packed">
-                            24-bit packed
-                          </SelectItem>
-                          <SelectItem value="s32">32-bit integer</SelectItem>
-                          <SelectItem value="float">32-bit float</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </label>
-                    <label className="field">
-                      Buffer size (samples per period)
-                      <input
-                        type="number"
-                        min={16}
-                        max={8192}
-                        value={request.period_frames}
-                        onChange={(e) =>
-                          update('period_frames', Number(e.target.value))
-                        }
-                      />
-                    </label>
-                    <label className="field">
-                      Buffer periods
-                      <input
-                        type="number"
-                        min={2}
-                        max={8}
-                        value={request.periods}
-                        onChange={(e) =>
-                          update('periods', Number(e.target.value))
-                        }
-                      />
-                    </label>
-                  </div>
-                  <details className="control-help">
-                    <summary>Buffers &amp; configuration checks</summary>
-                    <p>
-                      Smaller buffers reduce delay but need more processing
-                      headroom. Periods set queued capacity; this is not
-                      measured round-trip latency.
-                    </p>
-                    <p>
-                      The check opens and releases input, then output. It does
-                      not start playback or save the setup.
-                    </p>
-                  </details>
-                  <Button
-                    variant="outline"
-                    disabled={!inputEndpoint || !outputEndpoint}
-                    onClick={() => void check()}
-                  >
-                    Check input and output
-                  </Button>
-                </fieldset>
-              </>
-            )}
-            <p role="status">{busy ? 'Inspecting audio…' : message}</p>
-            {inventory && inventory.warnings.length > 0 && (
-              <details className="control-help">
-                <summary>Technical detail</summary>
-                {inventory.warnings.map((warning, index) => (
-                  <p key={index}>{warning}</p>
-                ))}
-              </details>
-            )}
-          </section>
-          <MasterLevel />
           <PlaybackSettings
             connected={connected}
             input={input}
             output={output}
+            level={<MasterLevel />}
+            interfaceCard={
+              <section
+                className="audio-diagnostics"
+                aria-labelledby="audio-interface-setup"
+              >
+                <div className="audio-card-heading">
+                  <h3 id="audio-interface-setup">Interface and buffers</h3>
+                  <Button
+                    variant="outline"
+                    disabled={busy || !connected}
+                    onClick={() => void refresh()}
+                  >
+                    Refresh audio devices
+                  </Button>
+                </div>
+                <p className="caption">
+                  Connected interfaces appear automatically. Check input and
+                  output before starting a new playback session.
+                </p>
+                {inventory?.backend_available && (
+                  <>
+                    <fieldset
+                      disabled={busy || !connected}
+                      className="audio-probe-fields"
+                    >
+                      <legend>Configuration check</legend>
+                      <div className="form-grid">
+                        <label className="field">
+                          Input
+                          <Select
+                            value={selectedInput || undefined}
+                            disabled={inputEndpoints.length === 0}
+                            onValueChange={(value) => {
+                              setSelectedInput(value);
+                              invalidate();
+                              setMessage('');
+                            }}
+                          >
+                            <SelectTrigger aria-label="Input">
+                              <SelectValue
+                                placeholder={
+                                  inputEndpoints.length === 0
+                                    ? 'No input detected'
+                                    : 'Choose an input'
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {inputEndpoints.map((endpoint) => (
+                                <SelectItem
+                                  key={endpoint.id}
+                                  value={endpoint.id}
+                                >
+                                  {endpoint.name} · {endpoint.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {inputEndpoints.length === 0 && (
+                            <span className="caption">
+                              {outputEndpoints.length > 0
+                                ? 'HDMI and other playback-only devices cannot receive your guitar. Connect or reconnect a USB audio interface, then refresh.'
+                                : 'No audio input is connected. Connect or reconnect a USB audio interface, then refresh.'}
+                            </span>
+                          )}
+                        </label>
+                        <label className="field">
+                          Output
+                          <Select
+                            value={selectedOutput || undefined}
+                            disabled={outputEndpoints.length === 0}
+                            onValueChange={(value) => {
+                              setSelectedOutput(value);
+                              invalidate();
+                              setMessage('');
+                            }}
+                          >
+                            <SelectTrigger aria-label="Output">
+                              <SelectValue
+                                placeholder={
+                                  outputEndpoints.length === 0
+                                    ? 'No output detected'
+                                    : 'Choose an output'
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {outputEndpoints.map((endpoint) => (
+                                <SelectItem
+                                  key={endpoint.id}
+                                  value={endpoint.id}
+                                >
+                                  {endpoint.name} · {endpoint.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {outputEndpoints.length === 0 && (
+                            <span className="caption">
+                              Connect an audio output, then refresh.
+                            </span>
+                          )}
+                        </label>
+                        <label className="field">
+                          Sample rate (Hz)
+                          <input
+                            type="number"
+                            list="audio-sample-rates"
+                            min={8000}
+                            max={192000}
+                            value={request.sample_rate}
+                            onChange={(e) =>
+                              update('sample_rate', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Input channels
+                          <input
+                            type="number"
+                            min={1}
+                            max={64}
+                            value={request.input_channels}
+                            onChange={(e) =>
+                              update('input_channels', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Output channels
+                          <input
+                            type="number"
+                            min={1}
+                            max={64}
+                            value={request.output_channels}
+                            onChange={(e) =>
+                              update('output_channels', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Sample format
+                          <Select
+                            value={request.format}
+                            onValueChange={(value) =>
+                              update('format', value as AudioProbe['format'])
+                            }
+                          >
+                            <SelectTrigger aria-label="Sample format">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="s16">
+                                16-bit integer
+                              </SelectItem>
+                              <SelectItem value="s24">
+                                24-bit in 32-bit container
+                              </SelectItem>
+                              <SelectItem value="s24_packed">
+                                24-bit packed
+                              </SelectItem>
+                              <SelectItem value="s32">
+                                32-bit integer
+                              </SelectItem>
+                              <SelectItem value="float">
+                                32-bit float
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="field">
+                          Buffer size (samples per period)
+                          <input
+                            type="number"
+                            list="audio-buffer-sizes"
+                            min={16}
+                            max={8192}
+                            value={request.period_frames}
+                            onChange={(e) =>
+                              update('period_frames', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          Buffer periods
+                          <input
+                            type="number"
+                            min={2}
+                            max={8}
+                            value={request.periods}
+                            onChange={(e) =>
+                              update('periods', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <datalist id="audio-sample-rates">
+                        {[44100, 48000, 88200, 96000].map((rate) => (
+                          <option key={rate} value={rate} />
+                        ))}
+                      </datalist>
+                      <datalist id="audio-buffer-sizes">
+                        {[16, 32, 64, 128, 256, 512, 1024, 2048].map((size) => (
+                          <option key={size} value={size} />
+                        ))}
+                      </datalist>
+                      <p className="caption" aria-label="Queued audio">
+                        ≈{' '}
+                        {(
+                          ((request.period_frames * request.periods) /
+                            Math.max(1, request.sample_rate)) *
+                          1000
+                        ).toFixed(1)}{' '}
+                        ms queued ({request.period_frames} × {request.periods}{' '}
+                        at {(request.sample_rate / 1000).toFixed(1)} kHz).
+                        Smaller buffers lower delay but need more processing
+                        headroom; this is not measured round-trip latency.
+                      </p>
+                      <div className="action-row">
+                        <Button
+                          variant="outline"
+                          disabled={!inputEndpoint || !outputEndpoint}
+                          onClick={() => void check()}
+                        >
+                          Check input and output
+                        </Button>
+                        <p role="status" className="audio-check-result">
+                          {busy ? 'Inspecting audio…' : message}
+                        </p>
+                      </div>
+                      <p className="caption">
+                        The check opens and releases input, then output. It
+                        never plays or saves the setup.
+                      </p>
+                    </fieldset>
+                  </>
+                )}
+                {!inventory?.backend_available && (
+                  <p role="status">{busy ? 'Inspecting audio…' : message}</p>
+                )}
+                {inventory && inventory.warnings.length > 0 && (
+                  <details className="control-help">
+                    <summary>Technical detail</summary>
+                    {inventory.warnings.map((warning, index) => (
+                      <p key={index}>{warning}</p>
+                    ))}
+                  </details>
+                )}
+              </section>
+            }
           />
         </section>
       </TabsContent>

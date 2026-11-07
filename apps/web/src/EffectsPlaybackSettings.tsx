@@ -1,7 +1,7 @@
 import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Button } from './components/ui/button';
 import { AudioReconfigure } from './AudioReconfigure';
 import { BufferFinder } from './BufferFinder';
@@ -21,14 +21,12 @@ export function EffectsPlaybackSettings({
   input,
   output,
   onState,
-  boot,
 }: {
   state: GraphAudioState;
   connected: boolean;
   input: AudioProbe | null;
   output: AudioProbe | null;
   onState: (state: GraphAudioState) => void;
-  boot: ReactNode;
 }) {
   const { failure: recoverFailure, fail: recoverFail } = useFailure();
   const [busy, setBusy] = useState(false);
@@ -86,18 +84,17 @@ export function EffectsPlaybackSettings({
       {!state.device_owned && !resumeReady && (
         <p className="caption">{resumeUnavailable}</p>
       )}
-      {boot}
       {(error || state.error) && <p role="alert">{error || state.error}</p>}
       {error && <RecoveryAction failure={recoverFailure} />}
       <p className="caption">
         {stream.input.sample_rate} Hz · {stream.input.period_frames} samples ×{' '}
         {stream.input.periods} periods
       </p>
-      <details
-        className="control-help"
+      <section
+        className="control-stack applied-settings"
         aria-label="Playback session configuration"
       >
-        <summary>Current device &amp; buffers</summary>
+        <h4>Applied settings</h4>
         <AudioReconfigure
           key={JSON.stringify(stream)}
           initial={stream}
@@ -113,7 +110,7 @@ export function EffectsPlaybackSettings({
           disabled={!connected || busy || transitioning}
           apply={(stream) => command({ kind: 'reconfigure', stream })}
         />
-      </details>
+      </section>
     </section>
   );
 }
