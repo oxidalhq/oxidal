@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import {
   CaretRight,
@@ -346,7 +347,7 @@ export function ModelPicker({
               aria-busy={loading}
             >
               {loading ? (
-                <p role="status">Reading this unit…</p>
+                <Loading label="Reading this unit…" />
               ) : (
                 <>
                   {!local?.data.some(

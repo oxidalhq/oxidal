@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
@@ -98,7 +99,7 @@ export function StorageLock({
           </span>
         </div>
       ) : (
-        <p role="status">Reading storage state…</p>
+        <Loading label="Reading storage state…" />
       )}
 
       <div

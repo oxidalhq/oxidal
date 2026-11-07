@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { friendlyError } from './lib/friendlyError';
@@ -541,9 +542,7 @@ function CollectionDialog({
             complex serial chains. Effect-only recipes work without NAM
             captures; others use voices you choose.
           </p>
-          {!profile && !error && (
-            <p role="status">Reading installed effects…</p>
-          )}
+          {!profile && !error && <Loading label="Reading installed effects…" />}
           {error && (
             <Alert variant="destructive" role="alert">
               <WarningCircle aria-hidden="true" />

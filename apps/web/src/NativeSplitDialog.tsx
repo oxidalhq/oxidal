@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -70,7 +71,7 @@ export function NativeSplitDialog({
     >
       <div className="space-y-3">
         <p className="text-sm break-words">{effect.name}</p>
-        {loading && <p role="status">Reading saved tone…</p>}
+        {loading && <Loading label="Reading saved tone…" />}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {(['amp', 'cab'] as const).map((role) => (
             <label key={role} className="field min-w-0">

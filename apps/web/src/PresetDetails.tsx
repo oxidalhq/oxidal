@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import {
@@ -111,7 +112,7 @@ export function PresetDetailsDialog({
             </Button>
           </div>
         )}
-        {!catalog && !error && <p role="status">Loading details…</p>}
+        {!catalog && !error && <Loading label="Loading details…" />}
         {editing ? (
           <form
             className="space-y-4"

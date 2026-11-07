@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
@@ -118,7 +119,7 @@ export function EffectPacks({
         </p>
       )}
 
-      {!state && !error && <p>Reading installed effects…</p>}
+      {!state && !error && <Loading label="Reading installed effects…" />}
       {state && (
         <ul className="effect-pack-list" aria-label="Curated packs">
           {state.packs.map((pack) => {

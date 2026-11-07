@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from './AdjustmentDialog';
@@ -187,7 +188,7 @@ export function SlotChooser({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {!plugins && !error && <p role="status">Reading effects…</p>}
+          {!plugins && !error && <Loading label="Reading effects…" />}
           {chips('Effect type', types, type, (t) => setType(t as EffectType))}
           {chips('Source', sources, source, setSource)}
           <div className="add-block-list" aria-label="Effects">

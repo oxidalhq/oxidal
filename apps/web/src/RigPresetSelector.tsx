@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { useEffect, useState } from 'react';
 import {
   CaretDown,
@@ -191,7 +192,7 @@ export function RigPresetSelector({
           </div>
         )}
         {!all && steps}
-        {loading && <p role="status">Loading presets…</p>}
+        {loading && <Loading label="Loading presets…" />}
         {error && (
           <div role="status">
             {error}

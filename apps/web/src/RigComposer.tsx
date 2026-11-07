@@ -1,3 +1,4 @@
+import { Loading } from './components/ui/loading';
 import { friendlyError } from './lib/friendlyError';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ArrowDown, Trash } from '@phosphor-icons/react';
@@ -645,7 +646,7 @@ export function RigComposer({
               Search
               <input value={query} onChange={(e) => setQuery(e.target.value)} />
             </label>
-            {loading && <p role="status">Loading…</p>}
+            {loading && <Loading label="Loading…" />}
             {error && <p role="alert">{error}</p>}
             <div className="max-h-64 space-y-2 overflow-y-auto">
               {picker === 'tones'
