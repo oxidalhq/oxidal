@@ -150,6 +150,31 @@ fn references(
             "The boot effects session has no saved-source identity. Turn off Start on boot or recall and save its boot choice again before deleting effects presets.",
         );
     }
+    // The startup sound is a dependency too (7.25): deleting it would leave
+    // the next boot with nothing to play.
+    if let Ok(Some(choice)) = shared.boot.snapshot() {
+        let startup = match &choice {
+            crate::audio_boot::Choice::Native { settings, .. } => native_reference(settings),
+            crate::audio_boot::Choice::Mixed { settings } => Some(LibraryReference {
+                kind: LibraryKind::Rig,
+                id: settings.revision.clone(),
+            }),
+            crate::audio_boot::Choice::Effects { settings } => {
+                settings.library_id.clone().map(|id| LibraryReference {
+                    kind: LibraryKind::Graph,
+                    id,
+                })
+            }
+        };
+        if let Some(startup) = startup {
+            if &startup == selected {
+                reason = Some(
+                    "Oxidal plays this preset at startup. Choose another startup sound or Nothing plays in Settings → Audio, then delete it.",
+                );
+            }
+            refs.active.push(startup);
+        }
+    }
     if reason.is_some() {
         refs.active.push(selected.clone());
     }

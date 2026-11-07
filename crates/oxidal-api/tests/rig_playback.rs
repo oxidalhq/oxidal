@@ -861,6 +861,22 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
     assert_eq!(selected["start_on_boot"], true);
     assert_eq!(selected["control"], state["control"]);
     let boot_bytes = std::fs::read(&boot_path).unwrap();
+    // The startup preset cannot be deleted while it is the startup sound (7.25).
+    let startup = selected["configured"]["revision"].as_str().unwrap();
+    let preview: serde_json::Value = c
+        .get(format!("{url}/presets/removal?kind=rig&id={startup}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        preview["blocked"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("at startup")),
+        "{preview}"
+    );
     let other = get(&c, &url, "audio").await;
     assert_eq!(other["start_on_boot"], false);
     let response=c.post(format!("{url}/audio")).json(&json!({"session":other["session"],"expected_revision":other["revision"],"action":{"kind":"set_boot","enabled":false}})).send().await.unwrap();

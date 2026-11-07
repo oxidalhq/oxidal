@@ -3040,7 +3040,7 @@ async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_othe
 }
 
 #[tokio::test]
-async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_recovery_on_shutdown()
+async fn permanent_removal_waits_for_startup_then_clears_resume_without_recreating_recovery()
 {
     let root = std::env::temp_dir().join(format!(
         "oxidal-delete-resume-{}-{}",
@@ -3093,8 +3093,30 @@ async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_rec
         .unwrap();
     assert_eq!(before["configured"]["preset_id"], id);
     assert_eq!(before["start_on_boot"], true);
+    let preview_url = format!("{url}/presets/removal?kind=original&id={id}");
     let preview: Value = client
-        .get(format!("{url}/presets/removal?kind=original&id={id}"))
+        .get(&preview_url)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    // The startup sound blocks its own deletion until startup changes (7.25).
+    assert!(
+        preview["blocked"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("at startup"))
+    );
+    let off = client
+        .post(format!("{url}/audio"))
+        .json(&json!({"session":before["session"],"expected_revision":before["revision"],"action":{"kind":"set_boot","enabled":false}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(off.status(), 200);
+    let preview: Value = client
+        .get(&preview_url)
         .send()
         .await
         .unwrap()
@@ -3102,7 +3124,7 @@ async fn permanent_removal_clears_stopped_resume_and_boot_without_recreating_rec
         .await
         .unwrap();
     assert_eq!(preview["blocked"], Value::Null);
-    assert_eq!(preview["remembered_files"], 2);
+    assert_eq!(preview["remembered_files"], 1);
     let result = client.post(format!("{url}/presets/removal")).json(&json!({"entry_kind":"original","id":id,"expected_preview":preview["token"],"delete_models":false})).send().await.unwrap();
     assert_eq!(result.status(), 200);
     let result: Value = result.json().await.unwrap();
