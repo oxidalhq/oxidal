@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   publishRig,
   rigDocument,
@@ -6,7 +6,11 @@ import {
   rigNativeSources,
   type RigDocument,
 } from '../../api';
-import type { RigEntry, RigNativeSource } from '../../generated/contract';
+import type {
+  RigEntry,
+  RigNativeSource,
+  RigPublish,
+} from '../../generated/contract';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { FailureNotice } from '../../components/ui/failure';
 import { useFailure } from '../../lib/useFailure';
@@ -55,6 +59,7 @@ export function NewPresetDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const { failure, fail, clear } = useFailure();
+  const pending = useRef<{ key: string; request: RigPublish } | null>(null);
   const [touched, setTouched] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -101,8 +106,17 @@ export function NewPresetDialog({
     setBusy(true);
     setError('');
     clear();
+    // The same choices reuse the same request, so trying again after a lost
+    // reply publishes the same revision instead of a second preset (7.24).
+    const key = JSON.stringify([name.trim(), start, source, profile]);
     try {
-      let request;
+      let request =
+        pending.current?.key === key ? pending.current.request : null;
+      if (request) {
+        onCreated(await publishRig(request));
+        pending.current = null;
+        return;
+      }
       if (start === 'empty') request = emptyPreset(name, profile);
       else if (source.startsWith('rig:'))
         request = presetCopy(await rigDocument(source.slice(4)), name);
@@ -111,7 +125,9 @@ export function NewPresetDialog({
         if (!tone) throw new Error('That TONE3000 preset is no longer here.');
         request = presetFromTone(name, tone, profile);
       }
+      pending.current = { key, request };
       onCreated(await publishRig(request));
+      pending.current = null;
     } catch (e) {
       fail(e, 'create the preset', () => void create());
     } finally {

@@ -464,19 +464,30 @@ pub async fn publish(
             }
             None => false,
         };
+        let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
         // Another browser saved this preset since this edit began: refuse
         // before writing, so the newer save is never silently replaced (C1).
         // Publishes are serialized by `bundle_work`, so the check cannot race.
-        if replaces
-            && let Some(source) = &request.source
-            && oxidal_presets::CatalogStore::open(root.clone())?
-                .is_superseded(oxidal_presets::LibraryKind::Rig, &source.id)?
-        {
-            return Err(Error::Conflict(
-                "This preset was saved again from another screen. Reopen it to see the latest version, then make your change again.",
-            ));
+        if replaces && let Some(source) = &request.source {
+            let catalog = oxidal_presets::CatalogStore::open(root.clone())?;
+            let rig = oxidal_presets::LibraryKind::Rig;
+            if catalog.is_superseded(rig, &source.id)? {
+                // The same save arriving again after a lost reply produces the
+                // same revision, already stored and current: answer it as the
+                // first time without repeating any library change (7.24).
+                if store.read(bundle.revision()).is_ok()
+                    && !catalog.is_superseded(rig, bundle.revision())?
+                {
+                    return Ok(RigDocument {
+                        revision: bundle.revision().to_owned(),
+                        manifest,
+                    });
+                }
+                return Err(Error::Conflict(
+                    "This preset was saved again from another screen. Reopen it to see the latest version, then make your change again.",
+                ));
+            }
         }
-        let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
         let revision = store.save(&bundle)?;
         if let Some(source) = &request.source {
             if replaces {

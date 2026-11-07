@@ -1726,6 +1726,24 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
         .await
         .unwrap();
     assert_ne!(changed["revision"], native["revision"]);
+    // The same save sent again after a lost reply is answered with the same
+    // revision instead of a false conflict, and nothing moves in the list.
+    let catalog_before = get(&c, &url, "presets/catalog").await;
+    let repeated: Value = c
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({
+            "manifest_json": m.to_string(),
+            "resources": from_native.clone(),
+            "source": {"kind":"rig", "id":native["revision"]}
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(repeated["revision"], changed["revision"]);
+    assert_eq!(get(&c, &url, "presets/catalog").await, catalog_before);
     // A second screen still holding the replaced revision cannot overwrite
     // the newer save: 409, and nothing is written (C1).
     let mut stale = m.clone();
