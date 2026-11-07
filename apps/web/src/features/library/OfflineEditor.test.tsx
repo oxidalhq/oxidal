@@ -144,6 +144,12 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
   fireEvent.change(screen.getByLabelText('Path 2 level'), {
     target: { value: '0.5' },
   });
+  // Pan the dry path half right and invert it (7.26).
+  fireEvent.change(screen.getByLabelText('Path 2 pan'), {
+    target: { value: '0.5' },
+  });
+  fireEvent.click(screen.getByLabelText('Invert path 2 polarity'));
+  expect(screen.getByText('Path 2 pan · 50% right')).toBeVisible();
   expect(screen.getByText('Dry · no blocks')).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -159,7 +165,11 @@ it('edits routing and settings in a draft and publishes only on Save', async () 
     (n: { kind: string; id: string }) =>
       n.kind === 'merge' && n.id.endsWith('-left'),
   );
-  expect(merge.inputGains).toEqual([1, 0.5]);
+  expect(merge.inputGains).toEqual([1, -0.25]);
+  const right = manifest.oxidal.graph.nodes.find(
+    (n: { id: string }) => n.id === merge.id.replace(/-left$/, '-right'),
+  );
+  expect(right.inputGains).toEqual([1, -0.5]);
 });
 
 it('saves a preset that is not yours as a copy', async () => {

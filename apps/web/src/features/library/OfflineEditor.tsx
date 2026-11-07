@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NativeEditor } from '../../NativeEditor';
+import { panLabel } from '../../lib/panLabel';
 import { replaceNativeFiles } from '../../nativeResourceEdit';
 import { readBlock } from '../../rigEdit';
 import {
@@ -37,7 +38,9 @@ import {
   routeAppend,
   routeControl,
   routePath,
-  routePathGain,
+  routePathMix,
+  pathMix,
+  type PathMix,
   routeRemove,
   routeShift,
   routeReplaceNative,
@@ -452,31 +455,66 @@ export function OfflineEditor({
                   Remove
                 </Button>
               </div>
-              <label className="field">
-                <span>
-                  Path {path + 1} level ·{' '}
-                  {Math.round((step.gains[path] ?? 1) * 100)}%
-                </span>
-                <input
-                  type="range"
-                  aria-label={`Path ${path + 1} level`}
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={step.gains[path] ?? 1}
-                  disabled={busy}
-                  onChange={(event) =>
-                    change((r) =>
-                      routePathGain(
-                        r,
-                        step.split,
-                        path,
-                        Number(event.target.value),
-                      ),
-                    )
-                  }
-                />
-              </label>
+              {(() => {
+                const mix = pathMix(
+                  step.gains[path] ?? 1,
+                  step.rightGains?.[path],
+                );
+                const set = (next: Partial<PathMix>) =>
+                  change((r) =>
+                    routePathMix(r, step.split, path, { ...mix, ...next }),
+                  );
+                return (
+                  <div className="path-mix">
+                    <label className="field">
+                      <span>
+                        Path {path + 1} level · {Math.round(mix.level * 100)}%
+                      </span>
+                      <input
+                        type="range"
+                        aria-label={`Path ${path + 1} level`}
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        value={mix.level}
+                        disabled={busy}
+                        onChange={(event) =>
+                          set({ level: Number(event.target.value) })
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      <span>
+                        Path {path + 1} pan · {panLabel(mix.pan)}
+                      </span>
+                      <input
+                        type="range"
+                        aria-label={`Path ${path + 1} pan`}
+                        min={-1}
+                        max={1}
+                        step={0.05}
+                        value={mix.pan}
+                        disabled={busy}
+                        onChange={(event) =>
+                          set({ pan: Number(event.target.value) })
+                        }
+                      />
+                    </label>
+                    <label className="flex min-h-11 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Invert path ${path + 1} polarity`}
+                        checked={mix.invert}
+                        disabled={busy}
+                        onChange={(event) =>
+                          set({ invert: event.target.checked })
+                        }
+                      />
+                      Invert polarity
+                    </label>
+                  </div>
+                );
+              })()}
               {steps(branch)}
             </li>
           ))}

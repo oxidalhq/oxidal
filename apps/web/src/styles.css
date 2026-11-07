@@ -3765,3 +3765,16 @@ textarea {
     column-gap: 0.25rem;
   }
 }
+
+/* A path's level, pan and polarity (7.26). */
+.path-mix {
+  display: grid;
+  gap: 0.25rem;
+}
+@media (min-width: 641px) {
+  .path-mix {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 0.75rem;
+  }
+}

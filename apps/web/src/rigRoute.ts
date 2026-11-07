@@ -21,7 +21,10 @@ export type RouteSplit = {
   kind: 'split';
   split: string;
   merge: string;
+  /** Left merge input gains per path; also the right ones unless `rightGains`. */
   gains: number[];
+  /** Right merge gains, only when a path is panned (7.26). */
+  rightGains?: number[];
   branches: Step[][];
 };
 type Step = DraftEffect | RouteSplit;
@@ -63,6 +66,7 @@ export function readRoute(
             split: s.split,
             merge: s.merge,
             gains: s.gains,
+            ...(s.rightGains ? { rightGains: s.rightGains } : {}),
             branches: s.branches.map(map),
           },
     );
@@ -129,7 +133,11 @@ export function buildRoute(
           kind: 'merge',
           audioInputs: n,
           audioOutputs: 1,
-          inputGains: step.branches.map((_, i) => step.gains[i] ?? 1),
+          inputGains: step.branches.map((_, i) =>
+            side === 'right'
+              ? (step.rightGains?.[i] ?? step.gains[i] ?? 1)
+              : (step.gains[i] ?? 1),
+          ),
         });
         ends.forEach((end, index) =>
           rig.host.graph.edges.push({
@@ -152,9 +160,28 @@ export function buildRoute(
 function clone(route: Route): Route {
   return route.map((s) =>
     isSplit(s)
-      ? { ...s, gains: [...s.gains], branches: s.branches.map(clone) }
+      ? {
+          ...s,
+          gains: [...s.gains],
+          ...(s.rightGains ? { rightGains: [...s.rightGains] } : {}),
+          branches: s.branches.map(clone),
+        }
       : s,
   );
+}
+/** Both sides' gain lists of a split, so a path edit keeps them in step. */
+function sides(s: RouteSplit): number[][] {
+  s.rightGains ??= [...s.gains];
+  return [s.gains, s.rightGains];
+}
+/** Drops the right side again when no path is panned. */
+function settle(s: RouteSplit) {
+  if (
+    s.rightGains &&
+    s.rightGains.length === s.gains.length &&
+    s.rightGains.every((g, i) => g === s.gains[i])
+  )
+    delete s.rightGains;
 }
 /** Empty branches that were already dry paths before an edit. */
 function dryPaths(route: Route, found = new Set<Step[]>()) {
@@ -170,21 +197,26 @@ function dryPaths(route: Route, found = new Set<Step[]>()) {
 function tidy(route: Route, dry: Set<Step[]>): Route {
   return route.flatMap((s): Step[] => {
     if (!isSplit(s)) return [s];
-    const kept: { branch: Route; gain: number }[] = [];
+    const kept: { branch: Route; gain: number; right: number }[] = [];
     s.branches.forEach((b, i) => {
       const branch = tidy(b, dry);
       if (branch.length || dry.has(b))
-        kept.push({ branch, gain: s.gains[i] ?? 1 });
+        kept.push({
+          branch,
+          gain: s.gains[i] ?? 1,
+          right: s.rightGains?.[i] ?? s.gains[i] ?? 1,
+        });
     });
     if (!kept.some((k) => k.branch.length)) return [];
     if (kept.length === 1) return kept[0]!.branch;
-    return [
-      {
-        ...s,
-        branches: kept.map((k) => k.branch),
-        gains: kept.map((k) => k.gain),
-      },
-    ];
+    const split: RouteSplit = {
+      ...s,
+      branches: kept.map((k) => k.branch),
+      gains: kept.map((k) => k.gain),
+      rightGains: kept.map((k) => k.right),
+    };
+    settle(split);
+    return [split];
   });
 }
 type Place = { list: Step[]; index: number; depth: number };
@@ -324,7 +356,8 @@ export function routeCopyBranch(route: Route, id: string): Route {
   if (!at?.owner) throw new Error('Only a block inside a split has a branch.');
   const b = at.branch!;
   at.owner.branches.splice(b + 1, 0, copySteps(at.owner.branches[b]!));
-  at.owner.gains.splice(b + 1, 0, at.owner.gains[b] ?? 1);
+  for (const g of sides(at.owner)) g.splice(b + 1, 0, g[b] ?? 1);
+  settle(at.owner);
   return next;
 }
 
@@ -334,7 +367,8 @@ export function routeAddBranch(route: Route, id: string): Route {
   const at = locate(next, id);
   if (!at?.owner) throw new Error('Only a block inside a split has a branch.');
   at.owner.branches.push([]);
-  at.owner.gains.push(1);
+  for (const g of sides(at.owner)) g.push(1);
+  settle(at.owner);
   return next;
 }
 
@@ -380,42 +414,9 @@ export function routeSplitAddPath(route: Route, split: string): Route {
   const owner = findSplit(next, split);
   if (!owner) throw new Error('That split is no longer in this preset.');
   owner.branches.push([]);
-  owner.gains.push(1);
+  for (const g of sides(owner)) g.push(1);
+  settle(owner);
   return next;
-}
-
-/** Split dialog (7.28): path `index` of split `split`, copied beside it. */
-export function routeSplitCopyPath(
-  route: Route,
-  split: string,
-  index: number,
-): Route {
-  const next = clone(route);
-  const owner = findSplit(next, split);
-  const branch = owner?.branches[index];
-  if (!owner || !branch)
-    throw new Error('That path is no longer in this preset.');
-  owner.branches.splice(index + 1, 0, copySteps(branch));
-  owner.gains.splice(index + 1, 0, owner.gains[index] ?? 1);
-  return next;
-}
-
-/** Split dialog (7.28): path `index` of split `split` removed, with its
- * blocks. A split left with one path dissolves, as with Remove branch. */
-export function routeSplitRemovePath(
-  route: Route,
-  split: string,
-  index: number,
-): Route {
-  const next = clone(route);
-  const dry = dryPaths(next);
-  const owner = findSplit(next, split);
-  const branch = owner?.branches[index];
-  if (!owner || !branch)
-    throw new Error('That path is no longer in this preset.');
-  branch.length = 0;
-  dry.delete(branch);
-  return tidy(next, dry);
 }
 
 function findSplit(route: Route, split: string): RouteSplit | null {
@@ -457,11 +458,13 @@ export function routePath(
   if (!s || !branch) throw new Error('That path is no longer in this preset.');
   if (action === 'copy') {
     s.branches.splice(path + 1, 0, copySteps(branch));
-    s.gains.splice(path + 1, 0, s.gains[path] ?? 1);
+    for (const g of sides(s)) g.splice(path + 1, 0, g[path] ?? 1);
+    settle(s);
     return next;
   }
   s.branches.splice(path, 1);
-  s.gains.splice(path, 1);
+  for (const g of sides(s)) g.splice(path, 1);
+  settle(s);
   return tidy(next, dry);
 }
 
@@ -494,16 +497,61 @@ export function routeControl(
   return next;
 }
 
-/** One path's level into its merge (0–4, as the daemon validates). */
+/** A path's level (0–4), pan (−1 left … 1 right) and polarity (7.26). */
+export type PathMix = { level: number; pan: number; invert: boolean };
+
+/** Reads a path's mix from its left and right merge gains. */
+export function pathMix(left: number, right: number = left): PathMix {
+  const level = Math.max(Math.abs(left), Math.abs(right));
+  const invert = left < 0 || right < 0;
+  if (level === 0) return { level: 0, pan: 0, invert };
+  const pan =
+    Math.abs(right) < Math.abs(left)
+      ? -(1 - Math.abs(right) / level)
+      : Math.abs(left) < Math.abs(right)
+        ? 1 - Math.abs(left) / level
+        : 0;
+  return { level, pan, invert };
+}
+
+/** Left and right merge gains for a path mix: panning only lowers a side. */
+export function mixGains(mix: PathMix): [number, number] {
+  const level = Math.max(0, Math.min(4, mix.level));
+  const pan = Math.max(-1, Math.min(1, mix.pan));
+  const sign = mix.invert ? -1 : 1;
+  const left = level * (pan > 0 ? 1 - pan : 1) * sign;
+  const right = level * (pan < 0 ? 1 + pan : 1) * sign;
+  // Never write −0: it reads back as an inverted path.
+  return [left || 0, right || 0];
+}
+
+/** Sets a path's level, pan and polarity together. */
+export function routePathMix(
+  route: Route,
+  split: string,
+  path: number,
+  mix: PathMix,
+): Route {
+  const next = clone(route);
+  const s = findSplit(next, split);
+  if (!s || path >= s.branches.length) return route;
+  const [left, right] = mixGains(mix);
+  const [gains, rightGains] = sides(s);
+  gains![path] = left;
+  rightGains![path] = right;
+  settle(s);
+  return next;
+}
+
+/** One path's level into its merge (0–4), keeping its pan and polarity. */
 export function routePathGain(
   route: Route,
   split: string,
   path: number,
   gain: number,
 ): Route {
-  const next = clone(route);
-  const s = findSplit(next, split);
+  const s = findSplit(route, split);
   if (!s || path >= s.branches.length) return route;
-  s.gains[path] = Math.max(0, Math.min(4, gain));
-  return next;
+  const mix = pathMix(s.gains[path] ?? 1, s.rightGains?.[path]);
+  return routePathMix(route, split, path, { ...mix, level: gain });
 }

@@ -3,6 +3,7 @@ import { StageControls } from './features/stage/StageControls';
 import { MaybeSheet } from './components/RigSheet';
 import { RouteTree } from './components/RouteTree';
 import { useNarrow } from './lib/useNarrow';
+import { panLabel } from './lib/panLabel';
 import { friendlyError, errorDetails } from './lib/friendlyError';
 import { AddBlockChooser } from './AddBlockChooser';
 import { MasterLevel } from './MasterLevel';
@@ -57,8 +58,10 @@ import {
   readRoute,
   routeAddBranch,
   routeSplitAddPath,
-  routeSplitCopyPath,
-  routeSplitRemovePath,
+  routePath,
+  pathMix,
+  mixGains,
+  type PathMix,
   routeAddPath,
   routeCopyBranch,
   routeInsert,
@@ -615,8 +618,9 @@ export function MixedRig({
     );
   }
   /** Sets one path's merge level on both channels, one confirmed command each. */
-  async function setPathLevel(targets: RigControl['target'][], value: number) {
-    for (const target of targets) {
+  /** Sets a path's left and right merge gains (level, pan, polarity). */
+  async function setPathSides(values: [RigControl['target'], number][]) {
+    for (const [target, value] of values) {
       const cursor = current.current?.control;
       if (
         !cursor ||
@@ -1400,7 +1404,8 @@ export function MixedRig({
   };
   const feedOpen = (index: number) =>
     editingSceneGains.some(
-      (gain) => gain.value > 0 && gain.node.startsWith(`scene-feed-${index}-`),
+      (gain) =>
+        gain.value !== 0 && gain.node.startsWith(`scene-feed-${index}-`),
     );
   const snapshotLanes =
     !!editingScene && (chainIds?.length ?? 0) > 1 && feedName(0) !== null;
@@ -1895,7 +1900,7 @@ export function MixedRig({
               !!sceneMix.length && (
                 <span className="scene-context-mix">
                   {sceneMix
-                    .filter((branch) => branch.value > 0)
+                    .filter((branch) => branch.value !== 0)
                     .map(
                       (branch) =>
                         `${branch.name} ${Math.round(branch.value * 100)}%`,
@@ -1917,7 +1922,7 @@ export function MixedRig({
               {sceneMix.map((branch) => (
                 <Badge
                   key={branch.name}
-                  data-state={branch.value > 0 ? 'active' : 'muted'}
+                  data-state={branch.value !== 0 ? 'active' : 'muted'}
                 >
                   {branch.name} · {Math.round(branch.value * 100)}%
                 </Badge>
@@ -2776,15 +2781,16 @@ export function MixedRig({
                   if (!sides[0] || !sides[1]) return null;
                   return (
                     <PathLevel
-                      key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}`}
+                      key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0]!.value}:${sides[1]!.value}`}
                       path={selectedBranch.port + 1}
-                      value={sides[0].value}
+                      left={sides[0]!.value}
+                      right={sides[1]!.value}
                       disabled={disabled || !!edit || editing || busy}
-                      onCommit={(value) =>
-                        setPathLevel(
-                          sides.map((side) => side!.target),
-                          value,
-                        )
+                      onCommit={(left, right) =>
+                        setPathSides([
+                          [sides[0]!.target, left],
+                          [sides[1]!.target, right],
+                        ])
                       }
                     />
                   );
@@ -3153,15 +3159,16 @@ export function MixedRig({
                     >
                       {sides[0] && sides[1] ? (
                         <PathLevel
-                          key={`${split.merge}:${port}:${sides[0].value}`}
+                          key={`${split.merge}:${port}:${sides[0]!.value}:${sides[1]!.value}`}
                           path={port + 1}
-                          value={sides[0].value}
+                          left={sides[0]!.value}
+                          right={sides[1]!.value}
                           disabled={disabled || !!edit || editing || busy}
-                          onCommit={(value) =>
-                            setPathLevel(
-                              sides.map((side) => side!.target),
-                              value,
-                            )
+                          onCommit={(left, right) =>
+                            setPathSides([
+                              [sides[0]!.target, left],
+                              [sides[1]!.target, right],
+                            ])
                           }
                         />
                       ) : (
@@ -3176,7 +3183,7 @@ export function MixedRig({
                             onClick={() => {
                               setRoutingSplit(null);
                               void editChain((route) =>
-                                routeSplitCopyPath(route, split.split, port),
+                                routePath(route, split.split, port, 'copy'),
                               );
                             }}
                           >
@@ -3189,7 +3196,7 @@ export function MixedRig({
                             onClick={() => {
                               setRoutingSplit(null);
                               void editChain((route) =>
-                                routeSplitRemovePath(route, split.split, port),
+                                routePath(route, split.split, port, 'remove'),
                               );
                             }}
                           >
@@ -3280,38 +3287,81 @@ export function MixedRig({
  * Live and unsaved until Save, like every other control. */
 function PathLevel({
   path,
-  value,
+  left,
+  right,
   disabled,
   onCommit,
 }: {
   path: number;
-  value: number;
+  /** The path's left and right merge gains. */
+  left: number;
+  right: number;
   disabled: boolean;
-  onCommit: (value: number) => Promise<void>;
+  onCommit: (left: number, right: number) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState(value);
-  const commit = () => {
-    if (Math.abs(draft - value) > 0.0001) void onCommit(draft);
+  const [draft, setDraft] = useState(() => pathMix(left, right));
+  const commit = (mix: PathMix = draft) => {
+    const [l, r] = mixGains(mix);
+    if (Math.abs(l - left) > 0.0001 || Math.abs(r - right) > 0.0001)
+      void onCommit(l, r);
   };
   return (
-    <label className="field">
-      <span>
-        Path {path} level · {Math.round(draft * 100)}%
-      </span>
-      <input
-        type="range"
-        aria-label={`Path ${path} level`}
-        min={0}
-        max={2}
-        step={0.05}
-        value={draft}
-        disabled={disabled}
-        onChange={(event) => setDraft(Number(event.target.value))}
-        onPointerUp={commit}
-        onKeyUp={commit}
-        onBlur={commit}
-      />
-    </label>
+    <div className="path-mix" role="group" aria-label={`Path ${path} mix`}>
+      <label className="field">
+        <span>
+          Path {path} level · {Math.round(draft.level * 100)}%
+        </span>
+        <input
+          type="range"
+          aria-label={`Path ${path} level`}
+          min={0}
+          max={2}
+          step={0.05}
+          value={draft.level}
+          disabled={disabled}
+          onChange={(event) =>
+            setDraft({ ...draft, level: Number(event.target.value) })
+          }
+          onPointerUp={() => commit()}
+          onKeyUp={() => commit()}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="field">
+        <span>
+          Path {path} pan · {panLabel(draft.pan)}
+        </span>
+        <input
+          type="range"
+          aria-label={`Path ${path} pan`}
+          min={-1}
+          max={1}
+          step={0.05}
+          value={draft.pan}
+          disabled={disabled}
+          onChange={(event) =>
+            setDraft({ ...draft, pan: Number(event.target.value) })
+          }
+          onPointerUp={() => commit()}
+          onKeyUp={() => commit()}
+          onBlur={() => commit()}
+        />
+      </label>
+      <label className="flex min-h-11 items-center gap-2">
+        <input
+          type="checkbox"
+          aria-label={`Invert path ${path} polarity`}
+          checked={draft.invert}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = { ...draft, invert: event.target.checked };
+            setDraft(next);
+            commit(next);
+          }}
+        />
+        Invert polarity
+      </label>
+    </div>
   );
 }
 

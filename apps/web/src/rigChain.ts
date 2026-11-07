@@ -66,6 +66,8 @@ export type IdStep =
       merge: string;
       /** Merge input gains per branch, read from the left merge. */
       gains: number[];
+      /** Right merge gains, only when they differ (a panned path). */
+      rightGains?: number[];
       branches: IdStep[][];
     };
 
@@ -114,10 +116,14 @@ export function chainRoute(graph: Graph): IdStep[] | null {
         const merge = pair(join);
         if (!merge || !joins(join)) return null;
         const gains = nodes.get(join)?.inputGains ?? [];
+        const right = nodes.get(`${merge}-right`)?.inputGains ?? gains;
+        const left = ports.map((_, i) => gains[i] ?? 1);
+        const rightGains = ports.map((_, i) => right[i] ?? left[i]!);
         steps.push({
           split,
           merge,
-          gains: ports.map((_, i) => gains[i] ?? 1),
+          gains: left,
+          ...(rightGains.some((g, i) => g !== left[i]) ? { rightGains } : {}),
           branches: read.map((r) => r!.steps),
         });
         id = next(join);

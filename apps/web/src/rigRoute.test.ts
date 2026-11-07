@@ -11,6 +11,9 @@ import {
   routeAppend,
   routeControl,
   routePath,
+  routePathMix,
+  pathMix,
+  mixGains,
   routePathGain,
   routeShift,
   routeCopyBranch,
@@ -20,8 +23,6 @@ import {
   routeRemove,
   routeRemoveBranch,
   routeSplitAddPath,
-  routeSplitCopyPath,
-  routeSplitRemovePath,
   type RouteSplit,
   type Route,
 } from './rigRoute';
@@ -389,20 +390,55 @@ it('adds, copies and removes a path by split and index for the split dialog', ()
     [],
     [],
   ]);
-  const copied = routeSplitCopyPath(route, 'split-s', 1);
+  const copied = routePath(route, 'split-s', 1, 'copy');
   expect(ids(copied)[2]![0]).toMatch(/^effect-/);
   expect((copied[0] as RouteSplit).gains).toEqual([1, 0.8, 0.8, 0.5]);
   // Removing the dry path drops it; removing down to one path dissolves the split.
-  expect(ids(routeSplitRemovePath(route, 'split-s', 2))).toEqual([
-    ['a'],
-    ['b'],
-  ]);
-  const one = routeSplitRemovePath(
-    routeSplitRemovePath(route, 'split-s', 2),
+  expect(ids(routePath(route, 'split-s', 2, 'remove'))).toEqual([['a'], ['b']]);
+  const one = routePath(
+    routePath(route, 'split-s', 2, 'remove'),
     'split-s',
     0,
+    'remove',
   );
   expect(ids(one)).toEqual([['b']]);
   expect(one.some(isSplit)).toBe(false);
   expect(() => routeSplitAddPath(route, 'split-gone')).toThrow(/no longer/);
+});
+
+it('pans and inverts one path through build and reopen, and edits keep them (7.26)', () => {
+  expect(mixGains({ level: 1, pan: -0.5, invert: false })).toEqual([1, 0.5]);
+  expect(mixGains({ level: 2, pan: 1, invert: true })).toEqual([0, -2]);
+  expect(pathMix(1, 0.5)).toEqual({ level: 1, pan: -0.5, invert: false });
+  expect(pathMix(-0.8)).toEqual({ level: 0.8, pan: 0, invert: true });
+  const route: Route = [split('s', [[fx('a')], [fx('b')]])];
+  const panned = routePathMix(route, 'split-s', 1, {
+    level: 0.8,
+    pan: 0.5,
+    invert: true,
+  });
+  const built = buildRoute('p', 'x', panned, 'prof');
+  const gains = (side: string) =>
+    graph(built).nodes.find((n) => n.id === `merge-s-${side}`)!.inputGains;
+  expect(gains('left')).toEqual([1, -0.4]);
+  expect(gains('right')).toEqual([1, -0.8]);
+  const reopened = reopen(panned)[0] as RouteSplit;
+  expect(reopened.gains).toEqual([1, -0.4]);
+  expect(reopened.rightGains).toEqual([1, -0.8]);
+  // A level change keeps pan and polarity; copying a path copies its mix.
+  const louder = routePathGain(panned, 'split-s', 1, 1.6)[0] as RouteSplit;
+  expect(pathMix(louder.gains[1]!, louder.rightGains![1])).toEqual({
+    level: 1.6,
+    pan: 0.5,
+    invert: true,
+  });
+  const copied = routePath(panned, 'split-s', 1, 'copy')[0] as RouteSplit;
+  expect(copied.rightGains).toEqual([1, -0.8, -0.8]);
+  // Centring the pan again leaves one gain list, as before panning existed.
+  const centred = routePathMix(panned, 'split-s', 1, {
+    level: 1,
+    pan: 0,
+    invert: false,
+  })[0] as RouteSplit;
+  expect(centred.rightGains).toBeUndefined();
 });

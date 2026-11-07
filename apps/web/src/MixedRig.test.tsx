@@ -866,6 +866,33 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
         ),
     ).toEqual(['merge-left', 'merge-right']),
   );
+  // Pan and polarity write the two sides separately (7.26).
+  const merges = () =>
+    vi
+      .mocked(rigAudioCommand)
+      .mock.calls.flatMap(([, action]) =>
+        action.kind === 'control' && action.command.target.kind === 'merge'
+          ? [[action.command.target.node, action.command.value]]
+          : [],
+      );
+  vi.mocked(rigAudioCommand).mockClear();
+  const pan = screen.getByLabelText('Path 2 pan');
+  fireEvent.change(pan, { target: { value: '-1' } });
+  fireEvent.pointerUp(pan);
+  await waitFor(() =>
+    expect(merges()).toEqual([
+      ['merge-left', 0.5],
+      ['merge-right', 0],
+    ]),
+  );
+  vi.mocked(rigAudioCommand).mockClear();
+  fireEvent.click(screen.getByLabelText('Invert path 2 polarity'));
+  await waitFor(() =>
+    expect(merges()).toEqual([
+      ['merge-left', -0.5],
+      ['merge-right', 0],
+    ]),
+  );
   fireEvent.click(within(routing).getByRole('button', { name: 'Copy branch' }));
   await waitFor(() => expect(publishRig).toHaveBeenCalled());
   const request = vi.mocked(publishRig).mock.calls[0]![0];
