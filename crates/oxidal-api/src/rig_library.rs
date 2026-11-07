@@ -240,6 +240,7 @@ where
         Ok(Ok(result)) => Json(result).into_response(),
         Ok(Err(error)) => {
             let status = match &error {
+                Error::Conflict(_) => StatusCode::CONFLICT,
                 Error::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
                 Error::Io(e) if e.kind() == std::io::ErrorKind::NotFound => StatusCode::NOT_FOUND,
                 _ => StatusCode::INTERNAL_SERVER_ERROR,
@@ -450,17 +451,35 @@ pub async fn publish(
                 );
             }
         }
-        let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
-        let revision = store.save(&bundle)?;
         // Saving your own preset again keeps its identity (manifest id) and its
         // place: the new revision replaces the earlier one in the set list.
+        let mine = |m: &Manifest| {
+            oxidal_presets::LibraryOrigin::from_manifest(m)
+                .is_ok_and(|o| o == oxidal_presets::LibraryOrigin::Mine)
+        };
+        let replaces = match &request.source {
+            Some(source) => {
+                let earlier = store.manifest(&source.id)?;
+                earlier.id == manifest.id && mine(&earlier) && mine(&manifest)
+            }
+            None => false,
+        };
+        // Another browser saved this preset since this edit began: refuse
+        // before writing, so the newer save is never silently replaced (C1).
+        // Publishes are serialized by `bundle_work`, so the check cannot race.
+        if replaces
+            && let Some(source) = &request.source
+            && oxidal_presets::CatalogStore::open(root.clone())?
+                .is_superseded(oxidal_presets::LibraryKind::Rig, &source.id)?
+        {
+            return Err(Error::Conflict(
+                "This preset was saved again from another screen. Reopen it to see the latest version, then make your change again.",
+            ));
+        }
+        let bundle = Bundle::from_parts(request.manifest_json.into_bytes(), payloads)?;
+        let revision = store.save(&bundle)?;
         if let Some(source) = &request.source {
-            let earlier = store.manifest(&source.id)?;
-            let mine = |m: &Manifest| {
-                oxidal_presets::LibraryOrigin::from_manifest(m)
-                    .is_ok_and(|o| o == oxidal_presets::LibraryOrigin::Mine)
-            };
-            if earlier.id == manifest.id && mine(&earlier) && mine(&manifest) {
+            if replaces {
                 oxidal_presets::CatalogStore::open(root.clone())?.supersede(
                     oxidal_presets::LibraryKind::Rig,
                     &source.id,

@@ -1726,6 +1726,34 @@ async fn portable_library_publishes_verified_revisions_without_changing_audio() 
         .await
         .unwrap();
     assert_ne!(changed["revision"], native["revision"]);
+    // A second screen still holding the replaced revision cannot overwrite
+    // the newer save: 409, and nothing is written (C1).
+    let mut stale = m.clone();
+    stale["name"] = json!("Stale edit");
+    let refused = c
+        .post(format!("{url}/presets/rigs"))
+        .json(&json!({
+            "manifest_json": stale.to_string(),
+            "resources": from_native.clone(),
+            "source": {"kind":"rig", "id":native["revision"]}
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 409);
+    let message: Value = refused.json().await.unwrap();
+    assert!(
+        message
+            .to_string()
+            .contains("saved again from another screen")
+    );
+    assert!(
+        get(&c, &url, "presets/rigs").await["presets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["name"] != "Stale edit")
+    );
     assert_eq!(
         changed["manifest"]["extensions"],
         first["manifest"]["extensions"]

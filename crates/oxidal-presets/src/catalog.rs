@@ -218,6 +218,10 @@ impl CatalogStore {
         }
         self.persist(candidate)
     }
+    /// Whether a later save of the same preset has replaced this revision.
+    pub fn is_superseded(&self, kind: LibraryKind, id: &str) -> Result<bool> {
+        Ok(self.preferences.superseded.contains(&kind.key(id)?))
+    }
     /// Remove only the deleted entry's display preferences; no logical-ID fanout.
     pub fn forget(&mut self, kind: LibraryKind, id: &str) -> Result<()> {
         let key = kind.key(id)?;
@@ -578,6 +582,17 @@ mod tests {
         assert_eq!(visible, [('d', "Lead"), ('b', "Rig b"), ('c', "Rig c")]);
         let earlier = view.items.iter().find(|i| i.id == "a".repeat(64)).unwrap();
         assert!(earlier.archived && earlier.superseded);
+        let current = CatalogStore::open(root.clone()).unwrap();
+        assert!(
+            current
+                .is_superseded(LibraryKind::Rig, &"a".repeat(64))
+                .unwrap()
+        );
+        assert!(
+            !current
+                .is_superseded(LibraryKind::Rig, &"d".repeat(64))
+                .unwrap()
+        );
         // Saving the original bytes again resurrects A in D's visible slot.
         store
             .supersede(LibraryKind::Rig, &"d".repeat(64), &"a".repeat(64))
