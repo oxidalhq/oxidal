@@ -34,6 +34,7 @@ import { detailsKey, detailsMatch } from './presetMetadata';
 import { ModelLibrary } from './ModelLibrary';
 import { requestMidiAssignments } from './midiNavigation';
 import { PresetRow } from './features/library/PresetRow';
+import { OfflineEditor } from './features/library/OfflineEditor';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { friendlyError } from './lib/friendlyError';
@@ -82,6 +83,7 @@ export function Library({
     null | 'effects' | 'tone3000'
   >('library-composer', null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [created, setCreated] = useState<{
     name: string;
     revision: string;
@@ -380,6 +382,21 @@ export function Library({
               connected={connected}
               onOpenRig={onOpenRig}
               onDismiss={() => setCreated(null)}
+              onEdit={() => {
+                setEditing(created.revision);
+                setCreated(null);
+              }}
+            />
+          )}
+          {editing && (
+            <OfflineEditor
+              revision={editing}
+              connected={connected}
+              onCancel={() => setEditing(null)}
+              onSaved={() => {
+                setEditing(null);
+                setRefresh((v) => v + 1);
+              }}
             />
           )}
           {detailsError && (
@@ -431,6 +448,7 @@ export function Library({
                 origin="mine"
                 title="Mine"
                 onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+                onEdit={(revision) => setEditing(revision)}
               />
               {copiesError && (
                 <StateNotice
@@ -479,6 +497,7 @@ export function Library({
               origin="oxidal_example"
               title="Oxidal"
               onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+              onEdit={(revision) => setEditing(revision)}
             />
           )}
           {show('tone3000') && (

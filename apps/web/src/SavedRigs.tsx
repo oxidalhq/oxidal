@@ -37,6 +37,7 @@ export function SavedRigs({
   category = '',
   details = {},
   onDetails,
+  onEdit,
   origin = 'mine',
   title = 'Mine',
 }: {
@@ -45,6 +46,8 @@ export function SavedRigs({
   category?: string;
   details?: Record<string, PresetDetails>;
   onDetails?: (id: string, name: string) => void;
+  /** Edit without playing (7.3). */
+  onEdit?: (revision: string, name: string) => void;
   origin?: RigPage['presets'][number]['origin'];
   title?: string;
   connected: boolean;
@@ -274,6 +277,15 @@ export function SavedRigs({
                 onDetails ? () => onDetails(p.revision, p.name) : undefined
               }
               actions={[
+                ...(onEdit
+                  ? [
+                      {
+                        label: 'Edit without playing…',
+                        onSelect: () => onEdit(p.revision, p.name),
+                        disabled: busy,
+                      },
+                    ]
+                  : []),
                 {
                   label: 'MIDI assignments…',
                   onSelect: () => void play(p.revision, true),

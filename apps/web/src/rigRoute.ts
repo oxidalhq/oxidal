@@ -347,3 +347,81 @@ export function routeRemoveBranch(route: Route, id: string): Route {
   dry.delete(at.owner.branches[at.branch!]!);
   return tidy(next, dry);
 }
+
+/* ---------- Offline editing by split id and path index (7.3). ---------- */
+
+function findSplit(route: Route, split: string): RouteSplit | null {
+  for (const s of route)
+    if (isSplit(s)) {
+      if (s.split === split) return s;
+      for (const b of s.branches) {
+        const found = findSplit(b, split);
+        if (found) return found;
+      }
+    }
+  return null;
+}
+
+/** Adds `effect` at the end of the preset, or of one path of a split. */
+export function routeAppend(
+  route: Route,
+  effect: DraftEffect,
+  at?: { split: string; path: number },
+): Route {
+  const next = clone(route);
+  const list = at ? findSplit(next, at.split)?.branches[at.path] : next;
+  if (!list) throw new Error('That path is no longer in this preset.');
+  list.push(effect);
+  return next;
+}
+
+/** Copy path / Remove path for any path of a split, dry paths included. */
+export function routePath(
+  route: Route,
+  split: string,
+  path: number,
+  action: 'copy' | 'remove',
+): Route {
+  const next = clone(route);
+  const dry = dryPaths(next);
+  const s = findSplit(next, split);
+  const branch = s?.branches[path];
+  if (!s || !branch) throw new Error('That path is no longer in this preset.');
+  if (action === 'copy') {
+    s.branches.splice(path + 1, 0, copySteps(branch));
+    s.gains.splice(path + 1, 0, s.gains[path] ?? 1);
+    return next;
+  }
+  s.branches.splice(path, 1);
+  s.gains.splice(path, 1);
+  return tidy(next, dry);
+}
+
+/** One step earlier or later among its neighbours; a split counts as one step. */
+export function routeShift(route: Route, id: string, step: -1 | 1): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  const to = at ? at.index + step : -1;
+  if (!at || to < 0 || to >= at.list.length) return route;
+  const [moving] = at.list.splice(at.index, 1);
+  at.list.splice(to, 0, moving!);
+  return next;
+}
+
+/** Sets one effect control in the draft. */
+export function routeControl(
+  route: Route,
+  id: string,
+  symbol: string,
+  value: number,
+): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  const block = at?.list[at.index];
+  if (!block || isSplit(block) || block.kind !== 'lv2') return route;
+  at!.list[at!.index] = {
+    ...block,
+    controls: { ...block.controls, [symbol]: value },
+  };
+  return next;
+}

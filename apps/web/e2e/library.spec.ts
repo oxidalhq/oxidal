@@ -60,7 +60,33 @@ test('new preset creates an empty preset of your own without hardware', async ({
     page.getByRole('button', { name: 'Play to edit…' }),
   ).toBeVisible();
   await expect(page).toHaveURL(/#library\/presets$/);
-  await page.getByRole('button', { name: 'Keep in Library' }).click();
+  // Edit without playing (7.3): a draft, saved in place, with no audio change.
+  await page.getByRole('button', { name: 'Edit without playing' }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit without playing' });
+  await expect(editor.getByText('Input straight to output.')).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await editor.getByLabel('Name').fill(`${name} edited`);
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByText(`${name} edited`)).toBeVisible();
+  const afterEdit = (
+    await (await page.request.get('/api/v1/presets/rigs')).json()
+  ).presets as { name: string }[];
+  expect(afterEdit.some((p) => p.name === `${name} edited`)).toBe(true);
+  expect(afterEdit.some((p) => p.name === name)).toBe(false);
+  expect(audioWrites).toEqual([]);
+  // Reopening the edited preset offline shows the saved name.
+  await page.getByRole('button', { name: `More for ${name} edited` }).click();
+  await page.getByRole('menuitem', { name: 'Edit without playing…' }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Edit without playing' })
+      .getByLabel('Name'),
+  ).toHaveValue(`${name} edited`);
+  await page
+    .getByRole('dialog', { name: 'Edit without playing' })
+    .getByRole('button', { name: 'Cancel' })
+    .click();
   expect(audioWrites).toEqual([]);
   // Creation publishes to Mine without any audio mutation.
   const listed = await page.request.get('/api/v1/presets/rigs');
@@ -70,7 +96,7 @@ test('new preset creates an empty preset of your own without hardware', async ({
     native_instances: number;
     lv2_instances: number;
   }[];
-  expect(presets.find((p) => p.name === name)).toMatchObject({
+  expect(presets.find((p) => p.name === `${name} edited`)).toMatchObject({
     origin: 'mine',
     native_instances: 0,
     lv2_instances: 0,

@@ -8,6 +8,10 @@ import {
   readRoute,
   routeAddBranch,
   routeAddPath,
+  routeAppend,
+  routeControl,
+  routePath,
+  routeShift,
   routeCopyBranch,
   routeInsert,
   routeLanes,
@@ -275,4 +279,31 @@ it('leaves an unknown topology alone instead of rewriting it', () => {
   expect(() =>
     readRoute({ manifest, revision: 'r'.repeat(64) }, plugins, {}),
   ).toThrow(/cannot be edited/);
+});
+
+it('edits offline by path: append, copy and remove paths, shift and set controls', () => {
+  const route: Route = [fx('a'), split('s', [[fx('b')], []])];
+  expect(ids(routeAppend(route, fx('end')))).toEqual([
+    ['a', 'b', 'end'],
+    ['a', 'end'],
+  ]);
+  expect(
+    ids(routeAppend(route, fx('dry-fx'), { split: 'split-s', path: 1 })),
+  ).toEqual([
+    ['a', 'b'],
+    ['a', 'dry-fx'],
+  ]);
+  expect(ids(routePath(route, 'split-s', 1, 'copy'))).toEqual([
+    ['a', 'b'],
+    ['a'],
+    ['a'],
+  ]);
+  expect(ids(routePath(route, 'split-s', 1, 'remove'))).toEqual([['a', 'b']]);
+  expect(ids(routeShift(route, 'a', 1))).toEqual([['b', 'a'], ['a']]);
+  expect(routeShift(route, 'a', -1)).toBe(route);
+  const set = routeControl(route, 'a', 'mix', 7);
+  expect((set[0] as { controls: Record<string, number> }).controls.mix).toBe(7);
+  expect(
+    (route[0] as { controls: Record<string, number> }).controls.mix,
+  ).not.toBe(7);
 });

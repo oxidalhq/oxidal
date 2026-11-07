@@ -3581,3 +3581,25 @@ textarea {
     transform: rotate(360deg);
   }
 }
+
+/* Edit without playing (7.3): the routing as a nested outline. */
+.offline-steps,
+.offline-paths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.offline-paths > li,
+.offline-split > .offline-paths {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+}
+.offline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-height: 2.75rem;
+}

@@ -29,12 +29,15 @@ export function CreatedPreset({
   connected,
   onOpenRig,
   onDismiss,
+  onEdit,
 }: {
   name: string;
   revision: string;
   connected: boolean;
   onOpenRig: () => void;
   onDismiss: () => void;
+  /** Edit without playing (7.3): opens the offline editor. */
+  onEdit?: () => void;
 }) {
   const [review, setReview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,13 +76,18 @@ export function CreatedPreset({
     <div className="control-stack" role="status">
       <p>Created {name} in Mine. Your playing sound is unchanged.</p>
       <p className="caption">
-        Editing currently requires playback. You can keep this preset without
-        playing it.
+        Edit without playing changes it in a draft; Play to edit opens it in
+        Rig.
       </p>
       <div className="action-row">
         <Button disabled={!connected || busy} onClick={() => void prepare()}>
           Play to edit…
         </Button>
+        {onEdit && (
+          <Button variant="outline" disabled={busy} onClick={onEdit}>
+            Edit without playing
+          </Button>
+        )}
         <Button variant="ghost" disabled={busy} onClick={onDismiss}>
           Keep in Library
         </Button>
