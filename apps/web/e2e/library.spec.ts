@@ -188,8 +188,9 @@ test('the same TONE3000 tone added twice saves as two NAM blocks (7.16)', async 
     await editor
       .getByRole('combobox', { name: 'Add a block at the end' })
       .click();
+    // By file hash: another test may import a preset with the same name.
     await page
-      .getByRole('option', { name: `${imported.name} · TONE3000` })
+      .locator(`[role="option"][data-value="tone:original:${imported.sha256}"]`)
       .click();
   }
   await expect(editor.getByText('TONE3000', { exact: true })).toHaveCount(2);
