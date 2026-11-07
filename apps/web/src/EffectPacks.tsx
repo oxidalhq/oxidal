@@ -10,6 +10,7 @@ import { DialogFooter } from './components/ui/dialog';
 import {
   changeEffectPack,
   effectPacks,
+  graphLibrary,
   rigLibrary,
   type EffectPacks as EffectPacksState,
 } from './api';
@@ -47,6 +48,13 @@ export function EffectPacks({
         );
         if (!next.next) break;
         after = next.next;
+      }
+      // Older effects-only presets keep their plugin URIs in bindings.
+      for (const graph of await graphLibrary().catch(() => [])) {
+        found.push({
+          name: graph.preset.name,
+          plugins: graph.preset.bindings.map((b) => b.uri),
+        });
       }
       return found;
     }

@@ -350,6 +350,50 @@ export function routeRemoveBranch(route: Route, id: string): Route {
 
 /* ---------- Offline editing by split id and path index (7.3). ---------- */
 
+/** Split dialog (7.28): a new dry path in split `split`. */
+export function routeSplitAddPath(route: Route, split: string): Route {
+  const next = clone(route);
+  const owner = findSplit(next, split);
+  if (!owner) throw new Error('That split is no longer in this preset.');
+  owner.branches.push([]);
+  owner.gains.push(1);
+  return next;
+}
+
+/** Split dialog (7.28): path `index` of split `split`, copied beside it. */
+export function routeSplitCopyPath(
+  route: Route,
+  split: string,
+  index: number,
+): Route {
+  const next = clone(route);
+  const owner = findSplit(next, split);
+  const branch = owner?.branches[index];
+  if (!owner || !branch)
+    throw new Error('That path is no longer in this preset.');
+  owner.branches.splice(index + 1, 0, copySteps(branch));
+  owner.gains.splice(index + 1, 0, owner.gains[index] ?? 1);
+  return next;
+}
+
+/** Split dialog (7.28): path `index` of split `split` removed, with its
+ * blocks. A split left with one path dissolves, as with Remove branch. */
+export function routeSplitRemovePath(
+  route: Route,
+  split: string,
+  index: number,
+): Route {
+  const next = clone(route);
+  const dry = dryPaths(next);
+  const owner = findSplit(next, split);
+  const branch = owner?.branches[index];
+  if (!owner || !branch)
+    throw new Error('That path is no longer in this preset.');
+  branch.length = 0;
+  dry.delete(branch);
+  return tidy(next, dry);
+}
+
 function findSplit(route: Route, split: string): RouteSplit | null {
   for (const s of route)
     if (isSplit(s)) {

@@ -19,6 +19,10 @@ import {
   routeMove,
   routeRemove,
   routeRemoveBranch,
+  routeSplitAddPath,
+  routeSplitCopyPath,
+  routeSplitRemovePath,
+  type RouteSplit,
   type Route,
 } from './rigRoute';
 import { keepScenes } from './sceneEdit';
@@ -375,4 +379,30 @@ it('keeps scene levels through a routing change and maps new paths (C9)', () => 
       buildRoute('p', 'x', routeRemoveBranch(route, 'a'), 'prof'),
     ),
   ).toThrow(/needs a split/);
+});
+
+it('adds, copies and removes a path by split and index for the split dialog', () => {
+  const route: Route = [split('s', [[fx('a')], [fx('b')], []], [1, 0.8, 0.5])];
+  expect(ids(routeSplitAddPath(route, 'split-s'))).toEqual([
+    ['a'],
+    ['b'],
+    [],
+    [],
+  ]);
+  const copied = routeSplitCopyPath(route, 'split-s', 1);
+  expect(ids(copied)[2]![0]).toMatch(/^effect-/);
+  expect((copied[0] as RouteSplit).gains).toEqual([1, 0.8, 0.8, 0.5]);
+  // Removing the dry path drops it; removing down to one path dissolves the split.
+  expect(ids(routeSplitRemovePath(route, 'split-s', 2))).toEqual([
+    ['a'],
+    ['b'],
+  ]);
+  const one = routeSplitRemovePath(
+    routeSplitRemovePath(route, 'split-s', 2),
+    'split-s',
+    0,
+  );
+  expect(ids(one)).toEqual([['b']]);
+  expect(one.some(isSplit)).toBe(false);
+  expect(() => routeSplitAddPath(route, 'split-gone')).toThrow(/no longer/);
 });

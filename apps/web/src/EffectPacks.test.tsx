@@ -9,6 +9,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { EffectPacks } from './EffectPacks';
 import { DeviceError } from './lib/friendlyError';
 import {
+  graphLibrary,
   rigLibrary,
   changeEffectPack,
   effectPacks,
@@ -19,6 +20,7 @@ vi.mock('./api', () => ({
   changeEffectPack: vi.fn(),
   effectPacks: vi.fn(),
   rigLibrary: vi.fn(),
+  graphLibrary: vi.fn(async () => []),
 }));
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -180,13 +182,25 @@ it('names the saved presets a removal would leave unplayable', async () => {
         },
       ],
     } as Awaited<ReturnType<typeof rigLibrary>>);
+  vi.mocked(graphLibrary).mockResolvedValue([
+    {
+      id: 'g',
+      preset: {
+        name: 'Old Swh Delay',
+        bindings: [
+          { node: 'n', uri: 'http://plugin.org.uk/swh-plugins/delay' },
+        ],
+      },
+    },
+  ] as unknown as Awaited<ReturnType<typeof graphLibrary>>);
   render(<EffectPacks connected audioRunning={false} />);
-  expect(await screen.findByText(/Used by 1 preset/)).toBeVisible();
+  expect(await screen.findByText(/Used by 2 presets/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
   const users = screen.getByRole('list', {
     name: 'Presets that use these effects',
   });
   expect(users).toHaveTextContent('Swh Phaser');
+  expect(users).toHaveTextContent('Old Swh Delay');
   expect(users).not.toHaveTextContent('Clean');
   expect(screen.getByRole('button', { name: 'Remove effects' })).toBeDisabled();
 });

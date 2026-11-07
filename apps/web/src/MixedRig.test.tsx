@@ -881,4 +881,19 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
     next.oxidal.graph.nodes.find((n: { id: string }) => n.id === 'merge-left')
       .inputGains,
   ).toEqual([1, 1, 1]);
+  // The split itself opens a dialog with every path's level and actions (7.28).
+  const open = await screen.findByRole('button', {
+    name: /Split .*2 paths: path levels/,
+  });
+  fireEvent.click(open);
+  const dialog = await screen.findByRole('dialog', { name: 'Split · 2 paths' });
+  expect(
+    within(dialog).getByRole('button', { name: 'Copy path 1' }),
+  ).toBeVisible();
+  expect(
+    within(dialog).getByRole('button', { name: 'Remove path 2' }),
+  ).toBeVisible();
+  expect(
+    within(dialog).getByRole('button', { name: '+ Add dry path' }),
+  ).toBeVisible();
 });

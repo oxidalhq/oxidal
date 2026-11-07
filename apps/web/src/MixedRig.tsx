@@ -56,6 +56,9 @@ import {
   buildRoute,
   readRoute,
   routeAddBranch,
+  routeSplitAddPath,
+  routeSplitCopyPath,
+  routeSplitRemovePath,
   routeAddPath,
   routeCopyBranch,
   routeInsert,
@@ -1500,6 +1503,16 @@ export function MixedRig({
   const fullRoute = matching?.manifest.oxidal
     ? chainRoute(matching.manifest.oxidal.graph)
     : null;
+  /** Every split in the route, outermost first, for the desktop split row. */
+  const routeSplits = (function collect(
+    steps: NonNullable<typeof fullRoute>,
+  ): Exclude<NonNullable<typeof fullRoute>[number], string>[] {
+    return steps.flatMap((step) =>
+      typeof step === 'string'
+        ? []
+        : [step, ...step.branches.flatMap((branch) => collect(branch))],
+    );
+  })(sceneLanes.length ? [] : (fullRoute ?? []));
   const routeTree =
     narrow &&
     !sceneLanes.length &&
@@ -2160,6 +2173,21 @@ export function MixedRig({
           );
         }}
       </RigTopology>
+      {!routeTree && running && routeSplits.length > 0 && (
+        <div className="action-row" role="group" aria-label="Splits">
+          {routeSplits.map((split, index) => (
+            <Button
+              key={split.split}
+              variant="ghost"
+              aria-label={`Split ${index + 1} · ${split.branches.length} paths: path levels`}
+              onClick={() => setRoutingSplit(split.split)}
+            >
+              ◆ Split {routeSplits.length > 1 ? `${index + 1} ` : ''}·{' '}
+              {split.branches.length} paths ›
+            </Button>
+          ))}
+        </div>
+      )}
       {/* Output row under the chain (7.28). */}
       <div className="rig-output-row">
         <MasterLevel
@@ -3118,26 +3146,80 @@ export function MixedRig({
                         c.target.port === port,
                     ),
                   );
-                  if (!sides[0] || !sides[1]) return null;
                   return (
-                    <PathLevel
-                      key={`${split.merge}:${port}:${sides[0].value}`}
-                      path={port + 1}
-                      value={sides[0].value}
-                      disabled={disabled || !!edit || editing || busy}
-                      onCommit={(value) =>
-                        setPathLevel(
-                          sides.map((side) => side!.target),
-                          value,
-                        )
-                      }
-                    />
+                    <div
+                      key={`${split.split}:${port}`}
+                      className="route-sheet-path"
+                    >
+                      {sides[0] && sides[1] ? (
+                        <PathLevel
+                          key={`${split.merge}:${port}:${sides[0].value}`}
+                          path={port + 1}
+                          value={sides[0].value}
+                          disabled={disabled || !!edit || editing || busy}
+                          onCommit={(value) =>
+                            setPathLevel(
+                              sides.map((side) => side!.target),
+                              value,
+                            )
+                          }
+                        />
+                      ) : (
+                        <span>Path {port + 1}</span>
+                      )}
+                      {editable && (
+                        <div className="action-row">
+                          <Button
+                            variant="outline"
+                            aria-label={`Copy path ${port + 1}`}
+                            disabled={disabled || !!edit || editing}
+                            onClick={() => {
+                              setRoutingSplit(null);
+                              void editChain((route) =>
+                                routeSplitCopyPath(route, split.split, port),
+                              );
+                            }}
+                          >
+                            Copy
+                          </Button>
+                          <Button
+                            variant="outline"
+                            aria-label={`Remove path ${port + 1}`}
+                            disabled={disabled || !!edit || editing}
+                            onClick={() => {
+                              setRoutingSplit(null);
+                              void editChain((route) =>
+                                routeSplitRemovePath(route, split.split, port),
+                              );
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
+              {editable && (
+                <div className="action-row">
+                  <Button
+                    variant="outline"
+                    disabled={disabled || !!edit || editing}
+                    onClick={() => {
+                      setRoutingSplit(null);
+                      void editChain((route) =>
+                        routeSplitAddPath(route, split.split),
+                      );
+                    }}
+                  >
+                    + Add dry path
+                  </Button>
+                </div>
+              )}
               <p className="caption">
-                To add, copy or remove a path, select a block on it and use its
-                Routing actions.
+                Removing the second-last path removes the split. Scene presets
+                keep at least one split.
               </p>
             </AdjustmentDialog>
           );
