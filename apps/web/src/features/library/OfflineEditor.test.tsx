@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   installedLv2,
@@ -12,6 +13,7 @@ import {
   publishRig,
   rigDocument,
   rigLibrary,
+  rigNativeSources,
   type Lv2Plugin,
 } from '../../api';
 import { chainLanes } from '../../rigChain';
@@ -26,6 +28,7 @@ vi.mock('../../api', () => ({
   publishRig: vi.fn(),
   rigDocument: vi.fn(),
   rigLibrary: vi.fn(),
+  rigNativeSources: vi.fn(),
 }));
 
 const port = (
@@ -94,7 +97,10 @@ function open(origin: 'mine' | 'oxidal_example' = 'mine', scenes = false) {
   return saved;
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(rigNativeSources).mockResolvedValue([]);
+});
 afterEach(cleanup);
 
 it('edits routing and settings in a draft and publishes only on Save', async () => {
@@ -169,7 +175,7 @@ it('opens a preset without effects when effect discovery is unavailable', async 
   );
   expect(await screen.findByText('Input straight to output.')).toBeVisible();
   expect(
-    screen.getByRole('combobox', { name: 'Add an effect at the end' }),
+    screen.getByRole('combobox', { name: 'Add a block at the end' }),
   ).toBeDisabled();
 });
 
@@ -211,4 +217,55 @@ it('keeps the draft on a save conflict and offers the latest version', async () 
     screen.getByRole('button', { name: 'Close and show the latest version' }),
   );
   expect(refresh).toHaveBeenCalledOnce();
+});
+
+it('adds a saved TONE3000 tone and keeps an existing one’s bytes', async () => {
+  const user = userEvent.setup();
+  const tone = (sha: string, name: string) => ({
+    preset: { sha256: sha.repeat(64), size_bytes: 10, name },
+    source: { kind: 'original' as const, preset: sha.repeat(64) },
+  });
+  const first = tone('a', 'Plexi');
+  const manifest = JSON.parse(
+    buildRoute(
+      'id',
+      'Amp',
+      [{ id: 'native-a', kind: 'native', name: 'Plexi', ...first } as never],
+      'prof',
+    ).manifest_json,
+  );
+  vi.mocked(rigDocument).mockResolvedValue({ revision: 'rev', manifest });
+  vi.mocked(installedLv2).mockResolvedValue([verb]);
+  vi.mocked(rigNativeSources).mockResolvedValue([tone('b', 'Cab IR')] as never);
+  vi.mocked(rigLibrary).mockResolvedValue({
+    native_profile: 'prof',
+    presets: [],
+  } as never);
+  vi.mocked(libraryCatalog).mockResolvedValue({ items: [] } as never);
+  vi.mocked(publishRig).mockImplementation(async (request) => ({
+    revision: 'next',
+    manifest: JSON.parse(request.manifest_json),
+  }));
+  render(
+    <OfflineEditor
+      revision="rev"
+      connected
+      onSaved={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+  expect(await screen.findByText('Plexi')).toBeVisible();
+  await user.click(
+    screen.getByRole('combobox', { name: 'Add a block at the end' }),
+  );
+  await user.click(screen.getByRole('option', { name: /Cab IR · TONE3000/ }));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  const request = vi.mocked(publishRig).mock.calls[0]![0];
+  const saved = JSON.parse(request.manifest_json);
+  expect(saved.tone3000.instances).toHaveLength(2);
+  // The kept block copies its bytes from the saved revision; the new one
+  // comes from the tone library. Nothing played.
+  expect(JSON.stringify(request)).toContain('"revision":"rev"');
+  expect(JSON.stringify(request)).toContain('b'.repeat(64));
 });

@@ -5,6 +5,7 @@ import {
   publishRig,
   rigDocument,
   rigLibrary,
+  rigNativeSources,
   type Lv2Plugin,
   type RigDocument,
 } from '../../api';
@@ -43,9 +44,12 @@ import { presetNameError } from './newPreset';
 /** The scan rate for plugin metadata; nothing is processed here. */
 const METADATA_RATE = 48000;
 
+type Tone = Awaited<ReturnType<typeof rigNativeSources>>[number];
+
 type Opened = {
   document: RigDocument;
   plugins: Lv2Plugin[];
+  tones: Tone[];
   profile: string;
   mine: boolean;
 };
@@ -86,10 +90,12 @@ export function OfflineEditor({
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [document, plugins, library, catalog] = await Promise.all([
+      const [document, plugins, tones, library, catalog] = await Promise.all([
         rigDocument(revision),
         // Effects need plugin metadata; a preset without them opens anyway.
         installedLv2(METADATA_RATE).catch(() => [] as Lv2Plugin[]),
+        // Saved TONE3000 tones (NAM and IR captures); optional the same way.
+        rigNativeSources().catch(() => [] as Tone[]),
         rigLibrary(),
         libraryCatalog(),
       ]);
@@ -108,6 +114,7 @@ export function OfflineEditor({
       setOpened({
         document,
         plugins,
+        tones,
         profile: library.native_profile,
         mine: (listed?.origin ?? 'mine') === 'mine',
       });
@@ -161,14 +168,28 @@ export function OfflineEditor({
     const plugin = usable.find((p) => p.uri === uri);
     return plugin ? lv2Effect(plugin) : null;
   };
+  const tones = opened?.tones ?? [];
+  const toneKey = (t: Tone) => `${t.source.kind}:${t.preset.sha256}`;
+  function made(value: string): DraftEffect | null {
+    if (value.startsWith('lv2:')) return effect(value.slice(4));
+    const tone = tones.find((t) => toneKey(t) === value.slice(5));
+    return tone
+      ? {
+          id: `native-${crypto.randomUUID()}`,
+          kind: 'native',
+          name: tone.preset.name,
+          ...tone,
+        }
+      : null;
+  }
   function addEffect(at?: { split: string; path: number }) {
     const key = at ? `${at.split}:${at.path}` : 'end';
     return (
       <Select
         value=""
-        onValueChange={(uri) => {
-          const made = effect(uri);
-          if (made) change((r) => routeAppend(r, made, at));
+        onValueChange={(value) => {
+          const item = made(value);
+          if (item) change((r) => routeAppend(r, item, at));
           setAdding('');
         }}
         open={adding === key}
@@ -176,19 +197,23 @@ export function OfflineEditor({
       >
         <SelectTrigger
           aria-label={
-            at
-              ? `Add an effect to path ${at.path + 1}`
-              : 'Add an effect at the end'
+            at ? `Add a block to path ${at.path + 1}` : 'Add a block at the end'
           }
           className="w-auto"
-          disabled={busy || !usable.length}
+          disabled={busy || !(usable.length || tones.length)}
         >
-          <SelectValue placeholder="+ Effect" />
+          <SelectValue placeholder="+ Add" />
         </SelectTrigger>
         <SelectContent>
+          {tones.map((t) => (
+            <SelectItem key={toneKey(t)} value={`tone:${toneKey(t)}`}>
+              {t.preset.name}
+              {t.source.kind === 'owned' ? ' · saved copy' : ''} · TONE3000
+            </SelectItem>
+          ))}
           {usable.map((p) => (
-            <SelectItem key={p.uri} value={p.uri}>
-              {p.name}
+            <SelectItem key={p.uri} value={`lv2:${p.uri}`}>
+              {p.name} · Effect
             </SelectItem>
           ))}
         </SelectContent>
