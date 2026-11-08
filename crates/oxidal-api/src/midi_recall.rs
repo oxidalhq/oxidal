@@ -6,7 +6,7 @@ use oxidal_audio::{
     midi::Message,
 };
 use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand, StartRig, SwitchCommand};
-use oxidal_presets::{LibraryKind, LibraryOrigin};
+use oxidal_presets::{DeviceAction, LibraryKind, LibraryOrigin};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
@@ -86,11 +86,15 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
             // Previous/Next are matched first and never fall through to a
             // Program recall. Each event is handled to completion before the
             // next, so quick taps stay in order.
-            if let Some(direction) = map.navigation.direction(event.message)
+            if let Some(action) = map.navigation.action(event.message)
                 && map.input.is_some()
                 && channel_of(event.message).is_some_and(|c| map.channel == 0 || map.channel == c)
             {
-                navigate_recorded(&shared, direction).await.ok();
+                match action {
+                    DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
+                    DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
+                    DeviceAction::MuteToggle => toggle_mute(&shared).await.ok(),
+                };
                 continue;
             }
             let Some((channel, slot)) = banks.apply(event) else {
@@ -144,6 +148,39 @@ fn step(current: usize, len: usize, direction: i8) -> Result<usize, &'static str
     } else {
         Err("Already at the last preset in the Set list")
     }
+}
+
+/// Flips the output mute on whichever engine is playing and records the outcome.
+/// The worker owns the state, so this never guesses what the screen shows.
+async fn toggle_mute(shared: &Arc<Shared>) -> Result<String, String> {
+    let command = oxidal_audio::tools::HostUtility::OutputMuteToggle;
+    let rig = shared.rig_playback.snapshot();
+    let native = shared.playback.snapshot();
+    let result = if rig.phase == AudioPhase::Running {
+        shared
+            .rig_playback
+            .dispatch(RigAudioCommand {
+                session: rig.session,
+                expected_revision: rig.revision,
+                action: RigAudioAction::HostUtility { command },
+            })
+            .await
+            .map(|_| "Output mute toggled".to_owned())
+    } else if native.phase == AudioPhase::Running {
+        shared
+            .playback
+            .dispatch(AudioCommand {
+                session: native.session,
+                expected_revision: native.revision,
+                action: AudioAction::HostUtility { command },
+            })
+            .await
+            .map(|_| "Output mute toggled".to_owned())
+    } else {
+        Err("Play a preset before using Mute".to_owned())
+    };
+    record(shared, &result);
+    result
 }
 
 /// Runs a navigation and records its outcome; the footswitch and the Perform

@@ -83,7 +83,9 @@ impl Protect {
 fn utility(command: &HostUtility) -> bool {
     matches!(
         command,
-        HostUtility::OutputMute { .. } | HostUtility::HearYourself { .. }
+        HostUtility::OutputMute { .. }
+            | HostUtility::OutputMuteToggle
+            | HostUtility::HearYourself { .. }
     )
 }
 

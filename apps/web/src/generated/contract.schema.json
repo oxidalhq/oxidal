@@ -4531,6 +4531,20 @@
           ]
         },
         {
+          "description": "Flip the output mute. The worker owns the state, so a footswitch needs no\nmirrored copy that could disagree with the screen.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "output_mute_toggle"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "kind": {
@@ -6312,6 +6326,17 @@
       "description": "Device-wide preset navigation through the current Mine set-list. They sit\noutside every preset map, so no preset can silently change what they do.",
       "type": "object",
       "properties": {
+        "mute": {
+          "description": "Flips the output mute, like the Mute button.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "next": {
           "anyOf": [
             {

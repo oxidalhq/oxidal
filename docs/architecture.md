@@ -65,8 +65,28 @@ Passive learning is a gate on dispatch: while `learning` is set, messages are
 recorded but never reach the action path, so learning a switch cannot sound its
 current assignment. A learn window ends after 30 seconds on its own and any
 configuration change cancels it, so a lost browser cannot leave footswitch
-control disabled. The worker operation and API route that start a learn window
-are not part of this change; the web learn flow still samples `last`.
+control disabled. `POST /midi/learn` starts or ends a window on the playing
+engine, and Protect refuses starting one. The web Learn buttons and the
+controller message check hold the gate open while they listen.
+
+Global preset recall consumes every recorded message in order, so a Bank Select
+pair arriving just before a Program Change is applied together with it rather
+than collapsed to the last message of a polling interval.
+
+### Device controls
+
+The MIDI map carries three optional device-wide triggers outside every preset
+map: Previous preset, Next preset and Mute output. Each is one Program Change or
+one CC press (value 64 or more). Bank Select CC 0 and 32 are refused, two actions
+cannot share a number, and a trigger that a preset mapping already uses is
+refused so one press never runs two actions. Previous and Next step through the
+current Mine set-list, stop at the first and last preset with a reason, and
+recall through the same path as Program Change, so a refused or unready preset
+leaves the current sound playing. Mute flips the worker-owned output mute, so no
+other copy of that state can disagree. Presses are handled one at a time in
+arrival order. `GET /midi/action` reports the newest outcome and
+`POST /midi/navigate` runs Previous or Next for the Perform buttons. The Tuner
+needs the browser and is not a footswitch action yet.
 
 Source: [MIDI decoder and input](../crates/oxidal-audio/src/midi.rs), with wire
 message identifiers from the [MIDI Association](https://midi.org/summary-of-midi-1-0-messages).

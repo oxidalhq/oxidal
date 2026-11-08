@@ -2,12 +2,13 @@ import { Button } from './components/ui/button';
 import type { MidiMap } from './api';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
-export type NavigationKey = 'previous' | 'next';
+export type NavigationKey = 'previous' | 'next' | 'mute';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
   ['previous', 'Previous preset'],
   ['next', 'Next preset'],
+  ['mute', 'Mute output'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */
@@ -39,13 +40,14 @@ export function PresetNavigation({
   onClear: (key: NavigationKey) => void;
 }) {
   return (
-    <section className="midi-preset-group" aria-label="Preset navigation">
+    <section className="midi-preset-group" aria-label="Device controls">
       <div className="midi-group-head">
         <div className="min-w-0">
-          <h3 className="m-0 text-base">Preset navigation</h3>
+          <h3 className="m-0 text-base">Device controls</h3>
           <p className="caption mt-0.5">
-            Move through the Mine set-list from a footswitch. It stops at the
-            first and last preset.
+            Previous and Next move through the Mine set-list and stop at the
+            first and last preset. Mute silences the output until pressed again.
+            The Tuner needs the browser and cannot start from a footswitch yet.
           </p>
         </div>
       </div>

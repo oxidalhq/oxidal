@@ -103,6 +103,9 @@ export type HostUtility =
       kind: "output_mute";
     }
   | {
+      kind: "output_mute_toggle";
+    }
+  | {
       kind: "test_tone";
     }
   | {
@@ -1883,6 +1886,10 @@ export interface MidiMapEntry {
  * outside every preset map, so no preset can silently change what they do.
  */
 export interface Navigation {
+  /**
+   * Flips the output mute, like the Mute button.
+   */
+  mute?: Trigger | null;
   next?: Trigger | null;
   previous?: Trigger | null;
 }

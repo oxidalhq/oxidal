@@ -114,31 +114,45 @@ pub struct Navigation {
     pub previous: Option<Trigger>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<Trigger>,
+    /// Flips the output mute, like the Mute button.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mute: Option<Trigger>,
+}
+
+/// A device-wide action a footswitch can run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceAction {
+    Previous,
+    Next,
+    MuteToggle,
 }
 
 impl Navigation {
     pub fn is_empty(&self) -> bool {
-        self.previous.is_none() && self.next.is_none()
+        self.previous.is_none() && self.next.is_none() && self.mute.is_none()
     }
 
-    /// Which direction a message navigates, if any: -1 previous, 1 next.
-    pub fn direction(&self, message: Message) -> Option<i8> {
+    /// Which device action a message runs, if any.
+    pub fn action(&self, message: Message) -> Option<DeviceAction> {
         if self.previous.is_some_and(|t| t.matches(message)) {
-            Some(-1)
+            Some(DeviceAction::Previous)
         } else if self.next.is_some_and(|t| t.matches(message)) {
-            Some(1)
+            Some(DeviceAction::Next)
+        } else if self.mute.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::MuteToggle)
         } else {
             None
         }
     }
 
     fn triggers(&self) -> impl Iterator<Item = Trigger> {
-        [self.previous, self.next].into_iter().flatten()
+        [self.previous, self.next, self.mute].into_iter().flatten()
     }
 
     fn validate(&self, entries: &BTreeMap<String, PresetMap>) -> Result<()> {
-        if self.triggers().any(|t| !t.valid())
-            || (self.previous.is_some() && self.previous == self.next)
+        let all: Vec<_> = self.triggers().collect();
+        if all.iter().any(|t| !t.valid())
+            || all.iter().enumerate().any(|(i, a)| all[..i].contains(a))
         {
             return Err(Error::Invalid("Invalid MIDI navigation control"));
         }
@@ -721,6 +735,10 @@ mod tests {
                 program: None,
                 controller: Some(21),
             }),
+            mute: Some(Trigger {
+                program: None,
+                controller: Some(22),
+            }),
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -732,6 +750,13 @@ mod tests {
             Navigation {
                 previous: Some(program(2)),
                 next: Some(program(2)),
+                mute: None,
+            },
+            // Mute may not reuse Previous either.
+            Navigation {
+                previous: Some(program(2)),
+                next: None,
+                mute: Some(program(2)),
             },
             Navigation {
                 previous: Some(Trigger {
@@ -739,6 +764,7 @@ mod tests {
                     controller: Some(32),
                 }),
                 next: None,
+                mute: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -746,6 +772,7 @@ mod tests {
                     controller: Some(21),
                 }),
                 next: None,
+                mute: None,
             },
         ] {
             assert!(matches!(
@@ -770,14 +797,15 @@ mod tests {
             value,
         };
         assert_eq!(
-            nav.direction(Message::Program {
+            nav.action(Message::Program {
                 channel: 1,
                 program: 2
             }),
-            Some(-1)
+            Some(DeviceAction::Previous)
         );
-        assert_eq!(nav.direction(press(21, 127)), Some(1));
-        assert_eq!(nav.direction(press(21, 0)), None, "release is not a press");
+        assert_eq!(nav.action(press(21, 127)), Some(DeviceAction::Next));
+        assert_eq!(nav.action(press(22, 127)), Some(DeviceAction::MuteToggle));
+        assert_eq!(nav.action(press(21, 0)), None, "release is not a press");
         let cleared = store
             .replace(update(Navigation::default(), vec![], &saved.revision))
             .unwrap();

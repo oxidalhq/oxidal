@@ -126,6 +126,9 @@ pub enum HostUtility {
     OutputMute {
         enabled: bool,
     },
+    /// Flip the output mute. The worker owns the state, so a footswitch needs no
+    /// mirrored copy that could disagree with the screen.
+    OutputMuteToggle,
     TestTone,
     StopTestTone,
     Levels {
@@ -365,6 +368,10 @@ impl HostSignal {
                 self.output_muted = enabled;
                 self.monitor_gain.target = if enabled { 0.0 } else { 1.0 };
             }
+            HostUtility::OutputMuteToggle => {
+                self.output_muted = !self.output_muted;
+                self.monitor_gain.target = if self.output_muted { 0.0 } else { 1.0 };
+            }
             HostUtility::TestTone => {
                 if !self.test_active {
                     self.test_frame = 0;
@@ -462,6 +469,22 @@ impl HostSignal {
 #[cfg(test)]
 mod host_tests {
     use super::*;
+    #[test]
+    fn mute_toggle_flips_the_worker_state_and_agrees_with_explicit_mute() {
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        assert!(!signal.state().output_muted);
+        signal.command(HostUtility::OutputMuteToggle);
+        assert!(signal.state().output_muted);
+        // An explicit command after a toggle sets the same single flag.
+        signal.command(HostUtility::OutputMute { enabled: true });
+        assert!(signal.state().output_muted);
+        signal.command(HostUtility::OutputMuteToggle);
+        assert!(!signal.state().output_muted);
+        signal.command(HostUtility::OutputMuteToggle);
+        signal.command(HostUtility::OutputMuteToggle);
+        assert!(!signal.state().output_muted, "two quick presses cancel out");
+    }
+
     #[test]
     fn temporary_output_mute_keeps_input_available_and_fades_without_changing_levels() {
         let levels = HostLevels {

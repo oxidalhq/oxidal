@@ -306,7 +306,7 @@ it('learns a device-wide Next preset trigger and keeps it through other edits', 
     />,
   );
   expect(
-    await screen.findByRole('region', { name: 'Preset navigation' }),
+    await screen.findByRole('region', { name: 'Device controls' }),
   ).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /Learn.*Next preset/ }));
   view.rerender(
@@ -441,4 +441,37 @@ it('undoes and clears with a count, through revision-checked saves', async () =>
   expect(restore.expected_revision).toBe('map-2');
   expect(restore.entries).toEqual(map.entries);
   expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+});
+
+it('learns a Mute trigger and shows it beside Previous and Next', async () => {
+  arrange();
+  const view = render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: /Learn.*Mute output/ }),
+  );
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(1, {
+        kind: 'control',
+        channel: 2,
+        controller: 22,
+        value: 127,
+      })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
+    mute: { program: null, controller: 22 },
+  });
+  expect(await screen.findByText('CC 22 · press')).toBeVisible();
 });
