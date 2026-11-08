@@ -1,7 +1,7 @@
 //! Device-local MIDI map keyed by immutable preset identity.
 //! Portable tone and rig payloads never carry controller or device bindings.
 use crate::{Error, LibraryKind, LibraryReference, Result};
-use oxidal_audio::midi::{Binding, BranchBinding, ParameterBinding, Settings};
+use oxidal_audio::midi::{Binding, BranchBinding, Message, ParameterBinding, Settings};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -58,6 +58,8 @@ struct Book {
     channel: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     template: Option<MidiTemplate>,
+    #[serde(default, skip_serializing_if = "Navigation::is_empty")]
+    navigation: Navigation,
     entries: BTreeMap<String, PresetMap>,
 }
 
@@ -68,8 +70,104 @@ impl Default for Book {
             input: None,
             channel: 1,
             template: None,
+            navigation: Navigation::default(),
             entries: BTreeMap::new(),
         }
+    }
+}
+
+/// One PC or CC press that runs a device-wide action. A Program Change fires
+/// on arrival; a CC fires on a value of 64 or more, like scene buttons.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Trigger {
+    pub program: Option<u8>,
+    pub controller: Option<u8>,
+}
+
+impl Trigger {
+    fn valid(self) -> bool {
+        self.program.is_some() != self.controller.is_some()
+            && self.program.is_none_or(|program| program <= 127)
+            && self
+                .controller
+                .is_none_or(|controller| controller <= 127 && !matches!(controller, 0 | 32))
+    }
+
+    /// Whether a received message is this trigger's press.
+    pub fn matches(self, message: Message) -> bool {
+        match message {
+            Message::Program { program, .. } => self.program == Some(program),
+            Message::Control {
+                controller, value, ..
+            } => self.controller == Some(controller) && value >= 64,
+        }
+    }
+}
+
+/// Device-wide preset navigation through the current Mine set-list. They sit
+/// outside every preset map, so no preset can silently change what they do.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Navigation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<Trigger>,
+}
+
+impl Navigation {
+    pub fn is_empty(&self) -> bool {
+        self.previous.is_none() && self.next.is_none()
+    }
+
+    /// Which direction a message navigates, if any: -1 previous, 1 next.
+    pub fn direction(&self, message: Message) -> Option<i8> {
+        if self.previous.is_some_and(|t| t.matches(message)) {
+            Some(-1)
+        } else if self.next.is_some_and(|t| t.matches(message)) {
+            Some(1)
+        } else {
+            None
+        }
+    }
+
+    fn triggers(&self) -> impl Iterator<Item = Trigger> {
+        [self.previous, self.next].into_iter().flatten()
+    }
+
+    fn validate(&self, entries: &BTreeMap<String, PresetMap>) -> Result<()> {
+        if self.triggers().any(|t| !t.valid())
+            || (self.previous.is_some() && self.previous == self.next)
+        {
+            return Err(Error::Invalid("Invalid MIDI navigation control"));
+        }
+        let taken = |program: Option<u8>, controller: Option<u8>| {
+            self.triggers().any(|t| {
+                (program.is_some() && t.program == program)
+                    || (controller.is_some() && t.controller == controller)
+            })
+        };
+        for mapping in entries.values() {
+            if mapping
+                .bindings
+                .iter()
+                .any(|b| taken(b.program, b.controller))
+                || mapping
+                    .branch_bindings
+                    .iter()
+                    .any(|b| taken(None, Some(b.controller)))
+                || mapping
+                    .parameter_bindings
+                    .iter()
+                    .any(|b| taken(None, Some(b.controller)))
+            {
+                return Err(Error::Invalid(
+                    "A MIDI navigation control is also assigned inside a preset",
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -115,6 +213,8 @@ pub struct MidiMap {
     pub channel: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<MidiTemplate>,
+    #[serde(default, skip_serializing_if = "Navigation::is_empty")]
+    pub navigation: Navigation,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -129,6 +229,8 @@ pub struct MidiMapUpdate {
     pub channel: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub template: Option<MidiTemplate>,
+    #[serde(default, skip_serializing_if = "Navigation::is_empty")]
+    pub navigation: Navigation,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -235,6 +337,7 @@ impl MidiMapStore {
     }
 
     fn write(&self, book: &Book) -> Result<()> {
+        book.navigation.validate(&book.entries)?;
         let bytes = serde_json::to_vec(book).map_err(|_| Error::Invalid("Invalid MIDI map"))?;
         if bytes.len() as u64 > LIMIT {
             return Err(Error::Invalid("MIDI map exceeds storage limit"));
@@ -281,6 +384,7 @@ impl MidiMapStore {
             input: book.input,
             channel: book.channel,
             template: book.template,
+            navigation: book.navigation,
             entries,
         })
     }
@@ -415,6 +519,7 @@ impl MidiMapStore {
             input: update.input,
             channel: update.channel,
             template: update.template,
+            navigation: update.navigation,
             entries,
         };
         self.write(&book)?;
@@ -594,12 +699,106 @@ mod tests {
     }
 
     #[test]
+    fn navigation_is_global_validated_and_never_overlaps_a_preset_mapping() {
+        let root = root("navigation");
+        let store = MidiMapStore::new(root);
+        let initial = store.snapshot().unwrap();
+        let program = |p| Trigger {
+            program: Some(p),
+            controller: None,
+        };
+        let update = |nav: Navigation, entries: Vec<MidiMapEntry>, revision: &str| MidiMapUpdate {
+            navigation: nav,
+            expected_revision: revision.into(),
+            input: Some("hw:Controller,0,0".into()),
+            channel: 1,
+            template: None,
+            entries,
+        };
+        let nav = Navigation {
+            previous: Some(program(2)),
+            next: Some(Trigger {
+                program: None,
+                controller: Some(21),
+            }),
+        };
+        let saved = store
+            .replace(update(nav, vec![], &initial.revision))
+            .unwrap();
+        assert_eq!(saved.navigation, nav);
+        assert_ne!(saved.revision, initial.revision);
+        // Same trigger twice, Bank Select and a trigger with both fields are refused.
+        for bad in [
+            Navigation {
+                previous: Some(program(2)),
+                next: Some(program(2)),
+            },
+            Navigation {
+                previous: Some(Trigger {
+                    program: None,
+                    controller: Some(32),
+                }),
+                next: None,
+            },
+            Navigation {
+                previous: Some(Trigger {
+                    program: Some(1),
+                    controller: Some(21),
+                }),
+                next: None,
+            },
+        ] {
+            assert!(matches!(
+                store.replace(update(bad, vec![], &saved.revision)),
+                Err(Error::Invalid(_))
+            ));
+        }
+        // A scene binding on the Previous Program would run two actions: refused.
+        let overlapping = vec![MidiMapEntry {
+            entry: entry('a'),
+            bindings: settings(2).bindings,
+            branch_bindings: vec![],
+            parameter_bindings: vec![],
+        }];
+        assert!(matches!(
+            store.replace(update(nav, overlapping, &saved.revision)),
+            Err(Error::Invalid(_))
+        ));
+        let press = |controller, value| Message::Control {
+            channel: 1,
+            controller,
+            value,
+        };
+        assert_eq!(
+            nav.direction(Message::Program {
+                channel: 1,
+                program: 2
+            }),
+            Some(-1)
+        );
+        assert_eq!(nav.direction(press(21, 127)), Some(1));
+        assert_eq!(nav.direction(press(21, 0)), None, "release is not a press");
+        let cleared = store
+            .replace(update(Navigation::default(), vec![], &saved.revision))
+            .unwrap();
+        assert!(cleared.navigation.is_empty());
+        assert_ne!(cleared.revision, saved.revision);
+        // An empty navigation is not serialized, so maps saved before this
+        // field existed keep their revision (value recorded from the prior build).
+        assert_eq!(
+            initial.revision,
+            "38eb924807afdfc80f86e87b767cfecb01000b48928f176256ab153593285691"
+        );
+    }
+
+    #[test]
     fn whole_map_replace_is_validated_and_revision_bound() {
         let root = root("replace");
         let store = MidiMapStore::new(root.clone());
         let initial = store.snapshot().unwrap();
         let updated = store
             .replace(MidiMapUpdate {
+                navigation: Navigation::default(),
                 expected_revision: initial.revision.clone(),
                 input: Some("hw:Controller,0,0".into()),
                 channel: 3,
@@ -617,6 +816,7 @@ mod tests {
         assert_eq!(updated.entries[0].bindings[0].program, Some(11));
 
         let stale = store.replace(MidiMapUpdate {
+            navigation: Navigation::default(),
             expected_revision: initial.revision,
             input: None,
             channel: 1,
@@ -626,6 +826,7 @@ mod tests {
         assert!(matches!(stale, Err(Error::Conflict(_))));
 
         let duplicate = store.replace(MidiMapUpdate {
+            navigation: Navigation::default(),
             expected_revision: updated.revision,
             input: Some("hw:Controller,0,0".into()),
             channel: 1,
@@ -656,6 +857,7 @@ mod tests {
         let initial = store.snapshot().unwrap();
         let configured = store
             .replace(MidiMapUpdate {
+                navigation: Navigation::default(),
                 expected_revision: initial.revision,
                 input: Some("hw:Controller,0,0".into()),
                 channel: 1,
@@ -703,6 +905,7 @@ mod tests {
         );
 
         let bad = store.replace(MidiMapUpdate {
+            navigation: Navigation::default(),
             expected_revision: store.snapshot().unwrap().revision,
             input: None,
             channel: 1,

@@ -103,6 +103,9 @@
     "lv2_catalog": {
       "$ref": "#/$defs/PluginCatalog"
     },
+    "midi_action": {
+      "$ref": "#/$defs/MidiAction"
+    },
     "midi_devices": {
       "$ref": "#/$defs/Devices"
     },
@@ -114,6 +117,9 @@
     },
     "midi_map_update": {
       "$ref": "#/$defs/MidiMapUpdate"
+    },
+    "midi_navigate": {
+      "$ref": "#/$defs/MidiNavigate"
     },
     "midi_template_apply": {
       "$ref": "#/$defs/MidiTemplateApply"
@@ -339,6 +345,8 @@
     "midi_template_apply",
     "midi_test",
     "midi_learn",
+    "midi_action",
+    "midi_navigate",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -5371,12 +5379,42 @@
         }
       ]
     },
+    "MidiAction": {
+      "description": "Outcome of the newest device-wide MIDI action. `seq` increases with each one\nso a client can tell a new refusal from a repeat of the previous text.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "ok",
+        "message"
+      ]
+    },
     "MidiCurve": {
       "description": "Scaling policy for a mapped absolute knob.\n@see docs/architecture.md",
       "type": "string",
       "enum": [
         "linear",
         "logarithmic"
+      ]
+    },
+    "MidiDirection": {
+      "type": "string",
+      "enum": [
+        "previous",
+        "next"
       ]
     },
     "MidiFeedback": {
@@ -5483,6 +5521,9 @@
             "null"
           ]
         },
+        "navigation": {
+          "$ref": "#/$defs/Navigation"
+        },
         "revision": {
           "type": "string"
         },
@@ -5561,6 +5602,9 @@
             "string",
             "null"
           ]
+        },
+        "navigation": {
+          "$ref": "#/$defs/Navigation"
         },
         "template": {
           "anyOf": [
@@ -5646,6 +5690,19 @@
       "enum": [
         "absolute",
         "relative_twos_complement"
+      ]
+    },
+    "MidiNavigate": {
+      "description": "Previous or next preset in the current Mine set-list, as the footswitch does.",
+      "type": "object",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/MidiDirection"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "direction"
       ]
     },
     "MidiTemplate": {
@@ -6250,6 +6307,33 @@
         "target",
         "value"
       ]
+    },
+    "Navigation": {
+      "description": "Device-wide preset navigation through the current Mine set-list. They sit\noutside every preset map, so no preset can silently change what they do.",
+      "type": "object",
+      "properties": {
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "NetworkState": {
       "type": "object",
@@ -10326,6 +10410,31 @@
         "query": {
           "type": "string",
           "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "Trigger": {
+      "description": "One PC or CC press that runs a device-wide action. A Program Change fires\non arrival; a CC fires on a value of 64 or more, like scene buttons.",
+      "type": "object",
+      "properties": {
+        "controller": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "program": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
         }
       },
       "additionalProperties": false

@@ -196,6 +196,8 @@ pub struct Contract {
     pub midi_template_apply: midi_map::MidiTemplateApply,
     pub midi_test: midi_map::MidiTest,
     pub midi_learn: midi_map::MidiLearn,
+    pub midi_action: midi_recall::MidiAction,
+    pub midi_navigate: midi_map::MidiNavigate,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
@@ -243,6 +245,7 @@ struct Shared {
     graph_playback: graph_playback::GraphPlayback,
     levels: Arc<levels::Levels>,
     midi_map: Arc<oxidal_presets::MidiMapStore>,
+    midi_action: std::sync::Mutex<midi_recall::MidiAction>,
     guitars: Arc<guitars::Store>,
     boosts: Arc<boosts::Store>,
     blends: Arc<blends::Store>,
@@ -370,6 +373,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )?,
         levels,
         midi_map,
+        midi_action: Default::default(),
         library_access,
         guitars: Arc::new(guitars::Store::load(config.preset_dir.join("guitars.json"))),
         boosts: Arc::new(boosts::Store::load(config.preset_dir.join("boosts.json"))),
@@ -513,6 +517,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/midi/template", post(midi_map::apply_template))
         .route("/midi/test", post(midi_map::test))
         .route("/midi/learn", post(midi_map::learn))
+        .route("/midi/action", get(midi_map::action))
+        .route("/midi/navigate", post(midi_map::navigate))
         .route("/audio/probe", post(audio::probe))
         .route(
             "/native",

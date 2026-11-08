@@ -312,6 +312,64 @@ async fn midi_map_import_is_revision_bound_and_strictly_validated() {
 }
 
 #[tokio::test]
+async fn midi_navigation_round_trips_is_validated_and_reports_no_action_yet() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let map: Value = reqwest::get(format!("{url}/midi/map"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(
+        map.get("navigation").is_none(),
+        "empty navigation is omitted"
+    );
+    let nav = json!({
+        "previous": {"program": 2, "controller": null},
+        "next": {"program": null, "controller": 21}
+    });
+    let saved = client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": map["revision"],
+            "input": "hw:Controller,0,0",
+            "channel": 1,
+            "navigation": nav,
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let saved: Value = saved.json().await.unwrap();
+    assert_eq!(saved["navigation"], nav);
+    let bank_select = client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": saved["revision"],
+            "input": "hw:Controller,0,0",
+            "channel": 1,
+            "navigation": {"previous": {"program": null, "controller": 32}},
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bank_select.status(), 422);
+    let action: Value = reqwest::get(format!("{url}/midi/action"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(action["seq"], 0);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn new_scene_rigs_inherit_the_unit_midi_template() {
     let (url, task, mapping) = start(true).await;
     let client = reqwest::Client::new();

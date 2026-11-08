@@ -133,6 +133,48 @@ pub(super) async fn apply_template(
     }
 }
 
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MidiDirection {
+    Previous,
+    Next,
+}
+
+/// Previous or next preset in the current Mine set-list, as the footswitch does.
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiNavigate {
+    pub direction: MidiDirection,
+}
+
+pub(super) async fn navigate(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<MidiNavigate>, JsonRejection>,
+) -> impl IntoResponse {
+    let request = match body {
+        Ok(Json(request)) => request,
+        Err(error) => return crate::failure(error.status(), "Invalid navigation").into_response(),
+    };
+    let direction = match request.direction {
+        MidiDirection::Previous => -1,
+        MidiDirection::Next => 1,
+    };
+    match crate::midi_recall::navigate_recorded(&shared, direction).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => crate::failure(StatusCode::CONFLICT, &error).into_response(),
+    }
+}
+
+/// The newest device-wide MIDI action and whether it ran, for the UI to show.
+pub(super) async fn action(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
+    let action = shared
+        .midi_action
+        .lock()
+        .map(|action| action.clone())
+        .unwrap_or_default();
+    ([(header::CACHE_CONTROL, "no-store")], Json(action))
+}
+
 /// While learning, input is recorded but never dispatched. Learning edits
 /// configuration, so Protect refuses it; ending a learn window is always allowed.
 pub(super) async fn learn(

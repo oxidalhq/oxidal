@@ -474,6 +474,7 @@ export type LibraryAction =
       before?: LibraryReference | null;
       kind: "place";
     };
+export type MidiDirection = "previous" | "next";
 export type EditorAction =
   | {
       id: string;
@@ -759,10 +760,12 @@ export interface Contract {
   local_model: LocalModel;
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
+  midi_action: MidiAction;
   midi_devices: Devices;
   midi_learn: MidiLearn;
   midi_map: MidiMap;
   midi_map_update: MidiMapUpdate;
+  midi_navigate: MidiNavigate;
   midi_template_apply: MidiTemplateApply;
   midi_test: MidiTest;
   model_page: Page2;
@@ -1837,6 +1840,15 @@ export interface Port {
   symbol: string;
   toggled: boolean;
 }
+/**
+ * Outcome of the newest device-wide MIDI action. `seq` increases with each one
+ * so a client can tell a new refusal from a repeat of the previous text.
+ */
+export interface MidiAction {
+  message: string;
+  ok: boolean;
+  seq: number;
+}
 export interface Devices {
   available: boolean;
   inputs: Endpoint[];
@@ -1856,6 +1868,7 @@ export interface MidiMap {
   channel: number;
   entries: MidiMapEntry[];
   input?: string | null;
+  navigation?: Navigation;
   revision: string;
   template?: MidiTemplate | null;
 }
@@ -1864,6 +1877,22 @@ export interface MidiMapEntry {
   branch_bindings: BranchBinding[];
   entry: LibraryReference;
   parameter_bindings: ParameterBinding[];
+}
+/**
+ * Device-wide preset navigation through the current Mine set-list. They sit
+ * outside every preset map, so no preset can silently change what they do.
+ */
+export interface Navigation {
+  next?: Trigger | null;
+  previous?: Trigger | null;
+}
+/**
+ * One PC or CC press that runs a device-wide action. A Program Change fires
+ * on arrival; a CC fires on a value of 64 or more, like scene buttons.
+ */
+export interface Trigger {
+  controller?: number | null;
+  program?: number | null;
 }
 /**
  * Unit default for controllers whose buttons emit consecutive CC messages.
@@ -1884,7 +1913,14 @@ export interface MidiMapUpdate {
   entries: MidiMapEntry[];
   expected_revision: string;
   input?: string | null;
+  navigation?: Navigation;
   template?: MidiTemplate | null;
+}
+/**
+ * Previous or next preset in the current Mine set-list, as the footswitch does.
+ */
+export interface MidiNavigate {
+  direction: MidiDirection;
 }
 export interface MidiTemplateApply {
   entry: LibraryReference;

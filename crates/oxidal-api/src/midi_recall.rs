@@ -16,6 +16,26 @@ pub(crate) struct Event {
     pub local_program: bool,
 }
 
+/// Outcome of the newest device-wide MIDI action. `seq` increases with each one
+/// so a client can tell a new refusal from a repeat of the previous text.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiAction {
+    pub seq: u64,
+    pub ok: bool,
+    pub message: String,
+}
+
+fn record(shared: &Shared, result: &Result<String, String>) {
+    if let Ok(mut action) = shared.midi_action.lock() {
+        action.seq += 1;
+        action.ok = result.is_ok();
+        action.message = match result {
+            Ok(message) | Err(message) => message.clone(),
+        };
+    }
+}
+
 #[derive(Default)]
 struct BankState([u16; 16]);
 
@@ -60,18 +80,96 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
             let Some(shared) = shared.upgrade() else {
                 break;
             };
-            let Some((channel, slot)) = banks.apply(event) else {
+            let Ok(map) = shared.midi_map.snapshot() else {
                 continue;
             };
-            let Ok(map) = shared.midi_map.snapshot() else {
+            // Previous/Next are matched first and never fall through to a
+            // Program recall. Each event is handled to completion before the
+            // next, so quick taps stay in order.
+            if let Some(direction) = map.navigation.direction(event.message)
+                && map.input.is_some()
+                && channel_of(event.message).is_some_and(|c| map.channel == 0 || map.channel == c)
+            {
+                navigate_recorded(&shared, direction).await.ok();
+                continue;
+            }
+            let Some((channel, slot)) = banks.apply(event) else {
                 continue;
             };
             if map.input.is_none() || (map.channel != 0 && map.channel != channel) {
                 continue;
             }
-            let _ = recall(&shared, slot).await;
+            record(
+                &shared,
+                &recall(&shared, slot)
+                    .await
+                    .map(|()| format!("Recalled Program {}", slot % 128 + 1)),
+            );
         }
     });
+}
+
+fn channel_of(message: Message) -> Option<u8> {
+    match message {
+        Message::Program { channel, .. } | Message::Control { channel, .. } => Some(channel),
+    }
+}
+
+fn is_playing(shared: &Shared, item: &oxidal_presets::LibraryItem) -> bool {
+    match item.kind {
+        LibraryKind::Owned => shared
+            .playback
+            .snapshot()
+            .configured
+            .as_ref()
+            .and_then(crate::library_removal::native_reference)
+            .is_some_and(|reference| reference.kind == item.kind && reference.id == item.id),
+        LibraryKind::Rig => shared
+            .rig_playback
+            .snapshot()
+            .configured
+            .is_some_and(|configured| configured.revision == item.id),
+        _ => false,
+    }
+}
+
+/// The neighbouring set-list position; the ends stop instead of wrapping.
+fn step(current: usize, len: usize, direction: i8) -> Result<usize, &'static str> {
+    if direction < 0 {
+        current
+            .checked_sub(1)
+            .ok_or("Already at the first preset in the Set list")
+    } else if current + 1 < len {
+        Ok(current + 1)
+    } else {
+        Err("Already at the last preset in the Set list")
+    }
+}
+
+/// Runs a navigation and records its outcome; the footswitch and the Perform
+/// buttons both come through here.
+pub(crate) async fn navigate_recorded(
+    shared: &Arc<Shared>,
+    direction: i8,
+) -> Result<String, String> {
+    let result = navigate(shared, direction).await;
+    record(shared, &result);
+    result
+}
+
+/// Previous (-1) or Next (1) in the current Mine set-list. The ends stop with a
+/// reason instead of wrapping, and a refused recall leaves the sound playing.
+async fn navigate(shared: &Arc<Shared>, direction: i8) -> Result<String, String> {
+    let items = set_list(shared).await?;
+    let current = items
+        .iter()
+        .position(|item| is_playing(shared, item))
+        .ok_or("Play a Set-list preset before using Previous or Next")?;
+    let target = step(current, items.len(), direction)?;
+    let item = items[target].clone();
+    let name = item.name.clone();
+    recall_target(shared, item).await?;
+    Ok(format!("Recalled {name}"))
 }
 
 async fn set_list(shared: &Arc<Shared>) -> Result<Vec<oxidal_presets::LibraryItem>, String> {
@@ -349,6 +447,15 @@ mod tests {
             })),
             Some((1, 7))
         );
+    }
+
+    #[test]
+    fn previous_and_next_stop_at_the_ends_of_the_set_list() {
+        assert_eq!(step(1, 3, -1), Ok(0));
+        assert_eq!(step(1, 3, 1), Ok(2));
+        assert!(step(0, 3, -1).unwrap_err().contains("first"));
+        assert!(step(2, 3, 1).unwrap_err().contains("last"));
+        assert!(step(0, 1, 1).unwrap_err().contains("last"));
     }
 
     #[test]
