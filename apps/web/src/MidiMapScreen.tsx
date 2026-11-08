@@ -4,6 +4,7 @@ import { friendlyError } from './lib/friendlyError';
 import { firstAfter, useLearnGate } from './midiLearn';
 import { PresetNavigation, type NavigationKey } from './PresetNavigation';
 import { ControllerSetup } from './ControllerSetup';
+import { ExtraControllers } from './ExtraControllers';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
@@ -60,7 +61,13 @@ type Learning = {
 };
 type MapContent = Pick<
   MidiMap,
-  'input' | 'channel' | 'template' | 'navigation' | 'saved_layouts' | 'entries'
+  | 'input'
+  | 'channel'
+  | 'template'
+  | 'navigation'
+  | 'saved_layouts'
+  | 'extra_inputs'
+  | 'entries'
 >;
 type ImportFile = {
   format: 'oxidal-midi-map';
@@ -70,6 +77,7 @@ type ImportFile = {
   template?: MidiMap['template'];
   navigation?: MidiMap['navigation'];
   saved_layouts?: MidiMap['saved_layouts'];
+  extra_inputs?: MidiMap['extra_inputs'];
   entries: MidiMap['entries'];
 };
 
@@ -200,6 +208,7 @@ export function MidiMapScreen({
   } | null>(null);
   const [action, setAction] = useState<MidiAction | null>(null);
   const [checking, setChecking] = useState(false);
+  const [learnSource, setLearnSource] = useState(0);
   const [pendingClearAll, setPendingClearAll] = useState(false);
   // Earlier maps for Undo. Restoring one is a normal revision-checked save, so a
   // change made by another client in the meantime is reported, never overwritten.
@@ -256,6 +265,7 @@ export function MidiMapScreen({
         template: content.template,
         navigation: content.navigation,
         saved_layouts: content.saved_layouts,
+        extra_inputs: content.extra_inputs,
         entries: content.entries,
       });
       if (remember) {
@@ -267,6 +277,7 @@ export function MidiMapScreen({
             template: map.template,
             navigation: map.navigation,
             saved_layouts: map.saved_layouts,
+            extra_inputs: map.extra_inputs,
             entries: map.entries,
           },
         ];
@@ -566,7 +577,7 @@ export function MidiMapScreen({
     setError(friendlyError(cause, 'learn a MIDI controller'));
   });
   const lastMessage = learning
-    ? firstAfter<Message>(status, learning.after)
+    ? firstAfter<Message>(status, learning.after, learnSource)
     : status?.last;
   const eventCount = status?.events ?? 0;
   useEffect(() => {
@@ -584,7 +595,7 @@ export function MidiMapScreen({
   }, [eventCount, lastMessage, learning]);
 
   const navMessage = navLearning
-    ? firstAfter<Message>(status, navLearning.after)
+    ? firstAfter<Message>(status, navLearning.after, learnSource)
     : undefined;
   useEffect(() => {
     if (!navLearning || !navMessage || !map) return;
@@ -685,6 +696,7 @@ export function MidiMapScreen({
       template: map.template ?? null,
       navigation: map.navigation,
       saved_layouts: map.saved_layouts,
+      extra_inputs: map.extra_inputs,
       entries: map.entries,
     };
     const url = URL.createObjectURL(
@@ -773,6 +785,19 @@ export function MidiMapScreen({
             </SelectContent>
           </Select>
         </label>
+        <div className="md:col-span-2">
+          <ExtraControllers
+            map={map}
+            devices={devices}
+            sources={status?.sources ?? []}
+            busy={busy || !connected}
+            learnSource={learnSource}
+            onChange={(extra_inputs) =>
+              void replaceMap({ ...map, extra_inputs }).catch(() => undefined)
+            }
+            onLearnSource={setLearnSource}
+          />
+        </div>
         <div className="min-w-0 md:col-span-2">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <Broadcast size={18} aria-hidden="true" />

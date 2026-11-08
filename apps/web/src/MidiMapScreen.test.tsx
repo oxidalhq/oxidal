@@ -107,6 +107,7 @@ function arrange() {
     template: update.template,
     navigation: update.navigation,
     saved_layouts: update.saved_layouts,
+    extra_inputs: update.extra_inputs,
     entries: update.entries,
   }));
   vi.mocked(applyMidiTemplate).mockResolvedValue({
@@ -592,4 +593,45 @@ it('opens the same editor from a switch in the controller view', async () => {
   expect(
     within(setup).getByRole('button', { name: 'Show in mappings' }),
   ).toBeVisible();
+});
+
+it('adds a second controller explicitly, with its own channel, and removes it again', async () => {
+  const user = userEvent.setup();
+  arrange();
+  vi.mocked(midiDevices).mockResolvedValue({
+    available: true,
+    inputs: [
+      { id: 'hw:Controller,0,0', name: 'Controller' },
+      { id: 'hw:Captain,0,0', name: 'Captain' },
+    ],
+    warnings: [],
+  });
+  renderScreen();
+  const extra = await screen.findByRole('region', {
+    name: 'Additional controllers',
+  });
+  // Nothing is listened to until it is added.
+  expect(within(extra).queryByText(/Controller 2/)).toBeNull();
+  await user.click(
+    within(extra).getByRole('button', { name: 'Add controller' }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].extra_inputs).toEqual([
+    { input: 'hw:Captain,0,0', channel: 1 },
+  ]);
+  // Both devices are now in use, so there is nothing left to add.
+  await waitFor(() =>
+    expect(
+      within(extra).getByRole('button', { name: 'Add controller' }),
+    ).toBeDisabled(),
+  );
+  expect(within(extra).getByText('Not connected')).toBeVisible();
+  expect(
+    within(extra).getByRole('combobox', { name: 'Learn from controller' }),
+  ).toBeVisible();
+  await user.click(
+    within(extra).getByRole('button', { name: /Remove controller 2/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(updateMidiMap).mock.calls[1]![0].extra_inputs).toEqual([]);
 });

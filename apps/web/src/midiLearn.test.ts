@@ -36,3 +36,21 @@ it('opens the device learn gate while active and always closes it', () => {
   unmount();
   expect(learnMidi).toHaveBeenLastCalledWith(false);
 });
+
+it('learns only from the chosen controller when several are connected', () => {
+  const status = {
+    events: 3,
+    last: program(2),
+    recent: [
+      { seq: 1, message: program(0), source: 0 },
+      { seq: 2, message: program(1), source: 1 },
+      { seq: 3, message: program(2), source: 0 },
+    ],
+  };
+  expect(firstAfter(status, 0, 1)).toEqual(program(1));
+  expect(firstAfter(status, 0, 0)).toEqual(program(0));
+  // Nothing from the second controller after seq 2: keep waiting, never borrow.
+  expect(firstAfter(status, 2, 1)).toBeUndefined();
+  // No source given keeps the earlier behaviour (first message from anyone).
+  expect(firstAfter(status, 0)).toEqual(program(0));
+});

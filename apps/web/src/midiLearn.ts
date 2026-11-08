@@ -3,7 +3,7 @@ import { learnMidi } from './api';
 
 const gate = async (on: boolean) => learnMidi(on);
 
-type Observed = { seq: number; message: unknown };
+type Observed = { seq: number; message: unknown; source?: number };
 
 /**
  * The first message received after `after`, in arrival order. A burst between
@@ -14,14 +14,21 @@ export function firstAfter<T>(
     | {
         events: number;
         last?: T | null;
-        recent?: { seq: number; message: T }[];
+        recent?: { seq: number; message: T; source?: number }[];
       }
     | null
     | undefined,
   after: number,
+  /** Only accept a message from this controller (0 is the first). */
+  source?: number,
 ): T | undefined {
   if (!status || status.events <= after) return undefined;
   const recent = status.recent as Observed[] | undefined;
+  if (recent && source !== undefined) {
+    return recent.find(
+      (item) => item.seq > after && (item.source ?? 0) === source,
+    )?.message as T | undefined;
+  }
   const found = recent?.find((item) => item.seq > after)?.message as
     T | undefined;
   return found ?? status.last ?? undefined;

@@ -4115,3 +4115,33 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.midi-extra {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.midi-extra-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 8rem auto auto;
+  align-items: end;
+  gap: 0.5rem 0.75rem;
+}
+.midi-extra-state {
+  align-self: center;
+}
+.midi-extra-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+.midi-extra-learn {
+  min-width: 14rem;
+}
+@media (max-width: 640px) {
+  .midi-extra-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

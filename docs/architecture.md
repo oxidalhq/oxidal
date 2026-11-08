@@ -88,6 +88,20 @@ arrival order. `GET /midi/action` reports the newest outcome and
 `POST /midi/navigate` runs Previous or Next for the Perform buttons. The Tuner
 needs the browser and is not a footswitch action yet.
 
+### Several controllers
+
+The first controller keeps its existing settings; up to three more can be added,
+each enabled explicitly in the map (`extra_inputs`), never merged in on
+detection. Each has its own endpoint, channel filter, port, decoder and retry
+timer, so one unplugged device neither stalls nor corrupts another and a reconnect
+starts from a clean decoder with no replayed press. Every logged message carries
+its source, and Bank Select is kept per controller and channel, so two pedals that
+send the same Program or CC never share a bank. Controllers share the playing
+preset's assignments; only the channel filter differs per source. The same device
+cannot be added twice, and extra controllers require a first one. Passive learn can
+be limited to one controller. A controller that disappears keeps its saved entry
+and shows as not connected.
+
 Source: [MIDI decoder and input](../crates/oxidal-audio/src/midi.rs), with wire
 message identifiers from the [MIDI Association](https://midi.org/summary-of-midi-1-0-messages).
 
