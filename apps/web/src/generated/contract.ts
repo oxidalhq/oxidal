@@ -26,6 +26,10 @@ export type AudioAction =
       message: Message;
     }
   | {
+      kind: "midi_learn";
+      on: boolean;
+    }
+  | {
       kind: "create";
       name: string;
       stream: StreamConfig;
@@ -634,6 +638,10 @@ export type RigAudioAction =
       message: Message;
     }
   | {
+      kind: "midi_learn";
+      on: boolean;
+    }
+  | {
       command: ModelCommand;
       kind: "model";
     }
@@ -752,6 +760,7 @@ export interface Contract {
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
   midi_devices: Devices;
+  midi_learn: MidiLearn;
   midi_map: MidiMap;
   midi_map_update: MidiMapUpdate;
   midi_template_apply: MidiTemplateApply;
@@ -1836,6 +1845,12 @@ export interface Devices {
 export interface Endpoint {
   id: string;
   name: string;
+}
+/**
+ * Start or end passive learning on the playing preset's controller input.
+ */
+export interface MidiLearn {
+  on: boolean;
 }
 export interface MidiMap {
   channel: number;

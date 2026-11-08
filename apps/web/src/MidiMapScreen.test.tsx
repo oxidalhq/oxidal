@@ -23,6 +23,7 @@ import {
 } from './api';
 
 vi.mock('./api', () => ({
+  learnMidi: vi.fn(),
   applyMidiTemplate: vi.fn(),
   libraryCatalog: vi.fn(),
   midiDevices: vi.fn(),

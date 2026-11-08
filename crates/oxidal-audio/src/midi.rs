@@ -387,6 +387,21 @@ pub struct Status {
     pub recent: Vec<Observed>,
 }
 impl Status {
+    /// Messages recorded after `previous` (the event count the consumer last
+    /// processed), oldest first, so a burst between polls is not collapsed to
+    /// its last message. A lower count means the worker restarted, so every
+    /// retained message is new. Nothing is returned while learning.
+    pub fn unseen(&self, previous: u64) -> Vec<Message> {
+        if self.learning {
+            return Vec::new();
+        }
+        let from = if self.events < previous { 0 } else { previous };
+        self.recent
+            .iter()
+            .filter(|item| item.seq > from)
+            .map(|item| item.message)
+            .collect()
+    }
     /// Record a received message in arrival order.
     pub fn observe(&mut self, message: Message) {
         self.events = self.events.saturating_add(1);
@@ -1309,6 +1324,36 @@ mod tests {
         assert_eq!(status.error.as_deref(), Some("refused"));
         deliver(&mut status, &settings, message, false, |_, _| Ok(true));
         assert_eq!(status.error, None);
+    }
+
+    #[test]
+    fn unseen_returns_a_burst_in_order_and_handles_restart_and_learning() {
+        let bank = |value| Message::Control {
+            channel: 1,
+            controller: 0,
+            value,
+        };
+        let program = Message::Program {
+            channel: 1,
+            program: 3,
+        };
+        let mut status = Status::default();
+        status.observe(bank(1));
+        status.observe(Message::Control {
+            channel: 1,
+            controller: 32,
+            value: 2,
+        });
+        status.observe(program);
+        // Bank Select CCs and the Program arrive in one poll interval.
+        assert_eq!(status.unseen(0).len(), 3);
+        assert_eq!(status.unseen(0).last(), Some(&program));
+        assert_eq!(status.unseen(2), vec![program]);
+        assert!(status.unseen(3).is_empty());
+        // Restart: the count fell below the consumer's, everything retained is new.
+        assert_eq!(status.unseen(50).len(), 3);
+        status.learning = true;
+        assert!(status.unseen(0).is_empty());
     }
 
     #[test]

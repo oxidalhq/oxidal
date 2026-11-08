@@ -340,6 +340,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 WorkerRequest::Authoring { .. } => "authoring",
                 WorkerRequest::Midi { .. } => "midi settings",
                 WorkerRequest::MidiTest { .. } => "midi test",
+                WorkerRequest::MidiLearn { .. } => "midi learn",
                 WorkerRequest::Control { .. } => "control",
                 WorkerRequest::Scene { .. } => "scene",
                 WorkerRequest::Branch { .. } => "branch",
@@ -373,6 +374,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                         None
                     }
                 },
+                WorkerRequest::MidiLearn { on } => {
+                    midi.learn(on);
+                    None
+                }
                 WorkerRequest::MidiTest { message } => midi
                     .test(message, |settings, message| {
                         rig.active_mut().midi_message(settings, message)

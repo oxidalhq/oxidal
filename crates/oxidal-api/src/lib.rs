@@ -195,6 +195,7 @@ pub struct Contract {
     pub midi_map_update: oxidal_presets::MidiMapUpdate,
     pub midi_template_apply: midi_map::MidiTemplateApply,
     pub midi_test: midi_map::MidiTest,
+    pub midi_learn: midi_map::MidiLearn,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
@@ -511,6 +512,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         )
         .route("/midi/template", post(midi_map::apply_template))
         .route("/midi/test", post(midi_map::test))
+        .route("/midi/learn", post(midi_map::learn))
         .route("/audio/probe", post(audio::probe))
         .route(
             "/native",

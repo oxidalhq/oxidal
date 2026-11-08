@@ -791,6 +791,17 @@ export async function testMidi(request: Contract['midi_test']): Promise<void> {
   if (!response.ok) await presetResponse(response);
 }
 
+/** Passive learning: input is recorded but its mappings do not run. */
+export async function learnMidi(on: boolean): Promise<void> {
+  const request: Contract['midi_learn'] = { on };
+  const response = await fetch('/api/v1/midi/learn', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) await presetResponse(response);
+}
+
 export type NativeDefaults = Contract['native_defaults'];
 const nativeDefaultsValidator = ajv.compile<NativeDefaults>({
   $defs: schema.$defs,

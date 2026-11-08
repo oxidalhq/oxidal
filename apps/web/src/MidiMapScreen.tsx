@@ -1,6 +1,7 @@
 import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
+import { firstAfter, useLearnGate } from './midiLearn';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
@@ -473,7 +474,13 @@ export function MidiMapScreen({
   useEffect(() => {
     learnHandler.current = applyLearn;
   });
-  const lastMessage = status?.last;
+  useLearnGate(!!learning, (cause) => {
+    setLearning(null);
+    setError(friendlyError(cause, 'learn a MIDI controller'));
+  });
+  const lastMessage = learning
+    ? firstAfter<Message>(status, learning.after)
+    : status?.last;
   const eventCount = status?.events ?? 0;
   useEffect(() => {
     if (!learning || !lastMessage || eventCount <= learning.after) return;

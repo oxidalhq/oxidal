@@ -106,6 +106,9 @@
     "midi_devices": {
       "$ref": "#/$defs/Devices"
     },
+    "midi_learn": {
+      "$ref": "#/$defs/MidiLearn"
+    },
     "midi_map": {
       "$ref": "#/$defs/MidiMap"
     },
@@ -335,6 +338,7 @@
     "midi_map_update",
     "midi_template_apply",
     "midi_test",
+    "midi_learn",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -774,6 +778,24 @@
           "required": [
             "kind",
             "message"
+          ]
+        },
+        {
+          "description": "Start or end passive learning: messages are recorded but not dispatched.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi_learn"
+            },
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "on"
           ]
         },
         {
@@ -5427,6 +5449,19 @@
         "value"
       ]
     },
+    "MidiLearn": {
+      "description": "Start or end passive learning on the playing preset's controller input.",
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "on"
+      ]
+    },
     "MidiMap": {
       "type": "object",
       "properties": {
@@ -8084,6 +8119,23 @@
           "required": [
             "kind",
             "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "midi_learn"
+            },
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "on"
           ]
         },
         {

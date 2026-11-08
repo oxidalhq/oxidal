@@ -142,6 +142,10 @@ pub enum AudioAction {
     MidiTest {
         message: crate::midi::Message,
     },
+    /// Start or end passive learning: messages are recorded but not dispatched.
+    MidiLearn {
+        on: bool,
+    },
     Create {
         stream: StreamConfig,
         name: String,
@@ -498,6 +502,9 @@ pub enum MidiOperation {
     Poll,
     Test {
         message: crate::midi::Message,
+    },
+    Learn {
+        on: bool,
     },
 }
 #[derive(Debug, Serialize, Deserialize)]

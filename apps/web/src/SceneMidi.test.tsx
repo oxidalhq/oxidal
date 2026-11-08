@@ -11,6 +11,7 @@ import { SceneMidi } from './SceneMidi';
 import { midiDevices } from './api';
 import type { RigAudioState } from './api';
 vi.mock('./api', () => ({
+  learnMidi: vi.fn(),
   midiDevices: vi.fn(async () => ({
     available: true,
     inputs: [{ id: 'hw:Controller,0,0', name: 'Controller' }],

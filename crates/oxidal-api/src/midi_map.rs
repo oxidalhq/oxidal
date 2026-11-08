@@ -16,6 +16,13 @@ pub struct MidiTest {
     pub message: Option<oxidal_audio::midi::Message>,
 }
 
+/// Start or end passive learning on the playing preset's controller input.
+#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiLearn {
+    pub on: bool,
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MidiTemplateApply {
@@ -123,6 +130,56 @@ pub(super) async fn apply_template(
         Err(error) => {
             crate::failure(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()).into_response()
         }
+    }
+}
+
+/// While learning, input is recorded but never dispatched. Learning edits
+/// configuration, so Protect refuses it; ending a learn window is always allowed.
+pub(super) async fn learn(
+    State(shared): State<Arc<Shared>>,
+    body: Result<Json<MidiLearn>, JsonRejection>,
+) -> impl IntoResponse {
+    let request = match body {
+        Ok(Json(request)) => request,
+        Err(error) => return crate::failure(error.status(), "Invalid MIDI learn").into_response(),
+    };
+    if request.on && shared.protect.on() {
+        return crate::failure(
+            StatusCode::CONFLICT,
+            "Protect is on. Turn Protect off to learn a controller.",
+        )
+        .into_response();
+    }
+    let rig = shared.rig_playback.snapshot();
+    let native = shared.playback.snapshot();
+    let result = if rig.phase == oxidal_audio::lifecycle::AudioPhase::Running {
+        shared
+            .rig_playback
+            .dispatch(oxidal_engine::protocol::RigAudioCommand {
+                session: rig.session,
+                expected_revision: rig.revision,
+                action: oxidal_engine::protocol::RigAudioAction::MidiLearn { on: request.on },
+            })
+            .await
+            .map(|_| ())
+    } else if native.phase == oxidal_audio::lifecycle::AudioPhase::Running {
+        shared
+            .playback
+            .dispatch(oxidal_audio::lifecycle::AudioCommand {
+                session: native.session,
+                expected_revision: native.revision,
+                action: oxidal_audio::lifecycle::AudioAction::MidiLearn { on: request.on },
+            })
+            .await
+            .map(|_| ())
+    } else if request.on {
+        Err("Play a preset before learning a controller".into())
+    } else {
+        Ok(())
+    };
+    match result {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => crate::failure(StatusCode::CONFLICT, &error).into_response(),
     }
 }
 

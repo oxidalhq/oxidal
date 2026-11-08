@@ -150,23 +150,19 @@ impl Owner {
         let Some(control) = &self.state.control else {
             return;
         };
-        if control.midi.events <= previous_events {
-            return;
+        for message in control.midi.unseen(previous_events) {
+            let local_program = matches!(message, oxidal_audio::midi::Message::Program { .. })
+                && self
+                    .state
+                    .configured
+                    .as_ref()
+                    .and_then(|configured| configured.midi.as_ref())
+                    .is_some_and(|settings| settings.scene(message).is_some());
+            let _ = self.midi_events.try_send(crate::midi_recall::Event {
+                message,
+                local_program,
+            });
         }
-        let Some(message) = control.midi.last else {
-            return;
-        };
-        let local_program = matches!(message, oxidal_audio::midi::Message::Program { .. })
-            && self
-                .state
-                .configured
-                .as_ref()
-                .and_then(|configured| configured.midi.as_ref())
-                .is_some_and(|settings| settings.scene(message).is_some());
-        let _ = self.midi_events.try_send(crate::midi_recall::Event {
-            message,
-            local_program,
-        });
     }
 
     fn forget(&mut self, entry: &oxidal_presets::LibraryReference) -> Result<(), String> {
@@ -1092,6 +1088,23 @@ impl Owner {
                 self.state.configured.as_mut().unwrap().midi = settings;
                 self.confirmed = self.state.configured.clone();
                 self.schedule_recovery();
+                self.changed();
+            }
+            RigAudioAction::MidiLearn { on } => {
+                if self.state.phase != AudioPhase::Running {
+                    return Err("Mixed audio is not running".into());
+                }
+                let reply = match self.exchange(&WorkerRequest::MidiLearn { on }).await {
+                    Ok(reply) => reply,
+                    Err(error) => return Err(self.fault(error).await),
+                };
+                let error = reply.error.clone();
+                if let Err(error) = self.readback(reply) {
+                    return Err(self.fault(error).await);
+                }
+                if let Some(error) = error {
+                    return Err(error);
+                }
                 self.changed();
             }
             RigAudioAction::MidiTest { message } => {

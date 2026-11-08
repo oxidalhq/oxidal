@@ -1,6 +1,7 @@
 import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
+import { firstAfter, useLearnGate } from './midiLearn';
 import { useEffect, useRef, useState } from 'react';
 import { PlugsConnected, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
@@ -106,7 +107,8 @@ export function MidiControls({
     presetProgram?.key === presetKey ? presetProgram.program : null;
   // Consume a fresh external snapshot once; clearing the token prevents later
   // telemetry from changing the draft before the musician applies it.
-  const message = status?.last;
+  const message = learning ? firstAfter(status, learning.after) : status?.last;
+  useLearnGate(!!learning);
   if (
     learning &&
     !disabled &&

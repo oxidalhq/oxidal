@@ -832,9 +832,7 @@ impl Owner {
         let previous_events = self.state.midi.events;
         let status_changed = self.state.midi != status;
         self.state.midi = status;
-        if self.state.midi.events > previous_events
-            && let Some(message) = self.state.midi.last
-        {
+        for message in self.state.midi.unseen(previous_events) {
             let _ = self.midi_events.try_send(crate::midi_recall::Event {
                 message,
                 local_program: false,
@@ -1744,6 +1742,11 @@ impl Owner {
             }
             AudioAction::MidiTest { message } => {
                 self.midi(oxidal_audio::lifecycle::MidiOperation::Test { message })
+                    .await?;
+                return Ok(self.state.clone());
+            }
+            AudioAction::MidiLearn { on } => {
+                self.midi(oxidal_audio::lifecycle::MidiOperation::Learn { on })
                     .await?;
                 return Ok(self.state.clone());
             }

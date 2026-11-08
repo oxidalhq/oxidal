@@ -360,6 +360,9 @@ pub enum WorkerRequest {
     MidiTest {
         message: oxidal_audio::midi::Message,
     },
+    MidiLearn {
+        on: bool,
+    },
     Model {
         command: ModelCommand,
     },
@@ -471,6 +474,9 @@ pub enum RigAudioAction {
     },
     MidiTest {
         message: oxidal_audio::midi::Message,
+    },
+    MidiLearn {
+        on: bool,
     },
     Model {
         command: ModelCommand,

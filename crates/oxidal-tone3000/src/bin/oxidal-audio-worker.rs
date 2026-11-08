@@ -253,6 +253,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 None
                             }
                             oxidal_audio::lifecycle::MidiOperation::Poll => None,
+                            oxidal_audio::lifecycle::MidiOperation::Learn { on } => {
+                                midi.learn(on);
+                                None
+                            }
                             oxidal_audio::lifecycle::MidiOperation::Test { message } => {
                                 let blocked = models.pending()
                                     || authoring.measurement_pending()
