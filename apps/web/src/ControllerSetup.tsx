@@ -52,6 +52,8 @@ export function ControllerSetup({
   onChecking,
   onApply,
   onSaved,
+  canLearnNav,
+  onLearnNav,
 }: {
   map: MidiMap;
   nameOf: (entry: MidiMap['entries'][number]['entry']) => string;
@@ -63,7 +65,10 @@ export function ControllerSetup({
   onChecking: (on: boolean) => void;
   onApply: (content: ReturnType<typeof applyLayout>) => void;
   onSaved: (layouts: NonNullable<MidiMap['saved_layouts']>) => void;
+  canLearnNav: boolean;
+  onLearnNav: (key: 'previous' | 'next' | 'mute') => void;
 }) {
+  const [selected, setSelected] = useState('');
   const saved = map.saved_layouts ?? [];
   const [name, setName] = useState('');
   const [profileId, setProfileId] = useState('chocolate');
@@ -145,12 +150,59 @@ export function ControllerSetup({
               key={row.switch}
               data-received={sameMessage(row, last) || undefined}
             >
-              <span className="midi-switch-name">{row.switch}</span>
-              <span className="midi-switch-does">{row.does}</span>
-              <code>{row.sends}</code>
+              <button
+                type="button"
+                aria-pressed={selected === row.switch}
+                onClick={() =>
+                  setSelected(selected === row.switch ? '' : row.switch)
+                }
+              >
+                <span className="midi-switch-name">{row.switch}</span>
+                <span className="midi-switch-does">{row.does}</span>
+                <code>{row.sends}</code>
+              </button>
             </li>
           ))}
         </ol>
+        {(() => {
+          const row = layout.switches.find((r) => r.switch === selected);
+          if (!row) return null;
+          const key = (
+            {
+              'Previous preset': 'previous',
+              'Next preset': 'next',
+              'Mute output': 'mute',
+            } as const
+          )[row.does as 'Previous preset'];
+          return (
+            <div className="midi-switch-detail" aria-live="polite">
+              <p>
+                <strong>{row.switch}</strong> sends {row.sends} and runs{' '}
+                {row.does}.
+              </p>
+              {key ? (
+                <Button
+                  variant="outline"
+                  disabled={!canLearnNav}
+                  onClick={() => onLearnNav(key)}
+                >
+                  Learn another switch for {row.does}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    document
+                      .querySelector('.midi-preset-list')
+                      ?.scrollIntoView?.({ block: 'start' })
+                  }
+                >
+                  Show in mappings
+                </Button>
+              )}
+            </div>
+          );
+        })()}
         {isChocolate && (
           <p className="midi-switch-bank" role="note">
             E = A+B and F = C+D are the pedal’s own bank down/up (CC 2 and CC 3,

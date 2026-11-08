@@ -845,6 +845,13 @@ export function MidiMapScreen({
         onApply={(content) =>
           void replaceMap({ ...map, ...content }).catch(() => undefined)
         }
+        canLearnNav={
+          connected && !!map.input && !!status?.connected && !learning && !busy
+        }
+        onLearnNav={(key) => {
+          setLearning(null);
+          setNavLearning({ key, after: status?.events ?? 0 });
+        }}
         onSaved={(saved_layouts) =>
           void replaceMap({ ...map, saved_layouts }).catch(() => undefined)
         }

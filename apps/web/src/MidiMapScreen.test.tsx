@@ -553,3 +553,43 @@ it('saves, duplicates, applies and deletes a named layout', async () => {
     vi.mocked(updateMidiMap).mock.calls[2]![0].saved_layouts!.map((l) => l.id),
   ).toEqual(['stage-setup']);
 });
+
+it('opens the same editor from a switch in the controller view', async () => {
+  const user = userEvent.setup();
+  arrange();
+  const view = renderScreen();
+  const setup = await screen.findByRole('region', { name: 'Controller setup' });
+  await user.click(within(setup).getByRole('radio', { name: /Two presets/ }));
+  await user.click(
+    within(setup).getByRole('button', { name: /D.*Next preset/ }),
+  );
+  expect(setup).toHaveTextContent(
+    'D sends Program 4 (raw 3) and runs Next preset.',
+  );
+  await user.click(
+    within(setup).getByRole('button', {
+      name: 'Learn another switch for Next preset',
+    }),
+  );
+  // The device section is now listening for that same trigger.
+  expect(screen.getByText('Press the switch…')).toBeVisible();
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(1, { kind: 'program', channel: 2, program: 6 })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
+    next: { program: 6, controller: null },
+  });
+  // A preset switch has no device trigger: it points at the mappings instead.
+  await user.click(
+    within(setup).getByRole('button', { name: /A.*Set-list preset 1/ }),
+  );
+  expect(
+    within(setup).getByRole('button', { name: 'Show in mappings' }),
+  ).toBeVisible();
+});
