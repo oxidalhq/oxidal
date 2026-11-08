@@ -355,6 +355,21 @@ impl Settings {
             .map(|b| b.scene.as_str())
     }
 }
+/// Newest messages retained for ordered observation and passive learning.
+pub const RECENT_LIMIT: usize = 32;
+/// A learn window ends by itself so a vanished browser cannot leave footswitch
+/// control disabled.
+pub const LEARN_WINDOW: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// One received PC/CC message with its position in the input's event count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Observed {
+    /// Equals `Status::events` after this message; consecutive messages differ by one.
+    pub seq: u64,
+    pub message: Message,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
@@ -362,6 +377,61 @@ pub struct Status {
     pub events: u64,
     pub last: Option<Message>,
     pub error: Option<String>,
+    /// True while passive learning suppresses action dispatch.
+    #[serde(default)]
+    pub learning: bool,
+    /// Oldest first, at most [`RECENT_LIMIT`]. A gap after the last `seq` a
+    /// consumer processed means older events were overwritten; a lower `events`
+    /// count means the worker restarted.
+    #[serde(default)]
+    pub recent: Vec<Observed>,
+}
+impl Status {
+    /// Record a received message in arrival order.
+    pub fn observe(&mut self, message: Message) {
+        self.events = self.events.saturating_add(1);
+        self.last = Some(message);
+        if self.recent.len() >= RECENT_LIMIT {
+            self.recent.remove(0);
+        }
+        self.recent.push(Observed {
+            seq: self.events,
+            message,
+        });
+    }
+}
+
+/// Record every message, then dispatch it unless passive learning is active.
+/// Learning never reaches `receive`, so learning a switch cannot sound its
+/// existing assignment.
+/// @see docs/architecture.md
+pub fn deliver(
+    status: &mut Status,
+    settings: &Settings,
+    message: Message,
+    protected: bool,
+    receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
+) {
+    status.observe(message);
+    if status.learning {
+        return;
+    }
+    match dispatch_protected(settings, message, protected, receive) {
+        Ok(true) => status.error = None,
+        Ok(false) => {}
+        Err(error) => status.error = Some(error),
+    }
+}
+
+/// Deadline for an active learn window; returns whether learning is still on.
+pub fn learning_active(until: &mut Option<std::time::Instant>, now: std::time::Instant) -> bool {
+    match *until {
+        Some(deadline) if now < deadline => true,
+        _ => {
+            *until = None;
+            false
+        }
+    }
 }
 /// Unmapped wire events for passive learning and future transport consumers.
 /// These are not serialized commands: observing a note or clock never dispatches
@@ -649,6 +719,7 @@ pub struct Connection {
     pub status: Status,
     port: Option<Input>,
     retry: std::time::Instant,
+    learn_until: Option<std::time::Instant>,
 }
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 impl Connection {
@@ -659,7 +730,13 @@ impl Connection {
             status: Status::default(),
             port: None,
             retry: std::time::Instant::now() - std::time::Duration::from_secs(2),
+            learn_until: None,
         }
+    }
+    /// Start or cancel a passive learn window. Configuration changes cancel it.
+    pub fn learn(&mut self, on: bool) {
+        self.learn_until = on.then(|| std::time::Instant::now() + LEARN_WINDOW);
+        self.status.learning = on;
     }
     pub fn configure(&mut self, settings: Option<Settings>) {
         let protected = self.protected;
@@ -687,6 +764,7 @@ impl Connection {
         let Some(settings) = &self.settings else {
             return;
         };
+        self.status.learning = learning_active(&mut self.learn_until, std::time::Instant::now());
         if self.port.is_none() && self.retry.elapsed() >= std::time::Duration::from_secs(2) {
             self.retry = std::time::Instant::now();
             match Input::open(&settings.input) {
@@ -710,13 +788,13 @@ impl Connection {
             }) {
                 Ok(_) => {
                     for message in messages.into_iter().flatten() {
-                        self.status.events = self.status.events.saturating_add(1);
-                        self.status.last = Some(message);
-                        match dispatch_protected(settings, message, self.protected, &mut receive) {
-                            Ok(true) => self.status.error = None,
-                            Ok(false) => {}
-                            Err(error) => self.status.error = Some(error),
-                        }
+                        deliver(
+                            &mut self.status,
+                            settings,
+                            message,
+                            self.protected,
+                            &mut receive,
+                        );
                     }
                 }
                 Err(error) => {
@@ -1141,6 +1219,107 @@ mod tests {
                 },
             ]
         );
+    }
+
+    fn scene_settings() -> Settings {
+        Settings {
+            input: "hw:SINCO,0,0".into(),
+            channel: 1,
+            bindings: vec![Binding {
+                scene: "clean".into(),
+                program: Some(0),
+                controller: None,
+            }],
+            branch_bindings: vec![],
+            parameter_bindings: vec![],
+        }
+    }
+
+    #[test]
+    fn recent_log_keeps_arrival_order_and_a_detectable_gap_when_full() {
+        let mut status = Status::default();
+        for program in 0..(RECENT_LIMIT as u8 + 5) {
+            status.observe(Message::Program {
+                channel: 1,
+                program,
+            });
+        }
+        assert_eq!(status.events, RECENT_LIMIT as u64 + 5);
+        assert_eq!(status.recent.len(), RECENT_LIMIT);
+        assert_eq!(status.recent[0].seq, 6);
+        assert!(status.recent.windows(2).all(|w| w[1].seq == w[0].seq + 1));
+        assert_eq!(status.last, Some(status.recent[RECENT_LIMIT - 1].message));
+    }
+
+    #[test]
+    fn learning_records_every_message_but_never_dispatches() {
+        let settings = scene_settings();
+        let mut status = Status {
+            learning: true,
+            ..Status::default()
+        };
+        let mut dispatched = 0;
+        for program in [0, 0, 1] {
+            deliver(
+                &mut status,
+                &settings,
+                Message::Program {
+                    channel: 1,
+                    program,
+                },
+                false,
+                |_, _| {
+                    dispatched += 1;
+                    Ok(true)
+                },
+            );
+        }
+        assert_eq!(dispatched, 0);
+        // A repeated PC is a real second press, not a duplicate to drop.
+        assert_eq!(status.recent.len(), 3);
+        status.learning = false;
+        deliver(
+            &mut status,
+            &settings,
+            Message::Program {
+                channel: 1,
+                program: 0,
+            },
+            false,
+            |_, _| {
+                dispatched += 1;
+                Ok(true)
+            },
+        );
+        assert_eq!(dispatched, 1);
+        assert_eq!(status.recent.len(), 4);
+    }
+
+    #[test]
+    fn dispatch_errors_surface_and_success_clears_them() {
+        let settings = scene_settings();
+        let mut status = Status::default();
+        let message = Message::Program {
+            channel: 1,
+            program: 0,
+        };
+        deliver(&mut status, &settings, message, false, |_, _| {
+            Err("refused".into())
+        });
+        assert_eq!(status.error.as_deref(), Some("refused"));
+        deliver(&mut status, &settings, message, false, |_, _| Ok(true));
+        assert_eq!(status.error, None);
+    }
+
+    #[test]
+    fn learn_window_expires_on_its_own() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let mut until = Some(start + LEARN_WINDOW);
+        assert!(learning_active(&mut until, start + Duration::from_secs(1)));
+        assert!(!learning_active(&mut until, start + LEARN_WINDOW));
+        assert_eq!(until, None);
+        assert!(!learning_active(&mut None, start));
     }
 
     #[test]

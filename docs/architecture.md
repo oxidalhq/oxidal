@@ -51,6 +51,23 @@ learning, capability checks, disconnect cleanup and bounded action scheduling.
 This decoder foundation does not enable note mappings, hold actions, MIDI clock
 following or controller feedback in the current workers.
 
+### Ordered PC/CC observation and learning
+
+Every PC/CC message a worker receives is recorded in arrival order in the MIDI
+status: `events` counts messages, `last` is the newest and `recent` keeps up to
+32 entries, each with a sequence number equal to the count after it. A consumer
+that remembers the last sequence it processed can detect overwritten messages
+(a gap) or a worker restart (a lower count); a repeated Program Change is a
+second press, not a duplicate. The log is bounded and updated outside audio
+callbacks.
+
+Passive learning is a gate on dispatch: while `learning` is set, messages are
+recorded but never reach the action path, so learning a switch cannot sound its
+current assignment. A learn window ends after 30 seconds on its own and any
+configuration change cancels it, so a lost browser cannot leave footswitch
+control disabled. The worker operation and API route that start a learn window
+are not part of this change; the web learn flow still samples `last`.
+
 Source: [MIDI decoder and input](../crates/oxidal-audio/src/midi.rs), with wire
 message identifiers from the [MIDI Association](https://midi.org/summary-of-midi-1-0-messages).
 

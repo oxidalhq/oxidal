@@ -668,6 +668,18 @@ export function MidiMapScreen({
               The last incoming message appears here.
             </p>
           )}
+          {(status?.recent?.length ?? 0) > 1 && (
+            <ol className="midi-recent" aria-label="Recent MIDI messages">
+              {status!
+                .recent!.slice(-6, -1)
+                .reverse()
+                .map((item) => (
+                  <li key={item.seq}>
+                    Ch {item.message.channel} · {messageText(item.message)}
+                  </li>
+                ))}
+            </ol>
+          )}
           {status?.error && <p className="caption mt-1">{status.error}</p>}
         </div>
       </div>
@@ -799,9 +811,9 @@ export function MidiMapScreen({
         </div>
       </details>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(12rem,1fr)_auto_auto] sm:items-center">
+      <div className="midi-toolbar">
         {groups.length > 0 && (
-          <label className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[12rem]">
+          <label className="midi-search relative min-w-0">
             <MagnifyingGlass
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
               size={18}
@@ -819,7 +831,7 @@ export function MidiMapScreen({
         )}
         <Button
           variant="outline"
-          className="w-full sm:w-auto"
+          className="midi-toolbar-button"
           onClick={exportMap}
           disabled={busy || groups.length === 0}
         >
@@ -828,7 +840,7 @@ export function MidiMapScreen({
         </Button>
         <Button
           variant="outline"
-          className="w-full sm:w-auto"
+          className="midi-toolbar-button"
           onClick={() => fileInput.current?.click()}
           disabled={busy || !connected}
         >
@@ -935,8 +947,9 @@ export function MidiMapScreen({
               JSON.stringify(learning.row) === JSON.stringify(row);
             return (
               <Button
-                variant="ghost"
-                className="min-h-9 px-2 py-1"
+                variant={active ? 'secondary' : 'outline'}
+                className="midi-action"
+                aria-pressed={active ? true : undefined}
                 disabled={!canLearn}
                 onClick={() =>
                   setLearning(
@@ -958,7 +971,7 @@ export function MidiMapScreen({
           const testButton = (row: RowRef, label: string) => (
             <Button
               variant="outline"
-              className="min-h-9 px-2 py-1"
+              className="midi-action"
               disabled={busy || !connected}
               title={
                 row.kind !== 'preset' && !isCurrent
@@ -981,11 +994,12 @@ export function MidiMapScreen({
           ) => (
             <li
               key={id}
-              className={`grid gap-2 border-t border-border/70 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${conflict ? 'bg-destructive/5' : ''}`}
+              className="midi-row"
+              data-conflict={conflict ? 'true' : undefined}
             >
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{label}</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span className="midi-row-label">{label}</span>
                   {conflict && (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive">
                       <WarningCircle size={15} aria-hidden="true" /> Conflict
@@ -997,9 +1011,9 @@ export function MidiMapScreen({
                     </span>
                   )}
                 </div>
-                <p className="caption break-words">{detail}</p>
               </div>
-              <div className="flex flex-wrap gap-1 sm:justify-end">
+              <code className="midi-address">{detail}</code>
+              <div className="midi-actions">
                 {learnButton(row, label)}
                 {testButton(row, label)}
               </div>
@@ -1007,7 +1021,7 @@ export function MidiMapScreen({
           );
           return (
             <section key={keyOf(group.entry)} className="midi-preset-group">
-              <div className="flex flex-wrap items-start justify-between gap-2 px-3 py-3">
+              <div className="midi-group-head">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="m-0 text-base">{group.name}</h3>
@@ -1044,70 +1058,72 @@ export function MidiMapScreen({
                     </p>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {group.entry.kind === 'rig' && map.template && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        className="min-h-9 px-2 py-1"
-                        disabled={busy || !connected}
-                        onClick={() => {
-                          if (
-                            rowCount > 0 &&
-                            pendingTemplate !== keyOf(group.entry)
-                          ) {
-                            setPendingTemplate(keyOf(group.entry));
-                          } else {
-                            void applyTemplateToPreset(group.entry);
-                          }
-                        }}
-                      >
-                        <MagicWand size={16} aria-hidden="true" />{' '}
-                        {pendingTemplate === keyOf(group.entry)
-                          ? 'Replace mappings'
-                          : 'Apply template'}
-                      </Button>
-                      {pendingTemplate === keyOf(group.entry) && (
-                        <Button
-                          variant="ghost"
-                          className="min-h-9 px-2 py-1"
-                          onClick={() => setPendingTemplate('')}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {local &&
-                    rowCount > 0 &&
-                    (pendingClear === keyOf(group.entry) ? (
+                <div className="midi-actions">
+                  <div className="midi-tools">
+                    {group.entry.kind === 'rig' && map.template && (
                       <>
                         <Button
-                          variant="destructive"
-                          className="min-h-9 px-2 py-1"
+                          variant="ghost"
+                          className="midi-tool"
                           disabled={busy || !connected}
-                          onClick={() => void clearMappings(group.entry)}
+                          onClick={() => {
+                            if (
+                              rowCount > 0 &&
+                              pendingTemplate !== keyOf(group.entry)
+                            ) {
+                              setPendingTemplate(keyOf(group.entry));
+                            } else {
+                              void applyTemplateToPreset(group.entry);
+                            }
+                          }}
                         >
-                          Clear mappings
+                          <MagicWand size={16} aria-hidden="true" />{' '}
+                          {pendingTemplate === keyOf(group.entry)
+                            ? 'Replace mappings'
+                            : 'Apply template'}
                         </Button>
+                        {pendingTemplate === keyOf(group.entry) && (
+                          <Button
+                            variant="ghost"
+                            className="midi-tool"
+                            onClick={() => setPendingTemplate('')}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {local &&
+                      rowCount > 0 &&
+                      (pendingClear === keyOf(group.entry) ? (
+                        <>
+                          <Button
+                            variant="destructive"
+                            className="midi-tool"
+                            disabled={busy || !connected}
+                            onClick={() => void clearMappings(group.entry)}
+                          >
+                            Clear mappings
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            className="midi-tool"
+                            onClick={() => setPendingClear('')}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
                         <Button
                           variant="ghost"
-                          className="min-h-9 px-2 py-1"
-                          onClick={() => setPendingClear('')}
+                          className="midi-tool text-destructive"
+                          disabled={busy || !connected}
+                          onClick={() => setPendingClear(keyOf(group.entry))}
                         >
-                          Cancel
+                          <Trash size={16} aria-hidden="true" /> Clear
                         </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        className="min-h-9 px-2 py-1 text-destructive"
-                        disabled={busy || !connected}
-                        onClick={() => setPendingClear(keyOf(group.entry))}
-                      >
-                        <Trash size={16} aria-hidden="true" /> Clear
-                      </Button>
-                    ))}
+                      ))}
+                  </div>
                   {group.slot >= 0 && (
                     <>
                       {learnButton(

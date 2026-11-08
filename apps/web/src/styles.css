@@ -2851,6 +2851,116 @@ textarea {
   border-bottom: 0;
 }
 
+/* Toolbar: search takes the free space; Export and Import share one size and
+   stay right-aligned whether or not the search field is shown. */
+.midi-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.midi-search {
+  flex: 1 1 12rem;
+}
+.midi-toolbar-button {
+  flex: 0 0 auto;
+  min-width: 6.5rem;
+}
+
+/* A preset is a heading band; its mappings are indented rows with the address
+   in its own column so Learn and Test line up from row to row. */
+.midi-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.midi-group-head h3 {
+  font-weight: 650;
+}
+.midi-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.midi-tools {
+  display: contents;
+}
+.midi-action {
+  min-height: 2.25rem;
+  min-width: 5.25rem;
+  padding: 0.25rem 0.75rem;
+}
+.midi-tool {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+}
+.midi-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9.5rem auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem 0.5rem 1.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.midi-row[data-conflict='true'] {
+  background: color-mix(in srgb, var(--destructive) 6%, transparent);
+}
+.midi-row-label {
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+.midi-address {
+  font: var(--text-xs) var(--font-mono);
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.midi-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--text-xs) var(--font-mono);
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .midi-group-head,
+  .midi-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .midi-row {
+    padding-left: 1.25rem;
+  }
+  .midi-actions {
+    justify-content: flex-start;
+  }
+  .midi-tools {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+  }
+  .midi-tools:empty {
+    display: none;
+  }
+  .midi-actions > .midi-action {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+  .midi-search {
+    flex-basis: 100%;
+  }
+  .midi-toolbar-button {
+    flex: 1 1 calc(50% - 0.25rem);
+  }
+}
+
 @media (max-width: 600px) {
   .effect-pack-row {
     grid-template-columns: minmax(0, 1fr);

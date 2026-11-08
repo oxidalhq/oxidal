@@ -1172,6 +1172,26 @@ export interface Status {
   error?: string | null;
   events: number;
   last?: Message | null;
+  /**
+   * True while passive learning suppresses action dispatch.
+   */
+  learning?: boolean;
+  /**
+   * Oldest first, at most [`RECENT_LIMIT`]. A gap after the last `seq` a
+   * consumer processed means older events were overwritten; a lower `events`
+   * count means the worker restarted.
+   */
+  recent?: Observed[];
+}
+/**
+ * One received PC/CC message with its position in the input's event count.
+ */
+export interface Observed {
+  message: Message;
+  /**
+   * Equals `Status::events` after this message; consecutive messages differ by one.
+   */
+  seq: number;
 }
 export interface ModelProgress {
   assignment: ModelAssignment;
@@ -2294,6 +2314,16 @@ export interface Status1 {
   error?: string | null;
   events: number;
   last?: Message | null;
+  /**
+   * True while passive learning suppresses action dispatch.
+   */
+  learning?: boolean;
+  /**
+   * Oldest first, at most [`RECENT_LIMIT`]. A gap after the last `seq` a
+   * consumer processed means older events were overwritten; a lower `events`
+   * count means the worker restarted.
+   */
+  recent?: Observed[];
 }
 export interface NodeModelChange {
   node: string;

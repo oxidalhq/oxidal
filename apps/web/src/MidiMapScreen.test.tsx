@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -262,4 +263,29 @@ it('copies and preview-confirms clearing a preset map', async () => {
       expect.objectContaining({ entry: { kind: 'rig', id: id('a') } }),
     ]),
   );
+});
+
+it('lists the previous messages from the ordered input log, newest first', async () => {
+  arrange();
+  const mixed = rig(3, { kind: 'program', channel: 1, program: 2 });
+  (mixed.control!.midi as unknown as { recent: unknown }).recent = [
+    { seq: 1, message: { kind: 'program', channel: 1, program: 0 } },
+    { seq: 2, message: { kind: 'program', channel: 1, program: 1 } },
+    { seq: 3, message: { kind: 'program', channel: 1, program: 2 } },
+  ];
+  render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={mixed}
+      onMapApplied={vi.fn()}
+    />,
+  );
+  const recent = await screen.findByRole('list', {
+    name: 'Recent MIDI messages',
+  });
+  const items = within(recent).getAllByRole('listitem');
+  expect(items).toHaveLength(2);
+  expect(items[0]).toHaveTextContent('Program 2');
+  expect(items[1]).toHaveTextContent('Program 1');
 });

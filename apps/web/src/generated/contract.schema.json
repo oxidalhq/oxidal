@@ -1270,7 +1270,9 @@
             "connected": false,
             "error": null,
             "events": 0,
-            "last": null
+            "last": null,
+            "learning": false,
+            "recent": []
           }
         },
         "model_change": {
@@ -6413,6 +6415,26 @@
         "receipt"
       ]
     },
+    "Observed": {
+      "description": "One received PC/CC message with its position in the input's event count.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/Message"
+        },
+        "seq": {
+          "description": "Equals `Status::events` after this message; consecutive messages differ by one.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "message"
+      ]
+    },
     "Operation": {
       "type": "string",
       "enum": [
@@ -8978,7 +9000,9 @@
             "connected": false,
             "error": null,
             "events": 0,
-            "last": null
+            "last": null,
+            "learning": false,
+            "recent": []
           }
         },
         "model_change": {
@@ -9513,6 +9537,19 @@
               "type": "null"
             }
           ]
+        },
+        "learning": {
+          "description": "True while passive learning suppresses action dispatch.",
+          "type": "boolean",
+          "default": false
+        },
+        "recent": {
+          "description": "Oldest first, at most [`RECENT_LIMIT`]. A gap after the last `seq` a\nconsumer processed means older events were overwritten; a lower `events`\ncount means the worker restarted.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Observed"
+          }
         }
       },
       "additionalProperties": false,
