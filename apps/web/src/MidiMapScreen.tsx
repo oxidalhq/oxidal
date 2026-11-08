@@ -72,6 +72,38 @@ type ImportFile = {
   entries: MidiMap['entries'];
 };
 
+type Disabled = NonNullable<MapEntry['disabled']>[number];
+/** An assignment is named by its trigger, which is unique inside a preset. */
+function identity(entry: MapEntry, row: RowRef): Disabled | null {
+  if (row.kind === 'scene') {
+    const b = entry.bindings[row.index];
+    return b
+      ? {
+          kind: 'scene',
+          program: b.program ?? null,
+          controller: b.controller ?? null,
+        }
+      : null;
+  }
+  if (row.kind === 'branch') {
+    const b = entry.branch_bindings[row.index];
+    return b
+      ? { kind: 'branch', program: null, controller: b.controller }
+      : null;
+  }
+  if (row.kind === 'parameter') {
+    const b = entry.parameter_bindings[row.index];
+    return b
+      ? { kind: 'parameter', program: null, controller: b.controller }
+      : null;
+  }
+  return null;
+}
+const sameIdentity = (a: Disabled, b: Disabled) =>
+  a.kind === b.kind &&
+  (a.program ?? null) === (b.program ?? null) &&
+  (a.controller ?? null) === (b.controller ?? null);
+
 const keyOf = (entry: EntryRef) => `${entry.kind}:${entry.id}`;
 const sameEntry = (a: EntryRef | null, b: EntryRef) =>
   a?.kind === b.kind && a.id === b.id;
@@ -458,7 +490,9 @@ export function MidiMapScreen({
       return;
     }
     const row = learn.row;
-    const entries = map.entries.map((entry) => {
+    const before = map.entries.find((e) => sameEntry(e.entry, learn.entry));
+    const old = before ? identity(before, row) : null;
+    const learned = map.entries.map((entry) => {
       if (!sameEntry(entry.entry, learn.entry)) return entry;
       if (row.kind === 'scene') {
         const selected = row.index;
@@ -501,6 +535,20 @@ export function MidiMapScreen({
         ),
       };
     });
+    // Learning a switch means it should work: it is switched back on under its
+    // new number rather than leaving a marker for the old one.
+    const entries = old
+      ? learned.map((e) =>
+          sameEntry(e.entry, learn.entry)
+            ? {
+                ...e,
+                disabled: (e.disabled ?? []).filter(
+                  (d) => !sameIdentity(d, old),
+                ),
+              }
+            : e,
+        )
+      : learned;
     await replaceMap({ ...map, entries });
   }
 
@@ -1157,11 +1205,11 @@ export function MidiMapScreen({
               </Button>
             );
           };
-          const testButton = (row: RowRef, label: string) => (
+          const testButton = (row: RowRef, label: string, off = false) => (
             <Button
               variant="outline"
               className="midi-action"
-              disabled={busy || !connected}
+              disabled={busy || !connected || off}
               title={
                 row.kind !== 'preset' && !isCurrent
                   ? 'Recalls this preset, then runs its mapped action'
@@ -1180,34 +1228,73 @@ export function MidiMapScreen({
             row: RowRef,
             conflict = false,
             shared = false,
-          ) => (
-            <li
-              key={id}
-              className="midi-row"
-              data-conflict={conflict ? 'true' : undefined}
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="midi-row-label">{label}</span>
-                  {conflict && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive">
-                      <WarningCircle size={15} aria-hidden="true" /> Conflict
-                    </span>
-                  )}
-                  {shared && !conflict && (
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      Shared number
-                    </span>
-                  )}
+          ) => {
+            const ident = local ? identity(local, row) : null;
+            const off =
+              !!ident && !!local?.disabled?.some((d) => sameIdentity(d, ident));
+            const toggle = () => {
+              if (!ident) return;
+              void replaceMap({
+                ...map,
+                entries: map.entries.map((e) =>
+                  sameEntry(e.entry, group.entry)
+                    ? {
+                        ...e,
+                        disabled: off
+                          ? (e.disabled ?? []).filter(
+                              (d) => !sameIdentity(d, ident),
+                            )
+                          : [...(e.disabled ?? []), ident],
+                      }
+                    : e,
+                ),
+              }).catch(() => undefined);
+            };
+            return (
+              <li
+                key={id}
+                className="midi-row"
+                data-conflict={conflict ? 'true' : undefined}
+                data-off={off ? 'true' : undefined}
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="midi-row-label">{label}</span>
+                    {off && (
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Disabled
+                      </span>
+                    )}
+                    {conflict && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-destructive">
+                        <WarningCircle size={15} aria-hidden="true" /> Conflict
+                      </span>
+                    )}
+                    {shared && !conflict && (
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Shared number
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <code className="midi-address">{detail}</code>
-              <div className="midi-actions">
-                {learnButton(row, label)}
-                {testButton(row, label)}
-              </div>
-            </li>
-          );
+                <code className="midi-address">{detail}</code>
+                <div className="midi-actions">
+                  {learnButton(row, label)}
+                  {testButton(row, label, off)}
+                  <Button
+                    variant="outline"
+                    className="midi-action"
+                    disabled={busy || !connected || !ident}
+                    aria-pressed={off}
+                    onClick={toggle}
+                  >
+                    {off ? 'Enable' : 'Disable'}
+                    <span className="sr-only"> {label}</span>
+                  </Button>
+                </div>
+              </li>
+            );
+          };
           return (
             <section key={keyOf(group.entry)} className="midi-preset-group">
               <div className="midi-group-head">

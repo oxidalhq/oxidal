@@ -477,6 +477,10 @@ export type LibraryAction =
       before?: LibraryReference | null;
       kind: "place";
     };
+/**
+ * Which kind of preset assignment a [`Disabled`] marker refers to.
+ */
+export type AssignmentKind = "scene" | "branch" | "parameter";
 export type MidiDirection = "previous" | "next";
 export type EditorAction =
   | {
@@ -1879,8 +1883,21 @@ export interface MidiMap {
 export interface MidiMapEntry {
   bindings: Binding2[];
   branch_bindings: BranchBinding[];
+  /**
+   * Assignments kept but switched off; they do nothing until enabled.
+   */
+  disabled?: Disabled[];
   entry: LibraryReference;
   parameter_bindings: ParameterBinding[];
+}
+/**
+ * An assignment kept in the map but switched off. Identified by its trigger, which
+ * is unique inside a preset. A disabled Program no longer overrides set-list recall.
+ */
+export interface Disabled {
+  controller?: number | null;
+  kind: AssignmentKind;
+  program?: number | null;
 }
 /**
  * Device-wide preset navigation through the current Mine set-list. They sit

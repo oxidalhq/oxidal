@@ -475,3 +475,30 @@ it('learns a Mute trigger and shows it beside Previous and Next', async () => {
   });
   expect(await screen.findByText('CC 22 · press')).toBeVisible();
 });
+
+it('disables an assignment without losing it and enables it again', async () => {
+  const user = userEvent.setup();
+  arrange();
+  renderScreen();
+  await user.click(
+    await screen.findByRole('button', { name: /Disable.*Scene · Lead/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  const sent = vi.mocked(updateMidiMap).mock.calls[0]![0].entries[0]!;
+  expect(sent.bindings).toHaveLength(1);
+  expect(sent.disabled).toEqual([
+    { kind: 'scene', program: 0, controller: null },
+  ]);
+  // The row stays, marked off, and cannot be tested while it does nothing.
+  expect(await screen.findByText('Disabled')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: /Test.*Scene · Lead/ }),
+  ).toBeDisabled();
+  await user.click(
+    screen.getByRole('button', { name: /Enable.*Scene · Lead/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  expect(
+    vi.mocked(updateMidiMap).mock.calls[1]![0].entries[0]!.disabled,
+  ).toEqual([]);
+});

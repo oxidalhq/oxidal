@@ -733,6 +733,15 @@
         "cached"
       ]
     },
+    "AssignmentKind": {
+      "description": "Which kind of preset assignment a [`Disabled`] marker refers to.",
+      "type": "string",
+      "enum": [
+        "scene",
+        "branch",
+        "parameter"
+      ]
+    },
     "AudioAction": {
       "oneOf": [
         {
@@ -3060,6 +3069,37 @@
       "enum": [
         "capture",
         "playback"
+      ]
+    },
+    "Disabled": {
+      "description": "An assignment kept in the map but switched off. Identified by its trigger, which\nis unique inside a preset. A disabled Program no longer overrides set-list recall.",
+      "type": "object",
+      "properties": {
+        "controller": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/AssignmentKind"
+        },
+        "program": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "kind"
       ]
     },
     "DraftScene": {
@@ -5576,6 +5616,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/BranchBinding"
+          }
+        },
+        "disabled": {
+          "description": "Assignments kept but switched off; they do nothing until enabled.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Disabled"
           }
         },
         "entry": {

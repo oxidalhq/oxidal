@@ -16,16 +16,61 @@ use std::{
 const LIMIT: u64 = 16 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+/// Which kind of preset assignment a [`Disabled`] marker refers to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AssignmentKind {
+    Scene,
+    Branch,
+    Parameter,
+}
+
+/// An assignment kept in the map but switched off. Identified by its trigger, which
+/// is unique inside a preset. A disabled Program no longer overrides set-list recall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Disabled {
+    pub kind: AssignmentKind,
+    pub program: Option<u8>,
+    pub controller: Option<u8>,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PresetMap {
     bindings: Vec<Binding>,
     branch_bindings: Vec<BranchBinding>,
     parameter_bindings: Vec<ParameterBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    disabled: Vec<Disabled>,
 }
 
 impl PresetMap {
+    fn off(&self, kind: AssignmentKind, program: Option<u8>, controller: Option<u8>) -> bool {
+        self.disabled.contains(&Disabled {
+            kind,
+            program,
+            controller,
+        })
+    }
+
+    /// What the worker runs: disabled assignments are left out.
     fn settings(&self, input: String, channel: u8) -> Settings {
+        let mut settings = self.full(input, channel);
+        settings
+            .bindings
+            .retain(|b| !self.off(AssignmentKind::Scene, b.program, b.controller));
+        settings
+            .branch_bindings
+            .retain(|b| !self.off(AssignmentKind::Branch, None, Some(b.controller)));
+        settings
+            .parameter_bindings
+            .retain(|b| !self.off(AssignmentKind::Parameter, None, Some(b.controller)));
+        settings
+    }
+
+    /// Every stored assignment, used for validation and collision checks.
+    fn full(&self, input: String, channel: u8) -> Settings {
         Settings {
             input,
             channel,
@@ -35,11 +80,93 @@ impl PresetMap {
         }
     }
 
+    /// Each marker must name a stored assignment, once.
+    fn disabled_valid(&self) -> bool {
+        self.disabled.iter().enumerate().all(|(i, d)| {
+            !self.disabled[..i].contains(d)
+                && match d.kind {
+                    AssignmentKind::Scene => self
+                        .bindings
+                        .iter()
+                        .any(|b| b.program == d.program && b.controller == d.controller),
+                    AssignmentKind::Branch => {
+                        d.program.is_none()
+                            && self
+                                .branch_bindings
+                                .iter()
+                                .any(|b| Some(b.controller) == d.controller)
+                    }
+                    AssignmentKind::Parameter => {
+                        d.program.is_none()
+                            && self
+                                .parameter_bindings
+                                .iter()
+                                .any(|b| Some(b.controller) == d.controller)
+                    }
+                }
+        })
+    }
+
     fn from_settings(settings: &Settings) -> Self {
         Self {
             bindings: settings.bindings.clone(),
             branch_bindings: settings.branch_bindings.clone(),
             parameter_bindings: settings.parameter_bindings.clone(),
+            disabled: vec![],
+        }
+    }
+
+    /// A save from the scene editor carries only active assignments. Keep what was
+    /// switched off, unless the editor now uses the same trigger for something else.
+    fn keep_disabled_from(&mut self, old: &PresetMap) {
+        for d in &old.disabled {
+            match d.kind {
+                AssignmentKind::Scene => {
+                    let free = !self
+                        .bindings
+                        .iter()
+                        .any(|b| b.program == d.program && b.controller == d.controller);
+                    if let (true, Some(b)) = (
+                        free,
+                        old.bindings
+                            .iter()
+                            .find(|b| b.program == d.program && b.controller == d.controller),
+                    ) {
+                        self.bindings.push(b.clone());
+                        self.disabled.push(*d);
+                    }
+                }
+                AssignmentKind::Branch => {
+                    let free = !self
+                        .branch_bindings
+                        .iter()
+                        .any(|b| Some(b.controller) == d.controller);
+                    if let (true, Some(b)) = (
+                        free,
+                        old.branch_bindings
+                            .iter()
+                            .find(|b| Some(b.controller) == d.controller),
+                    ) {
+                        self.branch_bindings.push(b.clone());
+                        self.disabled.push(*d);
+                    }
+                }
+                AssignmentKind::Parameter => {
+                    let free = !self
+                        .parameter_bindings
+                        .iter()
+                        .any(|b| Some(b.controller) == d.controller);
+                    if let (true, Some(b)) = (
+                        free,
+                        old.parameter_bindings
+                            .iter()
+                            .find(|b| Some(b.controller) == d.controller),
+                    ) {
+                        self.parameter_bindings.push(b.clone());
+                        self.disabled.push(*d);
+                    }
+                }
+            }
         }
     }
 
@@ -217,6 +344,9 @@ pub struct MidiMapEntry {
     pub bindings: Vec<Binding>,
     pub branch_bindings: Vec<BranchBinding>,
     pub parameter_bindings: Vec<ParameterBinding>,
+    /// Assignments kept but switched off; they do nothing until enabled.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled: Vec<Disabled>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -390,6 +520,7 @@ impl MidiMapStore {
                     bindings: mapping.bindings,
                     branch_bindings: mapping.branch_bindings,
                     parameter_bindings: mapping.parameter_bindings,
+                    disabled: mapping.disabled,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -472,7 +603,10 @@ impl MidiMapStore {
         let mut book = self.read()?;
         book.input = Some(settings.input.clone());
         book.channel = settings.channel;
-        let mapping = PresetMap::from_settings(&settings);
+        let mut mapping = PresetMap::from_settings(&settings);
+        if let Some(old) = book.entries.get(&key) {
+            mapping.keep_disabled_from(old);
+        }
         if mapping.empty() {
             book.entries.remove(&key);
         } else {
@@ -501,16 +635,20 @@ impl MidiMapStore {
                 bindings: entry.bindings,
                 branch_bindings: entry.branch_bindings,
                 parameter_bindings: entry.parameter_bindings,
+                disabled: entry.disabled,
             };
             if mapping.empty() {
                 continue;
+            }
+            if !mapping.disabled_valid() {
+                return Err(Error::Invalid("A disabled MIDI assignment does not exist"));
             }
             let input = update
                 .input
                 .clone()
                 .unwrap_or_else(|| "hw:Stored,0,0".into());
             mapping
-                .settings(input, update.channel)
+                .full(input, update.channel)
                 .validate()
                 .map_err(|_| Error::Invalid("Invalid stored MIDI mapping"))?;
             if entries.insert(key, mapping).is_some() {
@@ -560,6 +698,7 @@ impl MidiMapStore {
             return Err(Error::Invalid("Invalid MIDI template scene list"));
         }
         Ok(PresetMap {
+            disabled: vec![],
             bindings: scenes
                 .iter()
                 .take(usize::from(template.scene_buttons))
@@ -782,6 +921,7 @@ mod tests {
         }
         // A scene binding on the Previous Program would run two actions: refused.
         let overlapping = vec![MidiMapEntry {
+            disabled: vec![],
             entry: entry('a'),
             bindings: settings(2).bindings,
             branch_bindings: vec![],
@@ -820,6 +960,76 @@ mod tests {
     }
 
     #[test]
+    fn a_disabled_assignment_is_kept_but_not_run_and_survives_a_scene_editor_save() {
+        let root = root("disabled");
+        let store = MidiMapStore::new(root);
+        let initial = store.snapshot().unwrap();
+        let both = Settings {
+            bindings: vec![
+                Binding {
+                    scene: "clean".into(),
+                    program: Some(5),
+                    controller: None,
+                },
+                Binding {
+                    scene: "lead".into(),
+                    program: None,
+                    controller: Some(41),
+                },
+            ],
+            ..settings(5)
+        };
+        let off = Disabled {
+            kind: AssignmentKind::Scene,
+            program: Some(5),
+            controller: None,
+        };
+        let update = |disabled: Vec<Disabled>, revision: &str| MidiMapUpdate {
+            navigation: Navigation::default(),
+            expected_revision: revision.into(),
+            input: Some("hw:Controller,0,0".into()),
+            channel: 2,
+            template: None,
+            entries: vec![MidiMapEntry {
+                disabled,
+                entry: entry('a'),
+                bindings: both.bindings.clone(),
+                branch_bindings: vec![],
+                parameter_bindings: vec![],
+            }],
+        };
+        // A marker naming an assignment that is not stored is refused.
+        let bogus = Disabled {
+            controller: Some(99),
+            ..off
+        };
+        assert!(matches!(
+            store.replace(update(vec![bogus], &initial.revision)),
+            Err(Error::Invalid(_))
+        ));
+        let saved = store.replace(update(vec![off], &initial.revision)).unwrap();
+        // The map still lists both assignments and marks one off...
+        assert_eq!(saved.entries[0].bindings.len(), 2);
+        assert_eq!(saved.entries[0].disabled, vec![off]);
+        // ...but the worker's settings only run the other one, so Program 5 falls
+        // back to set-list recall instead of being swallowed by a dead assignment.
+        let running = store.settings(Some(&entry('a'))).unwrap().unwrap();
+        assert_eq!(running.bindings.len(), 1);
+        assert_eq!(running.bindings[0].scene, "lead");
+        // The scene editor saves what it was given (active only): the disabled
+        // assignment must not be lost.
+        store.configure(entry('a'), running).unwrap();
+        let after = store.snapshot().unwrap();
+        assert_eq!(after.entries[0].bindings.len(), 2);
+        assert_eq!(after.entries[0].disabled, vec![off]);
+        // Enabling it again makes it run.
+        let enabled = store.replace(update(vec![], &after.revision)).unwrap();
+        assert!(enabled.entries[0].disabled.is_empty());
+        let running = store.settings(Some(&entry('a'))).unwrap().unwrap();
+        assert_eq!(running.bindings.len(), 2);
+    }
+
+    #[test]
     fn whole_map_replace_is_validated_and_revision_bound() {
         let root = root("replace");
         let store = MidiMapStore::new(root.clone());
@@ -832,6 +1042,7 @@ mod tests {
                 channel: 3,
                 template: None,
                 entries: vec![MidiMapEntry {
+                    disabled: vec![],
                     entry: entry('a'),
                     bindings: settings(11).bindings,
                     branch_bindings: vec![],
@@ -861,12 +1072,14 @@ mod tests {
             template: None,
             entries: vec![
                 MidiMapEntry {
+                    disabled: vec![],
                     entry: entry('b'),
                     bindings: settings(1).bindings,
                     branch_bindings: vec![],
                     parameter_bindings: vec![],
                 },
                 MidiMapEntry {
+                    disabled: vec![],
                     entry: entry('b'),
                     bindings: settings(2).bindings,
                     branch_bindings: vec![],
