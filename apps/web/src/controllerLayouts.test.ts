@@ -72,3 +72,35 @@ it('passes the message check only for the expected press, not a release', () => 
   expect(checkPassed(presets, [{ kind: 'program', program: 1 }])).toBe(false);
   expect(checkPassed(presets, [{ kind: 'program', program: 0 }])).toBe(true);
 });
+
+it('saves the current template and triggers under a unique readable id', async () => {
+  const { layoutFromCurrent, savedToLayout, describeSaved } =
+    await import('./controllerLayouts');
+  const current = {
+    template: { scene_buttons: 2 as const, first_controller: 40 },
+    navigation: { next: { program: 3, controller: null } },
+  };
+  const first = layoutFromCurrent(current, 'chocolate', 'Stage Setup!', []);
+  expect(first.id).toBe('stage-setup');
+  expect(first.name).toBe('Stage Setup!');
+  expect(
+    layoutFromCurrent(current, 'chocolate', 'Stage Setup', ['stage-setup']).id,
+  ).toBe('stage-setup-2');
+  expect(layoutFromCurrent({}, 'generic', '???', []).id).toBe('layout');
+  expect(describeSaved(first)).toBe(
+    '2 scene buttons · CC 40–41 · Next Program 4',
+  );
+  // Applying a saved layout replaces all three triggers, so a missing one clears.
+  const applied = applyLayout(
+    {
+      template: undefined,
+      navigation: { mute: { program: null, controller: 9 } },
+    },
+    savedToLayout(first),
+  );
+  expect(applied.navigation).toEqual({
+    previous: null,
+    next: { program: 3, controller: null },
+    mute: null,
+  });
+});

@@ -11,7 +11,9 @@ import {
   applyLayout,
   checkPassed,
   layoutConflicts,
+  layoutFromCurrent,
   profiles,
+  savedToLayout,
   type Layout,
   type SwitchRow,
 } from './controllerLayouts';
@@ -49,6 +51,7 @@ export function ControllerSetup({
   busy,
   onChecking,
   onApply,
+  onSaved,
 }: {
   map: MidiMap;
   nameOf: (entry: MidiMap['entries'][number]['entry']) => string;
@@ -59,7 +62,10 @@ export function ControllerSetup({
   busy: boolean;
   onChecking: (on: boolean) => void;
   onApply: (content: ReturnType<typeof applyLayout>) => void;
+  onSaved: (layouts: NonNullable<MidiMap['saved_layouts']>) => void;
 }) {
+  const saved = map.saved_layouts ?? [];
+  const [name, setName] = useState('');
   const [profileId, setProfileId] = useState('chocolate');
   const profile = profiles.find((p) => p.id === profileId) ?? profiles[0]!;
   const [layoutId, setLayoutId] = useState<Record<string, string>>({});
@@ -175,6 +181,125 @@ export function ControllerSetup({
           >
             Save layout
           </Button>
+        </div>
+        <div className="midi-saved" role="group" aria-label="Saved layouts">
+          <h4 className="m-0 text-sm">Saved layouts</h4>
+          <div className="midi-saved-new">
+            <label className="field min-w-0">
+              Layout name
+              <input
+                value={name}
+                maxLength={48}
+                placeholder="Stage setup"
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <Button
+              variant="outline"
+              disabled={busy || !name.trim() || saved.length >= 32}
+              onClick={() => {
+                onSaved([
+                  ...saved,
+                  layoutFromCurrent(
+                    map,
+                    profile.id,
+                    name,
+                    saved.map((item) => item.id),
+                  ),
+                ]);
+                setName('');
+              }}
+            >
+              Save current as layout
+            </Button>
+          </div>
+          {saved.length === 0 ? (
+            <p className="caption">
+              Save the template and triggers you have now to reuse or share
+              them. Export keeps saved layouts.
+            </p>
+          ) : (
+            <ul className="midi-saved-list">
+              {saved.map((item) => {
+                const asLayout = savedToLayout(item);
+                const clash = layoutConflicts(map, asLayout, nameOf);
+                return (
+                  <li key={item.id}>
+                    <div className="min-w-0">
+                      <strong>{item.name}</strong>
+                      <small>{asLayout.summary}</small>
+                      {clash.length > 0 && (
+                        <small role="alert" className="midi-setup-conflict">
+                          Already used by a preset mapping: {clash.join(', ')}
+                        </small>
+                      )}
+                    </div>
+                    <div className="midi-actions">
+                      <Button
+                        variant="outline"
+                        className="midi-tool"
+                        disabled={busy || clash.length > 0}
+                        onClick={() => onApply(applyLayout(map, asLayout))}
+                      >
+                        Apply <span className="sr-only">{item.name}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="midi-tool"
+                        disabled={busy}
+                        title="Replace with the current template and triggers"
+                        onClick={() =>
+                          onSaved(
+                            saved.map((s) =>
+                              s.id === item.id
+                                ? {
+                                    ...layoutFromCurrent(
+                                      map,
+                                      s.profile,
+                                      s.name,
+                                      [],
+                                    ),
+                                    id: s.id,
+                                  }
+                                : s,
+                            ),
+                          )
+                        }
+                      >
+                        Update <span className="sr-only">{item.name}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="midi-tool"
+                        disabled={busy || saved.length >= 32}
+                        onClick={() => {
+                          const { id, name: copyName } = layoutFromCurrent(
+                            {},
+                            item.profile,
+                            `Copy of ${item.name}`,
+                            saved.map((s) => s.id),
+                          );
+                          onSaved([...saved, { ...item, id, name: copyName }]);
+                        }}
+                      >
+                        Duplicate <span className="sr-only">{item.name}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="midi-tool text-destructive"
+                        disabled={busy}
+                        onClick={() =>
+                          onSaved(saved.filter((s) => s.id !== item.id))
+                        }
+                      >
+                        Delete <span className="sr-only">{item.name}</span>
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
         {checking && (
           <p className="caption" role="status">

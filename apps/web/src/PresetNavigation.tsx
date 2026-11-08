@@ -69,8 +69,8 @@ export function PresetNavigation({
                   disabled={!active && (!canLearn || busy)}
                   onClick={() => onLearn(active ? null : key)}
                 >
-                  {active ? 'Cancel' : 'Learn'}
-                  <span className="sr-only"> {label}</span>
+                  {active ? 'Cancel' : 'Learn'}{' '}
+                  <span className="sr-only">{label}</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -78,7 +78,7 @@ export function PresetNavigation({
                   disabled={!assigned || busy}
                   onClick={() => onClear(key)}
                 >
-                  Clear<span className="sr-only"> {label}</span>
+                  Clear <span className="sr-only">{label}</span>
                 </Button>
               </div>
             </li>

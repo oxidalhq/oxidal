@@ -106,6 +106,7 @@ function arrange() {
     channel: update.channel,
     template: update.template,
     navigation: update.navigation,
+    saved_layouts: update.saved_layouts,
     entries: update.entries,
   }));
   vi.mocked(applyMidiTemplate).mockResolvedValue({
@@ -501,4 +502,54 @@ it('disables an assignment without losing it and enables it again', async () => 
   expect(
     vi.mocked(updateMidiMap).mock.calls[1]![0].entries[0]!.disabled,
   ).toEqual([]);
+});
+
+it('saves, duplicates, applies and deletes a named layout', async () => {
+  const user = userEvent.setup();
+  arrange();
+  vi.mocked(midiMap).mockResolvedValue({
+    ...map,
+    template: { scene_buttons: 4, first_controller: 40 },
+    navigation: { next: { program: 3, controller: null } },
+  });
+  renderScreen();
+  const setup = await screen.findByRole('region', { name: 'Controller setup' });
+  await user.type(within(setup).getByLabelText('Layout name'), 'Stage Setup');
+  await user.click(
+    within(setup).getByRole('button', { name: 'Save current as layout' }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  const saved = vi.mocked(updateMidiMap).mock.calls[0]![0].saved_layouts!;
+  expect(saved).toEqual([
+    {
+      id: 'stage-setup',
+      name: 'Stage Setup',
+      profile: 'chocolate',
+      template: { scene_buttons: 4, first_controller: 40 },
+      navigation: { next: { program: 3, controller: null } },
+    },
+  ]);
+  expect(
+    await within(setup).findByText('Stage Setup', { selector: 'strong' }),
+  ).toBeVisible();
+  expect(setup).toHaveTextContent(
+    '4 scene buttons · CC 40–43 · Next Program 4',
+  );
+  await user.click(
+    within(setup).getByRole('button', { name: /Duplicate Stage Setup/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  const two = vi.mocked(updateMidiMap).mock.calls[1]![0].saved_layouts!;
+  expect(two.map((l) => [l.id, l.name])).toEqual([
+    ['stage-setup', 'Stage Setup'],
+    ['copy-of-stage-setup', 'Copy of Stage Setup'],
+  ]);
+  expect(two[1]!.navigation).toEqual(two[0]!.navigation);
+  await user.click(
+    within(setup).getByRole('button', { name: /Delete Copy of Stage Setup/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(3));
+  expect(
+    vi.mocked(updateMidiMap).mock.calls[2]![0].saved_layouts!.map((l) => l.id),
+  ).toEqual(['stage-setup']);
 });

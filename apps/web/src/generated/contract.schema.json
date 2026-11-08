@@ -5585,6 +5585,12 @@
         "revision": {
           "type": "string"
         },
+        "saved_layouts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavedLayout"
+          }
+        },
         "template": {
           "anyOf": [
             {
@@ -5670,6 +5676,12 @@
         },
         "navigation": {
           "$ref": "#/$defs/Navigation"
+        },
+        "saved_layouts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavedLayout"
+          }
         },
         "template": {
           "anyOf": [
@@ -8728,6 +8740,41 @@
       "required": [
         "id",
         "preset"
+      ]
+    },
+    "SavedLayout": {
+      "description": "A named starting layout the owner saved: the scene template and device-wide\ntriggers to apply together. It never contains preset mappings or device identity.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "navigation": {
+          "$ref": "#/$defs/Navigation"
+        },
+        "profile": {
+          "description": "The controller profile it was made from, for display only.",
+          "type": "string"
+        },
+        "template": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MidiTemplate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "profile"
       ]
     },
     "SavedNetwork": {

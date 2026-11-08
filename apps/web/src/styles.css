@@ -4055,3 +4055,40 @@ textarea {
 .midi-row {
   grid-template-columns: minmax(0, 1fr) 9.5rem auto;
 }
+
+.midi-saved {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.midi-saved-new {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+.midi-saved-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.midi-saved-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.midi-saved-list small {
+  display: block;
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .midi-saved-new,
+  .midi-saved-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

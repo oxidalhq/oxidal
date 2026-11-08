@@ -60,7 +60,7 @@ type Learning = {
 };
 type MapContent = Pick<
   MidiMap,
-  'input' | 'channel' | 'template' | 'navigation' | 'entries'
+  'input' | 'channel' | 'template' | 'navigation' | 'saved_layouts' | 'entries'
 >;
 type ImportFile = {
   format: 'oxidal-midi-map';
@@ -69,6 +69,7 @@ type ImportFile = {
   channel: number;
   template?: MidiMap['template'];
   navigation?: MidiMap['navigation'];
+  saved_layouts?: MidiMap['saved_layouts'];
   entries: MidiMap['entries'];
 };
 
@@ -254,6 +255,7 @@ export function MidiMapScreen({
         channel: content.channel,
         template: content.template,
         navigation: content.navigation,
+        saved_layouts: content.saved_layouts,
         entries: content.entries,
       });
       if (remember) {
@@ -264,6 +266,7 @@ export function MidiMapScreen({
             channel: map.channel,
             template: map.template,
             navigation: map.navigation,
+            saved_layouts: map.saved_layouts,
             entries: map.entries,
           },
         ];
@@ -681,6 +684,7 @@ export function MidiMapScreen({
       channel: map.channel,
       template: map.template ?? null,
       navigation: map.navigation,
+      saved_layouts: map.saved_layouts,
       entries: map.entries,
     };
     const url = URL.createObjectURL(
@@ -840,6 +844,9 @@ export function MidiMapScreen({
         onChecking={setChecking}
         onApply={(content) =>
           void replaceMap({ ...map, ...content }).catch(() => undefined)
+        }
+        onSaved={(saved_layouts) =>
+          void replaceMap({ ...map, saved_layouts }).catch(() => undefined)
         }
       />
 
@@ -1288,8 +1295,8 @@ export function MidiMapScreen({
                     aria-pressed={off}
                     onClick={toggle}
                   >
-                    {off ? 'Enable' : 'Disable'}
-                    <span className="sr-only"> {label}</span>
+                    {off ? 'Enable' : 'Disable'}{' '}
+                    <span className="sr-only">{label}</span>
                   </Button>
                 </div>
               </li>

@@ -18,8 +18,12 @@ export type Layout = {
   summary: string;
   /** Scene-button template to save; `keep` leaves the current one alone. */
   template: Template | 'keep';
-  /** Previous/Next triggers to save; null leaves them alone. */
-  navigation: { previous: Trigger; next: Trigger } | null;
+  /** Triggers to save; a null entry clears it, a missing one leaves it alone. */
+  navigation: {
+    previous?: Trigger | null;
+    next?: Trigger | null;
+    mute?: Trigger | null;
+  } | null;
   switches: SwitchRow[];
   /** A message to press and expect, used by the passive message check. */
   check: { press: string; program?: number; controller?: number };
@@ -176,7 +180,9 @@ export function applyLayout(
 ) {
   return {
     template: layout.template === 'keep' ? map.template : layout.template,
-    navigation: layout.navigation ?? map.navigation,
+    navigation: layout.navigation
+      ? { ...map.navigation, ...layout.navigation }
+      : map.navigation,
   };
 }
 
@@ -195,7 +201,9 @@ export function layoutConflicts(
   nameOf: (entry: MidiMap['entries'][number]['entry']) => string,
 ): string[] {
   if (!layout.navigation) return [];
-  const claimed = [layout.navigation.previous, layout.navigation.next];
+  const claimed = Object.values(layout.navigation).filter(
+    (t): t is Trigger => !!t,
+  );
   const found: string[] = [];
   for (const item of map.entries) {
     const uses = (program: number | null, controller: number | null) =>
@@ -239,4 +247,65 @@ export function checkPassed(
         m.controller === layout.check.controller &&
         (m.value ?? 0) >= 64,
   );
+}
+
+type SavedLayout = NonNullable<MidiMap['saved_layouts']>[number];
+
+/** A saved layout as an applicable one; it replaces all three device triggers. */
+export function savedToLayout(saved: SavedLayout): Layout {
+  return {
+    id: saved.id,
+    label: saved.name,
+    summary: describeSaved(saved),
+    template: saved.template ?? 'keep',
+    navigation: {
+      previous: saved.navigation?.previous ?? null,
+      next: saved.navigation?.next ?? null,
+      mute: saved.navigation?.mute ?? null,
+    },
+    switches: [],
+    check: { press: '' },
+  };
+}
+
+/** What a saved layout will set, in one line. */
+export function describeSaved(saved: SavedLayout): string {
+  const parts: string[] = [];
+  const t = saved.template;
+  if (t)
+    parts.push(
+      `${t.scene_buttons} scene buttons · CC ${t.first_controller}–${t.first_controller + t.scene_buttons - 1}`,
+    );
+  const nav = saved.navigation;
+  for (const [label, trigger] of [
+    ['Previous', nav?.previous],
+    ['Next', nav?.next],
+    ['Mute', nav?.mute],
+  ] as const)
+    if (trigger) parts.push(`${label} ${numberOf(trigger)}`);
+  return parts.join(' · ') || 'No template or triggers';
+}
+
+/** The current template and triggers as a new saved layout. */
+export function layoutFromCurrent(
+  map: Pick<MidiMap, 'template' | 'navigation'>,
+  profile: string,
+  name: string,
+  taken: string[],
+): SavedLayout {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 30) || 'layout';
+  let id = base;
+  for (let n = 2; taken.includes(id); n += 1) id = `${base}-${n}`;
+  return {
+    id,
+    name: name.trim().slice(0, 48),
+    profile,
+    ...(map.template ? { template: map.template } : {}),
+    navigation: { ...map.navigation },
+  };
 }

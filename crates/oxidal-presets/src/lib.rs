@@ -24,7 +24,7 @@ pub use wav_info::WavInfo;
 mod native;
 pub use midi::{
     AssignmentKind, DeviceAction, Disabled, MidiMap, MidiMapEntry, MidiMapStore, MidiMapUpdate,
-    MidiTemplate, Navigation, Trigger,
+    MidiTemplate, Navigation, SavedLayout, Trigger,
 };
 pub use model::{LocalAssetPage, ModelAsset, ModelStore};
 mod owned;

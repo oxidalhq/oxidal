@@ -1878,6 +1878,7 @@ export interface MidiMap {
   input?: string | null;
   navigation?: Navigation;
   revision: string;
+  saved_layouts?: SavedLayout[];
   template?: MidiTemplate | null;
 }
 export interface MidiMapEntry {
@@ -1920,6 +1921,20 @@ export interface Trigger {
   program?: number | null;
 }
 /**
+ * A named starting layout the owner saved: the scene template and device-wide
+ * triggers to apply together. It never contains preset mappings or device identity.
+ */
+export interface SavedLayout {
+  id: string;
+  name: string;
+  navigation?: Navigation;
+  /**
+   * The controller profile it was made from, for display only.
+   */
+  profile: string;
+  template?: MidiTemplate | null;
+}
+/**
  * Unit default for controllers whose buttons emit consecutive CC messages.
  * Program Change remains reserved for the Mine set-list; these buttons select
  * scenes inside the recalled preset.
@@ -1939,6 +1954,7 @@ export interface MidiMapUpdate {
   expected_revision: string;
   input?: string | null;
   navigation?: Navigation;
+  saved_layouts?: SavedLayout[];
   template?: MidiTemplate | null;
 }
 /**

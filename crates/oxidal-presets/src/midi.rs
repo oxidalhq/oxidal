@@ -187,6 +187,8 @@ struct Book {
     template: Option<MidiTemplate>,
     #[serde(default, skip_serializing_if = "Navigation::is_empty")]
     navigation: Navigation,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    saved_layouts: Vec<SavedLayout>,
     entries: BTreeMap<String, PresetMap>,
 }
 
@@ -198,6 +200,7 @@ impl Default for Book {
             channel: 1,
             template: None,
             navigation: Navigation::default(),
+            saved_layouts: Vec::new(),
             entries: BTreeMap::new(),
         }
     }
@@ -312,6 +315,49 @@ impl Navigation {
     }
 }
 
+/// A named starting layout the owner saved: the scene template and device-wide
+/// triggers to apply together. It never contains preset mappings or device identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SavedLayout {
+    pub id: String,
+    pub name: String,
+    /// The controller profile it was made from, for display only.
+    pub profile: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<MidiTemplate>,
+    #[serde(default, skip_serializing_if = "Navigation::is_empty")]
+    pub navigation: Navigation,
+}
+
+fn saved_layouts_valid(layouts: &[SavedLayout]) -> Result<()> {
+    let text_ok = |s: &str, max: usize| {
+        !s.trim().is_empty() && s.chars().count() <= max && !s.chars().any(char::is_control)
+    };
+    if layouts.len() > 32 {
+        return Err(Error::Invalid("Too many saved MIDI layouts"));
+    }
+    for (index, layout) in layouts.iter().enumerate() {
+        if layout.id.is_empty()
+            || layout.id.len() > 40
+            || !layout
+                .id
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            || !text_ok(&layout.name, 48)
+            || !text_ok(&layout.profile, 32)
+            || layouts[..index].iter().any(|old| old.id == layout.id)
+        {
+            return Err(Error::Invalid("Invalid saved MIDI layout"));
+        }
+        if let Some(template) = layout.template {
+            template.validate()?;
+        }
+        layout.navigation.validate(&BTreeMap::new())?;
+    }
+    Ok(())
+}
+
 /// Unit default for controllers whose buttons emit consecutive CC messages.
 /// Program Change remains reserved for the Mine set-list; these buttons select
 /// scenes inside the recalled preset.
@@ -359,6 +405,8 @@ pub struct MidiMap {
     pub template: Option<MidiTemplate>,
     #[serde(default, skip_serializing_if = "Navigation::is_empty")]
     pub navigation: Navigation,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub saved_layouts: Vec<SavedLayout>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -375,6 +423,8 @@ pub struct MidiMapUpdate {
     pub template: Option<MidiTemplate>,
     #[serde(default, skip_serializing_if = "Navigation::is_empty")]
     pub navigation: Navigation,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub saved_layouts: Vec<SavedLayout>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -530,6 +580,7 @@ impl MidiMapStore {
             channel: book.channel,
             template: book.template,
             navigation: book.navigation,
+            saved_layouts: book.saved_layouts,
             entries,
         })
     }
@@ -620,6 +671,7 @@ impl MidiMapStore {
         if update.entries.len() > 4096 || update.channel > 16 {
             return Err(Error::Invalid("Unsupported or oversized MIDI map"));
         }
+        saved_layouts_valid(&update.saved_layouts)?;
         if let Some(template) = update.template {
             template.validate()?;
         }
@@ -672,6 +724,7 @@ impl MidiMapStore {
             channel: update.channel,
             template: update.template,
             navigation: update.navigation,
+            saved_layouts: update.saved_layouts,
             entries,
         };
         self.write(&book)?;
@@ -861,6 +914,7 @@ mod tests {
             controller: None,
         };
         let update = |nav: Navigation, entries: Vec<MidiMapEntry>, revision: &str| MidiMapUpdate {
+            saved_layouts: vec![],
             navigation: nav,
             expected_revision: revision.into(),
             input: Some("hw:Controller,0,0".into()),
@@ -986,6 +1040,7 @@ mod tests {
         };
         let update = |disabled: Vec<Disabled>, revision: &str| MidiMapUpdate {
             navigation: Navigation::default(),
+            saved_layouts: vec![],
             expected_revision: revision.into(),
             input: Some("hw:Controller,0,0".into()),
             channel: 2,
@@ -1030,6 +1085,82 @@ mod tests {
     }
 
     #[test]
+    fn saved_layouts_round_trip_and_reject_bad_names_ids_and_numbers() {
+        let store = MidiMapStore::new(root("saved-layouts"));
+        let initial = store.snapshot().unwrap();
+        let layout = |id: &str, name: &str| SavedLayout {
+            id: id.into(),
+            name: name.into(),
+            profile: "chocolate".into(),
+            template: Some(MidiTemplate {
+                scene_buttons: 2,
+                first_controller: 40,
+            }),
+            navigation: Navigation {
+                previous: Some(Trigger {
+                    program: Some(2),
+                    controller: None,
+                }),
+                next: None,
+                mute: None,
+            },
+        };
+        let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
+            saved_layouts: layouts,
+            navigation: Navigation::default(),
+            expected_revision: revision.into(),
+            input: None,
+            channel: 1,
+            template: None,
+            entries: vec![],
+        };
+        let saved = store
+            .replace(update(
+                vec![
+                    layout("stage-a", "Stage A"),
+                    layout("stage-b", "Copy of Stage A"),
+                ],
+                &initial.revision,
+            ))
+            .unwrap();
+        assert_eq!(saved.saved_layouts.len(), 2);
+        assert_eq!(saved.saved_layouts[1].name, "Copy of Stage A");
+        // Reopening shows the same list; it is part of the revision-checked map.
+        assert_eq!(store.snapshot().unwrap().saved_layouts, saved.saved_layouts);
+        let too_many: Vec<_> = (0..33)
+            .map(|i| layout(&format!("l{i}"), "Layout"))
+            .collect();
+        for bad in [
+            vec![layout("Bad Id", "Name")],
+            vec![layout("ok", "   ")],
+            vec![layout("ok", "bell\u{7}")],
+            vec![layout("same", "A"), layout("same", "B")],
+            too_many,
+        ] {
+            assert!(
+                matches!(
+                    store.replace(update(bad, &saved.revision)),
+                    Err(Error::Invalid(_))
+                ),
+                "a bad layout list must be refused"
+            );
+        }
+        // A layout that claims Bank Select as a trigger is refused like any trigger.
+        let mut bank = layout("bank", "Bank");
+        bank.navigation.previous = Some(Trigger {
+            program: None,
+            controller: Some(32),
+        });
+        assert!(matches!(
+            store.replace(update(vec![bank], &saved.revision)),
+            Err(Error::Invalid(_))
+        ));
+        // Removing them all returns the map to its original revision shape.
+        let cleared = store.replace(update(vec![], &saved.revision)).unwrap();
+        assert!(cleared.saved_layouts.is_empty());
+    }
+
+    #[test]
     fn whole_map_replace_is_validated_and_revision_bound() {
         let root = root("replace");
         let store = MidiMapStore::new(root.clone());
@@ -1037,6 +1168,7 @@ mod tests {
         let updated = store
             .replace(MidiMapUpdate {
                 navigation: Navigation::default(),
+                saved_layouts: vec![],
                 expected_revision: initial.revision.clone(),
                 input: Some("hw:Controller,0,0".into()),
                 channel: 3,
@@ -1056,6 +1188,7 @@ mod tests {
 
         let stale = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
+            saved_layouts: vec![],
             expected_revision: initial.revision,
             input: None,
             channel: 1,
@@ -1066,6 +1199,7 @@ mod tests {
 
         let duplicate = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
+            saved_layouts: vec![],
             expected_revision: updated.revision,
             input: Some("hw:Controller,0,0".into()),
             channel: 1,
@@ -1099,6 +1233,7 @@ mod tests {
         let configured = store
             .replace(MidiMapUpdate {
                 navigation: Navigation::default(),
+                saved_layouts: vec![],
                 expected_revision: initial.revision,
                 input: Some("hw:Controller,0,0".into()),
                 channel: 1,
@@ -1147,6 +1282,7 @@ mod tests {
 
         let bad = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
+            saved_layouts: vec![],
             expected_revision: store.snapshot().unwrap().revision,
             input: None,
             channel: 1,
