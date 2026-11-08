@@ -183,7 +183,7 @@ pub struct MidiTemplate {
 
 impl MidiTemplate {
     fn validate(self) -> Result<()> {
-        if !matches!(self.scene_buttons, 4 | 8)
+        if !matches!(self.scene_buttons, 2 | 4 | 8)
             || self.first_controller >= 128
             || u16::from(self.first_controller) + u16::from(self.scene_buttons) > 128
             || (u16::from(self.first_controller)

@@ -3,6 +3,7 @@ import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { firstAfter, useLearnGate } from './midiLearn';
 import { PresetNavigation, type NavigationKey } from './PresetNavigation';
+import { ControllerSetup } from './ControllerSetup';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
@@ -57,6 +58,10 @@ type Learning = {
   row: RowRef;
   after: number;
 };
+type MapContent = Pick<
+  MidiMap,
+  'input' | 'channel' | 'template' | 'navigation' | 'entries'
+>;
 type ImportFile = {
   format: 'oxidal-midi-map';
   version: 1;
@@ -161,6 +166,12 @@ export function MidiMapScreen({
     after: number;
   } | null>(null);
   const [action, setAction] = useState<MidiAction | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [pendingClearAll, setPendingClearAll] = useState(false);
+  // Earlier maps for Undo. Restoring one is a normal revision-checked save, so a
+  // change made by another client in the meantime is reported, never overwritten.
+  const history = useRef<MapContent[]>([]);
+  const [undoDepth, setUndoDepth] = useState(0);
   const [pendingImport, setPendingImport] = useState<ImportFile | null>(null);
   const [templateButtons, setTemplateButtons] = useState(0);
   const [templateController, setTemplateController] = useState(40);
@@ -200,12 +211,7 @@ export function MidiMapScreen({
     };
   }, [recoverFail]);
 
-  async function replaceMap(
-    content: Pick<
-      MidiMap,
-      'input' | 'channel' | 'template' | 'navigation' | 'entries'
-    >,
-  ) {
+  async function replaceMap(content: MapContent, remember = true) {
     if (!map || busy) return;
     setBusy(true);
     setError('');
@@ -218,6 +224,21 @@ export function MidiMapScreen({
         navigation: content.navigation,
         entries: content.entries,
       });
+      if (remember) {
+        history.current = [
+          ...history.current.slice(-9),
+          {
+            input: map.input,
+            channel: map.channel,
+            template: map.template,
+            navigation: map.navigation,
+            entries: map.entries,
+          },
+        ];
+      } else {
+        history.current = history.current.slice(0, -1);
+      }
+      setUndoDepth(history.current.length);
       setMap(updated);
       await onMapApplied(updated);
     } catch (cause) {
@@ -487,9 +508,10 @@ export function MidiMapScreen({
   useEffect(() => {
     learnHandler.current = applyLearn;
   });
-  useLearnGate(!!learning || !!navLearning, (cause) => {
+  useLearnGate(!!learning || !!navLearning || checking, (cause) => {
     setLearning(null);
     setNavLearning(null);
+    setChecking(false);
     setError(friendlyError(cause, 'learn a MIDI controller'));
   });
   const lastMessage = learning
@@ -750,6 +772,29 @@ export function MidiMapScreen({
         </div>
       </div>
 
+      <ControllerSetup
+        map={map}
+        nameOf={(entry) =>
+          groups.find((group) => sameEntry(group.entry, entry))?.name ??
+          'Preset'
+        }
+        last={status?.last}
+        recent={(status?.recent ?? []).map((item) => item.message)}
+        checking={checking}
+        canCheck={
+          connected &&
+          !!map.input &&
+          !!status?.connected &&
+          !learning &&
+          !navLearning
+        }
+        busy={busy}
+        onChecking={setChecking}
+        onApply={(content) =>
+          void replaceMap({ ...map, ...content }).catch(() => undefined)
+        }
+      />
+
       <details className="midi-helpers" aria-label="MIDI mapping helpers">
         <summary className="cursor-pointer px-3 py-3">
           <span className="ml-1 flex min-w-0 flex-1 flex-col pr-2">
@@ -781,6 +826,7 @@ export function MidiMapScreen({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">None</SelectItem>
+                  <SelectItem value="2">2 buttons</SelectItem>
                   <SelectItem value="4">4 buttons</SelectItem>
                   <SelectItem value="8">8 buttons</SelectItem>
                 </SelectContent>
@@ -898,6 +944,26 @@ export function MidiMapScreen({
         <Button
           variant="outline"
           className="midi-toolbar-button"
+          onClick={() => {
+            const previous = history.current.at(-1);
+            if (previous)
+              void replaceMap(previous, false).catch(() => undefined);
+          }}
+          disabled={busy || !connected || undoDepth === 0}
+        >
+          Undo
+        </Button>
+        <Button
+          variant="outline"
+          className="midi-toolbar-button"
+          onClick={() => setPendingClearAll(true)}
+          disabled={busy || !connected || groups.every((group) => !group.map)}
+        >
+          Clear all…
+        </Button>
+        <Button
+          variant="outline"
+          className="midi-toolbar-button"
           onClick={exportMap}
           disabled={busy || groups.length === 0}
         >
@@ -935,6 +1001,46 @@ export function MidiMapScreen({
           }}
         />
       </div>
+
+      {pendingClearAll && (
+        <section
+          className="rounded-lg border border-border bg-card p-3"
+          aria-label="Confirm clearing all mappings"
+        >
+          <strong>
+            Clear{' '}
+            {map.entries.reduce(
+              (total, item) =>
+                total +
+                item.bindings.length +
+                item.branch_bindings.length +
+                item.parameter_bindings.length,
+              0,
+            )}{' '}
+            mappings in {map.entries.length}{' '}
+            {map.entries.length === 1 ? 'preset' : 'presets'}?
+          </strong>
+          <p className="caption mt-1">
+            Presets, tones, the controller input, the scene template and
+            Previous/Next stay. Undo restores them.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                setPendingClearAll(false);
+                void replaceMap({ ...map, entries: [] }).catch(() => undefined);
+              }}
+            >
+              Clear mappings
+            </Button>
+            <Button variant="ghost" onClick={() => setPendingClearAll(false)}>
+              Cancel
+            </Button>
+          </div>
+        </section>
+      )}
 
       {pendingImport && (
         <section

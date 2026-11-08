@@ -358,3 +358,87 @@ it('shows why the last device-wide MIDI action did not run', async () => {
     ),
   ).toBeVisible();
 });
+
+function renderScreen(mixed = rig()) {
+  return render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={mixed}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+}
+
+it('saves a starting layout without touching preset mappings and shows each switch', async () => {
+  const user = userEvent.setup();
+  arrange();
+  renderScreen();
+  const setup = await screen.findByRole('region', { name: 'Controller setup' });
+  // Chocolate is first: A–D send Program Change; E/F are the pedal's own bank.
+  const switches = within(setup).getByRole('list', {
+    name: 'What each switch does',
+  });
+  expect(within(switches).getAllByRole('listitem')).toHaveLength(4);
+  expect(setup).toHaveTextContent('CC 2 and CC 3');
+  await user.click(within(setup).getByRole('radio', { name: /Two presets/ }));
+  await user.click(within(setup).getByRole('button', { name: 'Save layout' }));
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
+  const sent = vi.mocked(updateMidiMap).mock.calls[0]![0];
+  expect(sent.navigation).toEqual({
+    previous: { program: 2, controller: null },
+    next: { program: 3, controller: null },
+  });
+  expect(sent.entries).toEqual(map.entries);
+});
+
+it('refuses a layout whose numbers an existing preset mapping already uses', async () => {
+  const user = userEvent.setup();
+  arrange();
+  vi.mocked(midiMap).mockResolvedValue({
+    ...map,
+    entries: [
+      {
+        ...map.entries[0]!,
+        bindings: [{ scene: 'lead', program: 2, controller: null }],
+      },
+    ],
+  });
+  renderScreen();
+  const setup = await screen.findByRole('region', { name: 'Controller setup' });
+  await user.click(within(setup).getByRole('radio', { name: /Two presets/ }));
+  expect(within(setup).getByRole('alert')).toHaveTextContent(
+    'Program 3 · Stage Rig',
+  );
+  expect(
+    within(setup).getByRole('button', { name: 'Save layout' }),
+  ).toBeDisabled();
+});
+
+it('undoes and clears with a count, through revision-checked saves', async () => {
+  const user = userEvent.setup();
+  arrange();
+  renderScreen();
+  await screen.findByRole('region', { name: 'Controller setup' });
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Clear all…' }));
+  const confirm = screen.getByRole('region', {
+    name: 'Confirm clearing all mappings',
+  });
+  expect(confirm).toHaveTextContent('Clear 2 mappings in 1 preset?');
+  await user.click(
+    within(confirm).getByRole('button', { name: 'Clear mappings' }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].entries).toEqual([]);
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].expected_revision).toBe(
+    'map-1',
+  );
+  await user.click(await screen.findByRole('button', { name: 'Undo' }));
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  const restore = vi.mocked(updateMidiMap).mock.calls[1]![0];
+  // The restore is based on the newest revision, so a concurrent edit conflicts.
+  expect(restore.expected_revision).toBe('map-2');
+  expect(restore.entries).toEqual(map.entries);
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+});
