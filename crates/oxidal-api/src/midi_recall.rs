@@ -150,9 +150,71 @@ fn step(current: usize, len: usize, direction: i8) -> Result<usize, &'static str
     }
 }
 
+/// A neighbouring set-list preset and whether pressing Previous/Next would switch to it now.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Neighbor {
+    pub name: String,
+    pub ready: bool,
+    /// Plain-language state: prepared, loads on recall, or why it will refuse.
+    pub detail: String,
+}
+
+/// Where the playing preset sits in the Mine set-list.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MidiPosition {
+    /// Zero-based position of the playing preset; None when it is not in the list.
+    pub index: Option<usize>,
+    pub length: usize,
+    pub previous: Option<Neighbor>,
+    pub next: Option<Neighbor>,
+}
+
+fn neighbor(shared: &Shared, item: &oxidal_presets::LibraryItem) -> Neighbor {
+    let protect = shared.protect.on();
+    let prepared = item.kind == LibraryKind::Rig && {
+        let state = shared.rig_playback.snapshot();
+        state.phase == AudioPhase::Running
+            && state.control.as_ref().is_some_and(|control| {
+                control
+                    .prepared
+                    .iter()
+                    .any(|p| p.revision == item.id && p.error.is_none())
+            })
+    };
+    let (ready, detail) = if prepared {
+        (true, "Ready")
+    } else if protect {
+        (false, "Not ready: Protect is on")
+    } else {
+        (true, "Loads when selected")
+    };
+    Neighbor {
+        name: item.name.clone(),
+        ready,
+        detail: detail.into(),
+    }
+}
+
+pub(crate) async fn position(shared: &Arc<Shared>) -> Result<MidiPosition, String> {
+    let items = set_list(shared).await?;
+    let index = items.iter().position(|item| is_playing(shared, item));
+    Ok(MidiPosition {
+        index,
+        length: items.len(),
+        previous: index
+            .and_then(|i| i.checked_sub(1))
+            .map(|i| neighbor(shared, &items[i])),
+        next: index
+            .filter(|i| i + 1 < items.len())
+            .map(|i| neighbor(shared, &items[i + 1])),
+    })
+}
+
 /// Flips the output mute on whichever engine is playing and records the outcome.
 /// The worker owns the state, so this never guesses what the screen shows.
-async fn toggle_mute(shared: &Arc<Shared>) -> Result<String, String> {
+pub(crate) async fn toggle_mute(shared: &Arc<Shared>) -> Result<String, String> {
     let command = oxidal_audio::tools::HostUtility::OutputMuteToggle;
     let rig = shared.rig_playback.snapshot();
     let native = shared.playback.snapshot();

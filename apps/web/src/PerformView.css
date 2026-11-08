@@ -701,3 +701,19 @@
   font-size: var(--text-sm);
   color: var(--destructive);
 }
+
+.perform-neighbors {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted-foreground);
+}
+.perform-neighbors [data-ready='false'] {
+  color: var(--destructive);
+}
+.perform-steps .perform-mute[aria-pressed='true'] {
+  border-color: var(--foreground);
+  background: var(--foreground);
+  color: var(--background);
+}

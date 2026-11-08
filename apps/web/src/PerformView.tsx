@@ -4,8 +4,14 @@ import {
   CaretLeft,
   CaretRight,
 } from '@phosphor-icons/react';
-import { useState } from 'react';
-import { navigateMidi, type Monitoring } from './api';
+import { useEffect, useState } from 'react';
+import {
+  midiPosition,
+  muteMidi,
+  navigateMidi,
+  type MidiPosition,
+  type Monitoring,
+} from './api';
 import { friendlyError } from './lib/friendlyError';
 import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
@@ -102,20 +108,62 @@ function EdgeMeter({
  * footswitch, so the ends and unready presets refuse with a reason and keep the
  * current sound playing.
  */
-function PresetSteps({ disabled }: { disabled: boolean }) {
+function PresetSteps({
+  disabled,
+  muted,
+}: {
+  disabled: boolean;
+  muted: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState('');
+  const [position, setPosition] = useState<MidiPosition | null>(null);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      Promise.resolve()
+        .then(() => midiPosition())
+        .then((next) => live && setPosition(next ?? null))
+        .catch(() => live && setPosition(null));
+    void load();
+    const timer = window.setInterval(() => void load(), 3000);
+    return () => {
+      live = false;
+      window.clearInterval(timer);
+    };
+  }, [reload]);
   async function step(direction: 'previous' | 'next') {
     setBusy(true);
     setRefusal('');
     try {
       await navigateMidi(direction);
+      setReload((count) => count + 1);
     } catch (cause) {
       setRefusal(friendlyError(cause, 'change preset'));
     } finally {
       setBusy(false);
     }
   }
+  async function mute() {
+    setBusy(true);
+    setRefusal('');
+    try {
+      await muteMidi();
+    } catch (cause) {
+      setRefusal(friendlyError(cause, 'change mute'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const line = (label: string, n: MidiPosition['previous']) =>
+    n ? (
+      <span data-ready={n.ready}>
+        {label}: {n.name} · {n.detail}
+      </span>
+    ) : (
+      <span>{label}: none, end of the Set list</span>
+    );
   return (
     <div className="perform-steps">
       <div role="group" aria-label="Set list">
@@ -134,6 +182,21 @@ function PresetSteps({ disabled }: { disabled: boolean }) {
           Next <CaretRight aria-hidden="true" />
         </button>
       </div>
+      {position && position.index != null && (
+        <p className="perform-neighbors" aria-label="Set list neighbours">
+          {line('Previous', position.previous)}
+          {line('Next', position.next)}
+        </p>
+      )}
+      <button
+        type="button"
+        className="perform-mute"
+        aria-pressed={muted}
+        disabled={disabled || busy}
+        onClick={() => void mute()}
+      >
+        {muted ? 'Muted · tap to unmute' : 'Mute output'}
+      </button>
       {refusal && <p role="alert">{refusal}</p>}
     </div>
   );
@@ -401,7 +464,10 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
-          <PresetSteps disabled={disabled || !!switching} />
+          <PresetSteps
+            disabled={disabled || !!switching}
+            muted={audio?.monitoring?.output_muted ?? false}
+          />
           {switching ? (
             <div className="perform-switching" role="status" aria-live="polite">
               <ArrowsClockwise aria-hidden="true" />

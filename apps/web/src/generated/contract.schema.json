@@ -121,6 +121,9 @@
     "midi_navigate": {
       "$ref": "#/$defs/MidiNavigate"
     },
+    "midi_position": {
+      "$ref": "#/$defs/MidiPosition"
+    },
     "midi_template_apply": {
       "$ref": "#/$defs/MidiTemplateApply"
     },
@@ -347,6 +350,7 @@
     "midi_learn",
     "midi_action",
     "midi_navigate",
+    "midi_position",
     "audio_probe",
     "audio_probe_result",
     "error",
@@ -5719,6 +5723,50 @@
         "direction"
       ]
     },
+    "MidiPosition": {
+      "description": "Where the playing preset sits in the Mine set-list.",
+      "type": "object",
+      "properties": {
+        "index": {
+          "description": "Zero-based position of the playing preset; None when it is not in the list.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "length": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Neighbor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Neighbor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "length"
+      ]
+    },
     "MidiTemplate": {
       "description": "Unit default for controllers whose buttons emit consecutive CC messages.\nProgram Change remains reserved for the Mine set-list; these buttons select\nscenes inside the recalled preset.",
       "type": "object",
@@ -6359,6 +6407,28 @@
         }
       },
       "additionalProperties": false
+    },
+    "Neighbor": {
+      "description": "A neighbouring set-list preset and whether pressing Previous/Next would switch to it now.",
+      "type": "object",
+      "properties": {
+        "detail": {
+          "description": "Plain-language state: prepared, loads on recall, or why it will refuse.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ready": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "ready",
+        "detail"
+      ]
     },
     "NetworkState": {
       "type": "object",

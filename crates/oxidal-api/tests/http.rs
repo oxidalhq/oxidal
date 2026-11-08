@@ -370,6 +370,48 @@ async fn midi_navigation_round_trips_is_validated_and_reports_no_action_yet() {
 }
 
 #[tokio::test]
+async fn idle_position_and_mute_explain_themselves_instead_of_guessing() {
+    let (url, task, mapping) = start(true).await;
+    let position: Value = reqwest::get(format!("{url}/midi/position"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(position["index"], Value::Null);
+    assert_eq!(position["length"], 0);
+    assert!(position.get("next").is_none() || position["next"].is_null());
+    let client = reqwest::Client::new();
+    let mute = client
+        .post(format!("{url}/midi/mute"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(mute.status(), 409);
+    let body: Value = mute.json().await.unwrap();
+    assert!(body.to_string().contains("Play a preset before using Mute"));
+    let navigate = client
+        .post(format!("{url}/midi/navigate"))
+        .json(&json!({"direction": "next"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(navigate.status(), 409);
+    // The refusal is recorded so the screen can show why nothing happened.
+    let action: Value = reqwest::get(format!("{url}/midi/action"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(action["ok"], false);
+    assert!(action["seq"].as_u64().unwrap() >= 2);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn new_scene_rigs_inherit_the_unit_midi_template() {
     let (url, task, mapping) = start(true).await;
     let client = reqwest::Client::new();

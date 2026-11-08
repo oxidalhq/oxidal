@@ -1357,6 +1357,69 @@ mod tests {
     }
 
     #[test]
+    fn a_wire_burst_reaches_recall_in_order_and_is_not_collapsed_to_the_last_message() {
+        // Bank Select MSB/LSB, Program Change and a CC press in one USB read,
+        // using running status for the second controller, as a pedal would.
+        let wire = [
+            0xb0, 0x00, 0x01, 0x20, 0x02, // Bank Select 0/32 on channel 1
+            0xc0, 0x03, // Program Change 3
+            0xb0, 0x15, 0x7f, // CC 21 press
+            0xf8, // interleaved clock must not disturb anything
+            0x15, 0x00, // running status: CC 21 release
+        ];
+        let mut decoder = Decoder::default();
+        let settings = scene_settings();
+        let mut status = Status::default();
+        let mut dispatched = Vec::new();
+        for byte in wire {
+            if let Some(message) = decoder.push(byte) {
+                deliver(&mut status, &settings, message, false, |_, m| {
+                    dispatched.push(m);
+                    Ok(true)
+                });
+            }
+        }
+        // The consumer last saw nothing: it must get all five, oldest first.
+        let unseen = status.unseen(0);
+        assert_eq!(unseen.len(), 5);
+        assert_eq!(unseen, dispatched);
+        assert!(matches!(
+            unseen[0],
+            Message::Control {
+                controller: 0,
+                value: 1,
+                ..
+            }
+        ));
+        assert!(matches!(
+            unseen[1],
+            Message::Control {
+                controller: 32,
+                value: 2,
+                ..
+            }
+        ));
+        assert_eq!(
+            unseen[2],
+            Message::Program {
+                channel: 1,
+                program: 3
+            }
+        );
+        // Only the last was visible through `last`: the old path lost the rest.
+        assert_eq!(
+            status.last,
+            Some(Message::Control {
+                channel: 1,
+                controller: 21,
+                value: 0
+            })
+        );
+        // A second poll after more input returns only what is new.
+        assert!(status.unseen(status.events).is_empty());
+    }
+
+    #[test]
     fn learn_window_expires_on_its_own() {
         use std::time::{Duration, Instant};
         let start = Instant::now();

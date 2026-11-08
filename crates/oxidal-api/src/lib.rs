@@ -198,6 +198,7 @@ pub struct Contract {
     pub midi_learn: midi_map::MidiLearn,
     pub midi_action: midi_recall::MidiAction,
     pub midi_navigate: midi_map::MidiNavigate,
+    pub midi_position: midi_recall::MidiPosition,
     pub audio_probe: oxidal_audio::AudioProbe,
     pub audio_probe_result: oxidal_audio::AudioProbeResult,
     pub error: ApiError,
@@ -519,6 +520,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/midi/learn", post(midi_map::learn))
         .route("/midi/action", get(midi_map::action))
         .route("/midi/navigate", post(midi_map::navigate))
+        .route("/midi/position", get(midi_map::position))
+        .route("/midi/mute", post(midi_map::mute))
         .route("/audio/probe", post(audio::probe))
         .route(
             "/native",

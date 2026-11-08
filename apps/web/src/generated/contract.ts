@@ -769,6 +769,7 @@ export interface Contract {
   midi_map: MidiMap;
   midi_map_update: MidiMapUpdate;
   midi_navigate: MidiNavigate;
+  midi_position: MidiPosition;
   midi_template_apply: MidiTemplateApply;
   midi_test: MidiTest;
   model_page: Page2;
@@ -1928,6 +1929,29 @@ export interface MidiMapUpdate {
  */
 export interface MidiNavigate {
   direction: MidiDirection;
+}
+/**
+ * Where the playing preset sits in the Mine set-list.
+ */
+export interface MidiPosition {
+  /**
+   * Zero-based position of the playing preset; None when it is not in the list.
+   */
+  index?: number | null;
+  length: number;
+  next?: Neighbor | null;
+  previous?: Neighbor | null;
+}
+/**
+ * A neighbouring set-list preset and whether pressing Previous/Next would switch to it now.
+ */
+export interface Neighbor {
+  /**
+   * Plain-language state: prepared, loads on recall, or why it will refuse.
+   */
+  detail: string;
+  name: string;
+  ready: boolean;
 }
 export interface MidiTemplateApply {
   entry: LibraryReference;

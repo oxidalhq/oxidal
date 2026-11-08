@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PerformView } from './PerformView';
 import { setPerform } from './performState';
 import {
+  midiPosition,
+  muteMidi,
   navigateMidi,
   monitoring,
   nativeState,
@@ -14,6 +16,8 @@ import {
   type Monitoring,
 } from './api';
 vi.mock('./api', () => ({
+  midiPosition: vi.fn(),
+  muteMidi: vi.fn(),
   navigateMidi: vi.fn(),
   monitoring: vi.fn(),
   nativeState: vi.fn(),
@@ -209,4 +213,34 @@ it('steps through the set list and explains a refused step without losing the so
     />,
   );
   expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
+});
+
+it('shows each neighbour with its readiness and mutes only from confirmed state', async () => {
+  vi.mocked(monitoring).mockResolvedValue({} as Monitoring);
+  vi.mocked(midiPosition).mockResolvedValue({
+    index: 1,
+    length: 3,
+    previous: { name: 'Clean', ready: true, detail: 'Ready' },
+    next: { name: 'Lead', ready: false, detail: 'Not ready: Protect is on' },
+  });
+  vi.mocked(muteMidi).mockResolvedValue(undefined);
+  render(
+    <PerformView
+      now={{ session: 's', playing: true, name: 'Rhythm', modified: false }}
+      lanes={[]}
+      disabled={false}
+      onToggle={vi.fn()}
+      onEdit={vi.fn()}
+      selector={null}
+    />,
+  );
+  const near = await screen.findByLabelText('Set list neighbours');
+  expect(near).toHaveTextContent('Previous: Clean · Ready');
+  expect(near).toHaveTextContent('Next: Lead · Not ready: Protect is on');
+  const mute = screen.getByRole('button', { name: 'Mute output' });
+  fireEvent.click(mute);
+  await vi.waitFor(() => expect(muteMidi).toHaveBeenCalledTimes(1));
+  // The click alone does not claim Muted; only the confirmed reading does.
+  await vi.waitFor(() => expect(mute).toBeEnabled());
+  expect(mute).toHaveAttribute('aria-pressed', 'false');
 });

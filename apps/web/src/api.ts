@@ -802,6 +802,23 @@ export async function midiAction(): Promise<MidiAction> {
   if (!midiActionValidator(body)) throw new Error('Incompatible MIDI action');
   return body;
 }
+export type MidiPosition = Contract['midi_position'];
+const midiPositionValidator = ajv.compile<MidiPosition>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/MidiPosition',
+});
+/** The playing preset's place in the Mine set-list and its neighbours' readiness. */
+export async function midiPosition(): Promise<MidiPosition> {
+  const body = await presetResponse(await fetch('/api/v1/midi/position'));
+  if (!midiPositionValidator(body))
+    throw new Error('Incompatible set-list position');
+  return body;
+}
+/** Flips the output mute exactly as the footswitch does. */
+export async function muteMidi(): Promise<void> {
+  const response = await fetch('/api/v1/midi/mute', { method: 'POST' });
+  if (!response.ok) await presetResponse(response);
+}
 /** Moves one preset through the Mine set-list, exactly as a footswitch does. */
 export async function navigateMidi(
   direction: Contract['midi_navigate']['direction'],
