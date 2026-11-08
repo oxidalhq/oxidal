@@ -791,6 +791,29 @@ export async function testMidi(request: Contract['midi_test']): Promise<void> {
   if (!response.ok) await presetResponse(response);
 }
 
+export type MidiAction = Contract['midi_action'];
+const midiActionValidator = ajv.compile<MidiAction>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/MidiAction',
+});
+/** The newest device-wide MIDI action (Program recall, Previous, Next). */
+export async function midiAction(): Promise<MidiAction> {
+  const body = await presetResponse(await fetch('/api/v1/midi/action'));
+  if (!midiActionValidator(body)) throw new Error('Incompatible MIDI action');
+  return body;
+}
+/** Moves one preset through the Mine set-list, exactly as a footswitch does. */
+export async function navigateMidi(
+  direction: Contract['midi_navigate']['direction'],
+): Promise<void> {
+  const response = await fetch('/api/v1/midi/navigate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ direction }),
+  });
+  if (!response.ok) await presetResponse(response);
+}
+
 /** Passive learning: input is recorded but its mappings do not run. */
 export async function learnMidi(on: boolean): Promise<void> {
   const request: Contract['midi_learn'] = { on };

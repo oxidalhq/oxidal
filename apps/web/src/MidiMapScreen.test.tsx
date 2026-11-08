@@ -12,6 +12,7 @@ import { MidiMapScreen } from './MidiMapScreen';
 import {
   applyMidiTemplate,
   libraryCatalog,
+  midiAction,
   midiDevices,
   midiMap,
   testMidi,
@@ -24,6 +25,7 @@ import {
 
 vi.mock('./api', () => ({
   learnMidi: vi.fn(),
+  midiAction: vi.fn(),
   applyMidiTemplate: vi.fn(),
   libraryCatalog: vi.fn(),
   midiDevices: vi.fn(),
@@ -103,6 +105,7 @@ function arrange() {
     input: update.input,
     channel: update.channel,
     template: update.template,
+    navigation: update.navigation,
     entries: update.entries,
   }));
   vi.mocked(applyMidiTemplate).mockResolvedValue({
@@ -111,6 +114,7 @@ function arrange() {
     template: { scene_buttons: 4, first_controller: 40 },
   });
   vi.mocked(testMidi).mockResolvedValue();
+  vi.mocked(midiAction).mockResolvedValue({ seq: 0, ok: true, message: '' });
 }
 
 it('shows the whole hierarchy, live message, number search and precedence conflict', async () => {
@@ -289,4 +293,68 @@ it('lists the previous messages from the ordered input log, newest first', async
   expect(items).toHaveLength(2);
   expect(items[0]).toHaveTextContent('Program 2');
   expect(items[1]).toHaveTextContent('Program 1');
+});
+
+it('learns a device-wide Next preset trigger and keeps it through other edits', async () => {
+  arrange();
+  const view = render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  expect(
+    await screen.findByRole('region', { name: 'Preset navigation' }),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /Learn.*Next preset/ }));
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(1, { kind: 'program', channel: 2, program: 3 })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
+    next: { program: 3, controller: null },
+  });
+  // The stored trigger shows both the friendly and the raw MIDI number.
+  expect(await screen.findByText('Program 4 · raw 3')).toBeVisible();
+  // A later unrelated edit must carry it along rather than drop it.
+  fireEvent.click(
+    screen.getByRole('button', { name: /Clear.*Previous preset/ }),
+  );
+  expect(
+    screen.getByRole('button', { name: /Clear.*Previous preset/ }),
+  ).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: /Clear.*Next preset/ }));
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(updateMidiMap).mock.calls[1]![0].navigation).toEqual({
+    next: null,
+  });
+});
+
+it('shows why the last device-wide MIDI action did not run', async () => {
+  arrange();
+  vi.mocked(midiAction).mockResolvedValue({
+    seq: 4,
+    ok: false,
+    message: 'Already at the last preset in the Set list',
+  });
+  render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(2, { kind: 'program', channel: 2, program: 1 })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  expect(
+    await screen.findByText(
+      'Last action: Already at the last preset in the Set list',
+    ),
+  ).toBeVisible();
 });

@@ -2,6 +2,7 @@ import { RecoveryAction } from './components/ui/failure';
 import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { firstAfter, useLearnGate } from './midiLearn';
+import { PresetNavigation, type NavigationKey } from './PresetNavigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Broadcast,
@@ -26,12 +27,14 @@ import {
 import {
   libraryCatalog,
   applyMidiTemplate,
+  midiAction,
   midiDevices,
   midiMap,
   testMidi,
   updateMidiMap,
   type AudioState,
   type LibraryCatalog,
+  type MidiAction,
   type MidiDevices,
   type MidiMap,
   type RigAudioState,
@@ -60,6 +63,7 @@ type ImportFile = {
   input: string | null;
   channel: number;
   template?: MidiMap['template'];
+  navigation?: MidiMap['navigation'];
   entries: MidiMap['entries'];
 };
 
@@ -152,6 +156,11 @@ export function MidiMapScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [learning, setLearning] = useState<Learning | null>(null);
+  const [navLearning, setNavLearning] = useState<{
+    key: NavigationKey;
+    after: number;
+  } | null>(null);
+  const [action, setAction] = useState<MidiAction | null>(null);
   const [pendingImport, setPendingImport] = useState<ImportFile | null>(null);
   const [templateButtons, setTemplateButtons] = useState(0);
   const [templateController, setTemplateController] = useState(40);
@@ -192,7 +201,10 @@ export function MidiMapScreen({
   }, [recoverFail]);
 
   async function replaceMap(
-    content: Pick<MidiMap, 'input' | 'channel' | 'template' | 'entries'>,
+    content: Pick<
+      MidiMap,
+      'input' | 'channel' | 'template' | 'navigation' | 'entries'
+    >,
   ) {
     if (!map || busy) return;
     setBusy(true);
@@ -203,6 +215,7 @@ export function MidiMapScreen({
         input: content.input,
         channel: content.channel,
         template: content.template,
+        navigation: content.navigation,
         entries: content.entries,
       });
       setMap(updated);
@@ -474,8 +487,9 @@ export function MidiMapScreen({
   useEffect(() => {
     learnHandler.current = applyLearn;
   });
-  useLearnGate(!!learning, (cause) => {
+  useLearnGate(!!learning || !!navLearning, (cause) => {
     setLearning(null);
+    setNavLearning(null);
     setError(friendlyError(cause, 'learn a MIDI controller'));
   });
   const lastMessage = learning
@@ -495,6 +509,40 @@ export function MidiMapScreen({
     }, 0);
     return () => window.clearTimeout(timer);
   }, [eventCount, lastMessage, learning]);
+
+  const navMessage = navLearning
+    ? firstAfter<Message>(status, navLearning.after)
+    : undefined;
+  useEffect(() => {
+    if (!navLearning || !navMessage || !map) return;
+    // A CC release or a fader movement is not a press; keep waiting for one.
+    if (navMessage.kind === 'control' && navMessage.value < 64) return;
+    const key = navLearning.key;
+    const trigger =
+      navMessage.kind === 'program'
+        ? { program: navMessage.program, controller: null }
+        : { program: null, controller: navMessage.controller };
+    const timer = window.setTimeout(() => {
+      setNavLearning(null);
+      void replaceMap({
+        ...map,
+        navigation: { ...map.navigation, [key]: trigger },
+      }).catch(() => undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navMessage, navLearning]);
+  const actionEvents = status?.events;
+  useEffect(() => {
+    if (!connected) return;
+    let live = true;
+    void midiAction()
+      .then((next) => live && setAction(next))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [connected, actionEvents]);
 
   async function runTest(entry: EntryRef, row: RowRef) {
     if (!map) return;
@@ -562,6 +610,7 @@ export function MidiMapScreen({
       input: map.input ?? null,
       channel: map.channel,
       template: map.template ?? null,
+      navigation: map.navigation,
       entries: map.entries,
     };
     const url = URL.createObjectURL(
@@ -577,7 +626,8 @@ export function MidiMapScreen({
   if (!map || !catalog) {
     return <p className="caption">{error || 'Reading controller map…'}</p>;
   }
-  const canLearn = connected && !!map.input && !!status?.connected && !busy;
+  const canLearn =
+    connected && !!map.input && !!status?.connected && !busy && !navLearning;
   const templateChanged =
     templateButtons !== (map.template?.scene_buttons ?? 0) ||
     (templateButtons > 0 &&
@@ -686,6 +736,15 @@ export function MidiMapScreen({
                   </li>
                 ))}
             </ol>
+          )}
+          {action && action.seq > 0 && (
+            <p
+              className="midi-action-result mt-1"
+              data-ok={action.ok}
+              role="status"
+            >
+              Last action: {action.message}
+            </p>
           )}
           {status?.error && <p className="caption mt-1">{status.error}</p>}
         </div>
@@ -905,6 +964,23 @@ export function MidiMapScreen({
           </div>
         </section>
       )}
+
+      <PresetNavigation
+        navigation={map.navigation}
+        learning={navLearning?.key ?? null}
+        canLearn={connected && !!map.input && !!status?.connected && !learning}
+        busy={busy}
+        onLearn={(key) => {
+          setLearning(null);
+          setNavLearning(key ? { key, after: status?.events ?? 0 } : null);
+        }}
+        onClear={(key) =>
+          void replaceMap({
+            ...map,
+            navigation: { ...map.navigation, [key]: null },
+          }).catch(() => undefined)
+        }
+      />
 
       <div className="midi-preset-list" aria-label="Complete MIDI map">
         {visibleGroups.map((group) => {

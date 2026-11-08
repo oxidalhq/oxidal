@@ -1,6 +1,12 @@
-import { ArrowLeft, ArrowsClockwise } from '@phosphor-icons/react';
+import {
+  ArrowLeft,
+  ArrowsClockwise,
+  CaretLeft,
+  CaretRight,
+} from '@phosphor-icons/react';
 import { useState } from 'react';
-import type { Monitoring } from './api';
+import { navigateMidi, type Monitoring } from './api';
+import { friendlyError } from './lib/friendlyError';
 import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
 import { useMonitorReadings } from './monitorFeed';
@@ -91,6 +97,48 @@ function EdgeMeter({
  * Rails stay visible so a silent input reads as "No input", not as nothing.
  * @see docs/interface.md
  */
+/**
+ * Previous/Next through the Mine set-list. It runs the same daemon action as a
+ * footswitch, so the ends and unready presets refuse with a reason and keep the
+ * current sound playing.
+ */
+function PresetSteps({ disabled }: { disabled: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [refusal, setRefusal] = useState('');
+  async function step(direction: 'previous' | 'next') {
+    setBusy(true);
+    setRefusal('');
+    try {
+      await navigateMidi(direction);
+    } catch (cause) {
+      setRefusal(friendlyError(cause, 'change preset'));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="perform-steps">
+      <div role="group" aria-label="Set list">
+        <button
+          type="button"
+          disabled={disabled || busy}
+          onClick={() => void step('previous')}
+        >
+          <CaretLeft aria-hidden="true" /> Previous
+        </button>
+        <button
+          type="button"
+          disabled={disabled || busy}
+          onClick={() => void step('next')}
+        >
+          Next <CaretRight aria-hidden="true" />
+        </button>
+      </div>
+      {refusal && <p role="alert">{refusal}</p>}
+    </div>
+  );
+}
+
 export function PerformView({
   now,
   lanes,
@@ -353,6 +401,7 @@ export function PerformView({
             </div>
             <GuitarSwitch layout="compact" />
           </div>
+          <PresetSteps disabled={disabled || !!switching} />
           {switching ? (
             <div className="perform-switching" role="status" aria-live="polite">
               <ArrowsClockwise aria-hidden="true" />

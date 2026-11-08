@@ -2920,6 +2920,12 @@ textarea {
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
+.midi-action-result {
+  font-size: var(--text-sm);
+}
+.midi-action-result[data-ok='false'] {
+  color: var(--destructive);
+}
 .midi-recent {
   display: flex;
   flex-wrap: wrap;

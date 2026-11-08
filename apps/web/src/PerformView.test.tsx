@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { PerformView } from './PerformView';
 import { setPerform } from './performState';
 import {
+  navigateMidi,
   monitoring,
   nativeState,
   libraryCatalog,
@@ -13,6 +14,7 @@ import {
   type Monitoring,
 } from './api';
 vi.mock('./api', () => ({
+  navigateMidi: vi.fn(),
   monitoring: vi.fn(),
   nativeState: vi.fn(),
   presetDetails: vi.fn().mockResolvedValue({ revision: 'empty', entries: [] }),
@@ -164,4 +166,47 @@ it('stays in Perform on the same screen when the view is rebuilt, as when a pres
     'aria-pressed',
     'true',
   );
+});
+
+it('steps through the set list and explains a refused step without losing the sound', async () => {
+  vi.mocked(monitoring).mockResolvedValue({} as Monitoring);
+  vi.mocked(navigateMidi)
+    .mockResolvedValueOnce(undefined)
+    .mockRejectedValueOnce(
+      new Error('Already at the last preset in the Set list'),
+    );
+  render(
+    <PerformView
+      now={{ session: 's', playing: true, name: 'Clean', modified: false }}
+      lanes={[]}
+      disabled={false}
+      onToggle={vi.fn()}
+      onEdit={vi.fn()}
+      selector={null}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Previous/ }));
+  await vi.waitFor(() => expect(navigateMidi).toHaveBeenCalledWith('previous'));
+  await vi.waitFor(() =>
+    expect(screen.getByRole('button', { name: /Next/ })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+  await vi.waitFor(() => expect(navigateMidi).toHaveBeenCalledWith('next'));
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'last preset in the Set list',
+  );
+  // Switching disables both steps so a second press cannot race the first.
+  cleanup();
+  render(
+    <PerformView
+      now={{ session: 's', playing: true, name: 'Clean', modified: false }}
+      lanes={[]}
+      disabled={false}
+      switching
+      onToggle={vi.fn()}
+      onEdit={vi.fn()}
+      selector={null}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /Next/ })).toBeDisabled();
 });
