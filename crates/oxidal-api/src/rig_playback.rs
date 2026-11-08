@@ -150,17 +150,21 @@ impl Owner {
         let Some(control) = &self.state.control else {
             return;
         };
-        for message in control.midi.unseen(previous_events) {
+        for seen in control.midi.unseen(previous_events) {
+            let message = seen.message;
             let local_program = matches!(message, oxidal_audio::midi::Message::Program { .. })
                 && self
                     .state
                     .configured
                     .as_ref()
                     .and_then(|configured| configured.midi.as_ref())
-                    .is_some_and(|settings| settings.scene(message).is_some());
+                    .is_some_and(|settings| {
+                        settings.for_source(seen.source).scene(message).is_some()
+                    });
             let _ = self.midi_events.try_send(crate::midi_recall::Event {
                 message,
                 local_program,
+                source: seen.source,
             });
         }
     }

@@ -1,7 +1,7 @@
 //! Device-local MIDI map keyed by immutable preset identity.
 //! Portable tone and rig payloads never carry controller or device bindings.
 use crate::{Error, LibraryKind, LibraryReference, Result};
-use oxidal_audio::midi::{Binding, BranchBinding, Message, ParameterBinding, Settings};
+use oxidal_audio::midi::{Binding, BranchBinding, ExtraInput, Message, ParameterBinding, Settings};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -55,8 +55,8 @@ impl PresetMap {
     }
 
     /// What the worker runs: disabled assignments are left out.
-    fn settings(&self, input: String, channel: u8) -> Settings {
-        let mut settings = self.full(input, channel);
+    fn settings(&self, input: String, channel: u8, extras: &[ExtraInput]) -> Settings {
+        let mut settings = self.full(input, channel, extras);
         settings
             .bindings
             .retain(|b| !self.off(AssignmentKind::Scene, b.program, b.controller));
@@ -70,8 +70,9 @@ impl PresetMap {
     }
 
     /// Every stored assignment, used for validation and collision checks.
-    fn full(&self, input: String, channel: u8) -> Settings {
+    fn full(&self, input: String, channel: u8, extras: &[ExtraInput]) -> Settings {
         Settings {
+            extra_inputs: extras.to_vec(),
             input,
             channel,
             bindings: self.bindings.clone(),
@@ -189,6 +190,8 @@ struct Book {
     navigation: Navigation,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     saved_layouts: Vec<SavedLayout>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    extra_inputs: Vec<ExtraInput>,
     entries: BTreeMap<String, PresetMap>,
 }
 
@@ -201,6 +204,7 @@ impl Default for Book {
             template: None,
             navigation: Navigation::default(),
             saved_layouts: Vec::new(),
+            extra_inputs: Vec::new(),
             entries: BTreeMap::new(),
         }
     }
@@ -407,6 +411,9 @@ pub struct MidiMap {
     pub navigation: Navigation,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub saved_layouts: Vec<SavedLayout>,
+    /// Further controllers heard at once, each enabled explicitly (at most three).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_inputs: Vec<ExtraInput>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -425,6 +432,9 @@ pub struct MidiMapUpdate {
     pub navigation: Navigation,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub saved_layouts: Vec<SavedLayout>,
+    /// Further controllers heard at once, each enabled explicitly (at most three).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_inputs: Vec<ExtraInput>,
     pub entries: Vec<MidiMapEntry>,
 }
 
@@ -490,6 +500,7 @@ impl MidiMapStore {
         }
         if let Some(input) = &book.input {
             Settings {
+                extra_inputs: book.extra_inputs.clone(),
                 input: input.clone(),
                 channel: book.channel,
                 bindings: vec![],
@@ -503,7 +514,7 @@ impl MidiMapStore {
             identity(key)?;
             let input = book.input.clone().unwrap_or_else(|| "hw:Stored,0,0".into());
             mapping
-                .settings(input, book.channel)
+                .settings(input, book.channel, &book.extra_inputs)
                 .validate()
                 .map_err(|_| Error::Invalid("Invalid stored MIDI mapping"))?;
         }
@@ -581,6 +592,7 @@ impl MidiMapStore {
             template: book.template,
             navigation: book.navigation,
             saved_layouts: book.saved_layouts,
+            extra_inputs: book.extra_inputs,
             entries,
         })
     }
@@ -595,7 +607,11 @@ impl MidiMapStore {
             .transpose()?
             .and_then(|key| book.entries.get(&key).cloned())
             .unwrap_or_default();
-        Ok(Some(mapping.settings(input, book.channel)))
+        Ok(Some(mapping.settings(
+            input,
+            book.channel,
+            &book.extra_inputs,
+        )))
     }
 
     /// Adopt the legacy mapping embedded in a recovered playback session once.
@@ -672,6 +688,11 @@ impl MidiMapStore {
             return Err(Error::Invalid("Unsupported or oversized MIDI map"));
         }
         saved_layouts_valid(&update.saved_layouts)?;
+        if update.input.is_none() && !update.extra_inputs.is_empty() {
+            return Err(Error::Invalid(
+                "Choose the first MIDI controller before adding others",
+            ));
+        }
         if let Some(template) = update.template {
             template.validate()?;
         }
@@ -700,7 +721,7 @@ impl MidiMapStore {
                 .clone()
                 .unwrap_or_else(|| "hw:Stored,0,0".into());
             mapping
-                .full(input, update.channel)
+                .full(input, update.channel, &update.extra_inputs)
                 .validate()
                 .map_err(|_| Error::Invalid("Invalid stored MIDI mapping"))?;
             if entries.insert(key, mapping).is_some() {
@@ -709,6 +730,7 @@ impl MidiMapStore {
         }
         if let Some(input) = &update.input {
             Settings {
+                extra_inputs: update.extra_inputs.clone(),
                 input: input.clone(),
                 channel: update.channel,
                 bindings: vec![],
@@ -725,6 +747,7 @@ impl MidiMapStore {
             template: update.template,
             navigation: update.navigation,
             saved_layouts: update.saved_layouts,
+            extra_inputs: update.extra_inputs,
             entries,
         };
         self.write(&book)?;
@@ -848,6 +871,7 @@ mod tests {
 
     fn settings(program: u8) -> Settings {
         Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![Binding {
@@ -883,6 +907,7 @@ mod tests {
         let store = MidiMapStore::new(root.clone());
         store.configure(entry('a'), settings(7)).unwrap();
         let empty = Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![],
@@ -915,6 +940,7 @@ mod tests {
         };
         let update = |nav: Navigation, entries: Vec<MidiMapEntry>, revision: &str| MidiMapUpdate {
             saved_layouts: vec![],
+            extra_inputs: vec![],
             navigation: nav,
             expected_revision: revision.into(),
             input: Some("hw:Controller,0,0".into()),
@@ -1041,6 +1067,7 @@ mod tests {
         let update = |disabled: Vec<Disabled>, revision: &str| MidiMapUpdate {
             navigation: Navigation::default(),
             saved_layouts: vec![],
+            extra_inputs: vec![],
             expected_revision: revision.into(),
             input: Some("hw:Controller,0,0".into()),
             channel: 2,
@@ -1106,6 +1133,7 @@ mod tests {
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
+            extra_inputs: vec![],
             saved_layouts: layouts,
             navigation: Navigation::default(),
             expected_revision: revision.into(),
@@ -1161,6 +1189,60 @@ mod tests {
     }
 
     #[test]
+    fn extra_controllers_are_explicit_validated_and_reach_the_worker_settings() {
+        let store = MidiMapStore::new(root("extra-inputs"));
+        let initial = store.snapshot().unwrap();
+        let extra = |input: &str, channel| ExtraInput {
+            input: input.into(),
+            channel,
+        };
+        let update = |input: Option<&str>, extras: Vec<ExtraInput>, revision: &str| MidiMapUpdate {
+            extra_inputs: extras,
+            saved_layouts: vec![],
+            navigation: Navigation::default(),
+            expected_revision: revision.into(),
+            input: input.map(str::to_owned),
+            channel: 1,
+            template: None,
+            entries: vec![],
+        };
+        // A second controller needs a first one, and is never an implicit copy of it.
+        assert!(matches!(
+            store.replace(update(None, vec![extra("hw:B,0,0", 1)], &initial.revision)),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            store.replace(update(
+                Some("hw:A,0,0"),
+                vec![extra("hw:A,0,0", 1)],
+                &initial.revision
+            )),
+            Err(Error::Invalid(_))
+        ));
+        let saved = store
+            .replace(update(
+                Some("hw:A,0,0"),
+                vec![extra("hw:B,0,0", 3)],
+                &initial.revision,
+            ))
+            .unwrap();
+        assert_eq!(saved.extra_inputs, vec![extra("hw:B,0,0", 3)]);
+        let worker = store.settings(None).unwrap().unwrap();
+        assert_eq!(worker.input, "hw:A,0,0");
+        assert_eq!(worker.extra_inputs, vec![extra("hw:B,0,0", 3)]);
+        // Turning the first controller Off keeps the rest of the map valid only
+        // when the extras go with it.
+        assert!(matches!(
+            store.replace(update(None, vec![extra("hw:B,0,0", 3)], &saved.revision)),
+            Err(Error::Invalid(_))
+        ));
+        let single = store
+            .replace(update(Some("hw:A,0,0"), vec![], &saved.revision))
+            .unwrap();
+        assert!(single.extra_inputs.is_empty());
+    }
+
+    #[test]
     fn whole_map_replace_is_validated_and_revision_bound() {
         let root = root("replace");
         let store = MidiMapStore::new(root.clone());
@@ -1169,6 +1251,7 @@ mod tests {
             .replace(MidiMapUpdate {
                 navigation: Navigation::default(),
                 saved_layouts: vec![],
+                extra_inputs: vec![],
                 expected_revision: initial.revision.clone(),
                 input: Some("hw:Controller,0,0".into()),
                 channel: 3,
@@ -1189,6 +1272,7 @@ mod tests {
         let stale = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
             saved_layouts: vec![],
+            extra_inputs: vec![],
             expected_revision: initial.revision,
             input: None,
             channel: 1,
@@ -1200,6 +1284,7 @@ mod tests {
         let duplicate = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
             saved_layouts: vec![],
+            extra_inputs: vec![],
             expected_revision: updated.revision,
             input: Some("hw:Controller,0,0".into()),
             channel: 1,
@@ -1234,6 +1319,7 @@ mod tests {
             .replace(MidiMapUpdate {
                 navigation: Navigation::default(),
                 saved_layouts: vec![],
+                extra_inputs: vec![],
                 expected_revision: initial.revision,
                 input: Some("hw:Controller,0,0".into()),
                 channel: 1,
@@ -1283,6 +1369,7 @@ mod tests {
         let bad = store.replace(MidiMapUpdate {
             navigation: Navigation::default(),
             saved_layouts: vec![],
+            extra_inputs: vec![],
             expected_revision: store.snapshot().unwrap().revision,
             input: None,
             channel: 1,

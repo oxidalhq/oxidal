@@ -412,6 +412,52 @@ async fn idle_position_and_mute_explain_themselves_instead_of_guessing() {
 }
 
 #[tokio::test]
+async fn extra_midi_controllers_round_trip_and_duplicates_are_refused() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let map: Value = reqwest::get(format!("{url}/midi/map"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let body = |extras: Value, revision: &Value| {
+        json!({
+            "expected_revision": revision,
+            "input": "hw:Controller,0,0",
+            "channel": 1,
+            "extra_inputs": extras,
+            "entries": []
+        })
+    };
+    let saved = client
+        .post(format!("{url}/midi/map"))
+        .json(&body(
+            json!([{"input": "hw:Second,0,0", "channel": 3}]),
+            &map["revision"],
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let saved: Value = saved.json().await.unwrap();
+    assert_eq!(saved["extra_inputs"][0]["channel"], 3);
+    let duplicate = client
+        .post(format!("{url}/midi/map"))
+        .json(&body(
+            json!([{"input": "hw:Controller,0,0", "channel": 1}]),
+            &saved["revision"],
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(duplicate.status(), 422);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn new_scene_rigs_inherit_the_unit_midi_template() {
     let (url, task, mapping) = start(true).await;
     let client = reqwest::Client::new();
@@ -3030,6 +3076,7 @@ async fn permanent_removal_rechecks_preview_and_preserves_shared_models_and_othe
             id: ids[0].clone(),
         },
         oxidal_audio::midi::Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 2,
             bindings: vec![oxidal_audio::midi::Binding {

@@ -594,6 +594,7 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), legacy);
         let mut mixed: StartRig=serde_json::from_value(json!({"revision":"b".repeat(64),"stream":stream,"recall":{"source_revision":"b".repeat(64),"values":[]}})).unwrap();
         mixed.midi = Some(oxidal_audio::midi::Settings {
+            extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
                 target: oxidal_engine::protocol::Target::Native {
@@ -715,6 +716,7 @@ mod tests {
         );
         assert!(p.enabled(Role::Effects));
         mixed.midi = Some(oxidal_audio::midi::Settings {
+            extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
                 target: oxidal_engine::protocol::Target::Native {

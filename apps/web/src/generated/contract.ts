@@ -897,6 +897,11 @@ export interface Settings2 {
    * 0 accepts all MIDI channels; otherwise 1–16.
    */
   channel: number;
+  /**
+   * Further controllers listened to at once, each enabled explicitly. Their
+   * messages share these mappings but keep their own channel and bank state.
+   */
+  extra_inputs?: ExtraInput[];
   input: string;
   parameter_bindings?: ParameterBinding[];
 }
@@ -912,6 +917,13 @@ export interface BranchBinding {
   branch: string;
   controller: number;
   mode: BranchMode;
+}
+/**
+ * One more controller: its own endpoint and channel filter (0 accepts all).
+ */
+export interface ExtraInput {
+  channel: number;
+  input: string;
 }
 export interface ParameterBinding {
   controller: number;
@@ -1202,6 +1214,10 @@ export interface Status {
    * count means the worker restarted.
    */
   recent?: Observed[];
+  /**
+   * One entry per extra controller, in the order of `Settings::extra_inputs`.
+   */
+  sources?: SourceStatus[];
 }
 /**
  * One received PC/CC message with its position in the input's event count.
@@ -1212,6 +1228,17 @@ export interface Observed {
    * Equals `Status::events` after this message; consecutive messages differ by one.
    */
   seq: number;
+  /**
+   * Which controller sent it: 0 is the first input, then the extras in order.
+   */
+  source?: number;
+}
+/**
+ * Connection state of one extra controller.
+ */
+export interface SourceStatus {
+  connected: boolean;
+  error?: string | null;
 }
 export interface ModelProgress {
   assignment: ModelAssignment;
@@ -1875,6 +1902,10 @@ export interface MidiLearn {
 export interface MidiMap {
   channel: number;
   entries: MidiMapEntry[];
+  /**
+   * Further controllers heard at once, each enabled explicitly (at most three).
+   */
+  extra_inputs?: ExtraInput[];
   input?: string | null;
   navigation?: Navigation;
   revision: string;
@@ -1952,6 +1983,10 @@ export interface MidiMapUpdate {
   channel: number;
   entries: MidiMapEntry[];
   expected_revision: string;
+  /**
+   * Further controllers heard at once, each enabled explicitly (at most three).
+   */
+  extra_inputs?: ExtraInput[];
   input?: string | null;
   navigation?: Navigation;
   saved_layouts?: SavedLayout[];
@@ -2439,6 +2474,10 @@ export interface Status1 {
    * count means the worker restarted.
    */
   recent?: Observed[];
+  /**
+   * One entry per extra controller, in the order of `Settings::extra_inputs`.
+   */
+  sources?: SourceStatus[];
 }
 export interface NodeModelChange {
   node: string;

@@ -832,10 +832,11 @@ impl Owner {
         let previous_events = self.state.midi.events;
         let status_changed = self.state.midi != status;
         self.state.midi = status;
-        for message in self.state.midi.unseen(previous_events) {
+        for seen in self.state.midi.unseen(previous_events) {
             let _ = self.midi_events.try_send(crate::midi_recall::Event {
-                message,
+                message: seen.message,
                 local_program: false,
+                source: seen.source,
             });
         }
         if changed {

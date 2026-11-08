@@ -184,6 +184,29 @@ pub struct Settings {
     pub branch_bindings: Vec<BranchBinding>,
     #[serde(default)]
     pub parameter_bindings: Vec<ParameterBinding>,
+    /// Further controllers listened to at once, each enabled explicitly. Their
+    /// messages share these mappings but keep their own channel and bank state.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_inputs: Vec<ExtraInput>,
+}
+/// One more controller: its own endpoint and channel filter (0 accepts all).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ExtraInput {
+    pub input: String,
+    pub channel: u8,
+}
+/// Most controllers heard at once, the first plus extras.
+pub const MAX_INPUTS: usize = 4;
+fn alsa_endpoint_valid(input: &str) -> bool {
+    let parts: Vec<_> = input.strip_prefix("hw:").unwrap_or("").split(',').collect();
+    parts.len() == 3
+        && !parts[0].is_empty()
+        && input.len() <= 128
+        && parts[0]
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+        && parts[1..].iter().all(|p| p.parse::<u16>().is_ok())
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -208,20 +231,17 @@ pub struct BranchBinding {
 }
 impl Settings {
     pub fn validate(&self) -> Result<(), String> {
-        let parts: Vec<_> = self
-            .input
-            .strip_prefix("hw:")
-            .unwrap_or("")
-            .split(',')
-            .collect();
-        if parts.len() != 3
-            || parts[0].is_empty()
-            || self.input.len() > 128
-            || !parts[0]
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-            || parts[1..].iter().any(|p| p.parse::<u16>().is_err())
+        if !alsa_endpoint_valid(&self.input)
             || self.channel > 16
+            || self.extra_inputs.len() >= MAX_INPUTS
+            || self.extra_inputs.iter().enumerate().any(|(i, extra)| {
+                !alsa_endpoint_valid(&extra.input)
+                    || extra.channel > 16
+                    || extra.input == self.input
+                    || self.extra_inputs[..i]
+                        .iter()
+                        .any(|old| old.input == extra.input)
+            })
             || self.bindings.len() > 256
             || self.branch_bindings.len() > 128
             || self.parameter_bindings.len() > 128
@@ -279,6 +299,26 @@ impl Settings {
             }
         }
         Ok(())
+    }
+    /// How this controller sees the mappings: source 0 is the first input, the
+    /// rest are `extra_inputs`. Only the channel filter differs, so each source
+    /// is judged on its own channel while sharing the preset's assignments.
+    pub fn for_source(&self, source: u8) -> std::borrow::Cow<'_, Settings> {
+        let channel = match usize::from(source).checked_sub(1) {
+            None => self.channel,
+            Some(index) => self
+                .extra_inputs
+                .get(index)
+                .map_or(self.channel, |e| e.channel),
+        };
+        if channel == self.channel {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(Settings {
+                channel,
+                ..self.clone()
+            })
+        }
     }
     /// None means toggle the confirmed branch target; Some is an absolute gate.
     pub fn branch(&self, message: Message) -> Option<(&BranchBinding, Option<bool>)> {
@@ -368,6 +408,9 @@ pub struct Observed {
     /// Equals `Status::events` after this message; consecutive messages differ by one.
     pub seq: u64,
     pub message: Message,
+    /// Which controller sent it: 0 is the first input, then the extras in order.
+    #[serde(default)]
+    pub source: u8,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -385,13 +428,23 @@ pub struct Status {
     /// count means the worker restarted.
     #[serde(default)]
     pub recent: Vec<Observed>,
+    /// One entry per extra controller, in the order of `Settings::extra_inputs`.
+    #[serde(default)]
+    pub sources: Vec<SourceStatus>,
+}
+/// Connection state of one extra controller.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SourceStatus {
+    pub connected: bool,
+    pub error: Option<String>,
 }
 impl Status {
     /// Messages recorded after `previous` (the event count the consumer last
     /// processed), oldest first, so a burst between polls is not collapsed to
     /// its last message. A lower count means the worker restarted, so every
     /// retained message is new. Nothing is returned while learning.
-    pub fn unseen(&self, previous: u64) -> Vec<Message> {
+    pub fn unseen(&self, previous: u64) -> Vec<Observed> {
         if self.learning {
             return Vec::new();
         }
@@ -399,11 +452,11 @@ impl Status {
         self.recent
             .iter()
             .filter(|item| item.seq > from)
-            .map(|item| item.message)
+            .copied()
             .collect()
     }
     /// Record a received message in arrival order.
-    pub fn observe(&mut self, message: Message) {
+    pub fn observe(&mut self, source: u8, message: Message) {
         self.events = self.events.saturating_add(1);
         self.last = Some(message);
         if self.recent.len() >= RECENT_LIMIT {
@@ -412,6 +465,7 @@ impl Status {
         self.recent.push(Observed {
             seq: self.events,
             message,
+            source,
         });
     }
 }
@@ -423,15 +477,17 @@ impl Status {
 pub fn deliver(
     status: &mut Status,
     settings: &Settings,
+    source: u8,
     message: Message,
     protected: bool,
     receive: impl FnMut(&Settings, Message) -> Result<bool, String>,
 ) {
-    status.observe(message);
+    status.observe(source, message);
     if status.learning {
         return;
     }
-    match dispatch_protected(settings, message, protected, receive) {
+    let view = settings.for_source(source);
+    match dispatch_protected(&view, message, protected, receive) {
         Ok(true) => status.error = None,
         Ok(false) => {}
         Err(error) => status.error = Some(error),
@@ -726,15 +782,29 @@ pub fn dispatch_protected(
 }
 
 /// Device reads and retry state shared by workers; never called inside PCM.
+/// Each configured controller has its own port, decoder and retry timer, so one
+/// unplugged device never stalls or corrupts another.
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 #[derive(Debug)]
 pub struct Connection {
     protected: bool,
     settings: Option<Settings>,
     pub status: Status,
-    port: Option<Input>,
-    retry: std::time::Instant,
+    ports: Vec<Option<Input>>,
+    retry: Vec<std::time::Instant>,
     learn_until: Option<std::time::Instant>,
+}
+/// Record one controller's connection outcome. Source 0 keeps the long-standing
+/// `connected`/`error` fields; the rest report in `sources`.
+#[cfg(all(target_os = "linux", feature = "alsa"))]
+fn set_source_state(status: &mut Status, source: usize, connected: bool, error: Option<String>) {
+    if source == 0 {
+        status.connected = connected;
+        status.error = error;
+    } else if let Some(entry) = status.sources.get_mut(source - 1) {
+        entry.connected = connected;
+        entry.error = error;
+    }
 }
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 impl Connection {
@@ -743,8 +813,8 @@ impl Connection {
             protected: std::env::var("OXIDAL_PROTECT").is_ok_and(|value| value == "1"),
             settings,
             status: Status::default(),
-            port: None,
-            retry: std::time::Instant::now() - std::time::Duration::from_secs(2),
+            ports: Vec::new(),
+            retry: Vec::new(),
             learn_until: None,
         }
     }
@@ -779,33 +849,48 @@ impl Connection {
         let Some(settings) = &self.settings else {
             return;
         };
-        self.status.learning = learning_active(&mut self.learn_until, std::time::Instant::now());
-        if self.port.is_none() && self.retry.elapsed() >= std::time::Duration::from_secs(2) {
-            self.retry = std::time::Instant::now();
-            match Input::open(&settings.input) {
-                Ok(port) => {
-                    self.port = Some(port);
-                    self.status.connected = true;
-                    self.status.error = None;
-                }
-                Err(error) => {
-                    self.status.connected = false;
-                    self.status.error = Some(error);
+        let now = std::time::Instant::now();
+        self.status.learning = learning_active(&mut self.learn_until, now);
+        let count = 1 + settings.extra_inputs.len();
+        self.ports.resize_with(count, || None);
+        self.retry
+            .resize(count, now - std::time::Duration::from_secs(2));
+        self.status
+            .sources
+            .resize(count - 1, SourceStatus::default());
+        for source in 0..count {
+            let endpoint = if source == 0 {
+                &settings.input
+            } else {
+                &settings.extra_inputs[source - 1].input
+            };
+            if self.ports[source].is_none()
+                && self.retry[source].elapsed() >= std::time::Duration::from_secs(2)
+            {
+                self.retry[source] = std::time::Instant::now();
+                match Input::open(endpoint) {
+                    Ok(port) => {
+                        self.ports[source] = Some(port);
+                        set_source_state(&mut self.status, source, true, None);
+                    }
+                    Err(error) => set_source_state(&mut self.status, source, false, Some(error)),
                 }
             }
-        }
-        if let Some(port) = &mut self.port {
+            let Some(port) = &mut self.ports[source] else {
+                continue;
+            };
             let mut messages = [None; 64];
-            let mut count = 0;
+            let mut read = 0;
             match port.read(|message| {
-                messages[count] = Some(message);
-                count += 1;
+                messages[read] = Some(message);
+                read += 1;
             }) {
                 Ok(_) => {
                     for message in messages.into_iter().flatten() {
                         deliver(
                             &mut self.status,
                             settings,
+                            source as u8,
                             message,
                             self.protected,
                             &mut receive,
@@ -813,10 +898,9 @@ impl Connection {
                     }
                 }
                 Err(error) => {
-                    self.port = None;
-                    self.status.connected = false;
-                    self.status.error = Some(error);
-                    self.retry = std::time::Instant::now();
+                    self.ports[source] = None;
+                    set_source_state(&mut self.status, source, false, Some(error));
+                    self.retry[source] = std::time::Instant::now();
                 }
             }
         }
@@ -828,6 +912,7 @@ mod tests {
     #[test]
     fn protect_filters_parameter_edits_before_dispatch_but_keeps_performance_actions() {
         let mut settings = Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![Binding {
@@ -903,6 +988,7 @@ mod tests {
     #[test]
     fn branch_gates_follow_both_values_and_toggles_ignore_release() {
         let mut settings = Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![],
@@ -939,6 +1025,7 @@ mod tests {
     #[test]
     fn bank_select_controllers_are_reserved_for_global_preset_recall() {
         let mut settings = Settings {
+            extra_inputs: vec![],
             input: "hw:Controller,0,0".into(),
             channel: 1,
             bindings: vec![],
@@ -977,6 +1064,7 @@ mod tests {
     #[test]
     fn bindings_match_channel_pc_and_cc_press_but_not_release() {
         let settings = Settings {
+            extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![],
             input: "hw:Controller,0,0".into(),
@@ -1236,8 +1324,17 @@ mod tests {
         );
     }
 
+    fn messages(status: &Status, previous: u64) -> Vec<Message> {
+        status
+            .unseen(previous)
+            .into_iter()
+            .map(|o| o.message)
+            .collect()
+    }
+
     fn scene_settings() -> Settings {
         Settings {
+            extra_inputs: vec![],
             input: "hw:SINCO,0,0".into(),
             channel: 1,
             bindings: vec![Binding {
@@ -1254,10 +1351,13 @@ mod tests {
     fn recent_log_keeps_arrival_order_and_a_detectable_gap_when_full() {
         let mut status = Status::default();
         for program in 0..(RECENT_LIMIT as u8 + 5) {
-            status.observe(Message::Program {
-                channel: 1,
-                program,
-            });
+            status.observe(
+                0,
+                Message::Program {
+                    channel: 1,
+                    program,
+                },
+            );
         }
         assert_eq!(status.events, RECENT_LIMIT as u64 + 5);
         assert_eq!(status.recent.len(), RECENT_LIMIT);
@@ -1278,6 +1378,7 @@ mod tests {
             deliver(
                 &mut status,
                 &settings,
+                0,
                 Message::Program {
                     channel: 1,
                     program,
@@ -1296,6 +1397,7 @@ mod tests {
         deliver(
             &mut status,
             &settings,
+            0,
             Message::Program {
                 channel: 1,
                 program: 0,
@@ -1318,11 +1420,11 @@ mod tests {
             channel: 1,
             program: 0,
         };
-        deliver(&mut status, &settings, message, false, |_, _| {
+        deliver(&mut status, &settings, 0, message, false, |_, _| {
             Err("refused".into())
         });
         assert_eq!(status.error.as_deref(), Some("refused"));
-        deliver(&mut status, &settings, message, false, |_, _| Ok(true));
+        deliver(&mut status, &settings, 0, message, false, |_, _| Ok(true));
         assert_eq!(status.error, None);
     }
 
@@ -1338,22 +1440,25 @@ mod tests {
             program: 3,
         };
         let mut status = Status::default();
-        status.observe(bank(1));
-        status.observe(Message::Control {
-            channel: 1,
-            controller: 32,
-            value: 2,
-        });
-        status.observe(program);
+        status.observe(0, bank(1));
+        status.observe(
+            0,
+            Message::Control {
+                channel: 1,
+                controller: 32,
+                value: 2,
+            },
+        );
+        status.observe(0, program);
         // Bank Select CCs and the Program arrive in one poll interval.
-        assert_eq!(status.unseen(0).len(), 3);
-        assert_eq!(status.unseen(0).last(), Some(&program));
-        assert_eq!(status.unseen(2), vec![program]);
-        assert!(status.unseen(3).is_empty());
+        assert_eq!(messages(&status, 0).len(), 3);
+        assert_eq!(messages(&status, 0).last(), Some(&program));
+        assert_eq!(messages(&status, 2), vec![program]);
+        assert!(messages(&status, 3).is_empty());
         // Restart: the count fell below the consumer's, everything retained is new.
-        assert_eq!(status.unseen(50).len(), 3);
+        assert_eq!(messages(&status, 50).len(), 3);
         status.learning = true;
-        assert!(status.unseen(0).is_empty());
+        assert!(messages(&status, 0).is_empty());
     }
 
     #[test]
@@ -1373,14 +1478,14 @@ mod tests {
         let mut dispatched = Vec::new();
         for byte in wire {
             if let Some(message) = decoder.push(byte) {
-                deliver(&mut status, &settings, message, false, |_, m| {
+                deliver(&mut status, &settings, 0, message, false, |_, m| {
                     dispatched.push(m);
                     Ok(true)
                 });
             }
         }
         // The consumer last saw nothing: it must get all five, oldest first.
-        let unseen = status.unseen(0);
+        let unseen = messages(&status, 0);
         assert_eq!(unseen.len(), 5);
         assert_eq!(unseen, dispatched);
         assert!(matches!(
@@ -1416,7 +1521,79 @@ mod tests {
             })
         );
         // A second poll after more input returns only what is new.
-        assert!(status.unseen(status.events).is_empty());
+        assert!(messages(&status, status.events).is_empty());
+    }
+
+    #[test]
+    fn each_extra_controller_is_judged_on_its_own_channel_and_tagged_in_the_log() {
+        let mut settings = scene_settings(); // first controller: channel 1, Program 0 = clean
+        settings.extra_inputs = vec![ExtraInput {
+            input: "hw:Captain,0,0".into(),
+            channel: 3,
+        }];
+        settings.validate().unwrap();
+        let program_on = |channel| Message::Program {
+            channel,
+            program: 0,
+        };
+        let mut status = Status::default();
+        let mut ran = Vec::new();
+        // The same Program Change 0 arrives from both controllers on different channels.
+        for (source, channel) in [(0u8, 1u8), (1, 1), (1, 3), (0, 3)] {
+            deliver(
+                &mut status,
+                &settings,
+                source,
+                program_on(channel),
+                false,
+                |s, m| {
+                    ran.push((source, s.scene(m).map(str::to_owned)));
+                    Ok(true)
+                },
+            );
+        }
+        // Controller 0 listens on channel 1 and controller 1 on channel 3, so only
+        // the matching channel on each maps to the scene.
+        let mapped: Vec<_> = ran
+            .iter()
+            .map(|(source, scene)| (*source, scene.is_some()))
+            .collect();
+        assert_eq!(mapped, [(0, true), (1, false), (1, true), (0, false)]);
+        let sources: Vec<_> = status.recent.iter().map(|o| o.source).collect();
+        assert_eq!(sources, [0, 1, 1, 0]);
+        // An unknown source falls back to the first controller's filter.
+        assert_eq!(settings.for_source(9).channel, 1);
+    }
+
+    #[test]
+    fn extra_controllers_are_validated_explicitly() {
+        let extra = |input: &str, channel| ExtraInput {
+            input: input.into(),
+            channel,
+        };
+        let with = |extras: Vec<ExtraInput>| {
+            let mut settings = scene_settings();
+            settings.extra_inputs = extras;
+            settings.validate()
+        };
+        assert!(with(vec![extra("hw:Captain,0,0", 0)]).is_ok());
+        assert!(
+            with(vec![extra("hw:SINCO,0,0", 1)]).is_err(),
+            "same device as the first"
+        );
+        assert!(
+            with(vec![extra("hw:A,0,0", 1), extra("hw:A,0,0", 2)]).is_err(),
+            "the same device twice"
+        );
+        assert!(with(vec![extra("not-a-device", 1)]).is_err());
+        assert!(with(vec![extra("hw:A,0,0", 17)]).is_err());
+        let four: Vec<_> = (0..MAX_INPUTS)
+            .map(|i| extra(&format!("hw:D{i},0,0"), 1))
+            .collect();
+        assert!(
+            with(four).is_err(),
+            "at most {MAX_INPUTS} controllers in all"
+        );
     }
 
     #[test]

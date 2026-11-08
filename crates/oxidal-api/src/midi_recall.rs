@@ -14,6 +14,8 @@ use tokio::sync::mpsc;
 pub(crate) struct Event {
     pub message: Message,
     pub local_program: bool,
+    /// Which controller sent it; bank state is kept per controller and channel.
+    pub source: u8,
 }
 
 /// Outcome of the newest device-wide MIDI action. `seq` increases with each one
@@ -37,17 +39,35 @@ fn record(shared: &Shared, result: &Result<String, String>) {
 }
 
 #[derive(Default)]
-struct BankState([u16; 16]);
+struct BankState([[u16; 16]; oxidal_audio::midi::MAX_INPUTS]);
+
+/// The channel a controller listens on (0 accepts every channel), given the map.
+fn listens_on(map: &oxidal_presets::MidiMap, source: u8, channel: u8) -> bool {
+    let wanted = match usize::from(source).checked_sub(1) {
+        None => map.channel,
+        Some(index) => map
+            .extra_inputs
+            .get(index)
+            .map_or(map.channel, |e| e.channel),
+    };
+    wanted == 0 || wanted == channel
+}
 
 impl BankState {
+    /// A Program Change recall target, or None for Bank Select, a local scene
+    /// Program or a source beyond the supported controllers. Each controller and
+    /// channel has its own bank, so one controller's Bank Select never changes
+    /// what another's Program Change means.
     fn apply(&mut self, event: Event) -> Option<(u8, usize)> {
+        let source = usize::from(event.source);
+        let banks = self.0.get_mut(source)?;
         match event.message {
             Message::Control {
                 channel,
                 controller: 0,
                 value,
             } if (1..=16).contains(&channel) => {
-                let bank = &mut self.0[usize::from(channel - 1)];
+                let bank = &mut banks[usize::from(channel - 1)];
                 *bank = (u16::from(value) << 7) | (*bank & 0x7f);
                 None
             }
@@ -56,7 +76,7 @@ impl BankState {
                 controller: 32,
                 value,
             } if (1..=16).contains(&channel) => {
-                let bank = &mut self.0[usize::from(channel - 1)];
+                let bank = &mut banks[usize::from(channel - 1)];
                 *bank = (*bank & 0x3f80) | u16::from(value);
                 None
             }
@@ -65,7 +85,7 @@ impl BankState {
             {
                 Some((
                     channel,
-                    usize::from(self.0[usize::from(channel - 1)]) * 128 + usize::from(program),
+                    usize::from(banks[usize::from(channel - 1)]) * 128 + usize::from(program),
                 ))
             }
             _ => None,
@@ -88,7 +108,7 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
             // next, so quick taps stay in order.
             if let Some(action) = map.navigation.action(event.message)
                 && map.input.is_some()
-                && channel_of(event.message).is_some_and(|c| map.channel == 0 || map.channel == c)
+                && channel_of(event.message).is_some_and(|c| listens_on(&map, event.source, c))
             {
                 match action {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
@@ -100,7 +120,7 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
             let Some((channel, slot)) = banks.apply(event) else {
                 continue;
             };
-            if map.input.is_none() || (map.channel != 0 && map.channel != channel) {
+            if map.input.is_none() || !listens_on(&map, event.source, channel) {
                 continue;
             }
             record(
@@ -503,6 +523,7 @@ mod tests {
         Event {
             message,
             local_program: false,
+            source: 0,
         }
     }
 
@@ -558,6 +579,56 @@ mod tests {
     }
 
     #[test]
+    fn bank_select_is_kept_separately_for_each_controller() {
+        let mut banks = BankState::default();
+        let from = |source: u8, message| Event {
+            message,
+            local_program: false,
+            source,
+        };
+        let bank = |value| Message::Control {
+            channel: 1,
+            controller: 0,
+            value,
+        };
+        let program = Message::Program {
+            channel: 1,
+            program: 2,
+        };
+        // Controller 0 selects bank 1; controller 1 never did.
+        assert_eq!(banks.apply(from(0, bank(1))), None);
+        // MSB 1 is bank 128, as in the single-controller test above.
+        assert_eq!(banks.apply(from(0, program)), Some((1, 128 * 128 + 2)));
+        assert_eq!(banks.apply(from(1, program)), Some((1, 2)));
+        // A source past the supported controllers is ignored, never panics.
+        assert_eq!(banks.apply(from(9, program)), None);
+    }
+
+    #[test]
+    fn each_controller_is_filtered_on_its_own_channel() {
+        let map = oxidal_presets::MidiMap {
+            revision: String::new(),
+            input: Some("hw:A,0,0".into()),
+            channel: 1,
+            template: None,
+            navigation: Default::default(),
+            saved_layouts: vec![],
+            extra_inputs: vec![oxidal_audio::midi::ExtraInput {
+                input: "hw:B,0,0".into(),
+                channel: 0,
+            }],
+            entries: vec![],
+        };
+        assert!(listens_on(&map, 0, 1));
+        assert!(!listens_on(&map, 0, 2));
+        assert!(listens_on(&map, 1, 2), "channel 0 accepts every channel");
+        assert!(
+            listens_on(&map, 5, 1),
+            "unknown sources use the first filter"
+        );
+    }
+
+    #[test]
     fn a_local_scene_program_suppresses_global_recall() {
         let mut banks = BankState::default();
         assert_eq!(
@@ -567,6 +638,7 @@ mod tests {
                     program: 4,
                 },
                 local_program: true,
+                source: 0,
             }),
             None
         );

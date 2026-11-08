@@ -1315,7 +1315,8 @@
             "events": 0,
             "last": null,
             "learning": false,
-            "recent": []
+            "recent": [],
+            "sources": []
           }
         },
         "model_change": {
@@ -3904,6 +3905,26 @@
         }
       ]
     },
+    "ExtraInput": {
+      "description": "One more controller: its own endpoint and channel filter (0 accepts all).",
+      "type": "object",
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "input": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "channel"
+      ]
+    },
     "Framing": {
       "type": "string",
       "enum": [
@@ -5573,6 +5594,13 @@
             "$ref": "#/$defs/MidiMapEntry"
           }
         },
+        "extra_inputs": {
+          "description": "Further controllers heard at once, each enabled explicitly (at most three).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtraInput"
+          }
+        },
         "input": {
           "type": [
             "string",
@@ -5667,6 +5695,13 @@
         },
         "expected_revision": {
           "type": "string"
+        },
+        "extra_inputs": {
+          "description": "Further controllers heard at once, each enabled explicitly (at most three).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtraInput"
+          }
         },
         "input": {
           "type": [
@@ -6699,6 +6734,14 @@
           "description": "Equals `Status::events` after this message; consecutive messages differ by one.",
           "type": "integer",
           "format": "uint64",
+          "minimum": 0
+        },
+        "source": {
+          "description": "Which controller sent it: 0 is the first input, then the extras in order.",
+          "type": "integer",
+          "format": "uint8",
+          "default": 0,
+          "maximum": 255,
           "minimum": 0
         }
       },
@@ -9046,6 +9089,13 @@
           "maximum": 255,
           "minimum": 0
         },
+        "extra_inputs": {
+          "description": "Further controllers listened to at once, each enabled explicitly. Their\nmessages share these mappings but keep their own channel and bank state.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExtraInput"
+          }
+        },
         "input": {
           "type": "string"
         },
@@ -9327,7 +9377,8 @@
             "events": 0,
             "last": null,
             "learning": false,
-            "recent": []
+            "recent": [],
+            "sources": []
           }
         },
         "model_change": {
@@ -9423,6 +9474,25 @@
         "none",
         "left",
         "right"
+      ]
+    },
+    "SourceStatus": {
+      "description": "Connection state of one extra controller.",
+      "type": "object",
+      "properties": {
+        "connected": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "connected"
       ]
     },
     "Spectrum": {
@@ -9874,6 +9944,14 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/Observed"
+          }
+        },
+        "sources": {
+          "description": "One entry per extra controller, in the order of `Settings::extra_inputs`.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceStatus"
           }
         }
       },

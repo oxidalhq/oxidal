@@ -95,6 +95,7 @@ mod tests {
         let mut settings: StartRig = serde_json::from_value(json!({"revision":"a".repeat(64),"stream":{"input":input,"output":output,"input_map":[0,1],"output_map":[0,1]},"recall":{"source_revision":"a".repeat(64),"values":[{"target":{"kind":"native","node":"amp","parameter":"toneBass"},"value":0.25}]}})).unwrap();
         assert!(settings.midi.is_none()); // older checkpoints remain readable
         settings.midi = Some(oxidal_audio::midi::Settings {
+            extra_inputs: vec![],
             branch_bindings: vec![],
             parameter_bindings: vec![oxidal_audio::midi::ParameterBinding {
                 target: oxidal_engine::protocol::Target::Native {
