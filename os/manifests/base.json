@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "distribution": "raspberry-pi-os-lite",
   "debian_codename": "trixie",
   "architecture": "arm64",
@@ -16,7 +16,9 @@
     "policy": "The staging-only recipe makes no package changes. Appliance image assembly installs the explicit runtime list below and captures exact installed versions; no package removal."
   },
   "services": {
-    "stage": ["oxidald.service"],
+    "stage": [
+      "oxidald.service"
+    ],
     "enable": [],
     "disable": []
   },
@@ -90,7 +92,10 @@
           "lsof",
           "strace"
         ],
-        "masked_units": ["apt-daily.timer", "apt-daily-upgrade.timer"]
+        "masked_units": [
+          "apt-daily.timer",
+          "apt-daily-upgrade.timer"
+        ]
       }
     }
   }
