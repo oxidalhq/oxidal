@@ -169,6 +169,7 @@ export function GlobalTuner({
     try {
       await command(true);
       started.current = true;
+      if (initialMuted.current === false) await monitor(true);
       setError('');
     } catch (cause) {
       setError(friendlyError(cause, 'use the tuner'));

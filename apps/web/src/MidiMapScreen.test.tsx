@@ -113,7 +113,7 @@ function arrange() {
   vi.mocked(applyMidiTemplate).mockResolvedValue({
     ...map,
     revision: 'map-3',
-    template: { scene_buttons: 4, first_controller: 40 },
+    template: { scene_buttons: 4, first_controller: 16 },
   });
   vi.mocked(testMidi).mockResolvedValue();
   vi.mocked(midiAction).mockResolvedValue({ seq: 0, ok: true, message: '' });
@@ -217,7 +217,7 @@ it('saves and applies a scene-button template without hardware', async () => {
   await waitFor(() =>
     expect(updateMidiMap).toHaveBeenCalledWith(
       expect.objectContaining({
-        template: { scene_buttons: 4, first_controller: 40 },
+        template: { scene_buttons: 4, first_controller: 16 },
       }),
     ),
   );
@@ -394,6 +394,40 @@ it('saves a starting layout without touching preset mappings and shows each swit
   expect(sent.entries).toEqual(map.entries);
 });
 
+it('applies a chosen layout to an existing preset after previewing replacement', async () => {
+  const user = userEvent.setup();
+  arrange();
+  renderScreen();
+  const setup = await screen.findByRole('region', { name: 'Controller setup' });
+  await user.click(within(setup).getByLabelText('Controller profile'));
+  await user.click(screen.getByRole('option', { name: 'Generic controller' }));
+  await user.click(within(setup).getByLabelText('Existing preset for layout'));
+  await user.click(
+    screen.getByRole('option', { name: 'Stage Rig · 2 mappings' }),
+  );
+  await user.click(
+    within(setup).getByRole('button', { name: 'Apply layout to preset' }),
+  );
+  const replace = within(setup).getByRole('button', {
+    name: 'Replace 2 mappings',
+  });
+  expect(applyMidiTemplate).not.toHaveBeenCalled();
+  await user.click(replace);
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  expect(updateMidiMap).toHaveBeenCalledWith(
+    expect.objectContaining({
+      template: { scene_buttons: 4, first_controller: 16 },
+      entries: map.entries,
+    }),
+  );
+  await waitFor(() =>
+    expect(applyMidiTemplate).toHaveBeenCalledWith({
+      expected_revision: 'map-2',
+      entry: { kind: 'rig', id: id('a') },
+    }),
+  );
+});
+
 it('refuses a layout whose numbers an existing preset mapping already uses', async () => {
   const user = userEvent.setup();
   arrange();
@@ -478,6 +512,37 @@ it('learns a Mute trigger and shows it beside Previous and Next', async () => {
   expect(await screen.findByText('CC 22 · press')).toBeVisible();
 });
 
+it('learns a global Tuner trigger', async () => {
+  arrange();
+  const view = render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: /Learn.*Tuner/ }));
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(1, {
+        kind: 'control',
+        channel: 2,
+        controller: 23,
+        value: 127,
+      })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalled());
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
+    tuner: { program: null, controller: 23 },
+  });
+  expect(await screen.findByText('CC 23 · press')).toBeVisible();
+});
+
 it('disables an assignment without losing it and enables it again', async () => {
   const user = userEvent.setup();
   arrange();
@@ -510,7 +575,7 @@ it('saves, duplicates, applies and deletes a named layout', async () => {
   arrange();
   vi.mocked(midiMap).mockResolvedValue({
     ...map,
-    template: { scene_buttons: 4, first_controller: 40 },
+    template: { scene_buttons: 4, first_controller: 16 },
     navigation: { next: { program: 3, controller: null } },
   });
   renderScreen();
@@ -526,7 +591,7 @@ it('saves, duplicates, applies and deletes a named layout', async () => {
       id: 'stage-setup',
       name: 'Stage Setup',
       profile: 'chocolate',
-      template: { scene_buttons: 4, first_controller: 40 },
+      template: { scene_buttons: 4, first_controller: 16 },
       navigation: { next: { program: 3, controller: null } },
     },
   ]);
@@ -534,7 +599,7 @@ it('saves, duplicates, applies and deletes a named layout', async () => {
     await within(setup).findByText('Stage Setup', { selector: 'strong' }),
   ).toBeVisible();
   expect(setup).toHaveTextContent(
-    '4 scene buttons · CC 40–43 · Next Program 4',
+    '4 scene buttons · CC 16–19 · Next Program 4',
   );
   await user.click(
     within(setup).getByRole('button', { name: /Duplicate Stage Setup/ }),

@@ -6465,7 +6465,7 @@
       ]
     },
     "Navigation": {
-      "description": "Device-wide preset navigation through the current Mine set-list. They sit\noutside every preset map, so no preset can silently change what they do.",
+      "description": "Device-wide actions through the current Mine set-list and playing engine.\nThey sit outside every preset map, so no preset can silently change what\nthey do.",
       "type": "object",
       "properties": {
         "mute": {
@@ -6490,6 +6490,17 @@
           ]
         },
         "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tuner": {
+          "description": "Opens the global tuner overlay when a browser is connected.",
           "anyOf": [
             {
               "$ref": "#/$defs/Trigger"

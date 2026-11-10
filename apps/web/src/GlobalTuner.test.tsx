@@ -86,26 +86,28 @@ it('uses the current native cursor and stops its tuner on close', async () => {
     kind: 'authoring',
     action: { kind: 'utility', command: { kind: 'tuner', enabled: true } },
   });
+  expect(playbackCommand).toHaveBeenCalledWith(native, {
+    kind: 'host_utility',
+    command: { kind: 'output_mute', enabled: true },
+  });
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
-  expect(playbackCommand).toHaveBeenLastCalledWith(native, {
+  expect(playbackCommand).toHaveBeenCalledWith(native, {
     kind: 'authoring',
     action: { kind: 'utility', command: { kind: 'tuner', enabled: false } },
   });
+  expect(playbackCommand).toHaveBeenLastCalledWith(native, {
+    kind: 'host_utility',
+    command: { kind: 'output_mute', enabled: false },
+  });
 });
-it('temporarily mutes after the rig and restores monitoring on close', async () => {
+it('automatically mutes after the rig and restores monitoring on close', async () => {
   vi.mocked(playbackState).mockResolvedValue(native);
   vi.mocked(playbackCommand).mockResolvedValue(native);
   const close = vi.fn();
   render(<GlobalTuner onClose={close} />);
   const mute = await screen.findByRole('radio', { name: 'Mute' });
   await waitFor(() => expect(mute).toBeEnabled());
-  expect(mute).toHaveAttribute('aria-checked', 'false');
-  expect(screen.getByRole('radio', { name: 'Hear sound' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-  fireEvent.click(mute);
   await waitFor(() =>
     expect(playbackCommand).toHaveBeenCalledWith(native, {
       kind: 'host_utility',
@@ -113,6 +115,10 @@ it('temporarily mutes after the rig and restores monitoring on close', async () 
     }),
   );
   expect(mute).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByRole('radio', { name: 'Hear sound' })).toHaveAttribute(
+    'aria-checked',
+    'false',
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
   expect(playbackCommand).toHaveBeenLastCalledWith(native, {

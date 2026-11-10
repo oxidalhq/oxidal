@@ -796,7 +796,7 @@ const midiActionValidator = ajv.compile<MidiAction>({
   $defs: schema.$defs,
   $ref: '#/$defs/MidiAction',
 });
-/** The newest device-wide MIDI action (Program recall, Previous, Next). */
+/** The newest device-wide MIDI action (Program recall, navigation, mute or tuner). */
 export async function midiAction(): Promise<MidiAction> {
   const body = await presetResponse(await fetch('/api/v1/midi/action'));
   if (!midiActionValidator(body)) throw new Error('Incompatible MIDI action');

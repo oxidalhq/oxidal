@@ -114,6 +114,11 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
                     DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
                     DeviceAction::MuteToggle => toggle_mute(&shared).await.ok(),
+                    DeviceAction::TunerOpen => {
+                        let result = Ok("Tuner requested".to_owned());
+                        record(&shared, &result);
+                        result.ok()
+                    }
                 };
                 continue;
             }

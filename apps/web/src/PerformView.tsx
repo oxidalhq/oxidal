@@ -183,10 +183,16 @@ function PresetSteps({
         </button>
       </div>
       {position && position.index != null && (
-        <p className="perform-neighbors" aria-label="Set list neighbours">
-          {line('Previous', position.previous)}
-          {line('Next', position.next)}
-        </p>
+        <div className="perform-neighbors" aria-label="Set list neighbours">
+          <p>
+            {line('Previous', position.previous)}
+            {line('Next', position.next)}
+          </p>
+          <p>
+            Recall uses the preset’s saved starting scene; without one, it
+            starts at Scene 1. Previous and Next stop at the ends.
+          </p>
+        </div>
       )}
       <button
         type="button"

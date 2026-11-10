@@ -2,13 +2,14 @@ import { Button } from './components/ui/button';
 import type { MidiMap } from './api';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
-export type NavigationKey = 'previous' | 'next' | 'mute';
+export type NavigationKey = 'previous' | 'next' | 'mute' | 'tuner';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
   ['previous', 'Previous preset'],
   ['next', 'Next preset'],
   ['mute', 'Mute output'],
+  ['tuner', 'Tuner'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */
@@ -20,8 +21,8 @@ function triggerText(trigger: Trigger | null | undefined): string {
 }
 
 /**
- * Device-wide Previous/Next through the Mine set-list. They sit outside every
- * preset, so Clear here can never uncover another action.
+ * Device-wide actions sit outside every preset, so Clear here can never
+ * uncover another action.
  * @see docs/architecture.md
  */
 export function PresetNavigation({
@@ -47,7 +48,8 @@ export function PresetNavigation({
           <p className="caption mt-0.5">
             Previous and Next move through the Mine set-list and stop at the
             first and last preset. Mute silences the output until pressed again.
-            The Tuner needs the browser and cannot start from a footswitch yet.
+            Tuner opens the global tuner overlay from any screen when a browser
+            is connected.
           </p>
         </div>
       </div>

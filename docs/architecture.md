@@ -85,8 +85,11 @@ recall through the same path as Program Change, so a refused or unready preset
 leaves the current sound playing. Mute flips the worker-owned output mute, so no
 other copy of that state can disagree. Presses are handled one at a time in
 arrival order. `GET /midi/action` reports the newest outcome and
-`POST /midi/navigate` runs Previous or Next for the Perform buttons. The Tuner
-needs the browser and is not a footswitch action yet.
+`POST /midi/navigate` runs Previous or Next for the Perform buttons. Tuner is a
+fourth device-wide action: its learned PC/CC press records a `Tuner requested`
+outcome, and a connected browser opens the global tuner overlay from any view.
+The overlay owns tuner entry/exit and restores the output mute state it found
+when it opened; unsupported owners remain an explicit refusal.
 
 ### Several controllers
 

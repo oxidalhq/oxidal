@@ -29,10 +29,10 @@ it('applies only the template and navigation, leaving the rest as is', () => {
   };
   expect(applyLayout(current, layout('chocolate', 'presets'))).toEqual(current);
   const hybrid = applyLayout(current, layout('generic', 'hybrid'));
-  expect(hybrid.template).toEqual({ scene_buttons: 2, first_controller: 40 });
+  expect(hybrid.template).toEqual({ scene_buttons: 2, first_controller: 16 });
   expect(hybrid.navigation).toEqual({
-    previous: { program: null, controller: 42 },
-    next: { program: null, controller: 43 },
+    previous: { program: null, controller: 18 },
+    next: { program: null, controller: 19 },
   });
 });
 
@@ -41,9 +41,9 @@ it('names existing mappings that already use a number the layout needs', () => {
     entries: [
       {
         entry: ref,
-        bindings: [{ scene: 'lead', program: null, controller: 42 }],
+        bindings: [{ scene: 'lead', program: null, controller: 18 }],
         branch_bindings: [
-          { branch: 'x', controller: 43, mode: 'toggle' as const },
+          { branch: 'x', controller: 19, mode: 'toggle' as const },
         ],
         parameter_bindings: [],
       },
@@ -54,7 +54,7 @@ it('names existing mappings that already use a number the layout needs', () => {
     layout('generic', 'hybrid'),
     () => 'Stage Rig',
   );
-  expect(found).toEqual(['CC 42 · Stage Rig', 'CC 43 · Stage Rig']);
+  expect(found).toEqual(['CC 18 · Stage Rig', 'CC 19 · Stage Rig']);
   expect(
     layoutConflicts(map, layout('generic', 'scenes-4'), () => 'x'),
   ).toEqual([]);
@@ -63,10 +63,10 @@ it('names existing mappings that already use a number the layout needs', () => {
 it('passes the message check only for the expected press, not a release', () => {
   const hybrid = layout('generic', 'hybrid');
   expect(
-    checkPassed(hybrid, [{ kind: 'control', controller: 42, value: 0 }]),
+    checkPassed(hybrid, [{ kind: 'control', controller: 18, value: 0 }]),
   ).toBe(false);
   expect(
-    checkPassed(hybrid, [{ kind: 'control', controller: 42, value: 127 }]),
+    checkPassed(hybrid, [{ kind: 'control', controller: 18, value: 127 }]),
   ).toBe(true);
   const presets = layout('chocolate', 'presets');
   expect(checkPassed(presets, [{ kind: 'program', program: 1 }])).toBe(false);
@@ -102,5 +102,6 @@ it('saves the current template and triggers under a unique readable id', async (
     previous: null,
     next: { program: 3, controller: null },
     mute: null,
+    tuner: null,
   });
 });

@@ -23,6 +23,7 @@ export type Layout = {
     previous?: Trigger | null;
     next?: Trigger | null;
     mute?: Trigger | null;
+    tuner?: Trigger | null;
   } | null;
   switches: SwitchRow[];
   /** A message to press and expect, used by the passive message check. */
@@ -43,51 +44,51 @@ const press = (c: number): Trigger => ({ program: null, controller: c });
 const ccScenes = (count: 4 | 8): Layout => ({
   id: `scenes-${count}`,
   label: `${count} scenes`,
-  summary: `${count} buttons pick scenes inside the playing preset (CC 40–${39 + count}).`,
-  template: { scene_buttons: count, first_controller: 40 },
+  summary: `${count} buttons pick scenes inside the playing preset (CC 16–${15 + count}).`,
+  template: { scene_buttons: count, first_controller: 16 },
   navigation: null,
   switches: Array.from({ length: count }, (_, i) => ({
     switch: String(i + 1),
-    sends: `CC ${40 + i} press`,
+    sends: `CC ${16 + i} press`,
     does: `Scene ${i + 1}`,
-    message: { controller: 40 + i },
+    message: { controller: 16 + i },
   })),
-  check: { press: '1', controller: 40 },
+  check: { press: '1', controller: 16 },
 });
 
 const ccHybrid: Layout = {
   id: 'hybrid',
   label: 'Two scenes + Previous/Next',
   summary: 'Two scenes, then Previous and Next preset on the other buttons.',
-  template: { scene_buttons: 2, first_controller: 40 },
-  navigation: { previous: press(42), next: press(43) },
+  template: { scene_buttons: 2, first_controller: 16 },
+  navigation: { previous: press(18), next: press(19) },
   switches: [
     {
       switch: '1',
-      sends: 'CC 40 press',
+      sends: 'CC 16 press',
       does: 'Scene 1',
-      message: { controller: 40 },
+      message: { controller: 16 },
     },
     {
       switch: '2',
-      sends: 'CC 41 press',
+      sends: 'CC 17 press',
       does: 'Scene 2',
-      message: { controller: 41 },
+      message: { controller: 17 },
     },
     {
       switch: '3',
-      sends: 'CC 42 press',
+      sends: 'CC 18 press',
       does: 'Previous preset',
-      message: { controller: 42 },
+      message: { controller: 18 },
     },
     {
       switch: '4',
-      sends: 'CC 43 press',
+      sends: 'CC 19 press',
       does: 'Next preset',
-      message: { controller: 43 },
+      message: { controller: 19 },
     },
   ],
-  check: { press: '3', controller: 42 },
+  check: { press: '3', controller: 18 },
 };
 
 export const profiles: Profile[] = [
@@ -251,7 +252,7 @@ export function checkPassed(
 
 type SavedLayout = NonNullable<MidiMap['saved_layouts']>[number];
 
-/** A saved layout as an applicable one; it replaces all three device triggers. */
+/** A saved layout as an applicable one; it replaces all four device triggers. */
 export function savedToLayout(saved: SavedLayout): Layout {
   return {
     id: saved.id,
@@ -262,6 +263,7 @@ export function savedToLayout(saved: SavedLayout): Layout {
       previous: saved.navigation?.previous ?? null,
       next: saved.navigation?.next ?? null,
       mute: saved.navigation?.mute ?? null,
+      tuner: saved.navigation?.tuner ?? null,
     },
     switches: [],
     check: { press: '' },

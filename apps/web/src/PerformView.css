@@ -709,6 +709,9 @@
   font-size: var(--text-sm);
   color: var(--muted-foreground);
 }
+.perform-neighbors p {
+  color: inherit;
+}
 .perform-neighbors [data-ready='false'] {
   color: var(--destructive);
 }

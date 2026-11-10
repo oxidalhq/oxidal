@@ -237,6 +237,9 @@ it('shows each neighbour with its readiness and mutes only from confirmed state'
   const near = await screen.findByLabelText('Set list neighbours');
   expect(near).toHaveTextContent('Previous: Clean · Ready');
   expect(near).toHaveTextContent('Next: Lead · Not ready: Protect is on');
+  expect(near).toHaveTextContent(
+    'Recall uses the preset’s saved starting scene; without one, it starts at Scene 1. Previous and Next stop at the ends.',
+  );
   const mute = screen.getByRole('button', { name: 'Mute output' });
   fireEvent.click(mute);
   await vi.waitFor(() => expect(muteMidi).toHaveBeenCalledTimes(1));

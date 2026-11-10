@@ -25,6 +25,11 @@ type Message = {
   controller?: number;
   value?: number;
 };
+type PresetOption = {
+  entry: MidiMap['entries'][number]['entry'];
+  name: string;
+  mappings: number;
+};
 
 const sameMessage = (row: SwitchRow, message: Message | null | undefined) =>
   !!message &&
@@ -52,6 +57,8 @@ export function ControllerSetup({
   onChecking,
   onApply,
   onSaved,
+  presets,
+  onApplyToPreset,
   canLearnNav,
   onLearnNav,
 }: {
@@ -65,8 +72,13 @@ export function ControllerSetup({
   onChecking: (on: boolean) => void;
   onApply: (content: ReturnType<typeof applyLayout>) => void;
   onSaved: (layouts: NonNullable<MidiMap['saved_layouts']>) => void;
+  presets: PresetOption[];
+  onApplyToPreset: (
+    content: ReturnType<typeof applyLayout>,
+    entry: PresetOption['entry'],
+  ) => void;
   canLearnNav: boolean;
-  onLearnNav: (key: 'previous' | 'next' | 'mute') => void;
+  onLearnNav: (key: 'previous' | 'next' | 'mute' | 'tuner') => void;
 }) {
   const [selected, setSelected] = useState('');
   const saved = map.saved_layouts ?? [];
@@ -79,6 +91,11 @@ export function ControllerSetup({
     profile.layouts[0]!;
   const conflicts = layoutConflicts(map, layout, nameOf);
   const [seen, setSeen] = useState(0);
+  const [presetKey, setPresetKey] = useState('');
+  const [confirmPreset, setConfirmPreset] = useState('');
+  const chosenPreset = presets.find(
+    (preset) => `${preset.entry.kind}:${preset.entry.id}` === presetKey,
+  );
   const passed = checking && checkPassed(layout, recent.slice(seen));
   const isChocolate = profile.id === 'chocolate';
   return (
@@ -234,6 +251,56 @@ export function ControllerSetup({
             Save layout
           </Button>
         </div>
+        {layout.template !== 'keep' && presets.length > 0 && (
+          <div
+            className="midi-saved-new"
+            role="group"
+            aria-label="Apply layout to existing preset"
+          >
+            <label className="field min-w-0">
+              Existing preset
+              <Select
+                value={presetKey}
+                onValueChange={(value) => {
+                  setPresetKey(value);
+                  setConfirmPreset('');
+                }}
+              >
+                <SelectTrigger aria-label="Existing preset for layout">
+                  <SelectValue placeholder="Choose preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  {presets.map((preset) => {
+                    const key = `${preset.entry.kind}:${preset.entry.id}`;
+                    return (
+                      <SelectItem key={key} value={key}>
+                        {preset.name} · {preset.mappings}{' '}
+                        {preset.mappings === 1 ? 'mapping' : 'mappings'}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </label>
+            <Button
+              variant="outline"
+              disabled={!chosenPreset || busy || conflicts.length > 0}
+              onClick={() => {
+                if (!chosenPreset) return;
+                if (chosenPreset.mappings > 0 && confirmPreset !== presetKey) {
+                  setConfirmPreset(presetKey);
+                  return;
+                }
+                setConfirmPreset('');
+                onApplyToPreset(applyLayout(map, layout), chosenPreset.entry);
+              }}
+            >
+              {chosenPreset && confirmPreset === presetKey
+                ? `Replace ${chosenPreset.mappings} ${chosenPreset.mappings === 1 ? 'mapping' : 'mappings'}`
+                : 'Apply layout to preset'}
+            </Button>
+          </div>
+        )}
         <div className="midi-saved" role="group" aria-label="Saved layouts">
           <h4 className="m-0 text-sm">Saved layouts</h4>
           <div className="midi-saved-new">

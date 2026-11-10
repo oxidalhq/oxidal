@@ -1932,8 +1932,9 @@ export interface Disabled {
   program?: number | null;
 }
 /**
- * Device-wide preset navigation through the current Mine set-list. They sit
- * outside every preset map, so no preset can silently change what they do.
+ * Device-wide actions through the current Mine set-list and playing engine.
+ * They sit outside every preset map, so no preset can silently change what
+ * they do.
  */
 export interface Navigation {
   /**
@@ -1942,6 +1943,10 @@ export interface Navigation {
   mute?: Trigger | null;
   next?: Trigger | null;
   previous?: Trigger | null;
+  /**
+   * Opens the global tuner overlay when a browser is connected.
+   */
+  tuner?: Trigger | null;
 }
 /**
  * One PC or CC press that runs a device-wide action. A Program Change fires

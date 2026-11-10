@@ -47,7 +47,7 @@ const GraphAuthor = lazy(() =>
 );
 import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
-import { OPEN_TUNER_EVENT } from './tunerNavigation';
+import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
 import { TunerButton } from './TunerButton';
 import { refreshMonitorFeed } from './monitorFeed';
 import { SignalChain } from './SignalChain';
@@ -69,6 +69,7 @@ import { About } from './About';
 import { ControlEditor } from './ControlEditor';
 import {
   capabilities,
+  midiAction,
   deviceStorage,
   parseSnapshot,
   sendCommand,
@@ -119,6 +120,39 @@ function InstrumentApp() {
     window.addEventListener(OPEN_TUNER_EVENT, open);
     return () => window.removeEventListener(OPEN_TUNER_EVENT, open);
   }, []);
+  const lastTunerAction = useRef<number | null>(null);
+  useEffect(() => {
+    if (!connected) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const action = await midiAction();
+        if (!active) return;
+        if (lastTunerAction.current === null) {
+          lastTunerAction.current = action.seq;
+        } else if (
+          action.seq !== lastTunerAction.current &&
+          action.ok &&
+          action.message === 'Tuner requested'
+        ) {
+          lastTunerAction.current = action.seq;
+          requestTuner();
+        } else {
+          lastTunerAction.current = action.seq;
+        }
+      } catch {
+        // The normal reconnect path remains authoritative if polling fails.
+      } finally {
+        if (active) timer = setTimeout(() => void poll(), 250);
+      }
+    }
+    void poll();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [connected]);
   const [settingsSection, setSettingsSection] = useSectionLocation(
     'settings',
     settingsSections,

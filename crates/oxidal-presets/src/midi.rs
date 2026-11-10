@@ -239,8 +239,9 @@ impl Trigger {
     }
 }
 
-/// Device-wide preset navigation through the current Mine set-list. They sit
-/// outside every preset map, so no preset can silently change what they do.
+/// Device-wide actions through the current Mine set-list and playing engine.
+/// They sit outside every preset map, so no preset can silently change what
+/// they do.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Navigation {
@@ -251,6 +252,9 @@ pub struct Navigation {
     /// Flips the output mute, like the Mute button.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mute: Option<Trigger>,
+    /// Opens the global tuner overlay when a browser is connected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tuner: Option<Trigger>,
 }
 
 /// A device-wide action a footswitch can run.
@@ -259,11 +263,15 @@ pub enum DeviceAction {
     Previous,
     Next,
     MuteToggle,
+    TunerOpen,
 }
 
 impl Navigation {
     pub fn is_empty(&self) -> bool {
-        self.previous.is_none() && self.next.is_none() && self.mute.is_none()
+        self.previous.is_none()
+            && self.next.is_none()
+            && self.mute.is_none()
+            && self.tuner.is_none()
     }
 
     /// Which device action a message runs, if any.
@@ -274,13 +282,17 @@ impl Navigation {
             Some(DeviceAction::Next)
         } else if self.mute.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::MuteToggle)
+        } else if self.tuner.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::TunerOpen)
         } else {
             None
         }
     }
 
     fn triggers(&self) -> impl Iterator<Item = Trigger> {
-        [self.previous, self.next, self.mute].into_iter().flatten()
+        [self.previous, self.next, self.mute, self.tuner]
+            .into_iter()
+            .flatten()
     }
 
     fn validate(&self, entries: &BTreeMap<String, PresetMap>) -> Result<()> {
@@ -958,6 +970,10 @@ mod tests {
                 program: None,
                 controller: Some(22),
             }),
+            tuner: Some(Trigger {
+                program: None,
+                controller: Some(23),
+            }),
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -970,12 +986,14 @@ mod tests {
                 previous: Some(program(2)),
                 next: Some(program(2)),
                 mute: None,
+                tuner: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
                 previous: Some(program(2)),
                 next: None,
                 mute: Some(program(2)),
+                tuner: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -984,6 +1002,7 @@ mod tests {
                 }),
                 next: None,
                 mute: None,
+                tuner: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -992,6 +1011,7 @@ mod tests {
                 }),
                 next: None,
                 mute: None,
+                tuner: None,
             },
         ] {
             assert!(matches!(
@@ -1025,6 +1045,7 @@ mod tests {
         );
         assert_eq!(nav.action(press(21, 127)), Some(DeviceAction::Next));
         assert_eq!(nav.action(press(22, 127)), Some(DeviceAction::MuteToggle));
+        assert_eq!(nav.action(press(23, 127)), Some(DeviceAction::TunerOpen));
         assert_eq!(nav.action(press(21, 0)), None, "release is not a press");
         let cleared = store
             .replace(update(Navigation::default(), vec![], &saved.revision))
@@ -1130,6 +1151,7 @@ mod tests {
                 }),
                 next: None,
                 mute: None,
+                tuner: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {

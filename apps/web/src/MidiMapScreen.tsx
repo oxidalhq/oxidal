@@ -216,7 +216,7 @@ export function MidiMapScreen({
   const [undoDepth, setUndoDepth] = useState(0);
   const [pendingImport, setPendingImport] = useState<ImportFile | null>(null);
   const [templateButtons, setTemplateButtons] = useState(0);
-  const [templateController, setTemplateController] = useState(40);
+  const [templateController, setTemplateController] = useState(16);
   const [copyFrom, setCopyFrom] = useState('');
   const [copyTo, setCopyTo] = useState('');
   const [pendingClear, setPendingClear] = useState('');
@@ -238,7 +238,7 @@ export function MidiMapScreen({
         if (!active) return;
         setMap(nextMap);
         setTemplateButtons(nextMap.template?.scene_buttons ?? 0);
-        setTemplateController(nextMap.template?.first_controller ?? 40);
+        setTemplateController(nextMap.template?.first_controller ?? 16);
         setCatalog(nextCatalog);
         setDevices(nextDevices);
       })
@@ -287,6 +287,7 @@ export function MidiMapScreen({
       setUndoDepth(history.current.length);
       setMap(updated);
       await onMapApplied(updated);
+      return updated;
     } catch (cause) {
       setError(friendlyError(cause, 'change MIDI assignments'));
       recoverFail(
@@ -300,13 +301,13 @@ export function MidiMapScreen({
     }
   }
 
-  async function applyTemplateToPreset(entry: EntryRef) {
-    if (!map || busy) return;
+  async function applyTemplateToPreset(entry: EntryRef, source = map) {
+    if (!source || busy) return;
     setBusy(true);
     setError('');
     try {
       const updated = await applyMidiTemplate({
-        expected_revision: map.revision,
+        expected_revision: source.revision,
         entry,
       });
       setMap(updated);
@@ -321,6 +322,15 @@ export function MidiMapScreen({
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function applyLayoutToPreset(content: MapContent, entry: EntryRef) {
+    try {
+      const saved = await replaceMap(content);
+      if (saved) await applyTemplateToPreset(entry, saved);
+    } catch {
+      // replaceMap already presents the recoverable failure.
     }
   }
 
@@ -717,7 +727,7 @@ export function MidiMapScreen({
   const templateChanged =
     templateButtons !== (map.template?.scene_buttons ?? 0) ||
     (templateButtons > 0 &&
-      templateController !== (map.template?.first_controller ?? 40));
+      templateController !== (map.template?.first_controller ?? 16));
   const templateInvalid =
     templateButtons > 0 &&
     (templateController < 1 ||
@@ -880,6 +890,19 @@ export function MidiMapScreen({
         onSaved={(saved_layouts) =>
           void replaceMap({ ...map, saved_layouts }).catch(() => undefined)
         }
+        presets={groups
+          .filter((group) => group.entry.kind === 'rig' && !group.orphaned)
+          .map((group) => ({
+            entry: group.entry,
+            name: group.name,
+            mappings:
+              (group.map?.bindings.length ?? 0) +
+              (group.map?.branch_bindings.length ?? 0) +
+              (group.map?.parameter_bindings.length ?? 0),
+          }))}
+        onApplyToPreset={(content, entry) =>
+          void applyLayoutToPreset({ ...map, ...content }, entry)
+        }
       />
 
       <details className="midi-helpers" aria-label="MIDI mapping helpers">
@@ -895,7 +918,8 @@ export function MidiMapScreen({
             </span>
             <span className="caption mt-1 flex max-w-2xl">
               A unit template maps consecutive CC buttons to scenes. New Mine
-              scene presets inherit it automatically.
+              scene presets inherit it automatically. The standard four-scene
+              default is CC 16–19, MIDI General Purpose Controllers 1–4.
             </span>
           </span>
         </summary>
