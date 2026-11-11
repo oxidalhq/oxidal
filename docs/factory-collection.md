@@ -4,6 +4,11 @@ Open **Library → Oxidal sounds** to find starting points for your own rigs.
 Oxidal sounds are read-only examples. Editing one creates a copy in **Mine**
 with **Make my copy**.
 
+Every sound ships finished: its chain, every setting, its scenes and their
+levels. Oxidal does not ship the third-party effects and tones a sound uses.
+You install those with one step, and the sound is then ready. There is no
+separate build step.
+
 ## The browser
 
 Search by name, or filter by **Genre**, **Engine** and **Complexity**. Group the
@@ -13,15 +18,14 @@ Filters are remembered for the session.
 Each card shows its genres, engine, complexity and one state. A card offers one
 primary action for that state, plus **Details**.
 
-| State          | Primary action      | What it means                                                          |
-| -------------- | ------------------- | ---------------------------------------------------------------------- |
-| Ready          | Play                | Built and everything it needs is installed. The card lists its scenes. |
-| Not built      | Build               | Everything is installed; Build adds the preset to your library.        |
-| Tones needed   | Get tones           | Needs tones from your TONE3000 account.                                |
-| Sign-in needed | Sign in to TONE3000 | Tones are needed and no account is connected.                          |
-| Packs needed   | Install pack        | Needs an [effect pack](device-service.md#effect-packs).                |
-| Too heavy      | none                | More captures than the audio stream carries at the current buffer.     |
-| Not available  | none                | This unit does not have a plugin the sound uses.                       |
+| State          | Primary action      | What it means                                                      |
+| -------------- | ------------------- | ------------------------------------------------------------------ |
+| Ready          | Play                | Everything it needs is installed. The card lists its scenes.       |
+| Tones needed   | Get tones           | Needs tones from your TONE3000 account.                            |
+| Sign-in needed | Sign in to TONE3000 | Tones are needed and no account is connected.                      |
+| Packs needed   | Install pack        | Needs an [effect pack](device-service.md#effect-packs).            |
+| Too heavy      | none                | More captures than the audio stream carries at the current buffer. |
+| Not available  | none                | This unit does not have a plugin the sound uses.                   |
 
 Install pack is disabled, with the reason shown, while Protect is on or audio is
 running. A heavy sound says at which buffer it would fit.
@@ -29,7 +33,12 @@ running. A heavy sound says at which buffer it would fit.
 **Details** shows the description, an inspiration line, how to play it, the
 scenes, the chain, what it needs and its load, and offers **Add to set list**
 once the sound is ready. **Get tones** is one dialog for every tone a sound
-still needs, with file sizes, and then builds the preset.
+still needs, with file sizes.
+
+When **Install pack** or **Get tones** finishes, Oxidal saves every sound that
+install completed, so they appear in the preset picker at once. A sound that
+already had everything is saved the first time you play it. If a pack does not
+install, the card says why.
 
 The capture budget is provisional: a 96-frame stream carries three distinct
 Lite captures or two Full captures, in proportion to the buffer size. The
@@ -54,27 +63,36 @@ Every sound carries these fields, shown on its card and in Details:
 
 ## Showcase tiers
 
-The collection holds 131 recipes. The newest 71 are the showcase, built in
+The collection holds 140 recipes. The newest 80 are the showcase, built in
 four tiers:
 
 | Tier               | Sounds | Needs                                                  |
 | ------------------ | ------ | ------------------------------------------------------ |
 | LV2 only           | 29     | Effect packs only. No captures.                        |
-| TONE3000 · A2 Lite | 15     | Your own NAM tones from TONE3000, at the lighter size. |
-| TONE3000 · A2 Full | 10     | Your own NAM tones from TONE3000, at the full size.    |
+| TONE3000 · A2 Lite | 18     | Your own NAM tones from TONE3000, at the lighter size. |
+| TONE3000 · A2 Full | 16     | Your own NAM tones from TONE3000, at the full size.    |
 | Hybrid             | 17     | A capture plus LV2 effects.                            |
 
+Every tier has at least three complex sounds: split or parallel paths, panned
+voices and scenes that re-mix them. Scenes can also change effect settings,
+such as swell time or Hold.
+
 The rest are earlier effects recipes, the songbook and tool recipes. Thirteen
-earlier recipes were retired because a showcase sound of the same name replaces
-them; they no longer appear.
+earlier recipes were retired; they no longer appear.
 
-## First boot and nothing third-party
+## Nothing third-party is shipped
 
-A fresh appliance image installs the 29 LV2-only showcase presets in Library on
-first boot. They need no captures. Nothing third-party is bundled: no NAM
-captures, no IRs and no TONE3000 downloads. You install tones from your own
-account through **Get tones**. A recipe asks for a named voice, such as a clean
-or driven amp. Choose a compatible tone to fill the slot.
+The appliance image carries only Oxidal's own effects: Hold, Pitch and Swell.
+It carries no third-party effect pack, no NAM capture, no IR and no TONE3000
+download. On first boot the image saves only the sounds that need nothing else;
+all other sounds are listed and say what they need.
+
+- **Effect packs.** A card names the packs it needs and installs them with
+  **Install pack**. Packs are Debian packages downloaded by the unit.
+- **Tones.** You download tones from your own TONE3000 account through **Get
+  tones**. A sound asks for a named voice, such as a clean or driven amp.
+- **Starter set list.** One step installs the packs its nine effects-only
+  sounds need, saves the sounds and adds them to the set list.
 
 ## Dependencies
 
@@ -85,7 +103,7 @@ or driven amp. Choose a compatible tone to fill the slot.
 
 ## Signal layout and switching
 
-Most sounds have four scenes. Some use routed paths or longer serial chains.
+Every sound has at least four scenes. Some use routed paths.
 Play through the finished rig and check levels and processing headroom before
 using it live. See [mixed rigs and scenes](mixed-engine.md).
 
