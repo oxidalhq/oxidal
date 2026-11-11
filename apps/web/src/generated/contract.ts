@@ -125,6 +125,10 @@ export type HostUtility =
       kind: "backing";
     }
   | {
+      command: CaptureCommand;
+      kind: "capture";
+    }
+  | {
       crossfade: boolean;
       kind: "venue";
       venue?: VenueApplied | null;
@@ -156,6 +160,36 @@ export type BackingCommand =
       repeat: boolean;
     };
 export type MediaId = string;
+export type CaptureCommand =
+  | {
+      kind: "record_di";
+      output: MediaId;
+      seq: number;
+    }
+  | {
+      channel: number;
+      /**
+       * Channels in the source render, and which one to use.
+       */
+      channels: number;
+      frames: number;
+      kind: "reamp";
+      latency_frames: number;
+      /**
+       * Hear the reamp while it runs; off mutes the outputs (not the result).
+       */
+      monitoring: boolean;
+      output: MediaId;
+      seq: number;
+      source: MediaId;
+      tail_frames: number;
+      trim_and_gate: boolean;
+    }
+  | {
+      keep: boolean;
+      kind: "stop";
+      seq: number;
+    };
 export type BranchMode = "toggle" | "gate";
 export type Target =
   | {
@@ -358,6 +392,8 @@ export type Phase = "idle" | "listening" | "done" | "timeout";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
+export type CaptureKind = "di" | "reamp";
+export type JobPhase = ("running" | "done" | "failed" | "cancelled") | "starting" | "finishing";
 /**
  * One command entry point; relative edits are applied to current authoritative state.
  * @see docs/architecture.md
@@ -494,6 +530,7 @@ export type GraphAudioAction =
       command: Command;
       kind: "control";
     };
+export type CaptureFault = "disk" | "source" | "overflow";
 export type Framing = "legacy" | "current";
 export type LibraryKind = "original" | "owned" | "graph" | "rig";
 export type LibraryAction =
@@ -902,6 +939,8 @@ export interface Contract {
   calibration_command: CalibrationCommand;
   calibration_coverage: CalibrationCoverage;
   capabilities: Capabilities;
+  capture_state: CaptureState;
+  capture_stop: StopRequest;
   command: Command;
   control_audit: AuditHistory;
   debug_command: Command2;
@@ -952,6 +991,7 @@ export interface Contract {
   preset_details: DetailsCatalog;
   preset_details_update: DetailsUpdate;
   protect_state: ProtectState;
+  reamp_request: ReampRequest;
   removal_preview: RemovalPreview;
   removal_request: RemovalRequest;
   removal_result: RemovalResult;
@@ -1546,6 +1586,44 @@ export interface Capabilities {
   protocol: number;
   version: string;
 }
+export interface CaptureState {
+  job?: CaptureJob | null;
+  revision: number;
+}
+export interface CaptureJob {
+  /**
+   * The saved asset, once there is one.
+   */
+  asset?: string | null;
+  frames: number;
+  /**
+   * Also the ID of the asset it produces.
+   */
+  id: string;
+  /**
+   * The result is shorter than intended (stopped early or a fault).
+   */
+  incomplete: boolean;
+  kind: CaptureKind;
+  lostSamples: number;
+  monitoring: boolean;
+  peakDbfs: number;
+  phase: JobPhase;
+  rate: number;
+  reason?: string | null;
+  source?: string | null;
+  title: string;
+  /**
+   * Reamp only: frames the job will write in total.
+   */
+  totalFrames?: number | null;
+}
+export interface StopRequest {
+  /**
+   * Keep what was written (Stop and keep) or discard it (Cancel).
+   */
+  keep: boolean;
+}
 export interface Command {
   action: Action;
   expected_revision?: number | null;
@@ -1824,6 +1902,10 @@ export interface HostState {
    * The worker's backing player, when its stream has one.
    */
   backing?: BackingStatus | null;
+  /**
+   * The worker's Record DI or reamp job, when one has run.
+   */
+  capture?: CaptureStatus | null;
   hear_yourself: boolean;
   levels?: HostLevels2;
   output_muted?: boolean;
@@ -1858,6 +1940,35 @@ export interface BackingStatus {
    * Blocks that ran out of data and played silence, this worker lifetime.
    */
   underruns: number;
+}
+/**
+ * Where the worker's capture job is.
+ */
+export interface CaptureStatus {
+  discarded: boolean;
+  fault?: CaptureFault | null;
+  /**
+   * The file is complete on disk and synced; the daemon may finalize it.
+   */
+  finished: boolean;
+  /**
+   * Frames on disk.
+   */
+  frames: number;
+  kind: CaptureKind;
+  /**
+   * Samples the audio thread could not hand over.
+   */
+  lost: number;
+  /**
+   * Largest recent input sample, for the recording meter (dBFS).
+   */
+  peakDbfs: number;
+  /**
+   * Still taking audio.
+   */
+  running: boolean;
+  seq: number;
 }
 /**
  * Unit-wide gain staging around every rig: guitar input trim before the rig,
@@ -2683,6 +2794,19 @@ export interface DetailsUpdate {
 }
 export interface ProtectState {
   on: boolean;
+}
+export interface ReampRequest {
+  /**
+   * For a stereo DI: 0 left, 1 right.
+   */
+  channel?: number;
+  monitoring?: boolean;
+  /**
+   * No default: the user must choose (calibration applied once).
+   */
+  processing: "current" | "none";
+  source: string;
+  tailSeconds?: number;
 }
 export interface RemovalPreview {
   blocked?: string | null;

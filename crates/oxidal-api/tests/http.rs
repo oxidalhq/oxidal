@@ -4081,3 +4081,54 @@ async fn venue_profiles_preview_save_conflict_persist_and_obey_protect() {
     let _ = std::fs::remove_dir_all(mapping.with_extension("media"));
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn record_di_and_reamp_need_running_audio_and_say_so() {
+    let (url, task, mapping) = start_with(true, true).await;
+    let client = reqwest::Client::new();
+    let state: Value = reqwest::get(format!("{url}/capture"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(state["job"].is_null());
+    let record = client
+        .post(format!("{url}/capture/record-di"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(record.status(), 409);
+    assert!(
+        record.json::<Value>().await.unwrap()["error"]
+            .as_str()
+            .unwrap()
+            .contains("Start the audio")
+    );
+    let reamp = client
+        .post(format!("{url}/capture/reamp"))
+        .json(&json!({ "source": "01JD2W8T3N8M4K6V0P7Q9R1S2T", "processing": "none" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reamp.status(), 409);
+    // Input processing has no default: leaving it out is refused.
+    let unchosen = client
+        .post(format!("{url}/capture/reamp"))
+        .json(&json!({ "source": "01JD2W8T3N8M4K6V0P7Q9R1S2T" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unchosen.status(), 400);
+    let stop = client
+        .post(format!("{url}/capture/stop"))
+        .json(&json!({ "keep": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stop.status(), 409);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("media"));
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}

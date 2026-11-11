@@ -6,6 +6,7 @@ mod backup;
 mod blends;
 mod boosts;
 mod calibration;
+mod capture;
 mod debug;
 mod device;
 mod device_wait;
@@ -138,6 +139,9 @@ pub struct Contract {
     pub player_order: player::PlayerOrder,
     pub venue_state: venues::VenueState,
     pub venue_request: venues::VenueRequest,
+    pub capture_state: capture::CaptureState,
+    pub reamp_request: capture::ReampRequest,
+    pub capture_stop: capture::StopRequest,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
     pub keep_ready: keep_ready::KeepReady,
@@ -279,6 +283,7 @@ struct Shared {
     uploads: media_api::Uploads,
     player: player::Player,
     venues: venues::Venues,
+    captures: capture::Captures,
     config: Config,
 }
 
@@ -375,6 +380,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         uploads: media_api::Uploads::default(),
         player,
         venues,
+        captures: capture::Captures::new(protect.job_flag()),
         protect: protect.clone(),
         keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
@@ -439,6 +445,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     midi_recall::start(Arc::downgrade(&shared), midi_event_rx);
     player::follow(Arc::downgrade(&shared));
     venues::expire(Arc::downgrade(&shared));
+    capture::follow(Arc::downgrade(&shared));
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -604,6 +611,11 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/presets/{id}/artwork/{key}",
             get(artwork::read).post(artwork::download),
         )
+        .route("/capture", get(capture::state))
+        .route("/capture/record-di", post(capture::record_di))
+        .route("/capture/reamp", post(capture::reamp))
+        .route("/capture/stop", post(capture::stop))
+        .route("/media/assets/{id}/wav", get(media_api::download_wav))
         .route("/venues", get(venues::state))
         .route("/venues/commands", post(venues::command))
         .route("/venues/preview/keep", post(venues::keep))
@@ -792,11 +804,13 @@ async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
     let mut receiver = shared.events.subscribe();
     let mut player = shared.player.subscribe();
     let mut venue = shared.venues.subscribe();
+    let mut capture = shared.captures.subscribe();
     let mut shutdown = shared.config.shutdown.clone();
     let stream = async_stream::stream! {
         let mut state_changed = true;
         let mut player_changed = true;
         let mut venue_changed = true;
+        let mut capture_changed = true;
         loop {
             if state_changed {
                 let snapshot=receiver.borrow_and_update().clone();
@@ -813,18 +827,27 @@ async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
                 let event = Event::default().event("venue").json_data(snapshot).expect("finite venue state");
                 yield Ok::<Event,Infallible>(event);
             }
+            if capture_changed {
+                let snapshot = capture.borrow_and_update().clone();
+                let event = Event::default().event("capture").json_data(snapshot).expect("finite capture state");
+                yield Ok::<Event,Infallible>(event);
+            }
             tokio::select! {
                 changed = receiver.changed() => {
                     if changed.is_err() { break; }
-                    (state_changed, player_changed, venue_changed) = (true, false, false);
+                    (state_changed, player_changed, venue_changed, capture_changed) = (true, false, false, false);
                 },
                 changed = player.changed() => {
                     if changed.is_err() { break; }
-                    (state_changed, player_changed, venue_changed) = (false, true, false);
+                    (state_changed, player_changed, venue_changed, capture_changed) = (false, true, false, false);
                 },
                 changed = venue.changed() => {
                     if changed.is_err() { break; }
-                    (state_changed, player_changed, venue_changed) = (false, false, true);
+                    (state_changed, player_changed, venue_changed, capture_changed) = (false, false, true, false);
+                },
+                changed = capture.changed() => {
+                    if changed.is_err() { break; }
+                    (state_changed, player_changed, venue_changed, capture_changed) = (false, false, false, true);
                 },
                 _ = async {
                     match shutdown.as_mut() {

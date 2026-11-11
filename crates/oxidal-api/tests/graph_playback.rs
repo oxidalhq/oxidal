@@ -588,15 +588,21 @@ async fn a_backing_track_plays_through_the_worker_to_its_end_with_no_client_watc
         .await
         .unwrap();
     let mut asset = None;
-    for _ in 0..200 {
+    // A debug build resamples slowly under load: allow up to 20 s.
+    for _ in 0..400 {
         let state = get(&c, &url, &format!("media/uploads/{upload_id}")).await;
         if state["import"]["state"] == "ready" {
             asset = state["import"]["asset"].as_str().map(str::to_owned);
             break;
         }
-        tokio::time::sleep(Duration::from_millis(25)).await;
+        if !["receiving", "queued", "preparing"]
+            .contains(&state["import"]["state"].as_str().unwrap_or(""))
+        {
+            panic!("import ended: {state}");
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    let asset = asset.expect("import finished");
+    let asset = asset.unwrap_or_else(|| panic!("import finished: {}", upload_id));
 
     let mut s = get(&c, &url, "graph-audio").await;
     apply(
@@ -667,6 +673,155 @@ async fn a_backing_track_plays_through_the_worker_to_its_end_with_no_client_watc
         .await
         .unwrap();
     assert_eq!(deleted.status(), 204);
+
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+#[ignore = "pnpm lv2:check runs this with the actual Linux graph worker and ALSA null"]
+async fn record_a_di_then_reamp_it_through_the_locked_rig() {
+    let executable =
+        std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_GRAPH_WORKER").unwrap());
+    let root = std::env::temp_dir().join(format!("oxidal-graph-reamp-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let config = Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: Some(executable.clone()),
+        rig_worker: None,
+        audio_worker: Some(executable),
+        native_worker: None,
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        media_dir: Some(root.join("media")),
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    };
+    let (app, stopped) = router_with_shutdown(config).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+    let mut s = get(&c, &url, "graph-audio").await;
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"start","settings":settings()}),
+    )
+    .await;
+    wait(&c, &url, "running").await;
+    let job_done = |c: Client, url: String| async move {
+        for _ in 0..200 {
+            let state = get(&c, &url, "capture").await;
+            let phase = state["job"]["phase"].as_str().unwrap_or("").to_owned();
+            if ["done", "failed", "cancelled"].contains(&phase.as_str()) {
+                return state["job"].clone();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        panic!("job did not finish");
+    };
+
+    // Record a short DI from the (null) interface input.
+    let started = c
+        .post(format!("{url}/capture/record-di"))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        started.status().is_success(),
+        "{}",
+        started.text().await.unwrap()
+    );
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    c.post(format!("{url}/capture/stop"))
+        .json(&json!({ "keep": true }))
+        .send()
+        .await
+        .unwrap();
+    let di = job_done(c.clone(), url.clone()).await;
+    assert_eq!(di["phase"], "done", "{di}");
+    let di_asset = di["asset"].as_str().unwrap().to_owned();
+    let library = get(&c, &url, "media").await;
+    let listed = library["assets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == di_asset.as_str())
+        .unwrap()
+        .clone();
+    assert_eq!(listed["kind"], "di");
+    assert_eq!(listed["renders"][0]["channels"], 1);
+    assert!(listed["provenance"]["input"].is_object());
+
+    // Reamp it; while it runs the rig cannot be changed.
+    let reamp = c
+        .post(format!("{url}/capture/reamp"))
+        .json(&json!({ "source": di_asset, "processing": "none", "tailSeconds": 0.5, "monitoring": false }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        reamp.status().is_success(),
+        "{}",
+        reamp.text().await.unwrap()
+    );
+    let s = get(&c, &url, "graph-audio").await;
+    let refused = send(&c, &url, &s, json!({"kind":"restart"})).await;
+    assert_eq!(refused.status(), 423);
+    assert!(refused.text().await.unwrap().contains("Reamp in progress"));
+    let result = job_done(c.clone(), url.clone()).await;
+    assert_eq!(result["phase"], "done", "{result}");
+    assert_eq!(result["incomplete"], false);
+    let asset = result["asset"].as_str().unwrap().to_owned();
+    let library = get(&c, &url, "media").await;
+    let reamped = library["assets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["id"] == asset.as_str())
+        .unwrap()
+        .clone();
+    assert_eq!(reamped["kind"], "reamp");
+    assert_eq!(reamped["renders"][0]["channels"], 2);
+    assert_eq!(reamped["provenance"]["source"]["id"], di_asset.as_str());
+    assert_eq!(reamped["provenance"]["processing"], "none");
+    assert_eq!(reamped["provenance"]["complete"], true);
+    let di_frames = listed["renders"][0]["frames"].as_u64().unwrap();
+    let frames = reamped["renders"][0]["frames"].as_u64().unwrap();
+    assert!(
+        frames >= di_frames + 24_000 && frames < di_frames + 24_000 + 1024,
+        "{frames} vs {di_frames}"
+    );
+    // The lock is released and the result downloads as 24-bit WAV.
+    let s = get(&c, &url, "graph-audio").await;
+    assert_ne!(
+        send(&c, &url, &s, json!({"kind":"stop"})).await.status(),
+        423
+    );
+    let wav = c
+        .get(format!("{url}/media/assets/{asset}/wav"))
+        .send()
+        .await
+        .unwrap();
+    let bytes = wav.bytes().await.unwrap();
+    assert_eq!(&bytes[..4], b"RIFF");
+    assert_eq!(u16::from_le_bytes([bytes[34], bytes[35]]), 24);
+    assert_eq!(bytes.len() as u64, 44 + frames * 2 * 3);
 
     shutdown.send_replace(true);
     tokio::time::timeout(Duration::from_secs(5), stopped.wait())

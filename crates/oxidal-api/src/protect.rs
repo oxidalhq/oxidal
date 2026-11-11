@@ -35,6 +35,9 @@ pub struct ProtectState {
 pub struct Protect {
     path: PathBuf,
     on: AtomicBool,
+    /// Set while a reamp holds the rig: refuses what Protect would refuse,
+    /// whether or not Protect is on.
+    job: Arc<AtomicBool>,
 }
 
 const LOCKED: &str = "Protect is on. Turn Protect off to change this.";
@@ -51,7 +54,12 @@ impl Protect {
         Self {
             path,
             on: AtomicBool::new(on),
+            job: Arc::default(),
         }
+    }
+    /// The flag a reamp job raises while it holds the rig.
+    pub(crate) fn job_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.job)
     }
     pub fn on(&self) -> bool {
         self.on.load(Ordering::SeqCst)
@@ -74,7 +82,13 @@ impl Protect {
     }
     /// Why a request must be refused now, if it must.
     pub fn refuse(&self, allowed: bool) -> Option<&'static str> {
-        (self.on() && !allowed).then_some(LOCKED)
+        if allowed {
+            None
+        } else if self.job.load(Ordering::SeqCst) {
+            Some(crate::capture::REAMP_LOCKED)
+        } else {
+            self.on().then_some(LOCKED)
+        }
     }
 }
 
@@ -304,5 +318,25 @@ mod tests {
         assert_eq!(protect.refuse(true), None);
         assert_eq!(protect.refuse(false), Some(LOCKED));
         let _ = std::fs::remove_file(path("refuse"));
+    }
+}
+
+#[cfg(test)]
+mod job_tests {
+    use super::*;
+
+    #[test]
+    fn a_reamp_refuses_what_protect_would_and_keeps_mute() {
+        let protect = Protect::new(std::env::temp_dir().join("oxidal-protect-job-test.json"));
+        assert!(protect.refuse(false).is_none());
+        protect.job_flag().store(true, Ordering::SeqCst);
+        assert_eq!(protect.refuse(false), Some(crate::capture::REAMP_LOCKED));
+        assert!(
+            protect.refuse(true).is_none(),
+            "Mute and listening aids stay available"
+        );
+        assert!(utility(&HostUtility::OutputMuteToggle));
+        protect.job_flag().store(false, Ordering::SeqCst);
+        assert!(protect.refuse(false).is_none());
     }
 }

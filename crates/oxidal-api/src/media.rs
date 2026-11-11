@@ -521,6 +521,18 @@ impl Store {
         }
         Ok(self.root.join("incoming").join(format!("{id}.part")))
     }
+    /// Starts an asset whose ID was chosen earlier (a recording or reamp).
+    pub fn stage_as(&self, id: &str) -> Result<Staging, MediaError> {
+        if !valid_id(id) || self.root.join("assets").join(id).exists() {
+            return Err(MediaError::Invalid("invalid asset ID".into()));
+        }
+        let dir = self.root.join("incoming").join(format!("{id}.d"));
+        create_private_dir(&dir)?;
+        Ok(Staging {
+            id: id.to_owned(),
+            dir,
+        })
+    }
     /// Starts a new asset in `incoming/`.
     pub fn stage(&self) -> Result<Staging, MediaError> {
         let id = new_id();

@@ -736,12 +736,8 @@ async fn cue_by_id(
             "That track is no longer in Library".to_owned(),
         )
     })?;
-    if manifest.kind != MediaKind::Backing {
-        return Err((
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Only backing tracks can be cued".into(),
-        ));
-    }
+    // DI recordings and reamp results play here too (FR-18); Previous/Next
+    // still move through the Backing list only.
     if inner.state == PlayerState::Playing {
         let command = inner.stop_command();
         send(shared, command).await?;

@@ -110,6 +110,12 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                 && map.input.is_some()
                 && channel_of(event.message).is_some_and(|c| listens_on(&map, event.source, c))
             {
+                if matches!(action, DeviceAction::Previous | DeviceAction::Next)
+                    && shared.captures.reamping()
+                {
+                    record(&shared, &Err(crate::capture::REAMP_LOCKED.to_owned()));
+                    continue;
+                }
                 match action {
                     DeviceAction::Previous => navigate_recorded(&shared, -1).await.ok(),
                     DeviceAction::Next => navigate_recorded(&shared, 1).await.ok(),
@@ -127,6 +133,10 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                 continue;
             };
             if map.input.is_none() || !listens_on(&map, event.source, channel) {
+                continue;
+            }
+            if shared.captures.reamping() {
+                record(&shared, &Err(crate::capture::REAMP_LOCKED.to_owned()));
                 continue;
             }
             record(

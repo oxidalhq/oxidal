@@ -49,6 +49,12 @@
     "capabilities": {
       "$ref": "#/$defs/Capabilities"
     },
+    "capture_state": {
+      "$ref": "#/$defs/CaptureState"
+    },
+    "capture_stop": {
+      "$ref": "#/$defs/StopRequest"
+    },
     "command": {
       "$ref": "#/$defs/Command"
     },
@@ -202,6 +208,9 @@
     "protect_state": {
       "$ref": "#/$defs/ProtectState"
     },
+    "reamp_request": {
+      "$ref": "#/$defs/ReampRequest"
+    },
     "removal_preview": {
       "$ref": "#/$defs/RemovalPreview"
     },
@@ -312,6 +321,9 @@
     "player_order",
     "venue_state",
     "venue_request",
+    "capture_state",
+    "reamp_request",
+    "capture_stop",
     "removal_preview",
     "protect_state",
     "keep_ready",
@@ -2568,6 +2580,324 @@
         "audio_available",
         "midi_transport",
         "native_editor"
+      ]
+    },
+    "CaptureCommand": {
+      "oneOf": [
+        {
+          "description": "Write the raw interface input (mono) until stopped.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "record_di"
+            },
+            "output": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "seq": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "output",
+            "seq"
+          ]
+        },
+        {
+          "description": "Feed a DI render into the rig and write the rig's output (stereo)\nfor the source length plus `tail_frames`, skipping `latency_frames`\nat the start so the result lines up with the DI.",
+          "type": "object",
+          "properties": {
+            "channel": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "channels": {
+              "description": "Channels in the source render, and which one to use.",
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "frames": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "reamp"
+            },
+            "latency_frames": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "monitoring": {
+              "description": "Hear the reamp while it runs; off mutes the outputs (not the result).",
+              "type": "boolean"
+            },
+            "output": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "seq": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "source": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "tail_frames": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "trim_and_gate": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "channels",
+            "channel",
+            "frames",
+            "trim_and_gate",
+            "output",
+            "tail_frames",
+            "latency_frames",
+            "monitoring",
+            "seq"
+          ]
+        },
+        {
+          "description": "End the job; `keep` false discards what was written.",
+          "type": "object",
+          "properties": {
+            "keep": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            },
+            "seq": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "seq",
+            "keep"
+          ]
+        }
+      ]
+    },
+    "CaptureFault": {
+      "oneOf": [
+        {
+          "description": "Writing failed (disk full or removed); the valid part is kept.",
+          "type": "string",
+          "const": "disk"
+        },
+        {
+          "description": "The DI render could not be read.",
+          "type": "string",
+          "const": "source"
+        },
+        {
+          "description": "The writer fell behind and samples were lost.",
+          "type": "string",
+          "const": "overflow"
+        }
+      ]
+    },
+    "CaptureJob": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "description": "The saved asset, once there is one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "description": "Also the ID of the asset it produces.",
+          "type": "string"
+        },
+        "incomplete": {
+          "description": "The result is shorter than intended (stopped early or a fault).",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/CaptureKind"
+        },
+        "lostSamples": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "monitoring": {
+          "type": "boolean"
+        },
+        "peakDbfs": {
+          "type": "number",
+          "format": "float"
+        },
+        "phase": {
+          "$ref": "#/$defs/JobPhase"
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "totalFrames": {
+          "description": "Reamp only: frames the job will write in total.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "phase",
+        "title",
+        "rate",
+        "frames",
+        "peakDbfs",
+        "monitoring",
+        "incomplete",
+        "lostSamples"
+      ]
+    },
+    "CaptureKind": {
+      "type": "string",
+      "enum": [
+        "di",
+        "reamp"
+      ]
+    },
+    "CaptureState": {
+      "type": "object",
+      "properties": {
+        "job": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureJob"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision"
+      ]
+    },
+    "CaptureStatus": {
+      "description": "Where the worker's capture job is.",
+      "type": "object",
+      "properties": {
+        "discarded": {
+          "type": "boolean"
+        },
+        "fault": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureFault"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finished": {
+          "description": "The file is complete on disk and synced; the daemon may finalize it.",
+          "type": "boolean"
+        },
+        "frames": {
+          "description": "Frames on disk.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/CaptureKind"
+        },
+        "lost": {
+          "description": "Samples the audio thread could not hand over.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "peakDbfs": {
+          "description": "Largest recent input sample, for the recording meter (dBFS).",
+          "type": "number",
+          "format": "float"
+        },
+        "running": {
+          "description": "Still taking audio.",
+          "type": "boolean"
+        },
+        "seq": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "kind",
+        "running",
+        "finished",
+        "frames",
+        "lost",
+        "peakDbfs",
+        "discarded"
       ]
     },
     "ChainBlock": {
@@ -4863,6 +5193,17 @@
             }
           ]
         },
+        "capture": {
+          "description": "The worker's Record DI or reamp job, when one has run.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "hear_yourself": {
           "type": "boolean"
         },
@@ -5036,6 +5377,24 @@
           ]
         },
         {
+          "description": "Record DI or reamp; see [`crate::capture`].",
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/CaptureCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "capture"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
+          ]
+        },
+        {
           "description": "Venue EQ on the main outputs; `None` removes it. Profile switches and\nbypass set `crossfade`; knob edits glide.",
           "type": "object",
           "properties": {
@@ -5173,6 +5532,20 @@
         "left",
         "right",
         "dual"
+      ]
+    },
+    "InputProcessing": {
+      "oneOf": [
+        {
+          "description": "The unit's current input trim and gate (the guitar profile in use).",
+          "type": "string",
+          "const": "current"
+        },
+        {
+          "description": "Neither: the DI is already level-matched.",
+          "type": "string",
+          "const": "none"
+        }
       ]
     },
     "InputVerification": {
@@ -5343,6 +5716,29 @@
         "phase",
         "output",
         "elapsed_ms"
+      ]
+    },
+    "JobPhase": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "running",
+            "done",
+            "failed",
+            "cancelled"
+          ]
+        },
+        {
+          "description": "Accepted; waiting for the worker to start writing.",
+          "type": "string",
+          "const": "starting"
+        },
+        {
+          "description": "Stopped; the file is being finished.",
+          "type": "string",
+          "const": "finishing"
+        }
       ]
     },
     "KeepReady": {
@@ -8961,6 +9357,40 @@
         "channels"
       ]
     },
+    "ReampRequest": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "description": "For a stereo DI: 0 left, 1 right.",
+          "type": "integer",
+          "format": "uint16",
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "monitoring": {
+          "type": "boolean",
+          "default": false
+        },
+        "processing": {
+          "description": "No default: the user must choose (calibration applied once).",
+          "$ref": "#/$defs/InputProcessing"
+        },
+        "source": {
+          "type": "string"
+        },
+        "tailSeconds": {
+          "type": "number",
+          "format": "double",
+          "default": 2
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "processing"
+      ]
+    },
     "Recall": {
       "type": "object",
       "properties": {
@@ -11072,6 +11502,19 @@
       "required": [
         "connected",
         "events"
+      ]
+    },
+    "StopRequest": {
+      "type": "object",
+      "properties": {
+        "keep": {
+          "description": "Keep what was written (Stop and keep) or discard it (Cancel).",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "keep"
       ]
     },
     "StorageMode": {

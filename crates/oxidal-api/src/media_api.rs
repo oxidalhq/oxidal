@@ -775,6 +775,116 @@ pub(crate) async fn cancel_upload(
     }
 }
 
+/// A 24-bit PCM WAV made from the play-ready render: how DI recordings and
+/// reamp results leave the device (FR-18). Files over 4 GiB are refused.
+pub(crate) async fn download_wav(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<String>,
+) -> Response {
+    let store = match store(&shared) {
+        Ok(store) => store,
+        Err(response) => return *response,
+    };
+    let lookup = blocking(move || {
+        let manifest = store.manifest(&id)?;
+        let render = manifest
+            .renders
+            .first()
+            .cloned()
+            .ok_or(MediaError::NotFound)?;
+        let path = store.file(&id, &render.file)?;
+        Ok((manifest, render, path))
+    })
+    .await;
+    let (manifest, render, path) = match lookup {
+        Ok(found) => found,
+        Err(response) => return *response,
+    };
+    let data = render.frames * u64::from(render.channels) * 3;
+    let Ok(data_len) = u32::try_from(data).map(|d| d.min(u32::MAX - 36)) else {
+        return failure(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "WAV export is limited to 4 GiB",
+        );
+    };
+    if u64::from(data_len) != data {
+        return failure(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "WAV export is limited to 4 GiB",
+        );
+    }
+    let Ok(mut file) = tokio::fs::File::open(&path).await else {
+        return failure(StatusCode::NOT_FOUND, "That file is no longer in Library");
+    };
+    let channels = render.channels;
+    let rate = render.rate;
+    let mut header = Vec::with_capacity(44);
+    header.extend_from_slice(b"RIFF");
+    header.extend_from_slice(&(36 + data_len).to_le_bytes());
+    header.extend_from_slice(b"WAVEfmt ");
+    header.extend_from_slice(&16u32.to_le_bytes());
+    header.extend_from_slice(&1u16.to_le_bytes());
+    header.extend_from_slice(&channels.to_le_bytes());
+    header.extend_from_slice(&rate.to_le_bytes());
+    header.extend_from_slice(&(rate * u32::from(channels) * 3).to_le_bytes());
+    header.extend_from_slice(&(channels * 3).to_le_bytes());
+    header.extend_from_slice(&24u16.to_le_bytes());
+    header.extend_from_slice(b"data");
+    header.extend_from_slice(&data_len.to_le_bytes());
+    let stream = async_stream::stream! {
+        use tokio::io::AsyncReadExt;
+        yield Ok::<Bytes, std::io::Error>(Bytes::from(header));
+        let mut buffer = vec![0_u8; 64 * 1024];
+        let mut carry = Vec::new();
+        loop {
+            match file.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    carry.extend_from_slice(&buffer[..n]);
+                    let whole = carry.len() / 4 * 4;
+                    let mut out = Vec::with_capacity(whole / 4 * 3);
+                    for b in carry[..whole].chunks_exact(4) {
+                        let v = f32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+                        let v = if v.is_finite() { v.clamp(-1.0, 1.0) } else { 0.0 };
+                        let i = (v * 8_388_607.0).round() as i32;
+                        out.extend_from_slice(&i.to_le_bytes()[..3]);
+                    }
+                    carry.drain(..whole);
+                    yield Ok(Bytes::from(out));
+                }
+                Err(error) => {
+                    yield Err(error);
+                    return;
+                }
+            }
+        }
+    };
+    let safe: String = manifest
+        .title
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || " -_().".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    (
+        [
+            (header::CONTENT_TYPE, "audio/wav".to_owned()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}.wav\"", safe.trim()),
+            ),
+            (header::CONTENT_LENGTH, (44 + data).to_string()),
+            (header::CACHE_CONTROL, "no-store".to_owned()),
+        ],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
