@@ -5872,12 +5872,76 @@
           "required": [
             "kind"
           ]
+        },
+        {
+          "description": "Add the entry to the end of the set list, or take it out. Taking a\npreset out keeps it in Mine; read-only Oxidal sounds can be added by\nreference.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_list"
+            },
+            "member": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "member"
+          ]
+        },
+        {
+          "description": "Append these entries to the set list in order, after the existing\nentries; members keep their place and nothing is replaced. An empty\nlist declines the offer. Either way the starter is no longer offered.\nThe request's own `entry_kind` and `id` are not used.",
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/LibraryReference"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "starter"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "entries"
+          ]
+        },
+        {
+          "description": "Make \"Name copy\" in Mine with the preset's scenes, MIDI and levels.\nThe copy is not in the set list; the reply names it in `created`.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "duplicate"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
         }
       ]
     },
     "LibraryCatalog": {
       "type": "object",
       "properties": {
+        "created": {
+          "description": "The preset a `duplicate` made, in Mine and not in the set list.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LibraryReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "items": {
           "type": "array",
           "items": {
@@ -5886,6 +5950,11 @@
         },
         "revision": {
           "type": "string"
+        },
+        "starter_offered": {
+          "description": "The starter set list was added or declined on this unit; it is offered\nat most once automatically.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -5902,6 +5971,11 @@
         },
         "id": {
           "type": "string"
+        },
+        "in_set_list": {
+          "description": "In the Set list (MIDI program changes and Previous/Next follow it).\nPresets in Mine are members unless taken out; read-only Oxidal sounds\nare members only when added. Earlier revisions and archived entries\nnever are.",
+          "type": "boolean",
+          "default": false
         },
         "kind": {
           "$ref": "#/$defs/LibraryKind"
@@ -5932,12 +6006,20 @@
       ]
     },
     "LibraryKind": {
-      "type": "string",
-      "enum": [
-        "original",
-        "owned",
-        "graph",
-        "rig"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "original",
+            "owned",
+            "graph"
+          ]
+        },
+        {
+          "description": "The default only fills the unused entry of a `starter` request.",
+          "type": "string",
+          "const": "rig"
+        }
       ]
     },
     "LibraryOrigin": {
@@ -5970,20 +6052,20 @@
           "$ref": "#/$defs/LibraryAction"
         },
         "entry_kind": {
-          "$ref": "#/$defs/LibraryKind"
+          "$ref": "#/$defs/LibraryKind",
+          "default": "rig"
         },
         "expected_revision": {
           "type": "string"
         },
         "id": {
-          "type": "string"
+          "type": "string",
+          "default": ""
         }
       },
       "additionalProperties": false,
       "required": [
         "expected_revision",
-        "entry_kind",
-        "id",
         "action"
       ]
     },
@@ -6962,7 +7044,7 @@
       ]
     },
     "MidiPosition": {
-      "description": "Where the playing preset sits in the Mine set-list.",
+      "description": "Where the playing preset sits in the Set list.",
       "type": "object",
       "properties": {
         "index": {

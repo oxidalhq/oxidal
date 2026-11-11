@@ -6,7 +6,7 @@ use oxidal_audio::{
     midi::Message,
 };
 use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand, StartRig, SwitchCommand};
-use oxidal_presets::{DeviceAction, LibraryKind, LibraryOrigin};
+use oxidal_presets::{DeviceAction, LibraryKind};
 use std::sync::{Arc, Weak};
 use tokio::sync::mpsc;
 
@@ -196,7 +196,7 @@ pub struct Neighbor {
     pub detail: String,
 }
 
-/// Where the playing preset sits in the Mine set-list.
+/// Where the playing preset sits in the Set list.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MidiPosition {
@@ -292,7 +292,7 @@ pub(crate) async fn navigate_recorded(
     result
 }
 
-/// Previous (-1) or Next (1) in the current Mine set-list. The ends stop with a
+/// Previous (-1) or Next (1) in the current Set list. The ends stop with a
 /// reason instead of wrapping, and a refused recall leaves the sound playing.
 async fn navigate(shared: &Arc<Shared>, direction: i8) -> Result<String, String> {
     let items = set_list(shared).await?;
@@ -320,9 +320,7 @@ async fn set_list(shared: &Arc<Shared>) -> Result<Vec<oxidal_presets::LibraryIte
             .items
             .into_iter()
             .filter(|item| {
-                !item.archived
-                    && item.origin == LibraryOrigin::Mine
-                    && matches!(item.kind, LibraryKind::Owned | LibraryKind::Rig)
+                item.in_set_list && matches!(item.kind, LibraryKind::Owned | LibraryKind::Rig)
             })
             .collect())
     })

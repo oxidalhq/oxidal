@@ -532,7 +532,7 @@ export type GraphAudioAction =
     };
 export type CaptureFault = "disk" | "source" | "overflow";
 export type Framing = "legacy" | "current";
-export type LibraryKind = "original" | "owned" | "graph" | "rig";
+export type LibraryKind = ("original" | "owned" | "graph") | "rig";
 export type LibraryAction =
   | {
       kind: "rename";
@@ -549,6 +549,17 @@ export type LibraryAction =
   | {
       before?: LibraryReference | null;
       kind: "place";
+    }
+  | {
+      kind: "set_list";
+      member: boolean;
+    }
+  | {
+      entries: LibraryReference[];
+      kind: "starter";
+    }
+  | {
+      kind: "duplicate";
     };
 export type MediaKind = "backing" | "di" | "reamp";
 export type UploadFormat = "wav" | "mp3";
@@ -2096,12 +2107,32 @@ export interface Inspection {
   source_id?: string | null;
 }
 export interface LibraryCatalog {
+  /**
+   * The preset a `duplicate` made, in Mine and not in the set list.
+   */
+  created?: LibraryReference | null;
   items: LibraryItem[];
   revision: string;
+  /**
+   * The starter set list was added or declined on this unit; it is offered
+   * at most once automatically.
+   */
+  starter_offered?: boolean;
+}
+export interface LibraryReference {
+  id: string;
+  kind: LibraryKind;
 }
 export interface LibraryItem {
   archived: boolean;
   id: string;
+  /**
+   * In the Set list (MIDI program changes and Previous/Next follow it).
+   * Presets in Mine are members unless taken out; read-only Oxidal sounds
+   * are members only when added. Earlier revisions and archived entries
+   * never are.
+   */
+  in_set_list?: boolean;
   kind: LibraryKind;
   name: string;
   origin?: "tone3000" | "oxidal_example" | "mine";
@@ -2114,13 +2145,9 @@ export interface LibraryItem {
 }
 export interface LibraryUpdate {
   action: LibraryAction;
-  entry_kind: LibraryKind;
+  entry_kind?: ("original" | "owned" | "graph") | "rig";
   expected_revision: string;
-  id: string;
-}
-export interface LibraryReference {
-  id: string;
-  kind: LibraryKind;
+  id?: string;
 }
 export interface LocalModel {
   /**
@@ -2487,7 +2514,7 @@ export interface MidiNavigate {
   direction: MidiDirection;
 }
 /**
- * Where the playing preset sits in the Mine set-list.
+ * Where the playing preset sits in the Set list.
  */
 export interface MidiPosition {
   /**

@@ -940,6 +940,50 @@ impl MidiMapStore {
         Ok(())
     }
 
+    /// Give a new revision (saved again, or a duplicate) the source's MIDI
+    /// assignments. Scene bindings follow the scene id, not its position, and
+    /// bindings of scenes that no longer exist are dropped. An existing map
+    /// of the target always wins, so a retried save never overwrites it.
+    /// Returns whether the source had assignments to copy.
+    pub fn follow(
+        &self,
+        source: &LibraryReference,
+        target: &LibraryReference,
+        scenes: &[String],
+    ) -> Result<bool> {
+        let (from, to) = (source.kind.key(&source.id)?, target.kind.key(&target.id)?);
+        if from == to {
+            return Ok(true);
+        }
+        let _lock = self.lock()?;
+        let mut book = self.read()?;
+        let Some(mut mapping) = book.entries.get(&from).cloned() else {
+            return Ok(false);
+        };
+        if book.entries.contains_key(&to) {
+            return Ok(true);
+        }
+        let known = scenes.iter().collect::<BTreeSet<_>>();
+        mapping
+            .bindings
+            .retain(|binding| known.contains(&binding.scene));
+        // A switched-off assignment of a removed scene has nothing to switch off.
+        let kept = mapping.clone();
+        mapping.disabled.retain(|d| {
+            d.kind != AssignmentKind::Scene
+                || kept
+                    .bindings
+                    .iter()
+                    .any(|b| b.program == d.program && b.controller == d.controller)
+        });
+        if mapping.empty() {
+            return Ok(true);
+        }
+        book.entries.insert(to, mapping);
+        self.write(&book)?;
+        Ok(true)
+    }
+
     pub fn forget(&self, kind: LibraryKind, id: &str) -> Result<()> {
         let key = kind.key(id)?;
         let _lock = self.lock()?;

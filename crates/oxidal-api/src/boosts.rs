@@ -149,6 +149,30 @@ impl Store {
     }
 }
 
+impl Store {
+    /// Duplicate (Library): the copy starts with the source's preset and scene
+    /// boosts, under its own preset id.
+    pub(crate) fn copy_preset(&self, from: &str, to: &str) -> Result<(), String> {
+        let mut boosts = self.current();
+        let prefix = format!("scenes:{from}");
+        let copied = boosts
+            .boosts
+            .iter()
+            .filter_map(|(key, db)| {
+                let rest = key.strip_prefix(&prefix)?;
+                (rest.is_empty() || rest.starts_with('#'))
+                    .then(|| (format!("scenes:{to}{rest}"), *db))
+            })
+            .collect::<Vec<_>>();
+        if copied.is_empty() {
+            return Ok(());
+        }
+        boosts.boosts.extend(copied);
+        boosts.validate()?;
+        self.save(boosts)
+    }
+}
+
 /// The stable id of a preset with scenes, from its revision (read once).
 pub(crate) async fn preset_id(shared: &Shared, revision: String) -> Option<String> {
     let cached = shared

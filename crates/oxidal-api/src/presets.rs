@@ -167,6 +167,7 @@ pub(super) fn catalog_items(
             origin,
             archived: false,
             superseded: false,
+            in_set_list: false,
         })
     };
     for p in Store::new(root.into()).list()?.presets {
@@ -211,6 +212,9 @@ pub(super) async fn manage(
         Ok(Json(v)) => v,
         Err(e) => return failure(e.status(), "Invalid library edit"),
     };
+    if matches!(request.action, oxidal_presets::LibraryAction::Duplicate) {
+        return duplicate(shared, request).await;
+    }
     let root = shared.config.preset_dir.clone();
     job(shared, move |_| {
         let items = catalog_items(&root)?;
@@ -220,6 +224,98 @@ pub(super) async fn manage(
         Ok(Json(result).into_response())
     })
     .await
+}
+
+/// Duplicate: "Name copy" in Mine with the preset's scenes, MIDI assignments,
+/// boosts and measured levels; not in the set list. Holds the bundle work
+/// permit like any other publication.
+async fn duplicate(shared: Arc<Shared>, request: oxidal_presets::LibraryUpdate) -> Response {
+    use oxidal_presets::{LibraryKind, LibraryReference};
+    if request.entry_kind != LibraryKind::Rig {
+        return failure(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Only presets with scenes or effects can be duplicated here",
+        );
+    }
+    let Ok(permit) = shared.bundle_work.clone().try_acquire_owned() else {
+        return failure(
+            StatusCode::CONFLICT,
+            "Preset library operation already in progress",
+        );
+    };
+    let root = shared.config.preset_dir.clone();
+    let (boosts, calibration) = (shared.boosts.clone(), shared.calibration.clone());
+    job(shared, move |_| {
+        let _permit = permit;
+        let items = catalog_items(&root)?;
+        let mut catalog = oxidal_presets::CatalogStore::open(root.clone())?;
+        let view = catalog.reconcile(items)?;
+        if request.expected_revision != view.revision {
+            return Err(Error::Conflict("Library changed; refresh before editing"));
+        }
+        let source = view
+            .items
+            .iter()
+            .find(|i| i.kind == LibraryKind::Rig && i.id == request.id && !i.superseded)
+            .ok_or(Error::Invalid("Library entry is unavailable"))?;
+        let name = copy_name(&source.name, &view.items);
+        let made = crate::rig_library::duplicate(&root, &request.id, &name)?;
+        let (from, to) = (
+            LibraryReference {
+                kind: LibraryKind::Rig,
+                id: request.id.clone(),
+            },
+            LibraryReference {
+                kind: LibraryKind::Rig,
+                id: made.revision.clone(),
+            },
+        );
+        oxidal_presets::DetailsStore::new(root.clone()).inherit(to.clone(), from.clone())?;
+        let scenes = oxidal_presets::BundleStore::new(root.join("bundles"))
+            .manifest(&made.revision)?
+            .scenes()?
+            .map(|s| {
+                s.scenes
+                    .into_iter()
+                    .map(|scene| scene.id)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let midi = oxidal_presets::MidiMapStore::new(root.clone());
+        if !midi.follow(&from, &to, &scenes)? && !scenes.is_empty() {
+            midi.inherit_template(to.clone(), &scenes)?;
+        }
+        // Levels are a convenience: the copy itself is already saved.
+        let _ = boosts.copy_preset(&made.source_id, &made.id);
+        let _ = calibration.copy_preset((&made.source_id, &request.id), (&made.id, &made.revision));
+        let items = catalog_items(&root)?;
+        catalog.reconcile(items.clone())?;
+        catalog.leave_out_after(LibraryKind::Rig, &made.revision, &from)?;
+        let mut result = catalog.view(items)?;
+        result.created = Some(to);
+        Ok(Json(result).into_response())
+    })
+    .await
+}
+
+/// "Name copy", or "Name copy 2" and so on when that name is taken; within
+/// the 120-byte label limit.
+fn copy_name(name: &str, items: &[oxidal_presets::LibraryItem]) -> String {
+    let taken = |candidate: &str| items.iter().any(|i| !i.superseded && i.name == candidate);
+    let fit = |suffix: &str| {
+        let mut base = name.trim().to_owned();
+        while base.len() + suffix.len() > 120 {
+            base.pop();
+        }
+        format!("{}{suffix}", base.trim_end())
+    };
+    let mut candidate = fit(" copy");
+    let mut n = 2;
+    while taken(&candidate) && n < 1000 {
+        candidate = fit(&format!(" copy {n}"));
+        n += 1;
+    }
+    candidate
 }
 
 pub(super) fn visible_native(

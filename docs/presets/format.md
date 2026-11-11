@@ -347,6 +347,25 @@ catalog sequence, with origin labels on rows rather than group-based reshuffling
 MIDI program selection will consume this same sequence in its implementation;
 physical MIDI qualification is separate.
 
+Set-list membership is explicit. Each catalog item reports `in_set_list`: presets
+in Mine are members unless taken out (`set_list` with `member: false`, kept in
+`left_out`), and read-only Oxidal sounds join by reference (`added`) without
+being copied. Archived entries and earlier revisions are never members. Files
+written before membership existed have neither set, so everything in Mine stays
+in the list and the revision is unchanged. Saving a preset again carries its
+membership to the new revision. Move and Place reorder members only.
+
+`starter` appends the given entries after the last member in order, keeps any
+that are already members in place and replaces nothing; an empty list declines
+the offer. Either way `starter_offered` becomes true, and the Library offers the
+starter set list automatically only while it is false and the set list is empty.
+`duplicate` saves "Name copy" of a preset with scenes (the next free "Name copy
+N" when taken) under a new preset identity in Mine, with its details, MIDI
+assignments, boosts and measured levels, outside the set list and placed after
+its source; the reply names it in `created`. Saving a preset again also carries
+its MIDI assignments to the new revision: scene bindings follow the scene id, so
+renamed or reordered scenes keep them and deleted scenes lose only their own.
+
 ### Permanent preset deletion
 
 `GET /api/v1/presets/removal?kind=original&id=<sha256>` previews one immutable

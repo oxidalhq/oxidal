@@ -220,6 +220,37 @@ impl Store {
         *value = calibration;
         Ok(())
     }
+    /// Duplicate (Library): the copy sounds the same, so the source's
+    /// measurements carry over to the copy's preset id and revision.
+    pub(crate) fn copy_preset(&self, from: (&str, &str), to: (&str, &str)) -> Result<(), String> {
+        let (from_id, from_revision) = from;
+        let (to_id, to_revision) = to;
+        let mut calibration = self.current();
+        let prefix = format!("scenes:{from_id}");
+        let copied = calibration
+            .measured
+            .iter()
+            .filter_map(|(key, measured)| {
+                let rest = key.strip_prefix(&prefix)?;
+                (measured.content == measurement_content(from_revision)
+                    && (rest.is_empty() || rest.starts_with('#')))
+                .then(|| {
+                    (
+                        format!("scenes:{to_id}{rest}"),
+                        Measured {
+                            content: measurement_content(to_revision),
+                            ..measured.clone()
+                        },
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        if copied.is_empty() {
+            return Ok(());
+        }
+        calibration.measured.extend(copied);
+        self.save(calibration)
+    }
     fn state(&self) -> CalibrationState {
         let calibration = self.current();
         CalibrationState {

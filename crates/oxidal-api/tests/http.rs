@@ -570,6 +570,189 @@ async fn new_scene_rigs_inherit_the_unit_midi_template() {
 }
 
 #[tokio::test]
+async fn duplicate_copies_scenes_and_midi_outside_the_set_list_and_midi_follows_saves() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let get = |path: &str| {
+        let (client, url) = (client.clone(), format!("{url}{path}"));
+        async move {
+            client
+                .get(url)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+    let initial = get("/midi/map").await;
+    client
+        .post(format!("{url}/midi/map"))
+        .json(&json!({
+            "expected_revision": initial["revision"],
+            "input": null,
+            "channel": 1,
+            "template": {"scene_buttons": 4, "first_controller": 40},
+            "entries": []
+        }))
+        .send()
+        .await
+        .unwrap();
+    let manifest = |scenes: Value| {
+        json!({
+            "format": "oxidal.preset",
+            "formatVersion": 1,
+            "id": "4b6c6a52-0d4e-4c55-9d5a-7f0e3f1a2b3c",
+            "name": "Lead",
+            "tone3000": {"instances": []},
+            "oxidal": {
+                "graph": {
+                    "nodes": [
+                        {"id":"in","kind":"input","audioInputs":0,"audioOutputs":1},
+                        {"id":"scene-gain","kind":"gain","audioInputs":1,"audioOutputs":1,"inputGains":[1.0]},
+                        {"id":"out","kind":"output","audioInputs":1,"audioOutputs":0}
+                    ],
+                    "edges": [
+                        {"from":{"node":"in","port":0},"to":{"node":"scene-gain","port":0}},
+                        {"from":{"node":"scene-gain","port":0},"to":{"node":"out","port":0}}
+                    ]
+                },
+                "lv2": [],
+                "recall": {"tails":"cut"}
+            },
+            "resources": [],
+            "extensions": {
+                "urn:oxidal:gain:1": {},
+                "urn:oxidal:scenes:1": {"fade_ms": 10, "scenes": scenes}
+            },
+            "requiredExtensions": ["urn:oxidal:gain:1", "urn:oxidal:scenes:1"]
+        })
+    };
+    let scene = |id: &str, name: &str, value: f64| json!({"id": id, "name": name, "gains": [{"node":"scene-gain","port":0,"value":value}]});
+    let publish = |body: Value| {
+        let (client, url) = (client.clone(), format!("{url}/presets/rigs"));
+        async move {
+            let response = client.post(url).json(&body).send().await.unwrap();
+            let status = response.status();
+            let text = response.text().await.unwrap();
+            assert_eq!(status, 200, "{text}");
+            serde_json::from_str::<Value>(&text).unwrap()
+        }
+    };
+    let first = publish(json!({
+        "manifest_json": manifest(json!([scene("clean","Clean",1.0), scene("lead","Lead",0.5)])).to_string(),
+        "resources": {}
+    }))
+    .await;
+    let source = first["revision"].as_str().unwrap().to_owned();
+    let catalog = get("/presets/catalog").await;
+    let duplicated = client
+        .post(format!("{url}/presets/catalog"))
+        .json(&json!({
+            "expected_revision": catalog["revision"],
+            "entry_kind": "rig",
+            "id": source,
+            "action": {"kind": "duplicate"}
+        }))
+        .send()
+        .await
+        .unwrap();
+    let status = duplicated.status();
+    let body = duplicated.text().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    let duplicated: Value = serde_json::from_str(&body).unwrap();
+    let copy = duplicated["created"]["id"].as_str().unwrap().to_owned();
+    assert_ne!(copy, source);
+    let row = |catalog: &Value, id: &str| {
+        catalog["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["id"] == id)
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(row(&duplicated, &copy)["name"], "Lead copy");
+    assert_eq!(row(&duplicated, &copy)["origin"], "mine");
+    assert_eq!(row(&duplicated, &copy)["in_set_list"], false);
+    assert_eq!(row(&duplicated, &source)["in_set_list"], true);
+    let document = get(&format!("/presets/rigs/{copy}")).await;
+    assert_eq!(
+        document["manifest"]["extensions"]["urn:oxidal:scenes:1"]["scenes"][1]["name"],
+        "Lead"
+    );
+    assert_ne!(document["manifest"]["id"], first["manifest"]["id"]);
+    let map = get("/midi/map").await;
+    let entry = |map: &Value, id: &str| {
+        map["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["entry"]["id"] == id)
+            .cloned()
+    };
+    assert_eq!(
+        entry(&map, &copy).unwrap()["bindings"],
+        entry(&map, &source).unwrap()["bindings"]
+    );
+    // A second duplicate takes the next free name.
+    let again: Value = client
+        .post(format!("{url}/presets/catalog"))
+        .json(&json!({
+            "expected_revision": duplicated["revision"],
+            "entry_kind": "rig",
+            "id": source,
+            "action": {"kind": "duplicate"}
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        row(&again, again["created"]["id"].as_str().unwrap())["name"],
+        "Lead copy 2"
+    );
+    // Reordering scenes and saving again: bindings follow the scene, not the pad.
+    let reordered = publish(json!({
+        "manifest_json": manifest(json!([scene("lead","Lead",0.5), scene("clean","Clean",1.0)])).to_string(),
+        "resources": {},
+        "source": {"kind": "rig", "id": source}
+    }))
+    .await;
+    let reordered = reordered["revision"].as_str().unwrap().to_owned();
+    let map = get("/midi/map").await;
+    let bindings = entry(&map, &reordered).unwrap()["bindings"].clone();
+    let controller = |scene: &str| {
+        bindings
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["scene"] == scene)
+            .unwrap()["controller"]
+            .clone()
+    };
+    assert_eq!(controller("clean"), 40);
+    assert_eq!(controller("lead"), 41);
+    // Deleting a scene drops only its binding.
+    let trimmed = publish(json!({
+        "manifest_json": manifest(json!([scene("clean","Clean",1.0)])).to_string(),
+        "resources": {},
+        "source": {"kind": "rig", "id": reordered}
+    }))
+    .await;
+    let map = get("/midi/map").await;
+    let bindings = entry(&map, trimmed["revision"].as_str().unwrap()).unwrap()["bindings"].clone();
+    assert_eq!(bindings.as_array().unwrap().len(), 1);
+    assert_eq!(bindings[0]["scene"], "clean");
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
 async fn ui_page_revalidates_while_hashed_assets_stay_immutable() {
     let root = std::env::temp_dir().join(format!(
         "oxidal-ui-cache-{}-{}",

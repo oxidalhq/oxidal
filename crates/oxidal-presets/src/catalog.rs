@@ -50,13 +50,15 @@ fn default_group(kind: LibraryKind) -> u8 {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum LibraryKind {
     Original,
     Owned,
     Graph,
+    /// The default only fills the unused entry of a `starter` request.
+    #[default]
     Rig,
 }
 impl LibraryKind {
@@ -93,12 +95,25 @@ pub struct LibraryItem {
     /// as history and hidden from Library and the Removed list.
     #[serde(default)]
     pub superseded: bool,
+    /// In the Set list (MIDI program changes and Previous/Next follow it).
+    /// Presets in Mine are members unless taken out; read-only Oxidal sounds
+    /// are members only when added. Earlier revisions and archived entries
+    /// never are.
+    #[serde(default)]
+    pub in_set_list: bool,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryCatalog {
     pub revision: String,
     pub items: Vec<LibraryItem>,
+    /// The starter set list was added or declined on this unit; it is offered
+    /// at most once automatically.
+    #[serde(default)]
+    pub starter_offered: bool,
+    /// The preset a `duplicate` made, in Mine and not in the set list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<crate::LibraryReference>,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -115,12 +130,30 @@ pub enum LibraryAction {
     Place {
         before: Option<crate::LibraryReference>,
     },
+    /// Add the entry to the end of the set list, or take it out. Taking a
+    /// preset out keeps it in Mine; read-only Oxidal sounds can be added by
+    /// reference.
+    SetList {
+        member: bool,
+    },
+    /// Append these entries to the set list in order, after the existing
+    /// entries; members keep their place and nothing is replaced. An empty
+    /// list declines the offer. Either way the starter is no longer offered.
+    /// The request's own `entry_kind` and `id` are not used.
+    Starter {
+        entries: Vec<crate::LibraryReference>,
+    },
+    /// Make "Name copy" in Mine with the preset's scenes, MIDI and levels.
+    /// The copy is not in the set list; the reply names it in `created`.
+    Duplicate,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LibraryUpdate {
     pub expected_revision: String,
+    #[serde(default)]
     pub entry_kind: LibraryKind,
+    #[serde(default)]
     pub id: String,
     pub action: LibraryAction,
 }
@@ -133,6 +166,15 @@ struct Preferences {
     order: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     superseded: BTreeSet<String>,
+    /// Presets in Mine taken out of the set list. Absent in files written
+    /// before explicit membership, so everything in Mine stays in the list.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    left_out: BTreeSet<String>,
+    /// Read-only Oxidal sounds added to the set list by reference.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    added: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    starter_offered: bool,
 }
 #[derive(Debug)]
 pub struct CatalogStore {
@@ -210,6 +252,14 @@ impl CatalogStore {
         } else {
             candidate.archived.remove(&new);
         }
+        // Set-list membership follows the preset to its new revision.
+        for set in [&mut candidate.left_out, &mut candidate.added] {
+            if set.remove(&old) {
+                set.insert(new.clone());
+            } else {
+                set.remove(&new);
+            }
+        }
         candidate.archived.insert(old.clone());
         candidate.superseded.insert(old);
         candidate.superseded.remove(&new);
@@ -230,6 +280,8 @@ impl CatalogStore {
         candidate.archived.remove(&key);
         candidate.order.retain(|k| k != &key);
         candidate.superseded.remove(&key);
+        candidate.left_out.remove(&key);
+        candidate.added.remove(&key);
         self.persist(candidate)?;
         crate::DetailsStore::new(self.root.clone()).forget(kind, id)
     }
@@ -250,6 +302,8 @@ impl CatalogStore {
             || preferences.superseded.len() > 65536
             || preferences.archived.len() > 65536 + 4096
             || preferences.order.len() > 4096
+            || preferences.left_out.len() > 4096
+            || preferences.added.len() > 4096
         {
             return Err(Error::Invalid("Library preferences exceed limit"));
         }
@@ -273,6 +327,8 @@ impl CatalogStore {
             .iter()
             .chain(preferences.order.iter())
             .chain(preferences.superseded.iter())
+            .chain(preferences.left_out.iter())
+            .chain(preferences.added.iter())
             .any(|k| !valid_key(k))
             || preferences.order.iter().collect::<BTreeSet<_>>().len() != preferences.order.len()
         {
@@ -317,6 +373,7 @@ impl CatalogStore {
                 .preferences
                 .superseded
                 .contains(&item.kind.key(&item.id)?);
+            item.in_set_list = self.member(item)?;
         }
         items.sort_by(|a, b| {
             (a.kind == LibraryKind::Graph)
@@ -329,7 +386,47 @@ impl CatalogStore {
         Ok(LibraryCatalog {
             revision: self.revision.clone(),
             items,
+            starter_offered: self.preferences.starter_offered,
+            created: None,
         })
+    }
+    /// Set-list membership of a labelled, visibility-resolved entry.
+    fn member(&self, item: &LibraryItem) -> Result<bool> {
+        let key = item.kind.key(&item.id)?;
+        if item.archived || item.superseded || item.kind == LibraryKind::Graph {
+            return Ok(false);
+        }
+        Ok(match item.origin {
+            LibraryOrigin::Mine => !self.preferences.left_out.contains(&key),
+            LibraryOrigin::OxidalExample => {
+                item.kind == LibraryKind::Rig && self.preferences.added.contains(&key)
+            }
+            LibraryOrigin::Tone3000 => false,
+        })
+    }
+    /// Take a preset that was just made (Duplicate) out of the set list and
+    /// place it after its source, so it is in Mine but not in the list.
+    pub fn leave_out_after(
+        &mut self,
+        kind: LibraryKind,
+        id: &str,
+        source: &crate::LibraryReference,
+    ) -> Result<()> {
+        let key = kind.key(id)?;
+        let after = source.kind.key(&source.id)?;
+        let mut candidate = self.preferences.clone();
+        candidate.order.retain(|k| k != &key);
+        let place = candidate
+            .order
+            .iter()
+            .position(|k| k == &after)
+            .map_or(candidate.order.len(), |i| i + 1);
+        candidate.order.insert(place, key.clone());
+        candidate.left_out.insert(key);
+        if candidate.order.len() > 4096 || candidate.left_out.len() > 4096 {
+            return Err(Error::Invalid("Library preferences exceed limit"));
+        }
+        self.persist(candidate)
     }
     pub fn position(&self, kind: LibraryKind, id: &str) -> Result<usize> {
         let key = kind.key(id)?;
@@ -353,6 +450,34 @@ impl CatalogStore {
         }
         let catalog = self.view(items)?;
         let mut candidate = self.preferences.clone();
+        if let LibraryAction::Starter { entries } = &request.action {
+            if entries.len() > 64 {
+                return Err(Error::Invalid("A starter set list has at most 64 presets"));
+            }
+            let mut order = catalog
+                .items
+                .iter()
+                .map(|i| i.kind.key(&i.id))
+                .collect::<Result<Vec<_>>>()?;
+            for entry in entries {
+                let item = catalog
+                    .items
+                    .iter()
+                    .find(|i| i.kind == entry.kind && i.id == entry.id)
+                    .ok_or(Error::Invalid("A starter preset is not on this unit"))?;
+                if item.in_set_list
+                    || candidate.added.contains(&item.kind.key(&item.id)?)
+                    || (item.origin == LibraryOrigin::Mine
+                        && !candidate.left_out.contains(&item.kind.key(&item.id)?))
+                {
+                    continue;
+                }
+                Self::join(&catalog, &mut candidate, &mut order, item)?;
+            }
+            candidate.order = order;
+            candidate.starter_offered = true;
+            return self.commit(candidate, catalog.items);
+        }
         let key = request.entry_kind.key(&request.id)?;
         if !catalog
             .items
@@ -387,20 +512,11 @@ impl CatalogStore {
                     .iter()
                     .find(|item| item.kind == request.entry_kind && item.id == request.id)
                     .expect("entry checked");
-                if moving.origin != LibraryOrigin::Mine {
-                    return Err(Error::Invalid(
-                        "Only presets in Mine belong to the set list",
-                    ));
-                }
+                Self::movable(moving)?;
                 let visible = catalog
                     .items
                     .iter()
-                    .filter(|i| {
-                        !i.archived
-                            && i.origin == LibraryOrigin::Mine
-                            && (i.kind == LibraryKind::Graph)
-                                == (request.entry_kind == LibraryKind::Graph)
-                    })
+                    .filter(|i| Self::same_list(i, request.entry_kind))
                     .map(|i| i.kind.key(&i.id))
                     .collect::<Result<Vec<_>>>()?;
                 let from = visible
@@ -436,21 +552,14 @@ impl CatalogStore {
                     .iter()
                     .find(|item| item.kind == request.entry_kind && item.id == request.id)
                     .expect("entry checked");
-                if moving.origin != LibraryOrigin::Mine {
-                    return Err(Error::Invalid(
-                        "Only presets in Mine belong to the set list",
-                    ));
-                }
+                Self::movable(moving)?;
                 let before = before
                     .map(|entry| {
                         if !catalog.items.iter().any(|i| {
                             i.kind == entry.kind
                                 && i.id == entry.id
-                                && !i.archived
-                                && i.origin == LibraryOrigin::Mine
-                        }) || (entry.kind == LibraryKind::Graph)
-                            != (request.entry_kind == LibraryKind::Graph)
-                        {
+                                && Self::same_list(i, request.entry_kind)
+                        }) {
                             return Err(Error::Invalid("Drop target is unavailable"));
                         }
                         entry.kind.key(&entry.id)
@@ -481,15 +590,131 @@ impl CatalogStore {
                 order.insert(target, key);
                 candidate.order = order;
             }
+            LibraryAction::SetList { member } => {
+                let item = catalog
+                    .items
+                    .iter()
+                    .find(|item| item.kind == request.entry_kind && item.id == request.id)
+                    .expect("entry checked");
+                if member == item.in_set_list {
+                    return Ok(catalog);
+                }
+                if member {
+                    let mut order = catalog
+                        .items
+                        .iter()
+                        .map(|i| i.kind.key(&i.id))
+                        .collect::<Result<Vec<_>>>()?;
+                    Self::join(&catalog, &mut candidate, &mut order, item)?;
+                    candidate.order = order;
+                } else if item.origin == LibraryOrigin::Mine {
+                    candidate.left_out.insert(key);
+                } else {
+                    candidate.added.remove(&key);
+                }
+            }
+            LibraryAction::Starter { .. } => unreachable!("handled above"),
+            LibraryAction::Duplicate => {
+                return Err(Error::Invalid("Duplicate needs the preset store"));
+            }
         }
+        self.commit(candidate, catalog.items)
+    }
+    fn commit(
+        &mut self,
+        candidate: Preferences,
+        items: Vec<LibraryItem>,
+    ) -> Result<LibraryCatalog> {
         if candidate.labels.len() > 4096
             || candidate.archived.len() > 4096
             || candidate.order.len() > 4096
+            || candidate.left_out.len() > 4096
+            || candidate.added.len() > 4096
         {
             return Err(Error::Invalid("Library preferences exceed limit"));
         }
         self.persist(candidate)?;
-        self.view(catalog.items)
+        self.view(items)
+    }
+    /// Only set-list members move in the set list; effects drafts keep their
+    /// own order among the drafts in Mine.
+    fn movable(item: &LibraryItem) -> Result<()> {
+        if item.kind == LibraryKind::Graph && item.origin == LibraryOrigin::Mine {
+            return Ok(());
+        }
+        if item.in_set_list {
+            return Ok(());
+        }
+        Err(Error::Invalid(match item.origin {
+            LibraryOrigin::Tone3000 => "Only presets in Mine belong to the set list",
+            _ if item.kind == LibraryKind::Original || item.kind == LibraryKind::Graph => {
+                "Only presets in Mine belong to the set list"
+            }
+            _ => "Add this preset to the set list before moving it",
+        }))
+    }
+    /// The list an entry of `kind` moves within: the set list, or the effects
+    /// drafts in Mine.
+    fn same_list(item: &LibraryItem, kind: LibraryKind) -> bool {
+        if kind == LibraryKind::Graph {
+            item.kind == LibraryKind::Graph && !item.archived && item.origin == LibraryOrigin::Mine
+        } else {
+            item.in_set_list
+        }
+    }
+    /// Make `item` a set-list member at the end of the list: after the last
+    /// current member, before any effects drafts.
+    fn join(
+        catalog: &LibraryCatalog,
+        candidate: &mut Preferences,
+        order: &mut Vec<String>,
+        item: &LibraryItem,
+    ) -> Result<()> {
+        if item.archived || item.superseded {
+            return Err(Error::Invalid(
+                "Restore a preset before adding it to the set list",
+            ));
+        }
+        let key = item.kind.key(&item.id)?;
+        match (item.origin, item.kind) {
+            (LibraryOrigin::Mine, LibraryKind::Rig | LibraryKind::Owned) => {
+                candidate.left_out.remove(&key);
+            }
+            (LibraryOrigin::OxidalExample, LibraryKind::Rig) => {
+                candidate.added.insert(key.clone());
+            }
+            _ => {
+                return Err(Error::Invalid(
+                    "Only presets in Mine and Oxidal sounds belong to the set list",
+                ));
+            }
+        }
+        // Members as they now stand, so a batch keeps its own order.
+        let member = |k: &String| {
+            catalog.items.iter().any(|i| {
+                i.kind.key(&i.id).is_ok_and(|ik| &ik == k)
+                    && !i.archived
+                    && !i.superseded
+                    && i.kind != LibraryKind::Graph
+                    && match i.origin {
+                        LibraryOrigin::Mine => !candidate.left_out.contains(k),
+                        LibraryOrigin::OxidalExample => candidate.added.contains(k),
+                        LibraryOrigin::Tone3000 => false,
+                    }
+            })
+        };
+        order.retain(|k| k != &key);
+        let place = order.iter().rposition(member).map_or_else(
+            || {
+                order
+                    .iter()
+                    .position(|k| k.starts_with("graph:"))
+                    .unwrap_or(order.len())
+            },
+            |i| i + 1,
+        );
+        order.insert(place, key);
+        Ok(())
     }
     fn persist(&mut self, candidate: Preferences) -> Result<()> {
         let bytes = serde_json::to_vec(&candidate)
@@ -546,6 +771,7 @@ mod tests {
             origin: LibraryOrigin::Mine,
             archived: false,
             superseded: false,
+            in_set_list: false,
         };
         let mut rows = vec![rig("a"), rig("b"), rig("c")];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -645,6 +871,7 @@ mod tests {
             origin: LibraryOrigin::Mine,
             archived: false,
             superseded: false,
+            in_set_list: false,
         };
         let mut rows = vec![
             item(LibraryKind::Original, "a", "Original"),
@@ -755,6 +982,7 @@ mod tests {
                 origin: LibraryOrigin::Mine,
                 archived: false,
                 superseded: false,
+                in_set_list: false,
             },
             LibraryItem {
                 kind: LibraryKind::Graph,
@@ -764,6 +992,7 @@ mod tests {
                 origin: LibraryOrigin::Mine,
                 archived: false,
                 superseded: false,
+                in_set_list: false,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -810,6 +1039,7 @@ mod tests {
                 origin: LibraryOrigin::Mine,
                 archived: false,
                 superseded: false,
+                in_set_list: false,
             },
             LibraryItem {
                 kind: LibraryKind::Original,
@@ -819,6 +1049,7 @@ mod tests {
                 origin: LibraryOrigin::Mine,
                 archived: false,
                 superseded: false,
+                in_set_list: false,
             },
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
@@ -897,6 +1128,7 @@ mod tests {
             origin,
             archived: false,
             superseded: false,
+            in_set_list: false,
         };
         let rows = vec![
             row("a", LibraryOrigin::Tone3000),
@@ -906,7 +1138,10 @@ mod tests {
         ];
         let mut store = CatalogStore::open(root.clone()).unwrap();
         let initial = store.view(rows.clone()).unwrap();
-        for index in [0, 2] {
+        for (index, reason) in [
+            (0, "Only presets in Mine"),
+            (2, "Add this preset to the set list"),
+        ] {
             let error = store
                 .update(
                     rows.clone(),
@@ -918,7 +1153,7 @@ mod tests {
                     },
                 )
                 .unwrap_err();
-            assert!(error.to_string().contains("Only presets in Mine"));
+            assert!(error.to_string().contains(reason), "{error}");
         }
         let moved = store
             .update(
@@ -954,6 +1189,7 @@ mod tests {
             origin: LibraryOrigin::Mine,
             archived: false,
             superseded: false,
+            in_set_list: false,
         }];
         let mut store = CatalogStore::open(root.clone()).unwrap();
         let revision = store.view(rows.clone()).unwrap().revision;
@@ -1005,5 +1241,249 @@ mod tests {
         assert_eq!(unchanged.revision, revision);
         assert_eq!(unchanged.items[0].name, "A");
         fs::remove_file(root).unwrap();
+    }
+
+    fn rows(spec: &[(&str, LibraryOrigin)]) -> Vec<LibraryItem> {
+        spec.iter()
+            .map(|(id, origin)| LibraryItem {
+                kind: LibraryKind::Rig,
+                id: id.repeat(64),
+                name: format!("Rig {id}"),
+                source_name: format!("Rig {id}"),
+                origin: *origin,
+                archived: false,
+                superseded: false,
+                in_set_list: false,
+            })
+            .collect()
+    }
+    fn members(catalog: &LibraryCatalog) -> Vec<char> {
+        catalog
+            .items
+            .iter()
+            .filter(|i| i.in_set_list)
+            .map(|i| i.id.chars().next().unwrap())
+            .collect()
+    }
+    #[test]
+    fn set_list_membership_migrates_with_nothing_lost() {
+        let root = std::env::temp_dir().join(format!("oxidal-membership-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let rows = rows(&[
+            ("a", LibraryOrigin::Mine),
+            ("b", LibraryOrigin::Mine),
+            ("c", LibraryOrigin::OxidalExample),
+            ("d", LibraryOrigin::Mine),
+            ("e", LibraryOrigin::Tone3000),
+        ]);
+        // A file written before explicit membership: order, a label, an archived entry.
+        let key = |id: &str| format!("rig:{}", id.repeat(64));
+        let old = serde_json::json!({
+            "labels": { key("a"): "Lead" },
+            "archived": [key("d")],
+            "order": [key("b"), key("a"), key("c"), key("d"), key("e")],
+        });
+        let bytes = serde_json::to_vec(&old).unwrap();
+        fs::write(root.join("library.json"), &bytes).unwrap();
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let view = store.reconcile(rows.clone()).unwrap();
+        // Every visible preset in Mine is in the set list, in the old order;
+        // the example, the provider original and the removed entry are not.
+        assert_eq!(members(&view), ['b', 'a']);
+        assert_eq!(
+            view.items
+                .iter()
+                .find(|i| i.id == "a".repeat(64))
+                .unwrap()
+                .name,
+            "Lead"
+        );
+        assert!(!view.starter_offered);
+        // Reading does not rewrite the file or change its revision.
+        assert_eq!(fs::read(root.join("library.json")).unwrap(), bytes);
+        // Nothing new is written for a migrated file, so its revision is the
+        // one older readers computed.
+        let stored = String::from_utf8(serde_json::to_vec(&store.preferences).unwrap()).unwrap();
+        assert!(
+            !["left_out", "added", "starter_offered"]
+                .iter()
+                .any(|field| stored.contains(field))
+        );
+        assert_eq!(
+            view.revision,
+            format!("{:x}", Sha256::digest(stored.as_bytes()))
+        );
+        // Restoring the archived preset brings it back into the set list.
+        let restored = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: view.revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: "d".repeat(64),
+                    action: LibraryAction::Visibility { archived: false },
+                },
+            )
+            .unwrap();
+        assert_eq!(members(&restored), ['b', 'a', 'd']);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn set_list_add_remove_starter_append_and_saved_again_keep_membership() {
+        let root = std::env::temp_dir().join(format!("oxidal-set-list-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let mut rows = rows(&[
+            ("a", LibraryOrigin::Mine),
+            ("b", LibraryOrigin::Mine),
+            ("c", LibraryOrigin::OxidalExample),
+            ("d", LibraryOrigin::OxidalExample),
+            ("e", LibraryOrigin::Tone3000),
+        ]);
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        let view = store.reconcile(rows.clone()).unwrap();
+        assert_eq!(members(&view), ['a', 'b']);
+        let update = |store: &mut CatalogStore,
+                      rows: &Vec<LibraryItem>,
+                      revision: String,
+                      id: &str,
+                      action| {
+            store.update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: revision,
+                    entry_kind: LibraryKind::Rig,
+                    id: id.repeat(64),
+                    action,
+                },
+            )
+        };
+        // Taking a preset out keeps it in Mine; adding it back appends it.
+        let out = update(
+            &mut store,
+            &rows,
+            view.revision,
+            "a",
+            LibraryAction::SetList { member: false },
+        )
+        .unwrap();
+        assert_eq!(members(&out), ['b']);
+        assert!(
+            out.items
+                .iter()
+                .any(|i| i.id == "a".repeat(64) && !i.archived)
+        );
+        let error = update(
+            &mut store,
+            &rows,
+            out.revision.clone(),
+            "a",
+            LibraryAction::Move { up: true },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Add this preset"));
+        let error = update(
+            &mut store,
+            &rows,
+            out.revision.clone(),
+            "e",
+            LibraryAction::SetList { member: true },
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Only presets in Mine and Oxidal sounds")
+        );
+        // An Oxidal sound joins by reference at the end.
+        let added = update(
+            &mut store,
+            &rows,
+            out.revision,
+            "d",
+            LibraryAction::SetList { member: true },
+        )
+        .unwrap();
+        assert_eq!(members(&added), ['b', 'd']);
+        // S-20: the starter appends after the existing entries; members keep
+        // their place and nothing is replaced.
+        let reference = |id: &str| crate::LibraryReference {
+            kind: LibraryKind::Rig,
+            id: id.repeat(64),
+        };
+        let starter = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: added.revision,
+                    entry_kind: LibraryKind::default(),
+                    id: String::new(),
+                    action: LibraryAction::Starter {
+                        entries: vec![reference("c"), reference("d"), reference("a")],
+                    },
+                },
+            )
+            .unwrap();
+        assert_eq!(members(&starter), ['b', 'd', 'c', 'a']);
+        assert!(starter.starter_offered);
+        // Moving works for a referenced Oxidal sound in the set list.
+        let moved = update(
+            &mut store,
+            &rows,
+            starter.revision,
+            "c",
+            LibraryAction::Move { up: true },
+        )
+        .unwrap();
+        assert_eq!(members(&moved), ['b', 'c', 'd', 'a']);
+        // Saving a left-out preset again keeps it out; a member stays a member.
+        let out = update(
+            &mut store,
+            &rows,
+            moved.revision,
+            "b",
+            LibraryAction::SetList { member: false },
+        )
+        .unwrap();
+        assert_eq!(members(&out), ['c', 'd', 'a']);
+        rows.extend(self::tests::rows(&[("f", LibraryOrigin::Mine)]));
+        store
+            .supersede(LibraryKind::Rig, &"b".repeat(64), &"f".repeat(64))
+            .unwrap();
+        let view = CatalogStore::open(root.clone())
+            .unwrap()
+            .reconcile(rows.clone())
+            .unwrap();
+        assert_eq!(members(&view), ['c', 'd', 'a']);
+        // Duplicate's copy sits after its source and is not in the set list.
+        rows.extend(self::tests::rows(&[("9", LibraryOrigin::Mine)]));
+        let mut store = CatalogStore::open(root.clone()).unwrap();
+        store.reconcile(rows.clone()).unwrap();
+        store
+            .leave_out_after(LibraryKind::Rig, &"9".repeat(64), &reference("c"))
+            .unwrap();
+        let view = store.view(rows.clone()).unwrap();
+        assert_eq!(members(&view), ['c', 'd', 'a']);
+        let order: Vec<char> = view
+            .items
+            .iter()
+            .map(|i| i.id.chars().next().unwrap())
+            .collect();
+        let at = |c| order.iter().position(|o| *o == c).unwrap();
+        assert_eq!(at('9'), at('c') + 1);
+        // Starter with nothing declines the offer without changing the list.
+        let declined = store
+            .update(
+                rows.clone(),
+                LibraryUpdate {
+                    expected_revision: view.revision,
+                    entry_kind: LibraryKind::default(),
+                    id: String::new(),
+                    action: LibraryAction::Starter { entries: vec![] },
+                },
+            )
+            .unwrap();
+        assert_eq!(members(&declined), ['c', 'd', 'a']);
+        fs::remove_dir_all(root).unwrap();
     }
 }

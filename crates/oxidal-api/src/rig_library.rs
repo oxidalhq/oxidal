@@ -554,6 +554,20 @@ pub async fn publish(
             super::keep_ready::Store::new(root.join("keep-ready.json"))
                 .replace(&source.id, &revision)
                 .map_err(|_| Error::Invalid("Keep ready could not follow the saved preset"))?;
+            // MIDI assignments follow the saved preset; scene bindings follow
+            // the scene id, so renaming or reordering scenes keeps them.
+            let scenes = manifest
+                .scenes()?
+                .map(|s| s.scenes.into_iter().map(|scene| scene.id).collect::<Vec<_>>())
+                .unwrap_or_default();
+            oxidal_presets::MidiMapStore::new(root.clone()).follow(
+                source,
+                &oxidal_presets::LibraryReference {
+                    kind: oxidal_presets::LibraryKind::Rig,
+                    id: revision.clone(),
+                },
+                &scenes,
+            )?;
         }
         if let Some(source) = request.source {
             oxidal_presets::DetailsStore::new(root.clone()).inherit(
@@ -583,4 +597,73 @@ pub async fn publish(
         Ok(RigDocument { revision, manifest })
     })
     .await
+}
+
+/// The copy Duplicate makes: same scenes, routing, resources and levels as the
+/// source, a new preset identity and name, always in Mine.
+pub(crate) struct Duplicated {
+    pub revision: String,
+    pub source_id: String,
+    pub id: String,
+}
+/// Saves "Name copy" of a published preset with scenes. The source revision
+/// is never changed. Caller holds `bundle_work` and the library read lock.
+pub(crate) fn duplicate(
+    root: &std::path::Path,
+    revision: &str,
+    name: &str,
+) -> Result<Duplicated, Error> {
+    let store = BundleStore::new(root.join("bundles"));
+    let source = store.read(revision)?;
+    let mut manifest = source.manifest().clone();
+    let source_id = manifest.id.clone();
+    // A new stable identity: levels, MIDI and Keep ready follow it separately.
+    let hex = format!(
+        "{:x}",
+        Sha256::digest(
+            format!(
+                "oxidal-duplicate:{revision}:{}:{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_err(|_| Error::Invalid("Invalid system clock"))?
+                    .as_nanos()
+            )
+            .as_bytes()
+        )
+    );
+    manifest.id = format!(
+        "{}-{}-4{}-8{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[13..16],
+        &hex[17..20],
+        &hex[20..32]
+    );
+    manifest.name = name.to_owned();
+    let authoring = manifest
+        .extensions
+        .entry("urn:oxidal:authoring".into())
+        .or_default();
+    authoring.insert("origin".into(), serde_json::Value::String("mine".into()));
+    authoring.remove("draft");
+    let bytes =
+        serde_json::to_vec(&manifest).map_err(|_| Error::Invalid("Invalid preset manifest"))?;
+    let payloads = manifest
+        .resources
+        .iter()
+        .map(|resource| {
+            source
+                .resource(&resource.id)
+                .map(|bytes| (resource.id.clone(), bytes.to_vec()))
+                .ok_or(Error::Invalid("Missing source payload"))
+        })
+        .collect::<Result<BTreeMap<_, _>, Error>>()?;
+    let bundle = Bundle::from_parts(bytes, payloads)?;
+    let revision = store.save(&bundle)?;
+    Ok(Duplicated {
+        revision,
+        source_id,
+        id: manifest.id,
+    })
 }

@@ -1046,6 +1046,7 @@ impl RemovalStore {
             origin,
             archived: false,
             superseded: false,
+            in_set_list: false,
         };
         let originals = Store::new(self.root.clone());
         for p in originals.list()?.presets {
