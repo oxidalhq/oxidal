@@ -1,12 +1,10 @@
 import { allFactoryRecipes } from './factoryCatalog.ts';
 import {
-  factoryMissingPlugins,
   factoryRoles,
   recipeEffects,
   type FactoryRecipe,
 } from './factoryRecipes.ts';
 import { factoryVoices } from './factoryVoices.ts';
-import type { Lv2Plugin } from './api';
 
 /**
  * Sound metadata for Oxidal sounds: the fixed genre list, engine and complexity
@@ -34,23 +32,15 @@ export const factoryGenres = [
   'Experimental',
 ] as const;
 export type FactoryGenre = (typeof factoryGenres)[number];
-export const factoryEngines = [
+const factoryEngines = [
   'lv2',
   'tone3000-a2-lite',
   'tone3000-a2-full',
   'hybrid',
 ] as const;
 export type FactoryEngine = (typeof factoryEngines)[number];
-export const factoryComplexities = ['simple', 'layered', 'complex'] as const;
+const factoryComplexities = ['simple', 'layered', 'complex'] as const;
 export type FactoryComplexity = (typeof factoryComplexities)[number];
-
-/** Display names for the engine tiers; engine ids never appear in text. */
-export const factoryEngineLabels: Record<FactoryEngine, string> = {
-  lv2: 'LV2 only',
-  'tone3000-a2-lite': 'TONE3000 · A2 Lite',
-  'tone3000-a2-full': 'TONE3000 · A2 Full',
-  hybrid: 'Hybrid',
-};
 
 const packByPrefix: [RegExp, string][] = [
   [/^Gx/, 'guitarix'],
@@ -89,24 +79,9 @@ export function factoryRequiredPacks(recipe: FactoryRecipe): string[] {
   ];
 }
 
-/** Packs still missing for a recipe, from the plugins the device lists. */
-export function factoryMissingPacks(
-  recipe: FactoryRecipe,
-  plugins: Lv2Plugin[],
-): string[] {
-  return [
-    ...new Set(
-      factoryMissingPlugins(recipe, plugins).flatMap((name) => {
-        const pack = factoryPackFor(name);
-        return pack ? [pack] : [];
-      }),
-    ),
-  ];
-}
-
 /** Derived: TONE3000 tone ids of the named voices a recipe suggests. Generic
  * roles (clean, crunch, heavy, bass) are bound by the user, so list none. */
-export function factoryRequiredTones(recipe: FactoryRecipe): number[] {
+function factoryRequiredTones(recipe: FactoryRecipe): number[] {
   return [
     ...new Set(
       factoryRoles(recipe).flatMap((role) => {
@@ -120,11 +95,11 @@ export function factoryRequiredTones(recipe: FactoryRecipe): number[] {
 }
 
 /** Derived: processing blocks, NAM stages included. */
-export const factoryBlockCount = (recipe: FactoryRecipe) =>
+const factoryBlockCount = (recipe: FactoryRecipe) =>
   recipeEffects(recipe).length;
 
 /** Derived: simultaneous NAM instances (a shared role is loaded once). */
-export const factoryNamInstances = (recipe: FactoryRecipe) =>
+const factoryNamInstances = (recipe: FactoryRecipe) =>
   factoryRoles(recipe).length;
 
 /** Engine implied by a recipe's blocks. A2 Lite versus Full is not stored in

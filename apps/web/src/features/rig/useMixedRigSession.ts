@@ -1062,8 +1062,8 @@ export function useMixedRigSession({
   };
 }
 
-export type MixedRigSession = ReturnType<typeof useMixedRigSession>;
-export type MixedRigView = NonNullable<MixedRigSession['view']>;
+type MixedRigSession = ReturnType<typeof useMixedRigSession>;
+type MixedRigView = NonNullable<MixedRigSession['view']>;
 export type RigViewProps = { rig: MixedRigSession; vm: MixedRigView };
 
 const SCENE_DRAFT_KEY = 'oxidal.mixed.scene-draft';
