@@ -21,9 +21,9 @@ import { playScenes, playTone3000 } from './presetChoices';
 import { requestMidiAssignments } from './midiNavigation';
 import { friendlyError } from './lib/friendlyError';
 import {
-  addStarter,
   duplicatePreset,
   setListMember,
+  setUpStarter,
   starterMessage,
 } from './features/library/setList';
 
@@ -143,7 +143,7 @@ export function LibraryManagement({
       await run(
         'add the starter set list',
         async () => {
-          const result = await addStarter();
+          const result = await setUpStarter(setNotice);
           message = starterMessage(result);
           return result.catalog;
         },
@@ -331,7 +331,7 @@ export function LibraryManagement({
                   <div className="preset-row-text min-w-0">
                     <span className="library-name">{item.name}</span>
                     <span className="library-meta">
-                      {item.kind === 'owned' ? 'TONE3000 chain' : 'Mine'}
+                      {item.kind === 'owned' ? 'Mine · saved tone' : 'Mine'}
                     </span>
                   </div>
                   <div className="preset-row-actions">

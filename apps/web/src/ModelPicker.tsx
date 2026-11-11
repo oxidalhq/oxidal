@@ -93,7 +93,7 @@ export function ModelPicker({
   onSignIn,
 }: {
   name: string;
-  /** Shown in a page (Discover) instead of a dialog; keeps its browsing for this tab. */
+  /** Shown in a page (Library) instead of a dialog; keeps its browsing for this tab. */
   inline?: boolean;
   /** Opens Accounts when browsing needs a TONE3000 sign-in. */
   onSignIn?: () => void;

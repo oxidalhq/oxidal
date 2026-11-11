@@ -90,8 +90,8 @@ type Phase =
 
 /**
  * Get tones: one dialog for every tone a sound still needs, with sizes from the
- * player's TONE3000 account, progress, then Built and Play. A tone that was
- * removed fails cleanly and nothing is built.
+ * player's TONE3000 account, progress, then Ready and Play. A tone that was
+ * removed fails cleanly and nothing is saved.
  * @see docs/factory-collection.md
  */
 export function GetTonesDialog({
@@ -201,7 +201,7 @@ export function GetTonesDialog({
           if (gone)
             unit.setFailure(
               item.key,
-              `"${title}" was removed from TONE3000. Nothing was built.`,
+              `"${title}" was removed from TONE3000. Nothing was saved.`,
             );
           setPhase({
             name: 'fail',
@@ -216,8 +216,11 @@ export function GetTonesDialog({
       if (stop.current) return;
       setPhase({ name: 'run', step: jobs.length, total: jobs.length });
       const revision = await unit.build(item, [], chosen);
-      if (revision) setPhase({ name: 'done', revision });
-      else onClose();
+      if (revision) {
+        setPhase({ name: 'done', revision });
+        // Other sounds that share these tones are complete now as well.
+        void unit.finishReady();
+      } else onClose();
     } catch (cause) {
       setPhase({
         name: 'fail',
@@ -343,7 +346,7 @@ export function GetTonesDialog({
                 }
                 onClick={() => void go()}
               >
-                Download and build
+                Download
               </Button>
             </DialogFooter>
           </>
@@ -355,7 +358,7 @@ export function GetTonesDialog({
                 ? `${unit.progress.label} · Step ${unit.progress.current + 1} of ${unit.progress.steps.length} · ${unit.progress.steps[unit.progress.current]}`
                 : phase.step < phase.total
                   ? `Downloading ${phase.step} of ${phase.total} …`
-                  : 'Building the preset …'}
+                  : 'Saving the preset …'}
             </p>
             <progress
               aria-label="Progress"
@@ -379,7 +382,7 @@ export function GetTonesDialog({
         {phase.name === 'done' && (
           <>
             <p role="status">
-              <strong>Built.</strong> All tones are on this unit and the preset
+              <strong>Ready.</strong> All tones are on this unit and the preset
               is ready.
             </p>
             <DialogFooter>
@@ -406,7 +409,7 @@ export function GetTonesDialog({
                 : phase.message}
             </p>
             <p className="caption">
-              Nothing was built. Tones that finished downloading stay in Tones
+              Nothing was saved. Tones that finished downloading stay in Tones
               and IRs.
             </p>
             <DialogFooter>

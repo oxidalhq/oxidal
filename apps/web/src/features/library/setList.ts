@@ -3,6 +3,7 @@ import {
   type LibraryCatalog,
   type LibraryUpdate,
 } from '../../api';
+import { finishEffectsOnly } from './oxidal/finish';
 import { builtName } from './oxidal/oxidalSounds.model';
 import { lv2ShowcaseRecipes } from '../../recipes/lv2Showcase';
 
@@ -16,8 +17,9 @@ export type CatalogItem = LibraryCatalog['items'][number];
 type Entry = Pick<CatalogItem, 'kind' | 'id'>;
 
 /**
- * The starter set list: nine LV2-only Oxidal sounds, one per core genre, in a
- * playable order. Referenced, never copied, so they need nothing installed.
+ * The starter set list: nine effects-only Oxidal sounds, one per core genre,
+ * in a playable order. Referenced, never copied. They use no captures; the
+ * effect packs they need are installed when the player asks for the starter.
  */
 const STARTER_RECIPES = [
   'L09', // Two Rooms
@@ -31,8 +33,15 @@ const STARTER_RECIPES = [
   'L07', // Broken Radio
 ] as const;
 
-/** The installed starter presets on this unit, in starter order. */
-export function starterEntries(catalog: LibraryCatalog): CatalogItem[] {
+/** The starter sounds as shipped, in starter order. */
+export const starterRecipes = () =>
+  STARTER_RECIPES.flatMap((id) => {
+    const recipe = lv2ShowcaseRecipes.find((r) => r.id === id);
+    return recipe ? [recipe] : [];
+  });
+
+/** The starter presets saved on this unit, in starter order. */
+function starterEntries(catalog: LibraryCatalog): CatalogItem[] {
   return STARTER_RECIPES.flatMap((id) => {
     const recipe = lv2ShowcaseRecipes.find((r) => r.id === id);
     if (!recipe) return [];
@@ -72,7 +81,7 @@ export const setListMember = (entry: Entry, member: boolean) =>
   edit(entry, { kind: 'set_list', member });
 
 /** Append the installed starter presets after the existing entries (S-20). */
-export async function addStarter(): Promise<{
+async function addStarter(): Promise<{
   catalog: LibraryCatalog;
   added: number;
   before: number;
@@ -92,6 +101,19 @@ export async function addStarter(): Promise<{
     before: members(current),
     missing: STARTER_RECIPES.length - entries.length,
   };
+}
+
+/**
+ * The whole starter in one step: install the effect packs its sounds need,
+ * save the sounds, then append them to the set list.
+ */
+export async function setUpStarter(progress: (label: string) => void) {
+  await finishEffectsOnly(starterRecipes(), progress);
+  progress('Adding to the set list…');
+  const result = await addStarter();
+  if (!result.added && result.missing === STARTER_RECIPES.length)
+    throw new Error('The starter sounds could not be saved on this unit.');
+  return result;
 }
 
 /** "Not now": the starter is not offered again on this unit. */
@@ -117,7 +139,7 @@ export function starterMessage(result: {
   missing: number;
 }): string {
   const missing = result.missing
-    ? ` ${result.missing} starter preset${result.missing === 1 ? ' is' : 's are'} not installed on this unit.`
+    ? ` ${result.missing} starter preset${result.missing === 1 ? ' is' : 's are'} not on this unit yet.`
     : '';
   if (!result.added)
     return `The starter set list is already in your set list.${missing}`;

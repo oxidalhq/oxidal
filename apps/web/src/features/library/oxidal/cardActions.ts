@@ -40,9 +40,9 @@ export function primaryFor(
       };
     case 'build':
       return {
-        label: 'Build',
+        label: 'Play',
         disabled: !idle || !unit.profile,
-        run: () => void unit.build(item),
+        run: () => void unit.play(item),
       };
     case 'tone':
       return {

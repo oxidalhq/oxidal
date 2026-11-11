@@ -293,11 +293,11 @@ test('library sections: a removed tone fails cleanly and offers another tone (S-
   const dialog = page.getByRole('dialog', { name: `Get tones for ${BROWN}` });
   await expect(dialog.getByText(/Plexi test capture · by maker/)).toBeVisible();
   unit.state.toneRemoved = true;
-  await dialog.getByRole('button', { name: 'Download and build' }).click();
+  await dialog.getByRole('button', { name: 'Download' }).click();
   await expect(
     dialog.getByText('"Plexi test capture" was removed from TONE3000.'),
   ).toBeVisible();
-  await expect(dialog.getByText(/Nothing was built/)).toBeVisible();
+  await expect(dialog.getByText(/Nothing was saved/)).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: 'Choose another tone…' }),
   ).toBeVisible();

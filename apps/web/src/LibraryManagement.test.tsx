@@ -12,6 +12,9 @@ vi.mock('./presetChoices', () => ({
   playScenes: vi.fn(),
   playTone3000: vi.fn(),
 }));
+vi.mock('./features/library/oxidal/finish', () => ({
+  finishEffectsOnly: vi.fn(async () => 0),
+}));
 vi.mock('./api', () => ({
   libraryCatalog: vi.fn(),
   removalPreview: vi.fn(),

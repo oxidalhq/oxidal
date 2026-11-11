@@ -14,7 +14,7 @@ const chip = (state: CardState): string => {
     case 'ready':
       return '● Ready';
     case 'build':
-      return 'Not built';
+      return '● Ready';
     case 'tone':
       return `${state.missing.length} ${state.missing.length === 1 ? 'tone' : 'tones'} needed`;
     case 'signed-out':

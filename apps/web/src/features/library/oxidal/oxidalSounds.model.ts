@@ -220,7 +220,7 @@ export function installedKey(
 
 export function roleLabel(role: FactoryRole): string {
   return isFactoryVoice(role)
-    ? (factoryVoices[role].title ?? factoryVoices[role].character)
+    ? factoryVoices[role].character
     : `${role[0]!.toUpperCase()}${role.slice(1)} amp`;
 }
 
@@ -231,8 +231,8 @@ export function missingTones(item: SoundItem, facts: UnitFacts): MissingTone[] {
     (role): MissingTone[] => {
       if (facts.bindings[role]) return [];
       if (!isFactoryVoice(role)) return [{ role, named: false }];
-      const present = factoryVoices[role].captures.some((c) =>
-        facts.captures.has(`${c.tone}:${c.model}`),
+      const present = factoryVoices[role].captures.some(
+        (c) => installedKey(facts.captures, c) !== undefined,
       );
       if (present) return [];
       const capture = primaryCapture(role);
@@ -359,7 +359,9 @@ export function groupItems(
 
 export function summaryLine(shown: number, states: CardState[]): string {
   const total = states.length;
-  const ready = states.filter((s) => s.kind === 'ready').length;
+  const ready = states.filter(
+    (s) => s.kind === 'ready' || s.kind === 'build',
+  ).length;
   const need = states.filter(needsAttention).length;
   return `Showing ${shown} of ${total} · ${ready} ready to play · ${need} need a tone or pack`;
 }

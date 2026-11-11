@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  changeEffectPack,
   effectPacks,
   installedLv2,
   nativeDefaults,
@@ -31,8 +30,10 @@ import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import { friendlyError } from '../../../lib/friendlyError';
 import { playScenes } from '../../../presetChoices';
 import { presetCopy } from '../newPreset';
+import { installPack } from './finish';
 import {
   builtName,
+  cardState,
   installedKey,
   soundItems,
   type BuiltEntry,
@@ -42,8 +43,9 @@ import {
 
 /**
  * Reads what this unit has and runs the actions of the Oxidal sounds browser:
- * build, play, install a pack and make a copy. Local assembly never stops audio
- * and never downloads a tone without being asked.
+ * play, install a pack, get tones and make a copy. Every sound ships finished;
+ * once its packs and tones are on the unit it is saved here without a further
+ * step. Saving never stops audio and never downloads a tone without being asked.
  * @see docs/factory-collection.md
  */
 
@@ -88,6 +90,9 @@ export function useOxidalSounds({
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [reads, setReads] = useState(0);
   const cancelled = useRef(false);
+  /** Sounds this page already tried to save, so a failure is not retried in a loop. */
+  const tried = useRef(new Set<string>());
+  const finishing = useRef(false);
   const building = useRef<AbortController | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [ids] = useState(() =>
@@ -225,24 +230,29 @@ export function useOxidalSounds({
   const packName = (id: string) => packs?.find((p) => p.id === id)?.name ?? id;
 
   /** The saved source for a role: the player's choice, else a downloaded capture. */
-  const sourceFor = useCallback(
-    (role: FactoryRole) => {
+  const sourceIn = useCallback(
+    (role: FactoryRole, captures: Record<string, RigNativeSource>) => {
       const chosen = bindings[role];
       if (chosen) return chosen;
       if (!isFactoryVoice(role)) return undefined;
       for (const c of factoryVoices[role].captures) {
-        const key = installedKey(Object.keys(downloaded), c);
-        if (key) return downloaded[key];
+        const key = installedKey(Object.keys(captures), c);
+        if (key) return captures[key];
       }
       return undefined;
     },
-    [bindings, downloaded],
+    [bindings],
+  );
+  const sourceFor = useCallback(
+    (role: FactoryRole) => sourceIn(role, downloaded),
+    [sourceIn, downloaded],
   );
 
   async function build(
     item: SoundItem,
     then: string[] = [],
     chosen: Partial<Record<FactoryRole, RigNativeSource>> = {},
+    fresh?: { plugins: Lv2Plugin[]; captures: Record<string, RigNativeSource> },
   ) {
     const recipe = item.recipe;
     if (!recipe) return undefined;
@@ -253,7 +263,7 @@ export function useOxidalSounds({
       cancelled.current = false;
       setCancelling(false);
     }
-    const steps = ['Building the preset', 'Saving its description', ...then];
+    const steps = ['Saving the preset', 'Saving its description', ...then];
     setProgress({ label: builtName(recipe), steps, current: 0 });
     const controller = new AbortController();
     building.current = controller;
@@ -261,10 +271,12 @@ export function useOxidalSounds({
       const document = await publishRig(
         buildFactoryRecipe(
           recipe,
-          plugins,
+          fresh?.plugins ?? plugins,
           Object.fromEntries(
             factoryRoles(recipe).flatMap((role) => {
-              const source = chosen[role] ?? sourceFor(role);
+              const source =
+                chosen[role] ??
+                (fresh ? sourceIn(role, fresh.captures) : sourceFor(role));
               return source ? [[role, source]] : [];
             }),
           ),
@@ -295,7 +307,8 @@ export function useOxidalSounds({
       });
       onChanged();
       reload();
-      setNotice(`Built ${recipe.name}. It is in Library.`);
+      tried.current.add(item.key);
+      setNotice(`${recipe.name} is ready to play.`);
       return document.revision;
     } catch (cause) {
       if (controller.signal.aborted) {
@@ -304,7 +317,7 @@ export function useOxidalSounds({
         setError(
           `Stopped. If the device had already saved ${builtName(recipe)}, it is in Library.`,
         );
-      } else setError(friendlyError(cause, `build ${recipe.name}`));
+      } else setError(friendlyError(cause, `save ${recipe.name}`));
       setProgress(null);
     } finally {
       if (building.current === controller) building.current = null;
@@ -344,11 +357,61 @@ export function useOxidalSounds({
     }
   }
 
-  /** Install every missing pack, one at a time, waiting for each job. */
+  /**
+   * Save every sound an install has just completed. Reads the unit again
+   * first, so it sees the packs and tones that were added.
+   */
+  async function finishReady(): Promise<number> {
+    if (finishing.current || !profile) return 0;
+    finishing.current = true;
+    try {
+      const [lv2, caps] = await Promise.all([
+        installedLv2(48000),
+        voiceCaptures().catch(() => null),
+      ]);
+      const captures = caps
+        ? Object.fromEntries(
+            caps.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
+          )
+        : downloaded;
+      const now: UnitFacts = {
+        ...facts,
+        ready: true,
+        plugins: lv2,
+        captures: new Set(Object.keys(captures)),
+      };
+      // Only what this install completed: sounds that were ready before are
+      // saved when they are first played.
+      const pending = items.filter(
+        (item) =>
+          item.recipe &&
+          !item.built &&
+          !tried.current.has(item.key) &&
+          cardState(item, facts).kind !== 'build' &&
+          cardState(item, now).kind === 'build',
+      );
+      let saved = 0;
+      cancelled.current = false;
+      setCancelling(false);
+      for (const item of pending) {
+        if (cancelled.current) break;
+        tried.current.add(item.key);
+        if (await build(item, [], {}, { plugins: lv2, captures })) saved++;
+      }
+      if (saved > 1) setNotice(`${saved} sounds are ready to play.`);
+      return saved;
+    } finally {
+      finishing.current = false;
+    }
+  }
+
+  /** Install every missing pack, one at a time, then save the sounds that are
+   * now complete. A pack that did not install says why. */
   async function installPacks(ids: string[]) {
     setBusy(true);
     setError('');
     setNotice('');
+    let installed = false;
     try {
       for (const id of ids) {
         setProgress({
@@ -356,12 +419,9 @@ export function useOxidalSounds({
           steps: ['Installing'],
           current: 0,
         });
-        let state = await changeEffectPack(id, 'install');
-        for (let i = 0; i < 600 && state.job; i++) {
-          await new Promise((r) => setTimeout(r, 1000));
-          state = await effectPacks();
-        }
+        await installPack(id);
       }
+      installed = true;
       setNotice('Installed. The effects are ready to use.');
     } catch (cause) {
       setError(friendlyError(cause, 'install the pack'));
@@ -370,6 +430,7 @@ export function useOxidalSounds({
       setBusy(false);
       reload();
     }
+    if (installed) await finishReady();
   }
 
   /** A copy in Mine from the built example; the original stays unchanged. */
@@ -433,6 +494,7 @@ export function useOxidalSounds({
       setBindings((b) => ({ ...b, [role]: source })),
     reload,
     build,
+    finishReady,
     play,
     installPacks,
     makeCopy,

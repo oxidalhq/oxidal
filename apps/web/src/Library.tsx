@@ -549,6 +549,11 @@ export function Library({
           onChanged={() => setRefresh((v) => v + 1)}
         />
         <TabsContent value="mine">
+          <StarterOffer
+            connected={connected}
+            refresh={refresh}
+            onChanged={() => setRefresh((v) => v + 1)}
+          />
           {search(
             query,
             setQuery,

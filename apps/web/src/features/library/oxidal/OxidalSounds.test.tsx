@@ -209,7 +209,7 @@ it('Ready: one Play action that plays the built example and opens the rig', asyn
   expect(publishRig).not.toHaveBeenCalled();
 });
 
-it('Build: everything installed builds with metadata and then plays from Ready', async () => {
+it('Complete: a sound with everything installed is saved with its metadata on Play, with no separate step', async () => {
   vi.mocked(voiceCaptures).mockResolvedValue([
     { tone_id: 65578, model_id: 418470, source },
   ]);
@@ -218,10 +218,11 @@ it('Build: everything installed builds with metadata and then plays from Ready',
   expect(card).toHaveAttribute('data-state', 'build');
   expect(within(card).getByText('Everything is installed.')).toBeVisible();
   await user.click(
-    within(card).getByRole('button', { name: `Build: ${BROWN}` }),
+    within(card).getByRole('button', { name: `Play: ${BROWN}` }),
   );
   await waitFor(() => expect(publishRig).toHaveBeenCalledOnce());
-  await screen.findByText(/Built Brown Crunch/);
+  await waitFor(() => expect(playScenes).toHaveBeenCalledWith('a'.repeat(64)));
+  expect(screen.queryByRole('button', { name: /Build/ })).toBeNull();
   expect(presetDetails).toHaveBeenCalledWith(
     expect.objectContaining({
       id: 'a'.repeat(64),
@@ -250,10 +251,8 @@ it('Get tones: lists the missing tone with its size, downloads, builds, then Pla
     within(dialog).getByText('Already on this unit: 0 of 1'),
   ).toBeVisible();
   expect(downloadVoice).not.toHaveBeenCalled();
-  await user.click(
-    within(dialog).getByRole('button', { name: 'Download and build' }),
-  );
-  await within(dialog).findByText('Built.');
+  await user.click(within(dialog).getByRole('button', { name: 'Download' }));
+  await within(dialog).findByText('Ready.');
   expect(downloadVoice).toHaveBeenCalledExactlyOnceWith(
     65578,
     418470,
@@ -274,15 +273,13 @@ it('S-5: a tone removed from TONE3000 fails cleanly, names it and offers another
   await within(dialog).findByText(/Plexi test capture/);
   // The tone disappears between listing and downloading.
   vi.mocked(tone3000Tone).mockRejectedValue(notFound());
-  await user.click(
-    within(dialog).getByRole('button', { name: 'Download and build' }),
-  );
+  await user.click(within(dialog).getByRole('button', { name: 'Download' }));
   expect(
     await within(dialog).findByText(
       /"Plexi test capture" was removed from TONE3000\./,
     ),
   ).toBeVisible();
-  expect(within(dialog).getByText(/Nothing was built/)).toBeVisible();
+  expect(within(dialog).getByText(/Nothing was saved/)).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
   expect(
     within(dialog).getByRole('button', { name: 'Choose another tone…' }),
@@ -300,7 +297,7 @@ it('S-5: a tone already removed when the dialog opens blocks the download', asyn
     await within(dialog).findByText(/removed from TONE3000/),
   ).toBeVisible();
   expect(
-    within(dialog).getByRole('button', { name: 'Download and build' }),
+    within(dialog).getByRole('button', { name: 'Download' }),
   ).toBeDisabled();
   await user.click(
     within(dialog).getByRole('button', { name: 'Choose another tone…' }),
@@ -337,13 +334,13 @@ it('Sign in: signed out offers sign-in first; after sign-in the same Get tones d
 
 it('Install pack: missing pack is the one action; Protect disables it with the reason (S-6)', async () => {
   vi.mocked(installedLv2).mockResolvedValue([]);
-  vi.mocked(changeEffectPack).mockResolvedValue({
+  vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
     audio_running: false,
     available: true,
     message: '',
-    packs: [],
+    packs: [pack(id, true)],
     storage_writable: true,
-  });
+  }));
   const { user, card } = await openBrown();
   expect(card).toHaveAttribute('data-state', 'pack');
   const install = within(card).getByRole('button', {
@@ -357,6 +354,51 @@ it('Install pack: missing pack is the one action; Protect disables it with the r
   await waitFor(() =>
     expect(changeEffectPack).toHaveBeenCalledWith('guitarix', 'install'),
   );
+});
+
+it('S-6: a pack that did not install says why and never claims success', async () => {
+  vi.mocked(installedLv2).mockResolvedValue([]);
+  vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
+    audio_running: false,
+    available: true,
+    message: 'The package server could not be reached.',
+    packs: [pack(id, false)],
+    storage_writable: true,
+  }));
+  const { user, card } = await openBrown();
+  await user.click(
+    within(card).getByRole('button', { name: `Install pack: ${BROWN}` }),
+  );
+  expect(
+    await screen.findByText(/package server could not be reached/),
+  ).toBeVisible();
+  expect(screen.queryByText(/Installed\./)).toBeNull();
+  expect(publishRig).not.toHaveBeenCalled();
+});
+
+it('an installed pack saves the sounds it completes, with no Build step', async () => {
+  vi.mocked(voiceCaptures).mockResolvedValue([
+    { tone_id: 65578, model_id: 418470, source },
+  ]);
+  vi.mocked(installedLv2).mockResolvedValueOnce([]);
+  vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
+    audio_running: false,
+    available: true,
+    message: '',
+    packs: [pack(id, true)],
+    storage_writable: true,
+  }));
+  const { user, card } = await openBrown();
+  expect(card).toHaveAttribute('data-state', 'pack');
+  await user.click(
+    within(card).getByRole('button', { name: `Install pack: ${BROWN}` }),
+  );
+  await waitFor(() => expect(publishRig).toHaveBeenCalled());
+  expect(
+    vi
+      .mocked(presetDetails)
+      .mock.calls.some(([update]) => update?.description !== undefined),
+  ).toBe(true);
 });
 
 it('S-6: with Protect on, Install pack is disabled and says why', async () => {

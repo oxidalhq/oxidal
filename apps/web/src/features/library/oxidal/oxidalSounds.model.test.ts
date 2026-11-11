@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { allFactoryRecipes } from '../../../factoryCatalog';
+import { factoryRoles } from '../../../factoryRecipes';
+import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import {
   CAPTURE_BUDGET,
   bufferThatFits,
@@ -6,6 +9,7 @@ import {
   captureLimit,
   filterItems,
   groupItems,
+  missingTones,
   noFilters,
   sceneLine,
   summaryLine,
@@ -147,11 +151,33 @@ describe('filters, groups and summary', () => {
         { kind: 'build' },
         { kind: 'pack', packs: ['calf'] },
       ]),
-    ).toBe('Showing 2 of 3 · 1 ready to play · 1 need a tone or pack');
+    ).toBe('Showing 2 of 3 · 2 ready to play · 1 need a tone or pack');
   });
   it('shortens long scene lists', () => {
     expect(sceneLine(['1', '2', '3', '4', '5', '6', '7', '8'])).toBe(
       '1 · 2 · 3 · 4 · 5 · 6 · +2',
     );
+  });
+});
+
+describe('tones a sound still needs', () => {
+  it('counts a downloaded tone for a voice that leaves the model open', () => {
+    const recipe = allFactoryRecipes.find((r) =>
+      factoryRoles(r).some(
+        (role) =>
+          isFactoryVoice(role) &&
+          factoryVoices[role].captures[0]?.model === undefined,
+      ),
+    )!;
+    const sound: SoundItem = { ...item(), recipe };
+    const before = missingTones(sound, facts());
+    const open = before.find((t) => t.named && t.model === undefined)!;
+    expect(open).toBeDefined();
+    const tone = (open as { tone: number }).tone;
+    const after = missingTones(
+      sound,
+      facts({ captures: new Set([`${tone}:424242`]) }),
+    );
+    expect(after.some((t) => t.role === open.role)).toBe(false);
   });
 });

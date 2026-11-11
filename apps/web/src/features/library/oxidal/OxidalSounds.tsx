@@ -75,7 +75,7 @@ function FilterSelect({
 }
 
 /**
- * Oxidal sounds: installed examples and the sounds still to build in one
+ * Oxidal sounds: every sound in the collection, finished, in one
  * browser. Each card has exactly one primary action; Details opens one sheet.
  * @see docs/factory-collection.md
  */
@@ -227,7 +227,7 @@ export function OxidalSounds({
           <AlertTitle>Oxidal sounds unavailable</AlertTitle>
           <AlertDescription className="break-words text-current">
             Oxidal could not read the installed effects and library. You can
-            still browse these sounds, but building is disabled.{' '}
+            still browse these sounds, but they cannot be played from here.{' '}
             {unit.loadError}
           </AlertDescription>
         </Alert>

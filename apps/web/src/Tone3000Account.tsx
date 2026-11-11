@@ -10,7 +10,7 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
   const [key, setKey] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // The page that sent the player here to sign in, such as Discover (7.5).
+  // The page that sent the player here to sign in, such as Oxidal sounds.
   const [returnTo, setReturnTo] = useState(readReturnTarget);
   const epoch = useRef(0);
   useEffect(() => {
@@ -98,8 +98,8 @@ export function Tone3000Account({ connected }: { connected: boolean }) {
         <div className="tone3000-account-title">
           <h2 id="tone3000-account-heading">TONE3000 account</h2>
           <p className="caption">
-            Browse and download NAM captures and cabinet IRs in Discover. Sounds
-            already on this device never need it.
+            Browse and download NAM captures and cabinet IRs in Library ▸
+            TONE3000. Sounds already on this device never need it.
           </p>
         </div>
         <Badge role="status">

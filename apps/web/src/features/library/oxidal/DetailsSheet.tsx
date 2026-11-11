@@ -53,11 +53,11 @@ export function DetailsSheet({
   const [setList, setSetList] = useState('');
   const [adding, setAdding] = useState(false);
   async function addToSetList() {
-    const revision = item.built?.revision;
-    if (!revision) return;
     setAdding(true);
     setSetList('');
     try {
+      const revision = item.built?.revision ?? (await unit.build(item));
+      if (!revision) return;
       const catalog = await setListMember({ kind: 'rig', id: revision }, true);
       const place =
         catalog.items
@@ -131,18 +131,7 @@ export function DetailsSheet({
           )}
           <Button
             variant="outline"
-            disabled={
-              state.kind !== 'ready' ||
-              !item.built ||
-              !!listed.place ||
-              adding ||
-              !unit.connected
-            }
-            title={
-              state.kind !== 'ready' || !item.built
-                ? 'Build it first'
-                : undefined
-            }
+            disabled={!copyable || !!listed.place || adding || !unit.connected}
             onClick={() => void addToSetList()}
           >
             {listed.place
@@ -159,6 +148,12 @@ export function DetailsSheet({
             Make my copy
           </Button>
         </DialogFooter>
+        {!copyable && state.kind !== 'loading' && (
+          <p className="caption">
+            Install what it needs first; then it can join the set list or be
+            copied.
+          </p>
+        )}
         {setList && (
           <p className="caption" role="status">
             {setList}
