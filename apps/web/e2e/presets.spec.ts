@@ -440,7 +440,7 @@ test('native preset upload, durable library, exact download and rejected replace
     page.getByRole('complementary', { name: 'DSP and system resources' }),
   ).toHaveAttribute('data-connected', 'true');
   await page.getByRole('button', { name: 'Library', exact: true }).click();
-  await page.getByRole('tab', { name: 'Discover', exact: true }).click();
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   const fixtureNames = [
     'authored-current.t3kpreset',
     'authored-legacy.t3kpreset',
@@ -468,8 +468,9 @@ test('native preset upload, durable library, exact download and rejected replace
     .map((id) => `[data-testid="preset-${id}"]`)
     .join(',');
   const rows = page.locator(rowSelector);
-  const presetsTab = page.getByRole('tab', { name: 'Presets', exact: true });
-  const discoverTab = page.getByRole('tab', { name: 'Discover', exact: true });
+  // Originals and the import form share the TONE3000 section.
+  const presetsTab = page.getByRole('tab', { name: 'TONE3000', exact: true });
+  const discoverTab = presetsTab;
   await presetsTab.click();
   await expect(rows).toHaveCount(2);
   // Importing the same file again keeps one copy.
@@ -496,7 +497,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(rows).toHaveCount(2);
   const downloadEvent = page.waitForEvent('download');
   await current.getByRole('button', { name: /^More for / }).click();
-  await page.getByRole('menuitem', { name: 'Download file' }).click();
+  await page.getByRole('menuitem', { name: 'Download' }).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toMatch(/\.t3kpreset$/);
   const path = await download.path();
@@ -511,7 +512,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await expect(rows).toHaveCount(2);
-  await page.getByRole('tab', { name: 'Discover', exact: true }).click();
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await page.getByLabel('TONE3000 preset file').setInputFiles({
     name: 'bad.t3kpreset',
     mimeType: 'application/octet-stream',
@@ -521,7 +522,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await expect(
     page.getByRole('alert').filter({ hasText: 'Not a TONE3000 preset' }),
   ).toContainText('Not a TONE3000 preset');
-  await page.getByRole('tab', { name: 'Presets', exact: true }).click();
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
   await openComposer(page, 'tone3000');
@@ -3068,7 +3069,7 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
   await page.getByRole('button', { name: 'Library', exact: true }).click();
   await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const management = page.getByRole('region', {
-    name: 'Manage library',
+    name: 'Set list',
     exact: true,
   });
   const row = management.locator(
@@ -4747,7 +4748,7 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   }
   await rig.locator('[data-node="amp-a"] button').click();
   const selected = rig.locator('[aria-label="Selected block"]');
-  const title = selected.locator('.selected-node-title');
+  const title = selected.locator('.selected-block-title');
   const titleBox = (await title.boundingBox())!;
   expect(titleBox.width).toBeGreaterThan(160);
   expect(titleBox.height).toBeLessThan(100);
@@ -4929,14 +4930,9 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
     const routing = selected.getByRole('group', {
       name: `Routing for ${long}`,
     });
-    for (const name of [
-      'Add parallel path',
-      'Add branch',
-      'Copy branch',
-      'Remove branch',
-    ])
+    for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
       await expect(routing.getByRole('button', { name })).toBeVisible();
-    const title = selected.locator('.selected-node-title');
+    const title = selected.locator('.selected-block-title');
     const titleBox = (await title.boundingBox())!;
     const selectedBox = (await selected.boundingBox())!;
     const routingBox = (await routing.boundingBox())!;
@@ -5205,7 +5201,7 @@ test('device portrait shared NAM and IR libraries import, search and page indepe
     .toBe(true);
   if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
   await expect(
-    page.getByRole('tab', { name: 'Presets', exact: true }),
+    page.getByRole('tab', { name: 'Mine', exact: true }),
   ).toBeVisible();
   const accessibility = await new AxeBuilder({ page })
     .include('.asset-library')
@@ -5399,7 +5395,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   await page.goto('/#library');
   await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const management = page.getByRole('region', {
-    name: 'Manage library',
+    name: 'Set list',
     exact: true,
   });
   const peer = management.locator(
@@ -5453,7 +5449,7 @@ test('device portrait set-list drag and keyboard order agree with picker and Per
   expect(
     (
       await new AxeBuilder({ page })
-        .include('[aria-label="Manage library"]')
+        .include('[aria-label="Set list"]')
         .analyze()
     ).violations,
   ).toEqual([]);

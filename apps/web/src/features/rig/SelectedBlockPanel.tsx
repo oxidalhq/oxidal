@@ -1,6 +1,9 @@
+import './SelectedBlockPanel.css';
+import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
-import { CaretLeft, CaretRight, Trash } from '@phosphor-icons/react';
 import { LedToggle } from '../../ChainView';
+import { Trash } from '@phosphor-icons/react';
+import { useState } from 'react';
 import { removeSceneEffect } from '../../sceneEdit';
 import {
   routeAddBranch,
@@ -9,16 +12,54 @@ import {
   routeRemove,
   routeRemoveBranch,
 } from '../../rigRoute';
+import type { IdStep } from '../../rigChain';
 import type { RigViewProps } from './useMixedRigSession';
 import { PathLevel } from './PathLevel';
 
+/** Why the routing actions are unavailable for this block, or null. */
+const SCENE_LANES = 'Splits inside scene lanes cannot be edited here yet.';
+const NOT_EDITABLE = 'This preset’s routing cannot be edited here.';
+const SERIAL = 'Split here to make this block one of two paths.';
+
+/** Blocks on the path that holds `id`, nested splits included. */
+function pathBlocks(route: IdStep[] | null, id: string): number | null {
+  const count = (steps: IdStep[]): number =>
+    steps.reduce(
+      (n, s) =>
+        n +
+        (typeof s === 'string'
+          ? 1
+          : s.branches.reduce((m, b) => m + count(b), 0)),
+      0,
+    );
+  const contains = (steps: IdStep[]): boolean =>
+    steps.some(
+      (s) =>
+        s === id ||
+        (typeof s !== 'string' && s.branches.some((b) => contains(b))),
+    );
+  const look = (steps: IdStep[]): number | null => {
+    for (const s of steps) {
+      if (typeof s === 'string') continue;
+      for (const b of s.branches) {
+        if (!contains(b)) continue;
+        return look(b) ?? count(b);
+      }
+    }
+    return null;
+  };
+  return route ? look(route) : null;
+}
+
 /**
- * Toolbar of the selected block: arrange, path level, routing and on/off.
+ * Selected block panel: a header (name, type, On), an Arrange row, a Routing
+ * row that exists for every block, then the block's controls (rendered by the
+ * caller). One `busy` value disables every action while a change is in flight.
  * @see docs/interface.md
  */
 export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const {
-    busy,
+    busy: sending,
     command,
     edit,
     editChain,
@@ -30,6 +71,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const {
     disabled,
     editable,
+    fullRoute,
     inLane,
     place,
     running,
@@ -40,187 +82,236 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
     selectedView,
     state,
   } = vm;
+  const [removing, setRemoving] = useState<{
+    path: number;
+    effects: number;
+  } | null>(null);
+  if (
+    !running ||
+    !selectedView ||
+    !(selectedView.branch || selectedView.bypass)
+  )
+    return null;
+  const busy = disabled || !!edit || editing || sending;
+  const id = selected!.id;
+  const label = selectedView.label;
+  const inScene = sceneEffectSet.has(id);
+  const movable = editable && selected!.kind === 'lv2';
+  const kind = selectedView.branch
+    ? 'Path'
+    : selected!.kind === 'lv2'
+      ? 'LV2'
+      : selected!.kind === 'tone3000'
+        ? 'TONE3000'
+        : 'Mix';
+  const routable = editable && !sceneLanes.length;
+  const inSplit = routable && selectedBranch.found && selectedBranch.paths > 0;
+  const routeWhy = sceneLanes.length
+    ? SCENE_LANES
+    : !editable
+      ? NOT_EDITABLE
+      : !inSplit
+        ? SERIAL
+        : '';
+  const sides =
+    inLane && selectedBranch.paths > 0
+      ? ['left', 'right'].map((side) =>
+          state.control?.controls.find(
+            (c) =>
+              c.target.kind === 'merge' &&
+              c.target.node === `${selectedBranch.merge}-${side}` &&
+              c.target.port === selectedBranch.port,
+          ),
+        )
+      : [];
+  const effects = pathBlocks(fullRoute, id) ?? 1;
+  const why = 'selected-block-why';
   return (
-    <>
-      {running &&
-        selectedView &&
-        (selectedView.branch || selectedView.bypass) && (
-          <div className="selected-node" aria-label="Selected block">
-            <h3 className="selected-node-title" title={selectedView.label}>
-              {selectedView.label}
-            </h3>
-            {sceneEffectSet.has(selected!.id) && (
-              <div className="action-row" role="group" aria-label="Arrange">
-                <Button
-                  variant="ghost"
-                  disabled={disabled || !!edit || editing}
-                  onClick={() =>
-                    void rebuild(({ opened, live, name }) =>
-                      removeSceneEffect(opened, selected!.id, live, name),
-                    )
-                  }
-                >
-                  <Trash aria-hidden="true" /> Remove
-                </Button>
-              </div>
-            )}
-            {editable && selected!.kind === 'lv2' && (
-              <div className="action-row" role="group" aria-label="Arrange">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Move ${selectedView.label} left`}
-                  disabled={disabled || !!edit || editing || place.first}
-                  onClick={() => void shift(selected!.id, -1)}
-                >
-                  <CaretLeft aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Move ${selectedView.label} right`}
-                  disabled={disabled || !!edit || editing || place.last}
-                  onClick={() => void shift(selected!.id, 1)}
-                >
-                  <CaretRight aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={disabled || !!edit || editing}
-                  onClick={() =>
-                    void editChain((route) => routeRemove(route, selected!.id))
-                  }
-                >
-                  <Trash aria-hidden="true" /> Remove
-                </Button>
-              </div>
-            )}
-            {inLane &&
-              editable &&
-              !sceneLanes.length &&
-              selectedBranch.paths > 0 &&
-              (() => {
-                const sides = ['left', 'right'].map((side) =>
-                  state.control?.controls.find(
-                    (c) =>
-                      c.target.kind === 'merge' &&
-                      c.target.node === `${selectedBranch.merge}-${side}` &&
-                      c.target.port === selectedBranch.port,
-                  ),
-                );
-                if (!sides[0] || !sides[1]) return null;
-                return (
-                  <PathLevel
-                    key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0]!.value}:${sides[1]!.value}`}
-                    path={selectedBranch.port + 1}
-                    left={sides[0]!.value}
-                    right={sides[1]!.value}
-                    disabled={disabled || !!edit || editing || busy}
-                    onCommit={(left, right) =>
-                      setPathSides([
-                        [sides[0]!.target, left],
-                        [sides[1]!.target, right],
-                      ])
-                    }
-                  />
-                );
-              })()}
-            {inLane && editable && !sceneLanes.length && (
-              <div
-                className="action-row"
-                role="group"
-                aria-label={`Routing for ${selectedView.label}`}
-              >
-                <Button
-                  variant="outline"
-                  disabled={disabled || !!edit || editing}
-                  onClick={() =>
-                    void editChain((route) => routeAddPath(route, selected!.id))
-                  }
-                >
-                  {selectedView.block.kind === 'cab'
-                    ? 'Dual cab: add a cab path'
-                    : 'Add parallel path'}
-                </Button>
-                {selectedBranch.found && selectedBranch.paths > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeAddBranch(route, selected!.id),
-                        )
-                      }
-                    >
-                      Add branch
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeCopyBranch(route, selected!.id),
-                        )
-                      }
-                    >
-                      Copy branch
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={disabled || !!edit || editing}
-                      onClick={() =>
-                        void editChain((route) =>
-                          routeRemoveBranch(route, selected!.id),
-                        )
-                      }
-                    >
-                      Remove branch
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
-            {selectedView.branch ? (
-              <LedToggle
-                on={selectedView.branch.enabled}
-                kind={selectedView.block.kind}
-                state={selectedView.branch.partial ? 'Mixed' : undefined}
-                label={`Toggle branch ${selectedView.branch.name}`}
-                disabled={disabled || !!edit}
-                onToggle={() =>
-                  void command({
-                    kind: 'branch',
-                    command: {
-                      session: state.control!.session,
-                      expected_revision: state.control!.revision,
-                      branch: selectedView.branch!.id,
-                      enabled: !selectedView.branch!.enabled,
-                    },
-                  })
-                }
-              />
-            ) : (
-              <LedToggle
-                on={selectedView.bypass!.value !== 1}
-                kind={selectedView.block.kind}
-                label={`${selectedView.label} on`}
-                disabled={disabled || !!edit}
-                onToggle={() =>
-                  void command({
-                    kind: 'control',
-                    command: {
-                      session: state.control!.session,
-                      expected_revision: state.control!.revision,
-                      target: selectedView.bypass!.target,
-                      value: selectedView.bypass!.value === 1 ? 0 : 1,
-                    },
-                  })
-                }
-              />
-            )}
-          </div>
+    <div className="selected-block" aria-label="Selected block">
+      <div className="selected-block-head">
+        <h3 className="selected-block-title" title={label}>
+          {label}
+        </h3>
+        <span className="selected-block-type">{kind}</span>
+        {selectedView.branch ? (
+          <LedToggle
+            on={selectedView.branch.enabled}
+            kind={selectedView.block.kind}
+            state={selectedView.branch.partial ? 'Mixed' : undefined}
+            label={`Toggle branch ${selectedView.branch.name}`}
+            disabled={busy}
+            onToggle={() =>
+              void command({
+                kind: 'branch',
+                command: {
+                  session: state.control!.session,
+                  expected_revision: state.control!.revision,
+                  branch: selectedView.branch!.id,
+                  enabled: !selectedView.branch!.enabled,
+                },
+              })
+            }
+          />
+        ) : (
+          <LedToggle
+            on={selectedView.bypass!.value !== 1}
+            kind={selectedView.block.kind}
+            label={`${label} on`}
+            disabled={busy}
+            onToggle={() =>
+              void command({
+                kind: 'control',
+                command: {
+                  session: state.control!.session,
+                  expected_revision: state.control!.revision,
+                  target: selectedView.bypass!.target,
+                  value: selectedView.bypass!.value === 1 ? 0 : 1,
+                },
+              })
+            }
+          />
         )}
-    </>
+      </div>
+      {(inScene || movable) && (
+        <div className="action-row" role="group" aria-label="Arrange">
+          {movable && (
+            <>
+              <Button
+                variant="outline"
+                aria-label={`Move ${label} left`}
+                disabled={busy || place.first}
+                onClick={() => void shift(id, -1)}
+              >
+                ◀ Move
+              </Button>
+              <Button
+                variant="outline"
+                aria-label={`Move ${label} right`}
+                disabled={busy || place.last}
+                onClick={() => void shift(id, 1)}
+              >
+                Move ▶
+              </Button>
+            </>
+          )}
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() =>
+              inScene
+                ? void rebuild(({ opened, live, name }) =>
+                    removeSceneEffect(opened, id, live, name),
+                  )
+                : void editChain((route) => routeRemove(route, id))
+            }
+          >
+            <Trash aria-hidden="true" /> Remove
+          </Button>
+        </div>
+      )}
+      {inLane && (
+        <div
+          className="selected-block-routing"
+          role="group"
+          aria-label={`Routing for ${label}`}
+        >
+          <p className="selected-block-path">
+            {selectedBranch.found && selectedBranch.paths > 0
+              ? `Path ${selectedBranch.port + 1} of ${selectedBranch.paths}`
+              : 'Serial'}
+          </p>
+          {sides[0] && sides[1] && (
+            <PathLevel
+              key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}:${sides[1].value}`}
+              path={selectedBranch.port + 1}
+              left={sides[0].value}
+              right={sides[1].value}
+              disabled={busy}
+              onCommit={(left, right) =>
+                setPathSides([
+                  [sides[0]!.target, left],
+                  [sides[1]!.target, right],
+                ])
+              }
+            />
+          )}
+          <div className="action-row">
+            <Button
+              variant="outline"
+              disabled={busy || !routable}
+              aria-describedby={routable ? undefined : why}
+              title={
+                selectedView.block.kind === 'cab'
+                  ? 'Starts a dual cab: the empty path takes a second cab.'
+                  : undefined
+              }
+              onClick={() => void editChain((route) => routeAddPath(route, id))}
+            >
+              Split here
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy || !inSplit}
+              aria-describedby={inSplit ? undefined : why}
+              onClick={() =>
+                void editChain((route) => routeAddBranch(route, id))
+              }
+            >
+              Add path
+            </Button>
+            <Button
+              variant="outline"
+              disabled={busy || !inSplit}
+              aria-describedby={inSplit ? undefined : why}
+              onClick={() =>
+                void editChain((route) => routeCopyBranch(route, id))
+              }
+            >
+              Copy path
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy || !inSplit}
+              aria-describedby={inSplit ? undefined : why}
+              onClick={() =>
+                setRemoving({ path: selectedBranch.port + 1, effects })
+              }
+            >
+              Remove path
+            </Button>
+          </div>
+          {routeWhy && (
+            <p id={why} className="caption selected-block-why">
+              {routeWhy}
+            </p>
+          )}
+        </div>
+      )}
+      {removing && (
+        <AdjustmentDialog
+          title={`Remove Path ${removing.path}`}
+          onCancel={() => setRemoving(null)}
+        >
+          <p>
+            Remove Path {removing.path} and its {removing.effects}{' '}
+            {removing.effects === 1 ? 'effect' : 'effects'}?
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setRemoving(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setRemoving(null);
+                void editChain((route) => routeRemoveBranch(route, id));
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
+    </div>
   );
 }

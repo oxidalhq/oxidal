@@ -846,7 +846,7 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
     name: 'Routing for dirt',
   });
   expect(
-    within(routing).getByRole('button', { name: 'Remove branch' }),
+    within(routing).getByRole('button', { name: 'Remove path' }),
   ).toBeVisible();
   // The selected path's level is set live on both channels when released.
   const level = screen.getByLabelText('Path 2 level');
@@ -896,7 +896,7 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
       ['merge-right', 0],
     ]),
   );
-  fireEvent.click(within(routing).getByRole('button', { name: 'Copy branch' }));
+  fireEvent.click(within(routing).getByRole('button', { name: 'Copy path' }));
   await waitFor(() => expect(publishRig).toHaveBeenCalled());
   const request = vi.mocked(publishRig).mock.calls[0]![0];
   const next = JSON.parse(request.manifest_json);

@@ -1,5 +1,6 @@
 import { type PathMix, mixGains, pathMix } from '../../rigRoute';
 import { panLabel } from '../../lib/panLabel';
+import { Button } from '../../components/ui/button';
 import { useState } from 'react';
 
 /** A path's level into its merge, set on both channels when released (7.26).
@@ -26,6 +27,23 @@ export function PathLevel({
     if (Math.abs(l - left) > 0.0001 || Math.abs(r - right) > 0.0001)
       void onCommit(l, r);
   };
+  /** Step buttons for E-paper, where there is no dragging (S-17). */
+  const step = (
+    key: 'level' | 'pan',
+    delta: number,
+    lo: number,
+    hi: number,
+  ) => {
+    const next = {
+      ...draft,
+      [key]: Math.min(
+        hi,
+        Math.max(lo, Math.round((draft[key] + delta) * 20) / 20),
+      ),
+    };
+    setDraft(next);
+    commit(next);
+  };
   return (
     <div className="path-mix" role="group" aria-label={`Path ${path} mix`}>
       <label className="field">
@@ -47,6 +65,26 @@ export function PathLevel({
           onKeyUp={() => commit()}
           onBlur={() => commit()}
         />
+        <span className="path-mix-steps">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Lower path ${path} level`}
+            disabled={disabled}
+            onClick={() => step('level', -0.1, 0, 2)}
+          >
+            −
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Raise path ${path} level`}
+            disabled={disabled}
+            onClick={() => step('level', 0.1, 0, 2)}
+          >
+            +
+          </Button>
+        </span>
       </label>
       <label className="field">
         <span>
@@ -67,6 +105,26 @@ export function PathLevel({
           onKeyUp={() => commit()}
           onBlur={() => commit()}
         />
+        <span className="path-mix-steps">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Pan path ${path} left`}
+            disabled={disabled}
+            onClick={() => step('pan', -0.1, -1, 1)}
+          >
+            L
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Pan path ${path} right`}
+            disabled={disabled}
+            onClick={() => step('pan', 0.1, -1, 1)}
+          >
+            R
+          </Button>
+        </span>
       </label>
       <label className="flex min-h-11 items-center gap-2">
         <input
