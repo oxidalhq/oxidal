@@ -1493,7 +1493,7 @@ async fn effect_pack_catalog_is_curated_even_without_a_privileged_helper() {
     assert_eq!(state["available"], false);
     assert_eq!(state["audio_running"], false);
     assert_eq!(state["storage_writable"], false);
-    assert_eq!(state["packs"].as_array().unwrap().len(), 8);
+    assert_eq!(state["packs"].as_array().unwrap().len(), 10);
     assert!(
         state["packs"]
             .as_array()
