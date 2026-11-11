@@ -129,6 +129,52 @@ the full player, Perform and Library never disagree. Source:
 - **MIDI.** Settings › MIDI has a Backing player group: Play/Pause, Stop track,
   Next track, Previous track, Back 10 s, Forward 10 s and a level knob CC.
 
+## Venue EQ
+
+Settings › Audio › Output › Venue EQ corrects the main outputs for the room (on an
+interface such as the Jogg, the headphones mirror them). It applies once after
+the session mix, so it never changes presets, the DI tap, recordings, reamp
+results or exports. Source: [venue EQ screen](../apps/web/src/components/media/VenueEq.tsx),
+[response and headroom](../apps/web/src/lib/venueEq.ts) and
+[preview throttle](../apps/web/src/lib/venuePreview.ts).
+
+- **Bands.** High-pass (20–400 Hz, 12 or 24 dB/oct), low shelf (40–500 Hz),
+  low mid, mid and high mid bells (40 Hz–16 kHz, Q 0.3–8), high shelf
+  (1.5–16 kHz) and low-pass (2–20 kHz, 12 or 24 dB/oct); shelves and bells are
+  ±12 dB, and every band has its own On. Output trim is −24…+6 dB.
+- **Graph.** The response is the combined magnitude of the same RBJ biquads the
+  audio stage runs, at 48 kHz, on a 20 Hz–20 kHz log axis. Drag a handle (or
+  use the arrow keys on it) to move a band; the band editor below offers the
+  same values with step buttons. On E-paper the graph redraws on release only.
+- **Profiles.** Five read-only starting points (Flat, Small PA, Boomy room,
+  Harsh room, Headphones) to tune by ear, plus your own. Save on a starting
+  point creates your own copy, named after it with "(edited)"; Save as…, Rename, Duplicate and
+  Delete work on your profiles. Deleting the profile in use switches to Flat.
+- **Preview, Save, Revert.** Edits are heard at once as an unsaved preview
+  owned by the device ("Edited · unsaved"). A drag sends at most 20 previews a
+  second and always sends the value on release. Save keeps the edit; Revert
+  returns to the saved profile. Leaving the screen with an unsaved edit asks
+  Keep editing or Revert and leave.
+- **Compare and Bypass.** Compare to saved switches between the edit and the
+  saved profile; Bypass switches between the corrected and flat outputs. Both
+  are one-tap toggles and crossfade on the device.
+- **Headroom.** Above +6 dB of peak boost (bands plus trim) the screen says
+  "Adds up to +X dB; risk of clipping" and offers the output trim that brings
+  the peak back to +6 dB.
+- **Five-minute rule.** An unsaved edit stays audible while the screen is open
+  (it keeps it alive every minute) and for 5 minutes after a phone sleeps or
+  disconnects, so the PA sound does not jump. After that, or after a reboot, the
+  saved profile returns and the next visit says "Your unsaved venue edit was
+  discarded".
+- **Two screens.** Every change goes through `POST /api/v1/venues/commands`
+  with the revision the screen last saw, and the device event stream carries a
+  `venue` event with each new state. A screen acting on an old revision is
+  refused with `409` and shows the current state, saying someone else changed
+  the venue EQ.
+- **Protect.** With Protect on, every venue command is refused (`423`): no
+  edits, bypass or profile changes. The screen shows the lock and disables its
+  controls.
+
 ## Audio path
 
 Session media meets the live signal in the shared audio host stage that every

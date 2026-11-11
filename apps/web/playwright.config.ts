@@ -16,8 +16,8 @@ const webOrigin = `http://127.0.0.1:${webPort}`;
 // Reuse the native load/edit/save scenario on each device when explicitly enabled.
 const deviceCoverage = {
   testMatch:
-    /(device-layout|presets|library|monitor|debug|account|network|media)\.spec\.ts/,
-  grep: /backing|library sections|new preset creates|sounds deletes|protect refuses|live model comparison|network setup|mixed rig authoring|graph authoring|TONE3000 account|rig controls follow|device portrait|folding and unfolding|stage display|touch adjustment|native editor loads|playback lifecycle|monitor shows|asset artwork|interactive terminal/,
+    /(device-layout|presets|library|monitor|debug|account|network|media|venue)\.spec\.ts/,
+  grep: /backing|venue EQ|library sections|new preset creates|sounds deletes|protect refuses|live model comparison|network setup|mixed rig authoring|graph authoring|TONE3000 account|rig controls follow|device portrait|folding and unfolding|stage display|touch adjustment|native editor loads|playback lifecycle|monitor shows|asset artwork|interactive terminal/,
 };
 
 export default defineConfig({

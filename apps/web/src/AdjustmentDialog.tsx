@@ -18,6 +18,7 @@ export function AdjustmentDialog({
   onCancel,
   children,
   className = '',
+  returnFocus,
 }: {
   title: string;
   /** One quiet line under the title saying what the dialog is for. */
@@ -25,6 +26,8 @@ export function AdjustmentDialog({
   onCancel: () => void;
   children: ReactNode;
   className?: string;
+  /** Where focus goes on close, when not back to what opened the dialog. */
+  returnFocus?: () => HTMLElement | null;
 }) {
   const [dialog, setDialog] = useState<HTMLDivElement | null>(null);
   const previous = useRef(document.activeElement as HTMLElement | null);
@@ -78,7 +81,7 @@ export function AdjustmentDialog({
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          previous.current?.focus({ preventScroll: true });
+          (returnFocus?.() ?? previous.current)?.focus({ preventScroll: true });
         }}
       >
         <DialogHeader>

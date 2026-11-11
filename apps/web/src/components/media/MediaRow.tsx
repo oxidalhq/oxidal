@@ -15,7 +15,16 @@ export type MenuItem =
  * A small action menu: arrow keys move, Esc closes and returns focus, a
  * click outside closes it.
  */
-function MoreMenu({ name, items }: { name: string; items: MenuItem[] }) {
+export function MoreMenu({
+  name,
+  items,
+  label = `More for ${name}`,
+}: {
+  name: string;
+  items: MenuItem[];
+  /** The trigger's and the menu's accessible name. */
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -40,7 +49,7 @@ function MoreMenu({ name, items }: { name: string; items: MenuItem[] }) {
         ref={trigger}
         variant="outline"
         size="icon"
-        aria-label={`More for ${name}`}
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
@@ -52,7 +61,7 @@ function MoreMenu({ name, items }: { name: string; items: MenuItem[] }) {
           ref={menu}
           className="media-menu"
           role="menu"
-          aria-label={`More for ${name}`}
+          aria-label={label}
           onKeyDown={(event) => {
             const entries = [
               ...(menu.current?.querySelectorAll<HTMLElement>(

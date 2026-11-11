@@ -1512,3 +1512,55 @@ export async function setPlayerOrder(order: string[]): Promise<PlayerSnapshot> {
     ),
   );
 }
+
+export type VenueState = Contract['venue_state'];
+export type VenueRequest = Contract['venue_request'];
+export type VenueCommand = VenueRequest['command'];
+type VenueProfile = VenueState['profiles'][number];
+export type VenueSettings = VenueProfile['eq'];
+export type VenueBand = VenueSettings['bands'][number];
+const venueValidator = ajv.compile<VenueState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/VenueState',
+});
+/** Validate a venue EQ state from a response or the event stream. */
+export function parseVenue(value: unknown): VenueState {
+  if (!venueValidator(value)) throw new Error('Incompatible venue EQ state');
+  return value;
+}
+/** Another client changed the venue EQ first; `state` is the device's now. */
+export class VenueConflict extends Error {
+  constructor(readonly state: VenueState) {
+    super('Someone else changed the venue EQ');
+    this.name = 'VenueConflict';
+  }
+}
+/** The venue EQ: profiles, the active one, bypass and any unsaved preview.
+ * @see docs/media.md
+ */
+export async function venueState(): Promise<VenueState> {
+  return parseVenue(await presetResponse(await fetch('/api/v1/venues')));
+}
+/** Every venue EQ change goes through this one revision-checked handler.
+ * A stale revision throws `VenueConflict` carrying the current state.
+ * @see docs/media.md
+ */
+export async function venueCommand(request: VenueRequest): Promise<VenueState> {
+  const response = await fetch(
+    '/api/v1/venues/commands',
+    json('POST', request),
+  );
+  if (response.status === 409) {
+    const body: unknown = await response.json().catch(() => null);
+    if (venueValidator(body)) throw new VenueConflict(body);
+    throw deviceError(body, 409, 'The venue EQ changed');
+  }
+  return parseVenue(await presetResponse(response));
+}
+/** Keeps an unsaved venue preview from being discarded while it is edited. */
+export async function keepVenuePreview(): Promise<void> {
+  const response = await fetch('/api/v1/venues/preview/keep', {
+    method: 'POST',
+  });
+  if (!response.ok) await presetResponse(response);
+}

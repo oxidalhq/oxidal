@@ -51,6 +51,8 @@ import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
 import { TunerButton } from './TunerButton';
 import { refreshMonitorFeed } from './monitorFeed';
 import { publishPlayer } from './lib/playerFeed';
+import { publishVenue } from './lib/venueFeed';
+import { leaveScreen } from './lib/leaveGuard';
 import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
   import('./Library').then((m) => ({ default: m.Library })),
@@ -269,6 +271,13 @@ function InstrumentApp() {
           /* An incompatible player snapshot leaves the last good one shown. */
         }
       });
+      source.addEventListener('venue', (event: MessageEvent<string>) => {
+        try {
+          if (active && events === source) publishVenue(JSON.parse(event.data));
+        } catch {
+          /* An incompatible venue state leaves the last good one shown. */
+        }
+      });
       events.onerror = () => {
         if (active) setConnected(false);
       };
@@ -424,11 +433,15 @@ function InstrumentApp() {
                 key={destination}
                 variant="ghost"
                 aria-current={view === destination ? 'page' : undefined}
-                onClick={() =>
-                  destination === 'settings'
-                    ? showSettings()
-                    : setView(destination)
-                }
+                onClick={() => {
+                  const go = () =>
+                    destination === 'settings'
+                      ? showSettings()
+                      : setView(destination);
+                  // Only leaving the current page asks about unsaved edits.
+                  if (destination === view) go();
+                  else leaveScreen(go);
+                }}
               >
                 {
                   {
@@ -741,7 +754,9 @@ function InstrumentApp() {
               value={settingsSection}
               onValueChange={(value) => {
                 if (value in settingsLabels)
-                  setSettingsSection(value as keyof typeof settingsLabels);
+                  leaveScreen(() =>
+                    setSettingsSection(value as keyof typeof settingsLabels),
+                  );
               }}
             >
               <TabsList aria-label="Settings sections">

@@ -4,6 +4,8 @@ import { useWorkspaceState } from './workspaceMemory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EngineSettings } from './EngineSettings';
 import { MasterLevel } from './MasterLevel';
+import { VenueEq } from './components/media/VenueEq';
+import { leaveScreen } from './lib/leaveGuard';
 import { NativeDefaults } from './NativeDefaults';
 import { PlaybackSettings } from './PlaybackSettings';
 import {
@@ -26,7 +28,7 @@ import {
  */
 export function AudioSettings({ connected }: { connected: boolean }) {
   // The engine tab is a peer of the device, not buried under it (7.17).
-  const [tab, setTab] = useWorkspaceState<'device' | 'engine'>(
+  const [tab, setTab] = useWorkspaceState<'device' | 'output' | 'engine'>(
     'settings-audio-tab',
     'device',
   );
@@ -165,13 +167,22 @@ export function AudioSettings({ connected }: { connected: boolean }) {
     <Tabs
       value={tab}
       onValueChange={(value) => {
-        if (value === 'device' || value === 'engine') setTab(value);
+        if (value === 'device' || value === 'output' || value === 'engine')
+          leaveScreen(() => setTab(value));
       }}
     >
       <TabsList aria-label="Audio sections">
         <TabsTrigger value="device">Audio device</TabsTrigger>
+        <TabsTrigger value="output">Output</TabsTrigger>
         <TabsTrigger value="engine">TONE3000 engine</TabsTrigger>
       </TabsList>
+      <TabsContent value="output">
+        <p className="caption">
+          Master level and Mono (under Audio device) apply after the mix and
+          Venue EQ.
+        </p>
+        <VenueEq connected={connected} />
+      </TabsContent>
       <TabsContent value="engine">
         <section className="panel control-stack" aria-label="TONE3000 engine">
           <EngineSettings connected={connected} />
