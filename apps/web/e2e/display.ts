@@ -37,9 +37,9 @@ export async function setDisplayMode(
       .click();
 }
 
-/** Library → Sounds, then NAM captures or cabinet IRs (Sprint 07). */
+/** Library → Tones and IRs, then NAM captures or cabinet IRs (Sprint 07). */
 export async function openSounds(page: Page, format: 'nam' | 'ir') {
-  await page.getByRole('tab', { name: 'Sounds', exact: true }).click();
+  await page.getByRole('tab', { name: 'Tones and IRs', exact: true }).click();
   await page
     .getByRole('radiogroup', { name: 'Sound type' })
     .getByRole('radio', {

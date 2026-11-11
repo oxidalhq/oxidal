@@ -23,8 +23,8 @@ import { useSessionState } from './lib/sessionState';
 
 type Source = Choice['origin'];
 const SOURCES: [Source, string][] = [
-  ['mine', 'Set list'],
-  ['oxidal_example', 'Oxidal'],
+  ['mine', 'Mine'],
+  ['oxidal_example', 'Oxidal sounds'],
   ['tone3000', 'TONE3000'],
 ];
 

@@ -86,7 +86,7 @@ it('selects original and owned identities without optimistically changing the so
     screen.getByRole('button', { name: /^Amp A\s*Playing · NAM chain$/ }),
   ).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText(/editing one saves a copy/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
   fireEvent.click(screen.getByRole('button', { name: /^My A\s*NAM chain$/ }));
   expect(select).toHaveBeenCalledWith(tone('a', true));
   expect(picker).toHaveAccessibleName('Playing preset: Amp A');
@@ -95,7 +95,7 @@ it('selects original and owned identities without optimistically changing the so
     target: { value: 'b' },
   });
   // Search covers every source and names the source of each hit.
-  expect(screen.queryByRole('tab', { name: /Set list/ })).toBeNull();
+  expect(screen.queryByRole('tab', { name: /Mine/ })).toBeNull();
   expect(
     screen.queryByRole('button', { name: /^My A/ }),
   ).not.toBeInTheDocument();
@@ -334,8 +334,8 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   fireEvent.click(picker);
   expect(
     screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\s+/g, ' ')),
-  ).toEqual(['Set list 2', 'Oxidal 0', 'TONE3000 2']);
-  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
+  ).toEqual(['Mine 2', 'Oxidal sounds 0', 'TONE3000 2']);
+  fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
   const row = screen.getByRole('button', {
     name: /^Clean to heavy\s*3 scenes · 3 NAM$/,
   });

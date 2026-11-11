@@ -1,10 +1,12 @@
 import { allFactoryRecipes } from './factoryCatalog.ts';
 import {
+  factoryMissingPlugins,
   factoryRoles,
   recipeEffects,
   type FactoryRecipe,
 } from './factoryRecipes.ts';
 import { factoryVoices } from './factoryVoices.ts';
+import type { Lv2Plugin } from './api';
 
 /**
  * Sound metadata for Oxidal sounds: the fixed genre list, engine and complexity
@@ -39,6 +41,13 @@ const factoryEngines = [
   'hybrid',
 ] as const;
 export type FactoryEngine = (typeof factoryEngines)[number];
+/** Display names for the engine tiers; engine ids never appear in text. */
+export const factoryEngineLabels: Record<FactoryEngine, string> = {
+  lv2: 'LV2 only',
+  'tone3000-a2-lite': 'TONE3000 · A2 Lite',
+  'tone3000-a2-full': 'TONE3000 · A2 Full',
+  hybrid: 'Hybrid',
+};
 const factoryComplexities = ['simple', 'layered', 'complex'] as const;
 export type FactoryComplexity = (typeof factoryComplexities)[number];
 
@@ -72,6 +81,21 @@ export function factoryRequiredPacks(recipe: FactoryRecipe): string[] {
   return [
     ...new Set(
       factoryPluginNames(recipe).flatMap((name) => {
+        const pack = factoryPackFor(name);
+        return pack ? [pack] : [];
+      }),
+    ),
+  ];
+}
+
+/** Packs still missing for a recipe, from the plugins the device lists. */
+export function factoryMissingPacks(
+  recipe: FactoryRecipe,
+  plugins: Lv2Plugin[],
+): string[] {
+  return [
+    ...new Set(
+      factoryMissingPlugins(recipe, plugins).flatMap((name) => {
         const pack = factoryPackFor(name);
         return pack ? [pack] : [];
       }),

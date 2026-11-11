@@ -508,9 +508,11 @@ test('native preset upload, durable library, exact download and rejected replace
   const second = await context.newPage();
   await second.goto('/');
   await second.getByRole('button', { name: 'Library', exact: true }).click();
+  await second.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await expect(second.locator(rowSelector)).toHaveCount(2);
   await page.reload();
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await presetsTab.click();
   await expect(rows).toHaveCount(2);
   await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await page.getByLabel('TONE3000 preset file').setInputFiles({
@@ -525,6 +527,7 @@ test('native preset upload, durable library, exact download and rejected replace
   await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await expect(rows).toHaveCount(2);
   expect(await (await request.get('/api/v1/state')).json()).toEqual(before);
+  await page.getByRole('tab', { name: 'Mine', exact: true }).click();
   await openComposer(page, 'tone3000');
   await expect(
     page.getByText(/Playback and editing are not available/),
@@ -5092,9 +5095,12 @@ test('native preset library keeps originals accessible when saved copies cannot 
   await expect(
     page.getByRole('searchbox', { name: 'Search presets' }),
   ).toBeEnabled();
+  // Originals live in TONE3000 and stay playable while Mine's copies fail.
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Play Available original' }),
   ).toBeEnabled();
+  await page.getByRole('tab', { name: 'Mine', exact: true }).click();
   fail = false;
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByText('Saved copies could not be read.')).toHaveCount(
@@ -5584,7 +5590,7 @@ test('device portrait preset details edit and category search never recall audio
     )
       commands.push(r.url());
   });
-  await page.goto('/#library');
+  await page.goto('/#library/tone3000');
   await page
     .getByRole('button', { name: `Details: ${imported.name}`, exact: true })
     .click();

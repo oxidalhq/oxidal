@@ -17,8 +17,12 @@ vi.mock('./api', () => ({
   presetDetails: vi.fn(async () => ({ revision: 'r', entries: [] })),
 }));
 // Library sections have their own tests; this one covers the import form.
-vi.mock('./FactoryCollection', () => ({ DiscoverPage: () => null }));
+vi.mock('./features/library/oxidal', () => ({ OxidalSounds: () => null }));
 vi.mock('./ModelLibrary', () => ({ ModelLibrary: () => null }));
+vi.mock('./SavedRigs', () => ({ SavedRigs: () => null }));
+vi.mock('./components/media/BackingTracks', () => ({
+  BackingTracks: () => null,
+}));
 vi.mock('./LibraryManagement', () => ({ LibraryManagement: () => null }));
 afterEach(() => {
   cleanup();
@@ -26,7 +30,7 @@ afterEach(() => {
 });
 
 it('stops a preset import in flight and says what may still happen', async () => {
-  window.location.hash = '#library/discover';
+  window.location.hash = '#library/tone3000';
   let signal: AbortSignal | undefined;
   vi.mocked(importPreset).mockImplementation(
     (_file, abort) =>
@@ -47,4 +51,31 @@ it('stops a preset import in flight and says what may still happen', async () =>
   expect(signal?.aborted).toBe(true);
   expect(await screen.findByText(/Import stopped/)).toBeVisible();
   await waitFor(() => expect(presetLibrary).toHaveBeenCalledTimes(2));
+});
+
+it.each([
+  ['presets', 'Mine', 'mine'],
+  ['sounds', 'Tones and IRs', 'tones'],
+  ['discover', 'Oxidal sounds', 'oxidal'],
+])('old link #library/%s lands on %s', async (old, tab, id) => {
+  window.location.hash = `#library/${old}`;
+  render(<Library connected onOpenRig={() => {}} />);
+  expect(
+    await screen.findByRole('tab', { name: tab, selected: true }),
+  ).toBeVisible();
+  expect(window.location.hash).toBe(`#library/${id}`);
+});
+
+it('switches between the Sounds and Media groups', async () => {
+  window.location.hash = '#library/setlist';
+  render(<Library connected onOpenRig={() => {}} />);
+  fireEvent.click(await screen.findByRole('radio', { name: 'Media' }));
+  expect(
+    await screen.findByRole('tab', { name: 'Backing tracks', selected: true }),
+  ).toBeVisible();
+  expect(window.location.hash).toBe('#library/backing');
+  fireEvent.click(screen.getByRole('radio', { name: 'Sounds' }));
+  expect(
+    await screen.findByRole('tab', { name: 'Mine', selected: true }),
+  ).toBeVisible();
 });

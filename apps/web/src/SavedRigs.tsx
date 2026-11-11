@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from './components/ui/button';
 import { PresetRow } from './features/library/PresetRow';
 import { FailureNotice } from './components/ui/failure';
@@ -41,6 +41,10 @@ export function SavedRigs({
   onEdit,
   origin = 'mine',
   title = 'Mine',
+  tail,
+  tailCount = 0,
+  empty,
+  onManage,
 }: {
   refresh?: number;
   query?: string;
@@ -51,6 +55,16 @@ export function SavedRigs({
   onEdit?: (revision: string, name: string) => void;
   origin?: RigPage['presets'][number]['origin'];
   title?: string;
+  /** More rows for the same list (owned TONE3000 chains in Mine). */
+  tail?: ReactNode;
+  tailCount?: number;
+  /** Shown when the list has loaded and holds nothing. */
+  empty?: ReactNode;
+  /** Rename or delete a preset; the list refreshes when the parent does. */
+  onManage?: (
+    action: 'rename' | 'delete',
+    entry: { kind: 'rig'; id: string; name: string },
+  ) => void;
   connected: boolean;
   onOpenRig: () => void;
 }) {
@@ -61,6 +75,7 @@ export function SavedRigs({
   const [playing, setPlaying] = useState<string | null>(null);
   const { failure, fail, clear } = useFailure();
   const [reload, setReload] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [prepared, setPreparedState] = useState<string[]>([]);
   const [choosing, setChoosing] = useState(false);
   /** Worker-confirmed loaded revisions; empty when audio is not running. */
@@ -116,6 +131,7 @@ export function SavedRigs({
         if (alive.current) {
           setItems(page.presets);
           setNext(page.next ?? null);
+          setLoaded(true);
         }
       })
       .catch((cause: unknown) => {
@@ -183,7 +199,8 @@ export function SavedRigs({
   const shown = originItems.filter((item) =>
     detailsMatch(item.name, details[`rig:${item.revision}`], query, category),
   );
-  if (!originItems.length && !failure) return null;
+  if (!originItems.length && !tailCount && !failure)
+    return loaded && empty ? <>{empty}</> : null;
   const readyCount = shown.filter((p) => ready.includes(p.revision)).length;
   // Selected but not loaded beside the playing preset: needs a restart.
   const pending = prepared.some((id) => id !== playing && !ready.includes(id));
@@ -290,17 +307,41 @@ export function SavedRigs({
                 ...(onEdit
                   ? [
                       {
-                        label: 'Edit without playing…',
+                        label: 'Edit',
                         onSelect: () => onEdit(p.revision, p.name),
                         disabled: busy,
                       },
                     ]
                   : []),
                 {
-                  label: 'MIDI assignments…',
+                  label: 'MIDI',
                   onSelect: () => void play(p.revision, true),
                   disabled: !connected || busy,
                 },
+                ...(onManage
+                  ? [
+                      {
+                        label: 'Rename',
+                        onSelect: () =>
+                          onManage('rename', {
+                            kind: 'rig',
+                            id: p.revision,
+                            name: p.name,
+                          }),
+                        disabled: !connected || busy,
+                      },
+                      {
+                        label: 'Delete…',
+                        onSelect: () =>
+                          onManage('delete', {
+                            kind: 'rig',
+                            id: p.revision,
+                            name: p.name,
+                          }),
+                        disabled: !connected || busy,
+                      },
+                    ]
+                  : []),
               ]}
               extra={
                 choosing && (
@@ -328,8 +369,9 @@ export function SavedRigs({
             />
           );
         })}
+        {tail}
       </ul>
-      {(query.trim() || category) && !shown.length && (
+      {(query.trim() || category) && !shown.length && !tailCount && (
         <p role="status" className="caption">
           {next
             ? 'No matches yet. Load more to search further.'

@@ -108,9 +108,9 @@ export function choiceSummary(choice: PresetChoice): string {
 /** Where a preset came from, in the words the chooser tabs use. */
 export const choiceSource = (choice: PresetChoice) =>
   choice.origin === 'mine'
-    ? 'Set list'
+    ? 'Mine'
     : choice.origin === 'oxidal_example'
-      ? 'Oxidal'
+      ? 'Oxidal sounds'
       : 'TONE3000';
 
 /** One device set list; source failures remain visible and do not hide other formats. */

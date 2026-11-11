@@ -659,3 +659,52 @@
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
+
+/* Sprint 12: two groups of section tabs; on a phone a Sounds | Media switch
+   shows one group, and its sections scroll sideways. */
+.library-groups {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+.library-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.library-group-label {
+  flex: none;
+  width: 3.5rem;
+  color: var(--muted-foreground);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.library-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.library-tabs::-webkit-scrollbar {
+  display: none;
+}
+.library-tabs > .ui-tabs-trigger {
+  flex: none;
+  white-space: nowrap;
+}
+.library-group-switch {
+  display: none;
+}
+@media (max-width: 599px) {
+  .library-group-switch {
+    display: flex;
+  }
+  .library-group-label,
+  .library-group[data-active='false'] {
+    display: none;
+  }
+}

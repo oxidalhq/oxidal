@@ -3,26 +3,56 @@ import { readFileSync } from 'node:fs';
 import { openSounds } from './display';
 
 /**
- * Sprint 07 Library journeys against the real daemon: sections with their own
- * links, Discover as a page, an empty preset from New preset, protected sound
- * deletion and the device-wide Protect lock.
+ * Library journeys against the real daemon: two groups of sections with their
+ * own links, old links that land on the new sections, one Mine list, an empty
+ * preset from New preset, protected sound deletion and the device-wide Protect
+ * lock.
  */
-test('library sections have their own links and Discover is a page', async ({
+test('library sections have their own links and old links redirect', async ({
   page,
 }) => {
+  // S-3: an old Discover link lands on Oxidal sounds.
   await page.goto('/#library/discover');
   await expect(
-    page.getByRole('tab', { name: 'Discover', selected: true }),
+    page.getByRole('tab', { name: 'Oxidal sounds', selected: true }),
   ).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Discover' })).toBeVisible();
-  await expect(page.getByPlaceholder('Find a sound or genre…')).toBeVisible();
+  await expect(page).toHaveURL(/#library\/oxidal$/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Sounds', exact: true }).click();
-  await expect(page).toHaveURL(/#library\/sounds$/);
+  await page.goto('/#library/presets');
+  await expect(
+    page.getByRole('tab', { name: 'Mine', selected: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/#library\/mine$/);
+  await page.goto('/#library/sounds');
+  await expect(
+    page.getByRole('tab', { name: 'Tones and IRs', selected: true }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/#library\/tones$/);
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
+  await expect(page).toHaveURL(/#library\/tone3000$/);
   await page.reload();
   await expect(
-    page.getByRole('tab', { name: 'Sounds', selected: true }),
+    page.getByRole('tab', { name: 'TONE3000', selected: true }),
   ).toBeVisible();
+  await expect(page.getByLabel('TONE3000 preset file')).toBeVisible();
+  // Two groups; on a phone a Sounds | Media switch shows one at a time.
+  const phone = (page.viewportSize()?.width ?? 1000) < 600;
+  const groups = page.getByRole('radiogroup', { name: 'Library group' });
+  if (phone) {
+    await expect(page.getByRole('tab', { name: 'Backing tracks' })).toHaveCount(
+      0,
+    );
+    await groups.getByRole('radio', { name: 'Media', exact: true }).click();
+    await expect(
+      page.getByRole('tab', { name: 'Backing tracks', selected: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Mine' })).toHaveCount(0);
+  } else {
+    await expect(groups).toBeHidden();
+    await page.getByRole('tab', { name: 'DI and reamps', exact: true }).click();
+    await expect(page).toHaveURL(/#library\/di$/);
+    await expect(page.getByRole('tab', { name: 'Mine' })).toBeVisible();
+  }
   // The old Sound Check link still opens the renamed Levels workspace.
   await page.goto('/#monitor');
   await expect(
@@ -32,41 +62,16 @@ test('library sections have their own links and Discover is a page', async ({
   ).toHaveAttribute('aria-current', 'page');
 });
 
-test('Discover keeps its search and source on refresh and returns after TONE3000 sign-in', async ({
+test('library sections keep the Mine search after a reload', async ({
   page,
 }) => {
-  await page.goto('/#library/discover');
-  const search = page.getByPlaceholder('Find a sound or genre…');
-  await expect(search).toBeVisible();
-  await page.evaluate(() => window.scrollTo({ top: 600 }));
-  await page.waitForTimeout(200);
+  await page.goto('/#library/mine');
+  const search = page.getByRole('searchbox', { name: 'Search presets' });
+  await search.fill('no-such-preset-unique');
   await page.reload();
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(400);
-  await search.fill('doom');
-  await page.reload();
-  await expect(search).toHaveValue('doom');
-  await page.getByRole('radio', { name: 'TONE3000' }).click();
-  const remote = page.getByRole('region', { name: 'TONE3000 sounds' });
-  // No account on the test device: remote content asks for sign-in, local stays usable.
-  await expect(
-    remote.getByText(/already on this device still work/),
-  ).toBeVisible();
-  await remote.getByRole('button', { name: 'Connect TONE3000' }).click();
-  await expect(page).toHaveURL(/#settings\/accounts$/);
-  await expect(
-    page.getByRole('tab', { name: 'Accounts', selected: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText('After connecting, you can go back to Discover.'),
-  ).toBeVisible();
-  await page.goBack();
-  await expect(page).toHaveURL(/#library\/discover$/);
-  await expect(page.getByRole('radio', { name: 'TONE3000' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
+  await expect(search).toHaveValue('no-such-preset-unique');
+  await page.getByRole('button', { name: 'Clear preset search' }).click();
+  await expect(search).toHaveValue('');
 });
 
 test('Settings sections have links and Effects shows which presets need a pack', async ({
@@ -102,7 +107,7 @@ test('new preset creates an empty preset of your own without hardware', async ({
     )
       audioWrites.push(request.url());
   });
-  await page.goto('/#library/presets');
+  await page.goto('/#library/mine');
   await page.getByRole('button', { name: 'New preset' }).click();
   const dialog = page.getByRole('dialog', { name: 'New preset' });
   await dialog.getByRole('button', { name: 'Create preset' }).click();
@@ -116,7 +121,7 @@ test('new preset creates an empty preset of your own without hardware', async ({
   await expect(
     page.getByRole('button', { name: 'Play to edit…' }),
   ).toBeVisible();
-  await expect(page).toHaveURL(/#library\/presets$/);
+  await expect(page).toHaveURL(/#library\/mine$/);
   // Edit without playing (7.3): a draft, saved in place, with no audio change.
   await page.getByRole('button', { name: 'Edit without playing' }).click();
   const editor = page.getByRole('dialog', { name: 'Edit without playing' });
@@ -134,7 +139,7 @@ test('new preset creates an empty preset of your own without hardware', async ({
   expect(audioWrites).toEqual([]);
   // Reopening the edited preset offline shows the saved name.
   await page.getByRole('button', { name: `More for ${name} edited` }).click();
-  await page.getByRole('menuitem', { name: 'Edit without playing…' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
   await expect(
     page
       .getByRole('dialog', { name: 'Edit without playing' })
@@ -176,7 +181,7 @@ test('the same TONE3000 tone added twice saves as two NAM blocks (7.16)', async 
     })
   ).json();
   const name = `Two NAM ${info.project.name} ${Date.now()}`;
-  await page.goto('/#library/presets');
+  await page.goto('/#library/mine');
   await page.getByRole('button', { name: 'New preset' }).click();
   const create = page.getByRole('dialog', { name: 'New preset' });
   await create.getByLabel('Name').fill(name);
@@ -225,7 +230,7 @@ test('sounds deletes an unused NAM file after reviewing its uses', async ({
     },
   );
   expect(upload.status()).toBe(201);
-  await page.goto('/#library/sounds');
+  await page.goto('/#library/tones');
   await openSounds(page, 'nam');
   await page.getByRole('searchbox', { name: 'Search NAM models' }).fill(name);
   await page.getByRole('button', { name: `Delete ${name}` }).click();

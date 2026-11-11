@@ -96,7 +96,7 @@ export function LibraryManagement({
     (i) => i.kind === 'graph' && originOf(i) === 'mine',
   );
   return (
-    <section className="space-y-3" aria-label="Manage library">
+    <section className="space-y-3" aria-label="Set list">
       <h2>Set list</h2>
       <p className="caption">
         One set-list order for the preset picker and Perform. Hold a handle to
@@ -247,7 +247,7 @@ function LibraryRow({
             {origin === 'tone3000'
               ? 'TONE3000 · read-only original'
               : origin === 'oxidal_example'
-                ? 'Oxidal example · read-only original'
+                ? 'Oxidal sounds · read-only original'
                 : item.kind === 'owned'
                   ? 'Mine · saved tone'
                   : item.kind === 'rig'

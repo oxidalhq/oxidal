@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSectionLocation, useWorkspaceState } from './workspaceMemory';
+import { useSessionState } from './lib/sessionState';
 import { StateNotice } from './components/ui/state-notice';
 import {
   importPreset,
@@ -17,7 +18,8 @@ import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
-import { DiscoverPage } from './FactoryCollection';
+import { OxidalSounds } from './features/library/oxidal';
+import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
 import {
@@ -42,29 +44,49 @@ import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
 import './Library.css';
 
-const sections = [
-  'presets',
-  'sounds',
-  'discover',
+const soundSections = [
+  'mine',
+  'oxidal',
+  'tone3000',
   'setlist',
-  'backing',
-  'di',
+  'tones',
 ] as const;
+const mediaSections = ['backing', 'di'] as const;
+const sections = [...soundSections, ...mediaSections] as const;
 type Section = (typeof sections)[number];
-const sources = ['all', 'mine', 'oxidal', 'tone3000'] as const;
-type Source = (typeof sources)[number];
-const sourceLabels: Record<Source, string> = {
-  all: 'All',
+const sectionLabels: Record<Section, string> = {
   mine: 'Mine',
-  oxidal: 'Oxidal',
+  oxidal: 'Oxidal sounds',
   tone3000: 'TONE3000',
+  setlist: 'Set list',
+  tones: 'Tones and IRs',
+  backing: 'Backing tracks',
+  di: 'DI and reamps',
 };
+/** Links from before Sprint 12 keep working: they land on the new section. */
+const legacySections: Record<string, Section> = {
+  presets: 'mine',
+  sounds: 'tones',
+  discover: 'oxidal',
+};
+function legacySection(): Section | null {
+  const [view = '', id = ''] = window.location.hash.slice(1).split('/');
+  return view === 'library' ? (legacySections[id] ?? null) : null;
+}
+function migrateLegacyHash() {
+  const next = legacySection();
+  if (!next) return;
+  const url = new URL(window.location.href);
+  url.hash = `library/${next}`;
+  window.history.replaceState(null, '', url);
+}
 
 /**
- * Library (Sprint 07): Presets to play and manage, Sounds (NAM and IR files),
- * Discover for new sounds, the Set list and Backing tracks (Sprint 09). Each
- * section has its own link
- * (`#library/sounds`) and keeps its search and filters while you work.
+ * Library: two groups. Sounds holds Mine (rigs and your TONE3000 chains in one
+ * list), Oxidal sounds, TONE3000, the Set list and Tones and IRs; Media holds
+ * Backing tracks and DI and reamps. Each section has its own link
+ * (`#library/tones`); earlier links (`presets`, `sounds`, `discover`) land on
+ * the section that replaced them.
  * @see docs/presets/format.md
  */
 export function Library({
@@ -74,17 +96,36 @@ export function Library({
   connected: boolean;
   onOpenRig: () => void;
 }) {
+  useState(migrateLegacyHash);
   const [section, setSection] = useSectionLocation<Section>(
     'library',
     sections,
-    'presets',
+    'mine',
   );
+  useEffect(() => {
+    const redirect = () => {
+      const next = legacySection();
+      if (next) setSection(next);
+    };
+    window.addEventListener('hashchange', redirect);
+    window.addEventListener('popstate', redirect);
+    return () => {
+      window.removeEventListener('hashchange', redirect);
+      window.removeEventListener('popstate', redirect);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const group = (mediaSections as readonly string[]).includes(section)
+    ? 'media'
+    : 'sounds';
   const [refresh, setRefresh] = useState(0);
-  const [query, setQuery] = useWorkspaceState('library-query', '');
-  const [source, setSource] = useWorkspaceState<Source>(
-    'library-source',
-    'all',
+  // Search survives a reload (this tab), so Mine opens as you left it.
+  const [query, setQuery] = useSessionState('library-mine-query', '');
+  const [toneQuery, setToneQuery] = useSessionState(
+    'library-tone3000-query',
+    '',
   );
+  const [mineDialog, setMineDialog] = useState<MineTarget | null>(null);
   const [soundFormat, setSoundFormat] = useWorkspaceState<'nam' | 'ir'>(
     'library-sound-format',
     'nam',
@@ -114,7 +155,12 @@ export function Library({
     name: string;
   } | null>(null);
   const matches = (name: string, kind: 'original' | 'owned', id: string) =>
-    detailsMatch(name, details[`${kind}:${id}`], query, category);
+    detailsMatch(
+      name,
+      details[`${kind}:${id}`],
+      kind === 'owned' ? query : toneQuery,
+      category,
+    );
   const categories = [
     ...new Set(Object.values(details).flatMap((d) => d.categories)),
   ].sort((a, b) => a.localeCompare(b));
@@ -131,7 +177,6 @@ export function Library({
   const [playing, setPlaying] = useState<AudioState | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [owned, setOwned] = useState<{ id: string; name: string }[]>([]);
-  const show = (kind: Source) => source === 'all' || source === kind;
   useEffect(() => {
     let active = true;
     void presetDetails()
@@ -213,11 +258,37 @@ export function Library({
         }
         actions={[
           {
-            label: 'MIDI assignments…',
+            label: 'MIDI',
             onSelect: () => void play(id, isOwned, true),
             disabled: !connected || loadingId !== null,
           },
-          { label: 'Download file', href: download, download: true },
+          { label: 'Download', href: download, download: true },
+          ...(isOwned
+            ? [
+                {
+                  label: 'Rename',
+                  onSelect: () =>
+                    setMineDialog({
+                      action: 'rename',
+                      kind: 'owned',
+                      id,
+                      name,
+                    }),
+                  disabled: !connected || loadingId !== null,
+                },
+                {
+                  label: 'Delete…',
+                  onSelect: () =>
+                    setMineDialog({
+                      action: 'delete',
+                      kind: 'owned',
+                      id,
+                      name,
+                    }),
+                  disabled: !connected || loadingId !== null,
+                },
+              ]
+            : []),
         ]}
         extra={showArtwork && <ArtworkDeck id={id} owned={isOwned} />}
       />
@@ -256,14 +327,14 @@ export function Library({
       if (request !== generation.current) return;
       setPresets(items);
       setImportMessage(
-        `Added ${imported.name} to Presets. The original file is kept unchanged.`,
+        `Added ${imported.name} to TONE3000. The original file is kept unchanged.`,
       );
     } catch (cause) {
       if (request === generation.current) {
         // A device that already had the whole file may still finish (7.21).
         setImportError(
           controller.signal.aborted
-            ? 'Import stopped. If the device had already received the whole file, the preset may still appear in Presets.'
+            ? 'Import stopped. If the device had already received the whole file, the preset may still appear in TONE3000.'
             : friendlyError(cause, 'import the preset'),
         );
         if (controller.signal.aborted)
@@ -296,6 +367,81 @@ export function Library({
         )}
       </section>
     );
+  const categorySelect = categories.length > 0 && (
+    <Select
+      value={category || '__all__'}
+      onValueChange={(value) => setCategory(value === '__all__' ? '' : value)}
+    >
+      <SelectTrigger aria-label="Category" className="w-auto">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__all__">All categories</SelectItem>
+        {categories.map((c) => (
+          <SelectItem key={c} value={c}>
+            {c}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+  function search(
+    value: string,
+    set: (value: string) => void,
+    placeholder: string,
+    extra?: ReactNode,
+  ) {
+    return (
+      <div className="library-search-row">
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Search presets</span>
+          <MagnifyingGlass
+            aria-hidden="true"
+            size={18}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="search"
+            className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => set(event.target.value)}
+          />
+        </label>
+        {value && (
+          <Button
+            variant="ghost"
+            className="w-11 px-0"
+            aria-label="Clear preset search"
+            onClick={() => set('')}
+          >
+            <X aria-hidden="true" />
+          </Button>
+        )}
+        {extra}
+      </div>
+    );
+  }
+  function sectionTabs(
+    id: 'sounds' | 'media',
+    label: string,
+    list: readonly Section[],
+  ) {
+    return (
+      <div className="library-group" data-active={group === id}>
+        <span className="library-group-label" aria-hidden="true">
+          {label}
+        </span>
+        <TabsList aria-label={`${label} sections`} className="library-tabs">
+          {list.map((id) => (
+            <TabsTrigger key={id} value={id}>
+              {sectionLabels[id]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+    );
+  }
   return (
     <section className="instrument-surface" aria-label="Library">
       <Tabs
@@ -305,81 +451,58 @@ export function Library({
             setSection(value as Section);
         }}
       >
-        <TabsList aria-label="Library sections">
-          <TabsTrigger value="presets">Presets</TabsTrigger>
-          <TabsTrigger value="sounds">Sounds</TabsTrigger>
-          <TabsTrigger value="discover">Discover</TabsTrigger>
-          <TabsTrigger value="setlist">Set list</TabsTrigger>
-          <TabsTrigger value="backing">Backing tracks</TabsTrigger>
-          <TabsTrigger value="di">DI and reamps</TabsTrigger>
-        </TabsList>
-        <TabsContent value="presets">
-          <div className="library-search-row">
-            <label className="relative min-w-0 flex-1">
-              <span className="sr-only">Search presets</span>
-              <MagnifyingGlass
-                aria-hidden="true"
-                size={18}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                type="search"
-                className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
-                placeholder="Find a preset…"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-            {query && (
-              <Button
-                variant="ghost"
-                className="w-11 px-0"
-                aria-label="Clear preset search"
-                onClick={() => setQuery('')}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            )}
+        <div className="library-groups">
+          <ToggleGroup
+            type="single"
+            value={group}
+            aria-label="Library group"
+            className="library-group-switch"
+            onValueChange={(value) => {
+              if (value === 'sounds' && group !== 'sounds') setSection('mine');
+              if (value === 'media' && group !== 'media') setSection('backing');
+            }}
+          >
+            <ToggleGroupItem value="sounds">Sounds</ToggleGroupItem>
+            <ToggleGroupItem value="media">Media</ToggleGroupItem>
+          </ToggleGroup>
+          {sectionTabs('sounds', 'Sounds', soundSections)}
+          {sectionTabs('media', 'Media', mediaSections)}
+        </div>
+        {detailsError && (
+          <StateNotice kind="error" title="Preset details unavailable">
+            {detailsError}
+          </StateNotice>
+        )}
+        {error && (
+          <StateNotice kind="error" title="Something went wrong">
+            {error}
+          </StateNotice>
+        )}
+        {preview && (
+          <PresetDetailsDialog
+            entry={preview}
+            editable
+            onChanged={() => setRefresh((v) => v + 1)}
+            onCancel={() => setPreview(null)}
+          />
+        )}
+        <MineDialogs
+          target={mineDialog}
+          onClose={() => setMineDialog(null)}
+          onChanged={() => setRefresh((v) => v + 1)}
+        />
+        <TabsContent value="mine">
+          {search(
+            query,
+            setQuery,
+            'Find a preset…',
             <Button disabled={!connected} onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" /> New preset
-            </Button>
-          </div>
+            </Button>,
+          )}
           <div className="library-bar">
-            <ToggleGroup
-              type="single"
-              value={source}
-              aria-label="Show presets from"
-              onValueChange={(value) => {
-                if (value) setSource(value as Source);
-              }}
-            >
-              {sources.map((s) => (
-                <ToggleGroupItem key={s} value={s}>
-                  {sourceLabels[s]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
             <div className="flex flex-wrap items-center gap-2">
-              {categories.length > 0 && (
-                <Select
-                  value={category || '__all__'}
-                  onValueChange={(value) =>
-                    setCategory(value === '__all__' ? '' : value)
-                  }
-                >
-                  <SelectTrigger aria-label="Category" className="w-auto">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All categories</SelectItem>
-                    {categories.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {categorySelect}
               <ToggleGroup
                 type="single"
                 value={showArtwork ? 'artwork' : 'list'}
@@ -430,24 +553,6 @@ export function Library({
               }}
             />
           )}
-          {detailsError && (
-            <StateNotice kind="error" title="Preset details unavailable">
-              {detailsError}
-            </StateNotice>
-          )}
-          {error && (
-            <StateNotice kind="error" title="Something went wrong">
-              {error}
-            </StateNotice>
-          )}
-          {preview && (
-            <PresetDetailsDialog
-              entry={preview}
-              editable
-              onChanged={() => setRefresh((v) => v + 1)}
-              onCancel={() => setPreview(null)}
-            />
-          )}
           {creating && (
             <NewPresetDialog
               connected={connected}
@@ -459,7 +564,6 @@ export function Library({
               onCreated={(created) => {
                 setCreating(false);
                 setRefresh((v) => v + 1);
-                setSource('all');
                 setCreated({
                   name: created.manifest.name,
                   revision: created.revision,
@@ -467,134 +571,89 @@ export function Library({
               }}
             />
           )}
-          {show('mine') && (
-            <>
-              <SavedRigs
-                connected={connected}
-                onOpenRig={onOpenRig}
-                refresh={refresh}
-                query={query}
-                category={category}
-                details={details}
-                origin="mine"
-                title="Mine"
-                onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-                onEdit={(revision) => setEditing(revision)}
-              />
-              {copiesError && (
-                <StateNotice
-                  kind="error"
-                  title="Saved copies unavailable"
-                  action={
-                    <Button
-                      variant="outline"
-                      onClick={() => setRefresh((value) => value + 1)}
-                    >
-                      Try again
-                    </Button>
-                  }
-                >
-                  {copiesError}
-                </StateNotice>
-              )}
-              {ownedShown.length > 0 && (
-                <>
-                  <div className="section-heading">
-                    <h2>Mine · TONE3000 chains</h2>
-                  </div>
-                  <ul className="preset-library">
-                    {ownedShown.map((p) =>
-                      toneRow(
-                        p.id,
-                        p.name,
-                        true,
-                        'Saved copy',
-                        `/api/v1/presets/owned/${p.id}/download`,
-                      ),
-                    )}
-                  </ul>
-                </>
-              )}
-            </>
-          )}
-          {show('oxidal') && (
-            <SavedRigs
-              connected={connected}
-              onOpenRig={onOpenRig}
-              refresh={refresh}
-              query={query}
-              category={category}
-              details={details}
-              origin="oxidal_example"
-              title="Oxidal"
-              onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
-              onEdit={(revision) => setEditing(revision)}
-            />
-          )}
-          {show('tone3000') && (
-            <>
-              <div className="section-heading">
-                <h2>TONE3000</h2>
-              </div>
-              {busy && !presets.length ? (
-                <StateNotice kind="loading" title="Reading TONE3000 presets…" />
-              ) : !originalsShown.length ? (
-                <p role="status" className="caption">
-                  {query.trim() || category
-                    ? 'No TONE3000 presets match these filters.'
-                    : 'No TONE3000 presets yet. Import one in Discover.'}
-                </p>
-              ) : (
-                <ul className="preset-library">
-                  {originalsShown.map((preset) =>
-                    toneRow(
-                      preset.sha256,
-                      preset.name,
-                      false,
-                      `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
-                      `/api/v1/presets/${preset.sha256}/original`,
-                    ),
-                  )}
-                </ul>
-              )}
-            </>
-          )}
-          {!busy &&
-            source === 'all' &&
-            !query &&
-            !presets.length &&
-            !owned.length && (
-              <StateNotice kind="empty" title="No presets yet">
-                Create one with New preset, or find sounds in Discover.
-              </StateNotice>
-            )}
-        </TabsContent>
-        <TabsContent value="sounds">
-          <ToggleGroup
-            type="single"
-            value={soundFormat}
-            aria-label="Sound type"
-            className="my-3"
-            onValueChange={(value) => {
-              if (value === 'nam' || value === 'ir') setSoundFormat(value);
-            }}
-          >
-            <ToggleGroupItem value="nam">NAM captures</ToggleGroupItem>
-            <ToggleGroupItem value="ir">Cabinet IRs</ToggleGroupItem>
-          </ToggleGroup>
-          <ModelLibrary
-            key={soundFormat}
-            format={soundFormat}
+          <SavedRigs
             connected={connected}
             onOpenRig={onOpenRig}
+            refresh={refresh}
+            query={query}
+            category={category}
+            details={details}
+            origin="mine"
+            title="Mine"
+            onDetails={(id, name) => setPreview({ kind: 'rig', id, name })}
+            onEdit={(revision) => setEditing(revision)}
+            onManage={(action, entry) => setMineDialog({ action, ...entry })}
+            tailCount={ownedShown.length}
+            tail={ownedShown.map((p) =>
+              toneRow(
+                p.id,
+                p.name,
+                true,
+                'TONE3000 chain',
+                `/api/v1/presets/owned/${p.id}/download`,
+              ),
+            )}
+            empty={
+              <StateNotice kind="empty" title="No presets yet">
+                Create one with New preset, or start from Oxidal sounds.
+              </StateNotice>
+            }
           />
+          {copiesError && (
+            <StateNotice
+              kind="error"
+              title="Saved copies unavailable"
+              action={
+                <Button
+                  variant="outline"
+                  onClick={() => setRefresh((value) => value + 1)}
+                >
+                  Try again
+                </Button>
+              }
+            >
+              {copiesError}
+            </StateNotice>
+          )}
         </TabsContent>
-        <TabsContent value="discover">
-          <DiscoverPage
+        <TabsContent value="oxidal">
+          <OxidalSounds
             connected={connected}
             onOpenRig={onOpenRig}
             onChanged={() => setRefresh((v) => v + 1)}
           />
+        </TabsContent>
+        <TabsContent value="tone3000">
+          {search(
+            toneQuery,
+            setToneQuery,
+            'Find a TONE3000 preset…',
+            categorySelect,
+          )}
+          <div className="section-heading">
+            <h2>TONE3000</h2>
+          </div>
+          {busy && !presets.length ? (
+            <StateNotice kind="loading" title="Reading TONE3000 presets…" />
+          ) : !originalsShown.length ? (
+            <p role="status" className="caption">
+              {toneQuery.trim()
+                ? 'No TONE3000 presets match these filters.'
+                : 'No TONE3000 presets yet. Import a preset file below.'}
+            </p>
+          ) : (
+            <ul className="preset-library">
+              {originalsShown.map((preset) =>
+                toneRow(
+                  preset.sha256,
+                  preset.name,
+                  false,
+                  `Original · ${preset.block_count} blocks${preset.framing === 'legacy' ? ' · legacy format' : ''}`,
+                  `/api/v1/presets/${preset.sha256}/original`,
+                ),
+              )}
+            </ul>
+          )}
           <section className="library-import" aria-label="Import a preset">
             <h2 className="text-base">Import a TONE3000 preset file</h2>
             <p className="caption">
@@ -634,8 +693,8 @@ export function Library({
         <TabsContent value="setlist">
           <p className="caption">
             The order of presets here is the order MIDI program changes and
-            Previous/Next follow. Presets you remove from the list stay in
-            Library and can be restored.
+            Previous/Next follow. Presets you remove from the list stay in Mine
+            and can be restored.
           </p>
           <LibraryManagement
             connected={connected}
@@ -650,6 +709,26 @@ export function Library({
               briefly.
             </p>
           </details>
+        </TabsContent>
+        <TabsContent value="tones">
+          <ToggleGroup
+            type="single"
+            value={soundFormat}
+            aria-label="Sound type"
+            className="my-3"
+            onValueChange={(value) => {
+              if (value === 'nam' || value === 'ir') setSoundFormat(value);
+            }}
+          >
+            <ToggleGroupItem value="nam">NAM captures</ToggleGroupItem>
+            <ToggleGroupItem value="ir">Cabinet IRs</ToggleGroupItem>
+          </ToggleGroup>
+          <ModelLibrary
+            key={soundFormat}
+            format={soundFormat}
+            connected={connected}
+            onOpenRig={onOpenRig}
+          />
         </TabsContent>
         <TabsContent value="di">
           <DiReamps connected={connected} />

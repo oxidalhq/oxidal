@@ -178,3 +178,47 @@ it('offers Try again when playing fails because the device is busy', async () =>
     ),
   );
 });
+
+it('shows one action menu for a Mine row and the empty state when nothing is saved', async () => {
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [
+      {
+        revision: revisions[0]!,
+        name: 'My lead',
+        origin: 'mine',
+        scenes: ['Clean'],
+        topology: 'scenes',
+        native_instances: 0,
+        lv2_instances: 0,
+      },
+    ],
+    next: null,
+  } as never);
+  const manage = vi.fn();
+  const view = render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      onEdit={() => {}}
+      onManage={manage}
+    />,
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'More for My lead' }),
+  );
+  expect(
+    screen.getAllByRole('menuitem').map((item) => item.textContent),
+  ).toEqual(['Edit', 'MIDI', 'Rename', 'Delete…']);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+  expect(manage).toHaveBeenCalledWith('rename', {
+    kind: 'rig',
+    id: revisions[0],
+    name: 'My lead',
+  });
+  view.unmount();
+  vi.mocked(rigLibrary).mockResolvedValue({ presets: [], next: null } as never);
+  render(
+    <SavedRigs connected onOpenRig={() => {}} empty={<p>No presets yet</p>} />,
+  );
+  expect(await screen.findByText('No presets yet')).toBeVisible();
+});
