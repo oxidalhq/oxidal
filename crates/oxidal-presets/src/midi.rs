@@ -1,7 +1,9 @@
 //! Device-local MIDI map keyed by immutable preset identity.
 //! Portable tone and rig payloads never carry controller or device bindings.
 use crate::{Error, LibraryKind, LibraryReference, Result};
-use oxidal_audio::midi::{Binding, BranchBinding, ExtraInput, Message, ParameterBinding, Settings};
+use oxidal_audio::midi::{
+    Binding, BranchBinding, ControlTarget, ExtraInput, Message, ParameterBinding, Settings,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -12,6 +14,12 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
 };
+
+/// What a saved revision still has, for [`MidiMapStore::follow_save`].
+struct Saved<'a> {
+    branches: &'a [String],
+    blocks: &'a [(String, u8)],
+}
 
 const LIMIT: u64 = 16 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -940,16 +948,48 @@ impl MidiMapStore {
         Ok(())
     }
 
-    /// Give a new revision (saved again, or a duplicate) the source's MIDI
-    /// assignments. Scene bindings follow the scene id, not its position, and
-    /// bindings of scenes that no longer exist are dropped. An existing map
-    /// of the target always wins, so a retried save never overwrites it.
-    /// Returns whether the source had assignments to copy.
+    /// Give a duplicate the source's MIDI assignments. Scene bindings follow
+    /// the scene id, not its position, and bindings of scenes that no longer
+    /// exist are dropped. An existing map of the target always wins, so a
+    /// retry never overwrites it. Returns whether the source had assignments.
     pub fn follow(
         &self,
         source: &LibraryReference,
         target: &LibraryReference,
         scenes: &[String],
+    ) -> Result<bool> {
+        self.carry(source, target, scenes, None)
+    }
+
+    /// Move the MIDI assignments of a preset to the revision that replaces it.
+    /// Assignments the new revision cannot run are dropped with their
+    /// switched-off markers, because the rig worker refuses a map that names a
+    /// missing scene, path or control (`Snapshot::validate_midi` in
+    /// `oxidal-engine`): scene bindings of removed scenes, path bindings of
+    /// removed `branches`, and setting bindings whose block is gone or whose
+    /// merge input no longer exists. `blocks` lists every node id of the new
+    /// revision with its number of merge input gains (0 when it has none).
+    ///
+    /// The source is superseded by this save, so its entry is removed rather
+    /// than left behind. An existing map of the target still wins. A retried
+    /// save finds no source entry and changes nothing.
+    pub fn follow_save(
+        &self,
+        source: &LibraryReference,
+        target: &LibraryReference,
+        scenes: &[String],
+        branches: &[String],
+        blocks: &[(String, u8)],
+    ) -> Result<bool> {
+        self.carry(source, target, scenes, Some(Saved { branches, blocks }))
+    }
+
+    fn carry(
+        &self,
+        source: &LibraryReference,
+        target: &LibraryReference,
+        scenes: &[String],
+        saved: Option<Saved<'_>>,
     ) -> Result<bool> {
         let (from, to) = (source.kind.key(&source.id)?, target.kind.key(&target.id)?);
         if from == to {
@@ -967,19 +1007,46 @@ impl MidiMapStore {
         mapping
             .bindings
             .retain(|binding| known.contains(&binding.scene));
-        // A switched-off assignment of a removed scene has nothing to switch off.
+        if let Some(Saved { branches, blocks }) = &saved {
+            mapping
+                .branch_bindings
+                .retain(|binding| branches.contains(&binding.branch));
+            mapping.parameter_bindings.retain(|binding| {
+                let (node, port) = match &binding.target {
+                    ControlTarget::Native { node, .. }
+                    | ControlTarget::Lv2 { node, .. }
+                    | ControlTarget::Bypass { node } => (node, None),
+                    ControlTarget::Merge { node, port } => (node, Some(*port)),
+                };
+                blocks.iter().any(|(id, inputs)| {
+                    id == node && port.is_none_or(|port| port < usize::from(*inputs))
+                })
+            });
+        }
+        // A switched-off assignment that was dropped has nothing to switch off.
         let kept = mapping.clone();
-        mapping.disabled.retain(|d| {
-            d.kind != AssignmentKind::Scene
-                || kept
-                    .bindings
-                    .iter()
-                    .any(|b| b.program == d.program && b.controller == d.controller)
+        mapping.disabled.retain(|d| match d.kind {
+            AssignmentKind::Scene => kept
+                .bindings
+                .iter()
+                .any(|b| b.program == d.program && b.controller == d.controller),
+            AssignmentKind::Branch => kept
+                .branch_bindings
+                .iter()
+                .any(|b| Some(b.controller) == d.controller),
+            AssignmentKind::Parameter => kept
+                .parameter_bindings
+                .iter()
+                .any(|b| Some(b.controller) == d.controller),
         });
-        if mapping.empty() {
+        if saved.is_some() {
+            book.entries.remove(&from);
+        } else if mapping.empty() {
             return Ok(true);
         }
-        book.entries.insert(to, mapping);
+        if !mapping.empty() {
+            book.entries.insert(to, mapping);
+        }
         self.write(&book)?;
         Ok(true)
     }
@@ -1029,6 +1096,135 @@ mod tests {
             branch_bindings: vec![],
             parameter_bindings: vec![],
         }
+    }
+
+    #[test]
+    fn a_saved_revision_takes_only_the_assignments_it_can_still_run() {
+        use oxidal_audio::midi::{BranchMode, ControlMode};
+        let root = root("follow-save");
+        let store = MidiMapStore::new(root.clone());
+        let scene = |scene: &str, controller| Binding {
+            scene: scene.into(),
+            program: None,
+            controller: Some(controller),
+        };
+        let branch = |branch: &str, controller| BranchBinding {
+            branch: branch.into(),
+            controller,
+            mode: BranchMode::Toggle,
+        };
+        let parameter = |target, controller| ParameterBinding {
+            target,
+            controller,
+            mode: ControlMode::Absolute,
+        };
+        let lv2 = |node: &str| ControlTarget::Lv2 {
+            node: node.into(),
+            symbol: "gain".into(),
+        };
+        let merge = |port| ControlTarget::Merge {
+            node: "mix".into(),
+            port,
+        };
+        let off = |kind, controller| Disabled {
+            kind,
+            program: None,
+            controller: Some(controller),
+        };
+        let revision = store.snapshot().unwrap().revision;
+        store
+            .replace(MidiMapUpdate {
+                expected_revision: revision,
+                input: Some("hw:Controller,0,0".into()),
+                channel: 1,
+                template: None,
+                navigation: Navigation::default(),
+                saved_layouts: vec![],
+                extra_inputs: vec![],
+                entries: vec![MidiMapEntry {
+                    entry: entry('a'),
+                    bindings: vec![scene("clean", 20), scene("gone", 21)],
+                    branch_bindings: vec![branch("amp", 30), branch("removed", 31)],
+                    parameter_bindings: vec![
+                        parameter(lv2("drive"), 40),
+                        parameter(lv2("deleted"), 41),
+                        parameter(merge(1), 42),
+                        parameter(merge(2), 43),
+                        parameter(
+                            ControlTarget::Bypass {
+                                node: "deleted".into(),
+                            },
+                            44,
+                        ),
+                    ],
+                    disabled: vec![
+                        off(AssignmentKind::Scene, 21),
+                        off(AssignmentKind::Branch, 30),
+                        off(AssignmentKind::Branch, 31),
+                        off(AssignmentKind::Parameter, 40),
+                        off(AssignmentKind::Parameter, 41),
+                    ],
+                }],
+            })
+            .unwrap();
+        let scenes = ["clean".to_owned()];
+        let branches = ["amp".to_owned()];
+        let blocks = [("drive".to_owned(), 1), ("mix".to_owned(), 2)];
+        assert!(
+            store
+                .follow_save(&entry('a'), &entry('b'), &scenes, &branches, &blocks)
+                .unwrap()
+        );
+        let map = store.snapshot().unwrap();
+        // The superseded revision keeps no copy.
+        assert_eq!(map.entries.len(), 1);
+        let saved = &map.entries[0];
+        assert_eq!(saved.entry, entry('b'));
+        assert_eq!(saved.bindings, vec![scene("clean", 20)]);
+        assert_eq!(saved.branch_bindings, vec![branch("amp", 30)]);
+        assert_eq!(
+            saved.parameter_bindings,
+            vec![parameter(lv2("drive"), 40), parameter(merge(1), 42)]
+        );
+        assert_eq!(
+            saved.disabled,
+            vec![
+                off(AssignmentKind::Branch, 30),
+                off(AssignmentKind::Parameter, 40)
+            ]
+        );
+        // The same save arriving again finds nothing to move and changes nothing.
+        assert!(
+            !store
+                .follow_save(&entry('a'), &entry('b'), &scenes, &branches, &blocks)
+                .unwrap()
+        );
+        assert_eq!(store.snapshot().unwrap(), map);
+        // A map the target already has always wins, and nothing is lost.
+        store.configure(entry('c'), settings(9)).unwrap();
+        let before = store.snapshot().unwrap();
+        assert!(
+            store
+                .follow_save(&entry('c'), &entry('b'), &scenes, &branches, &blocks)
+                .unwrap()
+        );
+        assert_eq!(store.snapshot().unwrap(), before);
+        // A duplicate copies, and keeps every path and setting assignment.
+        assert!(store.follow(&entry('b'), &entry('d'), &scenes).unwrap());
+        let map = store.snapshot().unwrap();
+        let of = |id| map.entries.iter().find(|e| e.entry == entry(id)).unwrap();
+        assert_eq!(of('d').branch_bindings, of('b').branch_bindings);
+        assert_eq!(of('d').parameter_bindings, of('b').parameter_bindings);
+        // Nothing left to run: the source entry still goes away.
+        assert!(
+            store
+                .follow_save(&entry('d'), &entry('e'), &[], &[], &[])
+                .unwrap()
+        );
+        let map = store.snapshot().unwrap();
+        assert!(map.entries.iter().all(|e| e.entry != entry('d')));
+        assert!(map.entries.iter().all(|e| e.entry != entry('e')));
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

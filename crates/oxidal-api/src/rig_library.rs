@@ -556,17 +556,33 @@ pub async fn publish(
                 .map_err(|_| Error::Invalid("Keep ready could not follow the saved preset"))?;
             // MIDI assignments follow the saved preset; scene bindings follow
             // the scene id, so renaming or reordering scenes keeps them.
-            let scenes = manifest
+            // Assignments of a removed scene, path or block are dropped, and
+            // the map moves so the earlier revision keeps no copy.
+            let (scenes, branches) = manifest
                 .scenes()?
-                .map(|s| s.scenes.into_iter().map(|scene| scene.id).collect::<Vec<_>>())
+                .map(|s| {
+                    let ids = |list: Vec<_>| list.into_iter().map(|item: oxidal_presets::manifest::Scene| item.id).collect::<Vec<_>>();
+                    (ids(s.scenes), ids(s.branches))
+                })
                 .unwrap_or_default();
-            oxidal_presets::MidiMapStore::new(root.clone()).follow(
+            let blocks = manifest
+                .oxidal
+                .iter()
+                .flat_map(|host| &host.graph.nodes)
+                .map(|node| {
+                    let gains = node.input_gains.as_ref().map_or(0, Vec::len);
+                    (node.id.clone(), u8::try_from(gains).unwrap_or(u8::MAX))
+                })
+                .collect::<Vec<_>>();
+            oxidal_presets::MidiMapStore::new(root.clone()).follow_save(
                 source,
                 &oxidal_presets::LibraryReference {
                     kind: oxidal_presets::LibraryKind::Rig,
                     id: revision.clone(),
                 },
                 &scenes,
+                &branches,
+                &blocks,
             )?;
         }
         if let Some(source) = request.source {
