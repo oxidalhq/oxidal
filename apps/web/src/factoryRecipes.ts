@@ -48,6 +48,7 @@ const pluginUris: Record<string, string> = {
   'MDA RezFilter': 'http://drobilla.net/plugins/mda/RezFilter',
   'MDA Tracker': 'http://drobilla.net/plugins/mda/Tracker',
   'Oxidal Hold (Stereo)': 'urn:oxidal:plugin:hold#stereo',
+  'Oxidal Swell (Stereo)': 'urn:oxidal:plugin:swell#stereo',
 };
 
 /** The original four shared roles, or one of the named factory voices. */

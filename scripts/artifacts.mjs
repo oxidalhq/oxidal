@@ -143,6 +143,21 @@ if (appliance) {
     join(staging, 'lv2/oxidal-hold.lv2'),
     { recursive: true },
   );
+  const swellBuild = join(root, '.local/swell-appliance');
+  run('cmake', [
+    '-S',
+    'native/swell',
+    '-B',
+    swellBuild,
+    '-DCMAKE_BUILD_TYPE=Release',
+  ]);
+  run('cmake', ['--build', swellBuild, '--parallel', '2']);
+  run('ctest', ['--test-dir', swellBuild, '--output-on-failure']);
+  cpSync(
+    join(swellBuild, 'oxidal-swell.lv2'),
+    join(staging, 'lv2/oxidal-swell.lv2'),
+    { recursive: true },
+  );
   const pitchBuild = join(root, '.local/pitch-appliance');
   const nativeSource = join(root, '.local/tone3000/source');
   run('cmake', [

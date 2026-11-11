@@ -7,7 +7,7 @@ choose the effect when building a preset in **Library**. See
 | If you are looking for            | Start here                                              |
 | --------------------------------- | ------------------------------------------------------- |
 | Plugin and port limits            | [Supported boundary](#supported-boundary)               |
-| Bundled Hold and Pitch effects    | [Oxidal plugins](#oxidal-plugins)                       |
+| Bundled Hold, Swell, Pitch        | [Oxidal plugins](#oxidal-plugins)                       |
 | Available effects and pack checks | [Installed effects catalog](#installed-effects-catalog) |
 | Saving plugin state and assets    | [State capture and restore](#state-capture-and-restore) |
 | Developer tests                   | [Repeatable qualification](#repeatable-qualification)   |
@@ -36,7 +36,7 @@ Latency semantics follow the official [latency designation](https://lv2plug.in/n
 
 ## Oxidal plugins
 
-Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain.
+Oxidal builds its own LV2 effects in `native/`. [Oxidal Pitch](native-pitch.md) is the TONE3000 pitch engine as a standalone mono or stereo effect; [Oxidal Hold](native-hold.md) is an original spectral sustain; [Oxidal Swell](native-swell.md) is an original attack-triggered volume swell with no latency.
 
 ## Atom Sequence transport
 

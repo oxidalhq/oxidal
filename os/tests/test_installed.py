@@ -159,6 +159,7 @@ class InstalledTests(unittest.TestCase):
                     admitted = {p['uri'] for p in catalog['plugins'] if not p['unsupported']}
                     self.assertTrue({
                         'urn:oxidal:plugin:hold#stereo',
+                        'urn:oxidal:plugin:swell#stereo',
                         'urn:oxidal:plugin:pitch#stereo',
                         'http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo',
                         'http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo',

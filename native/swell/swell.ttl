@@ -1,0 +1,35 @@
+@prefix lv2: <http://lv2plug.in/ns/lv2core#> .
+@prefix doap: <http://usefulinc.com/ns/doap#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix units: <http://lv2plug.in/ns/extensions/units#> .
+
+# @see docs/native-swell.md
+<urn:oxidal:plugin:swell#mono> a lv2:Plugin, lv2:EnvelopePlugin ;
+    doap:name "Oxidal Swell (Mono)" ; doap:license <https://opensource.org/licenses/MIT> ;
+    rdfs:comment "Swell fades each new note in instead of letting it start on the pick, like a volume pedal worked by your playing. Threshold sets how loud a note must be to count; Sensitivity sets how big a jump in level retriggers a swell while a note still rings (0 waits for silence); Swell time is the fade-in; Release is the fade-out when the note dies away; Curve shapes the fade from linear to slow-starting; Mix blends back the unswelled signal. No latency." ;
+    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:port
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "threshold" ; lv2:name "Threshold" ; lv2:minimum -70 ; lv2:maximum -10 ; lv2:default -45 ; units:unit units:db ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "sensitivity" ; lv2:name "Sensitivity" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "time" ; lv2:name "Swell time" ; lv2:minimum 20 ; lv2:maximum 4000 ; lv2:default 600 ; lv2:portProperty <http://lv2plug.in/ns/ext/port-props#logarithmic> ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "release" ; lv2:name "Release" ; lv2:minimum 10 ; lv2:maximum 5000 ; lv2:default 300 ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "curve" ; lv2:name "Curve" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 6 ; lv2:symbol "in_l" ; lv2:name "Input" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 7 ; lv2:symbol "out_l" ; lv2:name "Output" ] .
+
+<urn:oxidal:plugin:swell#stereo> a lv2:Plugin, lv2:EnvelopePlugin ;
+    doap:name "Oxidal Swell (Stereo)" ; doap:license <https://opensource.org/licenses/MIT> ;
+    rdfs:comment "Stereo Swell: one detector listens to both sides and both fade in together, so the stereo image is kept. Threshold, Sensitivity, Swell time, Release, Curve and Mix work as in the mono plugin. No latency." ;
+    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:port
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "threshold" ; lv2:name "Threshold" ; lv2:minimum -70 ; lv2:maximum -10 ; lv2:default -45 ; units:unit units:db ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "sensitivity" ; lv2:name "Sensitivity" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "time" ; lv2:name "Swell time" ; lv2:minimum 20 ; lv2:maximum 4000 ; lv2:default 600 ; lv2:portProperty <http://lv2plug.in/ns/ext/port-props#logarithmic> ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "release" ; lv2:name "Release" ; lv2:minimum 10 ; lv2:maximum 5000 ; lv2:default 300 ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "curve" ; lv2:name "Curve" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "mix" ; lv2:name "Mix" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 100 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 6 ; lv2:symbol "in_l" ; lv2:name "Input L" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 7 ; lv2:symbol "out_l" ; lv2:name "Output L" ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 8 ; lv2:symbol "in_r" ; lv2:name "Input R" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 9 ; lv2:symbol "out_r" ; lv2:name "Output R" ] .

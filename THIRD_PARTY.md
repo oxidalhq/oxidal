@@ -45,10 +45,11 @@ measurement (`ebur128`) are MIT-licensed.
 
 ## Other native and model code
 
-The native Hold adapter and portions of the project-owned NAM implementation retain
+The native Hold and Swell adapters and portions of the project-owned NAM implementation retain
 their upstream MIT notices:
 
 - [`native/hold/NOTICE`](native/hold/NOTICE)
+- [`native/swell/NOTICE`](native/swell/NOTICE)
 - [`crates/oxidal-nam/NOTICE`](crates/oxidal-nam/NOTICE)
 
 Rust, JavaScript and system dependencies retain their own licences. The locked
