@@ -1,7 +1,7 @@
 //! Real ALSA-null duplex with file-fed reamp input, a raw input tap drained to
 //! a file and a venue EQ stage: the shared transport every worker uses.
 //! Linux with the `qualification` feature only.
-//! @see docs/audio.md
+//! @see docs/media.md
 #![cfg(all(target_os = "linux", feature = "qualification"))]
 #![allow(unsafe_code)]
 

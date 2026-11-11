@@ -477,6 +477,8 @@ export type LibraryAction =
       before?: LibraryReference | null;
       kind: "place";
     };
+export type MediaKind = "backing" | "di" | "reamp";
+export type UploadFormat = "wav" | "mp3";
 /**
  * Which kind of preset assignment a [`Disabled`] marker refers to.
  */
@@ -767,6 +769,9 @@ export interface Contract {
   local_model: LocalModel;
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
+  media_library: MediaLibrary;
+  media_upload_request: UploadRequest;
+  media_upload_state: UploadState;
   midi_action: MidiAction;
   midi_devices: Devices;
   midi_learn: MidiLearn;
@@ -1874,6 +1879,100 @@ export interface Port {
   output: boolean;
   symbol: string;
   toggled: boolean;
+}
+/**
+ * The Library view of the store.
+ */
+export interface MediaLibrary {
+  assets: MediaManifest[];
+  quarantined: Quarantined[];
+  /**
+   * Absent where free space cannot be measured.
+   */
+  space?: Space | null;
+  usedBytes: number;
+}
+/**
+ * `manifest.json`, schema 1. Written last; its presence makes an asset real.
+ */
+export interface MediaManifest {
+  created_at: string;
+  id: string;
+  kind: MediaKind;
+  playback?: MediaPlayback;
+  /**
+   * Set for reamp results: which DI and preset produced them.
+   */
+  provenance?: {
+    [k: string]: any;
+  };
+  renders: MediaRender[];
+  schema: number;
+  source?: MediaSource | null;
+  title: string;
+}
+export interface MediaPlayback {
+  /**
+   * Per-track trim in dB (−24 to +6), set from loudness at import.
+   */
+  trim_db: number;
+}
+/**
+ * Raw interleaved little-endian float32 at one stream rate.
+ */
+export interface MediaRender {
+  channels: number;
+  file: string;
+  frames: number;
+  loudness_lufs?: number | null;
+  peak_dbfs?: number | null;
+  rate: number;
+  resampler?: string | null;
+  sha256: string;
+}
+/**
+ * The file as uploaded, kept byte-exact for download and re-rendering.
+ */
+export interface MediaSource {
+  bytes: number;
+  channels: number;
+  codec: string;
+  container: string;
+  file: string;
+  frames: number;
+  lossy: boolean;
+  rate: number;
+  sha256: string;
+}
+/**
+ * An asset that failed its startup check, kept for inspection.
+ */
+export interface Quarantined {
+  entry: string;
+  reason: string;
+}
+export interface Space {
+  availableBytes: number;
+  reserveBytes: number;
+  totalBytes: number;
+}
+export interface UploadRequest {
+  /**
+   * The file's name on the sending device; becomes the default title.
+   */
+  name: string;
+  size: number;
+}
+export interface UploadState {
+  complete: boolean;
+  format: UploadFormat;
+  id: string;
+  /**
+   * Bytes received and confirmed; the next chunk must start here.
+   */
+  offset: number;
+  size: number;
+  title: string;
 }
 /**
  * Outcome of the newest device-wide MIDI action. `seq` increases with each one

@@ -823,7 +823,9 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "axum",
+ "getrandom 0.2.17",
  "image",
+ "nix",
  "oxidal-audio",
  "oxidal-control",
  "oxidal-debug",

@@ -44,6 +44,7 @@ async fn interrupted_library_removal_recovers_before_router_start_and_corruption
         simulator: false,
         mapping_path: root.join("mapping.json"),
         preset_dir: root.clone(),
+        media_dir: None,
         ui_dir: root.join("ui"),
     };
     assert!(router(config.clone()).is_ok());
@@ -62,6 +63,14 @@ async fn interrupted_library_removal_recovers_before_router_start_and_corruption
 }
 
 async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf) {
+    start_with(simulator, false).await
+}
+
+/// With `media`, the store lives beside the presets at `<mapping>.media`.
+async fn start_with(
+    simulator: bool,
+    media: bool,
+) -> (String, tokio::task::JoinHandle<()>, PathBuf) {
     let path = std::env::temp_dir().join(format!(
         "oxidal-test-{}-{}.json",
         std::process::id(),
@@ -80,6 +89,7 @@ async fn start(simulator: bool) -> (String, tokio::task::JoinHandle<()>, PathBuf
         simulator,
         mapping_path: path.clone(),
         preset_dir: path.with_extension("presets"),
+        media_dir: media.then(|| path.with_extension("media")),
         ui_dir: PathBuf::from("nonexistent"),
     })
     .unwrap();
@@ -582,6 +592,7 @@ async fn ui_page_revalidates_while_hashed_assets_stay_immutable() {
         simulator: true,
         mapping_path: root.join("mappings.json"),
         preset_dir: root.join("presets"),
+        media_dir: None,
         ui_dir: root.join("ui"),
     })
     .unwrap();
@@ -742,6 +753,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
         simulator: false,
         mapping_path: path.clone(),
         preset_dir: path.with_extension("presets"),
+        media_dir: None,
         ui_dir: "none".into(),
     });
     assert!(app.is_ok());
@@ -769,6 +781,7 @@ async fn persistence_is_validated_and_simulator_can_be_disabled() {
             simulator: false,
             mapping_path: path.clone(),
             preset_dir: path.with_extension("presets"),
+            media_dir: None,
             ui_dir: "none".into()
         })
         .is_err()
@@ -2805,6 +2818,7 @@ async fn library_backup_streams_order_details_mappings_and_assets_without_accoun
         simulator: true,
         mapping_path: root.join("mappings.json"),
         preset_dir: presets.clone(),
+        media_dir: None,
         ui_dir: root.join("ui"),
     })
     .unwrap();
@@ -3220,6 +3234,7 @@ async fn permanent_removal_waits_for_startup_then_clears_resume_without_recreati
         simulator: false,
         mapping_path: root.join("mapping.json"),
         preset_dir: root.clone(),
+        media_dir: None,
         ui_dir: root.join("ui"),
     })
     .unwrap();
@@ -3471,4 +3486,112 @@ async fn details_are_revision_bound_plain_metadata_and_invalidate_deletion_previ
     task.abort();
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_file(path);
+}
+
+#[tokio::test]
+async fn media_uploads_resume_at_the_confirmed_offset_within_chunk_and_file_limits() {
+    let (url, task, mapping) = start_with(true, true).await;
+    let media = mapping.with_extension("media");
+    let client = reqwest::Client::new();
+    let library: Value = reqwest::get(format!("{url}/media"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(library["assets"], json!([]));
+    assert_eq!(library["usedBytes"], 0);
+    assert!(library["space"]["reserveBytes"].as_u64().unwrap() >= 1 << 30);
+
+    let create = |name: &str, size: u64| {
+        client
+            .post(format!("{url}/media/uploads"))
+            .json(&json!({ "name": name, "size": size }))
+            .send()
+    };
+    assert_eq!(create("song.flac", 10).await.unwrap().status(), 415);
+    assert_eq!(create("song.wav", 3 << 30).await.unwrap().status(), 413);
+    assert_eq!(create("song.wav", 0).await.unwrap().status(), 413);
+    let created = create("Rehearsal 01.mp3", 20).await.unwrap();
+    assert_eq!(created.status(), 201);
+    let upload: Value = created.json().await.unwrap();
+    let id = upload["id"].as_str().unwrap().to_owned();
+    assert_eq!(upload["title"], "Rehearsal 01");
+    assert_eq!(upload["format"], "mp3");
+    assert_eq!(upload["offset"], 0);
+
+    let put = |offset: u64, body: Vec<u8>| {
+        client
+            .put(format!("{url}/media/uploads/{id}?offset={offset}"))
+            .body(body)
+            .send()
+    };
+    let first: Value = put(0, vec![1; 12]).await.unwrap().json().await.unwrap();
+    assert_eq!(
+        (first["offset"].clone(), first["complete"].clone()),
+        (json!(12), json!(false))
+    );
+    // A retried chunk after a dropped response learns where to resume.
+    let stale = put(0, vec![1; 12]).await.unwrap();
+    assert_eq!(stale.status(), 409);
+    assert_eq!(stale.json::<Value>().await.unwrap()["offset"], 12);
+    assert_eq!(put(12, vec![2; 9]).await.unwrap().status(), 422);
+    assert_eq!(put(12, vec![2; 9 << 20]).await.unwrap().status(), 413);
+    let done: Value = put(12, vec![2; 8]).await.unwrap().json().await.unwrap();
+    assert_eq!(done["complete"], true);
+    let part = media.join("incoming").join(format!("{id}.part"));
+    let mut expected = vec![1u8; 12];
+    expected.extend([2u8; 8]);
+    assert_eq!(std::fs::read(&part).unwrap(), expected);
+    let state: Value = reqwest::get(format!("{url}/media/uploads/{id}"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["offset"], 20);
+
+    let cancel = client
+        .delete(format!("{url}/media/uploads/{id}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cancel.status(), 204);
+    assert!(!part.exists());
+    assert_eq!(
+        reqwest::get(format!("{url}/media/uploads/{id}"))
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
+    let missing = client
+        .delete(format!("{url}/media/assets/01JD2W8T3N8M4K6V0P7Q9R1S2T"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), 404);
+    let escape = client
+        .delete(format!("{url}/media/assets/..%2Fpresets"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(escape.status(), 404);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(media);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+#[tokio::test]
+async fn media_without_a_directory_is_unavailable_and_creates_nothing() {
+    let (url, task, mapping) = start(true).await;
+    let response = reqwest::get(format!("{url}/media")).await.unwrap();
+    assert_eq!(response.status(), 503);
+    let error: Value = response.json().await.unwrap();
+    assert_eq!(error["code"], "unavailable");
+    assert!(!mapping.with_extension("presets").join("media").exists());
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
 }

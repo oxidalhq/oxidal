@@ -4,7 +4,7 @@
 //! and pop never allocate, lock or block, so the callback can use them.
 //! Samples are stored as `f32` bits in atomics, which keeps the crate free of
 //! unsafe code.
-//! @see docs/audio.md
+//! @see docs/media.md
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 

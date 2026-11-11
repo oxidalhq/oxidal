@@ -24,6 +24,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         preset_dir: PathBuf::from(
             std::env::var("OXIDAL_PRESET_DIR").unwrap_or_else(|_| ".local/presets".into()),
         ),
+        media_dir: Some(PathBuf::from(
+            std::env::var("OXIDAL_MEDIA_DIR").unwrap_or_else(|_| ".local/media".into()),
+        )),
         ui_dir: PathBuf::from(
             std::env::var("OXIDAL_UI_DIR").unwrap_or_else(|_| "apps/web/dist".into()),
         ),

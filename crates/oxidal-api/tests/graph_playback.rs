@@ -58,6 +58,7 @@ async fn graph_worker_controls_crash_recovery_and_shutdown_keep_daemon_alive() {
         simulator: true,
         mapping_path: root.join("mappings.json"),
         preset_dir: root.join("presets"),
+        media_dir: None,
         ui_dir: root.join("ui"),
         shutdown: Some(signal),
     };

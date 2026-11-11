@@ -509,6 +509,7 @@ mod tests {
             simulator: false,
             mapping_path: root.join("mapping.json"),
             preset_dir: root.clone(),
+            media_dir: None,
             ui_dir: root.join("ui"),
         };
         // Two separate daemon lifetimes; no image source server exists or is contacted.

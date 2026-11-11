@@ -168,6 +168,7 @@ class ApplianceTests(ProvisionTests):
         self.assertNotIn('NoNewPrivileges=', helper)
         self.assertNotIn('sudo', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         self.assertIn('Environment=OXIDAL_RIG_WORKER=/opt/oxidal/bin/oxidal-rig-worker', (self.root / 'etc/systemd/system/oxidald.service').read_text())
+        self.assertIn('Environment=OXIDAL_MEDIA_DIR=/var/lib/oxidal/media', (self.root / 'etc/systemd/system/oxidald.service').read_text())
         self.assertFalse((self.root / 'usr/share/oxidal/storage-layout-v1').exists())
         self.assertFalse((self.root / 'etc/systemd/system/oxidal-grow-data.service').exists())
         terminal = (self.root / 'etc/systemd/system/oxidal-terminal.service').read_text()

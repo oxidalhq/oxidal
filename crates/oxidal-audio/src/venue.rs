@@ -3,7 +3,7 @@
 //! fold, so it corrects the room without touching the rig, its taps or
 //! recordings. Sections are preallocated; processing never allocates. An
 //! empty or bypassed stage passes samples unchanged.
-//! @see docs/audio.md
+//! @see docs/media.md
 use crate::eq::EqType;
 
 /// The most sections one stage holds: seven bands, two of which may be

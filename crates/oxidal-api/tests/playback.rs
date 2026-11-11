@@ -36,6 +36,7 @@ async fn protect_reaches_native_worker_and_keeps_tuner_and_saved_pin_available()
         simulator: false,
         mapping_path: root.join("mapping.json"),
         preset_dir: root.join("presets"),
+        media_dir: None,
         ui_dir: root.join("ui"),
         shutdown: Some(signal),
     })
@@ -228,6 +229,7 @@ async fn playback_stop_restart_failure_and_client_disconnect_preserve_authoring(
         simulator: true,
         mapping_path: root.join("mappings.json"),
         preset_dir: root.join("presets"),
+        media_dir: None,
         ui_dir: root.join("ui"),
     };
     let (app, stopped) = router_with_shutdown(config.clone()).unwrap();
@@ -1771,6 +1773,7 @@ async fn live_structure_save_reconfigure_recovery_and_rollback() {
         simulator: false,
         mapping_path: root.join("mappings.json"),
         preset_dir: presets.clone(),
+        media_dir: None,
         ui_dir: root.join("ui"),
     };
     let (app, stopped) = router_with_shutdown(config.clone()).unwrap();

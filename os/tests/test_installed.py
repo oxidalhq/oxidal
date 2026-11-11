@@ -127,7 +127,8 @@ class InstalledTests(unittest.TestCase):
             self.assertNotIn('/tmp/oxidal-', output)
         with tempfile.TemporaryDirectory(prefix='oxidal-installed-') as temporary:
             env = {**os.environ, 'OXIDAL_ADDR': '127.0.0.1:3210', 'OXIDAL_SIMULATOR': '0',
-                   'OXIDAL_PRESET_DIR': temporary + '/presets', 'OXIDAL_MAPPING_PATH': temporary + '/mappings.json',
+                   'OXIDAL_PRESET_DIR': temporary + '/presets', 'OXIDAL_MEDIA_DIR': temporary + '/media',
+                   'OXIDAL_MAPPING_PATH': temporary + '/mappings.json',
                    'OXIDAL_UI_DIR': str(home / 'ui'), 'LV2_PATH': '/usr/lib/lv2:/usr/local/lib/lv2',
                    'OXIDAL_NATIVE_WORKER': str(home / 'bin/oxidal-native-worker'),
                    'OXIDAL_AUDIO_WORKER': str(home / 'bin/oxidal-audio-worker'),
@@ -151,6 +152,9 @@ class InstalledTests(unittest.TestCase):
                     else:
                         self.fail('Daemon did not become ready')
                     self.assertTrue(health['native_editor'])
+                    media = json.loads(get('/api/v1/media'))
+                    self.assertEqual(media['assets'], [])
+                    self.assertTrue(Path(temporary, 'media', 'store.json').is_file())
                     catalog = json.loads(get('/api/v1/plugins/lv2?sample_rate=48000'))
                     admitted = {p['uri'] for p in catalog['plugins'] if not p['unsupported']}
                     self.assertTrue({

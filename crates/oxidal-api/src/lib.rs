@@ -15,6 +15,8 @@ mod keep_ready;
 mod levels;
 mod library_removal;
 mod local_models;
+pub mod media;
+mod media_api;
 mod midi_map;
 mod midi_recall;
 mod monitor;
@@ -124,6 +126,9 @@ impl ErrorCode {
 /// @see docs/architecture.md
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Contract {
+    pub media_library: media_api::MediaLibrary,
+    pub media_upload_request: media_api::UploadRequest,
+    pub media_upload_state: media_api::UploadState,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
     pub keep_ready: keep_ready::KeepReady,
@@ -226,6 +231,8 @@ pub struct Config {
     pub rig_worker: Option<PathBuf>,
     pub mapping_path: PathBuf,
     pub preset_dir: PathBuf,
+    /// Session media store root; `None` leaves media unavailable (tests).
+    pub media_dir: Option<PathBuf>,
     pub ui_dir: PathBuf,
     pub shutdown: Option<watch::Receiver<bool>>,
 }
@@ -259,6 +266,8 @@ struct Shared {
     events: watch::Sender<Snapshot>,
     protect: Arc<protect::Protect>,
     keep_ready: keep_ready::Store,
+    media: Result<Arc<media::Store>, String>,
+    uploads: media_api::Uploads,
     config: Config,
 }
 
@@ -331,7 +340,21 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let protect = Arc::new(protect::Protect::new(
         config.preset_dir.join("protect.json"),
     ));
+    // Media trouble never stops the daemon: its routes report it instead.
+    let media = match &config.media_dir {
+        None => Err("no media directory is configured".to_owned()),
+        Some(dir) => media::Store::open(dir).map(Arc::new).map_err(|e| {
+            let reason = match e {
+                media::MediaError::Invalid(reason) | media::MediaError::Io(reason) => reason,
+                other => format!("{other:?}"),
+            };
+            eprintln!("Media store {} unavailable: {reason}", dir.display());
+            reason
+        }),
+    };
     let shared = Arc::new(Shared {
+        media,
+        uploads: media_api::Uploads::default(),
         protect: protect.clone(),
         keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
@@ -558,6 +581,19 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route(
             "/presets/{id}/artwork/{key}",
             get(artwork::read).post(artwork::download),
+        )
+        .route("/media", get(media_api::library))
+        .route(
+            "/media/assets/{id}",
+            axum::routing::delete(media_api::remove),
+        )
+        .route("/media/uploads", post(media_api::create_upload))
+        .route(
+            "/media/uploads/{id}",
+            get(media_api::upload_state)
+                .put(media_api::append_chunk)
+                .delete(media_api::cancel_upload)
+                .layer(DefaultBodyLimit::max(media_api::CHUNK_LIMIT)),
         )
         .route("/state", get(snapshot))
         .route("/commands", post(command))

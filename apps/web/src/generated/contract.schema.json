@@ -103,6 +103,15 @@
     "lv2_catalog": {
       "$ref": "#/$defs/PluginCatalog"
     },
+    "media_library": {
+      "$ref": "#/$defs/MediaLibrary"
+    },
+    "media_upload_request": {
+      "$ref": "#/$defs/UploadRequest"
+    },
+    "media_upload_state": {
+      "$ref": "#/$defs/UploadState"
+    },
     "midi_action": {
       "$ref": "#/$defs/MidiAction"
     },
@@ -276,6 +285,9 @@
     }
   },
   "required": [
+    "media_library",
+    "media_upload_request",
+    "media_upload_state",
     "removal_preview",
     "protect_state",
     "keep_ready",
@@ -5393,6 +5405,236 @@
         "state"
       ]
     },
+    "MediaKind": {
+      "type": "string",
+      "enum": [
+        "backing",
+        "di",
+        "reamp"
+      ]
+    },
+    "MediaLibrary": {
+      "description": "The Library view of the store.",
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MediaManifest"
+          }
+        },
+        "quarantined": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Quarantined"
+          }
+        },
+        "space": {
+          "description": "Absent where free space cannot be measured.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Space"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "usedBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "assets",
+        "quarantined",
+        "usedBytes"
+      ]
+    },
+    "MediaManifest": {
+      "description": "`manifest.json`, schema 1. Written last; its presence makes an asset real.",
+      "type": "object",
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MediaKind"
+        },
+        "playback": {
+          "$ref": "#/$defs/MediaPlayback",
+          "default": {
+            "trim_db": 0
+          }
+        },
+        "provenance": {
+          "description": "Set for reamp results: which DI and preset produced them.",
+          "default": null
+        },
+        "renders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MediaRender"
+          }
+        },
+        "schema": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "id",
+        "kind",
+        "title",
+        "created_at",
+        "renders"
+      ]
+    },
+    "MediaPlayback": {
+      "type": "object",
+      "properties": {
+        "trim_db": {
+          "description": "Per-track trim in dB (−24 to +6), set from loudness at import.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "trim_db"
+      ]
+    },
+    "MediaRender": {
+      "description": "Raw interleaved little-endian float32 at one stream rate.",
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "file": {
+          "type": "string"
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "loudness_lufs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "peak_dbfs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "resampler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "rate",
+        "channels",
+        "frames",
+        "sha256"
+      ]
+    },
+    "MediaSource": {
+      "description": "The file as uploaded, kept byte-exact for download and re-rendering.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "channels": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "codec": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "lossy": {
+          "type": "boolean"
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "bytes",
+        "sha256",
+        "container",
+        "codec",
+        "rate",
+        "channels",
+        "frames",
+        "lossy"
+      ]
+    },
     "Message": {
       "oneOf": [
         {
@@ -7862,6 +8104,22 @@
         "on"
       ]
     },
+    "Quarantined": {
+      "description": "An asset that failed its startup check, kept for inspection.",
+      "type": "object",
+      "properties": {
+        "entry": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entry",
+        "reason"
+      ]
+    },
     "Radio": {
       "type": "object",
       "properties": {
@@ -9506,6 +9764,31 @@
         "connected"
       ]
     },
+    "Space": {
+      "type": "object",
+      "properties": {
+        "availableBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "reserveBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "totalBytes": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "availableBytes",
+        "totalBytes",
+        "reserveBytes"
+      ]
+    },
     "Spectrum": {
       "type": "object",
       "properties": {
@@ -10738,6 +11021,68 @@
         "frequency",
         "confidence",
         "level"
+      ]
+    },
+    "UploadFormat": {
+      "type": "string",
+      "enum": [
+        "wav",
+        "mp3"
+      ]
+    },
+    "UploadRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The file's name on the sending device; becomes the default title.",
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "size"
+      ]
+    },
+    "UploadState": {
+      "type": "object",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "format": {
+          "$ref": "#/$defs/UploadFormat"
+        },
+        "id": {
+          "type": "string"
+        },
+        "offset": {
+          "description": "Bytes received and confirmed; the next chunk must start here.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "format",
+        "size",
+        "offset",
+        "complete"
       ]
     },
     "Validation": {

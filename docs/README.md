@@ -24,3 +24,4 @@
 - [Native preset and DSP adapter](native-tone3000.md)
 - [LV2 host](lv2.md), [Oxidal Hold](native-hold.md) and [Oxidal Pitch](native-pitch.md)
 - [Preset format](presets/format.md) and [storage locking](storage-lock.md)
+- [Session media](media.md)

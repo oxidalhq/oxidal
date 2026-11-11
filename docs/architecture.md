@@ -116,6 +116,15 @@ library entry. Rigs can also use local NAM and WAV IR files. A saved session can
 be selected explicitly for boot. See [the library](library.md) and
 [the preset format](presets/format.md).
 
+## Session media
+
+Backing tracks, DI recordings and reamp results live in a media store separate
+from presets, under `OXIDAL_MEDIA_DIR`. Uploads are chunked and resumable, an
+asset becomes visible only after an atomic rename, and anything that fails its
+check at startup is quarantined. In the shared audio host stage, preset boost
+now applies before the session mix and Master after it, with venue EQ between
+the mix and mono fold. See [session media](media.md).
+
 ## Appliance and device services
 
 Oxidal's custom image builds on Raspberry Pi OS Lite (ARM64). It runs headless,

@@ -109,6 +109,7 @@ async fn mixed_worker_http_controls_export_restart_exclusion_and_recovery() {
         rig_worker: Some(executable.clone()),
         mapping_path: root.join("mapping.json"),
         preset_dir: root.join("presets"),
+        media_dir: None,
         ui_dir: root.join("ui"),
         shutdown: Some(signal),
     };
