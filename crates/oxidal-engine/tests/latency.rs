@@ -126,6 +126,7 @@ fn portable_lv2_latency_aligns_parallel_paths_bypass_and_offline_recall() {
                         output,
                         input_map: [0, 1],
                         output_map: [0, 1],
+                        venue: None,
                     },
                     recall: None,
                 },
@@ -310,6 +311,7 @@ fn portable_state_assets_survive_isolated_save_without_original_files() {
                 output,
                 input_map: [0, 1],
                 output_map: [0, 1],
+                venue: None,
             },
             recall: None,
         },
@@ -405,6 +407,7 @@ fn resident_switch_qualification(preserve: bool) {
             output,
             input_map: [0, 1],
             output_map: [0, 1],
+            venue: None,
         },
     };
     let mut residents = ResidentSet::new(&store, &world, &settings, 1024 * 1024).unwrap();

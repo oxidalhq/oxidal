@@ -53,6 +53,7 @@ fn settings(revisions: &[String]) -> StartRig {
             output,
             input_map: [0, 1],
             output_map: [0, 1],
+            venue: None,
         },
     }
 }

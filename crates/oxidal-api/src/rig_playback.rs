@@ -380,6 +380,7 @@ impl Owner {
         self.follow_preparation = None;
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
+        settings.stream.venue = self.levels.venue();
         let entry = oxidal_presets::LibraryReference {
             kind: oxidal_presets::LibraryKind::Rig,
             id: settings.revision.clone(),
@@ -1830,6 +1831,7 @@ mod tests {
                 output,
                 input_map: [0, 1],
                 output_map: [0, 1],
+                venue: None,
             },
             recall: None,
         };

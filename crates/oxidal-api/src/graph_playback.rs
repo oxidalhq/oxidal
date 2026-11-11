@@ -218,6 +218,7 @@ impl Owner {
     ) -> Result<(), String> {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
+        settings.stream.venue = self.levels.venue();
         settings.validate()?;
         if let Some(id) = &settings.library_id {
             oxidal_presets::GraphStore::new(self.preset_root.clone())

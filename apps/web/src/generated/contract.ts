@@ -123,6 +123,11 @@ export type HostUtility =
   | {
       command: BackingCommand;
       kind: "backing";
+    }
+  | {
+      crossfade: boolean;
+      kind: "venue";
+      venue?: VenueApplied | null;
     };
 /**
  * What the daemon asks the worker's backing player to do.
@@ -835,6 +840,48 @@ export type TerminalCommand =
  * TONE3000 gear types a tone list can be narrowed to.
  */
 export type Gear = "amp" | "amp-cab" | "pedal" | "outboard" | "cab" | "space" | "experimental";
+export type VenueCommand =
+  | {
+      kind: "activate";
+      profile: string;
+    }
+  | {
+      bypass: boolean;
+      kind: "set_bypass";
+    }
+  | {
+      eq: VenueSettings;
+      kind: "preview";
+    }
+  | {
+      kind: "compare_saved";
+      saved: boolean;
+    }
+  | {
+      kind: "revert";
+    }
+  | {
+      kind: "save";
+    }
+  | {
+      kind: "save_as";
+      name: string;
+      notes?: string;
+    }
+  | {
+      kind: "rename";
+      name: string;
+      notes?: string | null;
+      profile: string;
+    }
+  | {
+      kind: "duplicate";
+      profile: string;
+    }
+  | {
+      kind: "delete";
+      profile: string;
+    };
 
 /**
  * Schema generation root. Rust wire types are the contract source of truth.
@@ -932,6 +979,8 @@ export interface Contract {
   tone_query: ToneQuery;
   unit_levels: HostLevels;
   validation: Validation;
+  venue_request: VenueRequest;
+  venue_state: VenueState;
   voice_list: VoiceList;
   voice_ready: VoiceReady;
   voice_request: VoiceRequest;
@@ -1000,6 +1049,51 @@ export interface HostLevels {
   output_level_db: number;
 }
 /**
+ * What the outputs should use now: settings, or bypassed (flat, no trim).
+ */
+export interface VenueApplied {
+  bypass: boolean;
+  settings: VenueSettings;
+}
+/**
+ * A whole venue EQ: seven bands and output trim.
+ */
+export interface VenueSettings {
+  /**
+   * @minItems 7
+   * @maxItems 7
+   */
+  bands: [
+    VenueBandSettings,
+    VenueBandSettings,
+    VenueBandSettings,
+    VenueBandSettings,
+    VenueBandSettings,
+    VenueBandSettings,
+    VenueBandSettings
+  ];
+  trimDb: number;
+}
+/**
+ * One band's settings. Which kind it is follows from its position.
+ */
+export interface VenueBandSettings {
+  enabled: boolean;
+  freqHz: number;
+  /**
+   * Shelves and bells only.
+   */
+  gainDb?: number;
+  /**
+   * Bells only (0.3–8); shelves use 0.707 and pass filters Butterworth.
+   */
+  q?: number;
+  /**
+   * Pass filters only: 24 dB/oct instead of 12.
+   */
+  steep?: boolean;
+}
+/**
  * Device-local configuration, deliberately absent from portable sound data.
  */
 export interface Settings2 {
@@ -1061,6 +1155,11 @@ export interface StreamConfig {
    * @maxItems 2
    */
   output_map: [number, number];
+  /**
+   * Venue EQ on the main outputs from the first sample; the daemon fills it
+   * at every start, like the levels.
+   */
+  venue?: VenueApplied | null;
 }
 export interface AudioProbe {
   channels: number;
@@ -3103,6 +3202,44 @@ export interface ToneQuery {
 export interface Validation {
   errors: string[];
   valid: boolean;
+}
+export interface VenueRequest {
+  command: VenueCommand;
+  expectedRevision: number;
+}
+export interface VenueState {
+  active: string;
+  bypass: boolean;
+  destination: string;
+  /**
+   * Shown once, e.g. after an unsaved edit timed out.
+   */
+  notice?: string | null;
+  preview?: VenuePreview | null;
+  profiles: VenueProfile[];
+  revision: number;
+}
+export interface VenuePreview {
+  /**
+   * The profile being edited.
+   */
+  base: string;
+  /**
+   * Temporarily hearing the saved profile instead of the edit.
+   */
+  compareSaved: boolean;
+  eq: VenueSettings;
+}
+export interface VenueProfile {
+  /**
+   * Read-only starting point; Save makes a user copy.
+   */
+  builtin?: boolean;
+  eq: VenueSettings;
+  id: string;
+  name: string;
+  notes?: string;
+  updatedAt?: string | null;
 }
 export interface VoiceList {
   captures: VoiceCapture[];

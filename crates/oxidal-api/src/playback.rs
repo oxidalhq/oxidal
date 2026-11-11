@@ -243,6 +243,7 @@ impl Owner {
     ) -> Result<(), String> {
         // Unit levels follow the player, not the preset or the recovered session.
         settings.stream.levels = self.levels.current();
+        settings.stream.venue = self.levels.venue();
         let entry = crate::library_removal::native_reference(&settings);
         self.midi_map
             .adopt(entry.as_ref(), settings.midi.as_ref())

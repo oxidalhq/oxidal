@@ -3986,3 +3986,98 @@ async fn restart(mapping: PathBuf) -> (String, tokio::task::JoinHandle<()>, Path
     });
     (url, task, mapping)
 }
+
+#[tokio::test]
+async fn venue_profiles_preview_save_conflict_persist_and_obey_protect() {
+    let (url, task, mapping) = start(true).await;
+    let client = reqwest::Client::new();
+    let state: Value = reqwest::get(format!("{url}/venues"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(state["active"], "builtin-flat");
+    assert_eq!(state["destination"], "main");
+    assert_eq!(state["profiles"].as_array().unwrap().len(), 5);
+    let revision = state["revision"].as_u64().unwrap();
+    let send = |revision: u64, command: Value| {
+        let client = client.clone();
+        let url = url.clone();
+        async move {
+            let r = client
+                .post(format!("{url}/venues/commands"))
+                .json(&json!({ "expectedRevision": revision, "command": command }))
+                .send()
+                .await
+                .unwrap();
+            (r.status().as_u16(), r.json::<Value>().await.unwrap())
+        }
+    };
+    // An edit is audible as a preview and bumps the revision.
+    let mut eq = state["profiles"][0]["eq"].clone();
+    eq["bands"][3]["gainDb"] = json!(-4.0);
+    let (status, edited) = send(revision, json!({ "kind": "preview", "eq": eq })).await;
+    assert_eq!(status, 200, "{edited}");
+    assert_eq!(edited["preview"]["eq"]["bands"][3]["gainDb"], -4.0);
+    // A second client that has not seen the edit is refused and shown it.
+    let (status, current) = send(revision, json!({ "kind": "set_bypass", "bypass": true })).await;
+    assert_eq!(status, 409);
+    assert_eq!(current["preview"]["base"], "builtin-flat");
+    let mut revision = edited["revision"].as_u64().unwrap();
+    let (_, saved) = send(
+        revision,
+        json!({ "kind": "save_as", "name": "Rehearsal room", "notes": "Boomy corner" }),
+    )
+    .await;
+    let id = saved["active"].as_str().unwrap().to_owned();
+    assert!(id.starts_with("user-"));
+    assert!(saved["preview"].is_null());
+    revision = saved["revision"].as_u64().unwrap();
+    let (_, bypassed) = send(revision, json!({ "kind": "set_bypass", "bypass": true })).await;
+    revision = bypassed["revision"].as_u64().unwrap();
+    // An unsaved edit never survives a reboot; the saved profile and bypass do.
+    let mut louder = eq.clone();
+    louder["trimDb"] = json!(-6.0);
+    send(revision, json!({ "kind": "preview", "eq": louder })).await;
+    task.abort();
+    let (url, task, mapping) = restart(mapping).await;
+    let rebooted: Value = reqwest::get(format!("{url}/venues"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(rebooted["active"], id.as_str());
+    assert_eq!(rebooted["bypass"], true);
+    assert!(rebooted["preview"].is_null());
+    let profile = rebooted["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == id.as_str())
+        .unwrap()
+        .clone();
+    assert_eq!(profile["name"], "Rehearsal room");
+    assert_eq!(profile["eq"]["bands"][3]["gainDb"], -4.0);
+    assert_eq!(profile["eq"]["trimDb"], 0.0);
+    // Protect refuses switching, bypass and edits.
+    let client = reqwest::Client::new();
+    client
+        .post(format!("{url}/protect"))
+        .json(&json!({ "on": true }))
+        .send()
+        .await
+        .unwrap();
+    let locked = client
+        .post(format!("{url}/venues/commands"))
+        .json(&json!({ "expectedRevision": rebooted["revision"], "command": { "kind": "set_bypass", "bypass": false } }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(locked.status(), 423);
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("media"));
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}

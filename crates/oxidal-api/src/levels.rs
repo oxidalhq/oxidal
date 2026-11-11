@@ -18,6 +18,9 @@ use std::{
 pub(crate) struct Levels {
     path: PathBuf,
     value: RwLock<HostLevels>,
+    /// The venue EQ the outputs use now (saved profile or live preview),
+    /// attached to every stream start. Persisted by the venue store.
+    venue: RwLock<Option<oxidal_audio::venue::VenueApplied>>,
 }
 impl Levels {
     /// A missing or unreadable file starts at unity; it never blocks audio.
@@ -31,6 +34,15 @@ impl Levels {
         Self {
             path,
             value: RwLock::new(value),
+            venue: RwLock::new(None),
+        }
+    }
+    pub(crate) fn venue(&self) -> Option<oxidal_audio::venue::VenueApplied> {
+        self.venue.read().map(|v| *v).unwrap_or_default()
+    }
+    pub(crate) fn set_venue(&self, venue: Option<oxidal_audio::venue::VenueApplied>) {
+        if let Ok(mut current) = self.venue.write() {
+            *current = venue;
         }
     }
     pub(crate) fn current(&self) -> HostLevels {

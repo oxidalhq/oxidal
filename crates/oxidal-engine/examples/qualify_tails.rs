@@ -97,6 +97,7 @@ fn qualify(world: &World, uri: &str) -> Result<Vec<serde_json::Value>, Box<dyn E
                 output: playback,
                 input_map: [0, 1],
                 output_map: [0, 1],
+                venue: None,
                 hear_yourself: true,
                 levels: Default::default(),
             },

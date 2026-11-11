@@ -38,6 +38,7 @@ mod rig_recovery;
 mod scene_draft;
 mod storage_lock;
 mod terminal;
+mod venues;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Request, State, rejection::JsonRejection},
@@ -135,6 +136,8 @@ pub struct Contract {
     pub player_snapshot: player::PlayerSnapshot,
     pub player_request: player::PlayerRequest,
     pub player_order: player::PlayerOrder,
+    pub venue_state: venues::VenueState,
+    pub venue_request: venues::VenueRequest,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
     pub keep_ready: keep_ready::KeepReady,
@@ -275,6 +278,7 @@ struct Shared {
     media: Result<Arc<media::Store>, String>,
     uploads: media_api::Uploads,
     player: player::Player,
+    venues: venues::Venues,
     config: Config,
 }
 
@@ -342,6 +346,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let levels = Arc::new(levels::Levels::load(
         config.preset_dir.join("unit-levels.json"),
     ));
+    // The saved venue EQ is known before any audio owner starts a stream.
+    let venues = venues::Venues::load(config.preset_dir.join("venues.json"));
+    levels.set_venue(Some(venues.applied_now()));
     let midi_map = Arc::new(oxidal_presets::MidiMapStore::new(config.preset_dir.clone()));
     let (midi_events, midi_event_rx) = tokio::sync::mpsc::channel(32);
     let protect = Arc::new(protect::Protect::new(
@@ -367,6 +374,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         media,
         uploads: media_api::Uploads::default(),
         player,
+        venues,
         protect: protect.clone(),
         keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
@@ -430,6 +438,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     monitor_history::start(Arc::downgrade(&shared));
     midi_recall::start(Arc::downgrade(&shared), midi_event_rx);
     player::follow(Arc::downgrade(&shared));
+    venues::expire(Arc::downgrade(&shared));
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -595,6 +604,9 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/presets/{id}/artwork/{key}",
             get(artwork::read).post(artwork::download),
         )
+        .route("/venues", get(venues::state))
+        .route("/venues/commands", post(venues::command))
+        .route("/venues/preview/keep", post(venues::keep))
         .route("/player", get(player::state))
         .route("/player/events", get(player::events))
         .route("/player/commands", post(player::command))
@@ -779,10 +791,12 @@ async fn command(
 async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
     let mut receiver = shared.events.subscribe();
     let mut player = shared.player.subscribe();
+    let mut venue = shared.venues.subscribe();
     let mut shutdown = shared.config.shutdown.clone();
     let stream = async_stream::stream! {
         let mut state_changed = true;
         let mut player_changed = true;
+        let mut venue_changed = true;
         loop {
             if state_changed {
                 let snapshot=receiver.borrow_and_update().clone();
@@ -794,14 +808,23 @@ async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
                 let event = Event::default().event("player").json_data(snapshot).expect("finite player snapshot");
                 yield Ok::<Event,Infallible>(event);
             }
+            if venue_changed {
+                let snapshot = venue.borrow_and_update().clone();
+                let event = Event::default().event("venue").json_data(snapshot).expect("finite venue state");
+                yield Ok::<Event,Infallible>(event);
+            }
             tokio::select! {
                 changed = receiver.changed() => {
                     if changed.is_err() { break; }
-                    (state_changed, player_changed) = (true, false);
+                    (state_changed, player_changed, venue_changed) = (true, false, false);
                 },
                 changed = player.changed() => {
                     if changed.is_err() { break; }
-                    (state_changed, player_changed) = (false, true);
+                    (state_changed, player_changed, venue_changed) = (false, true, false);
+                },
+                changed = venue.changed() => {
+                    if changed.is_err() { break; }
+                    (state_changed, player_changed, venue_changed) = (false, false, true);
                 },
                 _ = async {
                     match shutdown.as_mut() {

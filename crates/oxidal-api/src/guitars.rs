@@ -350,6 +350,7 @@ mod tests {
             input,
             input_map: [0, 0],
             output_map: [0, 1],
+            venue: None,
         }
     }
     fn guitar(id: &str, trim_db: f32) -> Guitar {

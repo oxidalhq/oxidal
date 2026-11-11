@@ -286,6 +286,12 @@
     "validation": {
       "$ref": "#/$defs/Validation"
     },
+    "venue_request": {
+      "$ref": "#/$defs/VenueRequest"
+    },
+    "venue_state": {
+      "$ref": "#/$defs/VenueState"
+    },
     "voice_list": {
       "$ref": "#/$defs/VoiceList"
     },
@@ -304,6 +310,8 @@
     "player_snapshot",
     "player_request",
     "player_order",
+    "venue_state",
+    "venue_request",
     "removal_preview",
     "protect_state",
     "keep_ready",
@@ -5025,6 +5033,34 @@
           "required": [
             "kind",
             "command"
+          ]
+        },
+        {
+          "description": "Venue EQ on the main outputs; `None` removes it. Profile switches and\nbypass set `crossfade`; knob edits glide.",
+          "type": "object",
+          "properties": {
+            "crossfade": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "venue"
+            },
+            "venue": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/VenueApplied"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "crossfade"
           ]
         }
       ]
@@ -11140,6 +11176,17 @@
           },
           "maxItems": 2,
           "minItems": 2
+        },
+        "venue": {
+          "description": "Venue EQ on the main outputs from the first sample; the daemon fills it\nat every start, like the levels.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VenueApplied"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -11906,6 +11953,389 @@
       "required": [
         "target",
         "value"
+      ]
+    },
+    "VenueApplied": {
+      "description": "What the outputs should use now: settings, or bypassed (flat, no trim).",
+      "type": "object",
+      "properties": {
+        "bypass": {
+          "type": "boolean"
+        },
+        "settings": {
+          "$ref": "#/$defs/VenueSettings"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "settings",
+        "bypass"
+      ]
+    },
+    "VenueBandSettings": {
+      "description": "One band's settings. Which kind it is follows from its position.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "freqHz": {
+          "type": "number",
+          "format": "float"
+        },
+        "gainDb": {
+          "description": "Shelves and bells only.",
+          "type": "number",
+          "format": "float",
+          "default": 0
+        },
+        "q": {
+          "description": "Bells only (0.3–8); shelves use 0.707 and pass filters Butterworth.",
+          "type": "number",
+          "format": "float",
+          "default": 1
+        },
+        "steep": {
+          "description": "Pass filters only: 24 dB/oct instead of 12.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "freqHz"
+      ]
+    },
+    "VenueCommand": {
+      "oneOf": [
+        {
+          "description": "Switch the active profile (any preview is discarded).",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "activate"
+            },
+            "profile": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "profile"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bypass": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_bypass"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bypass"
+          ]
+        },
+        {
+          "description": "Hear an edit of the active profile now; not saved.",
+          "type": "object",
+          "properties": {
+            "eq": {
+              "$ref": "#/$defs/VenueSettings"
+            },
+            "kind": {
+              "type": "string",
+              "const": "preview"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "eq"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "compare_saved"
+            },
+            "saved": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "saved"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "revert"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Save the preview into the active profile; a built-in becomes a copy.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Save the current sound as a new profile and make it active.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "save_as"
+            },
+            "name": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rename"
+            },
+            "name": {
+              "type": "string"
+            },
+            "notes": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
+            "profile": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "profile",
+            "name"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "duplicate"
+            },
+            "profile": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "profile"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "delete"
+            },
+            "profile": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "profile"
+          ]
+        }
+      ]
+    },
+    "VenuePreview": {
+      "type": "object",
+      "properties": {
+        "base": {
+          "description": "The profile being edited.",
+          "type": "string"
+        },
+        "compareSaved": {
+          "description": "Temporarily hearing the saved profile instead of the edit.",
+          "type": "boolean"
+        },
+        "eq": {
+          "$ref": "#/$defs/VenueSettings"
+        }
+      },
+      "required": [
+        "base",
+        "eq",
+        "compareSaved"
+      ]
+    },
+    "VenueProfile": {
+      "type": "object",
+      "properties": {
+        "builtin": {
+          "description": "Read-only starting point; Save makes a user copy.",
+          "type": "boolean",
+          "default": false
+        },
+        "eq": {
+          "$ref": "#/$defs/VenueSettings"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string",
+          "default": ""
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "eq"
+      ]
+    },
+    "VenueRequest": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/VenueCommand"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expectedRevision",
+        "command"
+      ]
+    },
+    "VenueSettings": {
+      "description": "A whole venue EQ: seven bands and output trim.",
+      "type": "object",
+      "properties": {
+        "bands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VenueBandSettings"
+          },
+          "maxItems": 7,
+          "minItems": 7
+        },
+        "trimDb": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "bands",
+        "trimDb"
+      ]
+    },
+    "VenueState": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "string"
+        },
+        "bypass": {
+          "type": "boolean"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "notice": {
+          "description": "Shown once, e.g. after an unsaved edit timed out.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VenuePreview"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VenueProfile"
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "destination",
+        "active",
+        "bypass",
+        "profiles"
       ]
     },
     "VoiceCapture": {

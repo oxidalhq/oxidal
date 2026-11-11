@@ -429,10 +429,15 @@ fn running_rate(shared: &Shared) -> Option<u32> {
 
 /// Sends a backing command to whichever audio owner is running.
 async fn send(shared: &Shared, command: BackingCommand) -> Result<(), Refusal> {
+    send_utility(shared, HostUtility::Backing { command }).await
+}
+
+/// Sends a host utility to whichever audio owner is running (native, graph
+/// or mixed); refused when no audio runs.
+pub(crate) async fn send_utility(shared: &Shared, utility: HostUtility) -> Result<(), Refusal> {
     use oxidal_audio::lifecycle::{AudioAction, AudioCommand, AudioPhase};
     use oxidal_engine::protocol::{RigAudioAction, RigAudioCommand};
     use oxidal_lv2::protocol::{GraphAudioAction, GraphAudioCommand};
-    let utility = HostUtility::Backing { command };
     let unavailable = || {
         (
             StatusCode::CONFLICT,

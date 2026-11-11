@@ -61,6 +61,7 @@ fn stream() -> oxidal_audio::StreamConfig {
         output,
         input_map: [0, 1],
         output_map: [0, 1],
+        venue: None,
     }
 }
 fn change(s: &mut Session, node: &str, parameter: &str, value: f64) -> Result<()> {

@@ -37,6 +37,7 @@ fn stream() -> oxidal_audio::StreamConfig {
         output,
         input_map: [0, 1],
         output_map: [0, 1],
+        venue: None,
     }
 }
 fn send<T: serde::Serialize>(child: &mut ChildGuard, value: &T) -> Result<()> {
