@@ -7,8 +7,10 @@ pub mod midi;
 #[allow(unsafe_code)]
 pub mod realtime;
 pub mod reference;
+pub mod session_media;
 pub mod structure;
 pub mod tools;
+pub mod venue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

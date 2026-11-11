@@ -226,6 +226,11 @@ pub struct HostSignal {
     monitor_gain: Glide,
     gate: Gate,
     reference: crate::reference::Reference,
+    source: crate::session_media::InputSource,
+    source_underruns: u64,
+    raw_tap: Option<crate::session_media::Producer>,
+    raw_dropped: u64,
+    venue: crate::venue::VenueEq,
 }
 /// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
 /// 50 ms, then fades over about 80 ms. Closes 6 dB below the threshold so
@@ -351,7 +356,41 @@ impl HostSignal {
             monitor_gain: Glide::new(rate, 1.0),
             gate: Gate::new(rate, levels.gate_db),
             reference: crate::reference::Reference::new(rate),
+            source: crate::session_media::InputSource::Live,
+            source_underruns: 0,
+            raw_tap: None,
+            raw_dropped: 0,
+            venue: crate::venue::VenueEq::new(rate),
         }
+    }
+    /// Selects what feeds the rig. Returns the previous source so its ring is
+    /// released by the caller, off the audio thread.
+    pub fn set_input_source(
+        &mut self,
+        source: crate::session_media::InputSource,
+    ) -> crate::session_media::InputSource {
+        std::mem::replace(&mut self.source, source)
+    }
+    /// Starts or stops copying the raw interface input (R0: the left mapped
+    /// channel, before the input source, trim and gate) into a ring. Returns
+    /// the previous tap for the caller to release off the audio thread.
+    pub fn set_raw_tap(
+        &mut self,
+        tap: Option<crate::session_media::Producer>,
+    ) -> Option<crate::session_media::Producer> {
+        std::mem::replace(&mut self.raw_tap, tap)
+    }
+    pub fn set_venue_eq(&mut self, bands: &[crate::venue::VenueBand], bypass: bool) {
+        self.venue.set(bands);
+        self.venue.set_bypass(bypass);
+    }
+    /// Blocks in which the injected source ran dry and silence was played.
+    pub fn source_underruns(&self) -> u64 {
+        self.source_underruns
+    }
+    /// Raw samples the tap could not keep because its writer fell behind.
+    pub fn raw_dropped(&self) -> u64 {
+        self.raw_dropped
     }
     /// Start a newly opened playback stream at silence and glide to its saved
     /// level. ALSA may begin after only a few queued periods, so the envelope
@@ -407,9 +446,33 @@ impl HostSignal {
         }
     }
     pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
+        // R0 is captured first, exactly as the interface delivered it.
+        if let Some(tap) = &mut self.raw_tap {
+            let kept = tap.push(left);
+            self.raw_dropped += (left.len() - kept) as u64;
+        }
         // The riff stands in for a guitar at the reference level: no trim or gate.
         if self.reference.active() {
             self.reference.input(left, right);
+            return;
+        }
+        if let crate::session_media::InputSource::Reamp {
+            frames,
+            trim_and_gate,
+        } = &mut self.source
+        {
+            // A DI is the rig's input, not the live guitar, so Hear yourself
+            // does not silence it. Mono DI feeds both sides, like the Jogg map.
+            let got = frames.pop(left);
+            if got < left.len() {
+                left[got..].fill(0.0);
+                self.source_underruns += 1;
+            }
+            right.copy_from_slice(left);
+            if *trim_and_gate {
+                self.input_gain.apply(left, right);
+                self.gate.apply(left, right);
+            }
             return;
         }
         if !self.hear {
@@ -430,6 +493,9 @@ impl HostSignal {
         }
         self.test_tone(left, right);
         self.output_gain.apply(left, right);
+        // Venue correction sits after the rig (and, later, the session mix)
+        // and before mono fold, so a mono PA hears the corrected sum.
+        self.venue.apply(left, right);
         if self.levels.mono {
             for (l, r) in left.iter_mut().zip(right.iter_mut()) {
                 let sum = (*l + *r) * 0.5;
@@ -758,6 +824,130 @@ mod host_tests {
         signal.input(&mut l, &mut r);
         signal.output(&mut l, &mut r);
         assert!((l[63] - 0.25).abs() < 1e-6, "the guitar is back");
+    }
+    #[test]
+    fn a_reamp_source_replaces_the_guitar_after_the_raw_tap() {
+        use crate::session_media::{InputSource, ring};
+        let levels = HostLevels {
+            input_trim_db: -6.0,
+            ..HostLevels::default()
+        };
+        let trim = levels.input_gain();
+        let mut signal = HostSignal::new(48000, false, levels);
+        let (tap_tx, mut tap_rx) = ring(256);
+        assert!(signal.set_raw_tap(Some(tap_tx)).is_none());
+        let (mut di_tx, di_rx) = ring(256);
+        let di: Vec<f32> = (0..96).map(|i| (i as f32 - 48.0) / 64.0).collect();
+        assert_eq!(di_tx.push(&di), 96);
+        let previous = signal.set_input_source(InputSource::Reamp {
+            frames: di_rx,
+            trim_and_gate: true,
+        });
+        assert!(matches!(previous, InputSource::Live));
+        // The live guitar (0.9) is tapped raw but never reaches the rig, and
+        // Hear yourself being off does not silence the DI.
+        let (mut l, mut r) = ([0.9; 64], [0.1; 64]);
+        signal.input(&mut l, &mut r);
+        for (i, (a, b)) in l.iter().zip(&r).enumerate() {
+            assert_eq!(*a, di[i] * trim);
+            assert_eq!(a, b, "mono DI feeds both sides");
+        }
+        let mut raw = [0.0; 64];
+        assert_eq!(tap_rx.pop(&mut raw), 64);
+        assert_eq!(raw, [0.9; 64], "R0 is the interface input, untouched");
+        // The DI runs dry after 32 more frames: the rest is silence, counted once.
+        let (mut l, mut r) = ([0.9; 64], [0.9; 64]);
+        signal.input(&mut l, &mut r);
+        assert_eq!(l[31], di[95] * trim);
+        assert!(l[32..].iter().chain(&r[32..]).all(|v| *v == 0.0));
+        assert_eq!(signal.source_underruns(), 1);
+        // Without trim and gate the DI reaches the rig exactly as recorded.
+        let (mut di_tx, di_rx) = ring(64);
+        di_tx.push(&[0.5; 64]);
+        signal.set_input_source(InputSource::Reamp {
+            frames: di_rx,
+            trim_and_gate: false,
+        });
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        signal.input(&mut l, &mut r);
+        assert_eq!(l, [0.5; 64]);
+        // Back to Live: Hear yourself applies again, and the tap stops on request.
+        assert!(matches!(
+            signal.set_input_source(InputSource::Live),
+            InputSource::Reamp { .. }
+        ));
+        let (mut l, mut r) = ([0.9; 64], [0.9; 64]);
+        signal.input(&mut l, &mut r);
+        assert_eq!(l, [0.0; 64]);
+        // Four 64-frame blocks tapped into 256 samples, one block read back.
+        let tap_tx = signal.set_raw_tap(None).unwrap();
+        assert_eq!(tap_tx.free(), 64);
+        assert_eq!(signal.raw_dropped(), 0);
+    }
+    #[test]
+    fn a_full_raw_tap_drops_and_counts_instead_of_blocking() {
+        let mut signal = HostSignal::new(48000, true, HostLevels::default());
+        let (tap_tx, _tap_rx) = crate::session_media::ring(100);
+        signal.set_raw_tap(Some(tap_tx));
+        let (mut l, mut r) = ([0.25; 64], [0.25; 64]);
+        signal.input(&mut l, &mut r);
+        signal.input(&mut l, &mut r);
+        assert_eq!(signal.raw_dropped(), 28);
+        assert_eq!(l, [0.25; 64], "the guitar still plays");
+    }
+    #[test]
+    fn venue_eq_corrects_the_output_only_and_before_mono_fold() {
+        use crate::venue::{VenueBand, VenueKind};
+        let rate = 48000;
+        let mut signal = HostSignal::new(
+            rate,
+            true,
+            HostLevels {
+                mono: true,
+                ..HostLevels::default()
+            },
+        );
+        let cut = VenueBand {
+            kind: VenueKind::Bell,
+            freq_hz: 1000.0,
+            gain_db: -6.0,
+            q: 1.0,
+        };
+        signal.set_venue_eq(&[cut], false);
+        let tone = |i: usize| (std::f32::consts::TAU * 1000.0 * i as f32 / rate as f32).sin() * 0.5;
+        // The input path never sees venue correction (FR-15).
+        let (mut l, mut r) = ([0.0f32; 480], [0.0f32; 480]);
+        for (i, s) in l.iter_mut().enumerate() {
+            *s = tone(i);
+        }
+        let source = l;
+        signal.input(&mut l, &mut r.clone());
+        assert_eq!(l, source);
+        // The output is about 6 dB down at 1 kHz once settled; left-only input
+        // proves the fold happens after the correction (both sides equal).
+        let mut peak = 0.0f32;
+        for block in 0..100 {
+            for (i, (a, b)) in l.iter_mut().zip(r.iter_mut()).enumerate() {
+                *a = tone(block * 480 + i);
+                *b = 0.0;
+            }
+            signal.output(&mut l, &mut r);
+            assert_eq!(l, r);
+            if block > 50 {
+                peak = l.iter().fold(peak, |m, v| m.max(v.abs()));
+            }
+        }
+        let db = 20.0 * (peak / 0.25).log10();
+        assert!((db + 6.0).abs() < 0.2, "{db}");
+        // Bypass restores the uncorrected (mono-folded) signal exactly.
+        signal.set_venue_eq(&[cut], true);
+        for (i, (a, b)) in l.iter_mut().zip(r.iter_mut()).enumerate() {
+            *a = tone(i);
+            *b = 0.0;
+        }
+        let expected: Vec<f32> = l.iter().map(|v| v * 0.5).collect();
+        signal.output(&mut l, &mut r);
+        assert_eq!(l.to_vec(), expected);
     }
     #[test]
     fn mono_sums_both_sides_and_cancels_opposite_polarity() {

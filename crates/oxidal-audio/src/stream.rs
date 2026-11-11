@@ -345,6 +345,27 @@ impl Duplex {
         }
         self.host.command(command);
     }
+    /// See [`crate::tools::HostSignal::set_input_source`].
+    pub fn set_input_source(
+        &mut self,
+        source: crate::session_media::InputSource,
+    ) -> crate::session_media::InputSource {
+        self.host.set_input_source(source)
+    }
+    /// See [`crate::tools::HostSignal::set_raw_tap`].
+    pub fn set_raw_tap(
+        &mut self,
+        tap: Option<crate::session_media::Producer>,
+    ) -> Option<crate::session_media::Producer> {
+        self.host.set_raw_tap(tap)
+    }
+    pub fn set_venue_eq(&mut self, bands: &[crate::venue::VenueBand], bypass: bool) {
+        self.host.set_venue_eq(bands, bypass);
+    }
+    /// Injected-source underrun blocks and raw-tap dropped samples.
+    pub fn media_faults(&self) -> (u64, u64) {
+        (self.host.source_underruns(), self.host.raw_dropped())
+    }
     fn write_pending(&mut self) -> Result<Step, String> {
         let stride =
             self.config.output.channels as usize * samples::width(self.config.output.format);
