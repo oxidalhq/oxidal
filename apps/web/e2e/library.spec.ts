@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { openSounds } from './display';
 
@@ -93,6 +93,26 @@ test('Settings sections have links and Effects shows which presets need a pack',
   ).toBeVisible();
 });
 
+type RigEntry = {
+  name: string;
+  origin: string;
+  native_instances: number;
+  lv2_instances: number;
+};
+/** Every saved rig: the daemon lists them a page at a time. */
+async function allRigs(request: APIRequestContext) {
+  const rigs: RigEntry[] = [];
+  let after: string | null = null;
+  do {
+    const page: { presets: RigEntry[]; next?: string | null } = await (
+      await request.get(`/api/v1/presets/rigs${after ? `?after=${after}` : ''}`)
+    ).json();
+    rigs.push(...page.presets);
+    after = page.next ?? null;
+  } while (after);
+  return rigs;
+}
+
 test('new preset creates an empty preset of your own without hardware', async ({
   page,
 }, info) => {
@@ -132,15 +152,20 @@ test('new preset creates an empty preset of your own without hardware', async ({
   await expect(editor).toHaveCount(0);
   // Mine is paged: on a device that ran many tests the row can be on a later page.
   const edited = page.getByText(`${name} edited`, { exact: true });
-  const more = page.getByRole('button', { name: 'Load more', exact: true });
-  while ((await edited.count()) === 0 && (await more.count()) > 0) {
-    await more.click();
-    await expect(more).toBeEnabled();
+  // Only an enabled button can be clicked: it is disabled while a page loads
+  // and gone after the last page.
+  const more = page.getByRole('button', {
+    name: 'Load more',
+    exact: true,
+    disabled: false,
+  });
+  await page.getByRole('searchbox', { name: 'Search presets' }).fill(name);
+  while ((await edited.count()) === 0) {
+    await expect(edited.or(more).first()).toBeVisible();
+    if ((await edited.count()) === 0) await more.click();
   }
   await expect(edited).toBeVisible();
-  const afterEdit = (
-    await (await page.request.get('/api/v1/presets/rigs')).json()
-  ).presets as { name: string }[];
+  const afterEdit = await allRigs(page.request);
   expect(afterEdit.some((p) => p.name === `${name} edited`)).toBe(true);
   expect(afterEdit.some((p) => p.name === name)).toBe(false);
   expect(audioWrites).toEqual([]);
@@ -158,18 +183,34 @@ test('new preset creates an empty preset of your own without hardware', async ({
     .click();
   expect(audioWrites).toEqual([]);
   // Creation publishes to Mine without any audio mutation.
-  const listed = await page.request.get('/api/v1/presets/rigs');
-  const presets = (await listed.json()).presets as {
-    name: string;
-    origin: string;
-    native_instances: number;
-    lv2_instances: number;
-  }[];
+  const presets = afterEdit;
   expect(presets.find((p) => p.name === `${name} edited`)).toMatchObject({
     origin: 'mine',
     native_instances: 0,
     lv2_instances: 0,
   });
+  // Remove the preset this test made, so Mine stays short for later journeys.
+  const items = (
+    await (await page.request.get('/api/v1/presets/catalog')).json()
+  ).items as { id: string; name: string; kind: string }[];
+  for (const item of items.filter(
+    (i) => i.kind === 'rig' && [name, `${name} edited`].includes(i.name),
+  )) {
+    const preview = await page.request.get(
+      `/api/v1/presets/removal?kind=rig&id=${item.id}`,
+    );
+    if (!preview.ok()) continue;
+    const { token, blocked } = await preview.json();
+    if (blocked) continue;
+    await page.request.post('/api/v1/presets/removal', {
+      data: {
+        entry_kind: 'rig',
+        id: item.id,
+        expected_preview: token,
+        delete_models: false,
+      },
+    });
+  }
 });
 
 test('the same TONE3000 tone added twice saves as two NAM blocks (7.16)', async ({

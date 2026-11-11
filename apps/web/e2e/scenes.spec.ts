@@ -173,11 +173,15 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
     await page.getByRole('searchbox', { name: 'Search presets' }).fill(name);
     // Mine is paged: on a unit that ran many journeys the row can be later.
     const row = page.getByRole('button', { name: `More for ${name}` });
-    const more = page.getByRole('button', { name: 'Load more', exact: true });
-    await expect(row.or(more).first()).toBeVisible();
-    while ((await row.count()) === 0 && (await more.count()) > 0) {
-      await more.click();
+    // Disabled while a page loads, gone after the last page.
+    const more = page.getByRole('button', {
+      name: 'Load more',
+      exact: true,
+      disabled: false,
+    });
+    while ((await row.count()) === 0) {
       await expect(row.or(more).first()).toBeVisible();
+      if ((await row.count()) === 0) await more.click();
     }
     await row.click();
     await page.getByRole('menuitem', { name: 'Duplicate' }).click();

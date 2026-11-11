@@ -5234,17 +5234,36 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   page,
   request,
 }, info) => {
-  const bytes = Buffer.from(
-    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
-  );
-  const offset = bytes.indexOf(Buffer.from('Fixture'));
-  expect(offset).toBeGreaterThan(0);
-  bytes.write('DelTest', offset, 'utf8');
-  const imported = await request.post('/api/v1/presets', {
-    data: bytes,
-    headers: { 'Content-Type': 'application/octet-stream' },
+  // TONE3000 originals no longer live in the Set list; a preset of your own
+  // shares the same permanent-deletion review.
+  const manifest = {
+    format: 'oxidal.preset',
+    formatVersion: 1,
+    id: randomUUID(),
+    name: `DelTest ${info.project.name}`,
+    tone3000: { instances: [] },
+    oxidal: {
+      graph: {
+        nodes: [
+          { id: 'in', kind: 'input', audioInputs: 0, audioOutputs: 2 },
+          { id: 'out', kind: 'output', audioInputs: 2, audioOutputs: 0 },
+        ],
+        edges: [
+          { from: { node: 'in', port: 0 }, to: { node: 'out', port: 0 } },
+          { from: { node: 'in', port: 1 }, to: { node: 'out', port: 1 } },
+        ],
+      },
+      lv2: [],
+      recall: { tails: 'cut' },
+    },
+    resources: [],
+    extensions: {},
+    requiredExtensions: [],
+  };
+  const imported = await request.post('/api/v1/presets/rigs', {
+    data: { manifest_json: JSON.stringify(manifest), resources: {} },
   });
-  expect(imported.ok()).toBe(true);
+  expect(imported.ok(), await imported.text()).toBe(true);
   const preset = await imported.json();
   const independentName = `keep-delete-test-${info.project.name}.nam`;
   const independent = await request.post(
@@ -5259,7 +5278,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   await page.goto('/#library');
   await page.getByRole('tab', { name: 'Set list', exact: true }).click();
   const row = page.locator(
-    `[data-library-kind="original"][data-library-entry="${preset.sha256}"]`,
+    `[data-library-kind="rig"][data-library-entry="${preset.revision}"]`,
   );
   await row.getByRole('button', { name: /^Preset options:/ }).click();
   await page
@@ -5275,7 +5294,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   await expect(
     dialog.getByRole('button', { name: 'Delete permanently', exact: true }),
   ).toBeEnabled();
-  const before = await request.get(`/api/v1/presets/${preset.sha256}/original`);
+  const before = await request.get(`/api/v1/presets/rigs/${preset.revision}`);
   expect(before.ok()).toBe(true);
   expect(
     await page.evaluate(
@@ -5292,7 +5311,7 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   });
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(
-    (await request.get(`/api/v1/presets/${preset.sha256}/original`)).ok(),
+    (await request.get(`/api/v1/presets/rigs/${preset.revision}`)).ok(),
   ).toBe(true);
   await row.getByRole('button', { name: /^Preset options:/ }).click();
   await page
@@ -5312,6 +5331,14 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
     )
   ).json();
   expect(models.data.some((m: { id: string }) => m.id === asset.id)).toBe(true);
+  // The independent file is this test's own: delete it too.
+  const removal = await (
+    await request.get(`/api/v1/models/local/removal?id=${asset.id}`)
+  ).json();
+  const removed = await request.post('/api/v1/models/local/removal', {
+    data: { id: asset.id, expected_preview: removal.token },
+  });
+  expect(removed.ok(), await removed.text()).toBe(true);
 });
 
 test('device portrait set-list drag and keyboard order agree with picker and Perform', async ({
