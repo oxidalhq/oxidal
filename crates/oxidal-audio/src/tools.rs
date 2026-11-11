@@ -144,6 +144,10 @@ pub enum HostUtility {
     Backing {
         command: crate::backing::BackingCommand,
     },
+    /// Record DI or reamp; see [`crate::capture`].
+    Capture {
+        command: crate::capture::CaptureCommand,
+    },
     /// Venue EQ on the main outputs; `None` removes it. Profile switches and
     /// bypass set `crossfade`; knob edits glide.
     Venue {
@@ -231,6 +235,9 @@ pub struct HostState {
     /// The worker's backing player, when its stream has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backing: Option<crate::backing::BackingStatus>,
+    /// The worker's Record DI or reamp job, when one has run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture: Option<crate::capture::CaptureStatus>,
 }
 #[derive(Debug)]
 pub struct HostSignal {
@@ -255,6 +262,9 @@ pub struct HostSignal {
     return_underruns: u64,
     venue: crate::venue::VenueEq,
     backing: Option<crate::backing::Backing>,
+    capture: Option<crate::capture::Capture>,
+    /// Job-owned mute while a reamp runs with monitoring off.
+    job_gain: Glide,
 }
 /// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
 /// 50 ms, then fades over about 80 ms. Closes 6 dB below the threshold so
@@ -404,6 +414,27 @@ impl HostSignal {
             return_underruns: 0,
             venue: crate::venue::VenueEq::new(rate),
             backing: None,
+            capture: None,
+            job_gain: Glide::new(rate, 1.0),
+        }
+    }
+    /// Gives this stream Record DI and reamp (its helper thread is running).
+    pub fn attach_capture(&mut self, capture: crate::capture::Capture) {
+        self.capture = Some(capture);
+    }
+    /// Applies what the capture engine asks for after a job starts or ends.
+    fn capture_requests(&mut self) {
+        let Some(capture) = &mut self.capture else {
+            return;
+        };
+        let (release_tap, restore_live) = capture.take_requests();
+        if release_tap && let Some(tap) = self.raw_tap.take() {
+            capture.release_tap(tap);
+        }
+        if restore_live {
+            let old = std::mem::replace(&mut self.source, crate::session_media::InputSource::Live);
+            capture.release_source(old);
+            self.job_gain.target = 1.0;
         }
     }
     /// Gives this stream a backing player (its reader thread is already running).
@@ -492,6 +523,11 @@ impl HostSignal {
                 }
             }
             HostUtility::Venue { venue, crossfade } => self.venue.apply(venue, crossfade),
+            HostUtility::Capture { command } => {
+                if let Some(capture) = &mut self.capture {
+                    capture.command(command);
+                }
+            }
             HostUtility::Backing { command } => {
                 if let Some(backing) = &mut self.backing {
                     backing.command(command);
@@ -517,17 +553,44 @@ impl HostSignal {
             levels: self.levels,
             reference: self.reference.reading(),
             backing: self.backing.as_ref().map(crate::backing::Backing::status),
+            capture: self
+                .capture
+                .as_ref()
+                .and_then(crate::capture::Capture::status),
         }
     }
     pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if let Some(capture) = &mut self.capture {
+            let plan = capture.before_input(left);
+            if let Some(tap) = plan.raw_tap
+                && let Some(old) = self.raw_tap.replace(tap)
+            {
+                capture.release_tap(old);
+            }
+            if let Some(source) = plan.source {
+                let old = std::mem::replace(&mut self.source, source);
+                capture.release_source(old);
+            }
+            self.job_gain.target = if plan.muted { 0.0 } else { 1.0 };
+        }
+        self.capture_requests();
         // R0 is captured first, exactly as the interface delivered it.
         if let Some(tap) = &mut self.raw_tap {
             let kept = tap.push(left);
-            self.raw_dropped += (left.len() - kept) as u64;
+            let dropped = (left.len() - kept) as u64;
+            self.raw_dropped += dropped;
+            if let Some(capture) = &mut self.capture {
+                capture.add_lost(dropped);
+            }
         }
         // The riff stands in for a guitar at the reference level: no trim or gate.
         if self.reference.active() {
             self.reference.input(left, right);
+            return;
+        }
+        if matches!(self.source, crate::session_media::InputSource::Silent) {
+            left.fill(0.0);
+            right.fill(0.0);
             return;
         }
         if let crate::session_media::InputSource::Reamp {
@@ -568,6 +631,11 @@ impl HostSignal {
         // [DES-SIGNAL]: rig → tone gain → (W0) → session mix → venue EQ →
         // mono fold → Master → Mute.
         self.tone_gain.apply(left, right);
+        // W0: the rig's own sound, before the backing track and room EQ.
+        if let Some(capture) = &mut self.capture {
+            capture.after_rig(left, right);
+        }
+        self.capture_requests();
         self.test_tone(left, right);
         self.mix_return(left, right);
         if let Some(backing) = &mut self.backing {
@@ -585,6 +653,7 @@ impl HostSignal {
         }
         self.master_gain.apply(left, right);
         self.monitor_gain.apply(left, right);
+        self.job_gain.apply(left, right);
     }
     fn mix_return(&mut self, left: &mut [f32], right: &mut [f32]) {
         let Some(frames) = &mut self.session_return else {

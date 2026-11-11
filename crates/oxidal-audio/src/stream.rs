@@ -90,6 +90,10 @@ impl Duplex {
             config.input.sample_rate,
             crate::backing::media_root(),
         ));
+        host.attach_capture(crate::capture::start(
+            config.input.sample_rate,
+            crate::backing::media_root(),
+        ));
         let mut stream = Self {
             host,
             input: vec![

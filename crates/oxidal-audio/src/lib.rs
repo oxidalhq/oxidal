@@ -1,6 +1,7 @@
 //! Audio-device discovery, exact probes and experimental Linux duplex transport.
 //! @see docs/audio.md
 pub mod backing;
+pub mod capture;
 pub mod eq;
 pub mod lifecycle;
 pub mod meter;

@@ -99,6 +99,8 @@ pub enum InputSource {
         frames: Consumer,
         trim_and_gate: bool,
     },
+    /// Silence into the rig: a reamp's source has ended and the tail rings out.
+    Silent,
 }
 
 #[cfg(test)]
