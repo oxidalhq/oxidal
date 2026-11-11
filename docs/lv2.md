@@ -405,20 +405,58 @@ Source: [Dragonfly Hall implementation](https://github.com/michaelwillis/dragonf
 
 ## Scene changes and stepped controls
 
-A scene is only a mix of already running branches: each scene lists merge
-gains (`SceneGain`: node, port, value) and nothing else. Selecting one ramps
-those gains sample by sample over the preset's fade, retargeting from the
-audible gain if a ramp is already running (`scenes_ramp_exact_samples_…` in
+A scene is a mix of already running branches plus, optionally, values for
+plugin controls. Each scene in `urn:oxidal:scenes:1` lists merge gains
+(`gains`: node, port, value) and may list `controls` (node, symbol, value in
+the plugin's native units). Selecting a scene ramps the gains sample by sample
+over the preset's `fade_ms`, retargeting from the audible gain if a ramp is
+already running (`scenes_ramp_exact_samples_…` in
 `crates/oxidal-engine/tests/latency.rs`). The per-preset and per-scene boost is
-an output gain that glides (`oxidal-audio` levels). No scene changes a plugin
-control, so a scene never steps a delay time, pitch interval, filter frequency
-or effect level: presets that need two delay times or two intervals keep both
-in separate branches and crossfade them.
+an output gain that glides (`oxidal-audio` levels).
 
-Plugin controls do step when they are edited live or moved by MIDI: the new
-value reaches the plugin at the next block, without host smoothing. Plugins
-that smooth internally (Calf's "inertia" filters, for example) hide this;
-plugins without smoothing can zipper or click on large jumps, especially delay
-time. Per-scene control values, with host ramping for continuous controls and
-silent-branch changes for integer, enumeration and toggle controls, are not
-implemented; the current rule is that a preset avoids such a change.
+Scene controls follow these rules:
+
+- **Admission.** Every scene sets the same controls (at most 32), as every
+  scene sets the same merge inputs, so a value never depends on the previous
+  scene. The manifest check requires an LV2 node and a valid symbol; when the
+  rig is prepared the engine also requires a scalar input control port, a
+  value in range (whole for integer ports, an end for toggles) and a plugin
+  without a reported-latency port. Anything else refuses to prepare the rig.
+  Branches (`branches`) never carry controls.
+- **Selection.** Every gain and control target is checked before the first
+  gain moves; a refused scene leaves the mix, the plugins and the selected
+  scene unchanged. Ramp slots are allocated when the rig is prepared, one per
+  scene control; the audio thread only steps them (no allocation or locks).
+- **Continuous controls** ramp once per audio block from the value the plugin
+  has now, over the preset's fade, in normalized space (logarithmic ports on a
+  logarithmic axis). No block moves more than the normalized distance divided
+  by the number of blocks in the fade; the last block writes the target
+  exactly. Plugins see a new value per block, so a delay that interpolates
+  its time within a block (SWH `delay_c`) glides without a jump.
+- **Stepped controls** (integer, toggle or with scale points) switch once. In
+  a branch (every path to the output passes a merge input first) the value
+  changes at the first block where all those merge inputs are silent: at once
+  if the branch is muted now, after its fade-out if the new scene mutes it. A
+  stepped control on the shared output chain, or in a branch both scenes
+  play, switches at the fade midpoint; that can still be audible (a delay
+  division, for example), so presets keep such changes behind branches.
+- **Readback.** The snapshot publishes each target at once, as the gains are,
+  with `scene_transitioning` true until every gain and control ramp ends; the
+  worker then reads the plugins back. A live or MIDI edit of a control stops
+  its scene ramp and wins; the scene then no longer matches and reads as
+  unselected, as after a gain edit.
+
+`crates/oxidal-engine/tests/scene_controls.rs` covers the ramp bound, the
+exact landing, retargeting, live edits, the silent and midpoint switches,
+refused targets, and S-18 on SWH `delay_c`: changing the delay time from 100 to
+150 ms over a 200 ms fade raises the largest sample step of a 220 Hz sine by
+about 1.3× (the read speed change), while the same change as an instant edit
+gives a step about 37× the steady one. Oxidal Swell's swell time is a
+logarithmic continuous port and ramps the same way; a listening check of a
+swell-time scene on the Pi is still pending.
+
+Plugin controls edited live or moved by MIDI still step: the new value reaches
+the plugin at the next block, without host smoothing. Plugins that smooth
+internally (Calf's "inertia" filters, for example) hide this; plugins without
+smoothing can zipper or click on large jumps, especially delay time. Native
+(TONE3000) controls are not scene controls.

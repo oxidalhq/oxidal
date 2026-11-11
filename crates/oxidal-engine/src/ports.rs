@@ -65,6 +65,89 @@ impl Gain {
         self.current
     }
 }
+/// A plugin control that scenes set. Slots are made when the rig is prepared,
+/// one per control the scenes name, so selecting a scene allocates nothing.
+/// Continuous controls step once per block in normalized space (logarithmic
+/// ports on a log axis) and land exactly on the target; stepped controls
+/// (integer, toggle or scale-point enumeration) switch once while silent.
+/// @see docs/lv2.md
+#[derive(Debug)]
+struct ControlRamp {
+    node: usize,
+    port: u32,
+    symbol: String,
+    stepped: bool,
+    integer: bool,
+    toggled: bool,
+    logarithmic: bool,
+    minimum: f32,
+    maximum: f32,
+    /// Normalized value last written to the plugin.
+    position: f32,
+    /// Native value the ramp ends on, written exactly.
+    target: f32,
+    step: f32,
+    /// Blocks left of a continuous ramp.
+    remaining: u32,
+    /// A stepped value waits for its branch to fall silent.
+    pending: bool,
+    /// Frames since a stepped value was requested, and when it gives up waiting.
+    waited: u32,
+    midpoint: u32,
+    /// Merge inputs that every path from this plugin to the output passes
+    /// first; empty when the plugin is on the shared output chain.
+    gates: Vec<(usize, usize)>,
+}
+impl ControlRamp {
+    fn normalized(&self, value: f32) -> f32 {
+        let (lo, hi) = (self.minimum, self.maximum);
+        let n = if self.logarithmic {
+            (value / lo).ln() / (hi / lo).ln()
+        } else {
+            (value - lo) / (hi - lo)
+        };
+        n.clamp(0.0, 1.0)
+    }
+    fn native(&self, normalized: f32) -> f32 {
+        let (lo, hi) = (self.minimum, self.maximum);
+        let value = if self.logarithmic {
+            lo * (hi / lo).powf(normalized)
+        } else {
+            lo + normalized * (hi - lo)
+        };
+        value.clamp(lo, hi)
+    }
+    fn accepts(&self, value: f64) -> bool {
+        let v = value as f32;
+        v.is_finite()
+            && (self.minimum..=self.maximum).contains(&v)
+            && (!self.integer || v.fract() == 0.0)
+            && (!self.toggled || v == self.minimum || v == self.maximum)
+    }
+    fn active(&self) -> bool {
+        self.remaining != 0 || self.pending
+    }
+    /// Starts a continuous ramp from the plugin's value over `blocks` blocks.
+    fn start(&mut self, current: f32, target: f32, blocks: u32) {
+        self.target = target;
+        self.pending = false;
+        self.position = self.normalized(current);
+        self.step = (self.normalized(target) - self.position) / blocks.max(1) as f32;
+        self.remaining = if current == target { 0 } else { blocks.max(1) };
+    }
+    /// The next block's value of a continuous ramp; the last one is exact.
+    fn next(&mut self) -> Option<f32> {
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        if self.remaining == 0 {
+            return Some(self.target);
+        }
+        self.position = (self.position + self.step).clamp(0.0, 1.0);
+        Some(self.native(self.position))
+    }
+}
 #[derive(Debug, Default)]
 pub(crate) struct Delay {
     samples: Vec<f32>,
@@ -121,10 +204,140 @@ pub struct PreparedPorts {
     /// Length of the group of independent native lanes starting at each
     /// position of `order` (0 inside or outside a group).
     waves: Vec<usize>,
+    /// Ramp slots for the plugin controls that scenes set.
+    ramps: Vec<ControlRamp>,
     /// Helpers that render a group's lanes in parallel, with the render thread.
     lanes: Option<crate::render::RenderPool>,
     // Declared after nodes so plugins finish worker cleanup before files disappear.
     assets: crate::lv2_state::Assets,
+}
+/// Admits every plugin control the preset's scenes set, before any audio: the
+/// node is an LV2 plugin without reported latency, the symbol is a scalar
+/// input control, and every scene's value is in range (and whole for integer,
+/// an end for toggle ports). Anything else refuses to prepare the rig.
+fn scene_ramps(
+    bundle: &Bundle,
+    nodes: &[PortNode],
+    buffer_bytes: &mut usize,
+    buffer_budget: usize,
+) -> Result<Vec<ControlRamp>, String> {
+    let Some(scenes) = bundle.manifest().scenes().map_err(|e| e.to_string())? else {
+        return Ok(Vec::new());
+    };
+    let host = bundle
+        .manifest()
+        .oxidal
+        .as_ref()
+        .ok_or("Explicit host graph required")?;
+    let bad = || String::from("Invalid scene control target");
+    let mut ramps: Vec<ControlRamp> = Vec::new();
+    // The manifest requires every scene to set the same controls.
+    for control in &scenes.scenes[0].controls {
+        let index = nodes
+            .iter()
+            .position(|n| n.id == control.node)
+            .ok_or_else(bad)?;
+        let Some(Processor::Lv2(plugin)) = &nodes[index].processor else {
+            return Err(bad());
+        };
+        let info = plugin.info();
+        // A control that could move the plugin's reported delay would break
+        // the prepared alignment mid-ramp, so such plugins are refused.
+        if info.ports.iter().any(|p| p.latency) {
+            return Err("Scene controls need a plugin without reported latency".into());
+        }
+        let port = info
+            .ports
+            .iter()
+            .find(|p| p.symbol == control.symbol && p.input && p.control && !p.atom)
+            .ok_or_else(bad)?;
+        let (Some(minimum), Some(maximum)) = (port.minimum, port.maximum) else {
+            return Err(bad());
+        };
+        if !minimum.is_finite()
+            || !maximum.is_finite()
+            || minimum >= maximum
+            || (port.logarithmic && minimum <= 0.0)
+        {
+            return Err(bad());
+        }
+        let current = plugin.value(port.index)?;
+        let mut gates = Vec::new();
+        let gated = gates_of(index, nodes, host, &mut gates);
+        let ramp = ControlRamp {
+            node: index,
+            port: port.index,
+            symbol: control.symbol.clone(),
+            stepped: port.integer || port.toggled || !port.scale_points.is_empty(),
+            integer: port.integer,
+            toggled: port.toggled,
+            logarithmic: port.logarithmic,
+            minimum,
+            maximum,
+            position: 0.0,
+            target: current,
+            step: 0.0,
+            remaining: 0,
+            pending: false,
+            waited: 0,
+            midpoint: 0,
+            gates: if gated { gates } else { Vec::new() },
+        };
+        if !scenes.scenes.iter().all(|scene| {
+            scene
+                .controls
+                .iter()
+                .find(|c| c.node == control.node && c.symbol == control.symbol)
+                .is_some_and(|c| ramp.accepts(c.value))
+        }) {
+            return Err(bad());
+        }
+        *buffer_bytes = (size_of::<ControlRamp>()
+            + ramp.symbol.len()
+            + ramp.gates.len() * size_of::<(usize, usize)>())
+        .checked_add(*buffer_bytes)
+        .filter(|bytes| *bytes <= buffer_budget)
+        .ok_or("Scene ramp state exceeds host buffer budget")?;
+        ramps.push(ramp);
+    }
+    Ok(ramps)
+}
+/// Collects the merge inputs that each path from `start` to the output enters
+/// first. False when some path reaches the output without one.
+fn gates_of(
+    start: usize,
+    nodes: &[PortNode],
+    host: &oxidal_presets::manifest::Host,
+    gates: &mut Vec<(usize, usize)>,
+) -> bool {
+    let mut stack = vec![start];
+    let mut seen = vec![false; nodes.len()];
+    while let Some(from) = stack.pop() {
+        for edge in host
+            .graph
+            .edges
+            .iter()
+            .filter(|e| e.from.node == nodes[from].id)
+        {
+            let Some(to) = nodes.iter().position(|n| n.id == edge.to.node) else {
+                continue;
+            };
+            let port = usize::from(edge.to.port);
+            if matches!(nodes[to].kind, NodeKind::Merge | NodeKind::Gain)
+                && port < nodes[to].gains.len()
+            {
+                if !gates.contains(&(to, port)) {
+                    gates.push((to, port));
+                }
+            } else if nodes[to].kind == NodeKind::Output {
+                return false;
+            } else if !seen[to] {
+                seen[to] = true;
+                stack.push(to);
+            }
+        }
+    }
+    true
 }
 /// Cores beyond the render thread that lanes may use (the Pi 5 has four).
 const LANE_HELPERS: usize = 3;
@@ -336,6 +549,7 @@ impl PreparedPorts {
                 }
             }
         }
+        let ramps = scene_ramps(bundle, &nodes, &mut buffer_bytes, buffer_budget)?;
         let mut samples = Vec::new();
         samples
             .try_reserve_exact(sample_count)
@@ -381,6 +595,7 @@ impl PreparedPorts {
             nodes,
             order,
             waves,
+            ramps,
             lanes,
             samples,
             frames,
@@ -550,6 +765,116 @@ impl PreparedPorts {
         self.nodes
             .iter()
             .any(|n| n.gains.iter().any(|g| g.remaining != 0))
+            || self.ramps.iter().any(ControlRamp::active)
+    }
+    /// Checks every scene control target before any changes, then starts all
+    /// ramps at the same block. A continuous control ramps over `frames` from
+    /// the value the plugin has now (so a second scene change retargets); a
+    /// stepped one waits until its branch is silent, or switches halfway
+    /// through the fade if it stays audible (on the shared output chain or
+    /// in a branch both scenes play).
+    pub(crate) fn scene_controls(
+        &mut self,
+        values: &[oxidal_presets::manifest::SceneControl],
+        frames: u32,
+    ) -> Result<(), String> {
+        if self.failed || frames == 0 {
+            return Err("Invalid scene transition".into());
+        }
+        let slots = self.scene_control_slots(values)?;
+        let blocks = frames.div_ceil(self.frames as u32).max(1);
+        for (value, &index) in values.iter().zip(&slots) {
+            let ramp = &mut self.ramps[index];
+            let target = value.value as f32;
+            let Some(Processor::Lv2(plugin)) = &self.nodes[ramp.node].processor else {
+                return Err("Missing LV2 processor".into());
+            };
+            let current = plugin.value(ramp.port)?;
+            ramp.target = target;
+            if ramp.stepped {
+                ramp.remaining = 0;
+                ramp.pending = current != target;
+                ramp.waited = 0;
+                ramp.midpoint = frames / 2;
+            } else {
+                ramp.start(current, target, blocks);
+            }
+        }
+        Ok(())
+    }
+    /// Refuses a scene whose controls are not exactly prepared ramp slots with
+    /// admissible values; nothing changes.
+    pub(crate) fn check_scene_controls(
+        &self,
+        values: &[oxidal_presets::manifest::SceneControl],
+    ) -> Result<(), String> {
+        self.scene_control_slots(values).map(|_| ())
+    }
+    fn scene_control_slots(
+        &self,
+        values: &[oxidal_presets::manifest::SceneControl],
+    ) -> Result<[usize; oxidal_presets::manifest::MAX_SCENE_CONTROLS], String> {
+        let mut slots = [usize::MAX; oxidal_presets::manifest::MAX_SCENE_CONTROLS];
+        if self.failed || values.len() > slots.len() {
+            return Err("Invalid scene control target".into());
+        }
+        for (i, value) in values.iter().enumerate() {
+            let slot = self
+                .ramps
+                .iter()
+                .position(|r| self.nodes[r.node].id == value.node && r.symbol == value.symbol);
+            match slot {
+                Some(index)
+                    if self.ramps[index].accepts(value.value) && !slots[..i].contains(&index) =>
+                {
+                    slots[i] = index;
+                }
+                _ => return Err("Invalid scene control target".into()),
+            }
+        }
+        Ok(slots)
+    }
+    /// A live or MIDI edit owns the control from now on: stop its scene ramp.
+    pub(crate) fn cancel_control_ramp(&mut self, node: &str, symbol: &str) {
+        for ramp in &mut self.ramps {
+            if self.nodes[ramp.node].id == node && ramp.symbol == symbol {
+                ramp.remaining = 0;
+                ramp.pending = false;
+            }
+        }
+    }
+    /// Block-start step of every running scene control ramp. Called on the
+    /// audio thread: no allocation, no locks; a plugin refusal fails the graph.
+    fn advance_ramps(&mut self) -> Result<(), String> {
+        for ramp in &mut self.ramps {
+            let value = if let Some(value) = ramp.next() {
+                value
+            } else if ramp.pending {
+                let gain = |&(node, port): &(usize, usize)| &self.nodes[node].gains[port];
+                let silent =
+                    !ramp.gates.is_empty() && ramp.gates.iter().all(|g| gain(g).current == 0.0);
+                // A branch that is closing waits for silence; one that stays
+                // audible (or the shared chain) switches at the fade midpoint.
+                let stays_open =
+                    ramp.gates.is_empty() || ramp.gates.iter().any(|g| gain(g).target != 0.0);
+                let due = stays_open && ramp.waited >= ramp.midpoint;
+                ramp.waited = ramp.waited.saturating_add(self.frames as u32);
+                if !(silent || due) {
+                    continue;
+                }
+                ramp.pending = false;
+                ramp.target
+            } else {
+                continue;
+            };
+            let Some(Processor::Lv2(plugin)) = &mut self.nodes[ramp.node].processor else {
+                return Err("Missing LV2 processor".into());
+            };
+            plugin
+                .set_control(ramp.port, value)
+                .map_err(|_| "Scene control refused by plugin")?;
+        }
+        Ok(())
     }
     pub fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) -> Result<(), String> {
         if self.failed
@@ -588,6 +913,7 @@ impl PreparedPorts {
         // With a separate render thread, the owner verifies latency instead
         // (`verify_latency`): native latency queries are owner-thread calls.
         let check_latency = !crate::render::render_thread_enabled();
+        self.advance_ramps()?;
         let mut position = 0;
         while position < self.order.len() {
             let wave = self.waves[position];
@@ -752,5 +1078,87 @@ impl PreparedPorts {
             self.check(self.order[k])?;
         }
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::ControlRamp;
+
+    fn ramp(minimum: f32, maximum: f32, logarithmic: bool) -> ControlRamp {
+        ControlRamp {
+            node: 0,
+            port: 0,
+            symbol: "time".into(),
+            stepped: false,
+            integer: false,
+            toggled: false,
+            logarithmic,
+            minimum,
+            maximum,
+            position: 0.0,
+            target: minimum,
+            step: 0.0,
+            remaining: 0,
+            pending: false,
+            waited: 0,
+            midpoint: 0,
+            gates: Vec::new(),
+        }
+    }
+
+    /// Every block moves at most the normalized distance divided by the
+    /// number of blocks (plus float rounding), and the last block is exact.
+    #[test]
+    fn continuous_ramps_are_bounded_per_block_and_land_exactly() {
+        for (log, from, to) in [
+            (false, 0.1, 1.9),
+            (true, 20.0, 4000.0),
+            (true, 3000.0, 25.0),
+        ] {
+            let (lo, hi) = if log { (20.0, 4000.0) } else { (0.0, 2.0) };
+            let mut r = ramp(lo, hi, log);
+            let blocks = 1920u32.div_ceil(64);
+            r.start(from, to, blocks);
+            let bound = (r.normalized(to) - r.normalized(from)).abs() / blocks as f32 + 1e-5;
+            let mut previous = r.normalized(from);
+            let mut values = Vec::new();
+            while let Some(value) = r.next() {
+                let n = r.normalized(value);
+                assert!((n - previous).abs() <= bound, "{from}→{to}: {previous}→{n}");
+                previous = n;
+                values.push(value);
+            }
+            assert_eq!(values.len(), blocks as usize);
+            assert_eq!(values.last(), Some(&to));
+            assert!(!r.active());
+            if log {
+                // Equal ratios per block on a logarithmic port, not equal steps.
+                let ratio = values[1] / values[0];
+                assert!((values[10] / values[9] - ratio).abs() < 1e-3);
+            }
+        }
+        // Retargeting from the value reached keeps the bound.
+        let mut r = ramp(0.0, 2.0, false);
+        r.start(0.0, 2.0, 10);
+        for _ in 0..5 {
+            r.next();
+        }
+        let reached = r.native(r.position);
+        r.start(reached, 0.0, 10);
+        assert!((r.next().unwrap() - (reached - reached / 10.0)).abs() < 1e-5);
+        // An unchanged value starts no ramp.
+        r.start(1.0, 1.0, 10);
+        assert!(!r.active() && r.next().is_none());
+    }
+
+    #[test]
+    fn ramp_values_respect_range_and_steps() {
+        let mut r = ramp(0.0, 4.0, false);
+        assert!(r.accepts(4.0) && r.accepts(0.5));
+        assert!(!r.accepts(4.5) && !r.accepts(f64::NAN) && !r.accepts(-0.1));
+        r.integer = true;
+        assert!(r.accepts(3.0) && !r.accepts(0.5));
+        r.toggled = true;
+        assert!(r.accepts(4.0) && !r.accepts(3.0));
     }
 }

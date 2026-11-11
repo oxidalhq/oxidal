@@ -19,6 +19,8 @@ pub struct Session {
     model_root: Option<std::path::PathBuf>,
     model_node: Option<String>,
     rate: f64,
+    /// Scene control ramps started; read the plugins back once they end.
+    scene_readback: bool,
     authoring_histories: std::collections::BTreeMap<String, oxidal_tone3000::working::Authoring>,
 }
 impl Session {
@@ -109,6 +111,7 @@ impl Session {
                             toggle: port.toggled,
                             logarithmic: port.logarithmic,
                             display: port.display(value),
+                            scale_points: port.scale_points.clone(),
                         });
                     }
                 }
@@ -136,6 +139,7 @@ impl Session {
                         "Off"
                     }
                     .into(),
+                    scale_points: Vec::new(),
                 });
             }
             if let Some(gains) = &node.input_gains {
@@ -152,6 +156,7 @@ impl Session {
                     toggle: false,
                     logarithmic: false,
                     display: format!("{g:.3}"),
+                    scale_points: Vec::new(),
                 }));
             }
         }
@@ -196,6 +201,7 @@ impl Session {
             model_node: None,
             authoring_histories,
             rate,
+            scene_readback: false,
         };
         if serde_json::to_vec(&result.snapshot())
             .map_err(|e| e.to_string())?
@@ -221,6 +227,12 @@ impl Session {
                                 port: usize::from(gain.port),
                             })
                             && c.value == f64::from(gain.value as f32)
+                    })
+                }) && scene.controls.iter().all(|control| {
+                    state.controls.iter().any(|c| {
+                        matches!(&c.target, Target::Lv2 { node, symbol }
+                            if *node == control.node && *symbol == control.symbol)
+                            && c.value == f64::from(control.value as f32)
                     })
                 })
             };
@@ -331,6 +343,7 @@ impl Session {
             self.failed = true;
             return Err(error);
         }
+        self.settle_scene_controls()?;
         self.advance_model()
     }
     pub fn pump(&mut self) -> Result<(), String> {
@@ -353,6 +366,7 @@ impl Session {
             self.failed = true;
             return Err(error);
         }
+        self.settle_scene_controls()?;
         self.advance_model()
     }
     pub fn apply(&mut self, command: ControlCommand) -> Result<(), String> {
@@ -417,10 +431,15 @@ impl Session {
             .find(|s| s.id == command.scene)
             .ok_or("Unknown rig scene")?;
         let gains = scene.gains.clone();
+        let controls = scene.controls.clone();
         let fade_ms = scenes.fade_ms;
         // A blend keeps the outgoing scene sounding while it fades out.
         let release_ms = command.release_ms.unwrap_or(fade_ms).max(fade_ms);
+        // Every control target is checked before the first gain moves, so a
+        // refused scene leaves the mix and every plugin as they were.
+        self.graph.check_scene_controls(&controls)?;
         self.apply_mix(&gains, fade_ms, release_ms)?;
+        self.apply_scene_controls(&controls, fade_ms)?;
         self.state.scene = Some(command.scene);
         Ok(())
     }
@@ -546,6 +565,84 @@ impl Session {
         self.state.revision = revision;
         Ok(())
     }
+    /// Starts the host ramps of a scene's plugin controls (over the preset's
+    /// fade) and publishes each target at once, as the scene's gains are.
+    fn apply_scene_controls(
+        &mut self,
+        controls: &[oxidal_presets::manifest::SceneControl],
+        fade_ms: u32,
+    ) -> Result<(), String> {
+        if controls.is_empty() {
+            return Ok(());
+        }
+        let frames = (self.rate * f64::from(fade_ms) / 1000.0).round().max(1.0) as u32;
+        if let Err(error) = self.graph.scene_controls(controls, frames) {
+            // Targets were admitted; a refusal now means the DSP state is unknown.
+            self.failed = true;
+            return Err(error);
+        }
+        for control in controls {
+            let value = control.value as f32;
+            let display = match self.graph.processor_mut(&control.node) {
+                Some(Processor::Lv2(p)) => p
+                    .info()
+                    .ports
+                    .iter()
+                    .find(|p| p.symbol == control.symbol)
+                    .map(|p| p.display(value)),
+                _ => None,
+            }
+            .ok_or("Missing LV2 port")?;
+            let c = self
+                .state
+                .controls
+                .iter_mut()
+                .find(|c| {
+                    matches!(&c.target, Target::Lv2 { node, symbol }
+                        if *node == control.node && *symbol == control.symbol)
+                })
+                .ok_or("Missing scene control")?;
+            c.value = f64::from(value);
+            c.display = display;
+        }
+        self.scene_readback = true;
+        Ok(())
+    }
+    /// After the ramps end, publish what the plugins actually hold.
+    fn settle_scene_controls(&mut self) -> Result<(), String> {
+        if !self.scene_readback || self.graph.scene_transitioning() {
+            return Ok(());
+        }
+        self.scene_readback = false;
+        let Some(scenes) = self.state.scenes.as_ref() else {
+            return Ok(());
+        };
+        let targets: Vec<_> = scenes.scenes[0]
+            .controls
+            .iter()
+            .map(|c| (c.node.clone(), c.symbol.clone()))
+            .collect();
+        for (node, symbol) in targets {
+            let Some(Processor::Lv2(p)) = self.graph.processor_mut(&node) else {
+                return Err("Missing LV2 processor".into());
+            };
+            let port = p
+                .info()
+                .ports
+                .iter()
+                .find(|p| p.symbol == symbol)
+                .ok_or("Missing LV2 port")?;
+            let actual = p.value(port.index)?;
+            let display = port.display(actual);
+            if let Some(c) = self.state.controls.iter_mut().find(|c| {
+                matches!(&c.target, Target::Lv2 { node: n, symbol: s } if *n == node && *s == symbol)
+            }) {
+                c.value = f64::from(actual);
+                c.display = display;
+            }
+        }
+        Ok(())
+    }
     pub fn apply_eq(&mut self, command: EqCommand) -> Result<(), String> {
         if self.measurement_pending() || self.gesture_pending() {
             return Err("Cancel measurement before editing EQ".into());
@@ -641,6 +738,8 @@ impl Session {
         match &c.target {
             Target::Native { .. } => unreachable!("handled above"),
             Target::Lv2 { node, symbol } => {
+                // The edit wins over a scene ramp still running on this control.
+                self.graph.cancel_control_ramp(node, symbol);
                 let Some(Processor::Lv2(p)) = self.graph.processor_mut(node) else {
                     return Err("Missing LV2 processor".into());
                 };
@@ -828,6 +927,78 @@ fn native_controls(
             toggle: c.toggle,
             logarithmic: false,
             display: c.display,
+            scale_points: Vec::new(),
         })
         .collect())
+}
+#[cfg(all(test, feature = "qualification"))]
+mod scene_control_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_refused_scene_control_leaves_the_mix_plugins_and_scene_unchanged() {
+        let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+        let scene = |id: &str, a: f64, b: f64, gain: f64| {
+            json!({"id":id,"name":id,
+                "gains":[{"node":"merge","port":0,"value":a},{"node":"merge","port":1,"value":b}],
+                "controls":[{"node":"fx","symbol":"gain","value":gain}]})
+        };
+        let value = json!({"format":"oxidal.preset","formatVersion":1,
+            "id":"0b8f8d4e-9a39-4a43-a0f2-3c8f3b6d9a12","name":"Refused scene",
+            "tone3000":{"instances":[]},"resources":[],
+            "requiredExtensions":["urn:oxidal:scenes:1"],
+            "extensions":{"urn:oxidal:scenes:1":{"fade_ms":10,
+                "scenes":[scene("a",1.0,0.0,0.5),scene("b",0.0,1.0,1.5)]}},
+            "oxidal":{"graph":{"nodes":[
+                {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+                {"id":"split","kind":"split","audioInputs":1,"audioOutputs":2},
+                {"id":"merge","kind":"merge","audioInputs":2,"audioOutputs":1,"inputGains":[1.0,0.0]},
+                {"id":"fx","kind":"lv2","audioInputs":2,"audioOutputs":2,"instance":"fx","bypassed":false},
+                {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+                "edges":[edge("in",0,"split",0),edge("split",0,"merge",0),edge("split",1,"merge",1),
+                    edge("merge",0,"fx",0),edge("in",1,"fx",1),edge("fx",0,"out",0),edge("fx",1,"out",1)]},
+            "lv2":[{"id":"fx","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.5,"feedback":0},
+                "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}});
+        let bundle =
+            Bundle::from_parts(serde_json::to_vec(&value).unwrap(), Default::default()).unwrap();
+        let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
+        let mut session = Session::new(bundle, &world, 48000.0, 64, 1 << 20).unwrap();
+        let before = session.snapshot();
+        assert_eq!(before.scene.as_deref(), Some("a"));
+        // A target the prepared rig never admitted (out of range, unknown
+        // port, or a second copy) is refused before the first gain moves.
+        for change in [
+            json!([{"node":"fx","symbol":"gain","value":9.0}]),
+            json!([{"node":"fx","symbol":"feedback","value":0.1}]),
+            json!([{"node":"fx","symbol":"gain","value":1.0},{"node":"fx","symbol":"gain","value":1.0}]),
+        ] {
+            session.state.scenes.as_mut().unwrap().scenes[1].controls =
+                serde_json::from_value(change).unwrap();
+            assert!(
+                session
+                    .select_scene(SceneCommand {
+                        session: before.session.clone(),
+                        expected_revision: before.revision,
+                        scene: "b".into(),
+                        release_ms: None,
+                    })
+                    .is_err()
+            );
+            let after = session.snapshot();
+            assert!(session.healthy());
+            assert_eq!(after.revision, before.revision);
+            assert_eq!(after.scene.as_deref(), Some("a"));
+            assert!(!after.scene_transitioning);
+            assert_eq!(
+                serde_json::to_value(&after.controls).unwrap(),
+                serde_json::to_value(&before.controls).unwrap()
+            );
+            let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+            session
+                .process(&[&[1.0; 64], &[0.0; 64]], &mut [&mut l, &mut r])
+                .unwrap();
+            assert!(l.iter().all(|v| *v == 0.5), "plugin and mix untouched");
+        }
+    }
 }

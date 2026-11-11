@@ -30,6 +30,10 @@ input and confirm the amp-head stage before adding effects between the two.
 - Branches remain ready and can use CPU even when muted. Check processing health
   with the full rig running.
 - Use MIDI program changes or CC mappings for supported scene and branch controls.
+- A scene can also set effect controls, such as a swell or delay time. Smooth
+  controls glide over the preset's scene fade; stepped ones (modes, switches,
+  note divisions) change while their branch is silent. See
+  [scene changes and stepped controls](lv2.md#scene-changes-and-stepped-controls).
 
 ## Whole-native authoring and portable instance settings
 

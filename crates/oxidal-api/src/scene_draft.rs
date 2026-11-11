@@ -4,6 +4,7 @@
 //! clients ignore it. Nothing here is written to disk or reaches the audio
 //! engine; Save in Rig still publishes the preset.
 //! @see docs/presets/format.md
+//! @see docs/lv2.md
 use crate::{Shared, failure};
 use axum::{
     Json,
@@ -11,6 +12,7 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
+use oxidal_presets::manifest::{MAX_SCENE_CONTROLS, SceneControl};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc, sync::Mutex};
@@ -35,6 +37,9 @@ pub struct DraftScene {
     pub id: String,
     pub name: String,
     pub gains: Vec<SceneGain>,
+    /// Plugin control values the new scene sets (see the preset's scenes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub controls: Vec<SceneControl>,
 }
 
 /// Scene levels changed with Update scene, by scene id, plus new scenes.
@@ -45,6 +50,9 @@ pub struct SceneDraft {
     pub gains: BTreeMap<String, Vec<SceneGain>>,
     #[serde(default)]
     pub added: Vec<DraftScene>,
+    /// Plugin control values changed with Update scene, by scene id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub controls: BTreeMap<String, Vec<SceneControl>>,
 }
 
 /// The shared draft; `revision` moves on every change so clients notice.
@@ -74,10 +82,21 @@ fn gains(list: &[SceneGain]) -> bool {
             .iter()
             .all(|g| text(&g.node) && g.value.is_finite() && (-4.0..=4.0).contains(&g.value))
 }
+fn controls(list: &[SceneControl]) -> bool {
+    list.len() <= MAX_SCENE_CONTROLS
+        && list
+            .iter()
+            .all(|c| text(&c.node) && text(&c.symbol) && c.value.is_finite())
+}
 fn valid(draft: &SceneDraft) -> bool {
     text(&draft.session)
         && draft.gains.len() <= MAX_SCENES
         && draft.added.len() <= MAX_SCENES
+        && draft.controls.len() <= MAX_SCENES
+        && draft
+            .controls
+            .iter()
+            .all(|(scene, list)| text(scene) && controls(list))
         && draft
             .gains
             .iter()
@@ -85,7 +104,7 @@ fn valid(draft: &SceneDraft) -> bool {
         && draft
             .added
             .iter()
-            .all(|s| text(&s.id) && text(&s.name) && gains(&s.gains))
+            .all(|s| text(&s.id) && text(&s.name) && gains(&s.gains) && controls(&s.controls))
 }
 
 impl Store {
@@ -143,6 +162,7 @@ mod tests {
                 }],
             )]),
             added: vec![],
+            controls: BTreeMap::new(),
         }
     }
 
@@ -160,5 +180,32 @@ mod tests {
         assert!(valid(&draft(0.5)));
         assert!(!valid(&draft(9.0)));
         assert!(!valid(&draft(f64::NAN)));
+    }
+
+    #[test]
+    fn carries_bounded_scene_control_values() {
+        let control = |value: f64| SceneControl {
+            node: "fx".into(),
+            symbol: "time".into(),
+            value,
+        };
+        let mut with = draft(1.0);
+        with.controls.insert("a".into(), vec![control(600.0)]);
+        assert!(valid(&with));
+        let json = serde_json::to_value(&with).unwrap();
+        assert_eq!(json["controls"]["a"][0]["symbol"], "time");
+        // Drafts without controls keep their old shape.
+        assert!(
+            serde_json::to_value(draft(1.0))
+                .unwrap()
+                .get("controls")
+                .is_none()
+        );
+        with.controls
+            .insert("a".into(), vec![control(f64::INFINITY)]);
+        assert!(!valid(&with));
+        with.controls
+            .insert("a".into(), vec![control(1.0); MAX_SCENE_CONTROLS + 1]);
+        assert!(!valid(&with));
     }
 }

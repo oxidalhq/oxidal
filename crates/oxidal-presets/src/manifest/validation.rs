@@ -17,7 +17,7 @@ pub(super) fn id(s: &str) -> bool {
         && s.bytes()
             .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
-fn symbol(s: &str) -> bool {
+pub(super) fn symbol(s: &str) -> bool {
     !s.is_empty()
         && (s.as_bytes()[0].is_ascii_alphabetic() || s.starts_with('_'))
         && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')

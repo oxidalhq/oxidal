@@ -3482,6 +3482,13 @@
           "type": "number",
           "format": "double"
         },
+        "scale_points": {
+          "description": "Named values of an LV2 port (`lv2:scalePoint`), sorted by value, so an\nedit dialog can offer \"Ping-pong\" rather than \"2\"; empty when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScalePoint"
+          }
+        },
         "target": {
           "$ref": "#/$defs/Target"
         },
@@ -3780,6 +3787,13 @@
       "description": "A scene drafted with Save as new scene.",
       "type": "object",
       "properties": {
+        "controls": {
+          "description": "Plugin control values the new scene sets (see the preset's scenes).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneControl"
+          }
+        },
         "gains": {
           "type": "array",
           "items": {
@@ -10488,6 +10502,13 @@
     "Scene": {
       "type": "object",
       "properties": {
+        "controls": {
+          "description": "Plugin control values this scene sets (none for branches). Continuous\ncontrols ramp over `fade_ms`; stepped ones switch while silent.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneControl"
+          }
+        },
         "gains": {
           "type": "array",
           "items": {
@@ -10539,6 +10560,28 @@
         "scene"
       ]
     },
+    "SceneControl": {
+      "description": "One LV2 input control value of a scene, in the plugin's native units.\nThe engine checks the port, range and step when it prepares the rig.",
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "symbol",
+        "value"
+      ]
+    },
     "SceneDraft": {
       "description": "Scene levels changed with Update scene, by scene id, plus new scenes.",
       "type": "object",
@@ -10548,6 +10591,16 @@
           "default": [],
           "items": {
             "$ref": "#/$defs/DraftScene"
+          }
+        },
+        "controls": {
+          "description": "Plugin control values changed with Update scene, by scene id.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SceneControl"
+            }
           }
         },
         "gains": {

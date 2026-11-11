@@ -341,3 +341,104 @@ fn native_instance_settings_require_explicit_support_and_complete_valid_controls
         value["extensions"][NATIVE_SETTINGS_EXTENSION]["instances"][&id].clone();
     assert!(Manifest::parse(&serde_json::to_vec(&value).unwrap()).is_err());
 }
+
+/// Two branches into a merge, then a shared LV2 delay; both scenes set its time.
+fn scene_controls_manifest() -> Value {
+    let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
+    let gains = |a: f64, b: f64| json!([{"node":"merge","port":0,"value":a},{"node":"merge","port":1,"value":b}]);
+    json!({"format":"oxidal.preset","formatVersion":1,
+        "id":"68448a6d-0168-4fc8-b337-c12959165271","name":"Scene controls",
+        "tone3000":{"instances":[]},"resources":[],
+        "requiredExtensions":[SCENES_EXTENSION],
+        "extensions":{SCENES_EXTENSION:{"fade_ms":40,"scenes":[
+            {"id":"clean","name":"Clean","gains":gains(1.0,0.0),
+             "controls":[{"node":"fx","symbol":"delay_time","value":0.25}]},
+            {"id":"lead","name":"Lead","gains":gains(0.0,1.0),
+             "controls":[{"node":"fx","symbol":"delay_time","value":0.5}]}]}},
+        "oxidal":{"graph":{"nodes":[
+            {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
+            {"id":"split","kind":"split","audioInputs":1,"audioOutputs":2},
+            {"id":"merge","kind":"merge","audioInputs":2,"audioOutputs":1,"inputGains":[1.0,0.0]},
+            {"id":"fx","kind":"lv2","audioInputs":1,"audioOutputs":1,"instance":"fx","bypassed":false},
+            {"id":"out","kind":"output","audioInputs":2,"audioOutputs":0}],
+            "edges":[edge("in",0,"split",0),edge("split",0,"merge",0),edge("split",1,"merge",1),
+                     edge("merge",0,"fx",0),edge("fx",0,"out",0),edge("in",1,"out",1)]},
+        "lv2":[{"id":"fx","pluginUri":"urn:test:delay","controls":{"delay_time":0.25},"assets":[],"requiredFeatures":[]}],
+        "recall":{"tails":"cut"}}})
+}
+#[test]
+fn scene_controls_round_trip_and_reject_foreign_partial_or_unbounded_targets() {
+    let value = scene_controls_manifest();
+    let manifest = Manifest::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    let scenes = manifest.scenes().unwrap().unwrap();
+    assert_eq!(
+        scenes.scenes[1].controls,
+        vec![SceneControl {
+            node: "fx".into(),
+            symbol: "delay_time".into(),
+            value: 0.5
+        }]
+    );
+    // Scenes without controls keep their old encoding.
+    let mut plain = value.clone();
+    for scene in plain["extensions"][SCENES_EXTENSION]["scenes"]
+        .as_array_mut()
+        .unwrap()
+    {
+        scene.as_object_mut().unwrap().remove("controls");
+    }
+    let plain = Manifest::parse(&serde_json::to_vec(&plain).unwrap()).unwrap();
+    assert!(
+        !String::from_utf8(plain.encode().unwrap())
+            .unwrap()
+            .contains("controls\":[")
+    );
+    let path = |scene: usize| format!("/extensions/{SCENES_EXTENSION}/scenes/{scene}/controls");
+    let rejected = |change: &dyn Fn(&mut Value)| {
+        let mut value = scene_controls_manifest();
+        change(&mut value);
+        Manifest::parse(&serde_json::to_vec(&value).unwrap()).is_err()
+    };
+    // Not an LV2 node, a bad symbol, a non-finite value, a duplicate target,
+    // a scene missing a control the others set, and too many controls.
+    assert!(rejected(
+        &|v| v.pointer_mut(&path(0)).unwrap()[0]["node"] = json!("merge")
+    ));
+    assert!(rejected(
+        &|v| v.pointer_mut(&path(0)).unwrap()[0]["node"] = json!("gone")
+    ));
+    assert!(rejected(
+        &|v| v.pointer_mut(&path(0)).unwrap()[0]["symbol"] = json!("9 bad")
+    ));
+    assert!(rejected(
+        &|v| v.pointer_mut(&path(0)).unwrap()[0]["value"] = json!(f64::NAN)
+    ));
+    assert!(rejected(&|v| {
+        let first = v.pointer(&path(0)).unwrap()[0].clone();
+        v.pointer_mut(&path(0))
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .push(first);
+    }));
+    assert!(rejected(&|v| *v.pointer_mut(&path(1)).unwrap() = json!([])));
+    assert!(rejected(&|v| {
+        let many: Vec<_> = (0..=MAX_SCENE_CONTROLS)
+            .map(|i| json!({"node":"fx","symbol":format!("p{i}"),"value":0.0}))
+            .collect();
+        *v.pointer_mut(&path(0)).unwrap() = json!(many.clone());
+        *v.pointer_mut(&path(1)).unwrap() = json!(many);
+    }));
+    assert!(rejected(
+        &|v| v["extensions"][SCENES_EXTENSION]["scenes"][0]["controls"][0]["extra"] = json!(1)
+    ));
+    // Branches name merge inputs only.
+    assert!(rejected(&|v| {
+        let mut branch = v["extensions"][SCENES_EXTENSION]["scenes"][0].clone();
+        branch["gains"] = json!([{"node":"merge","port":0,"value":1.0}]);
+        let mut other = v["extensions"][SCENES_EXTENSION]["scenes"][1].clone();
+        other["gains"] = json!([{"node":"merge","port":1,"value":1.0}]);
+        other.as_object_mut().unwrap().remove("controls");
+        v["extensions"][SCENES_EXTENSION]["branches"] = json!([branch, other]);
+    }));
+}

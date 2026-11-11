@@ -1,8 +1,13 @@
-//! Named mixes of already prepared branches, with shared downstream processors.
+//! Named mixes of already prepared branches, with shared downstream processors,
+//! plus optional plugin control values that the host ramps on scene change.
+//! @see docs/lv2.md
 use super::*;
 use std::collections::BTreeSet;
 
 pub const SCENES_EXTENSION: &str = "urn:oxidal:scenes:1";
+/// Most plugin controls one scene may set. Every scene of a preset sets the
+/// same controls, so this also bounds the host's ramp slots.
+pub const MAX_SCENE_CONTROLS: usize = 32;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -18,12 +23,25 @@ pub struct Scene {
     pub id: String,
     pub name: String,
     pub gains: Vec<SceneGain>,
+    /// Plugin control values this scene sets (none for branches). Continuous
+    /// controls ramp over `fade_ms`; stepped ones switch while silent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub controls: Vec<SceneControl>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SceneGain {
     pub node: String,
     pub port: u8,
+    pub value: f64,
+}
+/// One LV2 input control value of a scene, in the plugin's native units.
+/// The engine checks the port, range and step when it prepares the rig.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SceneControl {
+    pub node: String,
+    pub symbol: String,
     pub value: f64,
 }
 impl Manifest {
@@ -50,6 +68,7 @@ impl Manifest {
         }
         let mut ids = BTreeSet::new();
         let mut expected = None;
+        let mut expected_controls = None;
         for scene in &definition.scenes {
             if !validation::id(&scene.id)
                 || !ids.insert(&scene.id)
@@ -102,6 +121,33 @@ impl Manifest {
                 return Err(bad());
             }
             expected = Some(targets);
+            // Every scene sets the same plugin controls, for the same reason:
+            // otherwise a control's value would depend on the previous scene.
+            if scene.controls.len() > MAX_SCENE_CONTROLS {
+                return Err(bad());
+            }
+            let mut controls = BTreeSet::new();
+            for control in &scene.controls {
+                if !validation::symbol(&control.symbol)
+                    || control.symbol.len() > 64
+                    || !control.value.is_finite()
+                    || !host
+                        .graph
+                        .nodes
+                        .iter()
+                        .any(|n| n.id == control.node && n.kind == NodeKind::Lv2)
+                    || !controls.insert((&control.node, &control.symbol))
+                {
+                    return Err(bad());
+                }
+            }
+            if expected_controls
+                .as_ref()
+                .is_some_and(|previous| previous != &controls)
+            {
+                return Err(bad());
+            }
+            expected_controls = Some(controls);
         }
         let mut branches = BTreeSet::new();
         let mut branch_targets = BTreeSet::new();
@@ -112,6 +158,7 @@ impl Manifest {
                 || branch.name.chars().count() > 128
                 || branch.name.chars().any(char::is_control)
                 || branch.gains.is_empty()
+                || !branch.controls.is_empty()
             {
                 return Err(bad());
             }

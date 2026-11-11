@@ -962,6 +962,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
                 controller: 21,
                 mode: ControlMode::Absolute,
             }],
+            extra_inputs: vec![],
         };
         session.snapshot().validate_midi(&settings)?;
         let mut decoder = Decoder::default();
@@ -1002,6 +1003,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
                 controller: 23,
                 mode: ControlMode::Absolute,
             }],
+            extra_inputs: vec![],
         }),
         prepared: vec![],
         revision,
@@ -1015,6 +1017,7 @@ pub fn qualify_scenes(bundle: &Bundle, root: &Path, world: &World) -> Result<()>
     assert!(before.error.is_none());
     assert_eq!(before.control.scene.as_deref(), Some("clean"));
     let missing = oxidal_audio::midi::Settings {
+        extra_inputs: vec![],
         branch_bindings: vec![],
         parameter_bindings: vec![ParameterBinding {
             target: native_target,

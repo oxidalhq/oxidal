@@ -43,6 +43,10 @@ pub struct Control {
     pub toggle: bool,
     pub logarithmic: bool,
     pub display: String,
+    /// Named values of an LV2 port (`lv2:scalePoint`), sorted by value, so an
+    /// edit dialog can offer "Ping-pong" rather than "2"; empty when none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scale_points: Vec<oxidal_lv2::ScalePoint>,
 }
 impl Control {
     pub fn midi_value(
@@ -512,6 +516,7 @@ mod tests {
             toggle: false,
             logarithmic: false,
             display: String::new(),
+            scale_points: Vec::new(),
         };
         assert_eq!(c.midi_value(M::Absolute, 0).unwrap(), Some(0.0));
         assert_eq!(c.midi_value(M::Absolute, 127).unwrap(), Some(1.0));

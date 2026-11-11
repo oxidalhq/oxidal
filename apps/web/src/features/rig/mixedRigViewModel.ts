@@ -244,6 +244,7 @@ export function mixedRigViewModel({
         integer: edit.control.integer,
         toggled: edit.control.toggle,
         logarithmic: edit.control.logarithmic,
+        scale_points: edit.control.scale_points,
       })
     : undefined;
   const describeNode = (n: (typeof nodes)[number]) => {

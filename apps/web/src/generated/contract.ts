@@ -3047,6 +3047,11 @@ export interface Control {
   logarithmic: boolean;
   maximum: number;
   minimum: number;
+  /**
+   * Named values of an LV2 port (`lv2:scalePoint`), sorted by value, so an
+   * edit dialog can offer "Ping-pong" rather than "2"; empty when none.
+   */
+  scale_points?: ScalePoint[];
   target: Target;
   toggle: boolean;
   value: number;
@@ -3095,9 +3100,23 @@ export interface Scenes {
   scenes: Scene[];
 }
 export interface Scene {
+  /**
+   * Plugin control values this scene sets (none for branches). Continuous
+   * controls ramp over `fade_ms`; stepped ones switch while silent.
+   */
+  controls?: SceneControl[];
   gains: SceneGain[];
   id: string;
   name: string;
+}
+/**
+ * One LV2 input control value of a scene, in the plugin's native units.
+ * The engine checks the port, range and step when it prepares the rig.
+ */
+export interface SceneControl {
+  node: string;
+  symbol: string;
+  value: number;
 }
 export interface SceneGain {
   node: string;
@@ -3281,6 +3300,12 @@ export interface SceneDraftState {
  */
 export interface SceneDraft {
   added?: DraftScene[];
+  /**
+   * Plugin control values changed with Update scene, by scene id.
+   */
+  controls?: {
+    [k: string]: SceneControl[];
+  };
   gains: {
     [k: string]: SceneGain2[];
   };
@@ -3290,6 +3315,10 @@ export interface SceneDraft {
  * A scene drafted with Save as new scene.
  */
 export interface DraftScene {
+  /**
+   * Plugin control values the new scene sets (see the preset's scenes).
+   */
+  controls?: SceneControl[];
   gains: SceneGain2[];
   id: string;
   name: string;

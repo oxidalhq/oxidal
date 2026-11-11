@@ -775,7 +775,7 @@ fn scene_definitions_reject_partial_duplicate_or_foreign_targets() {
         ),
         (
             "/extensions/urn:oxidal:scenes:1/scenes/1/gains/1/value",
-            json!(-1),
+            json!(-5),
         ),
     ] {
         let mut changed = value.clone();
@@ -877,6 +877,7 @@ fn decoded_midi_selects_scenes_and_toggles_or_gates_the_actual_branch_mix() {
             controller: 64,
             mode: BranchMode::Toggle,
         }],
+        extra_inputs: vec![],
     };
     settings.validate().unwrap();
     let feed = |session: &mut Session, settings: &Settings, bytes: &[u8]| {
@@ -1024,6 +1025,7 @@ fn decoded_parameter_cc_uses_confirmed_controls_and_rejects_latency_edits() {
             controller: 20,
             mode: ControlMode::Absolute,
         }],
+        extra_inputs: vec![],
     };
     session.snapshot().validate_midi(&settings).unwrap(); // no scenes required
     let feed = |session: &mut Session, settings: &Settings, bytes: &[u8]| -> Result<(), String> {

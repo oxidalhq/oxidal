@@ -2,7 +2,7 @@
 //! plugin, resolve resource files, or change the playing rig.
 //! @see docs/presets/format.md
 mod scenes;
-pub use scenes::{SCENES_EXTENSION, Scene, SceneGain, Scenes};
+pub use scenes::{MAX_SCENE_CONTROLS, SCENES_EXTENSION, Scene, SceneControl, SceneGain, Scenes};
 mod strict;
 #[cfg(test)]
 mod tests;
