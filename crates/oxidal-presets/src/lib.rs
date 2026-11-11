@@ -23,8 +23,8 @@ mod wav_info;
 pub use wav_info::WavInfo;
 mod native;
 pub use midi::{
-    AssignmentKind, DeviceAction, Disabled, MidiMap, MidiMapEntry, MidiMapStore, MidiMapUpdate,
-    MidiTemplate, Navigation, SavedLayout, Trigger,
+    AssignmentKind, BackingTriggers, DeviceAction, Disabled, MidiMap, MidiMapEntry, MidiMapStore,
+    MidiMapUpdate, MidiTemplate, Navigation, SavedLayout, Trigger, backing_level_db,
 };
 pub use model::{LocalAssetPage, ModelAsset, ModelStore};
 mod owned;

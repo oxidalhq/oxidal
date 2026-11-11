@@ -2030,6 +2030,83 @@
         "missing"
       ]
     },
+    "BackingTriggers": {
+      "description": "Device-wide backing-player controls. Nothing is assigned by default.",
+      "type": "object",
+      "properties": {
+        "level": {
+          "description": "A CC whose value (0–127) sets the player level, −60 to +6 dB.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "play_pause": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skip_back": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "skip_forward": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "Binding": {
       "type": "object",
       "properties": {
@@ -7077,6 +7154,10 @@
       "description": "Device-wide actions through the current Mine set-list and playing engine.\nThey sit outside every preset map, so no preset can silently change what\nthey do.",
       "type": "object",
       "properties": {
+        "backing": {
+          "description": "Backing-track player switches and level knob.",
+          "$ref": "#/$defs/BackingTriggers"
+        },
         "mute": {
           "description": "Flips the output mute, like the Mute button.",
           "anyOf": [

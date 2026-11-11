@@ -119,6 +119,7 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                         record(&shared, &result);
                         result.ok()
                     }
+                    backing => backing_action(&shared, backing).await.ok(),
                 };
                 continue;
             }
@@ -518,6 +519,51 @@ async fn recall_target(
     }
     crate::boosts::follow(shared).await;
     Ok(())
+}
+
+/// Footswitches and the level knob drive the same player handler as the UI.
+async fn backing_action(shared: &Shared, action: DeviceAction) -> Result<String, String> {
+    use crate::player::{Origin, PlayerCommand, PlayerRequest};
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let (command, done) = match action {
+        DeviceAction::BackingPlayPause => (PlayerCommand::TogglePlay, "Backing track play/pause"),
+        DeviceAction::BackingStop => (PlayerCommand::Stop, "Backing track stopped"),
+        DeviceAction::BackingNext => (PlayerCommand::Next, "Next backing track"),
+        DeviceAction::BackingPrevious => (PlayerCommand::Previous, "Previous backing track"),
+        DeviceAction::BackingSkipBack => (
+            PlayerCommand::SkipBy { seconds: -10 },
+            "Backing track back 10 s",
+        ),
+        DeviceAction::BackingSkipForward => (
+            PlayerCommand::SkipBy { seconds: 10 },
+            "Backing track forward 10 s",
+        ),
+        DeviceAction::BackingLevel { value } => (
+            PlayerCommand::SetLevel {
+                db: oxidal_presets::backing_level_db(value),
+            },
+            "Backing track level",
+        ),
+        _ => return Err("Not a backing player action".into()),
+    };
+    let request = PlayerRequest {
+        request_id: format!(
+            "midi-{}",
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ),
+        origin: Origin::Midi,
+        expected_cue: None,
+        command,
+    };
+    let result = crate::player::apply(shared, request)
+        .await
+        .map(|_| done.to_owned())
+        .map_err(|(_, reason)| reason);
+    // Level knob moves are frequent; record only refusals for them.
+    if !matches!(action, DeviceAction::BackingLevel { .. }) || result.is_err() {
+        record(shared, &result);
+    }
+    result
 }
 
 #[cfg(test)]

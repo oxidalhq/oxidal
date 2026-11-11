@@ -2181,6 +2181,7 @@ export interface Disabled {
  * they do.
  */
 export interface Navigation {
+  backing?: BackingTriggers;
   /**
    * Flips the output mute, like the Mute button.
    */
@@ -2191,6 +2192,21 @@ export interface Navigation {
    * Opens the global tuner overlay when a browser is connected.
    */
   tuner?: Trigger | null;
+}
+/**
+ * Backing-track player switches and level knob.
+ */
+export interface BackingTriggers {
+  /**
+   * A CC whose value (0–127) sets the player level, −60 to +6 dB.
+   */
+  level?: number | null;
+  next?: Trigger | null;
+  play_pause?: Trigger | null;
+  previous?: Trigger | null;
+  skip_back?: Trigger | null;
+  skip_forward?: Trigger | null;
+  stop?: Trigger | null;
 }
 /**
  * One PC or CC press that runs a device-wide action. A Program Change fires

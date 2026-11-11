@@ -255,6 +255,51 @@ pub struct Navigation {
     /// Opens the global tuner overlay when a browser is connected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tuner: Option<Trigger>,
+    /// Backing-track player switches and level knob.
+    #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
+    pub backing: BackingTriggers,
+}
+
+/// Device-wide backing-player controls. Nothing is assigned by default.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BackingTriggers {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub play_pause: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_back: Option<Trigger>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_forward: Option<Trigger>,
+    /// A CC whose value (0–127) sets the player level, −60 to +6 dB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u8>,
+}
+
+impl BackingTriggers {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+    fn triggers(&self) -> [Option<Trigger>; 6] {
+        [
+            self.play_pause,
+            self.stop,
+            self.next,
+            self.previous,
+            self.skip_back,
+            self.skip_forward,
+        ]
+    }
+}
+
+/// CC value to player level: linear in dB like a fader, 0 is silent (−60 dB).
+pub fn backing_level_db(value: u8) -> f32 {
+    -60.0 + 66.0 * f32::from(value.min(127)) / 127.0
 }
 
 /// A device-wide action a footswitch can run.
@@ -264,6 +309,16 @@ pub enum DeviceAction {
     Next,
     MuteToggle,
     TunerOpen,
+    BackingPlayPause,
+    BackingStop,
+    BackingNext,
+    BackingPrevious,
+    BackingSkipBack,
+    BackingSkipForward,
+    /// The level CC moved to this value.
+    BackingLevel {
+        value: u8,
+    },
 }
 
 impl Navigation {
@@ -272,6 +327,7 @@ impl Navigation {
             && self.next.is_none()
             && self.mute.is_none()
             && self.tuner.is_none()
+            && self.backing.is_empty()
     }
 
     /// Which device action a message runs, if any.
@@ -285,13 +341,39 @@ impl Navigation {
         } else if self.tuner.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::TunerOpen)
         } else {
-            None
+            self.backing_action(message)
+        }
+    }
+
+    fn backing_action(&self, message: Message) -> Option<DeviceAction> {
+        let b = &self.backing;
+        let actions = [
+            (b.play_pause, DeviceAction::BackingPlayPause),
+            (b.stop, DeviceAction::BackingStop),
+            (b.next, DeviceAction::BackingNext),
+            (b.previous, DeviceAction::BackingPrevious),
+            (b.skip_back, DeviceAction::BackingSkipBack),
+            (b.skip_forward, DeviceAction::BackingSkipForward),
+        ];
+        if let Some((_, action)) = actions
+            .iter()
+            .find(|(trigger, _)| trigger.is_some_and(|t| t.matches(message)))
+        {
+            return Some(*action);
+        }
+        match message {
+            // Any value moves the knob, unlike a switch press.
+            Message::Control {
+                controller, value, ..
+            } if b.level == Some(controller) => Some(DeviceAction::BackingLevel { value }),
+            _ => None,
         }
     }
 
     fn triggers(&self) -> impl Iterator<Item = Trigger> {
         [self.previous, self.next, self.mute, self.tuner]
             .into_iter()
+            .chain(self.backing.triggers())
             .flatten()
     }
 
@@ -302,11 +384,20 @@ impl Navigation {
         {
             return Err(Error::Invalid("Invalid MIDI navigation control"));
         }
+        if let Some(level) = self.backing.level
+            && (level > 127
+                || matches!(level, 0 | 32)
+                || all.iter().any(|t| t.controller == Some(level)))
+        {
+            return Err(Error::Invalid(
+                "The backing level CC must be its own controller",
+            ));
+        }
         let taken = |program: Option<u8>, controller: Option<u8>| {
             self.triggers().any(|t| {
                 (program.is_some() && t.program == program)
                     || (controller.is_some() && t.controller == controller)
-            })
+            }) || (controller.is_some() && controller == self.backing.level)
         };
         for mapping in entries.values() {
             if mapping
@@ -942,6 +1033,88 @@ mod tests {
     }
 
     #[test]
+    fn backing_player_switches_and_level_knob_match_and_never_collide() {
+        let cc = |controller| Trigger {
+            program: None,
+            controller: Some(controller),
+        };
+        let pc = |program| Trigger {
+            program: Some(program),
+            controller: None,
+        };
+        let nav = Navigation {
+            next: Some(pc(1)),
+            backing: BackingTriggers {
+                play_pause: Some(cc(20)),
+                stop: Some(cc(21)),
+                next: Some(pc(9)),
+                skip_back: Some(cc(22)),
+                level: Some(7),
+                ..BackingTriggers::default()
+            },
+            ..Navigation::default()
+        };
+        nav.validate(&BTreeMap::new()).unwrap();
+        let control = |controller, value| Message::Control {
+            channel: 0,
+            controller,
+            value,
+        };
+        assert_eq!(
+            nav.action(control(20, 127)),
+            Some(DeviceAction::BackingPlayPause)
+        );
+        assert_eq!(nav.action(control(20, 0)), None, "a release does nothing");
+        assert_eq!(nav.action(control(21, 64)), Some(DeviceAction::BackingStop));
+        assert_eq!(
+            nav.action(Message::Program {
+                channel: 0,
+                program: 9
+            }),
+            Some(DeviceAction::BackingNext)
+        );
+        assert_eq!(
+            nav.action(Message::Program {
+                channel: 0,
+                program: 1
+            }),
+            Some(DeviceAction::Next),
+            "preset navigation keeps its own switch"
+        );
+        // The level knob answers every value, including zero.
+        assert_eq!(
+            nav.action(control(7, 0)),
+            Some(DeviceAction::BackingLevel { value: 0 })
+        );
+        assert_eq!(
+            nav.action(control(7, 100)),
+            Some(DeviceAction::BackingLevel { value: 100 })
+        );
+        assert_eq!(backing_level_db(0), -60.0);
+        assert_eq!(backing_level_db(127), 6.0);
+        assert!((backing_level_db(64) + 26.7).abs() < 0.1);
+        // One switch, one job: duplicates and a knob on a switch's CC are refused.
+        let mut twice = nav;
+        twice.backing.previous = Some(cc(20));
+        assert!(twice.validate(&BTreeMap::new()).is_err());
+        let mut clash = nav;
+        clash.next = Some(pc(9));
+        assert!(clash.validate(&BTreeMap::new()).is_err());
+        let mut knob = nav;
+        knob.backing.level = Some(21);
+        assert!(knob.validate(&BTreeMap::new()).is_err());
+        knob.backing.level = Some(0);
+        assert!(
+            knob.validate(&BTreeMap::new()).is_err(),
+            "bank select is reserved"
+        );
+        // Nothing assigned serializes to nothing.
+        assert!(BackingTriggers::default().is_empty());
+        let json = serde_json::to_value(Navigation::default()).unwrap();
+        assert_eq!(json, serde_json::json!({}));
+    }
+
+    #[test]
     fn navigation_is_global_validated_and_never_overlaps_a_preset_mapping() {
         let root = root("navigation");
         let store = MidiMapStore::new(root);
@@ -974,6 +1147,7 @@ mod tests {
                 program: None,
                 controller: Some(23),
             }),
+            backing: BackingTriggers::default(),
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -987,6 +1161,7 @@ mod tests {
                 next: Some(program(2)),
                 mute: None,
                 tuner: None,
+                backing: BackingTriggers::default(),
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -994,6 +1169,7 @@ mod tests {
                 next: None,
                 mute: Some(program(2)),
                 tuner: None,
+                backing: BackingTriggers::default(),
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1003,6 +1179,7 @@ mod tests {
                 next: None,
                 mute: None,
                 tuner: None,
+                backing: BackingTriggers::default(),
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1012,6 +1189,7 @@ mod tests {
                 next: None,
                 mute: None,
                 tuner: None,
+                backing: BackingTriggers::default(),
             },
         ] {
             assert!(matches!(
@@ -1152,6 +1330,7 @@ mod tests {
                 next: None,
                 mute: None,
                 tuner: None,
+                backing: BackingTriggers::default(),
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
