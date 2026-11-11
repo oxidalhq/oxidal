@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   keepReady,
+  libraryCatalog,
   rigAudioCommand,
   rigAudioState,
   rigLibrary,
@@ -22,6 +23,33 @@ vi.mock('./api', () => ({
   rigLibrary: vi.fn(),
   keepReady: vi.fn(),
   setKeepReady: vi.fn(),
+  libraryCatalog: vi.fn(async (update?: { action?: { kind: string } }) => ({
+    revision: 'c',
+    starter_offered: true,
+    ...(update?.action?.kind === 'duplicate'
+      ? { created: { kind: 'rig', id: 'f'.repeat(64) } }
+      : {}),
+    items: [
+      {
+        kind: 'rig',
+        id: 'a'.repeat(64),
+        name: 'My lead',
+        source_name: 'My lead',
+        archived: false,
+        origin: 'mine',
+        in_set_list: update?.action?.kind !== 'set_list',
+      },
+      {
+        kind: 'rig',
+        id: 'f'.repeat(64),
+        name: 'My lead copy',
+        source_name: 'My lead copy',
+        archived: false,
+        origin: 'mine',
+        in_set_list: false,
+      },
+    ],
+  })),
 }));
 
 const revisions = ['a', 'b', 'c', 'd', 'e'].map((letter) => letter.repeat(64));
@@ -208,7 +236,14 @@ it('shows one action menu for a Mine row and the empty state when nothing is sav
   );
   expect(
     screen.getAllByRole('menuitem').map((item) => item.textContent),
-  ).toEqual(['Edit', 'MIDI', 'Rename', 'Delete…']);
+  ).toEqual([
+    'Edit',
+    'Duplicate',
+    'Remove from set list',
+    'MIDI',
+    'Rename',
+    'Delete…',
+  ]);
   fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
   expect(manage).toHaveBeenCalledWith('rename', {
     kind: 'rig',
@@ -221,4 +256,45 @@ it('shows one action menu for a Mine row and the empty state when nothing is sav
     <SavedRigs connected onOpenRig={() => {}} empty={<p>No presets yet</p>} />,
   );
   expect(await screen.findByText('No presets yet')).toBeVisible();
+});
+
+it('S-10: Duplicate makes "Name copy" in Mine, outside the set list, and opens it stopped', async () => {
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [
+      {
+        revision: revisions[0]!,
+        name: 'My lead',
+        origin: 'mine',
+        scenes: ['Clean'],
+        topology: 'scenes',
+        native_instances: 0,
+        lv2_instances: 0,
+      },
+    ],
+    next: null,
+  } as never);
+  const edit = vi.fn();
+  render(<SavedRigs connected onOpenRig={() => {}} onEdit={edit} />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'More for My lead' }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('menuitem', { name: 'Remove from set list' }),
+    ).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+  expect(
+    await screen.findByText(
+      '"My lead copy" is in Mine. It is not in the set list.',
+    ),
+  ).toBeInTheDocument();
+  expect(libraryCatalog).toHaveBeenCalledWith({
+    expected_revision: 'c',
+    entry_kind: 'rig',
+    id: revisions[0],
+    action: { kind: 'duplicate' },
+  });
+  expect(edit).toHaveBeenCalledWith('f'.repeat(64), 'My lead copy');
+  expect(rigAudioCommand).not.toHaveBeenCalled();
 });

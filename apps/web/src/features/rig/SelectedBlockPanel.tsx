@@ -4,11 +4,12 @@ import { Button } from '../../components/ui/button';
 import { LedToggle } from '../../ChainView';
 import { Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { removeSceneEffect } from '../../sceneEdit';
 import {
+  MAX_PATHS,
   routeAddBranch,
   routeAddPath,
   routeCopyBranch,
+  routeDuplicate,
   routeRemove,
   routeRemoveBranch,
 } from '../../rigRoute';
@@ -17,7 +18,11 @@ import type { RigViewProps } from './useMixedRigSession';
 import { PathLevel } from './PathLevel';
 
 /** Why the routing actions are unavailable for this block, or null. */
-const SCENE_LANES = 'Splits inside scene lanes cannot be edited here yet.';
+const SCENE_PATH =
+  'Each scene is one path. Add or remove scenes with the scene pads.';
+const SCENE_TONE =
+  'A scene’s tone starts its path. Split here on an effect after it.';
+const PATH_LIMIT = `${MAX_PATHS} paths is the engine limit.`;
 const NOT_EDITABLE = 'This preset’s routing cannot be edited here.';
 const SERIAL = 'Split here to make this block one of two paths.';
 
@@ -64,9 +69,10 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
     edit,
     editChain,
     editing,
-    rebuild,
+    setCanvasChoice,
     setPathSides,
     shift,
+    shiftPath,
   } = rig;
   const {
     disabled,
@@ -75,10 +81,11 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
     inLane,
     place,
     running,
-    sceneEffectSet,
-    sceneLanes,
+    sceneCanvas,
     selected,
     selectedBranch,
+    selectedInScene,
+    selectedSpot,
     selectedView,
     state,
   } = vm;
@@ -95,8 +102,11 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const busy = disabled || !!edit || editing || sending;
   const id = selected!.id;
   const label = selectedView.label;
-  const inScene = sceneEffectSet.has(id);
   const movable = editable && selected!.kind === 'lv2';
+  /** The split nearest the block, and whether it is the scene lanes. */
+  const owner = selectedSpot?.owners.at(-1);
+  const sceneOwner = !!owner && owner.split === sceneCanvas?.split;
+  const sceneTone = selectedInScene && sceneOwner && selectedSpot!.index === 0;
   const kind = selectedView.branch
     ? 'Path'
     : selected!.kind === 'lv2'
@@ -104,17 +114,22 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
       : selected!.kind === 'tone3000'
         ? 'TONE3000'
         : 'Mix';
-  const routable = editable && !sceneLanes.length;
-  const inSplit = routable && selectedBranch.found && selectedBranch.paths > 0;
-  const routeWhy = sceneLanes.length
-    ? SCENE_LANES
-    : !editable
-      ? NOT_EDITABLE
-      : !inSplit
-        ? SERIAL
-        : '';
+  const routable = editable && !sceneTone;
+  const inSplit = editable && !!owner && !sceneOwner;
+  const full = inSplit && owner!.paths >= MAX_PATHS;
+  const routeWhy = !editable
+    ? NOT_EDITABLE
+    : sceneTone
+      ? SCENE_TONE
+      : sceneOwner
+        ? SCENE_PATH
+        : !inSplit
+          ? SERIAL
+          : full
+            ? PATH_LIMIT
+            : '';
   const sides =
-    inLane && selectedBranch.paths > 0
+    inLane && inSplit && selectedBranch.paths > 0
       ? ['left', 'right'].map((side) =>
           state.control?.controls.find(
             (c) =>
@@ -172,38 +187,62 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           />
         )}
       </div>
-      {(inScene || movable) && (
+      {movable && (
         <div className="action-row" role="group" aria-label="Arrange">
-          {movable && (
+          <Button
+            variant="outline"
+            aria-label={`Move ${label} left`}
+            disabled={busy || place.first}
+            onClick={() => void shift(id, -1)}
+          >
+            ◀ Move
+          </Button>
+          <Button
+            variant="outline"
+            aria-label={`Move ${label} right`}
+            disabled={busy || place.last}
+            onClick={() => void shift(id, 1)}
+          >
+            Move ▶
+          </Button>
+          {owner && (
             <>
               <Button
                 variant="outline"
-                aria-label={`Move ${label} left`}
-                disabled={busy || place.first}
-                onClick={() => void shift(id, -1)}
+                aria-label={`Move ${label} to the path above`}
+                disabled={busy || owner.path === 0}
+                onClick={() => void shiftPath(id, -1)}
               >
-                ◀ Move
+                ▲ Path
               </Button>
               <Button
                 variant="outline"
-                aria-label={`Move ${label} right`}
-                disabled={busy || place.last}
-                onClick={() => void shift(id, 1)}
+                aria-label={`Move ${label} to the path below`}
+                disabled={busy || owner.path === owner.paths - 1}
+                onClick={() => void shiftPath(id, 1)}
               >
-                Move ▶
+                Path ▼
               </Button>
             </>
           )}
           <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setCanvasChoice({ kind: 'replace', id })}
+          >
+            Replace…
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => void editChain((route) => routeDuplicate(route, id))}
+          >
+            Duplicate
+          </Button>
+          <Button
             variant="ghost"
             disabled={busy}
-            onClick={() =>
-              inScene
-                ? void rebuild(({ opened, live, name }) =>
-                    removeSceneEffect(opened, id, live, name),
-                  )
-                : void editChain((route) => routeRemove(route, id))
-            }
+            onClick={() => void editChain((route) => routeRemove(route, id))}
           >
             <Trash aria-hidden="true" /> Remove
           </Button>
@@ -216,9 +255,11 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           aria-label={`Routing for ${label}`}
         >
           <p className="selected-block-path">
-            {selectedBranch.found && selectedBranch.paths > 0
-              ? `Path ${selectedBranch.port + 1} of ${selectedBranch.paths}`
-              : 'Serial'}
+            {inSplit
+              ? `Path ${owner!.path + 1} of ${owner!.paths}`
+              : sceneOwner
+                ? `Scene ${owner!.path + 1} · ${sceneCanvas!.names[owner!.path] ?? ''}`
+                : 'Serial'}
           </p>
           {sides[0] && sides[1] && (
             <PathLevel
@@ -251,8 +292,8 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             </Button>
             <Button
               variant="outline"
-              disabled={busy || !inSplit}
-              aria-describedby={inSplit ? undefined : why}
+              disabled={busy || !inSplit || full}
+              aria-describedby={inSplit && !full ? undefined : why}
               onClick={() =>
                 void editChain((route) => routeAddBranch(route, id))
               }
@@ -261,8 +302,8 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             </Button>
             <Button
               variant="outline"
-              disabled={busy || !inSplit}
-              aria-describedby={inSplit ? undefined : why}
+              disabled={busy || !inSplit || full}
+              aria-describedby={inSplit && !full ? undefined : why}
               onClick={() =>
                 void editChain((route) => routeCopyBranch(route, id))
               }
@@ -273,9 +314,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
               variant="ghost"
               disabled={busy || !inSplit}
               aria-describedby={inSplit ? undefined : why}
-              onClick={() =>
-                setRemoving({ path: selectedBranch.port + 1, effects })
-              }
+              onClick={() => setRemoving({ path: owner!.path + 1, effects })}
             >
               Remove path
             </Button>

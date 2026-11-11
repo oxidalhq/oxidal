@@ -11,9 +11,11 @@ import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Lv2Plugin } from '../src/api';
-import { lv2Effect } from '../src/rigDraft';
-import { buildRoute } from '../src/rigRoute';
+import type { Lv2Plugin, Preset } from '../src/api';
+import { lv2Effect, sceneRig, type NativeDraft } from '../src/rigDraft';
+import { buildRoute, type Route } from '../src/rigRoute';
+import { chainRoute } from '../src/rigChain';
+import { addSceneEffect } from '../src/sceneEdit';
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,
@@ -5659,4 +5661,388 @@ test('device portrait preset details edit and category search never recall audio
   expect(await (await request.get('/api/v1/rig-audio')).json()).toEqual(
     rigBefore,
   );
+});
+
+/* ---------- Rig canvas (S-15, S-16, S-17): a mocked unit that rebuilds. ---------- */
+
+const canvasPlugin = (name: string) =>
+  ({
+    name,
+    uri: `urn:fixture:${name.toLowerCase()}`,
+    unsupported: null,
+    ports: (
+      [
+        ['in_l', true],
+        ['out_l', false],
+        ['in_r', true],
+        ['out_r', false],
+      ] as const
+    ).map(([symbol, input], index) => ({
+      index,
+      symbol,
+      audio: true,
+      control: false,
+      atom: false,
+      input,
+      output: !input,
+      integer: false,
+      toggled: false,
+      logarithmic: false,
+      latency: false,
+      minimum: null,
+      maximum: null,
+      default: null,
+    })),
+  }) as Lv2Plugin;
+const canvasPlugins = ['Echo', 'Hall', 'Verb'].map(canvasPlugin);
+const canvasEffect = (name: string) => ({
+  ...lv2Effect(canvasPlugins.find((p) => p.name === name)!),
+  id: name.toLowerCase(),
+  name,
+});
+type CanvasManifest = {
+  oxidal: {
+    graph: {
+      nodes: { id: string; kind: string; inputGains?: number[] }[];
+      edges: unknown[];
+    };
+  };
+  extensions: Record<string, unknown>;
+};
+
+/**
+ * The unit for the rig canvas: the sounding preset's state follows its
+ * manifest, a publish becomes the sounding revision, and control writes stick.
+ * Presentation/API contract fixture; no DSP qualification is implied.
+ */
+async function mockCanvasUnit(
+  page: Page,
+  request: APIRequestContext,
+  manifest: CanvasManifest,
+  scene?: string,
+) {
+  const baseline = await (await request.get('/api/v1/rig-audio')).json();
+  const input = {
+    endpoint: 'default',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const documents = new Map<string, CanvasManifest>([['canvas-0', manifest]]);
+  const published: CanvasManifest[] = [];
+  const writes: { node: string; port: number; value: number }[] = [];
+  const values = new Map<string, number>();
+  let revision = 'canvas-0';
+  let controlRevision = 1;
+  const state = () => {
+    const current = documents.get(revision)!;
+    const nodes = current.oxidal.graph.nodes;
+    return {
+      ...baseline,
+      phase: 'running',
+      device_owned: true,
+      configured: {
+        revision,
+        stream: {
+          input,
+          output: { ...input, direction: 'playback' },
+          input_map: [0, 1],
+          output_map: [0, 1],
+        },
+      },
+      control: {
+        session: 'canvas',
+        revision: controlRevision,
+        source_revision: revision,
+        modified: false,
+        buffer_bytes: 1024,
+        latency_frames: 0,
+        ...(scene
+          ? {
+              scene,
+              scenes: current.extensions['urn:oxidal:scenes:1'],
+            }
+          : {}),
+        controls: [
+          ...nodes
+            .filter((n) => n.kind === 'merge' && !n.id.endsWith('-mono'))
+            .flatMap((n) =>
+              n.inputGains!.map((gain, port) => ({
+                target: { kind: 'merge', node: n.id, port },
+                label: 'Level',
+                display: '100%',
+                toggle: false,
+                value: values.get(`${n.id}:${port}`) ?? gain,
+                minimum: 0,
+                maximum: 4,
+                integer: false,
+                logarithmic: false,
+              })),
+            ),
+          ...nodes
+            .filter((n) => n.kind === 'lv2')
+            .map((n) => ({
+              target: { kind: 'bypass', node: n.id },
+              display: 'Off',
+              label: 'Bypass',
+              value: 0,
+              minimum: 0,
+              maximum: 1,
+              integer: true,
+              toggle: true,
+              logarithmic: false,
+            })),
+        ],
+      },
+    };
+  };
+  await page.route('**/api/v1/rig-audio', async (route) => {
+    if (route.request().method() === 'POST') {
+      const action = route.request().postDataJSON().action;
+      if (action.kind === 'control' && action.command.target.kind === 'merge') {
+        const { node, port } = action.command.target;
+        writes.push({ node, port, value: action.command.value });
+        values.set(`${node}:${port}`, action.command.value);
+        controlRevision++;
+      }
+    }
+    await route.fulfill({ json: state() });
+  });
+  await page.route('**/api/v1/plugins/lv2*', (route) =>
+    route.fulfill({ json: { sample_rate: 48000, plugins: canvasPlugins } }),
+  );
+  await page.route(/\/api\/v1\/presets\/rigs(\?.*)?$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const body = route.request().postDataJSON();
+    const next = JSON.parse(body.manifest_json) as CanvasManifest;
+    published.push(next);
+    revision = `canvas-${published.length}`;
+    documents.set(revision, next);
+    controlRevision++;
+    await route.fulfill({ json: { revision, manifest: next } });
+  });
+  await page.route(/\/api\/v1\/presets\/rigs\/canvas-\d+$/, (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').pop()!;
+    return route.fulfill({
+      json: { revision: id, manifest: documents.get(id) },
+    });
+  });
+  return {
+    published,
+    writes,
+    /** The sounding preset's routing, as block ids. */
+    route: () => chainRoute(documents.get(revision)!.oxidal.graph as never),
+  };
+}
+
+test('mixed rig authoring splits inside scene lanes and asks before removing a path with effects', async ({
+  page,
+  request,
+}, info) => {
+  // S-15 and S-16 on a preset with two scenes; an echo sits after Lead's tone.
+  const preset = {
+    sha256: 'a'.repeat(64),
+    name: 'Tone',
+    size_bytes: 100,
+  } as Preset;
+  const tone = (id: string, name: string): NativeDraft => ({
+    id,
+    kind: 'native',
+    name,
+    preset,
+    source: { kind: 'original', preset: preset.sha256 },
+  });
+  const scenes = sceneRig(
+    'canvas',
+    'Two scenes',
+    [tone('clean', 'Clean'), tone('lead', 'Lead')],
+    'prof',
+  );
+  const document = {
+    revision: 'canvas-0',
+    manifest: JSON.parse(scenes.manifest_json),
+  };
+  const manifest = JSON.parse(
+    addSceneEffect(document as never, 'lead', canvasEffect('Echo'))
+      .manifest_json,
+  );
+  const unit = await mockCanvasUnit(page, request, manifest, 'lead');
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  const selected = rig.locator('[aria-label="Selected block"]');
+  await rig.getByRole('button', { name: 'Echo', exact: true }).click();
+  const routing = selected.getByRole('group', { name: 'Routing for Echo' });
+  await expect(routing).toContainText('Scene 2 · Lead');
+  // No hidden routing actions: all four are shown; Split here works here.
+  for (const name of ['Split here', 'Add path', 'Copy path', 'Remove path'])
+    await expect(routing.getByRole('button', { name })).toBeVisible();
+  await routing.getByRole('button', { name: 'Split here' }).click();
+  await expect.poll(() => unit.published.length).toBe(1);
+  expect(unit.route()).toMatchObject([
+    { branches: [['clean'], ['lead', { branches: [['echo'], []] }]] },
+  ]);
+  expect(unit.published[0]!.extensions['urn:oxidal:scenes:1']).toEqual(
+    manifest.extensions['urn:oxidal:scenes:1'],
+  );
+  // The new empty path is never a dead end: it asks for an effect.
+  await rig.getByRole('button', { name: /^Add effect to path 2/ }).click();
+  const chooser = page.getByRole('dialog', { name: 'Add an effect' });
+  await chooser.getByRole('button', { name: /^Hall/ }).click();
+  await expect.poll(() => unit.published.length).toBe(2);
+  const hall = expect.stringMatching(/^fx-/);
+  expect(unit.route()).toMatchObject([
+    {
+      branches: [['clean'], ['lead', { branches: [['echo'], [hall]] }]],
+    },
+  ]);
+  // S-16: removing a path with effects names the path and how many.
+  await rig.getByRole('button', { name: 'Echo', exact: true }).click();
+  await expect(routing).toContainText('Path 1 of 2');
+  await routing.getByRole('button', { name: 'Remove path' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Remove Path 1' });
+  await expect(confirm).toContainText('Remove Path 1 and its 1 effect?');
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirm).toHaveCount(0);
+  expect(unit.published).toHaveLength(2);
+  await routing.getByRole('button', { name: 'Remove path' }).click();
+  await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect.poll(() => unit.published.length).toBe(3);
+  expect(unit.route()).toMatchObject([
+    { branches: [['clean'], ['lead', hall]] },
+  ]);
+  expect(
+    await page.evaluate(
+      () => window.document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath('rig-canvas-scene-lanes.png'),
+    fullPage: true,
+  });
+});
+
+test('mixed rig authoring builds a split and changes a level with buttons only on E-paper', async ({
+  page,
+  request,
+}, info) => {
+  // S-17: no drag and no sliders; the chain is a numbered list.
+  const route: Route = [canvasEffect('Echo'), canvasEffect('Verb')];
+  const unit = await mockCanvasUnit(
+    page,
+    request,
+    JSON.parse(buildRoute('canvas', 'Plain', route, 'prof').manifest_json),
+  );
+  await page.goto('/');
+  await setDisplayMode(page, 'epaper');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  const list = rig.getByRole('list', { name: 'Chain as a list' });
+  await expect(list).toBeVisible();
+  await expect(rig.locator('[data-movable], [draggable="true"]')).toHaveCount(
+    0,
+  );
+  await list.getByRole('button', { name: 'Echo', exact: true }).click();
+  const selected = rig.locator('[aria-label="Selected block"]');
+  await selected.getByRole('button', { name: 'Split here' }).click();
+  await expect.poll(() => unit.published.length).toBe(1);
+  expect(unit.route()).toMatchObject([{ branches: [['echo'], []] }, 'verb']);
+  await expect(list).toContainText('Split, 2 paths');
+  await expect(
+    list.getByRole('button', { name: 'Add effect to path 2' }),
+  ).toBeVisible();
+  await list.getByRole('button', { name: 'Echo', exact: true }).click();
+  await expect(
+    selected.getByLabel('Path 1 level', { exact: true }),
+  ).toBeHidden();
+  await selected.getByRole('button', { name: 'Lower path 1 level' }).click();
+  await expect
+    .poll(() => unit.writes.map((w) => [w.node.split('-').pop(), w.value]))
+    .toEqual([
+      ['left', 0.9],
+      ['right', 0.9],
+    ]);
+  await expect(selected).toContainText('Path 1 level · 90%');
+  await page.screenshot({
+    path: info.outputPath('rig-canvas-epaper.png'),
+    fullPage: true,
+  });
+});
+
+test('mixed rig authoring moves blocks across paths by keys, buttons and drag', async ({
+  page,
+  request,
+}, info) => {
+  const route: Route = [
+    {
+      kind: 'split',
+      split: 'split',
+      merge: 'merge',
+      gains: [1, 1],
+      branches: [[canvasEffect('Echo')], [canvasEffect('Hall')]],
+    },
+    canvasEffect('Verb'),
+  ];
+  const unit = await mockCanvasUnit(
+    page,
+    request,
+    JSON.parse(buildRoute('canvas', 'Two paths', route, 'prof').manifest_json),
+  );
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  const selected = rig.locator('[aria-label="Selected block"]');
+  const epaper = info.project.name === 'boox-air3c';
+  // Keyboard: Alt+Down moves the focused block to the path below.
+  if (!epaper) {
+    await rig.getByRole('button', { name: 'Echo', exact: true }).focus();
+    await page.keyboard.press('Alt+ArrowDown');
+    await expect.poll(() => unit.published.length).toBe(1);
+    expect(unit.route()).toMatchObject([
+      { branches: [[], ['echo', 'hall']] },
+      'verb',
+    ]);
+  }
+  // Buttons: the same moves without a pointer or keys (and on E-paper).
+  await rig.getByRole('button', { name: 'Verb', exact: true }).click();
+  await selected
+    .getByRole('button', { name: 'Move Verb left', exact: true })
+    .click();
+  await expect.poll(() => unit.published.length).toBe(epaper ? 1 : 2);
+  // Move left from after a split lands at the end of its first path.
+  expect(unit.route()).toMatchObject([
+    {
+      branches: epaper
+        ? [['echo', 'verb'], ['hall']]
+        : [['verb'], ['echo', 'hall']],
+    },
+  ]);
+  await rig.getByRole('button', { name: 'Verb', exact: true }).click();
+  await selected
+    .getByRole('button', { name: 'Move Verb to the path below', exact: true })
+    .click();
+  await expect.poll(() => unit.published.length).toBe(epaper ? 2 : 3);
+  expect(JSON.stringify(unit.route())).toContain('verb');
+  // Drag: a mouse drops a block on the gap nearest the pointer.
+  if (info.project.name === 'chromium') {
+    const verb = rig.getByRole('button', { name: 'Verb', exact: true });
+    const first = rig.getByRole('button', {
+      name: 'Add or split at position 1',
+    });
+    await expect(verb).toBeEnabled();
+    await verb.scrollIntoViewIfNeeded();
+    const from = (await verb.boundingBox())!;
+    const to = (await first.boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x - 20, from.y, { steps: 4 });
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    await expect.poll(() => unit.published.length).toBe(4);
+    expect(unit.route()![0]).toBe('verb');
+  }
 });

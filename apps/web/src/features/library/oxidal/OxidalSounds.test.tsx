@@ -12,6 +12,7 @@ import {
   downloadVoice,
   effectPacks,
   installedLv2,
+  libraryCatalog,
   presetDetails,
   protectState,
   publishRig,
@@ -50,6 +51,23 @@ vi.mock('../../../api', () => ({
   protectState: vi.fn(),
   tone3000Account: vi.fn(),
   rigAudioState: vi.fn(),
+  libraryCatalog: vi.fn(async (update?: { id?: string }) => ({
+    revision: 'c1',
+    starter_offered: false,
+    items: update?.id
+      ? [
+          {
+            kind: 'rig',
+            id: update.id,
+            name: 'Brown Crunch',
+            source_name: 'Brown Crunch',
+            archived: false,
+            origin: 'oxidal_example',
+            in_set_list: true,
+          },
+        ]
+      : [],
+  })),
 }));
 vi.mock('../../../presetChoices', () => ({ playScenes: vi.fn() }));
 
@@ -401,8 +419,18 @@ it('Details: one sheet with scenes, chain, needs and load; S-9 Make my copy leav
   expect(within(sheet).getByText('Needs')).toBeVisible();
   expect(within(sheet).getByText('Load')).toBeVisible();
   expect(within(sheet).getByRole('button', { name: 'Play' })).toBeEnabled();
-  expect(
+  // D-8: the read-only sound joins the set list by reference.
+  await user.click(
     within(sheet).getByRole('button', { name: 'Add to set list' }),
+  );
+  expect(libraryCatalog).toHaveBeenCalledWith({
+    expected_revision: 'c1',
+    entry_kind: 'rig',
+    id: 'r1',
+    action: { kind: 'set_list', member: true },
+  });
+  expect(
+    await within(sheet).findByRole('button', { name: 'In the set list #1' }),
   ).toBeDisabled();
   await user.click(within(sheet).getByRole('button', { name: 'Make my copy' }));
   await waitFor(() => expect(publishRig).toHaveBeenCalledOnce());

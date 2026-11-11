@@ -121,3 +121,28 @@
 .rig-editor > .scene-pads .scene-pad strong {
   font-size: var(--text-base);
 }
+
+/* Rig view: each pad carries its scene menu (⋯), also opened by holding. */
+.scene-pad-cell {
+  position: relative;
+  display: grid;
+}
+.scene-pad-cell .scene-pad {
+  padding-right: 2.75rem;
+}
+.scene-pad-more {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.5rem;
+  min-height: var(--touch-target);
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: 600 var(--text-md) var(--font-mono);
+}
+.scene-pad[aria-pressed='true'] + .scene-pad-more {
+  color: var(--background);
+}

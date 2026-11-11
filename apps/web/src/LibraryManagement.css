@@ -1,0 +1,8 @@
+/* Set list: the ⋯ menu note for read-only Oxidal sounds. */
+.row-menu-note {
+  max-width: 16rem;
+  padding: 0.5rem 0.75rem;
+}
+.set-list-outside {
+  margin-top: 1rem;
+}

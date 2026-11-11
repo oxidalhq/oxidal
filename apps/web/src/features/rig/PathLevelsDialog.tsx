@@ -3,6 +3,19 @@ import { Button } from '../../components/ui/button';
 import { routePath, routeSplitAddPath } from '../../rigRoute';
 import type { RigViewProps } from './useMixedRigSession';
 import { PathLevel } from './PathLevel';
+import { useState } from 'react';
+import type { IdStep } from '../../rigChain';
+
+/** Blocks on a path, nested splits included. */
+const blocksOn = (steps: IdStep[]): number =>
+  steps.reduce(
+    (n, s) =>
+      n +
+      (typeof s === 'string'
+        ? 1
+        : s.branches.reduce((m, b) => m + blocksOn(b), 0)),
+    0,
+  );
 
 /**
  * A split's path levels, with copy, remove and add-path actions.
@@ -19,8 +32,41 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
     setRoutingSplit,
   } = rig;
   const { disabled, editable, fullRoute, state } = vm;
+  /** Remove path waiting for confirmation: it has effects (S-16). */
+  const [removing, setRemoving] = useState<{
+    split: string;
+    path: number;
+    effects: number;
+  } | null>(null);
+  const remove = (split: string, path: number) => {
+    setRemoving(null);
+    setRoutingSplit(null);
+    void editChain((route) => routePath(route, split, path, 'remove'));
+  };
   return (
     <>
+      {removing && (
+        <AdjustmentDialog
+          title={`Remove Path ${removing.path + 1}`}
+          onCancel={() => setRemoving(null)}
+        >
+          <p>
+            Remove Path {removing.path + 1} and its {removing.effects}{' '}
+            {removing.effects === 1 ? 'effect' : 'effects'}?
+          </p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setRemoving(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={disabled || !!edit || editing}
+              onClick={() => remove(removing.split, removing.path)}
+            >
+              Remove
+            </Button>
+          </div>
+        </AdjustmentDialog>
+      )}
       {routingSplit &&
         (() => {
           const split = (function find(
@@ -95,10 +141,17 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                             aria-label={`Remove path ${port + 1}`}
                             disabled={disabled || !!edit || editing}
                             onClick={() => {
-                              setRoutingSplit(null);
-                              void editChain((route) =>
-                                routePath(route, split.split, port, 'remove'),
-                              );
+                              const effects = blocksOn(split.branches[port]!);
+                              // An empty path goes at once; one with effects asks.
+                              if (!effects) remove(split.split, port);
+                              else {
+                                setRoutingSplit(null);
+                                setRemoving({
+                                  split: split.split,
+                                  path: port,
+                                  effects,
+                                });
+                              }
                             }}
                           >
                             Remove

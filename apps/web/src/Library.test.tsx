@@ -15,6 +15,11 @@ vi.mock('./api', () => ({
   playbackState: vi.fn(() => new Promise(() => {})),
   nativeState: vi.fn(async () => ({ owned: [] })),
   presetDetails: vi.fn(async () => ({ revision: 'r', entries: [] })),
+  libraryCatalog: vi.fn(async () => ({
+    revision: 'c',
+    items: [],
+    starter_offered: true,
+  })),
 }));
 // Library sections have their own tests; this one covers the import form.
 vi.mock('./features/library/oxidal', () => ({ OxidalSounds: () => null }));

@@ -1,24 +1,29 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { CaretDown, CaretUp } from '@phosphor-icons/react';
+import './RigSheet.css';
+import { CaretDown, CaretUp, X } from '@phosphor-icons/react';
 import { useSessionState } from '../lib/sessionState';
 
 /**
  * The selected block's controls as a sheet under the chain (7.28), in the page
  * flow so it never covers the chain. Hide collapses it to a one-line bar with
  * the block name; Esc inside it does the same. The choice is kept for this
- * browser tab.
+ * browser tab. With `onClose` it has a Close button that clears the selected
+ * block, and on a phone it is a bottom sheet over the page.
  * @see docs/interface.md
  */
 export function RigSheet({
   title,
   detail,
   actions,
+  onClose,
   children,
 }: {
   title: string;
   detail?: string;
   /** Header controls such as the block's on/off switch. */
   actions?: ReactNode;
+  /** Closes the sheet by clearing the selected block. */
+  onClose?: () => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useSessionState('rig-sheet-open', true);
@@ -43,6 +48,7 @@ export function RigSheet({
     <section
       className="rig-sheet"
       data-open={open || undefined}
+      data-closable={onClose ? true : undefined}
       aria-label="Block controls"
     >
       <header className="rig-sheet-header">
@@ -66,6 +72,16 @@ export function RigSheet({
             <CaretUp aria-hidden="true" />
           )}
         </button>
+        {onClose && (
+          <button
+            type="button"
+            className="rig-sheet-toggle"
+            aria-label="Close block panel"
+            onClick={onClose}
+          >
+            <X aria-hidden="true" />
+          </button>
+        )}
       </header>
       <div ref={body} className="rig-sheet-body" hidden={!open}>
         {children}
@@ -79,11 +95,11 @@ export function MaybeSheet({
   sheet,
   children,
 }: {
-  sheet: { label: string; detail?: string } | null;
+  sheet: { label: string; detail?: string; onClose?: () => void } | null;
   children: ReactNode;
 }) {
   return sheet ? (
-    <RigSheet title={sheet.label} detail={sheet.detail}>
+    <RigSheet title={sheet.label} detail={sheet.detail} onClose={sheet.onClose}>
       {children}
     </RigSheet>
   ) : (

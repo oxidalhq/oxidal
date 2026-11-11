@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from '../../../AdjustmentDialog';
+import { libraryCatalog } from '../../../api';
+import { friendlyError } from '../../../lib/friendlyError';
+import { setListMember } from '../setList';
 import { factoryTopologySummary } from '../../../factoryRecipes';
 import { Button } from '../../../components/ui/button';
 import { DialogFooter } from '../../../components/ui/dialog';
@@ -14,10 +18,6 @@ import {
 import { cardLine, primaryFor, type CardHandlers } from './cardActions';
 import type { OxidalSounds } from './useOxidalSounds';
 import './oxidal.css';
-
-/** Why Add to set list is off: the set list API arrives with a later change. */
-const SET_LIST_NOTE =
-  'Adding an Oxidal sound to the set list is not available yet. Make my copy puts it in Mine.';
 
 /**
  * The one Details sheet every card opens: description, inspiration, how to play
@@ -49,6 +49,28 @@ export function DetailsSheet({
         : 'Everything is installed'
       : cardLine(item, state, unit).replace(/^Needs: /, '');
   const guide = item.recipe ? sceneGuide(item.recipe) : [];
+  const listed = useSetListPlace(item.built?.revision);
+  const [setList, setSetList] = useState('');
+  const [adding, setAdding] = useState(false);
+  async function addToSetList() {
+    const revision = item.built?.revision;
+    if (!revision) return;
+    setAdding(true);
+    setSetList('');
+    try {
+      const catalog = await setListMember({ kind: 'rig', id: revision }, true);
+      const place =
+        catalog.items
+          .filter((i) => i.in_set_list)
+          .findIndex((i) => i.kind === 'rig' && i.id === revision) + 1;
+      listed.set(place);
+      setSetList(`${item.name} is in the set list as #${place}.`);
+    } catch (cause) {
+      setSetList(friendlyError(cause, 'add this sound to the set list'));
+    } finally {
+      setAdding(false);
+    }
+  }
   return (
     <AdjustmentDialog title={item.name} onCancel={onClose}>
       <div className="control-stack oxidal-details">
@@ -107,8 +129,25 @@ export function DetailsSheet({
               {primary.label}
             </Button>
           )}
-          <Button variant="outline" disabled title={SET_LIST_NOTE}>
-            Add to set list
+          <Button
+            variant="outline"
+            disabled={
+              state.kind !== 'ready' ||
+              !item.built ||
+              !!listed.place ||
+              adding ||
+              !unit.connected
+            }
+            title={
+              state.kind !== 'ready' || !item.built
+                ? 'Build it first'
+                : undefined
+            }
+            onClick={() => void addToSetList()}
+          >
+            {listed.place
+              ? `In the set list #${listed.place}`
+              : 'Add to set list'}
           </Button>
           <Button
             variant="outline"
@@ -120,8 +159,35 @@ export function DetailsSheet({
             Make my copy
           </Button>
         </DialogFooter>
-        <p className="caption">{SET_LIST_NOTE}</p>
+        {setList && (
+          <p className="caption" role="status">
+            {setList}
+          </p>
+        )}
       </div>
     </AdjustmentDialog>
   );
+}
+
+/** Where a built Oxidal sound sits in the set list (0 when it is not in it). */
+function useSetListPlace(revision: string | undefined) {
+  const [place, set] = useState(0);
+  useEffect(() => {
+    if (!revision) return;
+    let alive = true;
+    void libraryCatalog()
+      .then((catalog) => {
+        if (alive)
+          set(
+            catalog.items
+              .filter((i) => i.in_set_list)
+              .findIndex((i) => i.kind === 'rig' && i.id === revision) + 1,
+          );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [revision]);
+  return { place, set };
 }

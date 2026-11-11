@@ -26,6 +26,7 @@ export function ScenePads({
   disabled,
   onSelect,
   extra,
+  onMenu,
 }: {
   scenes: Scene[];
   active: string | null | undefined;
@@ -34,7 +35,16 @@ export function ScenePads({
   onSelect: (id: string) => void;
   /** A control for the heading, such as how scenes change. */
   extra?: React.ReactNode;
+  /** The scene menu (rig view): a ⋯ on each pad, or hold the pad. */
+  onMenu?: (id: string) => void;
 }) {
+  const held = useRef<{ timer: ReturnType<typeof setTimeout>; fired: boolean }>(
+    null,
+  );
+  const release = () => {
+    if (held.current) clearTimeout(held.current.timer);
+  };
+  useEffect(() => release, []);
   // Latest props for the key handler without re-registering it every render.
   const latest = useRef({ scenes, active, disabled, onSelect });
   useEffect(() => {
@@ -81,21 +91,69 @@ export function ScenePads({
         data-few={scenes.length <= 4 || undefined}
         style={{ '--pads': Math.min(scenes.length, 4) } as React.CSSProperties}
       >
-        {scenes.map((scene, i) => (
-          <button
-            key={scene.id}
-            type="button"
-            className="scene-pad"
-            aria-label={`Scene ${i + 1}: ${scene.name}`}
-            aria-pressed={scene.id === active}
-            aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
-            disabled={disabled}
-            onClick={() => scene.id !== active && onSelect(scene.id)}
-          >
-            <span className="scene-pad-number">{i + 1}</span>
-            <strong>{scene.name}</strong>
-          </button>
-        ))}
+        {scenes.map((scene, i) => {
+          const pad = (
+            <button
+              key={scene.id}
+              type="button"
+              className="scene-pad"
+              aria-label={`Scene ${i + 1}: ${scene.name}`}
+              aria-pressed={scene.id === active}
+              aria-keyshortcuts={i < 9 ? String(i + 1) : undefined}
+              disabled={disabled}
+              onClick={() => {
+                // A hold that opened the menu is not also a tap.
+                if (held.current?.fired) {
+                  held.current = null;
+                  return;
+                }
+                if (scene.id !== active) onSelect(scene.id);
+              }}
+              {...(onMenu && {
+                onPointerDown: () => {
+                  release();
+                  const hold = {
+                    fired: false,
+                    timer: setTimeout(() => {
+                      hold.fired = true;
+                      onMenu(scene.id);
+                    }, 600),
+                  };
+                  held.current = hold;
+                },
+                onPointerUp: release,
+                onPointerLeave: release,
+                onPointerCancel: release,
+                onContextMenu: (event: React.MouseEvent) => {
+                  event.preventDefault();
+                  release();
+                  if (!held.current?.fired) onMenu(scene.id);
+                  if (held.current) held.current.fired = true;
+                },
+              })}
+            >
+              <span className="scene-pad-number">{i + 1}</span>
+              <strong>{scene.name}</strong>
+            </button>
+          );
+          return onMenu ? (
+            <div key={scene.id} className="scene-pad-cell">
+              {pad}
+              <button
+                type="button"
+                className="scene-pad-more"
+                aria-label={`More for scene ${scene.name}`}
+                aria-haspopup="dialog"
+                disabled={disabled}
+                onClick={() => onMenu(scene.id)}
+              >
+                ⋯
+              </button>
+            </div>
+          ) : (
+            pad
+          );
+        })}
       </div>
     </section>
   );

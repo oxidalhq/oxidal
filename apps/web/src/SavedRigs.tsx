@@ -7,6 +7,7 @@ import { Checkbox } from './components/ui/checkbox';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { detailsMatch } from './presetMetadata';
 import {
+  libraryCatalog,
   rigLibrary,
   rigAudioState,
   type RigPage,
@@ -23,6 +24,7 @@ import {
   writeKeepReady,
 } from './presetChoices';
 import { requestMidiAssignments } from './midiNavigation';
+import { duplicatePreset, setListMember } from './features/library/setList';
 
 /**
  * Portable rigs in the Library: rows look and play like every other
@@ -83,6 +85,64 @@ export function SavedRigs({
   const [running, setRunning] = useState(false);
   const [modified, setModified] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  /** Rigs in the set list (Add to / Remove from set list in the menu). */
+  const [members, setMembers] = useState<Set<string> | null>(null);
+  const [notice, setNotice] = useState('');
+  function readMembers() {
+    return libraryCatalog()
+      .then((catalog) => {
+        if (alive.current)
+          setMembers(
+            new Set(
+              catalog.items
+                .filter((i) => i.kind === 'rig' && i.in_set_list)
+                .map((i) => i.id),
+            ),
+          );
+      })
+      .catch(() => {});
+  }
+  /** Duplicate: "Name copy" in Mine, not in the set list, opened stopped. */
+  async function duplicate(revision: string) {
+    setBusy(true);
+    clear();
+    setNotice('');
+    try {
+      const { copy } = await duplicatePreset({ kind: 'rig', id: revision });
+      if (!alive.current) return;
+      setNotice(`"${copy.name}" is in Mine. It is not in the set list.`);
+      setReload((n) => n + 1);
+      onEdit?.(copy.id, copy.name);
+    } catch (cause) {
+      if (alive.current)
+        fail(cause, 'duplicate this preset', () => void duplicate(revision));
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+  async function member(revision: string, name: string, add: boolean) {
+    setBusy(true);
+    clear();
+    setNotice('');
+    try {
+      const catalog = await setListMember({ kind: 'rig', id: revision }, add);
+      if (!alive.current) return;
+      const position =
+        catalog.items
+          .filter((i) => i.in_set_list)
+          .findIndex((i) => i.kind === 'rig' && i.id === revision) + 1;
+      setNotice(
+        add
+          ? `Added ${name} to the set list as #${position}.`
+          : `Removed ${name} from the set list. It stays in Mine.`,
+      );
+      await readMembers();
+    } catch (cause) {
+      if (alive.current) fail(cause, 'change the set list');
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
   function readRig() {
     return rigAudioState()
       .then((rig) => {
@@ -141,10 +201,11 @@ export function SavedRigs({
       .then((saved) => alive.current && setPreparedState(saved))
       .catch(() => {});
     void readRig();
+    if (origin === 'mine') void readMembers();
     return () => {
       alive.current = false;
     };
-  }, [refresh, reload, fail]);
+  }, [refresh, reload, fail, origin]);
   async function play(revision: string, openMidi = false) {
     setBusy(true);
     setLoadingId(revision);
@@ -277,6 +338,11 @@ export function SavedRigs({
           setReload((n) => n + 1);
         }}
       />
+      {notice && (
+        <p className="caption" role="status">
+          {notice}
+        </p>
+      )}
       <ul className="preset-library">
         {shown.map((p) => {
           const active = playing === p.revision;
@@ -311,6 +377,28 @@ export function SavedRigs({
                         onSelect: () => onEdit(p.revision, p.name),
                         disabled: busy,
                       },
+                    ]
+                  : []),
+                ...(origin === 'mine'
+                  ? [
+                      {
+                        label: 'Duplicate',
+                        onSelect: () => void duplicate(p.revision),
+                        disabled: !connected || busy,
+                      },
+                      members?.has(p.revision)
+                        ? {
+                            label: 'Remove from set list',
+                            onSelect: () =>
+                              void member(p.revision, p.name, false),
+                            disabled: !connected || busy,
+                          }
+                        : {
+                            label: 'Add to set list',
+                            onSelect: () =>
+                              void member(p.revision, p.name, true),
+                            disabled: !connected || busy || !members,
+                          },
                     ]
                   : []),
                 {

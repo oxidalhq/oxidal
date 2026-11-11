@@ -370,9 +370,10 @@ test('library sections: Make my copy puts a copy in Mine and leaves the original
   await card.getByRole('button', { name: `Details: ${BROWN}` }).click();
   const sheet = page.getByRole('dialog', { name: BROWN });
   await expect(sheet.getByText('How to play it')).toBeVisible();
+  // D-8: a built Oxidal sound can join the set list by reference.
   await expect(
     sheet.getByRole('button', { name: 'Add to set list' }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await sheet.getByRole('button', { name: 'Make my copy' }).click();
   await expect(sheet).toHaveCount(0);
   await expect(

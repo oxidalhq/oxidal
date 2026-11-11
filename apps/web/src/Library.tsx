@@ -19,6 +19,7 @@ import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
 import { SavedRigs } from './SavedRigs';
 import { OxidalSounds } from './features/library/oxidal';
+import { StarterOffer } from './features/library/StarterOffer';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
 import { playTone3000 } from './presetChoices';
 import { Button } from './components/ui/button';
@@ -620,6 +621,11 @@ export function Library({
           )}
         </TabsContent>
         <TabsContent value="oxidal">
+          <StarterOffer
+            connected={connected}
+            refresh={refresh}
+            onChanged={() => setRefresh((v) => v + 1)}
+          />
           <OxidalSounds
             connected={connected}
             onOpenRig={onOpenRig}
@@ -704,6 +710,7 @@ export function Library({
           </p>
           <LibraryManagement
             connected={connected}
+            onOpenRig={onOpenRig}
             onChanged={() => setRefresh((v) => v + 1)}
           />
           <details className="control-help">

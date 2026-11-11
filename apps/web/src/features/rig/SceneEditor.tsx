@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { SceneChange } from '../../SceneChange';
 import { ScenePads } from '../../ScenePads';
 import type { RigViewProps } from './useMixedRigSession';
+import { SceneMenu } from './SceneEditorMenu';
+import { SceneSettings } from './SceneEditorControls';
+import { useSceneSettings } from './SceneEditorSettings';
+import './SceneEditor.css';
 
 /**
  * Scene pads and the current-scene panel: mix, Update scene, Save as new
@@ -11,6 +16,9 @@ import type { RigViewProps } from './useMixedRigSession';
  * @see docs/interface.md
  */
 export function SceneEditor({ rig, vm }: RigViewProps) {
+  const [menu, setMenu] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const settings = useSceneSettings({ rig, vm });
   const {
     busy,
     current,
@@ -24,6 +32,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
     saveScenes,
     setNamingScene,
     setSaveReview,
+    sceneUpdates,
     setSceneDraft,
     setSceneUpdates,
   } = rig;
@@ -38,22 +47,55 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
     sceneMixChanged,
     state,
   } = vm;
+  const session = state.control?.session;
+  /** Effect settings drafted with Update scene, kept with the scene draft. */
+  const draftedControls =
+    sceneUpdates?.session === session ? (sceneUpdates?.controls ?? {}) : {};
+  const controlOnly = Object.keys(draftedControls).filter(
+    (id) => !drafts[id],
+  ).length;
+  const pending = draftCount + controlOnly;
+  const changed = sceneMixChanged || settings.changed;
+  const withSettings = (sceneId: string) => {
+    const values = settings.values();
+    return values.length
+      ? { ...draftedControls, [sceneId]: values }
+      : draftedControls;
+  };
+  const activeScene = state.control?.scenes?.scenes.find(
+    (scene) => scene.id === state.control?.scene,
+  );
   return (
     <>
       {!!state.control?.scenes?.scenes.length && (
         <ScenePads
           extra={
-            matching && (
-              <SceneChange
-                preset={matching.manifest.id}
-                disabled={disabled}
-                trails={
-                  matching.manifest.extensions['urn:oxidal:authoring']
-                    ?.scene_tails === 'preserve'
-                }
-              />
-            )
+            <>
+              {matching && (
+                <SceneChange
+                  preset={matching.manifest.id}
+                  disabled={disabled}
+                  trails={
+                    matching.manifest.extensions['urn:oxidal:authoring']
+                      ?.scene_tails === 'preserve'
+                  }
+                />
+              )}
+              {activeScene && (
+                <button
+                  type="button"
+                  className="scene-change"
+                  aria-label={`Scene menu for ${activeScene.name}`}
+                  aria-haspopup="dialog"
+                  disabled={disabled || !!edit}
+                  onClick={() => setMenu(activeScene.id)}
+                >
+                  Scene ⋯
+                </button>
+              )}
+            </>
           }
+          onMenu={setMenu}
           scenes={state.control.scenes.scenes}
           active={state.control.scene}
           fading={!!state.control.scene_transitioning}
@@ -67,10 +109,24 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
           }}
         />
       )}
+      {menu && (
+        <SceneMenu
+          rig={rig}
+          vm={vm}
+          sceneId={menu}
+          onClose={() => setMenu(null)}
+          onDone={setNotice}
+        />
+      )}
+      {notice && (
+        <p className="caption scene-notice" role="status">
+          {notice}
+        </p>
+      )}
       {editingScene && (
         <details
           className="scene-context"
-          open={sceneMixChanged || draftCount > 0 || undefined}
+          open={changed || pending > 0 || undefined}
         >
           <summary>
             <span>
@@ -114,7 +170,8 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               ))}
             </div>
           )}
-          {sceneMixChanged && (
+          <SceneSettings settings={settings} />
+          {changed && (
             <div className="scene-context-actions">
               <Button
                 variant="outline"
@@ -132,7 +189,9 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                     session,
                     gains: { ...drafts, [editingScene.id]: editingSceneGains },
                     added: addedScenes,
+                    controls: withSettings(editingScene.id),
                   });
+                  settings.reset();
                 }}
               >
                 Update scene
@@ -156,7 +215,11 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 the preset keeps. Shared block settings are saved either way.
               </p>
               <div className="control-stack">
-                <Button onClick={() => void saveScenes(true)}>
+                <Button
+                  onClick={() =>
+                    void saveScenes(true, withSettings(editingScene.id))
+                  }
+                >
                   Update {editingScene.name} and save
                 </Button>
                 <Button
@@ -170,7 +233,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={draftCount === 0}
+                  disabled={pending === 0}
                   onClick={() => void saveScenes(false)}
                 >
                   Save without this mix
@@ -193,18 +256,22 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                   const session = state.control?.session;
                   const label = namingScene.trim();
                   if (!session || !label) return;
+                  const values = settings.values();
                   setSceneUpdates({
                     session,
                     gains: drafts,
+                    controls: draftedControls,
                     added: [
                       ...addedScenes,
                       {
                         id: `scene-${crypto.randomUUID().slice(0, 8)}`,
                         name: label,
                         gains: editingSceneGains,
+                        ...(values.length ? { controls: values } : {}),
                       },
                     ],
                   });
+                  settings.reset();
                   setNamingScene(null);
                 }}
               >
@@ -237,14 +304,14 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               </form>
             </AdjustmentDialog>
           )}
-          {(draftCount > 0 || sceneMixChanged) && (
+          {(pending > 0 || changed) && (
             <div className="scene-context-actions" aria-label="Scene edits">
               <span className="caption" role="status">
-                {draftCount === 0
+                {pending === 0
                   ? 'The mix you hear is not saved in a scene yet.'
-                  : draftCount === 1
+                  : pending === 1
                     ? '1 scene updated · not saved yet.'
-                    : `${draftCount} scenes updated · not saved yet.`}
+                    : `${pending} scenes updated · not saved yet.`}
                 {addedScenes.length > 0 &&
                   ` New: ${addedScenes.map((scene) => scene.name).join(', ')}.`}
               </span>
@@ -261,7 +328,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               <Button
                 disabled={disabled || editing || !!edit || !!picker}
                 onClick={() =>
-                  sceneMixChanged ? setSaveReview(true) : void saveScenes(false)
+                  changed ? setSaveReview(true) : void saveScenes(false)
                 }
               >
                 Save preset

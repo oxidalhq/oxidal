@@ -1,0 +1,139 @@
+/* The rig canvas (S-15): blocks on a wire, a + in every gap, splits stack
+   their paths with a caption each. It scrolls sideways on every width. */
+.route-canvas {
+  min-width: 0;
+}
+.route-canvas[data-dragging] {
+  user-select: none;
+}
+.route-scroll {
+  overflow-x: auto;
+  padding-block: 0.25rem 0.5rem;
+}
+.route-row {
+  display: flex;
+  align-items: center;
+  flex: none;
+  width: max-content;
+}
+.route-port {
+  flex: none;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--wire);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  font: 600 0.6875rem var(--font-mono);
+}
+.route-gap {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  min-height: var(--touch-target);
+}
+.route-gap::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px solid var(--wire);
+}
+.route-gap-add {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--wire);
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+.route-gap-add:hover,
+.route-gap-add:focus-visible {
+  border-color: var(--foreground);
+  color: var(--foreground);
+}
+.route-gap[data-drop] .route-gap-add,
+.route-empty[data-drop] {
+  border: 2px solid var(--foreground);
+  color: var(--foreground);
+}
+.route-block {
+  display: flex;
+  flex: none;
+  gap: 0.25rem;
+}
+.route-block[data-lifted] {
+  position: relative;
+  z-index: 2;
+  opacity: 0.7;
+}
+.route-tile[data-movable] {
+  touch-action: pan-x;
+}
+.route-split {
+  display: grid;
+  flex: none;
+  gap: 0.5rem;
+  padding-block: 0.25rem;
+  border-inline: 2px solid var(--wire);
+}
+.route-path {
+  display: grid;
+  gap: 0.125rem;
+}
+.route-path[data-dim] {
+  opacity: 0.6;
+}
+.route-path-caption {
+  padding-left: 0.5rem;
+  color: var(--muted-foreground);
+  font: 500 var(--text-2xs, 0.6875rem) var(--font-mono);
+  white-space: nowrap;
+}
+.route-empty {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-height: var(--touch-target);
+  padding: 0 0.75rem;
+  border: 1px dashed var(--foreground);
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font-weight: 600;
+}
+span.route-empty {
+  border-color: var(--wire);
+  color: var(--muted-foreground);
+  font-style: italic;
+  font-weight: 500;
+}
+/* Phones: larger + targets. */
+@media (max-width: 640px) {
+  .route-gap {
+    width: 2.75rem;
+  }
+  .route-gap-add {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+}
+
+/* E-paper: the chain as a numbered list with path labels (S-17). */
+.route-list,
+.route-list ol {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: decimal;
+}
+.route-list ol {
+  margin-top: 0.25rem;
+}
+.route-list li {
+  line-height: 1.6;
+}

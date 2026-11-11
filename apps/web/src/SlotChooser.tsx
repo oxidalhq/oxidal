@@ -28,6 +28,7 @@ export function SlotChooser({
   allowEffects,
   modelsAllowed = true,
   placement,
+  effectTitle = 'Add an effect',
   onModel,
   onEffect,
   onCancel,
@@ -41,6 +42,8 @@ export function SlotChooser({
   modelsAllowed?: boolean;
   /** 'here' adds an effect at this slot, with no before/after/split step. */
   placement?: 'here';
+  /** The effect step's title, such as "Replace with…" for Replace…. */
+  effectTitle?: string;
   onModel: (format: 'nam' | 'ir') => void;
   onEffect: (plugin: Lv2Plugin, placement: Placement) => void;
   onCancel: () => void;
@@ -127,7 +130,7 @@ export function SlotChooser({
         step === 'kind'
           ? 'Add to this slot'
           : step === 'effect'
-            ? 'Add an effect'
+            ? effectTitle
             : `Where does ${plugin?.name ?? 'it'} go?`
       }
       onCancel={onCancel}

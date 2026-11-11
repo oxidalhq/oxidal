@@ -1,5 +1,9 @@
 import { GearIcon } from '../../GearIcon';
-import { type NewScene, branchEffects } from '../../sceneEdit';
+import {
+  type NewScene,
+  type SceneControl,
+  branchEffects,
+} from '../../sceneEdit';
 import type { RigAudioState, RigControl, RigDocument } from '../../api';
 import {
   type RigBlockVM,
@@ -9,7 +13,10 @@ import {
   chainRoute,
   isRigBlockNode,
   routeBranchOf,
+  routeSpot,
 } from '../../rigChain';
+import { sceneSplitIndex } from '../../rigRoute';
+import type { SceneLanes } from '../../components/RouteTree';
 import { controlGroup } from '../../rigControls';
 import { createElement } from 'react';
 import { lv2Control } from '../../lv2Control';
@@ -37,6 +44,8 @@ export type SceneDraft = {
   session: string;
   gains: Record<string, SceneGain[]>;
   added?: NewScene[];
+  /** Effect settings changed with Update scene, by scene id (D-6). */
+  controls?: Record<string, SceneControl[]>;
 };
 
 export type MixedRigViewInput = {
@@ -73,17 +82,20 @@ export function mixedRigViewModel({
   sceneDraft,
   sceneUpdates,
   gears,
-  narrow,
   switching,
 }: MixedRigViewInput) {
   const running = state.phase === 'running';
   const nodes =
     matching?.manifest.oxidal?.graph.nodes.filter(isRigBlockNode) ?? [];
+  // An empty node is a cleared selection (the sheet's Close); with no choice
+  // for this revision the first block is selected.
+  const chosen =
+    selection && selection.revision === revision ? selection.node : null;
   const selected =
-    nodes.find(
-      (n) =>
-        selection && selection.revision === revision && n.id === selection.node,
-    ) ?? nodes.find((n) => n.kind !== 'output');
+    chosen === ''
+      ? undefined
+      : (nodes.find((n) => n.id === chosen) ??
+        nodes.find((n) => n.kind !== 'output'));
   const stageRole = matching?.manifest.tone3000.instances.find(
     (n) => n.id === selected?.instance,
   )?.processingRole;
@@ -527,12 +539,38 @@ export function mixedRigViewModel({
         empty: true,
       }),
   }));
+  // The rig canvas draws the whole routing tree, scene lanes included (S-15).
+  const fullRoute = matching?.manifest.oxidal
+    ? chainRoute(matching.manifest.oxidal.graph)
+    : null;
+  const sceneAt = fullRoute ? sceneSplitIndex(fullRoute, sceneBranchIds) : -1;
+  const sceneStep = fullRoute?.[sceneAt];
+  const sceneCanvas: SceneLanes | null =
+    sceneStep && typeof sceneStep !== 'string'
+      ? {
+          split: sceneStep.split,
+          names: sceneBranchIds.map(
+            (id) => sceneList.find((scene) => scene.id === id)?.name ?? id,
+          ),
+          sounding: (() => {
+            const at = sceneLanes.findIndex((lane) => lane.active);
+            return at < 0 ? null : at;
+          })(),
+        }
+      : null;
+  /** The canvas draws and edits the route; scene presets only with their
+   * scene lanes intact. Other shapes keep the routing view. */
+  const editable = !!fullRoute && (!sceneBranchIds.length || sceneAt === 0);
+  const routeIds = (function collect(steps: NonNullable<typeof fullRoute>) {
+    return steps.flatMap((step): string[] =>
+      typeof step === 'string' ? [step] : step.branches.flatMap(collect),
+    );
+  })(editable ? fullRoute! : []);
+  /** Nodes the canvas draws; the routing view shows the rest. */
   const lanedNodes = new Set([
-    ...sceneBranches.map((n) => n.id),
-    ...chainNodes,
-    ...sceneEffectSet,
+    ...routeIds,
     // Mono adapters belong to their effect's tile, never a tile of their own.
-    ...(chainIds || sceneEffectSet.size
+    ...(routeIds.length
       ? nodes.filter((n) => /-(mono|stereo)$/.test(n.id))
       : []
     ).map((n) => n.id),
@@ -544,12 +582,26 @@ export function mixedRigViewModel({
       : null,
     selected?.id ?? '',
   );
-  const editable = effectLanes.length > 0;
-  /** Where the selected block sits in its lane, to stop moves at the ends. */
+  /** Where the selected block sits in the route, and the splits around it. */
+  const selectedSpot = editable
+    ? routeSpot(fullRoute, selected?.id ?? '')
+    : null;
+  /** The selected block is on a scene's path (its tone stays first there). */
+  const selectedInScene =
+    !!sceneCanvas &&
+    !!selectedSpot?.owners.some((o) => o.split === sceneCanvas.split);
+  /** Move ◀ / Move ▶ stop at the ends of the chain and before a scene's tone. */
   const place = (() => {
-    const lane = chainIds?.find((ids) => ids.includes(selected?.id ?? ''));
-    const at = lane?.indexOf(selected!.id) ?? -1;
-    return { first: at <= 0, last: !lane || at >= lane.length - 1 };
+    if (!selectedSpot) return { first: true, last: true };
+    const top = !selectedSpot.owners.length;
+    const afterTone =
+      selectedInScene &&
+      selectedSpot.owners.length === 1 &&
+      selectedSpot.index <= 1;
+    return {
+      first: (top && selectedSpot.index === 0) || afterTone,
+      last: top && selectedSpot.index === selectedSpot.length - 1,
+    };
   })();
   /** A lane tile's node, and its block for a TONE3000 node ('' for an effect). */
   const laneTarget = (laneBlock: string) => {
@@ -570,11 +622,7 @@ export function mixedRigViewModel({
           selected.kind === 'tone3000' ? nativeTarget : '',
         )
       : undefined;
-  // Phones read split routing as a vertical tree (7.28).
-  const fullRoute = matching?.manifest.oxidal
-    ? chainRoute(matching.manifest.oxidal.graph)
-    : null;
-  /** Every split in the route, outermost first, for the desktop split row. */
+  /** Every split in the route but the scenes, outermost first, for the split row. */
   const routeSplits = (function collect(
     steps: NonNullable<typeof fullRoute>,
   ): Exclude<NonNullable<typeof fullRoute>[number], string>[] {
@@ -583,13 +631,7 @@ export function mixedRigViewModel({
         ? []
         : [step, ...step.branches.flatMap((branch) => collect(branch))],
     );
-  })(sceneLanes.length ? [] : (fullRoute ?? []));
-  const routeTree =
-    narrow &&
-    !sceneLanes.length &&
-    fullRoute?.some((step) => typeof step !== 'string')
-      ? fullRoute
-      : null;
+  })(fullRoute ?? []).filter((split) => split.split !== sceneCanvas?.split);
   // Perform: the sounding scene's blocks and effects as switches, scene pads
   // above, the preset pads below. A Hold effect's tile engages and releases the
   // hold; any other effect's tile switches it in and out.
@@ -685,7 +727,9 @@ export function mixedRigViewModel({
     selectedLaneTile,
     fullRoute,
     routeSplits,
-    routeTree,
+    sceneCanvas,
+    selectedSpot,
+    selectedInScene,
     holdOf,
     nativeSwitch,
     stageLanes,

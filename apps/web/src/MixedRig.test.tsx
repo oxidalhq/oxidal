@@ -926,14 +926,18 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
   expect(
     within(dialog).getByRole('button', { name: '+ Add dry path' }),
   ).toBeVisible();
-  // On a phone the same routing reads as a tree with a + at the end of each
-  // path, which opens the block chooser for that path (7.28).
+  // Phones draw the same canvas, scrolling sideways: a + in each gap of a
+  // path offers Add effect or Split here for that place (S-15).
   narrow = true;
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
-  const tree = await screen.findByRole('group', { name: 'Signal chain' });
+  const chain = await screen.findByRole('group', { name: 'Signal chain' });
   fireEvent.click(
-    within(tree).getByRole('button', { name: 'Add a block to path 2' }),
+    within(chain).getByRole('button', {
+      name: 'Add or split on path 2 at position 2',
+    }),
   );
-  expect(await screen.findByRole('dialog')).toBeVisible();
+  expect(
+    await screen.findByRole('dialog', { name: 'Add or split here' }),
+  ).toBeVisible();
   narrow = false;
 });

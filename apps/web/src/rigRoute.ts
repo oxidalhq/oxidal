@@ -73,13 +73,8 @@ export function readRoute(
   return map(ids);
 }
 
-/** The next version of the preset from its route. */
-export function buildRoute(
-  id: string,
-  name: string,
-  route: Route,
-  profile: string,
-): RigPublish {
+/** Rejects a route where one block appears twice; returns every block. */
+function uniqueBlocks(route: Route): DraftEffect[] {
   const blocks = routeBlocks(route);
   const seen = new Set<string>();
   for (const b of blocks) {
@@ -87,10 +82,16 @@ export function buildRoute(
       throw new Error('A block can only be in one place. Remove one copy.');
     seen.add(b.id);
   }
-  validateStages(blocks);
-  const rig = rigBuilder(id, name, profile, false);
-  const nodes = new Set<string>();
-  function place(steps: Route, from: Stereo): Stereo {
+  return blocks;
+}
+
+/**
+ * Places a route's steps after `from` with a rig builder: blocks are chained,
+ * each split gets its `-left`/`-right` split and merge pairs. `taken` holds
+ * every node id already in use, so two splits never share a name.
+ */
+function placer(rig: ReturnType<typeof rigBuilder>, taken: Set<string>) {
+  return function place(steps: Route, from: Stereo): Stereo {
     let run: DraftEffect[] = [];
     let at = from;
     for (const step of steps) {
@@ -105,9 +106,9 @@ export function buildRoute(
         throw new Error('A split needs two paths and a block on one of them.');
       for (const base of [step.split, step.merge])
         for (const side of ['left', 'right'])
-          if (nodes.has(`${base}-${side}`) || seen.has(`${base}-${side}`))
+          if (taken.has(`${base}-${side}`))
             throw new Error('Two splits share a name. Rebuild this split.');
-          else nodes.add(`${base}-${side}`);
+          else taken.add(`${base}-${side}`);
       const splits = (['left', 'right'] as const).map((side, port) => {
         const node = `${step.split}-${side}`;
         rig.host.graph.nodes.push({
@@ -151,7 +152,20 @@ export function buildRoute(
       at = [merges[0]!, merges[1]!];
     }
     return rig.chain(run, at);
-  }
+  };
+}
+
+/** The next version of the preset from its route. */
+export function buildRoute(
+  id: string,
+  name: string,
+  route: Route,
+  profile: string,
+): RigPublish {
+  const blocks = uniqueBlocks(route);
+  validateStages(blocks);
+  const rig = rigBuilder(id, name, profile, false);
+  const place = placer(rig, new Set(blocks.map((b) => b.id)));
   return rig.finish(place(route, rig.input));
 }
 
@@ -554,4 +568,307 @@ export function routePathGain(
   if (!s || path >= s.branches.length) return route;
   const mix = pathMix(s.gains[path] ?? 1, s.rightGains?.[path]);
   return routePathMix(route, split, path, { ...mix, level: gain });
+}
+
+/* ---------- The rig canvas: gaps, moves across paths, replace (S-15). ---------- */
+
+/** The most outputs one split node may have in the engine, so the most paths. */
+export const MAX_PATHS = 64;
+
+/** A gap in the chain: before step `index` of the top level (`split` null) or
+ * of path `path` of split `split`; a split counts as one step. */
+export type RouteAt = { split: string | null; path: number; index: number };
+
+function listAt(route: Route, at: RouteAt): Step[] {
+  const list =
+    at.split === null ? route : findSplit(route, at.split)?.branches[at.path];
+  if (!list) throw new Error('That place is no longer in this preset.');
+  return list;
+}
+const within = (list: unknown[], index: number) =>
+  Math.max(0, Math.min(list.length, index));
+
+/** Adds `effect` at a gap. */
+export function routeInsertAt(
+  route: Route,
+  at: RouteAt,
+  effect: DraftEffect,
+): Route {
+  const next = clone(route);
+  const list = listAt(next, at);
+  list.splice(within(list, at.index), 0, effect);
+  return next;
+}
+
+/** Split here at a gap: Path 1 holds `effect`, Path 2 is dry ("Add effect"). */
+export function routeSplitAt(
+  route: Route,
+  at: RouteAt,
+  effect: DraftEffect,
+): Route {
+  const next = clone(route);
+  const list = listAt(next, at);
+  list.splice(within(list, at.index), 0, newSplit([[effect], []]));
+  return next;
+}
+
+/** The list holding split `split` and its index there. */
+function parentOf(
+  route: Route,
+  split: RouteSplit,
+): { list: Step[]; index: number } | null {
+  for (const [index, s] of route.entries()) {
+    if (s === split) return { list: route, index };
+    if (isSplit(s))
+      for (const b of s.branches) {
+        const found = parentOf(b, split);
+        if (found) return found;
+      }
+  }
+  return null;
+}
+
+/** Takes `block` out of `list`; the path it leaves stays as a dry path. */
+function lift(list: Step[], block: Step, dry: Set<Step[]>) {
+  list.splice(list.indexOf(block), 1);
+  if (!list.length) dry.add(list);
+}
+
+/**
+ * Drag and drop: block `id` moves to a gap, within its path or onto another.
+ * The path it leaves stays as a dry path; a split left with no block dissolves.
+ */
+export function routeMoveTo(route: Route, id: string, at: RouteAt): Route {
+  const next = clone(route);
+  const dry = dryPaths(next);
+  const from = locate(next, id);
+  if (!from) return route;
+  const block = from.list[from.index]!;
+  const list = listAt(next, at);
+  const index = within(list, at.index);
+  if (list === from.list && (index === from.index || index === from.index + 1))
+    return route;
+  list.splice(index, 0, { ...(block as DraftEffect) });
+  lift(from.list, block, dry);
+  return tidy(next, dry);
+}
+
+/**
+ * Move ◀ / Move ▶: one place earlier or later. Next to a split the block steps
+ * into its first path; at either end of a path it steps out of its split.
+ */
+export function routeStep(route: Route, id: string, step: -1 | 1): Route {
+  const next = clone(route);
+  const dry = dryPaths(next);
+  const at = locate(next, id);
+  if (!at) return route;
+  const block = at.list[at.index]!;
+  const to = at.index + step;
+  if (to >= 0 && to < at.list.length) {
+    const neighbour = at.list[to]!;
+    at.list.splice(at.index, 1);
+    if (isSplit(neighbour)) {
+      const path = neighbour.branches[0]!;
+      if (step < 0) path.push(block);
+      else path.unshift(block);
+    } else at.list.splice(to, 0, block);
+    return tidy(next, dry);
+  }
+  const parent = at.owner && parentOf(next, at.owner);
+  if (!parent) return route;
+  lift(at.list, block, dry);
+  parent.list.splice(parent.index + (step > 0 ? 1 : 0), 0, block);
+  return tidy(next, dry);
+}
+
+/** ▲ Path / Path ▼: the same place on the path above or below. */
+export function routePathStep(route: Route, id: string, step: -1 | 1): Route {
+  const next = clone(route);
+  const dry = dryPaths(next);
+  const at = locate(next, id);
+  const to = at?.owner?.branches[at.branch! + step];
+  if (!at || !to) return route;
+  const block = at.list[at.index]!;
+  lift(at.list, block, dry);
+  to.splice(within(to, at.index), 0, block);
+  return tidy(next, dry);
+}
+
+/** Replace…: another effect in the same place. */
+export function routeReplace(
+  route: Route,
+  id: string,
+  effect: DraftEffect,
+): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  if (!at) throw new Error('That block is no longer in this preset.');
+  at.list[at.index] = effect;
+  return next;
+}
+
+/** Duplicate: a copy of the block, with a new id, right after it. */
+export function routeDuplicate(route: Route, id: string): Route {
+  const next = clone(route);
+  const at = locate(next, id);
+  if (!at) throw new Error('That block is no longer in this preset.');
+  at.list.splice(at.index + 1, 0, ...copySteps([at.list[at.index]!]));
+  return next;
+}
+
+/* ---------- Presets with scene lanes (S-15). ---------- */
+
+type Manifest = RigDocument['manifest'];
+type AnyStep = IdStep | Step;
+const stepId = (s: AnyStep | undefined) =>
+  s === undefined || typeof s === 'string'
+    ? s
+    : 'branches' in s
+      ? undefined
+      : s.id;
+
+/** The TONE3000 tone of each scene branch, in scene order (none without). */
+export function sceneTones(manifest: Manifest | undefined): string[] {
+  const ext = manifest?.extensions['urn:oxidal:scenes:1'] as
+    { branches?: { id?: unknown }[] } | undefined;
+  return Array.isArray(ext?.branches)
+    ? ext.branches.flatMap((b) => (typeof b.id === 'string' ? [b.id] : []))
+    : [];
+}
+
+/** The top-level split whose paths are the scenes, each starting with its
+ * tone; -1 when there is none. */
+export function sceneSplitIndex(steps: AnyStep[], tones: string[]): number {
+  if (!tones.length) return -1;
+  return steps.findIndex(
+    (s) =>
+      typeof s === 'object' &&
+      'branches' in s &&
+      s.branches.length === tones.length &&
+      (s.branches as AnyStep[][]).every((b, i) => stepId(b[0]) === tones[i]),
+  );
+}
+
+/**
+ * The next version of a preset with scene lanes. Each scene's path keeps its
+ * tone first; everything after it, splits included, and everything after the
+ * scenes is rebuilt in the existing manifest, so the scenes, their gates, the
+ * TONE3000 chains and their resources are untouched.
+ */
+export function buildSceneRoute(
+  document: RigDocument,
+  route: Route,
+  name?: string,
+): RigPublish {
+  const tones = sceneTones(document.manifest);
+  const before = document.manifest.oxidal
+    ? chainRoute(document.manifest.oxidal.graph)
+    : null;
+  const was = before?.[sceneSplitIndex(before, tones)];
+  if (
+    !before ||
+    sceneSplitIndex(before, tones) !== 0 ||
+    typeof was !== 'object'
+  )
+    throw new Error('This preset’s routing cannot be edited here.');
+  const scene = route[0];
+  if (
+    sceneSplitIndex(route, tones) !== 0 ||
+    !isSplit(scene) ||
+    scene.split !== was.split
+  )
+    throw new Error(
+      'Each scene keeps its own path, with its tone first. Add or remove scenes with the scene pads.',
+    );
+  const blocks = uniqueBlocks(route);
+  validateStages(blocks);
+  const after = [
+    ...scene.branches.flatMap((b) => b.slice(1)),
+    ...route.slice(1),
+  ];
+  if (routeBlocks(after).some((b) => b.kind !== 'lv2'))
+    throw new Error('Only effects go after a scene’s tone.');
+  const manifest: Manifest = JSON.parse(JSON.stringify(document.manifest));
+  if (name) manifest.name = name.trim();
+  const authoring = (manifest.extensions['urn:oxidal:authoring'] ??= {});
+  authoring.origin = 'mine';
+  const labels = (authoring.labels ??= {}) as Record<string, string>;
+  const host = manifest.oxidal!;
+  const edges = host.graph.edges;
+  const mergeL = `${scene.merge}-left`;
+  const mergeR = `${scene.merge}-right`;
+  const output = host.graph.nodes.find((n) => n.kind === 'output')?.id ?? 'out';
+  /** Every node after `starts` and before `stops`: the part that is rebuilt. */
+  const reach = (starts: string[], stops: Set<string>) => {
+    const found = new Set<string>();
+    const queue = [...starts];
+    while (queue.length) {
+      const id = queue.shift()!;
+      for (const e of edges)
+        if (
+          e.from.node === id &&
+          !stops.has(e.to.node) &&
+          !found.has(e.to.node)
+        ) {
+          found.add(e.to.node);
+          queue.push(e.to.node);
+        }
+    }
+    return found;
+  };
+  const removed = new Set([
+    ...tones.flatMap((t) => [...reach([t], new Set([mergeL, mergeR]))]),
+    ...reach([mergeL, mergeR], new Set([output])),
+  ]);
+  const starts = new Set([...tones, mergeL, mergeR]);
+  const instances = new Set(
+    host.graph.nodes.filter((n) => removed.has(n.id)).map((n) => n.instance),
+  );
+  host.graph.edges = edges.filter(
+    (e) =>
+      !removed.has(e.from.node) &&
+      !removed.has(e.to.node) &&
+      !starts.has(e.from.node),
+  );
+  host.graph.nodes = host.graph.nodes.filter((n) => !removed.has(n.id));
+  host.lv2 = host.lv2.filter((l) => !instances.has(l.id));
+  for (const id of removed) delete labels[id];
+  const rig = rigBuilder(manifest.id, manifest.name, '', false, manifest);
+  const place = placer(
+    rig,
+    new Set([...host.graph.nodes.map((n) => n.id), ...blocks.map((b) => b.id)]),
+  );
+  const link = (from: Stereo, to: Stereo) =>
+    host.graph.edges.push(
+      { from: from[0], to: to[0] },
+      { from: from[1], to: to[1] },
+    );
+  scene.branches.forEach((branch, port) => {
+    const tone = stepId(branch[0])!;
+    const end = place(branch.slice(1), [
+      { node: tone, port: 0 },
+      { node: tone, port: 1 },
+    ]);
+    link(end, [
+      { node: mergeL, port },
+      { node: mergeR, port },
+    ]);
+  });
+  const end = place(route.slice(1), [
+    { node: mergeL, port: 0 },
+    { node: mergeR, port: 0 },
+  ]);
+  link(end, [
+    { node: output, port: 0 },
+    { node: output, port: 1 },
+  ]);
+  return {
+    manifest_json: JSON.stringify(manifest),
+    resources: Object.fromEntries(
+      manifest.resources.map((r) => [
+        r.id,
+        { kind: 'bundle', revision: document.revision, resource: r.id },
+      ]),
+    ),
+  };
 }

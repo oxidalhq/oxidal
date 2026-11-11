@@ -26,10 +26,14 @@ import {
 import type { RigPublish } from '../../generated/contract';
 import {
   type Route,
+  type RouteAt,
   buildRoute,
+  buildSceneRoute,
   readRoute,
-  routeLanes,
-  routeMove,
+  routeMoveTo,
+  routePathStep,
+  routeStep,
+  sceneTones,
 } from '../../rigRoute';
 import { errorDetails, friendlyError } from '../../lib/friendlyError';
 import { keepScenes, updateScenes } from '../../sceneEdit';
@@ -38,7 +42,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFailure } from '../../lib/useFailure';
 import { useNarrow } from '../../lib/useNarrow';
 import {
-  END,
   key,
   mixedRigViewModel,
   type SceneDraft,
@@ -96,6 +99,13 @@ export function useMixedRigSession({
     allowedFormat?: 'nam' | 'ir';
   } | null>(null);
   const [adding, setAdding] = useState(false);
+  /** The rig canvas's open chooser: a gap's Add or split menu, an effect to
+   * add or split in at a gap, or the effect replacing a block (S-15). */
+  const [canvasChoice, setCanvasChoice] = useState<
+    | { kind: 'gap' | 'add' | 'split'; at: RouteAt }
+    | { kind: 'replace'; id: string }
+    | null
+  >(null);
   // An empty lane slot the player tapped: which node, which slot.
   const [laneSlot, setLaneSlot] = useState<{
     node: string;
@@ -525,13 +535,23 @@ export function useMixedRigSession({
   }
   /** Saves the scene draft in one publish; `withMix` also updates the scene
    * being edited to the mix heard now. */
-  function saveScenes(withMix: boolean) {
+  function saveScenes(
+    withMix: boolean,
+    withControls: SceneDraft['controls'] = {},
+  ) {
     const { editingScene, drafts, editingSceneGains, addedScenes } = view!;
     setSaveReview(false);
     const gains =
       withMix && editingScene
         ? { ...drafts, [editingScene.id]: editingSceneGains }
         : drafts;
+    // Effect settings drafted with Update scene (D-6), plus any the caller adds.
+    const controls = {
+      ...(sceneUpdates?.session === current.current?.control?.session
+        ? (sceneUpdates?.controls ?? {})
+        : {}),
+      ...withControls,
+    };
     return rebuild(({ opened, live, name }) =>
       updateScenes(
         opened,
@@ -540,6 +560,7 @@ export function useMixedRigSession({
         live,
         name,
         addedScenes,
+        controls,
       ),
     );
   }
@@ -710,28 +731,37 @@ export function useMixedRigSession({
     if (changed) setUnsaved(() => run);
     else return run();
   }
-  /** Rebuilds this preset with a change to its chain of blocks. */
+  /** Rebuilds this preset with a change to its chain of blocks. A preset
+   * with scene lanes keeps its scenes and edits inside them (S-15). */
   function editChain(change: (route: Route) => Route) {
-    return rebuild(({ opened, plugins, live, name, profile }) =>
-      keepScenes(
-        opened,
-        buildRoute(
-          opened.manifest.id,
-          name,
-          change(readRoute(opened, plugins, live)),
-          profile,
-        ),
-      ),
-    );
-  }
-  /** One place left or right within the block's lane. */
-  function shift(id: string, step: -1 | 1) {
-    return editChain((route) => {
-      const lanes = routeLanes(route);
-      const lane = lanes.findIndex((l) => l.some((b) => b.id === id));
-      const at = lanes[lane]?.findIndex((b) => b.id === id) ?? -1;
-      return routeMove(route, id, at + step, lane);
+    return rebuild(({ opened, plugins, live, name, profile }) => {
+      const route = change(readRoute(opened, plugins, live));
+      return sceneTones(opened.manifest).length
+        ? buildSceneRoute(opened, route, name)
+        : keepScenes(
+            opened,
+            buildRoute(opened.manifest.id, name, route, profile),
+          );
     });
+  }
+  /** Move ◀ / Move ▶: one place, stepping into or out of splits. */
+  function shift(id: string, step: -1 | 1) {
+    return editChain((route) => routeStep(route, id, step));
+  }
+  /** ▲ Path / Path ▼: the same place on the path above or below. */
+  function shiftPath(id: string, step: -1 | 1) {
+    return editChain((route) => routePathStep(route, id, step));
+  }
+  /** Clears the selected block: the block sheet closes. */
+  function clearSelection() {
+    if (!revision) return;
+    const cleared = { revision, node: '' };
+    setSelection(cleared);
+    try {
+      sessionStorage.setItem('oxidal.mixed.selection', JSON.stringify(cleared));
+    } catch {
+      /* browsing preferences are optional */
+    }
   }
   async function switchPrepared(revision: string) {
     const cursor = current.current;
@@ -853,7 +883,7 @@ export function useMixedRigSession({
       }
     }
   }
-  const view =
+  const model =
     !state ||
     state.phase === 'unavailable' ||
     !state.configured ||
@@ -877,6 +907,14 @@ export function useMixedRigSession({
           narrow,
           switching,
         });
+  // The block sheet's Close clears the selection (phones: a bottom sheet).
+  const view = model && {
+    ...model,
+    selectedSheet: model.selectedSheet && {
+      ...model.selectedSheet,
+      onClose: clearSelection,
+    },
+  };
   async function saveCopy() {
     const cursor = current.current;
     if (
@@ -930,32 +968,21 @@ export function useMixedRigSession({
       if (alive.current) setBusy(false);
     }
   }
-  /** A dragged effect dropped before tile `before` in `lane` (null: the end). */
-  function dropBlock(tile: string, lane: number, before: string | null) {
-    const { chainIds, effectLanes, laneTarget } = view!;
-    const id = laneTarget(tile)?.node;
-    const ids = chainIds?.[lane];
-    if (!id || !ids) return;
-    const rest = ids.filter((n) => n !== id);
-    const at = before ? laneTarget(before) : null;
-    let index = rest.length;
-    if (at && at.node !== END) {
-      const node = rest.indexOf(at.node);
-      // Before a TONE3000 chain only at its first tile; otherwise after it.
-      const first = effectLanes[lane]?.blocks.find(
-        (b) => laneTarget(b.id)?.node === at.node,
-      );
-      if (node >= 0) index = first?.id === before ? node : node + 1;
-    }
-    if (chainIds?.findIndex((l) => l.includes(id)) === lane)
-      if (ids.indexOf(id) === index) return;
-    void editChain((route) => routeMove(route, id, index, lane));
+  /** A dragged block dropped on a gap, in its own path or another. */
+  function dropBlock(id: string, at: RouteAt) {
+    void editChain((route) => routeMoveTo(route, id, at));
   }
   function selectLaneTile(laneBlock: string) {
     const { laneTarget } = view!;
     const at = laneTarget(laneBlock);
     if (!revision || !at) return;
-    setSelection({ revision, node: at.node });
+    const chosen = { revision, node: at.node };
+    setSelection(chosen);
+    try {
+      sessionStorage.setItem('oxidal.mixed.selection', JSON.stringify(chosen));
+    } catch {
+      /* browsing preferences are optional */
+    }
     if (at.block) setNativeSelection({ node: at.node, target: at.block });
   }
   function switchTile(tile: string) {
@@ -1022,6 +1049,7 @@ export function useMixedRigSession({
     saveOpening,
     setSaveOpening,
     setSceneDraft,
+    sceneUpdates,
     setSceneUpdates,
     namingScene,
     setNamingScene,
@@ -1050,6 +1078,10 @@ export function useMixedRigSession({
     rebuild,
     editChain,
     shift,
+    shiftPath,
+    clearSelection,
+    canvasChoice,
+    setCanvasChoice,
     switchPrepared,
     open,
     finish,

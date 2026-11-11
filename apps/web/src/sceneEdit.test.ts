@@ -4,9 +4,17 @@ import schema from '../../../docs/presets/manifest.schema.json';
 import type { Lv2Plugin, Preset, RigDocument } from './api';
 import { lv2Effect, sceneRig, type NativeDraft } from './rigDraft';
 import {
+  LAST_SCENE,
   addSceneEffect,
   branchEffects,
+  copySceneTo,
+  deleteScene,
+  duplicateScene,
+  keepScenes,
+  moveScene,
   removeSceneEffect,
+  renameScene,
+  sceneCopyPlan,
   updateScene,
   updateScenes,
 } from './sceneEdit';
@@ -263,4 +271,206 @@ it('saves a new scene from the live mix with its own id, beside the others', () 
       { id: 'scene-x', name: ' ', gains },
     ]),
   ).toThrow('name');
+});
+
+type Ext = {
+  fade_ms: number;
+  scenes: {
+    id: string;
+    name: string;
+    gains: { node: string; port: number; value: number }[];
+    controls?: { node: string; symbol: string; value: number }[];
+  }[];
+};
+/** A preset with one effect and a gain the scenes switch. */
+function lv2Scenes(
+  name = 'Lead',
+  effects = ['echo'],
+  controls?: Record<string, number>,
+): RigDocument {
+  const chain = ['in', ...effects, 'scene-gain', 'out'];
+  return {
+    revision: `${name.toLowerCase()}`.padEnd(64, '0'),
+    manifest: {
+      format: 'oxidal.preset',
+      formatVersion: 1,
+      id: '4b6c6a52-0d4e-4c55-9d5a-7f0e3f1a2b3c',
+      name,
+      tone3000: { instances: [] },
+      oxidal: {
+        graph: {
+          nodes: [
+            { id: 'in', kind: 'input', audioInputs: 0, audioOutputs: 1 },
+            ...effects.map((id) => ({
+              id,
+              kind: 'lv2' as const,
+              instance: id,
+              audioInputs: 1,
+              audioOutputs: 1,
+            })),
+            {
+              id: 'scene-gain',
+              kind: 'gain',
+              audioInputs: 1,
+              audioOutputs: 1,
+              inputGains: [1],
+            },
+            { id: 'out', kind: 'output', audioInputs: 1, audioOutputs: 0 },
+          ],
+          edges: chain.slice(1).map((to, i) => ({
+            from: { node: chain[i]!, port: 0 },
+            to: { node: to, port: 0 },
+          })),
+        },
+        lv2: effects.map((id) => ({
+          id,
+          pluginUri: 'urn:example:mono',
+          controls: { gain: 0, ...controls },
+          assets: [],
+          requiredFeatures: [],
+        })),
+        recall: { tails: 'cut' },
+      },
+      resources: [],
+      extensions: {
+        'urn:oxidal:gain:1': {},
+        'urn:oxidal:authoring': { labels: { echo: 'Echo' } },
+        'urn:oxidal:scenes:1': {
+          fade_ms: 10,
+          scenes: [
+            {
+              id: 'clean',
+              name: 'Clean',
+              gains: [{ node: 'scene-gain', port: 0, value: 1 }],
+            },
+            {
+              id: 'lead',
+              name: 'Lead',
+              gains: [{ node: 'scene-gain', port: 0, value: 0.5 }],
+            },
+          ],
+        },
+      },
+      requiredExtensions: ['urn:oxidal:gain:1', 'urn:oxidal:scenes:1'],
+    },
+  } as unknown as RigDocument;
+}
+const extOf = (request: { manifest_json: string }) =>
+  JSON.parse(request.manifest_json).extensions['urn:oxidal:scenes:1'] as Ext;
+
+it('renames, moves, duplicates and deletes scenes by id (S-12, S-13)', () => {
+  const document = lv2Scenes();
+  const renamed = extOf(renameScene(document, 'lead', '  Solo '));
+  expect(renamed.scenes.map((s) => [s.id, s.name])).toEqual([
+    ['clean', 'Clean'],
+    ['lead', 'Solo'],
+  ]);
+  // Moving keeps each scene's id, so MIDI bindings follow the scene.
+  const moved = extOf(moveScene(document, 'lead', -1));
+  expect(moved.scenes.map((s) => s.id)).toEqual(['lead', 'clean']);
+  expect(() => moveScene(document, 'lead', 1)).toThrow('already the last');
+  const { publish, id } = duplicateScene(document, 'clean');
+  const duplicated = extOf(publish);
+  expect(duplicated.scenes.map((s) => s.name)).toEqual([
+    'Clean',
+    'Clean copy',
+    'Lead',
+  ]);
+  expect(duplicated.scenes[1]!.id).toBe(id);
+  expect(duplicated.scenes[1]!.gains).toEqual(duplicated.scenes[0]!.gains);
+  // Deleting the playing scene reopens on its neighbour's mix.
+  const deleted = JSON.parse(
+    deleteScene(document, 'clean', 'clean').manifest_json,
+  );
+  expect(
+    deleted.extensions['urn:oxidal:scenes:1'].scenes.map(
+      (s: { id: string }) => s.id,
+    ),
+  ).toEqual(['lead']);
+  expect(
+    deleted.oxidal.graph.nodes.find(
+      (n: { id: string }) => n.id === 'scene-gain',
+    ).inputGains,
+  ).toEqual([0.5]);
+  const single = JSON.parse(
+    deleteScene(document, 'clean', undefined).manifest_json,
+  );
+  expect(() =>
+    deleteScene(
+      { revision: document.revision, manifest: single },
+      'lead',
+      undefined,
+    ),
+  ).toThrow(LAST_SCENE);
+});
+
+it('Copy to preset copies exactly with the same blocks and lists what is skipped otherwise (S-11)', () => {
+  const lead = lv2Scenes('Lead');
+  const twin = lv2Scenes('Twin');
+  expect(sceneCopyPlan(lead, 'lead', twin)).toEqual({
+    exact: true,
+    skipped: [],
+    kept: [],
+  });
+  const request = copySceneTo(lead, 'lead', twin);
+  expect(request.source).toEqual({ kind: 'rig', id: twin.revision });
+  const copied = extOf(request);
+  expect(copied.scenes.at(-1)!.name).toBe('Lead');
+  expect(copied.scenes.at(-1)!.gains).toEqual([
+    { node: 'scene-gain', port: 0, value: 0.5 },
+  ]);
+  expect(copied.scenes.at(-1)!.id).not.toBe('lead');
+  // The source scene sets the echo's level; Crunch has no echo.
+  const withControls = JSON.parse(
+    updateScenes(lead, {}, 'lead', {}, undefined, [], {
+      lead: [{ node: 'echo', symbol: 'gain', value: -6 }],
+    }).manifest_json,
+  );
+  const source = { revision: lead.revision, manifest: withControls };
+  const crunch = lv2Scenes('Crunch', []);
+  const plan = sceneCopyPlan(source, 'lead', crunch);
+  expect(plan.exact).toBe(false);
+  expect(plan.skipped).toEqual([
+    "Crunch has no 'Echo' block: its gain setting is skipped.",
+  ]);
+  const into = extOf(copySceneTo(source, 'lead', crunch));
+  expect(into.scenes.at(-1)!.controls).toBeUndefined();
+  expect(into.scenes.at(-1)!.gains[0]!.value).toBe(0.5);
+});
+
+it('scene controls: every scene carries the same set, added scenes too, and the start scene sets the effect (D-6)', () => {
+  const document = lv2Scenes('Lead', ['echo'], { gain: -3 });
+  const request = updateScenes(
+    document,
+    {},
+    'lead',
+    { echo: { gain: 2 } },
+    undefined,
+    [
+      {
+        id: 'scene-new',
+        name: 'Wash',
+        gains: [{ node: 'scene-gain', port: 0, value: 0.25 }],
+      },
+    ],
+    { lead: [{ node: 'echo', symbol: 'gain', value: 4 }] },
+  );
+  const manifest = JSON.parse(request.manifest_json);
+  const scenes = (manifest.extensions['urn:oxidal:scenes:1'] as Ext).scenes;
+  expect(scenes.map((s) => s.controls)).toEqual([
+    [{ node: 'echo', symbol: 'gain', value: -3 }],
+    [{ node: 'echo', symbol: 'gain', value: 4 }],
+    [{ node: 'echo', symbol: 'gain', value: -3 }],
+  ]);
+  expect(manifest.oxidal.lv2[0].controls.gain).toBe(4);
+  // A chain rebuild without the echo drops its scene settings.
+  const rebuilt = keepScenes(
+    { revision: document.revision, manifest },
+    {
+      manifest_json: JSON.stringify(lv2Scenes('Lead', []).manifest),
+      resources: {},
+    },
+  );
+  const kept = extOf(rebuilt);
+  expect(kept.scenes.every((s) => s.controls === undefined)).toBe(true);
 });

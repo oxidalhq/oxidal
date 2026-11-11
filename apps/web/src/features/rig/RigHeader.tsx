@@ -11,6 +11,7 @@ import { Button } from '../../components/ui/button';
 import { RigPresetSelector } from '../../RigPresetSelector';
 import { StageControls } from '../stage/StageControls';
 import { TunerButton } from '../../TunerButton';
+import { RigHeaderDuplicate } from './RigHeaderDuplicate';
 import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
 import { choiceKey } from '../../presetChoices';
 import { requestMidiAssignments } from '../../midiNavigation';
@@ -105,6 +106,12 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             {state.save?.running ? 'Saving…' : 'Save'}
           </span>
         </Button>
+        <RigHeaderDuplicate
+          revision={revision}
+          connected={connected}
+          disabled={disabled || busy || switching || !!edit || !!picker}
+          changed={!!changed}
+        />
         <TunerButton disabled={!running} />
         <Button
           variant="outline"

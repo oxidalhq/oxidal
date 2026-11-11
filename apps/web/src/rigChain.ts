@@ -176,6 +176,49 @@ export function chainLanes(graph: Graph): string[][] | null {
   return lanes.length <= MAX_CHAIN_LANES ? lanes : null;
 }
 
+/** One split that holds a block, with the path the block is on. */
+export type SpotOwner = {
+  split: string;
+  merge: string;
+  paths: number;
+  path: number;
+};
+
+/**
+ * Where block `id` sits in a routing tree: its index in the list that holds
+ * it, that list's length, and every split around it, outermost first. Null
+ * when the block is not in the tree. Moves and their disabled states use it.
+ * @see docs/interface.md
+ */
+export function routeSpot(
+  route: IdStep[] | null,
+  id: string,
+): { index: number; length: number; owners: SpotOwner[] } | null {
+  const look = (
+    steps: IdStep[],
+    owners: SpotOwner[],
+  ): ReturnType<typeof routeSpot> => {
+    for (const [index, s] of steps.entries()) {
+      if (s === id) return { index, length: steps.length, owners };
+      if (typeof s !== 'string')
+        for (const [path, b] of s.branches.entries()) {
+          const found = look(b, [
+            ...owners,
+            {
+              split: s.split,
+              merge: s.merge,
+              paths: s.branches.length,
+              path,
+            },
+          ]);
+          if (found) return found;
+        }
+    }
+    return null;
+  };
+  return route ? look(route, []) : null;
+}
+
 /** Whether block `id` sits inside a split's branch: that split's path count,
  * its merge node base and the path's merge port. */
 export function routeBranchOf(route: IdStep[] | null, id: string) {
