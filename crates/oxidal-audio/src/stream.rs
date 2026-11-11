@@ -85,6 +85,10 @@ impl Duplex {
             config.levels,
         );
         host.begin_output();
+        host.attach_backing(crate::backing::start(
+            config.input.sample_rate,
+            crate::backing::media_root(),
+        ));
         let mut stream = Self {
             host,
             input: vec![

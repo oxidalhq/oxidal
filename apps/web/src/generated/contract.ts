@@ -119,7 +119,38 @@ export type HostUtility =
       enabled: boolean;
       kind: "reference";
       peak_db: number;
+    }
+  | {
+      command: BackingCommand;
+      kind: "backing";
     };
+/**
+ * What the daemon asks the worker's backing player to do.
+ */
+export type BackingCommand =
+  | {
+      asset: MediaId;
+      channels: number;
+      frames: number;
+      from: number;
+      gain_db: number;
+      kind: "play";
+      repeat: boolean;
+      seq: number;
+    }
+  | {
+      kind: "stop";
+      seq: number;
+    }
+  | {
+      gain_db: number;
+      kind: "gain";
+    }
+  | {
+      kind: "repeat";
+      repeat: boolean;
+    };
+export type MediaId = string;
 export type BranchMode = "toggle" | "gate";
 export type Target =
   | {
@@ -1642,6 +1673,10 @@ export interface Channel {
   rms_dbfs: number;
 }
 export interface HostState {
+  /**
+   * The worker's backing player, when its stream has one.
+   */
+  backing?: BackingStatus | null;
   hear_yourself: boolean;
   levels?: HostLevels2;
   output_muted?: boolean;
@@ -1650,6 +1685,32 @@ export interface HostState {
    */
   reference?: ReferenceReading | null;
   test_tone_active: boolean;
+}
+/**
+ * Where the worker's backing player is, reported with every telemetry snapshot.
+ */
+export interface BackingStatus {
+  /**
+   * Reached the last frame with Repeat off.
+   */
+  ended: boolean;
+  /**
+   * Frame last sent to the outputs.
+   */
+  frame: number;
+  /**
+   * The render could not be opened.
+   */
+  missing: boolean;
+  playing: boolean;
+  /**
+   * The command sequence this status describes.
+   */
+  seq: number;
+  /**
+   * Blocks that ran out of data and played silence, this worker lifetime.
+   */
+  underruns: number;
 }
 /**
  * Unit-wide gain staging around every rig: guitar input trim before the rig,

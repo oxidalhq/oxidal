@@ -1861,6 +1861,163 @@
         "can_redo"
       ]
     },
+    "BackingCommand": {
+      "description": "What the daemon asks the worker's backing player to do.",
+      "oneOf": [
+        {
+          "description": "Play a render from `from` (a frame), fading in once 100 ms is buffered.\nSent again with a new `seq` to seek: the old position fades out first.",
+          "type": "object",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "channels": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "frames": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "from": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "gain_db": {
+              "type": "number",
+              "format": "float"
+            },
+            "kind": {
+              "type": "string",
+              "const": "play"
+            },
+            "repeat": {
+              "type": "boolean"
+            },
+            "seq": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "asset",
+            "channels",
+            "frames",
+            "from",
+            "seq",
+            "repeat",
+            "gain_db"
+          ]
+        },
+        {
+          "description": "Fade out and stop. The last frame stays in the status.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            },
+            "seq": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "seq"
+          ]
+        },
+        {
+          "description": "Player level plus track trim, gliding over 20 ms.",
+          "type": "object",
+          "properties": {
+            "gain_db": {
+              "type": "number",
+              "format": "float"
+            },
+            "kind": {
+              "type": "string",
+              "const": "gain"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "gain_db"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "repeat"
+            },
+            "repeat": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "repeat"
+          ]
+        }
+      ]
+    },
+    "BackingStatus": {
+      "description": "Where the worker's backing player is, reported with every telemetry snapshot.",
+      "type": "object",
+      "properties": {
+        "ended": {
+          "description": "Reached the last frame with Repeat off.",
+          "type": "boolean"
+        },
+        "frame": {
+          "description": "Frame last sent to the outputs.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "missing": {
+          "description": "The render could not be opened.",
+          "type": "boolean"
+        },
+        "playing": {
+          "type": "boolean"
+        },
+        "seq": {
+          "description": "The command sequence this status describes.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "underruns": {
+          "description": "Blocks that ran out of data and played silence, this worker lifetime.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "frame",
+        "playing",
+        "ended",
+        "underruns",
+        "missing"
+      ]
+    },
     "Binding": {
       "type": "object",
       "properties": {
@@ -4559,6 +4716,17 @@
     "HostState": {
       "type": "object",
       "properties": {
+        "backing": {
+          "description": "The worker's backing player, when its stream has one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackingStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "hear_yourself": {
           "type": "boolean"
         },
@@ -4711,6 +4879,24 @@
             "kind",
             "enabled",
             "peak_db"
+          ]
+        },
+        {
+          "description": "Backing-track transport, mixed after the rig at the session mix point.",
+          "type": "object",
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/BackingCommand"
+            },
+            "kind": {
+              "type": "string",
+              "const": "backing"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "command"
           ]
         }
       ]
@@ -5531,6 +5717,9 @@
       "required": [
         "state"
       ]
+    },
+    "MediaId": {
+      "type": "string"
     },
     "MediaKind": {
       "type": "string",

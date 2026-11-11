@@ -256,3 +256,73 @@ fn the_venue_stage_shapes_the_device_output_and_bypasses_exactly() {
     let bypassed = run(&mut stream);
     assert!((bypassed - flat).abs() < 0.05, "{bypassed}");
 }
+
+#[test]
+fn a_backing_track_plays_to_its_end_without_audio_thread_allocation() {
+    use oxidal_audio::backing::{BackingCommand, MediaId};
+    use oxidal_audio::tools::HostUtility;
+    const ID: &str = "01JD2W8T3N8M4K6V0P7Q9R1S2T";
+    let root = std::env::temp_dir().join(format!("oxidal-backing-null-{}", std::process::id()));
+    let dir = root.join("assets").join(ID);
+    std::fs::create_dir_all(&dir).unwrap();
+    let frames = RATE as u64; // one second, stereo
+    let mut bytes = Vec::new();
+    for i in 0..frames {
+        let v = (std::f32::consts::TAU * 440.0 * i as f32 / RATE as f32).sin() * 0.25;
+        bytes.extend_from_slice(&v.to_le_bytes());
+        bytes.extend_from_slice(&(-v).to_le_bytes());
+    }
+    std::fs::write(dir.join(format!("play-{RATE}.f32")), bytes).unwrap();
+    // SAFETY: set before the stream (and its reader thread) starts; no other
+    // test in this binary reads the variable.
+    unsafe { std::env::set_var("OXIDAL_MEDIA_DIR", &root) };
+    let mut stream = Duplex::qualification_null(config(HostLevels::default())).unwrap();
+    stream.host_utility(HostUtility::Backing {
+        command: BackingCommand::Play {
+            asset: MediaId::parse(ID).unwrap(),
+            channels: 2,
+            frames,
+            from: 0,
+            seq: 1,
+            repeat: false,
+            gain_db: 0.0,
+        },
+    });
+    let mut allocations = 0usize;
+    let mut peak_left = -120.0f32;
+    let mut opposite = true;
+    for _ in 0..20_000 {
+        ALLOCATIONS.with(|n| n.set(0));
+        COUNTING.with(|c| c.set(true));
+        let step = stream
+            .step(|l, r| {
+                l.fill(0.0);
+                r.fill(0.0);
+                Ok(())
+            })
+            .unwrap();
+        COUNTING.with(|c| c.set(false));
+        allocations += ALLOCATIONS.with(Cell::get);
+        if step != Step::Processed {
+            continue;
+        }
+        // One snapshot per block: taking one resets the meter.
+        let t = stream.telemetry();
+        peak_left = peak_left.max(t.output[0].peak_dbfs as f32);
+        opposite &= (t.output[0].peak_dbfs - t.output[1].peak_dbfs).abs() < 0.01;
+        let status = t.monitoring.unwrap().backing.unwrap();
+        if status.ended {
+            assert_eq!(status.frame, frames);
+            assert_eq!(status.underruns, 0);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_micros(650));
+    }
+    let status = stream.telemetry().monitoring.unwrap().backing.unwrap();
+    assert!(status.ended, "{status:?}");
+    assert_eq!(allocations, 0, "audio steps never allocate");
+    // The track reached the outputs at its own level (−12 dBFS), both sides.
+    assert!((peak_left + 12.04).abs() < 0.3, "{peak_left}");
+    assert!(opposite);
+    std::fs::remove_dir_all(root).unwrap();
+}

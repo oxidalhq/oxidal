@@ -140,6 +140,10 @@ pub enum HostUtility {
         enabled: bool,
         peak_db: f32,
     },
+    /// Backing-track transport, mixed after the rig at the session mix point.
+    Backing {
+        command: crate::backing::BackingCommand,
+    },
 }
 /// Unit-wide gain staging around every rig: guitar input trim before the rig,
 /// master output level after it. Never stored in presets.
@@ -218,6 +222,9 @@ pub struct HostState {
     /// The calibration measurement while the reference riff plays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<crate::reference::ReferenceReading>,
+    /// The worker's backing player, when its stream has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backing: Option<crate::backing::BackingStatus>,
 }
 #[derive(Debug)]
 pub struct HostSignal {
@@ -241,6 +248,7 @@ pub struct HostSignal {
     return_gain: Glide,
     return_underruns: u64,
     venue: crate::venue::VenueEq,
+    backing: Option<crate::backing::Backing>,
 }
 /// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
 /// 50 ms, then fades over about 80 ms. Closes 6 dB below the threshold so
@@ -389,7 +397,12 @@ impl HostSignal {
             return_gain: Glide::new(rate, 1.0),
             return_underruns: 0,
             venue: crate::venue::VenueEq::new(rate),
+            backing: None,
         }
+    }
+    /// Gives this stream a backing player (its reader thread is already running).
+    pub fn attach_backing(&mut self, backing: crate::backing::Backing) {
+        self.backing = Some(backing);
     }
     /// Selects what feeds the rig. Returns the previous source so its ring is
     /// released by the caller, off the audio thread.
@@ -472,6 +485,11 @@ impl HostSignal {
                     self.reference.stop();
                 }
             }
+            HostUtility::Backing { command } => {
+                if let Some(backing) = &mut self.backing {
+                    backing.command(command);
+                }
+            }
             HostUtility::Levels { levels } => {
                 // Invalid levels never reach the audio path; the caller validates first.
                 if levels.validate().is_ok() {
@@ -491,6 +509,7 @@ impl HostSignal {
             test_tone_active: self.test_active,
             levels: self.levels,
             reference: self.reference.reading(),
+            backing: self.backing.as_ref().map(crate::backing::Backing::status),
         }
     }
     pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
@@ -544,6 +563,9 @@ impl HostSignal {
         self.tone_gain.apply(left, right);
         self.test_tone(left, right);
         self.mix_return(left, right);
+        if let Some(backing) = &mut self.backing {
+            backing.mix(left, right);
+        }
         // Venue correction sits after the mix and before mono fold, so a mono
         // PA hears the corrected sum.
         self.venue.apply(left, right);
