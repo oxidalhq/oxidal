@@ -126,8 +126,9 @@ const factoryBlockCount = (recipe: FactoryRecipe) =>
 const factoryNamInstances = (recipe: FactoryRecipe) =>
   factoryRoles(recipe).length;
 
-/** Engine implied by a recipe's blocks. A2 Lite versus Full is not stored in
- * the voice data, so a capture-only recipe defaults to Lite. */
+/** Engine family implied by a recipe's blocks. A2 Lite versus Full is
+ * authored on the recipe (voices list both sizes), so a capture-only recipe
+ * derives as Lite and either TONE3000 tier is consistent with it. */
 export function factoryDerivedEngine(recipe: FactoryRecipe): FactoryEngine {
   if (factoryNamInstances(recipe) === 0) return 'lv2';
   return factoryPluginNames(recipe).length > 0 ? 'hybrid' : 'tone3000-a2-lite';

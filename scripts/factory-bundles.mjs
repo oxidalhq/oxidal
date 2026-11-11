@@ -5,10 +5,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
-  factoryRecipes,
   factoryRoles,
   buildFactoryRecipe,
 } from '../apps/web/src/factoryRecipes.ts';
+import { lv2ShowcaseRecipes } from '../apps/web/src/recipes/lv2Showcase.ts';
 import {
   factoryMetadata,
   validateFactoryMetadata,
@@ -27,7 +27,8 @@ const scalar_layouts = JSON.parse(
     'utf8',
   ),
 );
-const recipes = factoryRecipes.filter(
+// First boot installs the LV2-only showcase (no captures, nothing third-party).
+const recipes = lv2ShowcaseRecipes.filter(
   (recipe) => factoryRoles(recipe).length === 0,
 );
 const sounds = recipes.map((recipe) => {
