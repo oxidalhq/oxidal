@@ -2,6 +2,7 @@ import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
 import { routePath, routeSplitAddPath } from '../../rigRoute';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 import { PathLevel } from './PathLevel';
 import { useState } from 'react';
 import type { IdStep } from '../../rigChain';
@@ -22,16 +23,9 @@ const blocksOn = (steps: IdStep[]): number =>
  * @see docs/interface.md
  */
 export function PathLevelsDialog({ rig, vm }: RigViewProps) {
-  const {
-    busy,
-    edit,
-    editChain,
-    editing,
-    routingSplit,
-    setPathSides,
-    setRoutingSplit,
-  } = rig;
-  const { disabled, editable, fullRoute, state } = vm;
+  const { editChain, routingSplit, setPathSides, setRoutingSplit } = rig;
+  const { editable, fullRoute, state } = vm;
+  const waiting = rigBusy(vm, rig);
   /** Remove path waiting for confirmation: it has effects (S-16). */
   const [removing, setRemoving] = useState<{
     split: string;
@@ -59,7 +53,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
               Cancel
             </Button>
             <Button
-              disabled={disabled || !!edit || editing}
+              disabled={waiting}
               onClick={() => remove(removing.split, removing.path)}
             >
               Remove
@@ -107,10 +101,11 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                       {sides[0] && sides[1] ? (
                         <PathLevel
                           key={`${split.merge}:${port}:${sides[0]!.value}:${sides[1]!.value}`}
+                          id={`${split.merge}:${port}`}
                           path={port + 1}
                           left={sides[0]!.value}
                           right={sides[1]!.value}
-                          disabled={disabled || !!edit || editing || busy}
+                          disabled={waiting}
                           onCommit={(left, right) =>
                             setPathSides([
                               [sides[0]!.target, left],
@@ -126,7 +121,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                           <Button
                             variant="outline"
                             aria-label={`Copy path ${port + 1}`}
-                            disabled={disabled || !!edit || editing}
+                            disabled={waiting}
                             onClick={() => {
                               setRoutingSplit(null);
                               void editChain((route) =>
@@ -139,7 +134,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                           <Button
                             variant="outline"
                             aria-label={`Remove path ${port + 1}`}
-                            disabled={disabled || !!edit || editing}
+                            disabled={waiting}
                             onClick={() => {
                               const effects = blocksOn(split.branches[port]!);
                               // An empty path goes at once; one with effects asks.
@@ -166,7 +161,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
                 <div className="action-row">
                   <Button
                     variant="outline"
-                    disabled={disabled || !!edit || editing}
+                    disabled={waiting}
                     onClick={() => {
                       setRoutingSplit(null);
                       void editChain((route) =>

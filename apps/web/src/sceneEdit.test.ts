@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import Ajv from 'ajv/dist/2020';
 import schema from '../../../docs/presets/manifest.schema.json';
 import type { Lv2Plugin, Preset, RigDocument } from './api';
+import { chainRoute } from './rigChain';
 import { lv2Effect, sceneRig, type NativeDraft } from './rigDraft';
 import {
   LAST_SCENE,
@@ -15,6 +16,7 @@ import {
   removeSceneEffect,
   renameScene,
   sceneCopyPlan,
+  scenePaths,
   updateScene,
   updateScenes,
 } from './sceneEdit';
@@ -473,4 +475,205 @@ it('scene controls: every scene carries the same set, added scenes too, and the 
   );
   const kept = extOf(rebuilt);
   expect(kept.scenes.every((s) => s.controls === undefined)).toBe(true);
+});
+
+/* Presets with scene lanes: one TONE3000 path per scene. */
+const other: Preset = { ...preset, sha256: 'b'.repeat(64), name: 'Other' };
+function lanes(
+  tails: 'cut' | 'preserve',
+  tones: NativeDraft[] = [
+    tone('crunch', 'Crunch'),
+    {
+      ...tone('fuzz', 'Fuzz'),
+      preset: other,
+      source: { kind: 'original', preset: other.sha256 },
+    },
+    tone('lead', 'Lead'),
+  ],
+  name = 'Scenes',
+): RigDocument {
+  const published = sceneRig(
+    '68448a6d-0168-4fc8-b337-c12959165271',
+    name,
+    tones,
+    'tone3000-plugin:' + 'a'.repeat(40),
+    tails,
+  );
+  return {
+    revision: name.toLowerCase().padEnd(64, '0'),
+    manifest: JSON.parse(published.manifest_json),
+  } as RigDocument;
+}
+const after = (document: RigDocument, request: { manifest_json: string }) =>
+  ({
+    revision: document.revision,
+    manifest: JSON.parse(request.manifest_json),
+  }) as RigDocument;
+
+for (const tails of ['cut', 'preserve'] as const)
+  it(`deleting a scene removes its own path, and keeps a path another scene uses (${tails})`, () => {
+    // Fuzz has an effect of its own and a scene setting on it.
+    const base = after(
+      lanes(tails),
+      addSceneEffect(lanes(tails), 'fuzz', {
+        ...lv2Effect(stereo),
+        id: 'echo',
+        name: 'Echo',
+      }),
+    );
+    const symbol = Object.keys(base.manifest.oxidal!.lv2[0]!.controls)[0]!;
+    const document = after(
+      base,
+      updateScenes(base, {}, 'crunch', {}, undefined, [], {
+        fuzz: [{ node: 'echo', symbol, value: 1 }],
+      }),
+    );
+    const request = deleteScene(document, 'fuzz', 'crunch');
+    const manifest = JSON.parse(
+      request.manifest_json,
+    ) as RigDocument['manifest'];
+    expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+    const ext = manifest.extensions['urn:oxidal:scenes:1'] as Ext & {
+      branches: {
+        id: string;
+        gains: { node: string; port: number; value: number }[];
+      }[];
+    };
+    expect(ext.scenes.map((s) => s.id)).toEqual(['crunch', 'lead']);
+    expect(ext.branches.map((b) => b.id)).toEqual(['crunch', 'lead']);
+    // Nothing of the path stays loaded: tone, effect, gates, resource, labels.
+    const ids = manifest.oxidal!.graph.nodes.map((n) => n.id);
+    expect(ids).not.toContain('fuzz');
+    expect(ids).not.toContain('echo');
+    expect(ids.filter((id) => id.startsWith('scene-feed-'))).toHaveLength(
+      tails === 'preserve' ? 4 : 0,
+    );
+    expect(manifest.tone3000.instances.map((i) => i.id)).toEqual([
+      'crunch',
+      'lead',
+    ]);
+    expect(manifest.oxidal!.lv2).toEqual([]);
+    expect(manifest.resources.map((r) => r.sha256)).toEqual([preset.sha256]);
+    expect(Object.keys(request.resources)).toEqual(
+      manifest.resources.map((r) => r.id),
+    );
+    expect(JSON.stringify(manifest.extensions)).not.toContain('fuzz');
+    expect(ext.scenes.every((s) => s.controls === undefined)).toBe(true);
+    // The two scenes left are a two-path split again, each opening its own path.
+    expect(chainRoute(manifest.oxidal!.graph)).toMatchObject([
+      { branches: [['crunch'], ['lead']] },
+    ]);
+    expect(ext.scenes.map((s) => scenePaths(s, ext.branches))).toEqual([
+      [0],
+      [1],
+    ]);
+    for (const sum of ['scene-left', 'scene-right']) {
+      expect(into(manifest, sum, 0).from.node).toBe('crunch');
+      expect(into(manifest, sum, 1).from.node).toBe('lead');
+      expect(
+        manifest.oxidal!.graph.nodes.find((n) => n.id === sum)!.audioInputs,
+      ).toBe(2);
+    }
+    // A duplicate opens the path of the scene it came from, so the path stays
+    // when either of them is deleted, and goes with the last one.
+    const { publish: copied, id } = duplicateScene(document, 'fuzz');
+    const twice = after(document, copied);
+    const twiceExt = twice.manifest.extensions[
+      'urn:oxidal:scenes:1'
+    ] as typeof ext;
+    expect(
+      scenePaths(
+        twiceExt.scenes.find((s) => s.id === id)!,
+        twiceExt.branches,
+      ),
+    ).toEqual([1]);
+    const kept = after(twice, deleteScene(twice, 'fuzz', undefined));
+    expect(validator(kept.manifest), JSON.stringify(validator.errors)).toBe(
+      true,
+    );
+    expect(kept.manifest.oxidal!.graph.nodes.map((n) => n.id)).toContain(
+      'fuzz',
+    );
+    const gone = JSON.parse(deleteScene(kept, id, id).manifest_json);
+    expect(
+      gone.oxidal.graph.nodes.map((n: { id: string }) => n.id),
+    ).not.toContain('fuzz');
+    // Deleting the playing scene starts the preset on its neighbour's path.
+    const open = (m: RigDocument['manifest'], branch: number) =>
+      (m.extensions['urn:oxidal:scenes:1'] as typeof ext).branches[
+        branch
+      ]!.gains.map(
+        (g) =>
+          m.oxidal!.graph.nodes.find((n) => n.id === g.node)!.inputGains![
+            g.port
+          ],
+      );
+    expect(open(gone, 1)).toEqual([1, 1]);
+    expect(open(gone, 0)).toEqual([0, 0]);
+  });
+
+it('keeps the path when a split would be left with one', () => {
+  const document = lanes('cut', [
+    tone('crunch', 'Crunch'),
+    tone('fuzz', 'Fuzz'),
+  ]);
+  const manifest = JSON.parse(
+    deleteScene(document, 'fuzz', 'fuzz').manifest_json,
+  ) as RigDocument['manifest'];
+  expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+  expect(manifest.oxidal!.graph.nodes.map((n) => n.id)).toContain('fuzz');
+});
+
+it('Copy to preset compares what the paths are, names them, and refuses when nothing is shared', () => {
+  const fuzzy = (id: string, label: string, p: Preset): NativeDraft => ({
+    ...tone(id, label),
+    preset: p,
+    source: { kind: 'original', preset: p.sha256 },
+  });
+  const source = lanes('cut', [tone('a', 'Crunch'), tone('b', 'Solo')], 'Mine');
+  // Same node names (scene-left, scene-right), entirely different tones.
+  const strangers = lanes(
+    'cut',
+    [fuzzy('a', 'Glass', other), fuzzy('b', 'Wall', other)],
+    'Other',
+  );
+  const plan = sceneCopyPlan(source, 'b', strangers);
+  expect(plan.exact).toBe(false);
+  expect(plan.refused).toBe(
+    "'Solo' cannot be copied to Other: the two presets have no paths or effects in common.",
+  );
+  expect(plan.skipped).toEqual([
+    "The 'Crunch' path is a different sound in Other: its level is skipped.",
+    "The 'Solo' path is a different sound in Other: its level is skipped.",
+  ]);
+  expect(() => copySceneTo(source, 'b', strangers)).toThrow(plan.refused);
+  // The same tones under the same names copy exactly.
+  const twin = lanes('cut', [tone('a', 'Crunch'), tone('b', 'Solo')], 'Twin');
+  expect(sceneCopyPlan(source, 'b', twin)).toEqual({
+    exact: true,
+    skipped: [],
+    kept: [],
+  });
+  // One shared tone: its level copies, the other path keeps the target's own.
+  const half = lanes(
+    'cut',
+    [tone('a', 'Crunch'), fuzzy('b', 'Wall', other)],
+    'Half',
+  );
+  const partly = sceneCopyPlan(source, 'b', half);
+  expect(partly.refused).toBeUndefined();
+  expect(partly.skipped).toEqual([
+    "The 'Solo' path is a different sound in Half: its level is skipped.",
+  ]);
+  expect(partly.kept).toEqual(["The 'Wall' path keeps Half's own level."]);
+  const copied = extOf(copySceneTo(source, 'b', half)).scenes.at(-1)!;
+  // Crunch off as in the source scene; Wall as Half's graph has it (off).
+  expect(copied.gains.map((g) => g.value)).toEqual([0, 0, 0, 0]);
+  // No message shows a node id.
+  expect(JSON.stringify([plan, partly])).not.toMatch(/scene-(left|right)/);
+  // A third path the target lacks is named, not numbered by a raw id.
+  const three = lanes('cut');
+  expect(sceneCopyPlan(three, 'lead', twin).skipped).toContain(
+    "Twin has no 'Lead' path: its level is skipped.",
+  );
 });

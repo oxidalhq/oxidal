@@ -15,6 +15,7 @@ import {
 } from '../../rigRoute';
 import type { IdStep } from '../../rigChain';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 import { PathLevel } from './PathLevel';
 
 /** Why the routing actions are unavailable for this block, or null. */
@@ -64,18 +65,14 @@ function pathBlocks(route: IdStep[] | null, id: string): number | null {
  */
 export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
   const {
-    busy: sending,
     command,
-    edit,
     editChain,
-    editing,
     setCanvasChoice,
     setPathSides,
     shift,
     shiftPath,
   } = rig;
   const {
-    disabled,
     editable,
     fullRoute,
     inLane,
@@ -99,7 +96,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
     !(selectedView.branch || selectedView.bypass)
   )
     return null;
-  const busy = disabled || !!edit || editing || sending;
+  const busy = rigBusy(vm, rig);
   const id = selected!.id;
   const label = selectedView.label;
   const movable = editable && selected!.kind === 'lv2';
@@ -153,7 +150,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             on={selectedView.branch.enabled}
             kind={selectedView.block.kind}
             state={selectedView.branch.partial ? 'Mixed' : undefined}
-            label={`Toggle branch ${selectedView.branch.name}`}
+            label={`Toggle path ${selectedView.branch.name}`}
             disabled={busy}
             onToggle={() =>
               void command({
@@ -264,6 +261,7 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           {sides[0] && sides[1] && (
             <PathLevel
               key={`${selectedBranch.merge}:${selectedBranch.port}:${sides[0].value}:${sides[1].value}`}
+              id={`${selectedBranch.merge}:${selectedBranch.port}`}
               path={selectedBranch.port + 1}
               left={sides[0].value}
               right={sides[1].value}

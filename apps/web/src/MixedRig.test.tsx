@@ -738,7 +738,8 @@ it('copies a read-only example on its first confirmed control edit', async () =>
   ).not.toBeInTheDocument();
 });
 
-it('copies a branch into a third parallel path through the routing tree (7.26)', async () => {
+/** Two parallel effects, Clean and Dirt, sounding with a path level each side. */
+function twoPaths() {
   const plugin = {
     name: 'Verb',
     uri: 'urn:example:verb',
@@ -841,6 +842,13 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
       otherPlaying={false}
     />,
   );
+  return {
+    manifest,
+    state: state as Awaited<ReturnType<typeof rigAudioState>>,
+  };
+}
+it('copies a path into a third path through the routing tree (7.26)', async () => {
+  const { manifest } = twoPaths();
   fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
   const routing = await screen.findByRole('group', {
     name: 'Routing for dirt',
@@ -940,4 +948,120 @@ it('copies a branch into a third parallel path through the routing tree (7.26)',
     await screen.findByRole('dialog', { name: 'Add or split here' }),
   ).toBeVisible();
   narrow = false;
+});
+
+it('puts the first side back when the second side of a pan fails', async () => {
+  const { state } = twoPaths();
+  const merges = () =>
+    vi
+      .mocked(rigAudioCommand)
+      .mock.calls.flatMap(([, action]) =>
+        action.kind === 'control' && action.command.target.kind === 'merge'
+          ? [[action.command.target.node, action.command.value]]
+          : [],
+      );
+  fireEvent.click(await screen.findByRole('button', { name: 'dirt' }));
+  const level = await screen.findByLabelText('Path 2 level');
+  vi.mocked(rigAudioCommand).mockClear();
+  vi.mocked(rigAudioCommand).mockImplementation(async (_, action) => {
+    if (
+      action.kind === 'control' &&
+      action.command.target.kind === 'merge' &&
+      action.command.target.node === 'merge-right'
+    )
+      throw new Error('worker refused');
+    return state;
+  });
+  fireEvent.change(level, { target: { value: '0.5' } });
+  fireEvent.pointerUp(level);
+  // Left is set, right is refused, so left goes back to what it was.
+  await waitFor(() =>
+    expect(merges()).toEqual([
+      ['merge-left', 0.5],
+      ['merge-right', 0.5],
+      ['merge-left', 1],
+    ]),
+  );
+  expect(await screen.findByText(/the path is back as it was/)).toBeVisible();
+});
+
+it('recalls a scene with every drafted level and effect setting, not only the first', async () => {
+  // Update scene drafted two levels and one effect setting for Stage mix.
+  sessionStorage.setItem(
+    'oxidal.mixed.scene-draft',
+    JSON.stringify({
+      session: 'audio',
+      gains: {
+        'scene-2': [
+          { node: 'mix', port: 0, value: 0.5 },
+          { node: 'mix', port: 1, value: 0.25 },
+        ],
+      },
+      controls: { 'scene-2': [{ node: 'fx', symbol: 'gain', value: 3 }] },
+    }),
+  );
+  const state = setup('mine', [], true);
+  const gains = [
+    { node: 'mix', port: 0, value: 1 },
+    { node: 'mix', port: 1, value: 1 },
+  ];
+  state.control!.scenes = {
+    fade_ms: 15,
+    scenes: [
+      { id: 'scene-1', name: 'Clean', gains },
+      { id: 'scene-2', name: 'Stage mix', gains },
+    ],
+    branches: [{ id: 'amp', name: 'Amp', gains: [gains[0]!] }],
+  };
+  state.control!.scene = 'scene-1';
+  const control = (target: object) => ({
+    target,
+    label: 'Level',
+    display: '',
+    toggle: false,
+    value: 1,
+    minimum: 0,
+    maximum: 4,
+    integer: false,
+    logarithmic: false,
+  });
+  state.control!.controls.push(
+    control({ kind: 'merge', node: 'mix', port: 0 }) as never,
+    control({ kind: 'merge', node: 'mix', port: 1 }) as never,
+    control({ kind: 'lv2', node: 'fx', symbol: 'gain' }) as never,
+  );
+  // Like the engine: once a level differs from the saved scene, no scene is named.
+  let live = state;
+  vi.mocked(rigAudioCommand).mockImplementation(async (_, action) => {
+    live = structuredClone(live);
+    if (action.kind === 'scene') live.control!.scene = action.command.scene;
+    if (action.kind === 'control') {
+      live.control!.scene = null;
+      live.control!.controls.find(
+        (c) =>
+          JSON.stringify(c.target) === JSON.stringify(action.command.target),
+      )!.value = action.command.value;
+    }
+    vi.mocked(rigAudioState).mockResolvedValue(live);
+    return live;
+  });
+  const pad = await screen.findByRole('button', { name: 'Scene 2: Stage mix' });
+  await waitFor(() => expect(pad).toBeEnabled());
+  fireEvent.click(pad);
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(rigAudioCommand)
+        .mock.calls.map(([, action]) =>
+          action.kind === 'control'
+            ? [action.command.target, action.command.value]
+            : action.kind,
+        ),
+    ).toEqual([
+      'scene',
+      [{ kind: 'merge', node: 'mix', port: 0 }, 0.5],
+      [{ kind: 'merge', node: 'mix', port: 1 }, 0.25],
+      [{ kind: 'lv2', node: 'fx', symbol: 'gain' }, 3],
+    ]),
+  );
 });

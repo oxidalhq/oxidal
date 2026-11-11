@@ -4,7 +4,7 @@ import { NativeAuthoring } from '../../NativeAuthoring';
 import { controlDisplay, controlLabel } from '../../lv2Control';
 import { rigAudioCommand } from '../../api';
 import type { RigViewProps } from './useMixedRigSession';
-import { key } from './mixedRigViewModel';
+import { key, rigBusy } from './mixedRigViewModel';
 
 /**
  * Controls of the selected block, with native authoring and live EQ.
@@ -26,7 +26,6 @@ export function ControlGrid({ rig, vm }: RigViewProps) {
     setEqBusy,
   } = rig;
   const {
-    disabled,
     eqBlock,
     eqBlocks,
     measuring,
@@ -51,7 +50,7 @@ export function ControlGrid({ rig, vm }: RigViewProps) {
               key={key(c)}
               className="h-auto min-h-16 flex-col items-start gap-1 p-3 text-left whitespace-normal"
               variant="outline"
-              disabled={disabled || !!edit}
+              disabled={rigBusy(vm, rig)}
               onClick={() => {
                 if (c.toggle && state.control) {
                   void command({

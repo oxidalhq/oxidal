@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { SceneChange } from '../../SceneChange';
 import { ScenePads } from '../../ScenePads';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 import { SceneMenu } from './SceneEditorMenu';
 import { SceneSettings } from './SceneEditorControls';
 import { useSceneSettings } from './SceneEditorSettings';
@@ -16,17 +17,14 @@ import './SceneEditor.css';
  * @see docs/interface.md
  */
 export function SceneEditor({ rig, vm }: RigViewProps) {
+  const waiting = rigBusy(vm, rig);
   const [menu, setMenu] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const settings = useSceneSettings({ rig, vm });
   const {
-    busy,
     current,
-    edit,
-    editing,
     matching,
     namingScene,
-    picker,
     recallScene,
     saveReview,
     saveScenes,
@@ -38,7 +36,6 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
   } = rig;
   const {
     addedScenes,
-    disabled,
     draftCount,
     drafts,
     editingScene,
@@ -74,7 +71,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               {matching && (
                 <SceneChange
                   preset={matching.manifest.id}
-                  disabled={disabled}
+                  disabled={waiting}
                   trails={
                     matching.manifest.extensions['urn:oxidal:authoring']
                       ?.scene_tails === 'preserve'
@@ -87,7 +84,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                   className="scene-change"
                   aria-label={`Scene menu for ${activeScene.name}`}
                   aria-haspopup="dialog"
-                  disabled={disabled || !!edit}
+                  disabled={waiting}
                   onClick={() => setMenu(activeScene.id)}
                 >
                   Scene ⋯
@@ -99,7 +96,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
           scenes={state.control.scenes.scenes}
           active={state.control.scene}
           fading={!!state.control.scene_transitioning}
-          disabled={disabled || !!edit}
+          disabled={waiting}
           onSelect={(scene) => {
             const control = current.current?.control;
             if (control) {
@@ -146,15 +143,15 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                       (branch) =>
                         `${branch.name} ${Math.round(branch.value * 100)}%`,
                     )
-                    .join(' · ') || 'All branches muted'}
+                    .join(' · ') || 'All paths muted'}
                 </span>
               )
             )}
           </summary>
           <p className="caption">
             {sceneMixChanged
-              ? 'Branch routing changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
-              : 'A scene recalls the branch levels shown here.'}{' '}
+              ? 'Path levels changed for this scene. Update scene keeps this mix in your edits; Save keeps it in the preset.'
+              : 'A scene recalls the path levels shown here.'}{' '}
             Block controls are shared by every scene; use Save to keep those
             whole-preset edits.
           </p>
@@ -175,13 +172,13 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
             <div className="scene-context-actions">
               <Button
                 variant="outline"
-                disabled={disabled || editing || !!edit || !!picker || busy}
+                disabled={waiting}
                 onClick={() => void recallScene(editingScene.id)}
               >
                 Discard changes
               </Button>
               <Button
-                disabled={disabled || editing || !!edit || !!picker}
+                disabled={waiting}
                 onClick={() => {
                   const session = state.control?.session;
                   if (!session) return;
@@ -198,7 +195,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               </Button>
               <Button
                 variant="outline"
-                disabled={disabled || editing || !!edit || !!picker}
+                disabled={waiting}
                 onClick={() => setNamingScene('')}
               >
                 Save as new scene…
@@ -317,7 +314,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
               </span>
               <Button
                 variant="outline"
-                disabled={disabled || editing || !!edit || !!picker || busy}
+                disabled={waiting}
                 onClick={() => {
                   setSceneUpdates(null);
                   void recallScene(editingScene.id);
@@ -326,7 +323,7 @@ export function SceneEditor({ rig, vm }: RigViewProps) {
                 Discard scene updates
               </Button>
               <Button
-                disabled={disabled || editing || !!edit || !!picker}
+                disabled={waiting}
                 onClick={() =>
                   changed ? setSaveReview(true) : void saveScenes(false)
                 }

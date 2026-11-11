@@ -6,7 +6,7 @@ import { useEpaper } from '../../components/RouteTree.display';
 import { pathMix, type RouteAt } from '../../rigRoute';
 import { routeSpot } from '../../rigChain';
 import type { RigViewProps } from './useMixedRigSession';
-import { laneBlockId } from './mixedRigViewModel';
+import { laneBlockId, rigLocked } from './mixedRigViewModel';
 import { RigChainSurfaceChooser } from './RigChainSurfaceChooser';
 
 /**
@@ -18,10 +18,7 @@ import { RigChainSurfaceChooser } from './RigChainSurfaceChooser';
 export function RigChainSurface({ rig, vm }: RigViewProps) {
   const {
     dropBlock,
-    edit,
-    editing,
     matching,
-    picker,
     revision,
     selectLaneTile,
     setCanvasChoice,
@@ -46,7 +43,7 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
     selectedLaneTile,
   } = vm;
   const epaper = useEpaper();
-  const locked = !!edit || !!picker || editing;
+  const locked = rigLocked(rig);
   /** Blocks go after a scene's tone and after the scenes, never before. */
   const gaps = (at: RouteAt) =>
     !sceneCanvas ||
@@ -149,7 +146,7 @@ export function RigChainSurface({ rig, vm }: RigViewProps) {
               <RigTile
                 block={view.block}
                 selected={n.id === selected?.id}
-                disabled={!!edit || !!picker}
+                disabled={locked}
                 onSelect={() => select(n.id)}
               />
             </div>

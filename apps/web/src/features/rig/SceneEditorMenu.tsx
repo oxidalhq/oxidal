@@ -21,6 +21,7 @@ import {
   type SceneCopyPlan,
 } from '../../sceneEdit';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 
 type Step =
   | { kind: 'menu' }
@@ -56,8 +57,7 @@ export function SceneMenu({
   const scene = scenes[index];
   if (!scene) return null;
   const pending = vm.draftCount > 0 || vm.sceneMixChanged;
-  const blocked =
-    vm.disabled || rig.busy || rig.editing || !!rig.edit || pending;
+  const blocked = rigBusy(vm, rig) || pending;
   /** Saves the preset with one scene change, then reports it. */
   const save = (make: Parameters<typeof rig.rebuild>[0], message: string) => {
     onClose();
@@ -342,7 +342,9 @@ function CopyToPreset({
         )}
         {plan && (
           <ul className="scene-copy-plan" aria-label="What copies">
-            {plan.exact ? (
+            {plan.refused ? (
+              <li role="alert">{plan.refused}</li>
+            ) : plan.exact ? (
               <li>✓ Same blocks: settings copy exactly.</li>
             ) : (
               <>
@@ -361,7 +363,10 @@ function CopyToPreset({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!plan || busy} onClick={() => void copy()}>
+          <Button
+            disabled={!plan || !!plan.refused || busy}
+            onClick={() => void copy()}
+          >
             Copy
           </Button>
         </div>

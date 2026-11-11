@@ -16,6 +16,7 @@ import { WAITING_FOR_DEVICE } from '../../lib/deviceWait';
 import { choiceKey } from '../../presetChoices';
 import { requestMidiAssignments } from '../../midiNavigation';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 
 /**
  * Rig header: preset selector, Perform, Save, Tuner, preset actions and
@@ -24,6 +25,7 @@ import type { RigViewProps } from './useMixedRigSession';
  * @see docs/interface.md
  */
 export function RigHeader({ rig, vm }: RigViewProps) {
+  const waiting = rigBusy(vm, rig);
   const {
     actionsOpen,
     busy,
@@ -33,7 +35,6 @@ export function RigHeader({ rig, vm }: RigViewProps) {
     copyOnEdit,
     discarding,
     edit,
-    editing,
     eqBusy,
     matching,
     picker,
@@ -66,16 +67,14 @@ export function RigHeader({ rig, vm }: RigViewProps) {
             modified: !!changed,
             refresh: revision,
           }}
-          disabled={
-            disabled || busy || switching || !!edit || !!picker || !!copyOnEdit
-          }
+          disabled={waiting || !!copyOnEdit}
           onSelect={(choice) => void choose(choice)}
         />
         <StageControls connected={connected} compact />
         <Button
           aria-label="Perform view"
           title="Scene pads and effect switches for playing live"
-          disabled={!running || disabled || !!edit || editing}
+          disabled={waiting}
           onClick={() => setPerforming(true)}
         >
           <Lightning aria-hidden="true" />
@@ -109,7 +108,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
         <RigHeaderDuplicate
           revision={revision}
           connected={connected}
-          disabled={disabled || busy || switching || !!edit || !!picker}
+          disabled={waiting}
           changed={!!changed}
         />
         <TunerButton disabled={!running} />
@@ -118,7 +117,7 @@ export function RigHeader({ rig, vm }: RigViewProps) {
           aria-label="Preset actions"
           aria-haspopup="dialog"
           title="MIDI assignments"
-          disabled={disabled || busy || switching || !!edit || !!picker}
+          disabled={waiting}
           onClick={() => setActionsOpen(true)}
         >
           <DotsThree aria-hidden="true" weight="bold" />

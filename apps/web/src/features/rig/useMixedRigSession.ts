@@ -564,27 +564,53 @@ export function useMixedRigSession({
       ),
     );
   }
-  /** Sets one path's merge level on both channels, one confirmed command each. */
-  /** Sets a path's left and right merge gains (level, pan, polarity). */
+  /** One confirmed control command against the latest confirmed state. */
+  async function setControl(target: RigControl['target'], value: number) {
+    const cursor = current.current?.control;
+    return (
+      !!cursor &&
+      !!(await command({
+        kind: 'control',
+        command: {
+          session: cursor.session,
+          expected_revision: cursor.revision,
+          target,
+          value,
+        },
+      }))
+    );
+  }
+  /**
+   * Sets a path's left and right merge gains (level, pan, polarity). The API
+   * takes one control per command, so when a later side fails the sides
+   * already set are put back: a pan is never left half applied.
+   */
   async function setPathSides(values: [RigControl['target'], number][]) {
+    const applied: [RigControl['target'], number][] = [];
     for (const [target, value] of values) {
-      const cursor = current.current?.control;
-      if (
-        !cursor ||
-        !(await command({
-          kind: 'control',
-          command: {
-            session: cursor.session,
-            expected_revision: cursor.revision,
-            target,
-            value,
-          },
-        }))
-      )
-        return;
+      const before = current.current?.control?.controls.find(
+        (c) => JSON.stringify(c.target) === JSON.stringify(target),
+      )?.value;
+      if (await setControl(target, value)) {
+        if (before !== undefined) applied.unshift([target, before]);
+        continue;
+      }
+      if (!applied.length) return;
+      let restored = true;
+      for (const [done, earlier] of applied)
+        restored = (await setControl(done, earlier)) && restored;
+      if (restored)
+        setError(
+          'That path change did not go through, so the path is back as it was. Try again.',
+        );
+      return;
     }
   }
-  /** Recalls a scene; a drafted update then replaces its saved snapshot live. */
+  /**
+   * Recalls a scene; a drafted update then replaces its saved snapshot live.
+   * The engine recalls what the saved preset holds, so the drafted levels and
+   * effect settings follow as ordinary control commands, without a ramp.
+   */
   async function recallScene(scene: string) {
     const control = current.current?.control;
     if (!control) return;
@@ -596,32 +622,40 @@ export function useMixedRigSession({
         scene,
       },
     });
-    const draft =
-      sceneUpdates?.session === control.session
-        ? sceneUpdates.gains[scene]
-        : undefined;
-    for (const gain of recalled ? (draft ?? []) : []) {
+    const drafted = sceneUpdates?.session === control.session;
+    const gains = (drafted && sceneUpdates.gains[scene]) || [];
+    const controls = (drafted && sceneUpdates.controls?.[scene]) || [];
+    if (!recalled || !(gains.length || controls.length)) return;
+    // Once a drafted value is applied the mix no longer equals the saved scene,
+    // so the engine stops naming it: remember which scene is being heard.
+    setSceneDraft({ session: control.session, scene });
+    const targets: [RigControl['target'], number][] = [
+      ...gains.map((gain): [RigControl['target'], number] => [
+        { kind: 'merge', node: gain.node, port: gain.port },
+        gain.value,
+      ]),
+      ...controls.map((c): [RigControl['target'], number] => [
+        { kind: 'lv2', node: c.node, symbol: c.symbol },
+        c.value,
+      ]),
+    ];
+    for (const [target, value] of targets) {
       const cursor = current.current?.control;
-      if (!cursor || cursor.scene !== scene) return;
+      // Another preset took over while the drafted values were going out.
+      if (!cursor || cursor.session !== control.session) return;
       const live = cursor.controls.find(
         (c) =>
-          c.target.kind === 'merge' &&
-          c.target.node === gain.node &&
-          c.target.port === gain.port,
+          c.target.kind === target.kind &&
+          c.target.node === target.node &&
+          (c.target.kind === 'merge'
+            ? target.kind === 'merge' && c.target.port === target.port
+            : c.target.kind === 'lv2' &&
+              target.kind === 'lv2' &&
+              c.target.symbol === target.symbol),
       );
-      if (live && Math.abs(live.value - gain.value) <= 0.0001) continue;
-      if (
-        !(await command({
-          kind: 'control',
-          command: {
-            session: cursor.session,
-            expected_revision: cursor.revision,
-            target: { kind: 'merge', node: gain.node, port: gain.port },
-            value: gain.value,
-          },
-        }))
-      )
-        return;
+      // A setting the sounding rig does not have is left to Save to report.
+      if (!live || Math.abs(live.value - value) <= 0.0001) continue;
+      if (!(await setControl(target, value))) return;
     }
   }
   /** Any preset from the picker: scene presets stay here, TONE3000 ones hand over. */

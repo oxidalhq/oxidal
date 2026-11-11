@@ -7,13 +7,23 @@ import { useState } from 'react';
  * Live and unsaved until Save, like every other control.
  * @see docs/interface.md
  */
+/**
+ * A silent path's gains are 0 and 0, which cannot carry its polarity or pan.
+ * They are remembered here by path while the page is open, so a path taken to
+ * 0 and raised again is still inverted and still panned.
+ */
+const silent = new Map<string, PathMix>();
+
 export function PathLevel({
+  id,
   path,
   left,
   right,
   disabled,
   onCommit,
 }: {
+  /** The path's merge and port, to remember its polarity and pan at level 0. */
+  id?: string;
   path: number;
   /** The path's left and right merge gains. */
   left: number;
@@ -21,9 +31,17 @@ export function PathLevel({
   disabled: boolean;
   onCommit: (left: number, right: number) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState(() => pathMix(left, right));
+  const [draft, setDraft] = useState(() => {
+    const read = pathMix(left, right);
+    // A path heard again was set elsewhere: what was remembered is stale.
+    if (id && read.level !== 0) silent.delete(id);
+    const kept = id ? silent.get(id) : undefined;
+    return kept ? { ...kept, level: 0 } : read;
+  });
   const commit = (mix: PathMix = draft) => {
     const [l, r] = mixGains(mix);
+    if (id && mix.level === 0) silent.set(id, mix);
+    else if (id) silent.delete(id);
     if (Math.abs(l - left) > 0.0001 || Math.abs(r - right) > 0.0001)
       void onCommit(l, r);
   };

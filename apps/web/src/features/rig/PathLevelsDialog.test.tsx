@@ -6,6 +6,7 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { PathLevel } from './PathLevel';
 import { PathLevelsDialog } from './PathLevelsDialog';
 import { RigChainSurfaceChooser } from './RigChainSurfaceChooser';
 import type { RigViewProps } from './useMixedRigSession';
@@ -115,4 +116,48 @@ it('titles the effect chooser for Replace… and for Add', () => {
   unmount();
   render(<RigChainSurfaceChooser {...chooser('add')} />);
   expect(screen.getByRole('dialog', { name: 'Add an effect' })).toBeVisible();
+});
+
+it('keeps Invert when a path is taken to level 0 and raised again', () => {
+  const onCommit = vi.fn(async () => {});
+  const mount = (left: number, right: number) =>
+    render(
+      <PathLevel
+        key={`${left}:${right}`}
+        id="merge:1"
+        path={2}
+        left={left}
+        right={right}
+        disabled={false}
+        onCommit={onCommit}
+      />,
+    );
+  // An inverted path at half level is taken to 0.
+  const first = mount(-0.5, -0.5);
+  expect(screen.getByLabelText('Invert path 2 polarity')).toBeChecked();
+  const level = screen.getByLabelText('Path 2 level');
+  fireEvent.change(level, { target: { value: '0' } });
+  fireEvent.pointerUp(level);
+  expect(onCommit).toHaveBeenLastCalledWith(0, 0);
+  first.unmount();
+  // The gains read back as 0 and 0, which cannot carry the polarity.
+  mount(0, 0);
+  expect(screen.getByLabelText('Invert path 2 polarity')).toBeChecked();
+  const again = screen.getByLabelText('Path 2 level');
+  fireEvent.change(again, { target: { value: '1' } });
+  fireEvent.pointerUp(again);
+  expect(onCommit).toHaveBeenLastCalledWith(-1, -1);
+  cleanup();
+  // Another path at 0 is not inverted by it.
+  render(
+    <PathLevel
+      id="merge:0"
+      path={1}
+      left={0}
+      right={0}
+      disabled={false}
+      onCommit={onCommit}
+    />,
+  );
+  expect(screen.getByLabelText('Invert path 1 polarity')).not.toBeChecked();
 });

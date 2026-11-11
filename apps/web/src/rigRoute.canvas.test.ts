@@ -14,6 +14,7 @@ import {
   routeMoveTo,
   routePath,
   routePathStep,
+  routeRemove,
   routeReplace,
   routeSplitAt,
   routeStep,
@@ -300,4 +301,57 @@ it('refuses to change the scene paths themselves or to move a tone', () => {
     { branches: [['clean'], ['lead']] },
     'echo',
   ]);
+});
+
+it('drops scene settings of an effect removed or replaced in a scene path', () => {
+  const document = scenes('cut');
+  type Scenes = {
+    scenes: { controls?: { node: string; symbol: string; value: number }[] }[];
+  };
+  // Every scene sets the echo's level, and one setting of an effect that stays.
+  const route = routeInsertAt(
+    readRoute(document, [plugin], {}),
+    { split: null, path: 0, index: 1 },
+    fx('hall'),
+  );
+  const withHall = {
+    revision,
+    manifest: JSON.parse(buildSceneRoute(document, route).manifest_json),
+  } as RigDocument;
+  const ext = withHall.manifest.extensions['urn:oxidal:scenes:1'] as Scenes;
+  for (const scene of ext.scenes)
+    scene.controls = [
+      { node: 'echo', symbol: 'level', value: 1 },
+      { node: 'hall', symbol: 'level', value: 2 },
+    ];
+  const read = readRoute(withHall, [plugin], {});
+  for (const next of [
+    routeRemove(read, 'echo'),
+    routeReplace(read, 'echo', fx('slap')),
+  ]) {
+    const manifest = JSON.parse(
+      buildSceneRoute(withHall, next).manifest_json,
+    ) as RigDocument['manifest'];
+    expect(validator(manifest), JSON.stringify(validator.errors)).toBe(true);
+    expect(manifest.oxidal!.lv2.some((l) => l.id === 'echo')).toBe(false);
+    expect(
+      (manifest.extensions['urn:oxidal:scenes:1'] as Scenes).scenes.map(
+        (scene) => scene.controls,
+      ),
+    ).toEqual([
+      [{ node: 'hall', symbol: 'level', value: 2 }],
+      [{ node: 'hall', symbol: 'level', value: 2 }],
+    ]);
+  }
+  // With its last setting gone, a scene carries no empty list.
+  for (const scene of ext.scenes)
+    scene.controls = [{ node: 'echo', symbol: 'level', value: 1 }];
+  const bare = JSON.parse(
+    buildSceneRoute(withHall, routeRemove(read, 'echo')).manifest_json,
+  );
+  expect(
+    bare.extensions['urn:oxidal:scenes:1'].scenes.every(
+      (scene: object) => !('controls' in scene),
+    ),
+  ).toBe(true);
 });

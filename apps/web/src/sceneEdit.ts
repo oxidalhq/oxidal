@@ -263,13 +263,135 @@ export function deleteScene(
   const at = extension.scenes.findIndex((s) => s.id === sceneId);
   if (at < 0) throw new Error('That scene is not in this preset.');
   if (extension.scenes.length <= 1) throw new Error(LAST_SCENE);
-  extension.scenes.splice(at, 1);
-  if (playing === sceneId)
-    startOn(
-      manifest,
-      extension.scenes[Math.min(at, extension.scenes.length - 1)]!,
-    );
+  const [deleted] = extension.scenes.splice(at, 1);
+  // The scene's own path goes with it, unless another scene still opens it.
+  // A split needs two paths, so the last two stay.
+  const used = new Set(
+    extension.scenes.flatMap((s) => scenePaths(s, extension.branches ?? [])),
+  );
+  const own = scenePaths(deleted!, extension.branches ?? [])
+    .filter((path) => !used.has(path))
+    .reverse();
+  for (const path of own)
+    if ((extension.branches?.length ?? 0) > 2)
+      removeScenePath(manifest, extension, path);
+  const neighbour =
+    extension.scenes[Math.min(at, extension.scenes.length - 1)]!;
+  if (playing === sceneId || (own.length && startsSilent(manifest, extension)))
+    startOn(manifest, neighbour);
   return publish(manifest, document.revision);
+}
+
+/**
+ * The scene paths a scene opens, as indexes into `branches`: every path with
+ * one of its levels above zero in the scene. A duplicated or copied scene has
+ * a new id but opens the path of the scene it came from.
+ */
+export function scenePaths(
+  scene: { gains: Gain[] },
+  branches: { gains: Gain[] }[],
+): number[] {
+  const level = new Map(scene.gains.map((g) => [gainKey(g), g.value]));
+  return branches.flatMap((branch, index) =>
+    branch.gains.some((g) => (level.get(gainKey(g)) ?? 0) !== 0) ? [index] : [],
+  );
+}
+
+/** No scene path is open in the graph's starting mix. */
+function startsSilent(manifest: Manifest, extension: ScenesExtension) {
+  const nodes = manifest.oxidal?.graph.nodes ?? [];
+  return !(extension.branches ?? []).some((branch) =>
+    branch.gains.some(
+      (g) => nodes.find((n) => n.id === g.node)?.inputGains?.[g.port] !== 0,
+    ),
+  );
+}
+
+/**
+ * Take one scene path out of a preset with scene lanes: its tone, its effects
+ * and feed gates, its output of the scene split and its input of the scene
+ * sum. Later paths move up one port, in the graph and in every scene.
+ */
+function removeScenePath(
+  manifest: Manifest,
+  extension: ScenesExtension,
+  path: number,
+) {
+  const host = manifest.oxidal!;
+  const kind = new Map(host.graph.nodes.map((n) => [n.id, n.kind]));
+  const splits = ['scene-input-left', 'scene-input-right'];
+  const sums = ['scene-left', 'scene-right'];
+  const gone = new Set<string>();
+  const queue = host.graph.edges
+    .filter((e) => splits.includes(e.from.node) && e.from.port === path)
+    .map((e) => e.to.node);
+  if (
+    queue.length !== 2 ||
+    !sums.every((sum) => kind.get(sum) === 'merge') ||
+    !extension.branches?.[path]
+  )
+    throw new Error('This preset’s scene paths cannot be changed here.');
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (sums.includes(id) || gone.has(id)) continue;
+    gone.add(id);
+    for (const e of host.graph.edges)
+      if (e.from.node === id) queue.push(e.to.node);
+  }
+  const instances = new Set(
+    host.graph.nodes.flatMap((n) =>
+      gone.has(n.id) && n.instance ? [n.instance] : [],
+    ),
+  );
+  const up = (end: { node: string; port: number }, ends: string[]) =>
+    ends.includes(end.node) && end.port > path
+      ? { ...end, port: end.port - 1 }
+      : end;
+  host.graph.edges = host.graph.edges
+    .filter(
+      (e) =>
+        !gone.has(e.from.node) &&
+        !gone.has(e.to.node) &&
+        !(splits.includes(e.from.node) && e.from.port === path),
+    )
+    .map((e) => ({ from: up(e.from, splits), to: up(e.to, sums) }));
+  host.graph.nodes = host.graph.nodes.filter((n) => !gone.has(n.id));
+  for (const node of host.graph.nodes) {
+    if (splits.includes(node.id)) node.audioOutputs -= 1;
+    if (sums.includes(node.id)) {
+      node.audioInputs -= 1;
+      node.inputGains?.splice(path, 1);
+    }
+  }
+  host.lv2 = host.lv2.filter((l) => !instances.has(l.id));
+  manifest.tone3000.instances = manifest.tone3000.instances.filter(
+    (i) => !instances.has(i.id),
+  );
+  // A resource only the removed blocks used is not kept.
+  const { resources, ...rest } = manifest;
+  const text = JSON.stringify(rest);
+  manifest.resources = resources.filter((r) =>
+    text.includes(JSON.stringify(r.id)),
+  );
+  const authoring = manifest.extensions['urn:oxidal:authoring'];
+  const labels = authoring?.labels as Record<string, string> | undefined;
+  for (const id of gone) if (labels) delete labels[id];
+  if (Array.isArray(authoring?.internal_nodes))
+    authoring.internal_nodes = (authoring.internal_nodes as string[]).filter(
+      (id) => !gone.has(id),
+    );
+  extension.branches.splice(path, 1);
+  for (const scene of [...extension.scenes, ...extension.branches]) {
+    scene.gains = scene.gains
+      .filter(
+        (g) => !gone.has(g.node) && !(sums.includes(g.node) && g.port === path),
+      )
+      .map((g) => up(g, sums) as Gain);
+    if (scene.controls) {
+      scene.controls = scene.controls.filter((c) => !instances.has(c.node));
+      if (!scene.controls.length) delete scene.controls;
+    }
+  }
 }
 
 /** Duplicate a scene as "Name copy" right after it, with a new id. */
@@ -296,7 +418,7 @@ export function duplicateScene(
   return { publish: publish(manifest, document.revision), id };
 }
 
-/** What Copy to preset… will do, shown before anything is copied (S-11). */
+/** What Copy to preset… will do, shown before anything is copied. */
 export type SceneCopyPlan = {
   /** Same blocks and paths: every setting copies exactly. */
   exact: boolean;
@@ -304,13 +426,157 @@ export type SceneCopyPlan = {
   skipped: string[];
   /** Settings the other preset has that the scene does not set. */
   kept: string[];
+  /** Why nothing can be copied: the presets have nothing in common. */
+  refused?: string;
 };
 
-function sceneTargets(scene: SceneDef) {
-  return {
-    gains: new Set(scene.gains.map(gainKey)),
-    controls: new Set((scene.controls ?? []).map(controlKey)),
-  };
+/** What a block is: the plugin of an effect, the tone of a capture. */
+function blockIdentity(manifest: Manifest, id: string): string | null {
+  const node = manifest.oxidal?.graph.nodes.find((n) => n.id === id);
+  const instance = node?.instance ?? id;
+  if (node?.kind === 'lv2')
+    return `effect:${manifest.oxidal?.lv2.find((l) => l.id === instance)?.pluginUri ?? ''}`;
+  if (node?.kind === 'tone3000') {
+    const preset = manifest.tone3000.instances.find(
+      (i) => i.id === instance,
+    )?.preset;
+    const tone = manifest.resources.find((r) => r.id === preset);
+    return `tone:${tone?.sha256 ?? preset ?? ''}`;
+  }
+  return null;
+}
+
+/**
+ * What the path behind one scene level is, so two presets are compared by
+ * their sounds and not by node names, which scene-lane presets share. A level
+ * stage in a chain is `level`. A path is its tones, or its effects when it
+ * has no tone, or `dry`: read back from a merge input to the split, or
+ * forward from a feed gate to the merge.
+ */
+function pathIdentity(manifest: Manifest, gain: Gain): string {
+  const graph = manifest.oxidal?.graph;
+  if (!graph) return '';
+  const kind = (id: string) => graph.nodes.find((n) => n.id === id)?.kind;
+  const adapter = (id: string) => /-(mono|stereo)$/.test(id);
+  const before = (id: string, port: number) =>
+    graph.edges.find((e) => e.to.node === id && e.to.port === port)?.from.node;
+  const after = (id: string) =>
+    graph.edges.find((e) => e.from.node === id && e.from.port === 0)?.to.node;
+  const feed = before(gain.node, gain.port);
+  const gate =
+    kind(gain.node) === 'gain' &&
+    !!feed &&
+    kind(feed) === 'split' &&
+    !adapter(feed);
+  if (kind(gain.node) === 'gain' && !gate) return 'level';
+  const [opens, closes, end] = gate
+    ? ['split', 'merge', 'output']
+    : ['merge', 'split', 'input'];
+  const found: string[] = [];
+  let depth = 0;
+  let at = gate ? gain.node : feed;
+  for (let guard = 0; at && guard < 256; guard++) {
+    const what = kind(at);
+    if (what === end) break;
+    if (!adapter(at)) {
+      if (what === opens) depth++;
+      if (what === closes && depth-- === 0) break;
+    }
+    const block = blockIdentity(manifest, at);
+    if (block) found.push(block);
+    at = gate ? after(at) : before(at, 0);
+  }
+  const tones = found.filter((block) => block.startsWith('tone:'));
+  return (tones.length ? tones : found).join('|') || 'dry';
+}
+
+/** A block's display name, never its id. */
+function shownBlock(manifest: Manifest, node: string): string {
+  const labels = (manifest.extensions['urn:oxidal:authoring']?.labels ??
+    {}) as Record<string, string>;
+  const label = labels[node] ?? labels[node.replace(/-(mono|stereo)$/, '')];
+  return label ? `'${label}'` : 'An unnamed effect';
+}
+
+/** A scene level's path by its display name, never a node id. */
+function shownPath(manifest: Manifest, gain: Gain): string {
+  const extension = manifest.extensions['urn:oxidal:scenes:1'] as
+    ScenesExtension | undefined;
+  const branch = extension?.branches?.find((b) =>
+    b.gains.some((g) => gainKey(g) === gainKey(gain)),
+  );
+  const labels = (manifest.extensions['urn:oxidal:authoring']?.labels ??
+    {}) as Record<string, string>;
+  const label = labels[gain.node];
+  const name =
+    branch?.name ??
+    (label?.endsWith(' send') ? label.slice(0, -' send'.length) : undefined);
+  if (name) return `the '${name}' path`;
+  if (pathIdentity(manifest, gain) === 'level') return 'the scene level';
+  return `path ${gain.port + 1}`;
+}
+
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Which settings of `scene` have the same place in `target`: a level whose
+ * path is the same sound there, a setting whose effect is the same plugin.
+ */
+function sceneMatch(source: Manifest, scene: SceneDef, target: Manifest) {
+  const shape = scenesOf(target).scenes[0]!;
+  const targetName = target.name;
+  const gainKeys = new Set(shape.gains.map(gainKey));
+  const controlKeys = new Set((shape.controls ?? []).map(controlKey));
+  const plugin = (manifest: Manifest, node: string) =>
+    manifest.oxidal?.lv2.find((l) => l.id === node)?.pluginUri;
+  const gains = new Map<string, number>();
+  const controls = new Map<string, number>();
+  const skipped = new Set<string>();
+  const kept = new Set<string>();
+  for (const gain of scene.gains) {
+    const path = shownPath(source, gain);
+    if (!gainKeys.has(gainKey(gain)))
+      skipped.add(
+        `${targetName} has no ${path.replace(/^the /, '')}: its level is skipped.`,
+      );
+    else if (pathIdentity(source, gain) !== pathIdentity(target, gain))
+      skipped.add(
+        `${sentence(path)} is a different sound in ${targetName}: its level is skipped.`,
+      );
+    else gains.set(gainKey(gain), gain.value);
+  }
+  for (const control of scene.controls ?? []) {
+    const block = shownBlock(source, control.node);
+    const theirs = plugin(target, control.node);
+    if (theirs === undefined)
+      skipped.add(
+        `${targetName} has no ${block.replace(/^An /, 'an ')} block: its ${control.symbol} setting is skipped.`,
+      );
+    else if (theirs !== plugin(source, control.node))
+      skipped.add(
+        `${block} is a different effect in ${targetName}: its ${control.symbol} setting is skipped.`,
+      );
+    else if (!controlKeys.has(controlKey(control)))
+      skipped.add(
+        `${targetName}'s scenes do not change ${block.replace(/^An /, 'an ')} ${control.symbol}: it is skipped.`,
+      );
+    else controls.set(controlKey(control), control.value);
+  }
+  for (const gain of shape.gains)
+    if (!gains.has(gainKey(gain)))
+      kept.add(
+        `${sentence(shownPath(target, gain))} keeps ${targetName}'s own level.`,
+      );
+  for (const control of shape.controls ?? [])
+    if (!controls.has(controlKey(control)))
+      kept.add(
+        `${shownBlock(target, control.node)} keeps ${targetName}'s own ${control.symbol} setting.`,
+      );
+  const refused =
+    gains.size || controls.size
+      ? undefined
+      : `'${scene.name}' cannot be copied to ${targetName}: the two presets have no paths or effects in common.`;
+  return { gains, controls, skipped, kept, refused };
 }
 
 /** Compare a scene with the scenes of another preset. */
@@ -321,36 +587,16 @@ export function sceneCopyPlan(
 ): SceneCopyPlan {
   const scene = scenesOf(source.manifest).scenes.find((s) => s.id === sceneId);
   if (!scene) throw new Error('That scene is not in this preset.');
-  const into = scenesOf(target.manifest).scenes[0]!;
-  const from = sceneTargets(scene);
-  const to = sceneTargets(into);
-  const targetName = target.manifest.name;
-  const skipped = new Set<string>();
-  const kept = new Set<string>();
-  for (const gain of scene.gains)
-    if (!to.gains.has(gainKey(gain)))
-      skipped.add(
-        `${targetName} has no path ${gain.port + 1} at '${blockLabel(source.manifest, gain.node)}': its level is skipped.`,
-      );
-  for (const control of scene.controls ?? [])
-    if (!to.controls.has(controlKey(control)))
-      skipped.add(
-        `${targetName} has no '${blockLabel(source.manifest, control.node)}' block: its ${control.symbol} setting is skipped.`,
-      );
-  for (const gain of into.gains)
-    if (!from.gains.has(gainKey(gain)))
-      kept.add(
-        `Path ${gain.port + 1} at '${blockLabel(target.manifest, gain.node)}' keeps ${targetName}'s own level.`,
-      );
-  for (const control of into.controls ?? [])
-    if (!from.controls.has(controlKey(control)))
-      kept.add(
-        `'${blockLabel(target.manifest, control.node)}' keeps ${targetName}'s own ${control.symbol} setting.`,
-      );
+  const { skipped, kept, refused } = sceneMatch(
+    source.manifest,
+    scene,
+    target.manifest,
+  );
   return {
-    exact: !skipped.size && !kept.size,
+    exact: !skipped.size && !kept.size && !refused,
     skipped: [...skipped],
     kept: [...kept],
+    ...(refused ? { refused } : {}),
   };
 }
 
@@ -358,7 +604,8 @@ export function sceneCopyPlan(
  * Copy one scene to the end of another preset in Mine. Settings the other
  * preset has no place for are skipped; settings it has that the scene does
  * not set keep that preset's own values. Saved as a new version of the other
- * preset, which keeps its place, name and MIDI.
+ * preset, which keeps its place, name and MIDI. Refused when the two presets
+ * have nothing in common.
  */
 export function copySceneTo(
   source: RigDocument,
@@ -372,10 +619,12 @@ export function copySceneTo(
   if (extension.scenes.length >= MAX_SCENES)
     throw new Error(`${manifest.name} already has ${MAX_SCENES} scenes.`);
   const shape = extension.scenes[0]!;
-  const gains = new Map(scene.gains.map((g) => [gainKey(g), g.value]));
-  const controls = new Map(
-    (scene.controls ?? []).map((c) => [controlKey(c), c.value]),
+  const { gains, controls, refused } = sceneMatch(
+    source.manifest,
+    scene,
+    target.manifest,
   );
+  if (refused) throw new Error(refused);
   const graphGain = (g: Gain) =>
     manifest.oxidal!.graph.nodes.find((n) => n.id === g.node)?.inputGains?.[
       g.port
@@ -579,7 +828,9 @@ export function keepScenes(
     { branches?: unknown[]; scenes?: { gains: Gain[] }[] } | undefined;
   if (!before) return request;
   if (before.branches?.length)
-    throw new Error('Change the routing of scene branches in the scene lanes.');
+    throw new Error(
+      'Each scene of this preset has its own path. Change a path inside its scene.',
+    );
   const manifest = JSON.parse(request.manifest_json) as Manifest;
   const nodes = manifest.oxidal?.graph.nodes ?? [];
   const inputs = nodes.flatMap((node) =>
@@ -616,7 +867,7 @@ export function keepScenes(
   // Scenes switch levels; with no split left there is nothing to switch.
   if (scenes.scenes?.some((scene) => !scene.gains.length))
     throw new Error(
-      'A preset with scenes needs a split. Keep at least one parallel path.',
+      'A preset with scenes needs a split. Keep at least one split with two paths.',
     );
   manifest.extensions['urn:oxidal:scenes:1'] = scenes;
   if (!manifest.requiredExtensions.includes('urn:oxidal:scenes:1'))

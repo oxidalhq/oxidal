@@ -545,7 +545,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
   }
 });
 
-test('mixed rig authoring: Copy to preset lists what is skipped before copying (S-11)', async ({
+test('mixed rig authoring: Copy to preset says what copies and refuses presets with nothing in common (S-11)', async ({
   page,
   request,
 }, info) => {
@@ -557,12 +557,19 @@ test('mixed rig authoring: Copy to preset lists what is skipped before copying (
       { id: 'lead', name: 'Lead', value: 0.5 },
     ]),
   );
+  // Crunch sets a different level stage: nothing of the scene has a place there.
   const crunchName = `Crunch ${stamp}`;
   const crunch = await publish(
     request,
     manifest(crunchName, [{ id: 'rhythm', name: 'Rhythm', value: 0.8 }], {
       gain: 'mix-gain',
     }),
+  );
+  // Twin has the same level stage, so the scene copies exactly.
+  const twinName = `Twin ${stamp}`;
+  const twin = await publish(
+    request,
+    manifest(twinName, [{ id: 'rhythm', name: 'Rhythm', value: 0.8 }]),
   );
   await mockRig(page, request, source);
   try {
@@ -573,27 +580,32 @@ test('mixed rig authoring: Copy to preset lists what is skipped before copying (
       .getByRole('menuitem', { name: 'Copy to preset…' })
       .click();
     const dialog = page.getByRole('dialog', { name: 'Copy to preset' });
+    const copy = dialog.getByRole('button', { name: 'Copy', exact: true });
     await dialog
       .getByLabel("Copy 'Lead' to")
       .selectOption({ label: crunchName });
     const plan = dialog.getByRole('list', { name: 'What copies' });
     await expect(plan).toContainText(
-      `⚠ ${crunchName} has no path 1 at 'scene-gain': its level is skipped.`,
+      `'Lead' cannot be copied to ${crunchName}: the two presets have no paths or effects in common.`,
     );
-    await expect(plan).toContainText(
-      `Path 1 at 'mix-gain' keeps ${crunchName}'s own level.`,
-    );
+    // No block or path is shown by its internal id.
+    await expect(plan).not.toContainText('mix-gain');
+    await expect(copy).toBeDisabled();
+    expect(
+      (await catalog(request)).items.find((i) => i.name === crunchName)!.id,
+    ).toBe(crunch);
+    await dialog.getByLabel("Copy 'Lead' to").selectOption({ label: twinName });
+    await expect(plan).toContainText('✓ Same blocks: settings copy exactly.');
     // Nothing is copied until confirmed.
-    const unchanged = (await catalog(request)).items.find(
-      (i) => i.name === crunchName,
-    )!;
-    expect(unchanged.id).toBe(crunch);
-    await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
+    expect(
+      (await catalog(request)).items.find((i) => i.name === twinName)!.id,
+    ).toBe(twin);
+    await copy.click();
     await expect(
-      page.getByText(`"Lead" copied to ${crunchName} as scene 2.`),
+      page.getByText(`"Lead" copied to ${twinName} as scene 2.`),
     ).toBeVisible();
     const saved = (await catalog(request)).items.find(
-      (i) => i.name === crunchName && i.id !== crunch,
+      (i) => i.name === twinName && i.id !== twin,
     )!;
     const document = await (
       await request.get(`/api/v1/presets/rigs/${saved.id}`)
@@ -607,12 +619,12 @@ test('mixed rig authoring: Copy to preset lists what is skipped before copying (
       ),
     ).toEqual([
       ['Rhythm', 0.8],
-      ['Lead', 0.8],
+      ['Lead', 0.5],
     ]);
   } finally {
     await remove(
       request,
-      await current(request, [`Lead ${stamp}`, crunchName]),
+      await current(request, [`Lead ${stamp}`, crunchName, twinName]),
     );
   }
 });

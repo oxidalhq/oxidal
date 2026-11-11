@@ -24,6 +24,7 @@ import { ControlGrid } from './features/rig/ControlGrid';
 import { ControlAdjustDialog } from './features/rig/ControlAdjustDialog';
 import { PathLevelsDialog } from './features/rig/PathLevelsDialog';
 import { useMixedRigSession } from './features/rig/useMixedRigSession';
+import { rigBusy } from './features/rig/mixedRigViewModel';
 
 /**
  * The sounding mixed rig: header, scenes, chain, selected block and dialogs.
@@ -39,6 +40,7 @@ export function MixedRig(props: {
   const rig = useMixedRigSession(props);
   const vm = rig.view;
   if (!vm) return null;
+  const waiting = rigBusy(vm, rig);
   const {
     accept,
     alive,
@@ -55,7 +57,6 @@ export function MixedRig(props: {
     matching,
     name,
     performing,
-    picker,
     readError,
     recallScene,
     revision,
@@ -69,7 +70,6 @@ export function MixedRig(props: {
     setSaveOpening,
     switchPrepared,
     switchTile,
-    switching,
   } = rig;
   const {
     changed,
@@ -98,7 +98,7 @@ export function MixedRig(props: {
             modified: !!changed,
           }}
           lanes={stageLanes}
-          disabled={disabled || !!edit || editing || performSwitching}
+          disabled={waiting || performSwitching}
           switching={performSwitching}
           onToggle={switchTile}
           onEdit={() => setPerforming(false)}
@@ -108,7 +108,7 @@ export function MixedRig(props: {
                 scenes={state.control.scenes.scenes}
                 active={state.control.scene}
                 fading={!!state.control.scene_transitioning}
-                disabled={disabled || !!edit}
+                disabled={waiting}
                 onSelect={(scene) => void recallScene(scene)}
               />
             )
@@ -126,14 +126,7 @@ export function MixedRig(props: {
                 modified: !!changed,
                 refresh: revision,
               }}
-              disabled={
-                disabled ||
-                busy ||
-                switching ||
-                !!edit ||
-                !!picker ||
-                !!copyOnEdit
-              }
+              disabled={waiting || !!copyOnEdit}
               pads
               all
               onSelect={(choice) => void choose(choice)}
@@ -229,7 +222,7 @@ export function MixedRig(props: {
                   key={p.revision}
                   className="h-auto min-h-11 max-w-full min-w-0 text-left whitespace-normal"
                   variant="outline"
-                  disabled={disabled || !!edit || !!p.error}
+                  disabled={waiting || !!p.error}
                   onClick={() => void switchPrepared(p.revision)}
                 >
                   <span className="min-w-0 break-words">
@@ -331,7 +324,7 @@ export function MixedRig(props: {
       <SceneMidi
         trigger={false}
         state={state}
-        disabled={disabled || !!edit}
+        disabled={waiting}
         onCommand={async (action) => {
           await command(action);
         }}

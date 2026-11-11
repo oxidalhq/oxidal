@@ -3292,7 +3292,7 @@ for (const layout of ['serial', 'scenes'] as const) {
       ).id;
       await rig.locator(`.mixed-node[data-node="${id}"] .rig-tile`).click();
       return rig.getByRole('button', {
-        name: `Toggle branch ${name}`,
+        name: `Toggle path ${name}`,
         exact: true,
       });
     };

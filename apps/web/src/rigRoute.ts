@@ -367,7 +367,7 @@ function copySteps(steps: Route): Route {
 export function routeCopyBranch(route: Route, id: string): Route {
   const next = clone(route);
   const at = locate(next, id);
-  if (!at?.owner) throw new Error('Only a block inside a split has a branch.');
+  if (!at?.owner) throw new Error('Only a block inside a split has a path.');
   const b = at.branch!;
   at.owner.branches.splice(b + 1, 0, copySteps(at.owner.branches[b]!));
   for (const g of sides(at.owner)) g.splice(b + 1, 0, g[b] ?? 1);
@@ -379,7 +379,7 @@ export function routeCopyBranch(route: Route, id: string): Route {
 export function routeAddBranch(route: Route, id: string): Route {
   const next = clone(route);
   const at = locate(next, id);
-  if (!at?.owner) throw new Error('Only a block inside a split has a branch.');
+  if (!at?.owner) throw new Error('Only a block inside a split has a path.');
   at.owner.branches.push([]);
   for (const g of sides(at.owner)) g.push(1);
   settle(at.owner);
@@ -391,7 +391,7 @@ export function routeRemoveBranch(route: Route, id: string): Route {
   const next = clone(route);
   const dry = dryPaths(next);
   const at = locate(next, id);
-  if (!at?.owner) throw new Error('Only a block inside a split has a branch.');
+  if (!at?.owner) throw new Error('Only a block inside a split has a path.');
   at.owner.branches[at.branch!]!.length = 0;
   dry.delete(at.owner.branches[at.branch!]!);
   return tidy(next, dry);
@@ -862,6 +862,16 @@ export function buildSceneRoute(
     { node: output, port: 0 },
     { node: output, port: 1 },
   ]);
+  // Scene settings of an effect that was removed or replaced go with it, as
+  // `keepScenes` does for presets without scene lanes.
+  const effects = new Set(host.lv2.map((l) => l.id));
+  const scenes = manifest.extensions['urn:oxidal:scenes:1'] as
+    { scenes?: { controls?: { node: string }[] }[] } | undefined;
+  for (const item of scenes?.scenes ?? []) {
+    if (!item.controls) continue;
+    item.controls = item.controls.filter((c) => effects.has(c.node));
+    if (!item.controls.length) delete item.controls;
+  }
   return {
     manifest_json: JSON.stringify(manifest),
     resources: Object.fromEntries(

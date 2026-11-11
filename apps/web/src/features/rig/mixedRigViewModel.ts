@@ -3,6 +3,7 @@ import {
   type NewScene,
   type SceneControl,
   branchEffects,
+  scenePaths,
 } from '../../sceneEdit';
 import type { RigAudioState, RigControl, RigDocument } from '../../api';
 import {
@@ -40,6 +41,54 @@ export const END = 'end';
 export const PATH = 'path';
 
 export type SceneGain = { node: string; port: number; value: number };
+
+type RigActivity = {
+  edit?: unknown;
+  editing?: boolean;
+  picker?: unknown;
+  switching?: boolean;
+};
+/**
+ * Looking is always allowed, so selection only waits for what would move
+ * under it: an open setting dialog, an open chooser, or a save in flight.
+ */
+export const rigLocked = (rig: RigActivity): boolean =>
+  !!rig.edit || !!rig.picker || !!rig.editing;
+/**
+ * The one rule for when the rig's actions wait: the rig is not ready or a
+ * command is in flight (`disabled` of the view model), selection is locked,
+ * or another preset is being switched in. Every action under `features/rig`
+ * uses this; a dialog's own buttons and the engine controls, which must work
+ * while the rig is stopped, keep their own state.
+ */
+export const rigBusy = (vm: { disabled: boolean }, rig: RigActivity): boolean =>
+  vm.disabled || rigLocked(rig) || !!rig.switching;
+
+type SceneBranchDef = { id: string; name?: string; gains: SceneGain[] };
+/** The scene paths a preset with scene lanes declares, in lane order. */
+function sceneBranchDefs(document: RigDocument | null): SceneBranchDef[] {
+  const extension = document?.manifest.extensions['urn:oxidal:scenes:1'] as
+    { branches?: SceneBranchDef[] } | undefined;
+  return Array.isArray(extension?.branches)
+    ? extension.branches.filter(
+        (branch) =>
+          typeof branch.id === 'string' && Array.isArray(branch.gains),
+      )
+    : [];
+}
+
+/**
+ * The lane a scene sounds: the first path its levels open, read from the
+ * scene's gains. Falls back to the path with the scene's id, then to none (-1).
+ */
+export function soundingLane(
+  scene: { id: string; gains: SceneGain[] } | undefined,
+  branches: SceneBranchDef[],
+): number {
+  if (!scene) return -1;
+  const [open] = scenePaths(scene, branches);
+  return open ?? branches.findIndex((branch) => branch.id === scene.id);
+}
 export type SceneDraft = {
   session: string;
   gains: Record<string, SceneGain[]>;
@@ -467,7 +516,8 @@ export function mixedRigViewModel({
     );
     const active = branch?.enabled ?? state.control?.scene === scene?.id;
     return {
-      id: scene?.name ?? n.id,
+      // Never a raw id: the scene's name, else the name of the path's tone.
+      id: scene?.name ?? branch?.name ?? rigNodeLabel(matching, n.id) ?? 'Path',
       input: String(index + 1),
       name: scene?.name,
       active,
@@ -516,7 +566,7 @@ export function mixedRigViewModel({
   const effectLanes: RigLaneVM[] = (chainIds ?? []).map((ids, index) => ({
     id:
       chainIds!.length > 1
-        ? ((snapshotLanes ? feedName(index) : null) ?? `Lane ${index + 1}`)
+        ? ((snapshotLanes ? feedName(index) : null) ?? `Path ${index + 1}`)
         : 'Chain',
     input: chainIds!.length > 1 ? String(index + 1) : 'IN',
     name: snapshotLanes ? (feedName(index) ?? undefined) : undefined,
@@ -550,7 +600,12 @@ export function mixedRigViewModel({
       ? {
           split: sceneStep.split,
           names: sceneBranchIds.map(
-            (id) => sceneList.find((scene) => scene.id === id)?.name ?? id,
+            (id) =>
+              sceneList.find((scene) => scene.id === id)?.name ??
+              sceneBranchDefs(matching).find((branch) => branch.id === id)
+                ?.name ??
+              rigNodeLabel(matching, id) ??
+              'Path',
           ),
           sounding: (() => {
             const at = sceneLanes.findIndex((lane) => lane.active);
@@ -649,11 +704,11 @@ export function mixedRigViewModel({
         c.target.node === node &&
         c.target.parameter === `block:${block}:enabled`,
     );
-  const activeScene = Math.max(
-    0,
-    sceneBranches.findIndex((branch) => branch.id === state.control?.scene),
-  );
-  const activeSceneLane = sceneLanes[activeScene] ?? sceneLanes[0];
+  // The sounding scene's lane is the path its levels open, not the path named
+  // like it: a duplicated or copied scene has its own id but no path of its own.
+  const activeSceneLane =
+    sceneLanes[soundingLane(soundingScene, sceneBranchDefs(matching))] ??
+    sceneLanes[0];
   const stageSource = activeSceneLane
     ? [activeSceneLane]
     : snapshotLanes && effectLanes.some((lane) => !lane.dim)

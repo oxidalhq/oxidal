@@ -24,7 +24,34 @@ export type SceneSetting = {
 };
 
 /**
- * Effect settings scenes can change (D-6). Every scene of a preset sets the
+ * The port of a setting a scene may change, or null when the engine would
+ * refuse to prepare a preset whose scenes set it. Mirrors `scene_ramps` in
+ * `crates/oxidal-engine/src/ports.rs`: the plugin reports no latency, the
+ * symbol is a scalar input control, and it has a finite range with minimum
+ * below maximum, above zero for a logarithmic control.
+ */
+export function sceneControlPort(
+  plugin: Lv2Plugin,
+  symbol: string,
+): Lv2Plugin['ports'][number] | null {
+  if (plugin.ports.some((p) => p.latency)) return null;
+  const port = plugin.ports.find((p) => p.symbol === symbol);
+  if (!port || !port.control || !port.input || port.atom) return null;
+  const { minimum, maximum } = port;
+  if (
+    typeof minimum !== 'number' ||
+    typeof maximum !== 'number' ||
+    !Number.isFinite(minimum) ||
+    !Number.isFinite(maximum) ||
+    minimum >= maximum ||
+    (port.logarithmic && minimum <= 0)
+  )
+    return null;
+  return port;
+}
+
+/**
+ * Effect settings scenes can change. Every scene of a preset sets the
  * same controls; the player chooses which changed controls join them. Only
  * scalar input controls of effects without a latency port are offered.
  * @see docs/lv2.md
@@ -64,9 +91,8 @@ export function useSceneSettings({ rig, vm }: RigViewProps) {
         (l) => l.id === target.node,
       )?.pluginUri;
       const plugin = plugins.find((p) => p.uri === uri);
-      if (!plugin || plugin.ports.some((p) => p.latency)) return [];
-      const port = plugin.ports.find((p) => p.symbol === target.symbol);
-      if (!port || !port.control || !port.input || port.atom) return [];
+      const port = plugin && sceneControlPort(plugin, target.symbol);
+      if (!port) return [];
       const k = key(target);
       const reference =
         own.get(k) ??

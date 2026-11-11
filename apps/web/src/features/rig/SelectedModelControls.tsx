@@ -10,6 +10,7 @@ import { Button } from '../../components/ui/button';
 import { ToneDetails } from '../../ToneDetails';
 import { controlGroup } from '../../rigControls';
 import type { RigViewProps } from './useMixedRigSession';
+import { rigBusy } from './mixedRigViewModel';
 
 /**
  * Model controls of the selected native block: control groups, model
@@ -17,17 +18,11 @@ import type { RigViewProps } from './useMixedRigSession';
  * @see docs/interface.md
  */
 export function SelectedModelControls({ rig, vm }: RigViewProps) {
-  const {
-    adding,
-    edit,
-    setAdding,
-    setInsertion,
-    setNativeSelection,
-    setPicker,
-  } = rig;
+  const waiting = rigBusy(vm, rig);
+  const { adding, setAdding, setInsertion, setNativeSelection, setPicker } =
+    rig;
   const {
     controls,
-    disabled,
     eqBlock,
     eqBlocks,
     inLane,
@@ -71,7 +66,7 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
                 key={target}
                 variant="ghost"
                 aria-pressed={nativeTarget === target}
-                disabled={disabled || !!edit}
+                disabled={waiting}
                 onClick={() =>
                   setNativeSelection({ node: selected.id, target })
                 }
@@ -99,7 +94,7 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
                   variant="outline"
                   aria-label={`Select model ${index + 1}`}
                   aria-pressed={nativeTarget === block.block_id}
-                  disabled={disabled || !!edit}
+                  disabled={waiting}
                   className="h-auto min-h-11 max-w-full min-w-0 whitespace-normal"
                   onClick={() =>
                     setNativeSelection({
@@ -118,7 +113,7 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
             {eqBlock && (
               <Button
                 variant="outline"
-                disabled={disabled || !!edit}
+                disabled={waiting}
                 onClick={() =>
                   setPicker({
                     opening: state,
@@ -136,7 +131,7 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
               <Button
                 variant="outline"
                 aria-label="Add block"
-                disabled={disabled || !!edit}
+                disabled={waiting}
                 onClick={() => setAdding(true)}
               >
                 Add
@@ -163,7 +158,7 @@ export function SelectedModelControls({ rig, vm }: RigViewProps) {
       {running && selected && nativeModels && !wholeNative && eqBlock && (
         <Button
           variant="outline"
-          disabled={disabled || !!edit}
+          disabled={waiting}
           onClick={() =>
             setPicker({
               opening: state,
