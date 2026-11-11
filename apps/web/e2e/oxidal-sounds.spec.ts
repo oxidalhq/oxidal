@@ -378,12 +378,20 @@ test('library sections: Make my copy puts a copy in Mine and leaves the original
   await expect(
     page.getByText(/Brown Crunch copy( \d+)? is in Mine\./),
   ).toBeVisible();
-  const list = (await (await request.get('/api/v1/presets/rigs')).json())
-    .presets as {
-    name: string;
-    origin: string;
-    revision: string;
-  }[];
+  // The library is paged and shared by every project in a run: read all pages.
+  type Entry = { name: string; origin: string; revision: string };
+  const list: Entry[] = [];
+  let after: string | undefined;
+  for (let page_ = 0; page_ < 50; page_++) {
+    const body = (await (
+      await request.get(
+        `/api/v1/presets/rigs${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+      )
+    ).json()) as { presets: Entry[]; next?: string | null };
+    list.push(...body.presets);
+    if (!body.next) break;
+    after = body.next;
+  }
   expect(
     list.some((p) => /^Brown Crunch copy/.test(p.name) && p.origin === 'mine'),
   ).toBe(true);
