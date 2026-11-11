@@ -8,6 +8,7 @@
 - [Use the browser interface](interface.md) or [browse screenshots](screenshots.md)
 - [Check levels and audio health](monitoring.md)
 - [Capacity and buffer size](capacity.md)
+- [Comparison with other amp and effects units](comparison.md)
 - [Explore the factory effects recipes](factory-collection.md)
 - [Connect a TONE3000 account](tone3000-account.md)
 
