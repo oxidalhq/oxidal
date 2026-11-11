@@ -100,6 +100,28 @@ static int property(LilvWorld* w, const LilvPlugin* p, const LilvPort* port, con
     LilvNode* node = lilv_new_uri(w, uri);
     int result = lilv_port_has_property(p, port, node); lilv_node_free(node); return result;
 }
+// Copies up to `capacity` lv2:scalePoint values and labels into caller buffers
+// (`labels` holds 65-byte slots). Labels over 64 bytes are skipped, never cut.
+uint32_t ox_lv2_scale_points(const LilvPlugin* p, uint32_t index, float* values, char* labels, uint32_t capacity) {
+    const LilvPort* port = lilv_plugin_get_port_by_index(p, index);
+    if (!port) return 0;
+    LilvScalePoints* points = lilv_port_get_scale_points(p, port);
+    if (!points) return 0;
+    uint32_t count = 0;
+    LILV_FOREACH(scale_points, i, points) {
+        if (count >= capacity) break;
+        const LilvScalePoint* point = lilv_scale_points_get(points, i);
+        const LilvNode* value = lilv_scale_point_get_value(point);
+        const LilvNode* label = lilv_scale_point_get_label(point);
+        const char* text = label ? lilv_node_as_string(label) : NULL;
+        if (!value || !(lilv_node_is_float(value) || lilv_node_is_int(value)) || !text || !*text || strlen(text) > 64) continue;
+        values[count] = lilv_node_as_float(value);
+        memcpy(labels + count * 65, text, strlen(text) + 1);
+        count++;
+    }
+    lilv_scale_points_free(points);
+    return count;
+}
 // flags: audio, control, input, output, integer, toggled, sampleRate, logarithmic, latency, Atom, invalid Atom metadata.
 int ox_lv2_port(void* world, const LilvPlugin* p, uint32_t index, float* def, float* min, float* max) {
     LilvWorld* w = world; const LilvPort* port = lilv_plugin_get_port_by_index(p, index);

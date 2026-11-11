@@ -8700,6 +8700,13 @@
         "output": {
           "type": "boolean"
         },
+        "scale_points": {
+          "description": "Named values (`lv2:scalePoint`), sorted by value; empty when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScalePoint"
+          }
+        },
         "symbol": {
           "type": "string"
         },
@@ -10458,6 +10465,24 @@
         "name",
         "active",
         "managed"
+      ]
+    },
+    "ScalePoint": {
+      "description": "One named value of a control, such as a mode or note division, so the\ninterface can show \"Ping-pong\" rather than \"2\".\n@see docs/lv2.md",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "format": "float"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "label"
       ]
     },
     "Scene": {

@@ -17,6 +17,9 @@ PACKAGES = {
     'mda': 'mda-lv2',
     'swh': 'swh-lv2',
     'fomp': 'fomp',
+    # Harness candidates only; Settings → Effects offers the helper allowlist.
+    'zam': 'zam-plugins',
+    'dpf': 'dpf-plugins-lv2',
 }
 
 

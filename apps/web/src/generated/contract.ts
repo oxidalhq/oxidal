@@ -2224,8 +2224,21 @@ export interface Port {
   maximum?: number | null;
   minimum?: number | null;
   output: boolean;
+  /**
+   * Named values (`lv2:scalePoint`), sorted by value; empty when none.
+   */
+  scale_points?: ScalePoint[];
   symbol: string;
   toggled: boolean;
+}
+/**
+ * One named value of a control, such as a mode or note division, so the
+ * interface can show "Ping-pong" rather than "2".
+ * @see docs/lv2.md
+ */
+export interface ScalePoint {
+  label: string;
+  value: number;
 }
 /**
  * Rename or re-trim an asset; files never change.

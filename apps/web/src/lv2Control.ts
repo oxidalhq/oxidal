@@ -1,4 +1,16 @@
+/**
+ * Native-value LV2 control entry and display: ranges, tapers and scale-point
+ * names ("Ping-pong" rather than "2").
+ *
+ * @see docs/lv2.md
+ */
 import type { Lv2Plugin } from './api';
+
+type ScalePoints = Lv2Plugin['ports'][number]['scale_points'];
+/** The declared name for an exact native value, if the port has one. */
+export function scalePointLabel(points: ScalePoints, value: number) {
+  return points?.find((point) => point.value === value)?.label;
+}
 
 /** Native-value entry with normalized transport and a logarithmic drag axis. */
 export type ControlScale = {
@@ -16,7 +28,8 @@ export function lv2Control(
   port: Pick<
     Lv2Plugin['ports'][number],
     'minimum' | 'maximum' | 'logarithmic' | 'integer' | 'toggled'
-  >,
+  > &
+    Partial<Pick<Lv2Plugin['ports'][number], 'scale_points'>>,
 ): ControlScale | undefined {
   const lo = port.minimum;
   const hi = port.maximum;
@@ -55,11 +68,12 @@ export function lv2Control(
       return Math.max(0, Math.min(1, value + direction * 0.001));
     },
     format: (value) =>
-      port.toggled
+      scalePointLabel(port.scale_points, native(value)) ??
+      (port.toggled
         ? native(value) === hi
           ? 'On'
           : 'Off'
-        : String(Number(native(value).toPrecision(6))),
+        : String(Number(native(value).toPrecision(6)))),
   };
 }
 

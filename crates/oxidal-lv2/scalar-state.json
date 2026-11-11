@@ -21,5 +21,90 @@
       "width"
     ],
     "atoms": ["lv2_events_in", "lv2_events_out"]
+  },
+  "http://calf.sourceforge.net/plugins/VintageDelay": {
+    "controls": [
+      "amount",
+      "bpm",
+      "bpm_host",
+      "dry",
+      "feedback",
+      "fragmentation",
+      "hz",
+      "level_in",
+      "level_out",
+      "medium",
+      "mix_mode",
+      "ms",
+      "on",
+      "pbeats",
+      "pfrag",
+      "subdiv",
+      "time_l",
+      "time_r",
+      "timing",
+      "width"
+    ],
+    "atoms": ["events_in", "events_out"]
+  },
+  "http://calf.sourceforge.net/plugins/ReverseDelay": {
+    "controls": [
+      "amount",
+      "bpm",
+      "bpm_host",
+      "bypass",
+      "feedback",
+      "level_in",
+      "level_out",
+      "reset",
+      "subdiv",
+      "sync",
+      "time_l",
+      "time_r",
+      "width",
+      "window"
+    ],
+    "atoms": ["events_in", "events_out"]
+  },
+  "http://calf.sourceforge.net/plugins/MultiChorus": {
+    "controls": [
+      "amount",
+      "dry",
+      "freq",
+      "freq2",
+      "level_in",
+      "level_out",
+      "lfo",
+      "min_delay",
+      "mod_depth",
+      "mod_rate",
+      "on",
+      "overlap",
+      "q",
+      "stereo",
+      "voices",
+      "vphase"
+    ],
+    "atoms": ["events_in", "events_out"]
+  },
+  "http://calf.sourceforge.net/plugins/Saturator": {
+    "controls": [
+      "blend",
+      "bypass",
+      "drive",
+      "hp_post_freq",
+      "hp_pre_freq",
+      "level_in",
+      "level_out",
+      "lp_post_freq",
+      "lp_pre_freq",
+      "mix",
+      "p_freq",
+      "p_level",
+      "p_q",
+      "post",
+      "pre"
+    ],
+    "atoms": ["events_in", "events_out"]
   }
 }

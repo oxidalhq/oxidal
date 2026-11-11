@@ -253,6 +253,54 @@ timeout containment.
 The maintained `pnpm lv2:check` verifies real installed SWH names/ranges/admission and
 rescanning while the graph worker continues processing. The browser uses this catalog in New preset; persistent mixed-native/LV2 rigs remain separate work.
 
+The runner also accepts `--pack zam` (`zam-plugins`) and `--pack dpf`
+(`dpf-plugins-lv2`) as harness candidates. They are not in the Settings →
+Effects allowlist, so the appliance cannot install them yet.
+
+### Debian 13 ARM64 results (2026-11-12)
+
+Run in a disposable Debian 13 (trixie) ARM64 container on an Apple-silicon
+host, built with Rust 1.95.0 against `liblilv-0-0` 0.24.26-1 and `lv2-dev`
+1.18.10-2+b2; 48 kHz, 48-frame blocks. The container started from the Debian 12
+Rust image with trixie packages pinned, so libc6 is trixie's 2.41-12+deb13u4.
+This is container evidence, not a run on the Raspberry Pi.
+
+| Pack     | Package version  | Usable | Rejected | Crashed | Timed out |
+| -------- | ---------------- | ------ | -------- | ------- | --------- |
+| guitarix | 0.46.0+dfsg-1+b1 | 70     | 0        | 1       | 1         |
+| calf     | 0.90.3-4+b2      | 37     | 14       | 0       | 0         |
+| zam      | 4.2+ds-1+b1      | 12     | 5        | 0       | 0         |
+| dpf      | 1.7+ds-3         | 9      | 6        | 0       | 0         |
+
+As on Debian 12, Gx Tape Stereo crashes (SIGSEGV) and Gxdetune times out; both
+are contained. Effects named for the library sprint:
+
+| Effect                   | URI                                                                               | Result                                             |
+| ------------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------- |
+| GxShimmizita             | `http://guitarix.sourceforge.net/plugins/gx_shimmizita_#_shimmizita_`             | usable, stereo                                     |
+| GxDuckDelay (stereo)     | `http://guitarix.sourceforge.net/plugins/gx_duck_delay_st_#_duck_delay_st_`       | usable; mono `gx_duck_delay_` also usable          |
+| GxDigitalDelay (stereo)  | `http://guitarix.sourceforge.net/plugins/gx_digital_delay_st_#_digital_delay_st_` | usable; has an Atom transport input (`DD_CONTROL`) |
+| GxOC-2                   | `http://guitarix.sourceforge.net/plugins/gx_oc_2_#_oc_2_`                         | usable, mono (dual instance)                       |
+| Calf Vintage Delay       | `http://calf.sourceforge.net/plugins/VintageDelay`                                | usable                                             |
+| Calf Reverse Delay       | `http://calf.sourceforge.net/plugins/ReverseDelay`                                | usable                                             |
+| Calf Multi Chorus        | `http://calf.sourceforge.net/plugins/MultiChorus`                                 | usable                                             |
+| Calf Saturator           | `http://calf.sourceforge.net/plugins/Saturator`                                   | usable                                             |
+| Calf Envelope Filter     | `http://calf.sourceforge.net/plugins/EnvelopeFilter`                              | rejected: sidechain input layout                   |
+| ZamVerb                  | `urn:zamaudio:ZamVerb`                                                            | usable, stereo                                     |
+| ZamDelay, ZamGrains      | `urn:zamaudio:ZamDelay`, `urn:zamaudio:ZamGrains`                                 | usable, mono                                       |
+| ZaMultiCompX2, ZaMaximX2 | `urn:zamaudio:ZaMultiCompX2`, `urn:zamaudio:ZaMaximX2`                            | usable; ZaMaximX2 reports 480 frames latency       |
+| ZamGate, ZamCompX2       | `urn:zamaudio:ZamGate`, `urn:zamaudio:ZamCompX2`                                  | rejected: sidechain input layout                   |
+| MVerb                    | `http://distrho.sf.net/plugins/MVerb`                                             | usable, stereo                                     |
+
+The factory fixture (`apps/web/src/fixtures/factory-lv2.json`) adds the usable
+Guitarix and Calf effects above except GxDigitalDelay, whose Atom transport input
+needs its own review. The four Calf effects use events ports only for interface
+updates: they declare no configure variables, MIDI input or state interface
+(Calf 0.90.3 `makerdf.cpp`/`lv2wrap.cpp`), so `scalar-state.json` lists their exact
+scalar layouts, like Dragonfly Hall. Existing Guitarix fixture entries match the
+Debian 13 metadata. A run on the Pi itself is still required before these
+effects count as qualified on the device.
+
 ## Graph snapshots
 
 While graph audio is running, `save_copy` with a name stores the authoritative
@@ -301,7 +349,14 @@ minus and arrow keys move one native integer for integer ports and between endpo
 for toggles; continuous controls use a 0.001 normalized increment. Reset/Cancel retain
 the existing owned-edit behavior and confirmed native readback remains authoritative.
 Missing or unusable port metadata falls back to explicitly labelled percentage entry.
-Enumeration labels/scale points and native unit metadata are not exposed yet.
+
+Discovery copies each input control's `lv2:scalePoint` names into the catalog
+(`scale_points`, sorted by value; at most 64 per port, labels up to 64 bytes;
+non-finite, out-of-range, empty and repeated values are dropped). A control
+whose native value equals a scale point shows its name — "Ping-pong" rather
+than "2" — both in the mixed engine's control `display` and in the shared
+browser formatter (`lv2Control`). Other values keep their number. Native unit
+metadata is not exposed yet.
 
 Unit/component coverage checks every integer in a 1–200 range with both tapers and
 actual touch-button/keyboard dispatch. The maintained Linux browser scenario enters a
@@ -347,3 +402,23 @@ covers scalar restore and tail continuity, not retained DSP history across a
 full process restart. Dragonfly Room remains outside this curated mode.
 
 Source: [Dragonfly Hall implementation](https://github.com/michaelwillis/dragonfly-reverb/blob/master/plugins/dragonfly-hall-reverb/Plugin.cpp).
+
+## Scene changes and stepped controls
+
+A scene is only a mix of already running branches: each scene lists merge
+gains (`SceneGain`: node, port, value) and nothing else. Selecting one ramps
+those gains sample by sample over the preset's fade, retargeting from the
+audible gain if a ramp is already running (`scenes_ramp_exact_samples_…` in
+`crates/oxidal-engine/tests/latency.rs`). The per-preset and per-scene boost is
+an output gain that glides (`oxidal-audio` levels). No scene changes a plugin
+control, so a scene never steps a delay time, pitch interval, filter frequency
+or effect level: presets that need two delay times or two intervals keep both
+in separate branches and crossfade them.
+
+Plugin controls do step when they are edited live or moved by MIDI: the new
+value reaches the plugin at the next block, without host smoothing. Plugins
+that smooth internally (Calf's "inertia" filters, for example) hide this;
+plugins without smoothing can zipper or click on large jumps, especially delay
+time. Per-scene control values, with host ramping for continuous controls and
+silent-branch changes for integer, enumeration and toggle controls, are not
+implemented; the current rule is that a preset avoids such a change.

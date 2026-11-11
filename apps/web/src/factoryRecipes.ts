@@ -44,6 +44,15 @@ const pluginUris: Record<string, string> = {
     'http://invadarecords.com/plugins/lv2/filter/hpf/stereo',
   'Invada Low Pass Filter (stereo)':
     'http://invadarecords.com/plugins/lv2/filter/lpf/stereo',
+  GxShimmizita:
+    'http://guitarix.sourceforge.net/plugins/gx_shimmizita_#_shimmizita_',
+  'GxDuckDelay-Stereo':
+    'http://guitarix.sourceforge.net/plugins/gx_duck_delay_st_#_duck_delay_st_',
+  'GxOC-2': 'http://guitarix.sourceforge.net/plugins/gx_oc_2_#_oc_2_',
+  'Calf Vintage Delay': 'http://calf.sourceforge.net/plugins/VintageDelay',
+  'Calf Reverse Delay': 'http://calf.sourceforge.net/plugins/ReverseDelay',
+  'Calf Multi Chorus': 'http://calf.sourceforge.net/plugins/MultiChorus',
+  'Calf Saturator': 'http://calf.sourceforge.net/plugins/Saturator',
   'MDA DubDelay': 'http://drobilla.net/plugins/mda/DubDelay',
   'MDA RezFilter': 'http://drobilla.net/plugins/mda/RezFilter',
   'MDA Tracker': 'http://drobilla.net/plugins/mda/Tracker',

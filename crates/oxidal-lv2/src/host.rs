@@ -1,5 +1,5 @@
 mod state;
-use crate::{PluginInfo, Port};
+use crate::{PluginInfo, Port, ScalePoint};
 pub use state::{PluginState, StatePath, StateProperty};
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -28,6 +28,13 @@ unsafe extern "C" {
         hi: *mut f32,
     ) -> i32;
     fn ox_lv2_supported(w: *mut c_void, p: *const c_void) -> i32;
+    fn ox_lv2_scale_points(
+        p: *const c_void,
+        index: u32,
+        values: *mut f32,
+        labels: *mut c_char,
+        capacity: u32,
+    ) -> u32;
     fn ox_lv2_new(w: *mut c_void, p: *const c_void, rate: f64, frames: u32) -> *mut c_void;
     fn ox_lv2_free(h: *mut c_void);
     fn ox_lv2_set(h: *mut c_void, port: u32, value: f32);
@@ -217,7 +224,7 @@ impl World {
                 lo *= rate as f32;
                 hi *= rate as f32;
             }
-            let port = Port {
+            let mut port = Port {
                 index: i,
                 symbol,
                 audio: f & 1 != 0,
@@ -232,7 +239,30 @@ impl World {
                 minimum: lo.is_finite().then_some(lo),
                 maximum: hi.is_finite().then_some(hi),
                 default: d.is_finite().then_some(d),
+                scale_points: Vec::new(),
             };
+            if port.control && port.input {
+                let mut values = [0.0f32; ScalePoint::LIMIT];
+                let mut labels = [0 as c_char; ScalePoint::LIMIT * 65];
+                // SAFETY: validated index; buffers hold LIMIT values and 65-byte label slots.
+                let n = unsafe {
+                    ox_lv2_scale_points(
+                        p,
+                        i,
+                        values.as_mut_ptr(),
+                        labels.as_mut_ptr(),
+                        ScalePoint::LIMIT as u32,
+                    )
+                } as usize;
+                let raw = (0..n.min(ScalePoint::LIMIT))
+                    .filter_map(|k| {
+                        // SAFETY: C wrote a NUL-terminated label of at most 64 bytes in slot k.
+                        let label = unsafe { CStr::from_ptr(labels[k * 65..].as_ptr()) };
+                        Some((values[k], label.to_str().ok()?.to_owned()))
+                    })
+                    .collect();
+                port.scale_points = ScalePoint::bounded(raw, port.minimum, port.maximum);
+            }
             if u8::from(port.audio) + u8::from(port.control) + u8::from(port.atom) != 1
                 || port.input == port.output
                 || f & 1024 != 0

@@ -28,6 +28,51 @@ pub struct Port {
     pub minimum: Option<f32>,
     pub maximum: Option<f32>,
     pub default: Option<f32>,
+    /// Named values (`lv2:scalePoint`), sorted by value; empty when none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scale_points: Vec<ScalePoint>,
+}
+/// One named value of a control, such as a mode or note division, so the
+/// interface can show "Ping-pong" rather than "2".
+/// @see docs/lv2.md
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScalePoint {
+    pub value: f32,
+    pub label: String,
+}
+impl ScalePoint {
+    /// Most points kept for one port; longer enumerations keep the first ones.
+    pub const LIMIT: usize = 64;
+    /// Keeps finite, in-range, nonempty points of at most 64 bytes, sorted by
+    /// value; the first label wins when a plugin repeats a value.
+    pub fn bounded(
+        raw: Vec<(f32, String)>,
+        minimum: Option<f32>,
+        maximum: Option<f32>,
+    ) -> Vec<Self> {
+        let (Some(lo), Some(hi)) = (minimum, maximum) else {
+            return Vec::new();
+        };
+        let mut points: Vec<Self> = Vec::new();
+        for (value, label) in raw.into_iter().take(Self::LIMIT) {
+            let label = label.trim();
+            if !value.is_finite()
+                || !(lo..=hi).contains(&value)
+                || label.is_empty()
+                || label.len() > 64
+                || points.iter().any(|p| p.value == value)
+            {
+                continue;
+            }
+            points.push(Self {
+                value,
+                label: label.to_owned(),
+            });
+        }
+        points.sort_by(|a, b| a.value.total_cmp(&b.value));
+        points
+    }
 }
 /// Curated plugins whose complete sound is represented by scalar controls.
 /// Their Atom ports carry UI preset messages; no messages are sent in this mode.
@@ -66,6 +111,13 @@ pub fn scalar_state_complete(info: &PluginInfo) -> bool {
 }
 
 impl Port {
+    /// The scale-point name for an exact native value, else three decimals.
+    pub fn display(&self, value: f32) -> String {
+        self.scale_points
+            .iter()
+            .find(|p| p.value == value)
+            .map_or_else(|| format!("{value:.3}"), |p| p.label.clone())
+    }
     pub fn normalize(&self, value: f32) -> Result<f32, String> {
         let (lo, hi) = self.range()?;
         if !value.is_finite() || !(lo..=hi).contains(&value) {
@@ -162,6 +214,7 @@ mod tests {
                         minimum: Some(0.0),
                         maximum: Some(1.0),
                         default: Some(0.0),
+                        scale_points: Vec::new(),
                     })
             })
             .collect();
@@ -201,6 +254,7 @@ mod tests {
             minimum: Some(20.0),
             maximum: Some(20000.0),
             default: Some(1000.0),
+            scale_points: Vec::new(),
         };
         let value = p.denormalize(0.5).unwrap();
         assert!((value - (20.0_f32 * 20000.0).sqrt()).abs() < 0.001);
@@ -217,6 +271,61 @@ mod tests {
         p.maximum = Some(1.0);
         assert_eq!(p.denormalize(0.49).unwrap(), 0.0);
         assert_eq!(p.denormalize(0.5).unwrap(), 1.0);
+    }
+
+    #[test]
+    fn scale_points_name_exact_values_and_drop_unusable_entries() {
+        let raw = vec![
+            (2.0, "Ping-pong".to_owned()),
+            (0.0, " Mono ".to_owned()),
+            (1.0, "Stereo".to_owned()),
+            (1.0, "Duplicate".to_owned()),
+            (f32::NAN, "Nonfinite".to_owned()),
+            (9.0, "Out of range".to_owned()),
+            (3.0, String::new()),
+            (3.0, "x".repeat(65)),
+        ];
+        let points = ScalePoint::bounded(raw, Some(0.0), Some(4.0));
+        let labels: Vec<_> = points.iter().map(|p| p.label.as_str()).collect();
+        assert_eq!(labels, ["Mono", "Stereo", "Ping-pong"]);
+        assert!(ScalePoint::bounded(vec![(0.0, "A".into())], None, Some(1.0)).is_empty());
+        let many = (0..100).map(|i| (i as f32, format!("{i}"))).collect();
+        assert_eq!(
+            ScalePoint::bounded(many, Some(0.0), Some(200.0)).len(),
+            ScalePoint::LIMIT
+        );
+        let port = Port {
+            index: 0,
+            symbol: "mode".into(),
+            audio: false,
+            control: true,
+            atom: false,
+            input: true,
+            output: false,
+            integer: true,
+            toggled: false,
+            logarithmic: false,
+            latency: false,
+            minimum: Some(0.0),
+            maximum: Some(4.0),
+            default: Some(0.0),
+            scale_points: points,
+        };
+        assert_eq!(port.display(2.0), "Ping-pong");
+        assert_eq!(port.display(4.0), "4.000");
+        // Serialized catalogs omit the field when a port has no points, and
+        // older fixtures without it still parse.
+        let mut json = serde_json::to_value(&port).unwrap();
+        assert_eq!(json["scale_points"][0]["label"], "Mono");
+        json.as_object_mut().unwrap().remove("scale_points");
+        let old: Port = serde_json::from_value(json).unwrap();
+        assert!(old.scale_points.is_empty());
+        assert!(
+            serde_json::to_value(&old)
+                .unwrap()
+                .get("scale_points")
+                .is_none()
+        );
     }
 }
 

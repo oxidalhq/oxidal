@@ -108,7 +108,7 @@ impl Session {
                             integer: port.integer,
                             toggle: port.toggled,
                             logarithmic: port.logarithmic,
-                            display: format!("{value:.3}"),
+                            display: port.display(value),
                         });
                     }
                 }
@@ -651,8 +651,9 @@ impl Session {
                     .find(|p| &p.symbol == symbol)
                     .ok_or("Missing LV2 port")?
                     .index;
-                c.value = f64::from(p.set_control(port, value as f32)?);
-                c.display = format!("{:.3}", c.value);
+                let actual = p.set_control(port, value as f32)?;
+                c.value = f64::from(actual);
+                c.display = p.info().ports[port as usize].display(actual);
             }
             Target::Bypass { .. } | Target::Merge { .. } => {
                 self.graph.host_value(&c.target, value)?;

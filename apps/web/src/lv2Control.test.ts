@@ -3,7 +3,7 @@ import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { vi } from 'vitest';
 import { TouchAdjust } from './TouchAdjust';
 import { expect, it } from 'vitest';
-import { lv2Control } from './lv2Control';
+import { controlDisplay, lv2Control, scalePointLabel } from './lv2Control';
 import type { Lv2Plugin } from './api';
 
 const port: Lv2Plugin['ports'][number] = {
@@ -109,4 +109,39 @@ it('touch and keyboard nudges use the native integer step', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Decrease voices' }));
   expect(change.mock.calls.at(-1)![0]).toBe(0);
   cleanup();
+});
+
+it('shows scale-point names for declared values and numbers elsewhere', () => {
+  const mode = lv2Control({
+    ...port,
+    minimum: 0,
+    maximum: 3,
+    integer: true,
+    scale_points: [
+      { value: 0, label: 'Mono' },
+      { value: 2, label: 'Ping-pong' },
+    ],
+  })!;
+  expect(mode.format(mode.normalized(0))).toBe('Mono');
+  expect(mode.format(mode.normalized(2))).toBe('Ping-pong');
+  expect(mode.format(mode.normalized(1))).toBe('1');
+  expect(scalePointLabel(undefined, 1)).toBeUndefined();
+  const toggle = lv2Control({
+    ...port,
+    minimum: 0,
+    maximum: 1,
+    toggled: true,
+    scale_points: [{ value: 1, label: 'Tape' }],
+  })!;
+  expect(toggle.format(1)).toBe('Tape');
+  expect(toggle.format(0)).toBe('Off');
+  // A daemon display that is already a name passes through unchanged.
+  expect(
+    controlDisplay({
+      display: 'Ping-pong',
+      toggle: false,
+      value: 2,
+      minimum: 0,
+    }),
+  ).toBe('Ping-pong');
 });
