@@ -9,6 +9,10 @@ import {
   factoryRoles,
   buildFactoryRecipe,
 } from '../apps/web/src/factoryRecipes.ts';
+import {
+  factoryMetadata,
+  validateFactoryMetadata,
+} from '../apps/web/src/factoryMetadata.ts';
 const { values } = parseArgs({ options: { output: { type: 'string' } } });
 if (!values.output) throw new Error('Use --output directory');
 const plugins = JSON.parse(
@@ -31,6 +35,8 @@ const sounds = recipes.map((recipe) => {
     .update(`oxidal-factory:${recipe.id}:1`)
     .digest('hex');
   const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  const problems = validateFactoryMetadata(recipe);
+  if (problems.length) throw new Error(`${recipe.id}: ${problems.join('; ')}`);
   const request = buildFactoryRecipe(recipe, plugins, {}, 'effects-only', id);
   const manifest = JSON.parse(request.manifest_json);
   if (
@@ -45,6 +51,7 @@ const sounds = recipes.map((recipe) => {
     id: recipe.id,
     description: recipe.description,
     categories: recipe.categories,
+    metadata: factoryMetadata(recipe),
     request,
   };
 });

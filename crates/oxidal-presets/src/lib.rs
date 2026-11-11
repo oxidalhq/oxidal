@@ -3,7 +3,8 @@
 //! @see docs/presets/format.md
 mod details;
 pub use details::{
-    CopyCredit, DetailsCatalog, DetailsEntry, DetailsStore, DetailsUpdate, PresetDetails,
+    CopyCredit, DetailsCatalog, DetailsEntry, DetailsStore, DetailsUpdate, GENRES, PresetDetails,
+    RecipeMetadata,
 };
 mod catalog;
 pub use catalog::{

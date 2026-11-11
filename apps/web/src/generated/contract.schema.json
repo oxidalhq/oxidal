@@ -3689,6 +3689,18 @@
         },
         "id": {
           "type": "string"
+        },
+        "metadata": {
+          "description": "Omit to keep the sound metadata the preset already has.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecipeMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -9248,6 +9260,17 @@
         },
         "description": {
           "type": "string"
+        },
+        "metadata": {
+          "description": "Absent on presets built without sound metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecipeMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -9431,6 +9454,81 @@
       "required": [
         "source_revision",
         "values"
+      ]
+    },
+    "RecipeMetadata": {
+      "description": "Filterable sound metadata that travels with a built preset. Optional on\nread: presets built before it existed carry none.",
+      "type": "object",
+      "properties": {
+        "block_count": {
+          "description": "Derived: processing blocks in the sound.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
+          "minimum": 0
+        },
+        "complexity": {
+          "description": "`simple`, `layered` or `complex`.",
+          "type": "string"
+        },
+        "engine": {
+          "description": "`lv2`, `tone3000-a2-lite`, `tone3000-a2-full` or `hybrid`.",
+          "type": "string"
+        },
+        "era": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "genres": {
+          "description": "One to three entries from the fixed genre list.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inspiration": {
+          "type": "string"
+        },
+        "nam_instances": {
+          "description": "Derived: simultaneous NAM instances.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
+          "minimum": 0
+        },
+        "performance": {
+          "type": "string"
+        },
+        "required_packs": {
+          "description": "Derived: LV2 packs the sound needs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "required_tones": {
+          "description": "Derived: TONE3000 tone ids the sound needs.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "techniques": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "genres",
+        "engine",
+        "complexity"
       ]
     },
     "Record": {

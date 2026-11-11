@@ -28,6 +28,12 @@ export const toolRecipes: FactoryRecipe[] = [
     description:
       'Plays your guitar an octave down through a warm vintage bass stack, for testing and recording bass parts. Play single notes cleanly; the pitch voice adds a little delay.',
     categories: ['Modern', 'Bass', 'Utility'],
+    genres: ['Bass'],
+    techniques: ['Pitch', 'Utility'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [octave(), nam('bass-vintage')],
     voices: [
       voice('Octave'),
@@ -44,6 +50,12 @@ export const toolRecipes: FactoryRecipe[] = [
     description:
       'Octave-down guitar through a gritty rock bass amp, with a fuzz and a sub layer for heavy riffs. Keep notes clear and short for the best tracking.',
     categories: ['Modern', 'Bass', 'Rock'],
+    genres: ['Bass', 'Hard rock'],
+    techniques: ['Pitch', 'Utility'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [octave(), nam('bass-grit')],
     voices: [
       voice('Clean'),
@@ -60,6 +72,12 @@ export const toolRecipes: FactoryRecipe[] = [
     description:
       'A plexi-style guitar and an octave-down vintage bass played together from one guitar. Switch between guitar, bass, both, and a bass-heavy stack. Two amps run at once.',
     categories: ['Modern', 'Bass', 'Guitar and bass'],
+    genres: ['Bass', 'Classic rock'],
+    techniques: ['Pitch', 'Guitar and bass'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Guitar', nam('plexi-crunch')),
@@ -80,6 +98,12 @@ export const toolRecipes: FactoryRecipe[] = [
     description:
       'A clean chorused guitar over an octave-down bass with a short echo, for warm duo parts and recording demos. Two amps run at once; echo is fixed, not tempo-synced.',
     categories: ['Modern', 'Bass', 'Guitar and bass'],
+    genres: ['Bass', 'Clean'],
+    techniques: ['Pitch', 'Guitar and bass'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Guitar', nam('blackface-clean'), chorus()),

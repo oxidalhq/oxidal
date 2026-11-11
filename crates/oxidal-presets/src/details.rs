@@ -22,12 +22,113 @@ pub struct CopyCredit {
     pub source: LibraryReference,
     pub name: String,
 }
+/// The fixed genre list for Oxidal sounds; 1–3 per preset.
+pub const GENRES: [&str; 17] = [
+    "Clean",
+    "Edge of breakup",
+    "Funk",
+    "Blues",
+    "Country",
+    "Jazz",
+    "Pop",
+    "Classic rock",
+    "Hard rock",
+    "Modern metal",
+    "Progressive",
+    "Ambient",
+    "Post-rock",
+    "Synth",
+    "Bass",
+    "Lo-fi",
+    "Experimental",
+];
+const ENGINES: [&str; 4] = ["lv2", "tone3000-a2-lite", "tone3000-a2-full", "hybrid"];
+const COMPLEXITIES: [&str; 3] = ["simple", "layered", "complex"];
+const ERAS: [&str; 4] = ["80s", "90s", "2000s", "Modern"];
+/// Filterable sound metadata that travels with a built preset. Optional on
+/// read: presets built before it existed carry none.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecipeMetadata {
+    /// One to three entries from the fixed genre list.
+    pub genres: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub techniques: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub era: Option<String>,
+    /// `lv2`, `tone3000-a2-lite`, `tone3000-a2-full` or `hybrid`.
+    pub engine: String,
+    /// `simple`, `layered` or `complex`.
+    pub complexity: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub inspiration: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub performance: String,
+    /// Derived: LV2 packs the sound needs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_packs: Vec<String>,
+    /// Derived: TONE3000 tone ids the sound needs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_tones: Vec<u32>,
+    /// Derived: processing blocks in the sound.
+    #[serde(default)]
+    pub block_count: u32,
+    /// Derived: simultaneous NAM instances.
+    #[serde(default)]
+    pub nam_instances: u32,
+}
+fn text_ok(text: &str, limit: usize) -> bool {
+    text.chars().count() <= limit
+        && !text
+            .chars()
+            .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+}
+fn short_ok(text: &str) -> bool {
+    !text.trim().is_empty()
+        && text.chars().count() <= 48
+        && !text.chars().any(char::is_control)
+        && !text.contains(',')
+}
+fn clean_metadata(mut m: RecipeMetadata) -> Result<RecipeMetadata> {
+    let mut seen = BTreeSet::new();
+    m.genres.retain(|g| seen.insert(g.clone()));
+    let mut seen = BTreeSet::new();
+    m.techniques = m.techniques.into_iter().map(|t| t.trim().into()).collect();
+    m.techniques
+        .retain(|t: &String| seen.insert(t.to_lowercase()));
+    m.inspiration = m.inspiration.replace("\r\n", "\n").trim().into();
+    m.performance = m.performance.replace("\r\n", "\n").trim().into();
+    if !(1..=3).contains(&m.genres.len())
+        || m.genres.iter().any(|g| !GENRES.contains(&g.as_str()))
+        || m.techniques.len() > 8
+        || !m.techniques.iter().all(|t| short_ok(t))
+        || m.era.as_deref().is_some_and(|e| !ERAS.contains(&e))
+        || !ENGINES.contains(&m.engine.as_str())
+        || !COMPLEXITIES.contains(&m.complexity.as_str())
+        || !text_ok(&m.inspiration, 600)
+        || !text_ok(&m.performance, 800)
+        || m.required_packs.len() > 16
+        || !m.required_packs.iter().all(|p| short_ok(p))
+        || m.required_tones.len() > 64
+        || m.block_count > 256
+        || m.nam_instances > 64
+        || (m.engine == "lv2") != (m.nam_instances == 0)
+    {
+        return Err(Error::Invalid(
+            "Use 1–3 listed genres, a known engine and complexity, and valid sound metadata",
+        ));
+    }
+    Ok(m)
+}
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetDetails {
     pub description: String,
     pub categories: Vec<String>,
     pub copied_from: Option<CopyCredit>,
+    /// Absent on presets built without sound metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<RecipeMetadata>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -49,6 +150,9 @@ pub struct DetailsUpdate {
     pub id: String,
     pub description: String,
     pub categories: Vec<String>,
+    /// Omit to keep the sound metadata the preset already has.
+    #[serde(default)]
+    pub metadata: Option<RecipeMetadata>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -113,6 +217,7 @@ fn normalize(description: String, categories: Vec<String>) -> Result<PresetDetai
         description: description.replace("\r\n", "\n").trim().into(),
         categories: cleaned,
         copied_from: None,
+        metadata: None,
     })
 }
 fn revision(book: &Book) -> Result<String> {
@@ -158,6 +263,11 @@ impl DetailsStore {
                 || normalized.categories != details.categories
             {
                 return Err(Error::Invalid("Invalid stored preset details"));
+            }
+            if let Some(metadata) = &details.metadata
+                && clean_metadata(metadata.clone())? != *metadata
+            {
+                return Err(Error::Invalid("Invalid stored preset metadata"));
             }
             if let Some(credit) = &details.copied_from {
                 credit.source.kind.key(&credit.source.id)?;
@@ -248,7 +358,12 @@ impl DetailsStore {
                 "Preset details changed; refresh before saving",
             ));
         }
-        details.copied_from = book.entries.get(&key).and_then(|d| d.copied_from.clone());
+        let existing = book.entries.get(&key);
+        details.copied_from = existing.and_then(|d| d.copied_from.clone());
+        details.metadata = match request.metadata {
+            Some(m) => Some(clean_metadata(m)?),
+            None => existing.and_then(|d| d.metadata.clone()),
+        };
         let old = book.clone();
         if details == PresetDetails::default() {
             book.entries.remove(&key);
@@ -371,7 +486,73 @@ mod tests {
             id: id.into(),
             description: description.into(),
             categories: categories.iter().map(|s| (*s).into()).collect(),
+            metadata: None,
         })
+    }
+    fn meta(genres: &[&str], engine: &str, nam: u32) -> RecipeMetadata {
+        RecipeMetadata {
+            genres: genres.iter().map(|s| (*s).into()).collect(),
+            techniques: vec!["Serial chain".into()],
+            era: Some("80s".into()),
+            engine: engine.into(),
+            complexity: "layered".into(),
+            inspiration: "Late-1980s session lead".into(),
+            performance: String::new(),
+            required_packs: vec![],
+            required_tones: vec![],
+            block_count: 4,
+            nam_instances: nam,
+        }
+    }
+    fn with_meta(
+        store: &DetailsStore,
+        id: &str,
+        m: Option<RecipeMetadata>,
+    ) -> Result<DetailsCatalog> {
+        store.update(DetailsUpdate {
+            expected_revision: store.snapshot()?.revision,
+            entry_kind: LibraryKind::Rig,
+            id: id.into(),
+            description: "d".into(),
+            categories: vec![],
+            metadata: m,
+        })
+    }
+    #[test]
+    fn sound_metadata_is_validated_kept_across_plain_edits_and_optional_on_read() {
+        let f = Fixture::new();
+        let store = f.store();
+        let id = "a".repeat(64);
+        for bad in [
+            meta(&[], "lv2", 0),
+            meta(&["Clean", "Funk", "Blues", "Jazz"], "lv2", 0),
+            meta(&["Metalcore"], "lv2", 0),
+            meta(&["Clean"], "tube", 0),
+            meta(&["Clean"], "lv2", 1),
+            meta(&["Clean"], "hybrid", 0),
+        ] {
+            assert!(with_meta(&store, &id, Some(bad)).is_err());
+        }
+        let good = meta(&["Clean", "Blues"], "hybrid", 2);
+        let saved = with_meta(&store, &id, Some(good.clone())).unwrap();
+        assert_eq!(saved.entries[0].details.metadata, Some(good.clone()));
+        // A plain description edit keeps the metadata.
+        let kept = with_meta(&store, &id, None).unwrap();
+        assert_eq!(kept.entries[0].details.metadata, Some(good));
+        // Stored details without the field still load.
+        fs::write(
+            f.0.join("preset-details.json"),
+            format!(
+                r#"{{"schema":1,"entries":{{"rig:{id}":{{"description":"old","categories":[],"copied_from":null}}}}}}"#
+            ),
+        )
+        .unwrap();
+        assert!(
+            store.snapshot().unwrap().entries[0]
+                .details
+                .metadata
+                .is_none()
+        );
     }
     #[test]
     fn normalized_unicode_details_are_durable_and_stale_edits_do_not_overwrite() {
@@ -396,7 +577,8 @@ mod tests {
                 entry_kind: LibraryKind::Original,
                 id: id.clone(),
                 description: "stale".into(),
-                categories: vec![]
+                categories: vec![],
+                metadata: None
             }),
             Err(Error::Conflict(_))
         ));
@@ -496,6 +678,7 @@ mod tests {
                         id: letter.to_string().repeat(64),
                         description: letter.into(),
                         categories: vec![],
+                        metadata: None,
                     })
                 })
             })

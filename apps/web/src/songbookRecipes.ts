@@ -42,6 +42,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Plexi-style crunch with a swirling phaser and a soft modulated intro, in the spirit of early-eighties hard rock. Echo is fixed, not tempo-synced.',
     categories: ['80s', 'Hard rock', 'Classic rock'],
+    genres: ['Hard rock', 'Classic rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('plexi-crunch')],
     voices: [
       voice('Rhythm'),
@@ -58,6 +63,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Open 800-style crunch with a wide chorus intro and an echoing lead, aimed at big eighties pop-rock choruses.',
     categories: ['80s', 'Hard rock', 'Pop rock'],
+    genres: ['Hard rock', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('jcm-crunch')],
     voices: [
       voice('Rhythm'),
@@ -74,6 +84,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Saturated 800-style stack for heavy metal rhythm and lead. Tightening comes before the amp; use the Boost scene for a small lift.',
     categories: ['80s', 'Heavy metal', 'Metal'],
+    genres: ['Hard rock', 'Modern metal'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(90)),
@@ -90,6 +105,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Fast, tight, thick lead voice for thrash rhythm; palm-muted riffs stay clear because the low end is pulled back before the amp.',
     categories: ['80s', 'Thrash', 'Metal'],
+    genres: ['Modern metal', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(110), drive()),
@@ -106,6 +126,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Bright, tight clean with a lush chorus, a slow phase sweep and a roomy hall, for new-wave and synth-pop guitar parts.',
     categories: ['80s', 'New wave', 'Pop'],
+    genres: ['Clean', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('studio-clean')],
     voices: [
       voice('Rhythm', chorus()),
@@ -122,6 +147,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Open blackface-style clean through gentle compression, with a shimmering chorus and a short room for polished pop rhythm and arpeggios.',
     categories: ['80s', 'Pop', 'Synth-pop'],
+    genres: ['Pop', 'Clean'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('blackface-clean'), compressor()],
     voices: [
       voice('Rhythm'),
@@ -139,6 +169,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Thick boutique crunch pushed by a fuzz, a gritty distortion or a clean-ish drive, for loud-quiet-loud grunge dynamics.',
     categories: ['90s', 'Grunge', 'Alt rock'],
+    genres: ['Hard rock', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', fuzz()),
@@ -155,6 +190,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Aggressive high-gain stack for groove and down-tuned metal. Low end is controlled before the amp; try drop tunings and keep the gain moderate.',
     categories: ['90s', 'Groove metal', 'Metal'],
+    genres: ['Modern metal', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(110)),
@@ -171,6 +211,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Open blackface-style clean with squeezy compression, an envelope filter and a light chorus, for funk-rock rhythm.',
     categories: ['90s', 'Funk rock', 'Alt rock'],
+    genres: ['Funk', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('blackface-clean')],
     voices: [
       voice('Rhythm', compressor()),
@@ -187,6 +232,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Glassy clean with a firm low end, a short echo and a shimmering chorus for jangly indie and britpop parts.',
     categories: ['90s', 'Britpop', 'Indie'],
+    genres: ['Pop', 'Clean'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('chime-clean')],
     voices: [
       voice('Rhythm'),
@@ -204,6 +254,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Scooped, heavy, wide high-gain rhythm for nu-metal and alternative metal. Keep the tuning low and the guitar profile gate set.',
     categories: ['2000s', 'Nu metal', 'Alt metal'],
+    genres: ['Modern metal', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(100)),
@@ -220,6 +275,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Edge-of-breakup 800-style crunch with a drive for choruses and an echoing lead into a large hall, for alternative rock.',
     categories: ['2000s', 'Alt rock', 'Rock'],
+    genres: ['Hard rock', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('jcm-crunch')],
     voices: [
       voice('Rhythm'),
@@ -236,6 +296,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Raw plexi-style crunch behind a fuzz, a gritty distortion or a light drive, for riff-driven alternative and garage rock.',
     categories: ['2000s', 'Alt rock', 'Garage'],
+    genres: ['Hard rock', 'Classic rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', fuzz()),
@@ -253,6 +318,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Scooped modern high gain for low-tuned rhythm; drop, seven- or eight-string tunings. A tightening filter and a boost sit before the amp. Pair with your measured guitar gate.',
     categories: ['Modern', 'Djent', 'Metal'],
+    genres: ['Modern metal', 'Progressive'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(100), drive()),
@@ -269,6 +339,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Dark, dense high gain with a tightly cut low end for brutal and extreme metal. Assumes low tuning and a strong gate; use the lead scene for solos only.',
     categories: ['Modern', 'Brutal', 'Death metal'],
+    genres: ['Modern metal'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', tight(120), compressor()),
@@ -285,6 +360,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Glassy clean with a slow phase sweep, a very long hall and a cold early-reflection room for gothic and dark atmospheric guitar. Echo and reverb are not tempo-synced.',
     categories: ['Modern', 'Goth', 'Dark'],
+    genres: ['Clean', 'Ambient'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('chime-clean')],
     voices: [
       voice('Rhythm', orbit(0.15, 6)),
@@ -301,6 +381,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Bright clean with a pitched-up shimmer and a large hall for worship swells and cinematic beds. Pitch voices add some delay.',
     categories: ['Modern', 'Worship', 'Ambient'],
+    genres: ['Ambient', 'Clean'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('studio-clean')],
     voices: [
       voice('Rhythm'),
@@ -317,6 +402,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Slow, heavy rectifier-style rhythm behind a fuzz and a long hall, for doom and stoner riffs. Keep the volume up and the notes long.',
     categories: ['Modern', 'Doom', 'Metal'],
+    genres: ['Modern metal', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm', fuzz()),
@@ -333,6 +423,11 @@ export const songbookRecipes: FactoryRecipe[] = [
     description:
       'Open blackface-style clean with a throbbing tremolo, a slap echo and a bright hall, for surf, rockabilly and twangy roots parts.',
     categories: ['Modern', 'Surf', 'Roots'],
+    genres: ['Clean', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('blackface-clean')],
     voices: [
       voice('Rhythm'),

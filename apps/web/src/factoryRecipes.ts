@@ -6,6 +6,11 @@ import type {
 } from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft.ts';
 import type { FactoryVoiceId } from './factoryVoices.ts';
+import type {
+  FactoryComplexity,
+  FactoryEngine,
+  FactoryGenre,
+} from './factoryMetadata.ts';
 
 const pluginUris: Record<string, string> = {
   'x42 Compressor Stereo': 'http://gareus.org/oss/lv2/darc#stereo',
@@ -79,6 +84,17 @@ export type FactoryRecipe = {
   era?: '80s' | '90s' | '2000s' | 'Modern';
   description: string;
   categories: string[];
+  /** One to three entries from the fixed genre list. */
+  genres: FactoryGenre[];
+  /** Routing and effect techniques, such as Parallel routing or Hold. */
+  techniques?: string[];
+  /** Must agree with the NAM roles: no NAM roles means 'lv2'. */
+  engine: FactoryEngine;
+  complexity: FactoryComplexity;
+  /** Style and era only; never an artist, band or song. */
+  inspiration: string;
+  /** How the four scenes are meant to be used live. */
+  performance: string;
   /** Scene recipes split into voices; serial recipes run one ordered chain;
    * routed recipes are a tree of splits whose top-level paths scenes mix. */
   topology?: 'scenes' | 'serial' | 'routed';
@@ -254,6 +270,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by articulate studio cleans. A shared clean NAM voice with compression, gentle width and an intentional lead lift.',
     categories: ['Clean', 'Pop', 'Country'],
+    genres: ['Clean', 'Pop', 'Country'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Dry'),
@@ -274,6 +295,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by intimate jazz and neo-soul chord sounds. Warm top end, gentle movement and a small shared room.',
     categories: ['Jazz', 'Neo-soul', 'Clean'],
+    genres: ['Jazz', 'Clean'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [
       nam('clean'),
       fx('Invada Low Pass Filter (stereo)', { freq: 6200 }),
@@ -294,6 +320,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by percussive funk and disco rhythm. Play short muted strokes; the envelope responds to your picking level.',
     categories: ['Funk', 'Disco', 'Pop'],
+    genres: ['Funk', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Tight', compressor()),
@@ -309,6 +340,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by roots and blues touch response. Drives feed one shared crunch NAM voice; echo history remains downstream.',
     categories: ['Blues', 'Roots', 'Indie'],
+    genres: ['Blues', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Touch'),
@@ -324,6 +360,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by clean offbeat chops and dub echoes. Scene sends leave the old repeats ringing; feedback is deliberately restrained.',
     categories: ['Reggae', 'Ska', 'Dub'],
+    genres: ['Clean', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Chop'),
@@ -344,6 +385,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by open classic-rock crunch. Three drive colours feed the same NAM chain and shared room.',
     categories: ['Classic rock', 'Garage', 'Power pop'],
+    genres: ['Classic rock', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Edge'),
@@ -359,6 +405,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by articulate modern-metal rhythm. Tightening happens before the shared high-gain NAM voice; use its lead scene for a small level lift.',
     categories: ['Modern metal', 'Progressive metal'],
+    genres: ['Modern metal', 'Progressive'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Rhythm'),
@@ -378,6 +429,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by split-band bass production: compressed lows under an independently driven upper voice. Check the crossover with your bass in mono.',
     categories: ['Bass', 'Rock', 'Metal'],
+    genres: ['Bass', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice(
@@ -410,6 +466,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by post-rock and ambient clean textures. Effect-only: clear dry attack, a rhythmic echo send and a persistent long hall.',
     categories: ['Ambient', 'Post-rock', 'Worship'],
+    genres: ['Ambient', 'Post-rock'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [compressor()],
     voices: [
       voice('Near'),
@@ -430,6 +491,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by an accompaniment you can play over. Open the Hold block and turn Hold on while a chord rings, then off to release. Scenes mix that captured layer; they do not capture automatically.',
     categories: ['Ambient', 'Hold', 'Soundtrack'],
+    genres: ['Ambient', 'Experimental'],
+    techniques: ['Hold'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Live'),
@@ -460,6 +527,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by monophonic electronic lead instruments. Play one clean note at a time; Tracker does not track chords. The dry blend preserves some pick articulation.',
     categories: ['Guitar synth', 'Electronic', 'Fusion'],
+    genres: ['Synth', 'Experimental'],
+    techniques: ['Guitar synth'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Dry'),
@@ -490,6 +563,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by complementary studio amp blends. Two NAM voices share one wet chain. This blends audio, not model weights; check phase and mono compatibility with your chosen captures.',
     categories: ['Experimental', 'Alternative rock', 'Dual amp'],
+    genres: ['Experimental', 'Edge of breakup'],
+    techniques: ['Dual amp'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [voice('Clear', nam('clean')), voice('Edge', nam('crunch'))],
     after: [echo(0.12), hall(100, 1.8)],
@@ -506,6 +585,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by bright interlocking guitar lines in highlife, soukous and Latin pop. A clean voice feeds separate short and offset echoes; leave space between phrases.',
     categories: ['Clean', 'Highlife', 'Latin pop'],
+    genres: ['Clean', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Dry'),
@@ -526,6 +610,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by repeating desert-blues lines and raw roots guitar. Filtered grit precedes one crunch voice, with a dark echo for sustained phrases.',
     categories: ['Roots', 'Desert blues', 'Blues'],
+    genres: ['Blues', 'Edge of breakup'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Touch'),
@@ -545,6 +634,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by rockabilly slap and country tremolo. The splash uses a short room, not a spring-reverb emulation; choose a bright clean capture.',
     categories: ['Country', 'Rockabilly', 'Surf'],
+    genres: ['Country', 'Clean'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Twang'),
@@ -568,6 +662,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by tight punk and hard-rock rhythm. Filter and drive colours feed a shared crunch capture; the dry scene has no artificial echo.',
     categories: ['Hard rock', 'Punk', 'Alternative rock'],
+    genres: ['Hard rock', 'Classic rock'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Crunch'),
@@ -587,6 +686,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by wide eighties clean and lead contrasts. Clean chorus and a driven NAM voice share an echo; check the chosen captures together in mono.',
     categories: ['Pop', 'Fusion', 'Progressive rock'],
+    genres: ['Pop', 'Progressive'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Clean', nam('clean')),
@@ -607,6 +711,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by psychedelic sustained leads. Fuzz feeds a shared crunch voice; a separate rotary-coloured branch offers movement without changing the echo history.',
     categories: ['Psychedelic rock', 'Blues rock', 'Fusion'],
+    genres: ['Classic rock', 'Blues'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Edge'),
@@ -622,6 +731,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by low-tuned modern heavy rhythm. Downshift is minus two semitones before a shared high-gain voice; it adds processing delay and does not physically retune the strings.',
     categories: ['Detuned', 'Djent', 'Modern metal'],
+    genres: ['Modern metal'],
+    techniques: ['Detuned'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Native tuning'),
@@ -642,6 +757,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by doom and stoner-rock fuzz. A sub-octave branch and a restrained long space sit around one heavy capture; watch low-frequency headroom.',
     categories: ['Doom', 'Stoner', 'Sludge'],
+    genres: ['Modern metal', 'Hard rock'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Grit', drive()),
@@ -667,6 +787,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by post-hardcore clean-to-heavy contrasts. Three independently prepared NAM voices feed a common room. This is a demanding preset: match the selected captures before playing.',
     categories: ['Post-hardcore', 'Progressive metal', 'Alternative rock'],
+    genres: ['Modern metal', 'Progressive'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Glass', nam('clean'), chorus()),
@@ -687,6 +812,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by supportive soul, jazz and pop bass. One bass NAM voice feeds rounded, clear and compressed branches. Set levels with an actual bass before relying on the pick scene.',
     categories: ['Bass', 'Soul', 'Jazz'],
+    genres: ['Bass', 'Jazz'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('bass')],
     voices: [
       voice('Round', fx('Invada Low Pass Filter (stereo)', { freq: 1800 })),
@@ -706,6 +836,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by percussive funk and disco bass. Envelope and octave voices respond to single-note playing; preserve a clean foundation when adding the octave.',
     categories: ['Bass', 'Funk', 'Disco'],
+    genres: ['Bass', 'Funk'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('bass')],
     voices: [
       voice('Punch'),
@@ -726,6 +861,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by dub and electronic bass production. Clean lows, a generated sub and filtered grit share a protective high-pass. Sub tracking needs clear single notes.',
     categories: ['Bass', 'Dub', 'Electronic'],
+    genres: ['Bass', 'Experimental'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('bass')],
     voices: [
       voice(
@@ -753,6 +893,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by shoegaze reverb-before-drive textures. The reverse branch and a long hall feed fuzz independently; their returns keep ringing when a scene send closes.',
     categories: ['Shoegaze', 'Noise rock', 'Ambient'],
+    genres: ['Ambient', 'Post-rock'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Dry edge', drive()),
@@ -773,6 +918,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by interlocking art-rock and ambient echoes. Two distinct echo times create a pattern; times are fixed, not host-tempo synchronized.',
     categories: ['Art rock', 'Math rock', 'Ambient'],
+    genres: ['Progressive', 'Ambient'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Direct'),
@@ -793,6 +943,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by organ-like octave and rotary textures. Octave voices remain separate from your dry attack. Pitch processing adds delay; this does not generate a tracked polyphonic synthesizer.',
     categories: ['Guitar synth', 'Psychedelic', 'Gospel'],
+    genres: ['Synth', 'Experimental'],
+    techniques: ['Guitar synth'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Dry'),
@@ -813,6 +969,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by percussive electronic sound design. An octave-up reverse branch and a metallic ring branch contrast with the clear attack; let the reverse buffer fill before judging its onset.',
     categories: ['Electronic', 'Experimental', 'Guitar synth'],
+    genres: ['Synth', 'Experimental'],
+    techniques: ['Guitar synth'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Dry'),
@@ -833,6 +995,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by guitar-to-bass and electronic low voices. Play clear single notes for the sub generator. Dry attack, filtered sub and dirty sub can be mixed independently.',
     categories: ['Guitar synth', 'Electronic', 'Bass'],
+    genres: ['Synth', 'Bass'],
+    techniques: ['Guitar synth'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Dry'),
@@ -862,6 +1030,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by worn tape and bedroom-pop guitar. Tape movement and bandwidth change the texture without adding deliberate hiss. One clean NAM voice remains shared.',
     categories: ['Lo-fi', 'Bedroom pop', 'Alternative'],
+    genres: ['Lo-fi', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean')],
     voices: [
       voice('Clear'),
@@ -882,6 +1055,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by band-limited industrial textures. Degradation and ring modulation sit beside a narrow dry voice. The Clear scene stops new effect sends while existing returns drain.',
     categories: ['Industrial', 'Experimental', 'Lo-fi'],
+    genres: ['Experimental', 'Lo-fi'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [
       fx('Invada High Pass Filter (stereo)', { freq: 300 }),
       fx('Invada Low Pass Filter (stereo)', { freq: 3200 }),
@@ -913,6 +1091,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by a held cinematic harmony above clear live notes. Capture and release explicitly in the Hold blocks: scenes only mix their sends. Two independent held voices rise an octave or stay dark.',
     categories: ['Hold', 'Ambient', 'Cinematic'],
+    genres: ['Ambient', 'Experimental'],
+    techniques: ['Hold'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Live'),
@@ -938,6 +1122,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by polished pop and fingerstyle sessions. x42 compression keeps the shared clean NAM voice even; FOMP chorus and Dragonfly reflections add space without a long wash.',
     categories: ['Clean', 'Pop', 'Fingerstyle'],
+    genres: ['Clean', 'Pop'],
+    techniques: ['Fingerstyle'],
+    engine: 'hybrid',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('clean'), studioComp()],
     voices: [
       voice('Close'),
@@ -961,6 +1151,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by elastic funk bass. x42 catches peaks before FOMP auto-wah; a shared bass NAM voice gives the dry, envelope and phaser scenes the same foundation. Start with single notes and adjust wah drive to your pickups.',
     categories: ['Bass', 'Funk', 'Envelope'],
+    genres: ['Bass', 'Funk'],
+    techniques: ['Envelope'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [studioComp(-22)],
     voices: [
       voice('Pocket'),
@@ -985,6 +1181,11 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by psychedelic rock and new-wave rhythm. A shared crunch NAM voice feeds FOMP chorus or its six-stage LFO phaser, with a short Dragonfly reflection pattern behind the whole instrument.',
     categories: ['Rock', 'Psychedelic', 'New wave'],
+    genres: ['Classic rock', 'Pop'],
+    engine: 'hybrid',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [nam('crunch')],
     voices: [
       voice('Crunch'),
@@ -1000,6 +1201,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by spacious post-rock. Effect-only: keep the direct attack, add a rhythmic delay or a soft FOMP chorus, and let the shared Dragonfly Hall ring through scene changes.',
     categories: ['Ambient', 'Post-rock', 'Hall'],
+    genres: ['Ambient', 'Post-rock'],
+    techniques: ['Hall'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Direct'),
@@ -1015,6 +1222,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by close, late-night neo-soul. Effect-only: x42 compression, a soft FOMP chorus or a slow tremolo, and compact Dragonfly early reflections. Use your own amp voice before this preset if desired.',
     categories: ['Neo-soul', 'Ambient', 'Room'],
+    genres: ['Ambient', 'Clean'],
+    techniques: ['Room'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [studioComp(-26)],
     voices: [
       voice('Close'),
@@ -1033,6 +1246,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental effect-only sound: FOMP phasing, an octave-up voice and a long Dragonfly Hall. Move between slow orbit, bright shards and a blended cloud; sparse notes leave room for the tails.',
     categories: ['Experimental', 'Ambient', 'Pitch'],
+    genres: ['Experimental', 'Ambient'],
+    techniques: ['Pitch'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Anchor'),
@@ -1053,6 +1272,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental effect-only instrument: FOMP auto-wah follows your attack while a separate Hold voice blooms through chorus. Capture a chord with Hold, then play short notes over it; scenes preserve the captured sound.',
     categories: ['Experimental', 'Hold', 'Envelope'],
+    genres: ['Experimental', 'Ambient'],
+    techniques: ['Hold', 'Envelope'],
+    engine: 'lv2',
+    complexity: 'simple',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [],
     voices: [
       voice('Live'),
@@ -1082,6 +1307,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Inspired by string-machine ensembles. Effect-only: FOMP chorus softens an octave-down or unshifted voice before a shared Dragonfly early-reflection space. For the low scene, play single notes and let the attack settle.',
     categories: ['Synth', 'Ensemble', 'Pitch'],
+    genres: ['Synth', 'Ambient'],
+    techniques: ['Pitch', 'Ensemble'],
+    engine: 'lv2',
+    complexity: 'layered',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     before: [studioComp(-24)],
     voices: [
       voice('Plain'),
@@ -1102,6 +1333,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental long serial chain: compression and a clean whole-rig NAM feed drive, a second crunch whole-rig NAM, modulation, echo and hall. This deliberately stacks complete captures; it is not a separate amp/cab/IR claim. Start quietly and use Levels before raising Master Level.',
     categories: ['Experimental', 'Dual NAM', 'Serial chain'],
+    genres: ['Experimental', 'Edge of breakup'],
+    techniques: ['Serial chain', 'Dual amp'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'serial',
     before: [studioComp(-26), nam('clean')],
     voices: [
@@ -1116,6 +1353,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental high-gain serial stack: a tight filter, overdrive and fuzz push one heavy whole-rig NAM, followed by phasing, bandwidth control and compact reflections. This is intentionally demanding and should be level-matched before audition.',
     categories: ['Experimental', 'Heavy', 'Serial chain'],
+    genres: ['Modern metal', 'Experimental'],
+    techniques: ['Serial chain'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'serial',
     before: [
       fx('Invada High Pass Filter (stereo)', { freq: 85 }),
@@ -1133,6 +1376,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental effect-only serial instrument: compression, phasing, a fifth-up pitch voice, reverse delay, chorus, dub echo and a long hall all process the same path in order. Sparse single notes reveal the evolving chain; chords can become dense quickly.',
     categories: ['Experimental', 'Ambient', 'Serial chain'],
+    genres: ['Ambient', 'Experimental'],
+    techniques: ['Serial chain'],
+    engine: 'lv2',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'serial',
     before: [studioComp(-28), orbit(0.16, 8)],
     voices: [voice('Serial chain', pitch(7), reverse(0.42), silk())],
@@ -1145,6 +1394,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Experimental bass serial chain: a whole-rig bass NAM is peak-controlled, reinforced by a tracked sub, driven, filtered, widened and placed in a compact reflection space. Play clean single notes and check low-frequency headroom in Levels.',
     categories: ['Bass', 'Experimental', 'Serial chain'],
+    genres: ['Bass', 'Experimental'],
+    techniques: ['Serial chain'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'serial',
     before: [nam('bass'), studioComp(-24), sub(0.3)],
     voices: [
@@ -1166,6 +1421,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Blues: a clean amp panned left and a crunch amp panned right play in parallel, with a little dry signal under both. Scenes move between the rooms.',
     categories: ['Blues', 'Parallel routing'],
+    genres: ['Blues', 'Clean'],
+    techniques: ['Parallel routing'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -1193,6 +1454,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Rock: a driven amp in parallel with an octave path that splits again into an octave up and an inverted octave down, so the low voice tightens rather than doubles the amp.',
     categories: ['Rock', 'Parallel routing'],
+    genres: ['Classic rock', 'Hard rock'],
+    techniques: ['Parallel routing', 'Pitch'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -1234,6 +1501,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Metal: a heavy amp panned hard left and a crunch amp panned hard right for a double-tracked width, plus a tracked sub path for weight. Scenes narrow it, widen it or lean on one side.',
     categories: ['Metal', 'Parallel routing'],
+    genres: ['Modern metal', 'Hard rock'],
+    techniques: ['Parallel routing'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [fx('Invada High Pass Filter (stereo)', { freq: 85 })],
     voices: [],
@@ -1260,6 +1533,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Ambient: a dry path, a reverse-delay wash panned left and an octave-up shimmer panned right. No amp captures needed. Scenes fade between dry, wash and shimmer.',
     categories: ['Ambient', 'Parallel routing'],
+    genres: ['Ambient', 'Post-rock'],
+    techniques: ['Parallel routing'],
+    engine: 'lv2',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -1289,6 +1568,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Funk: a clean amp in the middle with an envelope-filter path on the right and a phaser path on the left. Scenes add quack or swirl without losing the clean pocket.',
     categories: ['Funk', 'Parallel routing'],
+    genres: ['Funk', 'Clean'],
+    techniques: ['Parallel routing'],
+    engine: 'hybrid',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [compressor()],
     voices: [],
@@ -1327,6 +1612,12 @@ export const factoryRecipes: FactoryRecipe[] = [
     description:
       'Synth: four parallel lanes from one guitar: a tracked sub synth, a ring modulator panned left, a bit-crusher panned right and an inverted octave down. No amp captures needed. Scenes pick a synth voice.',
     categories: ['Synth', 'Parallel routing'],
+    genres: ['Synth', 'Experimental'],
+    techniques: ['Parallel routing', 'Pitch'],
+    engine: 'lv2',
+    complexity: 'complex',
+    inspiration: 'TODO(WP-C): describe the style and era.',
+    performance: 'TODO(WP-C): describe how the four scenes are used live.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -1366,7 +1657,7 @@ export const factoryRecipes: FactoryRecipe[] = [
 ];
 
 /** Every block a recipe uses, whatever its topology. */
-function recipeEffects(recipe: FactoryRecipe): Effect[] {
+export function recipeEffects(recipe: FactoryRecipe): Effect[] {
   return [
     ...recipe.before,
     ...recipe.voices.flatMap((v) => v.effects),

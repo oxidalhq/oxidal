@@ -47,3 +47,40 @@ class FactorySeedTests(unittest.TestCase):
                 'resources': {'model': {}}, 'manifest_json': '{}'}}]}))
             with self.assertRaisesRegex(ValueError, 'asset-free'):
                 seed_factory.seed(catalog, root / 'complete.json', lambda *_: self.fail('No API mutation allowed'))
+
+
+class FactoryMetadataTests(unittest.TestCase):
+    def catalog(self, root, metadata):
+        manifest = {'resources': [], 'tone3000': {'instances': []},
+            'extensions': {'urn:oxidal:authoring': {'origin': 'oxidal_example'}}, 'oxidal': {'lv2': []}}
+        sound = {'id': 'a', 'description': 'a', 'categories': ['Ambient'],
+            'request': {'manifest_json': json.dumps(manifest), 'resources': {}}}
+        if metadata is not None:
+            sound['metadata'] = metadata
+        path = root / 'catalog.json'
+        path.write_text(json.dumps({'version': 1, 'sounds': [sound]}))
+        return path
+
+    def test_metadata_is_sent_with_details_and_invalid_metadata_is_rejected_before_publication(self):
+        good = {'genres': ['Ambient', 'Post-rock'], 'engine': 'lv2', 'complexity': 'layered',
+            'nam_instances': 0, 'block_count': 3}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sent = []
+            def api(path, request=None):
+                if path.startswith('plugins/'):
+                    return {'plugins': []}
+                if path == 'presets/details' and request:
+                    sent.append(request)
+                return {'revision': 'a' * 64}
+            seed_factory.seed(self.catalog(root, good), root / 'one.json', api)
+            self.assertEqual(sent[0]['metadata'], good)
+            # Sounds without metadata still seed, with no metadata key.
+            sent.clear()
+            seed_factory.seed(self.catalog(root, None), root / 'two.json', api)
+            self.assertNotIn('metadata', sent[0])
+            for bad in [dict(good, genres=[]), dict(good, genres=['Metalcore']), dict(good, engine='hybrid'),
+                    dict(good, complexity='epic'), dict(good, genres=['Clean', 'Funk', 'Blues', 'Jazz'])]:
+                with self.assertRaises(ValueError):
+                    seed_factory.seed(self.catalog(root, bad), root / 'bad.json',
+                        lambda *_: self.fail('No API call before validation'))

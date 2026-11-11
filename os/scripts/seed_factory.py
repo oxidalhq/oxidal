@@ -21,6 +21,28 @@ def request(path, body=None, port=3210):
         return json.load(response)
 
 
+GENRES = {'Clean', 'Edge of breakup', 'Funk', 'Blues', 'Country', 'Jazz', 'Pop', 'Classic rock',
+    'Hard rock', 'Modern metal', 'Progressive', 'Ambient', 'Post-rock', 'Synth', 'Bass', 'Lo-fi',
+    'Experimental'}
+ENGINES = {'lv2', 'tone3000-a2-lite', 'tone3000-a2-full', 'hybrid'}
+COMPLEXITIES = {'simple', 'layered', 'complex'}
+
+
+def check_metadata(metadata):
+    """Sound metadata is optional; when present it must match the daemon's rules."""
+    if metadata is None:
+        return
+    genres = metadata.get('genres')
+    if (not isinstance(genres, list) or not 1 <= len(genres) <= 3 or len(set(genres)) != len(genres)
+            or any(g not in GENRES for g in genres)):
+        raise ValueError('Factory metadata needs one to three listed genres')
+    if metadata.get('engine') not in ENGINES or metadata.get('complexity') not in COMPLEXITIES:
+        raise ValueError('Factory metadata has an unknown engine or complexity')
+    # Image examples carry no captures, so they never need NAM instances.
+    if metadata.get('engine') != 'lv2' or metadata.get('nam_instances', 0) != 0:
+        raise ValueError('Factory seed metadata must describe an LV2-only sound')
+
+
 def seed(catalog, marker, api=request):
     if marker.exists():
         return 0
@@ -33,6 +55,7 @@ def seed(catalog, marker, api=request):
     # Validate the entire bank before making the first publication.
     for sound in sounds:
         body = sound['request']
+        check_metadata(sound.get('metadata'))
         manifest = json.loads(body['manifest_json'])
         if (body['resources'] or manifest['resources'] or manifest['tone3000']['instances']
                 or manifest['extensions']['urn:oxidal:authoring']['origin'] != 'oxidal_example'):
@@ -61,8 +84,11 @@ def seed(catalog, marker, api=request):
     for sound in sounds:
         published = api('presets/rigs', sound['request'])
         details = api('presets/details')
-        api('presets/details', {'expected_revision': details['revision'], 'entry_kind': 'rig',
-            'id': published['revision'], 'description': sound['description'], 'categories': sound['categories']})
+        update = {'expected_revision': details['revision'], 'entry_kind': 'rig',
+            'id': published['revision'], 'description': sound['description'], 'categories': sound['categories']}
+        if sound.get('metadata') is not None:
+            update['metadata'] = sound['metadata']
+        api('presets/details', update)
         revisions.append(published['revision'])
     marker.parent.mkdir(parents=True, exist_ok=True)
     pending = marker.with_suffix('.pending')

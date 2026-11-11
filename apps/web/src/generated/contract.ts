@@ -2780,10 +2780,52 @@ export interface PresetDetails {
   categories: string[];
   copied_from?: CopyCredit | null;
   description: string;
+  /**
+   * Absent on presets built without sound metadata.
+   */
+  metadata?: RecipeMetadata | null;
 }
 export interface CopyCredit {
   name: string;
   source: LibraryReference;
+}
+/**
+ * Filterable sound metadata that travels with a built preset. Optional on
+ * read: presets built before it existed carry none.
+ */
+export interface RecipeMetadata {
+  /**
+   * Derived: processing blocks in the sound.
+   */
+  block_count?: number;
+  /**
+   * `simple`, `layered` or `complex`.
+   */
+  complexity: string;
+  /**
+   * `lv2`, `tone3000-a2-lite`, `tone3000-a2-full` or `hybrid`.
+   */
+  engine: string;
+  era?: string | null;
+  /**
+   * One to three entries from the fixed genre list.
+   */
+  genres: string[];
+  inspiration?: string;
+  /**
+   * Derived: simultaneous NAM instances.
+   */
+  nam_instances?: number;
+  performance?: string;
+  /**
+   * Derived: LV2 packs the sound needs.
+   */
+  required_packs?: string[];
+  /**
+   * Derived: TONE3000 tone ids the sound needs.
+   */
+  required_tones?: number[];
+  techniques?: string[];
 }
 export interface DetailsUpdate {
   categories: string[];
@@ -2791,6 +2833,10 @@ export interface DetailsUpdate {
   entry_kind: LibraryKind;
   expected_revision: string;
   id: string;
+  /**
+   * Omit to keep the sound metadata the preset already has.
+   */
+  metadata?: RecipeMetadata | null;
 }
 export interface ProtectState {
   on: boolean;
