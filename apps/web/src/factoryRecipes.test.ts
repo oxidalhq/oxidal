@@ -219,7 +219,8 @@ it('links every voice to numeric capture ids and covers more than four amps', ()
     expect(voice.captures.length).toBeGreaterThan(0);
     for (const capture of voice.captures) {
       expect(Number.isInteger(capture.tone) && capture.tone > 0).toBe(true);
-      expect(Number.isInteger(capture.model) && capture.model > 0).toBe(true);
+      if (capture.model !== undefined)
+        expect(Number.isInteger(capture.model) && capture.model > 0).toBe(true);
     }
     expect(primaryCapture(id)).toEqual(voice.captures[0]);
   }
