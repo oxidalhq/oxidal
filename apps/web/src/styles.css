@@ -3604,36 +3604,6 @@ textarea {
   }
 }
 
-/* A factory amp slot that needs its capture: what it is, and one Download. */
-.voice-slot {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-}
-.voice-slot-head {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-.voice-slot-head > div {
-  display: grid;
-  gap: 0.125rem;
-  min-width: 0;
-}
-.voice-slot-head img {
-  flex: none;
-  object-fit: cover;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.voice-slot .oxidal-button {
-  justify-self: start;
-}
-
 /* About: one aligned definition list, no decorative cards (7.18). */
 .about-facts {
   display: grid;
@@ -3762,9 +3732,6 @@ textarea {
     grid-column: 1 / -1;
     justify-self: start;
   }
-}
-.discover-sources {
-  margin-bottom: 0.75rem;
 }
 /* In a Rig header the stage controls are two ordinary header buttons (7.28). */
 .stage-controls[data-compact] {
