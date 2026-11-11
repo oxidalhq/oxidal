@@ -385,6 +385,28 @@ export function Library({
       </SelectContent>
     </Select>
   );
+  const viewToggle = (
+    <ToggleGroup
+      type="single"
+      value={showArtwork ? 'artwork' : 'list'}
+      aria-label="Library view"
+      onValueChange={(value) => {
+        if (!value) return;
+        setShowArtwork(value === 'artwork');
+        try {
+          localStorage.setItem(
+            'oxidal-library-artwork',
+            String(value === 'artwork'),
+          );
+        } catch {
+          /* storage unavailable */
+        }
+      }}
+    >
+      <ToggleGroupItem value="list">List</ToggleGroupItem>
+      <ToggleGroupItem value="artwork">Artwork</ToggleGroupItem>
+    </ToggleGroup>
+  );
   function search(
     value: string,
     set: (value: string) => void,
@@ -503,26 +525,7 @@ export function Library({
           <div className="library-bar">
             <div className="flex flex-wrap items-center gap-2">
               {categorySelect}
-              <ToggleGroup
-                type="single"
-                value={showArtwork ? 'artwork' : 'list'}
-                aria-label="Library view"
-                onValueChange={(value) => {
-                  if (!value) return;
-                  setShowArtwork(value === 'artwork');
-                  try {
-                    localStorage.setItem(
-                      'oxidal-library-artwork',
-                      String(value === 'artwork'),
-                    );
-                  } catch {
-                    /* storage unavailable */
-                  }
-                }}
-              >
-                <ToggleGroupItem value="list">List</ToggleGroupItem>
-                <ToggleGroupItem value="artwork">Artwork</ToggleGroupItem>
-              </ToggleGroup>
+              {viewToggle}
             </div>
           </div>
           {created && (
@@ -628,7 +631,10 @@ export function Library({
             toneQuery,
             setToneQuery,
             'Find a TONE3000 preset…',
-            categorySelect,
+            <>
+              {categorySelect}
+              {viewToggle}
+            </>,
           )}
           <div className="section-heading">
             <h2>TONE3000</h2>

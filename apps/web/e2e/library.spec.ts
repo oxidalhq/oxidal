@@ -130,7 +130,14 @@ test('new preset creates an empty preset of your own without hardware', async ({
   await editor.getByLabel('Name').fill(`${name} edited`);
   await editor.getByRole('button', { name: 'Save' }).click();
   await expect(editor).toHaveCount(0);
-  await expect(page.getByText(`${name} edited`)).toBeVisible();
+  // Mine is paged: on a device that ran many tests the row can be on a later page.
+  const edited = page.getByText(`${name} edited`, { exact: true });
+  const more = page.getByRole('button', { name: 'Load more', exact: true });
+  while ((await edited.count()) === 0 && (await more.count()) > 0) {
+    await more.click();
+    await expect(more).toBeEnabled();
+  }
+  await expect(edited).toBeVisible();
   const afterEdit = (
     await (await page.request.get('/api/v1/presets/rigs')).json()
   ).presets as { name: string }[];

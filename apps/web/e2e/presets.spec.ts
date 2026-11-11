@@ -2069,6 +2069,8 @@ test('asset artwork stays identifiable offline in portrait and landscape', async
     await setDisplayMode(page, 'epaper');
   }
   await page.getByRole('button', { name: 'Library', exact: true }).click();
+  // The fixture is a TONE3000 original, which lives in the TONE3000 section.
+  await page.getByRole('tab', { name: 'TONE3000', exact: true }).click();
   const image = page.getByRole('img', {
     name: 'Shared name · amp',
     exact: true,
