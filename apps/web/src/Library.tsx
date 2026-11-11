@@ -39,6 +39,7 @@ import { NewPresetDialog } from './features/library/NewPresetDialog';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { friendlyError } from './lib/friendlyError';
 import { BackingTracks } from './components/media/BackingTracks';
+import { DiReamps } from './components/media/DiReamps';
 import './Library.css';
 
 const sections = [
@@ -47,6 +48,7 @@ const sections = [
   'discover',
   'setlist',
   'backing',
+  'di',
 ] as const;
 type Section = (typeof sections)[number];
 const sources = ['all', 'mine', 'oxidal', 'tone3000'] as const;
@@ -309,6 +311,7 @@ export function Library({
           <TabsTrigger value="discover">Discover</TabsTrigger>
           <TabsTrigger value="setlist">Set list</TabsTrigger>
           <TabsTrigger value="backing">Backing tracks</TabsTrigger>
+          <TabsTrigger value="di">DI and reamps</TabsTrigger>
         </TabsList>
         <TabsContent value="presets">
           <div className="library-search-row">
@@ -647,6 +650,9 @@ export function Library({
               briefly.
             </p>
           </details>
+        </TabsContent>
+        <TabsContent value="di">
+          <DiReamps connected={connected} />
         </TabsContent>
         <TabsContent value="backing">
           <BackingTracks connected={connected} />

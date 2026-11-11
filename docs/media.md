@@ -189,3 +189,36 @@ Preset boost is part of the guitar signal and never reaches a backing track.
 Master, mono, Mute and venue EQ apply to everything that reaches the outputs.
 Samples move between file threads and the audio thread through preallocated
 lock-free rings, so the audio thread never waits for storage or allocates.
+
+## Record DI and reamp
+
+Library ▸ DI and reamps records the raw guitar and reamps it later.
+
+- **Record DI** writes the interface input before trim, gate and effects (mono,
+  float32 at the stream rate) while you hear your rig as usual. A backing track
+  may keep playing; it is mixed after the rig and never reaches the recording.
+  The asset records the guitar profile, trim and gate in effect.
+- **Reamp** plays a DI (or one channel of a stereo file) into the rig that is
+  playing now, in place of the guitar, and records the rig's own output before
+  the backing track, venue EQ and Master. Input processing has no default: the
+  unit's current trim and gate, or none for a DI that is already
+  level-matched. A tail of 0–10 s lets delays and reverbs ring out. With
+  monitoring off the outputs are muted; the result is not.
+- While a reamp runs, recall, scene changes, edits and calibration are refused
+  with "Reamp in progress"; Mute stays available. Stop and keep saves the part
+  so far, marked incomplete; Cancel discards it. A full disk stops the job and
+  keeps the valid part. Live input returns when it ends.
+- Results are `di` and `reamp` assets with provenance (source and hash,
+  channel, processing, the running rig and scene, tail, stream rate and
+  buffer). They play in the backing player and download as 24-bit WAV.
+- A reamp runs through the preset and scene that are playing now; load the
+  sound first. Footswitch scene changes handled inside the mixed-rig worker
+  are not yet blocked during a reamp.
+
+| Request                             | Effect                                     |
+| ----------------------------------- | ------------------------------------------ |
+| `GET /api/v1/capture`               | The current or last job                    |
+| `POST /api/v1/capture/record-di`    | Start recording a DI                       |
+| `POST /api/v1/capture/reamp`        | Start a reamp (`source`, `processing`, …)  |
+| `POST /api/v1/capture/stop`         | `{ "keep": true }` saves, `false` discards |
+| `GET /api/v1/media/assets/{id}/wav` | Download any asset as 24-bit WAV           |

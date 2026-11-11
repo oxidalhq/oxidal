@@ -579,3 +579,31 @@
   transition: none !important;
   animation: none !important;
 }
+
+/* Library ▸ DI and reamps: the Record DI card and a running job. */
+.media-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--enclosure-border);
+  border-radius: var(--radius);
+  background: var(--card);
+  margin-block: 0.75rem;
+}
+.media-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.media-job > span {
+  flex: 1 1 12rem;
+}
+.media-dialog-form fieldset {
+  display: grid;
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}

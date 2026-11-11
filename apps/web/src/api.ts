@@ -1564,3 +1564,40 @@ export async function keepVenuePreview(): Promise<void> {
   });
   if (!response.ok) await presetResponse(response);
 }
+
+export type CaptureState = Contract['capture_state'];
+export type CaptureJob = NonNullable<CaptureState['job']>;
+export type ReampRequest = Contract['reamp_request'];
+const captureValidator = ajv.compile<CaptureState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/CaptureState',
+});
+async function captureResponse(response: Response): Promise<CaptureState> {
+  const body = await presetResponse(response);
+  if (!captureValidator(body)) throw new Error('Incompatible recording state');
+  return body;
+}
+/** The current or last Record DI / reamp job; it survives a closed page. */
+export async function captureState(): Promise<CaptureState> {
+  return captureResponse(await fetch('/api/v1/capture'));
+}
+/** Records the raw guitar (before trim, gate and effects) as a DI. */
+export async function recordDi(): Promise<CaptureState> {
+  return captureResponse(
+    await fetch('/api/v1/capture/record-di', { method: 'POST' }),
+  );
+}
+/** Reamps a DI through the rig that is playing now. */
+export async function startReamp(request: ReampRequest): Promise<CaptureState> {
+  return captureResponse(
+    await fetch('/api/v1/capture/reamp', json('POST', request)),
+  );
+}
+/** Stop and keep (`keep`), or Cancel and discard. */
+export async function stopCapture(keep: boolean): Promise<CaptureState> {
+  return captureResponse(
+    await fetch('/api/v1/capture/stop', json('POST', { keep })),
+  );
+}
+export const wavPath = (id: string) =>
+  `/api/v1/media/assets/${encodeURIComponent(id)}/wav`;
