@@ -347,7 +347,10 @@ pub(crate) async fn remove(State(shared): State<Arc<Shared>>, Path(id): Path<Str
         Err(response) => return *response,
     };
     match blocking(move || store.delete(&id)).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Ok(()) => {
+            crate::player::library_changed(&shared).await;
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(response) => *response,
     }
 }
@@ -465,7 +468,12 @@ pub(crate) async fn upload_state(
     Path(id): Path<String>,
 ) -> Response {
     match shared.uploads.get(&id) {
-        Some(state) => no_store(StatusCode::OK, state),
+        Some(state) => {
+            if matches!(state.import, ImportPhase::Ready { .. }) {
+                crate::player::library_changed(&shared).await;
+            }
+            no_store(StatusCode::OK, state)
+        }
         None => failure(
             StatusCode::NOT_FOUND,
             "That upload has expired; start again",
@@ -661,7 +669,10 @@ pub(crate) async fn update_asset(
     })
     .await
     {
-        Ok(manifest) => no_store(StatusCode::OK, manifest),
+        Ok(manifest) => {
+            crate::player::library_changed(&shared).await;
+            no_store(StatusCode::OK, manifest)
+        }
         Err(response) => *response,
     }
 }

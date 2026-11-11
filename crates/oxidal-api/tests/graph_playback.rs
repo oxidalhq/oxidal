@@ -535,3 +535,144 @@ async fn graph_worker_rejects_malformed_or_oversized_startup() {
         assert!(result.stdout.is_empty());
     }
 }
+
+#[tokio::test]
+#[ignore = "pnpm lv2:check runs this with the actual Linux graph worker and ALSA null"]
+async fn a_backing_track_plays_through_the_worker_to_its_end_with_no_client_watching() {
+    let executable =
+        std::path::PathBuf::from(std::env::var_os("OXIDAL_TEST_GRAPH_WORKER").unwrap());
+    assert_eq!(std::env::var("OXIDAL_GRAPH_QUALIFY_NULL").unwrap(), "1");
+    let root = std::env::temp_dir().join(format!("oxidal-graph-backing-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let (shutdown, signal) = tokio::sync::watch::channel(false);
+    let config = Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: Some(executable.clone()),
+        rig_worker: None,
+        audio_worker: Some(executable),
+        native_worker: None,
+        simulator: true,
+        mapping_path: root.join("mappings.json"),
+        preset_dir: root.join("presets"),
+        media_dir: Some(root.join("media")),
+        ui_dir: root.join("ui"),
+        shutdown: Some(signal),
+    };
+    let (app, stopped) = router_with_shutdown(config).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let c = Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap();
+
+    // Import a one-second track.
+    let bytes = include_bytes!("fixtures/media/tone-44k-mono-vbr.mp3");
+    let upload: Value = c
+        .post(format!("{url}/media/uploads"))
+        .json(&json!({ "name": "Click.mp3", "size": bytes.len() }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let upload_id = upload["id"].as_str().unwrap().to_owned();
+    c.put(format!("{url}/media/uploads/{upload_id}?offset=0"))
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap();
+    let mut asset = None;
+    for _ in 0..200 {
+        let state = get(&c, &url, &format!("media/uploads/{upload_id}")).await;
+        if state["import"]["state"] == "ready" {
+            asset = state["import"]["asset"].as_str().map(str::to_owned);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    let asset = asset.expect("import finished");
+
+    let mut s = get(&c, &url, "graph-audio").await;
+    apply(
+        &c,
+        &url,
+        &mut s,
+        json!({"kind":"start","settings":settings()}),
+    )
+    .await;
+    wait(&c, &url, "running").await;
+    let mut n = 0;
+    let mut command = |kind: Value| {
+        n += 1;
+        let c = c.clone();
+        let url = url.clone();
+        async move {
+            let r = c
+                .post(format!("{url}/player/commands"))
+                .json(&json!({ "requestId": format!("g{n}"), "origin": "api", "command": kind }))
+                .send()
+                .await
+                .unwrap();
+            let status = r.status();
+            let body: Value = r.json().await.unwrap();
+            assert!(status.is_success(), "{status}: {body}");
+            body
+        }
+    };
+    command(json!({ "kind": "cue", "asset": asset })).await;
+    let playing = command(json!({ "kind": "play" })).await;
+    assert_eq!(playing["state"], "playing");
+    let frames = playing["track"]["frames"].as_u64().unwrap();
+
+    // Pause holds the position the worker reached; Play resumes from it.
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    let paused = command(json!({ "kind": "pause" })).await;
+    assert_eq!(paused["state"], "paused");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let held = get(&c, &url, "player").await;
+    assert_eq!(held["state"], "paused");
+    let at = held["frame"].as_u64().unwrap();
+    assert!(
+        at > 0 && at < frames,
+        "{held} {}",
+        get(&c, &url, "monitor").await["audio"]
+    );
+    command(json!({ "kind": "play" })).await;
+
+    // Delete is refused while the track plays.
+    let refused = c
+        .delete(format!("{url}/media/assets/{asset}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(refused.status(), 409);
+
+    // Nobody watches: no requests until well after the track's end. The
+    // null device is not clocked exactly, so allow several times the length.
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    let ended = get(&c, &url, "player").await;
+    assert_eq!(ended["state"], "ended", "{ended}");
+    assert_eq!(ended["frame"].as_u64().unwrap(), frames);
+    assert_eq!(ended["underruns"], 0);
+    // Once ended the lease is released and the file can be deleted.
+    let deleted = c
+        .delete(format!("{url}/media/assets/{asset}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 204);
+
+    shutdown.send_replace(true);
+    tokio::time::timeout(Duration::from_secs(5), stopped.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    server.abort();
+    let _ = std::fs::remove_dir_all(root);
+}

@@ -67,6 +67,8 @@ struct Owner {
     boot: Arc<Policy>,
     midi_enabled: bool,
     executable: Option<PathBuf>,
+    /// Passed to workers so they read renders from the daemon's media store.
+    media_dir: Option<PathBuf>,
     preset_root: PathBuf,
     worker: Option<Worker>,
     state: GraphAudioState,
@@ -234,6 +236,7 @@ impl Owner {
             );
         }
         let mut child = tokio::process::Command::new(executable)
+            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -630,6 +633,7 @@ impl GraphPlayback {
             boot: policy.clone(),
             midi_enabled: config.simulator,
             executable: config.graph_worker.clone(),
+            media_dir: config.media_dir.clone(),
             preset_root: config.preset_dir.join("graphs"),
             worker: None,
             state: initial,

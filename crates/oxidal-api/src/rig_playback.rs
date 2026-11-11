@@ -110,6 +110,8 @@ struct Owner {
     midi_events: mpsc::Sender<crate::midi_recall::Event>,
     boot: Arc<Policy>,
     executable: Option<PathBuf>,
+    /// Passed to workers so they read renders from the daemon's media store.
+    media_dir: Option<PathBuf>,
     root: PathBuf,
     runtime: PathBuf,
     worker: Option<Worker>,
@@ -406,6 +408,7 @@ impl Owner {
         let runtime = self.runtime.join("playback");
         std::fs::create_dir_all(&runtime).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(executable)
+            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
             .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
             .env("OXIDAL_BUNDLE_STORE", &root)
             .env(
@@ -1470,6 +1473,7 @@ impl RigPlayback {
             midi_events,
             boot: policy.clone(),
             executable: config.rig_worker.clone(),
+            media_dir: config.media_dir.clone(),
             root: config.preset_dir.join("bundles"),
             runtime: config.preset_dir.join("rig-runtime"),
             worker: None,

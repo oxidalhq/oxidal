@@ -181,6 +181,15 @@
     "network_state": {
       "$ref": "#/$defs/NetworkState"
     },
+    "player_order": {
+      "$ref": "#/$defs/PlayerOrder"
+    },
+    "player_request": {
+      "$ref": "#/$defs/PlayerRequest"
+    },
+    "player_snapshot": {
+      "$ref": "#/$defs/PlayerSnapshot"
+    },
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
@@ -292,6 +301,9 @@
     "media_upload_request",
     "media_upload_state",
     "media_asset_update",
+    "player_snapshot",
+    "player_request",
+    "player_order",
     "removal_preview",
     "protect_state",
     "keep_ready",
@@ -3166,6 +3178,45 @@
       },
       "required": [
         "username"
+      ]
+    },
+    "CuedTrack": {
+      "type": "object",
+      "properties": {
+        "channels": {
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "title": {
+          "type": "string"
+        },
+        "trimDb": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "frames",
+        "rate",
+        "channels",
+        "trimDb"
       ]
     },
     "DetailsCatalog": {
@@ -7341,6 +7392,14 @@
         "controls"
       ]
     },
+    "Origin": {
+      "type": "string",
+      "enum": [
+        "ui",
+        "midi",
+        "api"
+      ]
+    },
     "Outcome": {
       "type": "string",
       "enum": [
@@ -7669,6 +7728,333 @@
         "listening",
         "done",
         "timeout"
+      ]
+    },
+    "PlayerCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "toggle_play"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "play"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "pause"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "stop"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "skip_by"
+            },
+            "seconds": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "seconds"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "frame": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "seek_to"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "frame"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "previous"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "next"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "cue"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "asset"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_repeat"
+            },
+            "repeat": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "repeat"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "db": {
+              "type": "number",
+              "format": "float"
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_level"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "db"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "delta_db": {
+              "type": "number",
+              "format": "float"
+            },
+            "kind": {
+              "type": "string",
+              "const": "adjust_level"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "delta_db"
+          ]
+        }
+      ]
+    },
+    "PlayerOrder": {
+      "type": "object",
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "order"
+      ]
+    },
+    "PlayerRequest": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/PlayerCommand"
+        },
+        "expectedCue": {
+          "description": "The track the sender believes is cued; a mismatch is refused.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "requestId": {
+          "description": "Retries with the same ID return the first result instead of acting twice.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "origin",
+        "command"
+      ]
+    },
+    "PlayerSnapshot": {
+      "type": "object",
+      "properties": {
+        "frame": {
+          "description": "Frame at the moment this snapshot was taken. While `Playing`, clients\nadvance it locally until the next snapshot.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "levelDb": {
+          "type": "number",
+          "format": "float"
+        },
+        "notice": {
+          "description": "Shown once after a preset change made the track pause briefly.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "order": {
+          "description": "The Backing list, in Library order (asset IDs).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repeat": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/PlayerState"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CuedTrack"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "underruns": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "revision",
+        "state",
+        "frame",
+        "repeat",
+        "levelDb",
+        "order",
+        "underruns"
+      ]
+    },
+    "PlayerState": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "empty",
+            "ready",
+            "playing",
+            "paused",
+            "ended"
+          ]
+        },
+        {
+          "description": "The audio worker stopped unexpectedly; the position is kept.",
+          "type": "string",
+          "const": "interrupted"
+        },
+        {
+          "description": "The cued file cannot play now; `reason` says why.",
+          "type": "string",
+          "const": "unavailable"
+        }
       ]
     },
     "PluginCatalog": {

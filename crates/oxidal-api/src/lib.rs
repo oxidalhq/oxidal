@@ -27,6 +27,7 @@ mod native_editor;
 mod packs;
 mod playback;
 mod playback_recovery;
+mod player;
 mod plugins;
 mod presets;
 pub mod protect;
@@ -131,6 +132,9 @@ pub struct Contract {
     pub media_upload_request: media_api::UploadRequest,
     pub media_upload_state: media_api::UploadState,
     pub media_asset_update: media_api::AssetUpdate,
+    pub player_snapshot: player::PlayerSnapshot,
+    pub player_request: player::PlayerRequest,
+    pub player_order: player::PlayerOrder,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
     pub keep_ready: keep_ready::KeepReady,
@@ -270,6 +274,7 @@ struct Shared {
     keep_ready: keep_ready::Store,
     media: Result<Arc<media::Store>, String>,
     uploads: media_api::Uploads,
+    player: player::Player,
     config: Config,
 }
 
@@ -354,9 +359,14 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             reason
         }),
     };
+    let player = player::Player::load(
+        config.preset_dir.join("player.json"),
+        media.as_ref().ok().map(|store| store.as_ref()),
+    );
     let shared = Arc::new(Shared {
         media,
         uploads: media_api::Uploads::default(),
+        player,
         protect: protect.clone(),
         keep_ready: keep_ready::Store::new(config.preset_dir.join("keep-ready.json")),
         boot: boot.clone(),
@@ -419,6 +429,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     monitor::start(Arc::downgrade(&shared), monitor_updates);
     monitor_history::start(Arc::downgrade(&shared));
     midi_recall::start(Arc::downgrade(&shared), midi_event_rx);
+    player::follow(Arc::downgrade(&shared));
     let stopped = WorkersStopped {
         audio: shared.playback.finished.clone(),
         graph: shared.graph_playback.finished.clone(),
@@ -584,6 +595,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             "/presets/{id}/artwork/{key}",
             get(artwork::read).post(artwork::download),
         )
+        .route("/player", get(player::state))
+        .route("/player/events", get(player::events))
+        .route("/player/commands", post(player::command))
+        .route("/player/order", axum::routing::put(player::reorder))
         .route("/media", get(media_api::library))
         .route(
             "/media/assets/{id}",

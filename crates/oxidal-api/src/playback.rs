@@ -71,6 +71,8 @@ struct Owner {
     boot: Arc<Policy>,
     worker: Option<Worker>,
     executable: Option<PathBuf>,
+    /// Passed to workers so they read renders from the daemon's media store.
+    media_dir: Option<PathBuf>,
     preset_dir: PathBuf,
     state: AudioState,
     resume_controls: Option<Vec<LiveControl>>,
@@ -268,6 +270,7 @@ impl Owner {
         let data = root.join("audio-runtime");
         std::fs::create_dir_all(&data).map_err(|e| e.to_string())?;
         let mut child = tokio::process::Command::new(executable)
+            .envs(self.media_dir.iter().map(|dir| ("OXIDAL_MEDIA_DIR", dir)))
             .env("OXIDAL_PRESET_DIR", &root)
             .env("OXIDAL_PROTECT", if self.protect.on() { "1" } else { "0" })
             .env("OXIDAL_QUALIFICATION_DATA", &data)
@@ -2111,6 +2114,7 @@ impl Playback {
             boot: policy.clone(),
             worker: None,
             executable: config.audio_worker.clone(),
+            media_dir: config.media_dir.clone(),
             preset_dir: config.preset_dir.clone(),
             state: initial,
             resume_eq: recovery.as_ref().and_then(|r| r.eq.clone()),

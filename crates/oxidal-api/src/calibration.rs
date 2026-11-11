@@ -578,6 +578,10 @@ fn reading(shared: &Shared) -> Option<oxidal_audio::reference::ReferenceReading>
 }
 /// Plays the riff into whatever is loaded and returns its loudness.
 async fn measure(shared: &Shared, peak_db: f32) -> Result<f32, String> {
+    // The riff is measured at the outputs; a playing track would be mixed in.
+    if shared.player.playing().await {
+        return Err("Pause the backing track to calibrate".into());
+    }
     host(
         shared,
         HostUtility::Reference {

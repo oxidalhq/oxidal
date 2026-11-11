@@ -650,6 +650,51 @@ export type Command3 =
 export type PowerAction = "reboot" | "shutdown";
 export type Mode = "never" | "no_ethernet" | "not_at_home" | "no_remembered" | "always";
 export type StorageMode = "unlocked" | "locked";
+export type PlayerCommand =
+  | {
+      kind: "toggle_play";
+    }
+  | {
+      kind: "play";
+    }
+  | {
+      kind: "pause";
+    }
+  | {
+      kind: "stop";
+    }
+  | {
+      kind: "skip_by";
+      seconds: number;
+    }
+  | {
+      frame: number;
+      kind: "seek_to";
+    }
+  | {
+      kind: "previous";
+    }
+  | {
+      kind: "next";
+    }
+  | {
+      asset: MediaId;
+      kind: "cue";
+    }
+  | {
+      kind: "set_repeat";
+      repeat: boolean;
+    }
+  | {
+      db: number;
+      kind: "set_level";
+    }
+  | {
+      delta_db: number;
+      kind: "adjust_level";
+    };
+export type Origin = "ui" | "midi" | "api";
+export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
 export type RigAudioAction =
   | {
       command: HostUtility;
@@ -853,6 +898,9 @@ export interface Contract {
   native_editor: EditorSnapshot;
   network_command: Command3;
   network_state: NetworkState;
+  player_order: PlayerOrder;
+  player_request: PlayerRequest;
+  player_snapshot: PlayerSnapshot;
   preset: Inspection;
   preset_details: DetailsCatalog;
   preset_details_update: DetailsUpdate;
@@ -2448,6 +2496,51 @@ export interface SavedNetwork {
   managed: boolean;
   name: string;
   uuid: string;
+}
+export interface PlayerOrder {
+  order: string[];
+}
+export interface PlayerRequest {
+  command: PlayerCommand;
+  /**
+   * The track the sender believes is cued; a mismatch is refused.
+   */
+  expectedCue?: string | null;
+  origin: Origin;
+  /**
+   * Retries with the same ID return the first result instead of acting twice.
+   */
+  requestId: string;
+}
+export interface PlayerSnapshot {
+  /**
+   * Frame at the moment this snapshot was taken. While `Playing`, clients
+   * advance it locally until the next snapshot.
+   */
+  frame: number;
+  levelDb: number;
+  /**
+   * Shown once after a preset change made the track pause briefly.
+   */
+  notice?: string | null;
+  /**
+   * The Backing list, in Library order (asset IDs).
+   */
+  order: string[];
+  reason?: string | null;
+  repeat: boolean;
+  revision: number;
+  state: PlayerState;
+  track?: CuedTrack | null;
+  underruns: number;
+}
+export interface CuedTrack {
+  channels: number;
+  frames: number;
+  id: string;
+  rate: number;
+  title: string;
+  trimDb: number;
 }
 export interface DetailsCatalog {
   entries: DetailsEntry[];

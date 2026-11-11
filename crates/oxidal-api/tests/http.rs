@@ -3726,3 +3726,248 @@ async fn an_uploaded_mp3_imports_detects_duplicates_and_round_trips_its_original
     let _ = std::fs::remove_dir_all(media);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
 }
+
+/// Uploads bytes as `name` in small chunks and waits for the import to finish.
+async fn import_track(url: &str, name: &str, bytes: &[u8]) -> Value {
+    let client = reqwest::Client::new();
+    let created: Value = client
+        .post(format!("{url}/media/uploads"))
+        .json(&json!({ "name": name, "size": bytes.len() }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = created["id"].as_str().unwrap().to_owned();
+    client
+        .put(format!("{url}/media/uploads/{id}?offset=0"))
+        .body(bytes.to_vec())
+        .send()
+        .await
+        .unwrap();
+    for _ in 0..400 {
+        let state: Value = reqwest::get(format!("{url}/media/uploads/{id}"))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        let phase = state["import"]["state"].as_str().unwrap();
+        if !["receiving", "queued", "preparing"].contains(&phase) {
+            return state["import"].clone();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    panic!("import did not finish");
+}
+
+#[tokio::test]
+async fn the_backing_player_cues_navigates_dedupes_and_restores_stopped() {
+    let (url, task, mapping) = start_with(true, true).await;
+    let client = reqwest::Client::new();
+    let player = || async {
+        reqwest::get(format!("{url}/player"))
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap()
+    };
+    let empty = player().await;
+    assert_eq!(
+        (empty["state"].clone(), empty["levelDb"].clone()),
+        (json!("empty"), json!(-6.0))
+    );
+    let mono = include_bytes!("fixtures/media/tone-44k-mono-vbr.mp3");
+    let stereo = include_bytes!("fixtures/media/tone-44k-stereo-cbr128.mp3");
+    let a = import_track(&url, "Song A.mp3", mono).await["asset"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let b = import_track(&url, "Song B.mp3", stereo).await["asset"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut next_id = 0;
+    let mut send = |command: Value, expected: Option<&str>| {
+        next_id += 1;
+        let body = json!({
+            "requestId": format!("r{next_id}"),
+            "origin": "ui",
+            "expectedCue": expected,
+            "command": command,
+        });
+        let client = client.clone();
+        let url = url.clone();
+        async move {
+            let response = client
+                .post(format!("{url}/player/commands"))
+                .json(&body)
+                .send()
+                .await
+                .unwrap();
+            (
+                response.status().as_u16(),
+                response.json::<Value>().await.unwrap(),
+            )
+        }
+    };
+    // Play needs a track; then it needs running audio, and says so.
+    assert_eq!(send(json!({ "kind": "play" }), None).await.0, 409);
+    let (status, cued) = send(json!({ "kind": "cue", "asset": a }), None).await;
+    assert_eq!(status, 200);
+    assert_eq!(cued["state"], "ready");
+    assert_eq!(cued["track"]["title"], "Song A");
+    assert_eq!(cued["order"], json!([a, b]));
+    let (status, refused) = send(json!({ "kind": "toggle_play" }), None).await;
+    assert_eq!(status, 409);
+    assert!(
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("Start the audio")
+    );
+    assert_eq!(
+        player().await["state"],
+        "ready",
+        "a refused Play changes nothing"
+    );
+
+    // Skip and seek move the stopped position, clamped to the track.
+    let (_, skipped) = send(json!({ "kind": "skip_by", "seconds": 10 }), None).await;
+    let frames = skipped["track"]["frames"].as_u64().unwrap();
+    assert_eq!(skipped["frame"], frames - 1);
+    assert_eq!(skipped["state"], "paused");
+    let (_, seeked) = send(json!({ "kind": "seek_to", "frame": 4800 }), None).await;
+    assert_eq!(seeked["frame"], 4800);
+    let (_, back) = send(json!({ "kind": "skip_by", "seconds": -10 }), None).await;
+    assert_eq!(back["frame"], 0);
+    let (_, stopped) = send(json!({ "kind": "stop" }), None).await;
+    assert_eq!(
+        (stopped["state"].clone(), stopped["frame"].clone()),
+        (json!("ready"), json!(0))
+    );
+
+    // Level and repeat; a retried request acts once.
+    send(json!({ "kind": "set_level", "db": 3.0 }), None).await;
+    let (_, louder) = send(json!({ "kind": "adjust_level", "delta_db": 10.0 }), None).await;
+    assert_eq!(louder["levelDb"], 6.0);
+    let retry = json!({ "requestId": "same", "origin": "midi", "command": { "kind": "adjust_level", "delta_db": -1.0 } });
+    for _ in 0..3 {
+        client
+            .post(format!("{url}/player/commands"))
+            .json(&retry)
+            .send()
+            .await
+            .unwrap();
+    }
+    assert_eq!(player().await["levelDb"], 5.0);
+    send(json!({ "kind": "set_repeat", "repeat": true }), None).await;
+
+    // A command for a track the sender no longer sees is refused.
+    assert_eq!(send(json!({ "kind": "next" }), Some(&b)).await.0, 409);
+    let (_, next) = send(json!({ "kind": "next" }), Some(&a)).await;
+    assert_eq!(
+        (next["track"]["id"].clone(), next["state"].clone()),
+        (json!(b), json!("ready"))
+    );
+    assert_eq!(
+        send(json!({ "kind": "next" }), None).await.0,
+        409,
+        "no wrap past the end"
+    );
+    let (_, previous) = send(json!({ "kind": "previous" }), None).await;
+    assert_eq!(previous["track"]["id"], a.as_str());
+
+    // Reorder the Backing list; a stale list is refused.
+    let reordered = client
+        .put(format!("{url}/player/order"))
+        .json(&json!({ "order": [b, a] }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reordered.status(), 200);
+    let stale = client
+        .put(format!("{url}/player/order"))
+        .json(&json!({ "order": [a] }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), 409);
+
+    // The first SSE event already carries the full player state.
+    let mut events = reqwest::get(format!("{url}/player/events")).await.unwrap();
+    let chunk = String::from_utf8(events.chunk().await.unwrap().unwrap().to_vec()).unwrap();
+    assert!(chunk.starts_with("event: player"), "{chunk}");
+    assert!(chunk.contains("\"title\":\"Song A\""));
+    drop(events);
+    task.abort();
+
+    // Reboot: same track cued, stopped at the start; level, repeat and order kept.
+    let (url, task, mapping) = restart(mapping).await;
+    let restored: Value = reqwest::get(format!("{url}/player"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(restored["state"], "ready");
+    assert_eq!(restored["track"]["id"], a.as_str());
+    assert_eq!(
+        (
+            restored["frame"].clone(),
+            restored["levelDb"].clone(),
+            restored["repeat"].clone()
+        ),
+        (json!(0), json!(5.0), json!(true))
+    );
+    assert_eq!(restored["order"], json!([b, a]));
+
+    // Deleting the cued track empties the player.
+    let deleted = reqwest::Client::new()
+        .delete(format!("{url}/media/assets/{a}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), 204);
+    let after: Value = reqwest::get(format!("{url}/player"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        (after["state"].clone(), after["order"].clone()),
+        (json!("empty"), json!([b]))
+    );
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("media"));
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}
+
+/// Starts a new daemon on the same mapping, presets and media as before.
+async fn restart(mapping: PathBuf) -> (String, tokio::task::JoinHandle<()>, PathBuf) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/api/v1", listener.local_addr().unwrap());
+    let app = router(Config {
+        debug_socket: None,
+        device_socket: None,
+        graph_worker: None,
+        rig_worker: None,
+        audio_worker: None,
+        native_worker: None,
+        shutdown: None,
+        simulator: true,
+        mapping_path: mapping.clone(),
+        preset_dir: mapping.with_extension("presets"),
+        media_dir: Some(mapping.with_extension("media")),
+        ui_dir: PathBuf::from("nonexistent"),
+    })
+    .unwrap();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (url, task, mapping)
+}
