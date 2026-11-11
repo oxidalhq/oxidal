@@ -9,6 +9,24 @@ Oxidal prepares the graph before playback and runs it in a supervised worker.
 | Split amp and cab | An effect between the amp and cabinet stages of a compatible tone. |
 | Scenes            | Preloaded branches with a shared output chain.                     |
 
+## The rig canvas
+
+Rig draws every topology with one renderer: a straight chain, any routing tree
+and scene lanes. Blocks sit on a wire with a **+** in every gap. The **+** offers
+**Add effect** or **Split here**. Split here makes two paths: the effect you
+choose goes on Path 1 and Path 2 starts dry, with **+ Add effect** to fill it.
+
+- **Paths.** A split stacks its paths, each captioned with its level and pan.
+  Each path has a level, a pan and **Invert polarity**. Use **Add path** to
+  add another and the path levels dialog to copy or remove one. A rig holds up to 64
+  paths.
+- **Moving blocks.** Drag a block to any gap, within a path or across paths.
+  Without a pointer, focus the block and press Alt with an arrow key.
+- **E-paper.** With the E-paper display setting the chain is a numbered list
+  with path labels and buttons only. There is no dragging; level and pan use
+  raise and lower steps.
+- **Scenes.** In a scene preset each scene is a path of the top split.
+
 ## Serial composition from saved tones
 
 Open **Library → New preset**, add saved tones and installed effects, then
@@ -34,6 +52,9 @@ input and confirm the amp-head stage before adding effects between the two.
   controls glide over the preset's scene fade; stepped ones (modes, switches,
   note divisions) change while their branch is silent. See
   [scene changes and stepped controls](lv2.md#scene-changes-and-stepped-controls).
+  The scene's settings list marks each control **glides** or **switches when
+  silent**, and a scene keeps up to 32 control values. To rename, reorder,
+  duplicate, delete or copy scenes, see [scene management](library.md#scene-management).
 
 ## Whole-native authoring and portable instance settings
 

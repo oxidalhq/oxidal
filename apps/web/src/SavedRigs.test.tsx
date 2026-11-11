@@ -298,3 +298,59 @@ it('S-10: Duplicate makes "Name copy" in Mine, outside the set list, and opens i
   expect(edit).toHaveBeenCalledWith('f'.repeat(64), 'My lead copy');
   expect(rigAudioCommand).not.toHaveBeenCalled();
 });
+
+it('shows set list position on Mine rows and lets extra rows join the set list', async () => {
+  vi.mocked(rigLibrary).mockResolvedValue({
+    presets: [
+      {
+        revision: revisions[0]!,
+        name: 'My lead',
+        origin: 'mine',
+        scenes: ['Clean'],
+        topology: 'scenes',
+        native_instances: 0,
+        lv2_instances: 0,
+      },
+      {
+        revision: revisions[1]!,
+        name: 'My rhythm',
+        origin: 'mine',
+        scenes: ['Clean'],
+        topology: 'scenes',
+        native_instances: 0,
+        lv2_instances: 0,
+      },
+    ],
+    next: null,
+  } as never);
+  render(
+    <SavedRigs
+      connected
+      onOpenRig={() => {}}
+      tail={(setList) => (
+        <li>
+          <span>{setList.label('chain-1') || 'unknown'}</span>
+          <button
+            type="button"
+            onClick={() => setList.toggle('chain-1', 'Chain', true)}
+          >
+            Join
+          </button>
+        </li>
+      )}
+    />,
+  );
+  expect(await screen.findByText(/In set list #1/)).toBeInTheDocument();
+  // The rhythm row and the extra row are both outside the set list.
+  expect(screen.getAllByText(/Not in set list/)).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Join' }));
+  await waitFor(() =>
+    expect(libraryCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry_kind: 'owned',
+        id: 'chain-1',
+        action: { kind: 'set_list', member: true },
+      }),
+    ),
+  );
+});

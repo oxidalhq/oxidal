@@ -17,7 +17,7 @@ import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
 import { GraphAuthor } from './GraphAuthor';
-import { SavedRigs } from './SavedRigs';
+import { SavedRigs, type SetListControls } from './SavedRigs';
 import { OxidalSounds } from './features/library/oxidal';
 import { StarterOffer } from './features/library/StarterOffer';
 import { MineDialogs, type MineTarget } from './features/library/MineDialogs';
@@ -239,7 +239,9 @@ export function Library({
     isOwned: boolean,
     meta: string,
     download: string,
+    setList?: SetListControls,
   ) {
+    const inSetList = setList?.isMember(id) ?? null;
     const active =
       playing?.phase === 'running' &&
       playing.configured?.preset_id === id &&
@@ -249,7 +251,7 @@ export function Library({
         key={`${isOwned ? 'owned' : 'original'}-${id}`}
         testId={isOwned ? undefined : `preset-${id}`}
         name={name}
-        meta={meta}
+        meta={[meta, setList?.label(id)].filter(Boolean).join(' · ')}
         playing={active}
         loading={loadingId === id}
         disabled={!connected || loadingId !== null}
@@ -264,6 +266,21 @@ export function Library({
             disabled: !connected || loadingId !== null,
           },
           { label: 'Download', href: download, download: true },
+          ...(setList && inSetList !== null
+            ? [
+                inSetList
+                  ? {
+                      label: 'Remove from set list',
+                      onSelect: () => setList.toggle(id, name, false),
+                      disabled: !connected || setList.disabled,
+                    }
+                  : {
+                      label: 'Add to set list',
+                      onSelect: () => setList.toggle(id, name, true),
+                      disabled: !connected || setList.disabled,
+                    },
+              ]
+            : []),
           ...(isOwned
             ? [
                 {
@@ -588,15 +605,18 @@ export function Library({
             onEdit={(revision) => setEditing(revision)}
             onManage={(action, entry) => setMineDialog({ action, ...entry })}
             tailCount={ownedShown.length}
-            tail={ownedShown.map((p) =>
-              toneRow(
-                p.id,
-                p.name,
-                true,
-                'TONE3000 chain',
-                `/api/v1/presets/owned/${p.id}/download`,
-              ),
-            )}
+            tail={(setList) =>
+              ownedShown.map((p) =>
+                toneRow(
+                  p.id,
+                  p.name,
+                  true,
+                  'TONE3000 chain',
+                  `/api/v1/presets/owned/${p.id}/download`,
+                  setList,
+                ),
+              )
+            }
             empty={
               <StateNotice kind="empty" title="No presets yet">
                 Create one with New preset, or start from Oxidal sounds.

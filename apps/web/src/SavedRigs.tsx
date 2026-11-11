@@ -32,6 +32,37 @@ import { duplicatePreset, setListMember } from './features/library/setList';
  * Keep ready loads chosen presets in the background for gapless switching.
  * @see docs/audio.md
  */
+/** What a Mine row shows about the set list; nothing until it is known. */
+function setListLabel(
+  members: Map<string, number> | null,
+  kind: 'rig' | 'owned',
+  id: string,
+  shown: boolean,
+): string {
+  if (!shown || !members) return '';
+  const position = members.get(`${kind}:${id}`);
+  return position ? `In set list #${position}` : 'Not in set list';
+}
+
+/** Set list state and actions SavedRigs hands to rows it does not own. */
+export type SetListControls = {
+  label: (id: string) => string;
+  /** Null until the catalog has been read. */
+  isMember: (id: string) => boolean | null;
+  toggle: (id: string, name: string, add: boolean) => void;
+  disabled: boolean;
+};
+
+function TailRows({
+  tail,
+  setList,
+}: {
+  tail: (setList: SetListControls) => ReactNode;
+  setList: SetListControls;
+}) {
+  return <>{tail(setList)}</>;
+}
+
 export function SavedRigs({
   connected,
   onOpenRig,
@@ -58,7 +89,7 @@ export function SavedRigs({
   origin?: RigPage['presets'][number]['origin'];
   title?: string;
   /** More rows for the same list (owned TONE3000 chains in Mine). */
-  tail?: ReactNode;
+  tail?: (setList: SetListControls) => ReactNode;
   tailCount?: number;
   /** Shown when the list has loaded and holds nothing. */
   empty?: ReactNode;
@@ -86,17 +117,17 @@ export function SavedRigs({
   const [modified, setModified] = useState(false);
   const [confirming, setConfirming] = useState(false);
   /** Rigs in the set list (Add to / Remove from set list in the menu). */
-  const [members, setMembers] = useState<Set<string> | null>(null);
+  const [members, setMembers] = useState<Map<string, number> | null>(null);
   const [notice, setNotice] = useState('');
   function readMembers() {
     return libraryCatalog()
       .then((catalog) => {
         if (alive.current)
           setMembers(
-            new Set(
+            new Map(
               catalog.items
-                .filter((i) => i.kind === 'rig' && i.in_set_list)
-                .map((i) => i.id),
+                .filter((i) => i.in_set_list)
+                .map((i, index) => [`${i.kind}:${i.id}`, index + 1]),
             ),
           );
       })
@@ -120,17 +151,22 @@ export function SavedRigs({
       if (alive.current) setBusy(false);
     }
   }
-  async function member(revision: string, name: string, add: boolean) {
+  async function member(
+    revision: string,
+    name: string,
+    add: boolean,
+    kind: 'rig' | 'owned' = 'rig',
+  ) {
     setBusy(true);
     clear();
     setNotice('');
     try {
-      const catalog = await setListMember({ kind: 'rig', id: revision }, add);
+      const catalog = await setListMember({ kind, id: revision }, add);
       if (!alive.current) return;
       const position =
         catalog.items
           .filter((i) => i.in_set_list)
-          .findIndex((i) => i.kind === 'rig' && i.id === revision) + 1;
+          .findIndex((i) => i.kind === kind && i.id === revision) + 1;
       setNotice(
         add
           ? `Added ${name} to the set list as #${position}.`
@@ -354,6 +390,7 @@ export function SavedRigs({
               meta={[
                 rigTopologyLabel({ ...p, scenes }),
                 scenes.join(', '),
+                setListLabel(members, 'rig', p.revision, origin === 'mine'),
                 ready.includes(p.revision)
                   ? 'Ready'
                   : prepared.includes(p.revision)
@@ -386,7 +423,7 @@ export function SavedRigs({
                         onSelect: () => void duplicate(p.revision),
                         disabled: !connected || busy,
                       },
-                      members?.has(p.revision)
+                      members?.has(`rig:${p.revision}`)
                         ? {
                             label: 'Remove from set list',
                             onSelect: () =>
@@ -457,7 +494,17 @@ export function SavedRigs({
             />
           );
         })}
-        {tail}
+        {tail && (
+          <TailRows
+            tail={tail}
+            setList={{
+              label: (id) => setListLabel(members, 'owned', id, true),
+              isMember: (id) => members?.has(`owned:${id}`) ?? null,
+              toggle: (id, name, add) => void member(id, name, add, 'owned'),
+              disabled: !connected || busy,
+            }}
+          />
+        )}
       </ul>
       {(query.trim() || category) && !shown.length && !tailCount && (
         <p role="status" className="caption">

@@ -4,12 +4,12 @@
 
 - [Build the Raspberry Pi image and connect to the hotspot](../os/README.md)
 - [Set up an audio interface and start playback](audio.md)
-- [Import captures and manage presets](library.md)
+- [Browse the Library, manage the set list and import captures](library.md)
 - [Use the browser interface](interface.md) or [browse screenshots](screenshots.md)
 - [Check levels and audio health](monitoring.md)
 - [Capacity and buffer size](capacity.md)
 - [Comparison with other amp and effects units](comparison.md)
-- [Explore the factory effects recipes](factory-collection.md)
+- [Explore Oxidal sounds](factory-collection.md)
 - [Connect a TONE3000 account](tone3000-account.md)
 
 ## Build and maintain
