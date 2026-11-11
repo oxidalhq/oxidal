@@ -552,6 +552,10 @@ if (mode === 'bootstrap') {
       : {}),
     OXIDAL_MAPPING_PATH: mappingPath,
     OXIDAL_PRESET_DIR: join(dirname(mappingPath), 'presets'),
+    // Browser tests import backing tracks into their own temporary store.
+    ...(mode === 'e2e-server'
+      ? { OXIDAL_MEDIA_DIR: join(dirname(mappingPath), 'media') }
+      : {}),
     OXIDAL_UI_DIR: join(root, 'apps/web/dist'),
   };
   const children = [

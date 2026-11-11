@@ -773,16 +773,36 @@ async fn command(
         ),
     }
 }
+/// One event stream per browser tab: device state (`state`) and the backing
+/// player (`player`), so a few open tabs never exhaust the browser's
+/// connections to the device.
 async fn state_events(State(shared): State<Arc<Shared>>) -> impl IntoResponse {
     let mut receiver = shared.events.subscribe();
+    let mut player = shared.player.subscribe();
     let mut shutdown = shared.config.shutdown.clone();
     let stream = async_stream::stream! {
+        let mut state_changed = true;
+        let mut player_changed = true;
         loop {
-            let snapshot=receiver.borrow_and_update().clone();
-            let event=Event::default().event("state").id(snapshot.revision.to_string()).json_data(snapshot).expect("finite validated snapshot");
-            yield Ok::<Event,Infallible>(event);
+            if state_changed {
+                let snapshot=receiver.borrow_and_update().clone();
+                let event=Event::default().event("state").id(snapshot.revision.to_string()).json_data(snapshot).expect("finite validated snapshot");
+                yield Ok::<Event,Infallible>(event);
+            }
+            if player_changed {
+                let snapshot = player.borrow_and_update().clone();
+                let event = Event::default().event("player").json_data(snapshot).expect("finite player snapshot");
+                yield Ok::<Event,Infallible>(event);
+            }
             tokio::select! {
-                changed = receiver.changed() => { if changed.is_err() { break; } },
+                changed = receiver.changed() => {
+                    if changed.is_err() { break; }
+                    (state_changed, player_changed) = (true, false);
+                },
+                changed = player.changed() => {
+                    if changed.is_err() { break; }
+                    (state_changed, player_changed) = (false, true);
+                },
                 _ = async {
                     match shutdown.as_mut() {
                         Some(signal) => { let _ = signal.changed().await; },

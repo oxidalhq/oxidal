@@ -124,3 +124,16 @@ export function friendlyError(error: unknown, action: string): string {
       : (coded ?? `${detail.charAt(0).toUpperCase()}${detail.slice(1)}.`);
   return `Could not ${action}. ${reason}`;
 }
+
+/**
+ * The device's own sentence for a refusal ("Start the audio to play the
+ * track."), which names the cause and the fix; network failures get the
+ * app's plain explanation instead.
+ */
+export function deviceSentence(cause: unknown, action: string): string {
+  if (cause instanceof DeviceError && cause.code !== 'internal') {
+    const text = cause.message.trim();
+    return /[.!?]$/.test(text) ? text : `${text}.`;
+  }
+  return friendlyError(cause, action);
+}

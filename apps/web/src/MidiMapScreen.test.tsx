@@ -700,3 +700,86 @@ it('adds a second controller explicitly, with its own channel, and removes it ag
   await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
   expect(vi.mocked(updateMidiMap).mock.calls[1]![0].extra_inputs).toEqual([]);
 });
+
+it('learns backing-player switches and a level knob outside every preset', async () => {
+  arrange();
+  const view = render(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig()}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  const group = await screen.findByRole('region', { name: 'Backing player' });
+  expect(
+    within(group)
+      .getAllByRole('listitem')
+      .map((row) => row.querySelector('.midi-row-label')?.textContent),
+  ).toEqual([
+    'Play/Pause',
+    'Stop track',
+    'Next track',
+    'Previous track',
+    'Back 10 s',
+    'Forward 10 s',
+    'Level knob',
+  ]);
+  fireEvent.click(
+    within(group).getByRole('button', { name: /Learn.*Stop track/ }),
+  );
+  expect(within(group).getByText('Press the switch…')).toBeVisible();
+  // A release (value below 64) is not a press; the next press is learned.
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(1, { kind: 'control', channel: 2, controller: 21, value: 0 })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  expect(updateMidiMap).not.toHaveBeenCalled();
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(2, {
+        kind: 'control',
+        channel: 2,
+        controller: 21,
+        value: 127,
+      })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(updateMidiMap).mock.calls[0]![0].navigation).toEqual({
+    backing: { stop: { program: null, controller: 21 } },
+  });
+  expect(await within(group).findByText('CC 21 · press')).toBeVisible();
+
+  // The level knob follows any value of its CC.
+  fireEvent.click(
+    within(group).getByRole('button', { name: /Learn.*Level knob/ }),
+  );
+  view.rerender(
+    <MidiMapScreen
+      connected
+      native={{ phase: 'stopped' } as AudioState}
+      mixed={rig(3, { kind: 'control', channel: 2, controller: 7, value: 12 })}
+      onMapApplied={vi.fn(async () => undefined)}
+    />,
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(updateMidiMap).mock.calls[1]![0].navigation).toEqual({
+    backing: { stop: { program: null, controller: 21 }, level: 7 },
+  });
+  expect(await within(group).findByText('CC 7 · any value')).toBeVisible();
+  fireEvent.click(
+    within(group).getByRole('button', { name: /Clear.*Stop track/ }),
+  );
+  await waitFor(() => expect(updateMidiMap).toHaveBeenCalledTimes(3));
+  expect(vi.mocked(updateMidiMap).mock.calls[2]![0].navigation).toEqual({
+    backing: { stop: null, level: 7 },
+  });
+});

@@ -15,6 +15,7 @@ import {
 import { friendlyError } from './lib/friendlyError';
 import { GuitarSwitch } from './GuitarSettings';
 import { MasterLevel } from './MasterLevel';
+import { PerformPlayerRow } from './components/media/PerformPlayerRow';
 import { useMonitorReadings } from './monitorFeed';
 import { setPerform, usePerform } from './performState';
 import type { RigLaneVM } from './rigChain';
@@ -523,6 +524,7 @@ export function PerformView({
               )}
             </>
           )}
+          <PerformPlayerRow />
           {knobs}
           <MasterLevel />
           <details

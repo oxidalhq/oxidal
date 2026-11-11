@@ -1356,3 +1356,159 @@ export async function presetDetails(
   if (!detailsValidator(body)) throw new Error('Incompatible preset details');
   return body;
 }
+
+export type MediaLibrary = Contract['media_library'];
+export type MediaAsset = MediaLibrary['assets'][number];
+export type AssetUpdate = Contract['media_asset_update'];
+export type UploadState = Contract['media_upload_state'];
+export type PlayerSnapshot = Contract['player_snapshot'];
+export type PlayerRequest = Contract['player_request'];
+const mediaLibraryValidator = ajv.compile<MediaLibrary>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/MediaLibrary',
+});
+const mediaAssetValidator = ajv.compile<MediaAsset>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/MediaManifest',
+});
+const uploadValidator = ajv.compile<UploadState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/UploadState',
+});
+const playerValidator = ajv.compile<PlayerSnapshot>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/PlayerSnapshot',
+});
+const json = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+function uploadBody(body: unknown): UploadState {
+  if (!uploadValidator(body)) throw new Error('Incompatible upload state');
+  return body;
+}
+
+/** Backing tracks and other session media kept on the device.
+ * @see docs/media.md
+ */
+export async function mediaLibrary(): Promise<MediaLibrary> {
+  const body = await presetResponse(await fetch('/api/v1/media'));
+  if (!mediaLibraryValidator(body)) throw new Error('Incompatible media list');
+  return body;
+}
+/** Rename or re-trim a track; the files never change. */
+export async function updateAsset(
+  id: string,
+  update: AssetUpdate,
+): Promise<MediaAsset> {
+  const body = await presetResponse(
+    await fetch(
+      `/api/v1/media/assets/${encodeURIComponent(id)}`,
+      json('PATCH', update),
+    ),
+  );
+  if (!mediaAssetValidator(body)) throw new Error('Incompatible media file');
+  return body;
+}
+/** Refused with 409 while the track plays or a job uses it. */
+export async function deleteAsset(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/media/assets/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) await presetResponse(response);
+}
+export const originalPath = (id: string) =>
+  `/api/v1/media/assets/${encodeURIComponent(id)}/original`;
+
+/** A chunk sent at an offset the device has not confirmed; resume from `state`. */
+export class OffsetConflict extends Error {
+  constructor(readonly state: UploadState) {
+    super('The upload offset moved');
+    this.name = 'OffsetConflict';
+  }
+}
+export async function startUpload(
+  name: string,
+  size: number,
+): Promise<UploadState> {
+  return uploadBody(
+    await presetResponse(
+      await fetch('/api/v1/media/uploads', json('POST', { name, size })),
+    ),
+  );
+}
+export async function sendChunk(
+  id: string,
+  offset: number,
+  chunk: Blob,
+  signal?: AbortSignal,
+): Promise<UploadState> {
+  const response = await fetch(
+    `/api/v1/media/uploads/${encodeURIComponent(id)}?offset=${offset}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: chunk,
+      signal,
+    },
+  );
+  if (response.status === 409) {
+    const body: unknown = await response.json().catch(() => null);
+    if (uploadValidator(body)) throw new OffsetConflict(body);
+    throw deviceError(body, 409, 'The upload is busy');
+  }
+  return uploadBody(await presetResponse(response));
+}
+export async function uploadStatus(id: string): Promise<UploadState> {
+  return uploadBody(
+    await presetResponse(
+      await fetch(`/api/v1/media/uploads/${encodeURIComponent(id)}`),
+    ),
+  );
+}
+/** Continue a duplicate as a second copy. */
+export async function importCopy(id: string): Promise<UploadState> {
+  return uploadBody(
+    await presetResponse(
+      await fetch(
+        `/api/v1/media/uploads/${encodeURIComponent(id)}/import`,
+        json('POST', { copy: true }),
+      ),
+    ),
+  );
+}
+export async function cancelUpload(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/media/uploads/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok && response.status !== 404) await presetResponse(response);
+}
+
+/** Validate a backing player snapshot from a response or the event stream. */
+export function parsePlayer(value: unknown): PlayerSnapshot {
+  if (!playerValidator(value)) throw new Error('Incompatible player state');
+  return value;
+}
+/** Every player control in the app goes through this one daemon handler.
+ * @see docs/media.md
+ */
+export async function playerCommand(
+  request: PlayerRequest,
+): Promise<PlayerSnapshot> {
+  return parsePlayer(
+    await presetResponse(
+      await fetch('/api/v1/player/commands', json('POST', request)),
+    ),
+  );
+}
+/** Reorder the Backing list; refused under Protect or when the set changed. */
+export async function setPlayerOrder(order: string[]): Promise<PlayerSnapshot> {
+  return parsePlayer(
+    await presetResponse(
+      await fetch('/api/v1/player/order', json('PUT', { order })),
+    ),
+  );
+}

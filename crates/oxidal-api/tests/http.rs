@@ -3902,6 +3902,21 @@ async fn the_backing_player_cues_navigates_dedupes_and_restores_stopped() {
     assert!(chunk.starts_with("event: player"), "{chunk}");
     assert!(chunk.contains("\"title\":\"Song A\""));
     drop(events);
+    // The device stream carries the same snapshots, so a browser tab needs
+    // only one stream to the device.
+    let mut device = reqwest::get(format!("{url}/events")).await.unwrap();
+    let mut seen = String::new();
+    while !seen.contains("event: player") {
+        let chunk = tokio::time::timeout(std::time::Duration::from_secs(2), device.chunk())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        seen.push_str(std::str::from_utf8(&chunk).unwrap());
+    }
+    assert!(seen.starts_with("event: state"), "{seen}");
+    assert!(seen.contains("\"title\":\"Song A\""), "{seen}");
+    drop(device);
     task.abort();
 
     // Reboot: same track cued, stopped at the start; level, repeat and order kept.

@@ -50,6 +50,7 @@ import { ResourceStrip } from './ResourceStrip';
 import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
 import { TunerButton } from './TunerButton';
 import { refreshMonitorFeed } from './monitorFeed';
+import { publishPlayer } from './lib/playerFeed';
 import { SignalChain } from './SignalChain';
 const Library = lazy(() =>
   import('./Library').then((m) => ({ default: m.Library })),
@@ -67,6 +68,9 @@ import { Loading } from './components/ui/loading';
 import { AudioSettings } from './AudioSettings';
 import { About } from './About';
 import { ControlEditor } from './ControlEditor';
+import { SessionMediaProvider } from './components/media/SessionMediaProvider';
+import { NowPlaying } from './components/media/NowPlaying';
+import { MediaSheets } from './components/media/PlayerSheet';
 import {
   capabilities,
   midiAction,
@@ -257,6 +261,14 @@ function InstrumentApp() {
           }
         }
       });
+      source.addEventListener('player', (event: MessageEvent<string>) => {
+        try {
+          if (active && events === source)
+            publishPlayer(JSON.parse(event.data));
+        } catch {
+          /* An incompatible player snapshot leaves the last good one shown. */
+        }
+      });
       events.onerror = () => {
         if (active) setConnected(false);
       };
@@ -440,7 +452,9 @@ function InstrumentApp() {
             ),
           )}
         </nav>
+        <NowPlaying placement="masthead" />
       </header>
+      <NowPlaying placement="strip" />
       {tunerOpen && (
         <GlobalTuner
           onClose={() => setTunerOpen(false)}
@@ -1125,16 +1139,21 @@ function InstrumentApp() {
           )}
         </main>
       </div>
+      <NowPlaying placement="bottom" />
+      <MediaSheets />
     </div>
   );
 }
 
-/** Workspace memory contains display context only, never authoritative audio state. */
+/** Workspace memory contains display context only, never authoritative audio state.
+ * The backing player's session media outlives every page. */
 export default function App() {
   const [memory] = useState(() => new Map<string, unknown>());
   return (
     <WorkspaceMemory.Provider value={memory}>
-      <InstrumentApp />
+      <SessionMediaProvider>
+        <InstrumentApp />
+      </SessionMediaProvider>
     </WorkspaceMemory.Provider>
   );
 }

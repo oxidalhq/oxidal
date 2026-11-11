@@ -3,6 +3,10 @@ import { useFailure } from './lib/useFailure';
 import { friendlyError } from './lib/friendlyError';
 import { firstAfter, useLearnGate } from './midiLearn';
 import { PresetNavigation, type NavigationKey } from './PresetNavigation';
+import {
+  BackingPlayerControls,
+  type BackingKey,
+} from './BackingPlayerControls';
 import { ControllerSetup } from './ControllerSetup';
 import { ExtraControllers } from './ExtraControllers';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -204,6 +208,10 @@ export function MidiMapScreen({
   const [learning, setLearning] = useState<Learning | null>(null);
   const [navLearning, setNavLearning] = useState<{
     key: NavigationKey;
+    after: number;
+  } | null>(null);
+  const [backingLearning, setBackingLearning] = useState<{
+    key: BackingKey;
     after: number;
   } | null>(null);
   const [action, setAction] = useState<MidiAction | null>(null);
@@ -580,12 +588,16 @@ export function MidiMapScreen({
   useEffect(() => {
     learnHandler.current = applyLearn;
   });
-  useLearnGate(!!learning || !!navLearning || checking, (cause) => {
-    setLearning(null);
-    setNavLearning(null);
-    setChecking(false);
-    setError(friendlyError(cause, 'learn a MIDI controller'));
-  });
+  useLearnGate(
+    !!learning || !!navLearning || !!backingLearning || checking,
+    (cause) => {
+      setLearning(null);
+      setNavLearning(null);
+      setBackingLearning(null);
+      setChecking(false);
+      setError(friendlyError(cause, 'learn a MIDI controller'));
+    },
+  );
   const lastMessage = learning
     ? firstAfter<Message>(status, learning.after, learnSource)
     : status?.last;
@@ -626,6 +638,38 @@ export function MidiMapScreen({
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navMessage, navLearning]);
+  const backingMessage = backingLearning
+    ? firstAfter<Message>(status, backingLearning.after, learnSource)
+    : undefined;
+  useEffect(() => {
+    if (!backingLearning || !backingMessage || !map) return;
+    const key = backingLearning.key;
+    // The level knob follows any value of one CC; a switch learns a press.
+    if (key === 'level' && backingMessage.kind !== 'control') return;
+    if (
+      key !== 'level' &&
+      backingMessage.kind === 'control' &&
+      backingMessage.value < 64
+    )
+      return;
+    const backing = { ...map.navigation?.backing };
+    if (key === 'level' && backingMessage.kind === 'control')
+      backing.level = backingMessage.controller;
+    else if (key !== 'level')
+      backing[key] =
+        backingMessage.kind === 'program'
+          ? { program: backingMessage.program, controller: null }
+          : { program: null, controller: backingMessage.controller };
+    const timer = window.setTimeout(() => {
+      setBackingLearning(null);
+      void replaceMap({
+        ...map,
+        navigation: { ...map.navigation, backing },
+      }).catch(() => undefined);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backingMessage, backingLearning]);
   const actionEvents = status?.events;
   useEffect(() => {
     if (!connected) return;
@@ -723,7 +767,12 @@ export function MidiMapScreen({
     return <p className="caption">{error || 'Reading controller map…'}</p>;
   }
   const canLearn =
-    connected && !!map.input && !!status?.connected && !busy && !navLearning;
+    connected &&
+    !!map.input &&
+    !!status?.connected &&
+    !busy &&
+    !navLearning &&
+    !backingLearning;
   const templateChanged =
     templateButtons !== (map.template?.scene_buttons ?? 0) ||
     (templateButtons > 0 &&
@@ -1189,12 +1238,34 @@ export function MidiMapScreen({
         busy={busy}
         onLearn={(key) => {
           setLearning(null);
+          setBackingLearning(null);
           setNavLearning(key ? { key, after: status?.events ?? 0 } : null);
         }}
         onClear={(key) =>
           void replaceMap({
             ...map,
             navigation: { ...map.navigation, [key]: null },
+          }).catch(() => undefined)
+        }
+      />
+
+      <BackingPlayerControls
+        backing={map.navigation?.backing}
+        learning={backingLearning?.key ?? null}
+        canLearn={connected && !!map.input && !!status?.connected && !learning}
+        busy={busy}
+        onLearn={(key) => {
+          setLearning(null);
+          setNavLearning(null);
+          setBackingLearning(key ? { key, after: status?.events ?? 0 } : null);
+        }}
+        onClear={(key) =>
+          void replaceMap({
+            ...map,
+            navigation: {
+              ...map.navigation,
+              backing: { ...map.navigation?.backing, [key]: null },
+            },
           }).catch(() => undefined)
         }
       />

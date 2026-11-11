@@ -318,6 +318,8 @@ fn no_store(status: StatusCode, body: impl Serialize) -> Response {
 }
 
 pub(crate) async fn library(State(shared): State<Arc<Shared>>) -> Response {
+    // Imports finish in the background; keep the Backing list in step.
+    crate::player::library_changed(&shared).await;
     let store = match store(&shared) {
         Ok(store) => store,
         Err(response) => return *response,

@@ -98,6 +98,37 @@ The player and reamp jobs hold a lease on an asset while they use it. Deleting a
 leased asset is refused with `409`. A delete first renames the asset out of
 `assets/`, so it disappears at once even if removing the files takes a moment.
 
+## Backing player in the app
+
+Every player control in the web app sends the same player command to the
+daemon (`POST /api/v1/player/commands`), so MIDI footswitches, the mini-player,
+the full player, Perform and Library never disagree. Source:
+[session media components](../apps/web/src/components/media/),
+[upload client](../apps/web/src/lib/mediaUpload.ts) and
+[player clock](../apps/web/src/lib/playerClock.ts).
+
+- **One snapshot.** The device event stream `GET /api/v1/events` carries a
+  `player` event with every player snapshot, so a browser tab keeps one stream
+  to the device (`GET /api/v1/player/events` carries the same snapshots alone).
+  The app draws every surface from the newest snapshot. While a track plays, the shown position
+  advances locally from `frame` and the track rate until the next snapshot.
+  Buttons show a pending state for at most 300 ms, then the device's state.
+- **Safe retries.** Each action has a fresh request ID; a lost response is
+  retried once with the same ID. Next, Previous, seek and skip carry the cued
+  track, so a command from a screen that missed a change is refused.
+- **Where it shows.** A masthead chip from 1024 px, a strip under the masthead
+  from 600 px and a bar above the safe area on phones and in E-paper mode. It is
+  hidden while nothing is cued. The full player opens over any page. Perform
+  has one backing row, and Library has a Backing tracks section.
+- **Imports.** Files go up in 8 MiB chunks. A refused offset resumes from the
+  offset the device confirmed, and a lost connection pauses the file until the
+  browser is back online. The import queue lives for the whole app session, so
+  leaving Library does not stop an upload.
+- **Protect.** Play, pause, stop, skip, seek, Next/Previous and level work with
+  Protect on. Import, rename, reorder, trim, delete and MIDI learn need it off.
+- **MIDI.** Settings › MIDI has a Backing player group: Play/Pause, Stop track,
+  Next track, Previous track, Back 10 s, Forward 10 s and a level knob CC.
+
 ## Audio path
 
 Session media meets the live signal in the shared audio host stage that every

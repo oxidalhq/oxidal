@@ -38,9 +38,16 @@ import { OfflineEditor } from './features/library/OfflineEditor';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
 import { CreatedPreset } from './features/library/CreatedPreset';
 import { friendlyError } from './lib/friendlyError';
+import { BackingTracks } from './components/media/BackingTracks';
 import './Library.css';
 
-const sections = ['presets', 'sounds', 'discover', 'setlist'] as const;
+const sections = [
+  'presets',
+  'sounds',
+  'discover',
+  'setlist',
+  'backing',
+] as const;
 type Section = (typeof sections)[number];
 const sources = ['all', 'mine', 'oxidal', 'tone3000'] as const;
 type Source = (typeof sources)[number];
@@ -53,7 +60,8 @@ const sourceLabels: Record<Source, string> = {
 
 /**
  * Library (Sprint 07): Presets to play and manage, Sounds (NAM and IR files),
- * Discover for new sounds, and the Set list. Each section has its own link
+ * Discover for new sounds, the Set list and Backing tracks (Sprint 09). Each
+ * section has its own link
  * (`#library/sounds`) and keeps its search and filters while you work.
  * @see docs/presets/format.md
  */
@@ -300,6 +308,7 @@ export function Library({
           <TabsTrigger value="sounds">Sounds</TabsTrigger>
           <TabsTrigger value="discover">Discover</TabsTrigger>
           <TabsTrigger value="setlist">Set list</TabsTrigger>
+          <TabsTrigger value="backing">Backing tracks</TabsTrigger>
         </TabsList>
         <TabsContent value="presets">
           <div className="library-search-row">
@@ -638,6 +647,9 @@ export function Library({
               briefly.
             </p>
           </details>
+        </TabsContent>
+        <TabsContent value="backing">
+          <BackingTracks connected={connected} />
         </TabsContent>
       </Tabs>
     </section>
