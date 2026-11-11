@@ -55,7 +55,7 @@ struct Spec {
     qualification: &'static str,
 }
 
-const SPECS: [Spec; 8] = [
+const SPECS: [Spec; 10] = [
     Spec {
         id: "guitarix",
         name: "Guitarix",
@@ -127,6 +127,24 @@ const SPECS: [Spec; 8] = [
         size_mib: 2,
         usable_plugins: 4,
         qualification: "ARM64 harness",
+    },
+    Spec {
+        id: "zam",
+        name: "ZamAudio",
+        website: "https://www.zamaudio.com/",
+        package: "zam-plugins",
+        size_mib: 8,
+        usable_plugins: 12,
+        qualification: "ARM64 container harness (Debian 13)",
+    },
+    Spec {
+        id: "dpf",
+        name: "DISTRHO Ports",
+        website: "https://github.com/DISTRHO/DPF-Plugins",
+        package: "dpf-plugins-lv2",
+        size_mib: 10,
+        usable_plugins: 9,
+        qualification: "ARM64 container harness (Debian 13)",
     },
 ];
 
@@ -302,7 +320,7 @@ mod tests {
 
     #[test]
     fn allowlist_has_only_qualified_nonempty_packs() {
-        assert_eq!(SPECS.len(), 8);
+        assert_eq!(SPECS.len(), 10);
         assert!(SPECS.iter().all(|pack| pack.usable_plugins > 0));
         assert!(SPECS.iter().all(|pack| pack.website.starts_with("http")));
         assert!(known("swh"));

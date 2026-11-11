@@ -14,6 +14,8 @@ const prefixes: Record<string, readonly string[]> = {
   mda: ['http://drobilla.net/plugins/mda/'],
   swh: ['http://plugin.org.uk/'],
   fomp: ['http://drobilla.net/plugins/fomp/'],
+  zam: ['urn:zamaudio:'],
+  dpf: ['http://distrho.sf.net/'],
 };
 
 /** Names of presets using any effect from `pack`, sorted; an unknown pack is unused. */
