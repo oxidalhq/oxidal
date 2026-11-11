@@ -144,6 +144,12 @@ pub enum HostUtility {
     Backing {
         command: crate::backing::BackingCommand,
     },
+    /// Venue EQ on the main outputs; `None` removes it. Profile switches and
+    /// bypass set `crossfade`; knob edits glide.
+    Venue {
+        venue: Option<crate::venue::VenueApplied>,
+        crossfade: bool,
+    },
 }
 /// Unit-wide gain staging around every rig: guitar input trim before the rig,
 /// master output level after it. Never stored in presets.
@@ -440,9 +446,9 @@ impl HostSignal {
     pub fn return_underruns(&self) -> u64 {
         self.return_underruns
     }
-    pub fn set_venue_eq(&mut self, bands: &[crate::venue::VenueBand], bypass: bool) {
-        self.venue.set(bands);
-        self.venue.set_bypass(bypass);
+    /// Starts the venue EQ with no transition (a stream opening with it).
+    pub fn start_venue(&mut self, venue: Option<crate::venue::VenueApplied>) {
+        self.venue.start(venue);
     }
     /// Blocks in which the injected source ran dry and silence was played.
     pub fn source_underruns(&self) -> u64 {
@@ -485,6 +491,7 @@ impl HostSignal {
                     self.reference.stop();
                 }
             }
+            HostUtility::Venue { venue, crossfade } => self.venue.apply(venue, crossfade),
             HostUtility::Backing { command } => {
                 if let Some(backing) = &mut self.backing {
                     backing.command(command);
@@ -568,7 +575,7 @@ impl HostSignal {
         }
         // Venue correction sits after the mix and before mono fold, so a mono
         // PA hears the corrected sum.
-        self.venue.apply(left, right);
+        self.venue.process(left, right);
         if self.levels.mono {
             for (l, r) in left.iter_mut().zip(right.iter_mut()) {
                 let sum = (*l + *r) * 0.5;
@@ -997,7 +1004,7 @@ mod host_tests {
     }
     #[test]
     fn venue_eq_corrects_the_output_only_and_before_mono_fold() {
-        use crate::venue::{VenueBand, VenueKind};
+        use crate::venue::{VenueApplied, VenueSettings};
         let rate = 48000;
         let mut signal = HostSignal::new(
             rate,
@@ -1007,13 +1014,13 @@ mod host_tests {
                 ..HostLevels::default()
             },
         );
-        let cut = VenueBand {
-            kind: VenueKind::Bell,
-            freq_hz: 1000.0,
-            gain_db: -6.0,
-            q: 1.0,
+        let mut settings = VenueSettings::default();
+        settings.bands[3].gain_db = -6.0;
+        let cut = |bypass| HostUtility::Venue {
+            venue: Some(VenueApplied { settings, bypass }),
+            crossfade: true,
         };
-        signal.set_venue_eq(&[cut], false);
+        signal.command(cut(false));
         let tone = |i: usize| (std::f32::consts::TAU * 1000.0 * i as f32 / rate as f32).sin() * 0.5;
         // The input path never sees venue correction (FR-15).
         let (mut l, mut r) = ([0.0f32; 480], [0.0f32; 480]);
@@ -1039,8 +1046,11 @@ mod host_tests {
         }
         let db = 20.0 * (peak / 0.25).log10();
         assert!((db + 6.0).abs() < 0.2, "{db}");
-        // Bypass restores the uncorrected (mono-folded) signal exactly.
-        signal.set_venue_eq(&[cut], true);
+        // Bypass crossfades (30 ms), then passes the mono-folded signal exactly.
+        signal.command(cut(true));
+        for _ in 0..4 {
+            signal.output(&mut l, &mut r);
+        }
         for (i, (a, b)) in l.iter_mut().zip(r.iter_mut()).enumerate() {
             *a = tone(i);
             *b = 0.0;

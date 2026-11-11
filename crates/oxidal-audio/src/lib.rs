@@ -99,6 +99,10 @@ pub struct StreamConfig {
     pub input_map: [u32; 2],
     /// Duplicate output indexes mix the stereo processor output equally into mono.
     pub output_map: [u32; 2],
+    /// Venue EQ on the main outputs from the first sample; the daemon fills it
+    /// at every start, like the levels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub venue: Option<crate::venue::VenueApplied>,
 }
 impl StreamConfig {
     pub fn validate(&self) -> Result<(), String> {

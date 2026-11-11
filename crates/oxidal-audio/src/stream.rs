@@ -85,6 +85,7 @@ impl Duplex {
             config.levels,
         );
         host.begin_output();
+        host.start_venue(config.venue);
         host.attach_backing(crate::backing::start(
             config.input.sample_rate,
             crate::backing::media_root(),
@@ -363,9 +364,6 @@ impl Duplex {
     ) -> Option<crate::session_media::Producer> {
         self.host.set_raw_tap(tap)
     }
-    pub fn set_venue_eq(&mut self, bands: &[crate::venue::VenueBand], bypass: bool) {
-        self.host.set_venue_eq(bands, bypass);
-    }
     /// Injected-source underrun blocks and raw-tap dropped samples.
     pub fn media_faults(&self) -> (u64, u64) {
         (self.host.source_underruns(), self.host.raw_dropped())
@@ -431,6 +429,7 @@ mod tests {
             output,
             input_map: [0, 1],
             output_map: [0, 1],
+            venue: None,
         }
     }
     #[test]

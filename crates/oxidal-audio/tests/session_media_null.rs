@@ -8,7 +8,7 @@
 use oxidal_audio::session_media::{InputSource, ring};
 use oxidal_audio::stream::{Duplex, Step};
 use oxidal_audio::tools::HostLevels;
-use oxidal_audio::venue::{VenueBand, VenueKind};
+use oxidal_audio::venue::{VenueApplied, VenueSettings};
 use oxidal_audio::{AudioProbe, Direction, SampleFormat, StreamConfig};
 use std::cell::Cell;
 use std::io::{Read, Write};
@@ -69,6 +69,7 @@ fn config(levels: HostLevels) -> StreamConfig {
         // Mono interface input duplicated to both sides, as the Jogg is saved.
         input_map: [0, 0],
         output_map: [0, 1],
+        venue: None,
     }
 }
 
@@ -241,18 +242,24 @@ fn the_venue_stage_shapes_the_device_output_and_bypasses_exactly() {
     };
     let flat = run(&mut stream);
     assert!((flat + 6.02).abs() < 0.05, "{flat}");
-    stream.set_venue_eq(
-        &[VenueBand {
-            kind: VenueKind::Bell,
-            freq_hz: 1000.0,
-            gain_db: -6.0,
-            q: 1.0,
-        }],
-        false,
-    );
+    let mut settings = VenueSettings::default();
+    settings.bands[3].gain_db = -6.0;
+    stream.host_utility(oxidal_audio::tools::HostUtility::Venue {
+        venue: Some(VenueApplied {
+            settings,
+            bypass: false,
+        }),
+        crossfade: true,
+    });
     let corrected = run(&mut stream);
     assert!((corrected - flat + 6.0).abs() < 0.2, "{corrected}");
-    stream.set_venue_eq(&[], true);
+    stream.host_utility(oxidal_audio::tools::HostUtility::Venue {
+        venue: Some(VenueApplied {
+            settings,
+            bypass: true,
+        }),
+        crossfade: true,
+    });
     let bypassed = run(&mut stream);
     assert!((bypassed - flat).abs() < 0.05, "{bypassed}");
 }
