@@ -35,6 +35,14 @@ and contribution notices are in:
 - [`native/tone3000/NOTICE-split.md`](native/tone3000/NOTICE-split.md)
 - [`native/pitch/NOTICE`](native/pitch/NOTICE)
 
+## Audio decoding
+
+Backing-track import decodes WAV and MP3 with the Symphonia crates, licensed
+under the Mozilla Public License 2.0 and used unmodified. The licence text,
+locked versions and source location are in
+[`licenses/symphonia`](licenses/symphonia). Resampling (`rubato`) and loudness
+measurement (`ebur128`) are MIT-licensed.
+
 ## Other native and model code
 
 The native Hold adapter and portions of the project-owned NAM implementation retain

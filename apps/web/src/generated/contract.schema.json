@@ -103,6 +103,9 @@
     "lv2_catalog": {
       "$ref": "#/$defs/PluginCatalog"
     },
+    "media_asset_update": {
+      "$ref": "#/$defs/AssetUpdate"
+    },
     "media_library": {
       "$ref": "#/$defs/MediaLibrary"
     },
@@ -288,6 +291,7 @@
     "media_library",
     "media_upload_request",
     "media_upload_state",
+    "media_asset_update",
     "removal_preview",
     "protect_state",
     "keep_ready",
@@ -744,6 +748,28 @@
         "gear",
         "cached"
       ]
+    },
+    "AssetUpdate": {
+      "description": "Rename or re-trim an asset; files never change.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "trimDb": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        }
+      },
+      "additionalProperties": false
     },
     "AssignmentKind": {
       "description": "Which kind of preset assignment a [`Disabled`] marker refers to.",
@@ -4685,6 +4711,107 @@
             "kind",
             "enabled",
             "peak_db"
+          ]
+        }
+      ]
+    },
+    "ImportPhase": {
+      "description": "Where a received file is in the import pipeline.",
+      "oneOf": [
+        {
+          "description": "Chunks are still arriving.",
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "receiving"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "const": "queued"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        {
+          "description": "Decoding and preparing the play-ready render; `progress` is 0–1.",
+          "type": "object",
+          "properties": {
+            "progress": {
+              "type": "number",
+              "format": "double"
+            },
+            "state": {
+              "type": "string",
+              "const": "preparing"
+            }
+          },
+          "required": [
+            "state",
+            "progress"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "asset": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "ready"
+            }
+          },
+          "required": [
+            "state",
+            "asset"
+          ]
+        },
+        {
+          "description": "The same file is already in Library. Import a copy or cancel.",
+          "type": "object",
+          "properties": {
+            "existing": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "duplicate"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "existing",
+            "title"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "failed"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
           ]
         }
       ]
@@ -11061,6 +11188,9 @@
         "id": {
           "type": "string"
         },
+        "import": {
+          "$ref": "#/$defs/ImportPhase"
+        },
         "offset": {
           "description": "Bytes received and confirmed; the next chunk must start here.",
           "type": "integer",
@@ -11082,7 +11212,8 @@
         "format",
         "size",
         "offset",
-        "complete"
+        "complete",
+        "import"
       ]
     },
     "Validation": {

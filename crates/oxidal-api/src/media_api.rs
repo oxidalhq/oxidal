@@ -54,6 +54,30 @@ pub enum UploadFormat {
     Mp3,
 }
 
+/// Where a received file is in the import pipeline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ImportPhase {
+    /// Chunks are still arriving.
+    Receiving,
+    Queued,
+    /// Decoding and preparing the play-ready render; `progress` is 0–1.
+    Preparing {
+        progress: f64,
+    },
+    Ready {
+        asset: String,
+    },
+    /// The same file is already in Library. Import a copy or cancel.
+    Duplicate {
+        existing: String,
+        title: String,
+    },
+    Failed {
+        reason: String,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadState {
@@ -64,6 +88,24 @@ pub struct UploadState {
     /// Bytes received and confirmed; the next chunk must start here.
     pub offset: u64,
     pub complete: bool,
+    pub import: ImportPhase,
+}
+
+/// Rename or re-trim an asset; files never change.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssetUpdate {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub trim_db: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ImportChoice {
+    /// Import a second copy of a file that is already in Library.
+    copy: bool,
 }
 
 #[derive(Debug)]
@@ -73,9 +115,125 @@ struct Upload {
     writing: bool,
 }
 
+type Open = Arc<Mutex<HashMap<String, Upload>>>;
+
+struct Job {
+    id: String,
+    request: crate::media_import::ImportRequest,
+    copy: bool,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct Uploads {
-    open: Mutex<HashMap<String, Upload>>,
+    open: Open,
+    queue: std::sync::OnceLock<std::sync::mpsc::Sender<Job>>,
+}
+
+fn set_phase(open: &Open, id: &str, phase: ImportPhase) {
+    if let Some(upload) = open.lock().unwrap_or_else(|e| e.into_inner()).get_mut(id) {
+        upload.state.import = phase;
+        upload.touched = Instant::now();
+    }
+}
+
+/// One import at a time, in arrival order, on its own thread.
+fn importer(store: Arc<crate::media::Store>, open: Open, jobs: std::sync::mpsc::Receiver<Job>) {
+    for job in jobs {
+        let Ok(part) = store.upload_part(&job.id) else {
+            continue;
+        };
+        set_phase(&open, &job.id, ImportPhase::Preparing { progress: 0.0 });
+        if !job.copy {
+            let existing = crate::media_import::hash_file(&part).ok().and_then(|hash| {
+                store.list().ok()?.into_iter().find(|asset| {
+                    asset
+                        .source
+                        .as_ref()
+                        .is_some_and(|source| source.sha256 == hash)
+                })
+            });
+            if let Some(asset) = existing {
+                set_phase(
+                    &open,
+                    &job.id,
+                    ImportPhase::Duplicate {
+                        existing: asset.id,
+                        title: asset.title,
+                    },
+                );
+                continue;
+            }
+        }
+        let mut reported = 0.0;
+        let result = crate::media_import::import(&store, &part, &job.request, &mut |progress| {
+            if progress - reported >= 0.02 {
+                reported = progress;
+                set_phase(&open, &job.id, ImportPhase::Preparing { progress });
+            }
+        });
+        set_phase(
+            &open,
+            &job.id,
+            match result {
+                Ok(manifest) => ImportPhase::Ready { asset: manifest.id },
+                Err(MediaError::Invalid(reason)) => ImportPhase::Failed { reason },
+                Err(MediaError::NoSpace(space)) => ImportPhase::Failed {
+                    reason: format!(
+                        "No space: {} MB free, {} MB kept in reserve",
+                        space.available_bytes / 1_000_000,
+                        space.reserve_bytes / 1_000_000
+                    ),
+                },
+                Err(_) => ImportPhase::Failed {
+                    reason: "Media storage failed during import".into(),
+                },
+            },
+        );
+    }
+}
+
+impl std::fmt::Debug for Job {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Job").field("id", &self.id).finish()
+    }
+}
+
+impl Uploads {
+    fn enqueue(&self, store: &Arc<crate::media::Store>, job: Job) {
+        let sender = self.queue.get_or_init(|| {
+            let (send, receive) = std::sync::mpsc::channel();
+            let store = Arc::clone(store);
+            let open = Arc::clone(&self.open);
+            std::thread::Builder::new()
+                .name("media-import".into())
+                .spawn(move || importer(store, open, receive))
+                .expect("start the media import thread");
+            send
+        });
+        let id = job.id.clone();
+        if sender.send(job).is_ok() {
+            set_phase(&self.open, &id, ImportPhase::Queued);
+        } else {
+            set_phase(
+                &self.open,
+                &id,
+                ImportPhase::Failed {
+                    reason: "The import service stopped".into(),
+                },
+            );
+        }
+    }
+}
+
+/// The stream rate renders are made for: the saved startup sound's, else 48 kHz.
+fn stream_rate(shared: &Shared) -> u32 {
+    use crate::audio_boot::Choice;
+    match shared.boot.snapshot() {
+        Ok(Some(Choice::Native { settings, .. })) => settings.stream.input.sample_rate,
+        Ok(Some(Choice::Mixed { settings })) => settings.stream.input.sample_rate,
+        Ok(Some(Choice::Effects { settings })) => settings.stream.input.sample_rate,
+        _ => 48_000,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -198,7 +356,11 @@ impl Uploads {
     fn sweep(&self, store: &crate::media::Store) {
         let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         open.retain(|id, upload| {
-            let keep = upload.writing || upload.touched.elapsed() < STALE;
+            let busy = matches!(
+                upload.state.import,
+                ImportPhase::Queued | ImportPhase::Preparing { .. }
+            );
+            let keep = upload.writing || busy || upload.touched.elapsed() < STALE;
             if !keep && let Ok(path) = store.upload_part(id) {
                 let _ = std::fs::remove_file(path);
             }
@@ -245,7 +407,16 @@ pub(crate) async fn create_upload(
             .open
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        if open.len() >= MAX_OPEN_UPLOADS {
+        let active = open
+            .values()
+            .filter(|u| {
+                !matches!(
+                    u.state.import,
+                    ImportPhase::Ready { .. } | ImportPhase::Failed { .. }
+                )
+            })
+            .count();
+        if active >= MAX_OPEN_UPLOADS {
             return failure(
                 StatusCode::TOO_MANY_REQUESTS,
                 "Too many uploads in progress; finish or cancel one",
@@ -271,6 +442,7 @@ pub(crate) async fn create_upload(
         size: request.size,
         offset: 0,
         complete: false,
+        import: ImportPhase::Receiving,
     };
     shared
         .uploads
@@ -383,7 +555,183 @@ pub(crate) async fn append_chunk(
     }
     upload.state.offset += length;
     upload.state.complete = upload.state.offset == upload.state.size;
-    no_store(StatusCode::OK, upload.state.clone())
+    let job = upload.state.complete.then(|| Job {
+        id: id.clone(),
+        request: crate::media_import::ImportRequest {
+            title: upload.state.title.clone(),
+            wav: upload.state.format == UploadFormat::Wav,
+            kind: crate::media::MediaKind::Backing,
+            rate: stream_rate(&shared),
+        },
+        copy: false,
+    });
+    drop(open);
+    if let (Some(job), Ok(store)) = (job, store_of(&shared)) {
+        shared.uploads.enqueue(&store, job);
+    }
+    match shared.uploads.get(&id) {
+        Some(state) => no_store(StatusCode::OK, state),
+        None => failure(StatusCode::NOT_FOUND, "That upload was cancelled"),
+    }
+}
+
+fn store_of(shared: &Shared) -> Result<Arc<crate::media::Store>, ()> {
+    shared.media.as_ref().map(Arc::clone).map_err(|_| ())
+}
+
+/// Continues a duplicate as a second copy.
+pub(crate) async fn import_copy(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<String>,
+    body: Result<Json<ImportChoice>, JsonRejection>,
+) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
+    let Ok(Json(ImportChoice { copy: true })) = body else {
+        return failure(
+            StatusCode::BAD_REQUEST,
+            "Choose to import a copy, or cancel",
+        );
+    };
+    let store = match store(&shared) {
+        Ok(store) => store,
+        Err(response) => return *response,
+    };
+    let job = {
+        let open = shared
+            .uploads
+            .open
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let Some(upload) = open.get(&id) else {
+            return failure(
+                StatusCode::NOT_FOUND,
+                "That upload has expired; start again",
+            );
+        };
+        if !matches!(upload.state.import, ImportPhase::Duplicate { .. }) {
+            return failure(
+                StatusCode::CONFLICT,
+                "Only a duplicate waits for this choice",
+            );
+        }
+        Job {
+            id: id.clone(),
+            request: crate::media_import::ImportRequest {
+                title: upload.state.title.clone(),
+                wav: upload.state.format == UploadFormat::Wav,
+                kind: crate::media::MediaKind::Backing,
+                rate: stream_rate(&shared),
+            },
+            copy: true,
+        }
+    };
+    shared.uploads.enqueue(&store, job);
+    match shared.uploads.get(&id) {
+        Some(state) => no_store(StatusCode::ACCEPTED, state),
+        None => failure(StatusCode::NOT_FOUND, "That upload was cancelled"),
+    }
+}
+
+pub(crate) async fn update_asset(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<String>,
+    body: Result<Json<AssetUpdate>, JsonRejection>,
+) -> Response {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return crate::protect::locked(reason).into_response();
+    }
+    let Ok(Json(update)) = body else {
+        return failure(StatusCode::BAD_REQUEST, "Send a new title or track trim");
+    };
+    let store = match store(&shared) {
+        Ok(store) => store,
+        Err(response) => return *response,
+    };
+    match blocking(move || {
+        store.update(&id, |manifest| {
+            if let Some(title) = update.title {
+                manifest.title = title.trim().to_owned();
+            }
+            if let Some(trim) = update.trim_db {
+                manifest.playback.trim_db = (trim * 10.0).round() / 10.0;
+            }
+        })
+    })
+    .await
+    {
+        Ok(manifest) => no_store(StatusCode::OK, manifest),
+        Err(response) => *response,
+    }
+}
+
+/// The original file, byte for byte, named after the asset's title.
+pub(crate) async fn download(
+    State(shared): State<Arc<Shared>>,
+    Path(id): Path<String>,
+) -> Response {
+    let store = match store(&shared) {
+        Ok(store) => store,
+        Err(response) => return *response,
+    };
+    let lookup = blocking(move || {
+        let manifest = store.manifest(&id)?;
+        let source = manifest.source.clone().ok_or(MediaError::NotFound)?;
+        let path = store.file(&id, &source.file)?;
+        Ok((manifest, source, path))
+    })
+    .await;
+    let (manifest, source, path) = match lookup {
+        Ok(found) => found,
+        Err(response) => return *response,
+    };
+    let Ok(mut file) = tokio::fs::File::open(&path).await else {
+        return failure(StatusCode::NOT_FOUND, "That file is no longer in Library");
+    };
+    let stream = async_stream::stream! {
+        use tokio::io::AsyncReadExt;
+        let mut buffer = vec![0_u8; 64 * 1024];
+        loop {
+            match file.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(length) => yield Ok::<Bytes, std::io::Error>(Bytes::copy_from_slice(&buffer[..length])),
+                Err(error) => {
+                    yield Err(error);
+                    return;
+                }
+            }
+        }
+    };
+    let safe: String = manifest
+        .title
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || " -_().".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let (mime, ext) = if source.container == "mp3" {
+        ("audio/mpeg", "mp3")
+    } else {
+        ("audio/wav", "wav")
+    };
+    (
+        [
+            (header::CONTENT_TYPE, mime.to_owned()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{}.{ext}\"", safe.trim()),
+            ),
+            (header::CONTENT_LENGTH, source.bytes.to_string()),
+            (header::CACHE_CONTROL, "no-store".to_owned()),
+        ],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
 }
 
 pub(crate) async fn cancel_upload(

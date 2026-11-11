@@ -40,3 +40,28 @@ test('HTTPS notice inventory matches the locked versions and original files', ()
     }
   }
 });
+
+test('Symphonia notice matches the locked versions and the MPL-2.0 text', () => {
+  const base = new URL('../licenses/symphonia/', import.meta.url);
+  const manifest = JSON.parse(
+    readFileSync(new URL('manifest.json', base), 'utf8'),
+  );
+  const lock = readFileSync(new URL('../Cargo.lock', import.meta.url), 'utf8');
+  for (const [name, version] of Object.entries(manifest.crates))
+    assert.ok(
+      lock.includes(`name = "${name}"\nversion = "${version}"`),
+      `${name} notice needs review`,
+    );
+  const text = readFileSync(new URL(manifest.license.file, base));
+  assert.equal(
+    createHash('sha256').update(text).digest('hex'),
+    manifest.license.sha256,
+  );
+  const deny = readFileSync(new URL('../deny.toml', import.meta.url), 'utf8');
+  for (const [name, version] of Object.entries(manifest.crates))
+    assert.ok(
+      deny.includes(
+        `name = "${name}", version = "=${version}", allow = ["MPL-2.0"]`,
+      ),
+    );
+});

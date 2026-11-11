@@ -3595,3 +3595,134 @@ async fn media_without_a_directory_is_unavailable_and_creates_nothing() {
     let _ = std::fs::remove_file(&mapping);
     let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
 }
+
+#[tokio::test]
+async fn an_uploaded_mp3_imports_detects_duplicates_and_round_trips_its_original() {
+    let (url, task, mapping) = start_with(true, true).await;
+    let media = mapping.with_extension("media");
+    let client = reqwest::Client::new();
+    let bytes = include_bytes!("fixtures/media/tone-44k-mono-vbr.mp3").to_vec();
+    let upload = |name: &'static str| {
+        let client = client.clone();
+        let url = url.clone();
+        let bytes = bytes.clone();
+        async move {
+            let created: Value = client
+                .post(format!("{url}/media/uploads"))
+                .json(&json!({ "name": name, "size": bytes.len() }))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            let id = created["id"].as_str().unwrap().to_owned();
+            let mut offset = 0;
+            for chunk in bytes.chunks(2000) {
+                let state: Value = client
+                    .put(format!("{url}/media/uploads/{id}?offset={offset}"))
+                    .body(chunk.to_vec())
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                offset += chunk.len();
+                assert_eq!(state["offset"], offset);
+            }
+            id
+        }
+    };
+    let settle = |id: String| {
+        let url = url.clone();
+        async move {
+            for _ in 0..200 {
+                let state: Value = reqwest::get(format!("{url}/media/uploads/{id}"))
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap();
+                let phase = state["import"]["state"].as_str().unwrap().to_owned();
+                if !["receiving", "queued", "preparing"].contains(&phase.as_str()) {
+                    return state["import"].clone();
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            }
+            panic!("import did not finish");
+        }
+    };
+    let first = settle(upload("Rehearsal 01.mp3").await).await;
+    assert_eq!(first["state"], "ready", "{first}");
+    let asset = first["asset"].as_str().unwrap().to_owned();
+    let library: Value = reqwest::get(format!("{url}/media"))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let listed = &library["assets"][0];
+    assert_eq!(listed["id"], asset.as_str());
+    assert_eq!(listed["title"], "Rehearsal 01");
+    assert_eq!(listed["renders"][0]["rate"], 48000);
+    assert_eq!(listed["source"]["channels"], 1);
+
+    // The same bytes again wait for a choice, then import as a copy.
+    let again = upload("Rehearsal 01 (phone).mp3").await;
+    let duplicate = settle(again.clone()).await;
+    assert_eq!(duplicate["state"], "duplicate");
+    assert_eq!(duplicate["existing"], asset.as_str());
+    let copied = client
+        .post(format!("{url}/media/uploads/{again}/import"))
+        .json(&json!({ "copy": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(copied.status(), 202);
+    let copy = settle(again).await;
+    assert_eq!(copy["state"], "ready");
+    assert_ne!(copy["asset"], asset.as_str());
+
+    let renamed: Value = client
+        .patch(format!("{url}/media/assets/{asset}"))
+        .json(&json!({ "title": "Song A", "trimDb": -4.25 }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(renamed["title"], "Song A");
+    assert_eq!(renamed["playback"]["trim_db"], -4.3);
+    let bad = client
+        .patch(format!("{url}/media/assets/{asset}"))
+        .json(&json!({ "trimDb": 12.0 }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 422);
+
+    let download = reqwest::get(format!("{url}/media/assets/{asset}/original"))
+        .await
+        .unwrap();
+    assert_eq!(download.status(), 200);
+    assert_eq!(
+        download.headers()["content-disposition"],
+        "attachment; filename=\"Song A.mp3\""
+    );
+    assert_eq!(download.bytes().await.unwrap().to_vec(), bytes);
+    assert_eq!(
+        client
+            .delete(format!("{url}/media/assets/{asset}"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    task.abort();
+    let _ = std::fs::remove_file(&mapping);
+    let _ = std::fs::remove_dir_all(media);
+    let _ = std::fs::remove_dir_all(mapping.with_extension("presets"));
+}

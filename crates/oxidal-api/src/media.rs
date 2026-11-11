@@ -205,13 +205,6 @@ pub(crate) fn valid_id(id: &str) -> bool {
 }
 
 /// UTC now as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "stamps imported assets; used by the import pipeline (9.11.2)"
-    )
-)]
 pub(crate) fn now_iso() -> String {
     let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

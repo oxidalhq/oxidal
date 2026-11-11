@@ -480,6 +480,33 @@ export type LibraryAction =
 export type MediaKind = "backing" | "di" | "reamp";
 export type UploadFormat = "wav" | "mp3";
 /**
+ * Where a received file is in the import pipeline.
+ */
+export type ImportPhase =
+  | {
+      state: "receiving";
+    }
+  | {
+      state: "queued";
+    }
+  | {
+      progress: number;
+      state: "preparing";
+    }
+  | {
+      asset: string;
+      state: "ready";
+    }
+  | {
+      existing: string;
+      state: "duplicate";
+      title: string;
+    }
+  | {
+      reason: string;
+      state: "failed";
+    };
+/**
  * Which kind of preset assignment a [`Disabled`] marker refers to.
  */
 export type AssignmentKind = "scene" | "branch" | "parameter";
@@ -769,6 +796,7 @@ export interface Contract {
   local_model: LocalModel;
   local_model_page: LocalModelPage;
   lv2_catalog: PluginCatalog;
+  media_asset_update: AssetUpdate;
   media_library: MediaLibrary;
   media_upload_request: UploadRequest;
   media_upload_state: UploadState;
@@ -1881,6 +1909,13 @@ export interface Port {
   toggled: boolean;
 }
 /**
+ * Rename or re-trim an asset; files never change.
+ */
+export interface AssetUpdate {
+  title?: string | null;
+  trimDb?: number | null;
+}
+/**
  * The Library view of the store.
  */
 export interface MediaLibrary {
@@ -1967,6 +2002,7 @@ export interface UploadState {
   complete: boolean;
   format: UploadFormat;
   id: string;
+  import: ImportPhase;
   /**
    * Bytes received and confirmed; the next chunk must start here.
    */

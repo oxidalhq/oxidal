@@ -17,6 +17,7 @@ mod library_removal;
 mod local_models;
 pub mod media;
 mod media_api;
+mod media_import;
 mod midi_map;
 mod midi_recall;
 mod monitor;
@@ -129,6 +130,7 @@ pub struct Contract {
     pub media_library: media_api::MediaLibrary,
     pub media_upload_request: media_api::UploadRequest,
     pub media_upload_state: media_api::UploadState,
+    pub media_asset_update: media_api::AssetUpdate,
     pub removal_preview: oxidal_presets::RemovalPreview,
     pub protect_state: protect::ProtectState,
     pub keep_ready: keep_ready::KeepReady,
@@ -585,8 +587,10 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/media", get(media_api::library))
         .route(
             "/media/assets/{id}",
-            axum::routing::delete(media_api::remove),
+            axum::routing::delete(media_api::remove).patch(media_api::update_asset),
         )
+        .route("/media/assets/{id}/original", get(media_api::download))
+        .route("/media/uploads/{id}/import", post(media_api::import_copy))
         .route("/media/uploads", post(media_api::create_upload))
         .route(
             "/media/uploads/{id}",
