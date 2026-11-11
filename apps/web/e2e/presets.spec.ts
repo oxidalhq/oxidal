@@ -11,6 +11,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Lv2Plugin } from '../src/api';
+import { lv2Effect } from '../src/rigDraft';
+import { buildRoute } from '../src/rigRoute';
 const fixtures = new URL(
   '../../../crates/oxidal-presets/tests/fixtures/',
   import.meta.url,
@@ -4798,6 +4801,161 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
     path: info.outputPath('mixed-routing-landscape.png'),
     fullPage: true,
   });
+});
+
+test('mixed rig authoring keeps a long selected block name on its own row beside four routing buttons', async ({
+  page,
+  request,
+}, info) => {
+  // Presentation fixture (S-14): three paths, so all four routing buttons show.
+  const plugin = {
+    name: 'Stereo effect',
+    uri: 'urn:fixture:stereo',
+    unsupported: null,
+    ports: [
+      ['in_l', true],
+      ['out_l', false],
+      ['in_r', true],
+      ['out_r', false],
+    ].map(([symbol, input], index) => ({
+      index,
+      symbol,
+      audio: true,
+      control: false,
+      atom: false,
+      input,
+      output: !input,
+      integer: false,
+      toggled: false,
+      logarithmic: false,
+      latency: false,
+      minimum: null,
+      maximum: null,
+      default: null,
+    })),
+  } as Lv2Plugin;
+  const long = 'x42-comp - Dynamic Compressor with a long readable name';
+  const effect = (id: string, name = id) => ({
+    ...lv2Effect(plugin),
+    id,
+    name,
+  });
+  const built = buildRoute(
+    'fixture',
+    'Three paths',
+    [
+      {
+        kind: 'split',
+        split: 'split',
+        merge: 'merge',
+        gains: [1, 1, 1],
+        branches: [[effect('clean')], [effect('dirt', long)], [effect('wash')]],
+      },
+    ],
+    'prof',
+  );
+  const manifest = JSON.parse(built.manifest_json);
+  const baseline = await (await request.get('/api/v1/rig-audio')).json();
+  const input = {
+    endpoint: 'default',
+    direction: 'capture',
+    sample_rate: 48000,
+    channels: 2,
+    format: 's16',
+    period_frames: 128,
+    periods: 3,
+  };
+  const state = {
+    ...baseline,
+    phase: 'running',
+    device_owned: true,
+    configured: {
+      revision: 'fixture',
+      stream: {
+        input,
+        output: { ...input, direction: 'playback' },
+        input_map: [0, 1],
+        output_map: [0, 1],
+      },
+    },
+    control: {
+      session: 'sound',
+      revision: 1,
+      source_revision: 'fixture',
+      modified: false,
+      buffer_bytes: 1024,
+      latency_frames: 0,
+      controls: [
+        ...[0, 1, 2].flatMap((port) =>
+          ['left', 'right'].map((side) => ({
+            target: { kind: 'merge', node: `merge-${side}`, port },
+            label: 'Level',
+            display: '100%',
+            toggle: false,
+            value: 1,
+            minimum: 0,
+            maximum: 4,
+            integer: false,
+            logarithmic: false,
+          })),
+        ),
+        ...['clean', 'dirt', 'wash'].map((node) => ({
+          target: { kind: 'bypass', node },
+          display: 'Off',
+          label: 'Bypass',
+          value: 0,
+          minimum: 0,
+          maximum: 1,
+          integer: true,
+          toggle: true,
+          logarithmic: false,
+        })),
+      ],
+    },
+  };
+  await page.route('**/api/v1/rig-audio', (route) =>
+    route.fulfill({ json: state }),
+  );
+  await page.route('**/api/v1/presets/rigs/fixture', (route) =>
+    route.fulfill({ json: { revision: 'fixture', manifest } }),
+  );
+  await page.goto('/');
+  if (info.project.name === 'boox-air3c') await setDisplayMode(page, 'epaper');
+  const rig = page.getByRole('region', { name: 'Sounding mixed rig' });
+  for (const width of [345, 690, 930]) {
+    await page.setViewportSize({ width, height: 900 });
+    await rig.getByRole('button', { name: long, exact: true }).click();
+    const selected = rig.locator('[aria-label="Selected block"]');
+    const routing = selected.getByRole('group', {
+      name: `Routing for ${long}`,
+    });
+    for (const name of [
+      'Add parallel path',
+      'Add branch',
+      'Copy branch',
+      'Remove branch',
+    ])
+      await expect(routing.getByRole('button', { name })).toBeVisible();
+    const title = selected.locator('.selected-node-title');
+    const titleBox = (await title.boundingBox())!;
+    const selectedBox = (await selected.boundingBox())!;
+    const routingBox = (await routing.boundingBox())!;
+    // Its own row, the panel's full width, one line high, never per letter.
+    expect(titleBox.width).toBeGreaterThan(selectedBox.width - 2);
+    expect(titleBox.height).toBeLessThan(48);
+    expect(routingBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    await expect(title).toHaveCSS('text-overflow', 'ellipsis');
+    await expect(title).toHaveAttribute('title', long);
+    expect(
+      await page.evaluate(
+        () => window.document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`mixed-selected-long-name-${width}.png`),
+      fullPage: true,
+    });
+  }
 });
 
 test('playback lifecycle distinguishes loading and offers readable buffer choices', async ({
