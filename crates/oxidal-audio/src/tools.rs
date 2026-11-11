@@ -189,11 +189,17 @@ impl HostLevels {
     fn input_gain(&self) -> f32 {
         10f32.powf(self.input_trim_db / 20.0)
     }
-    fn output_gain(&self) -> f32 {
+    /// Preset and scene boost: part of the guitar signal, applied before the
+    /// session mix so a backing track never receives it.
+    fn tone_gain(&self) -> f32 {
+        10f32.powf(self.boost_db / 20.0)
+    }
+    /// Master level after the mix and venue EQ; −60 dB is silent.
+    fn master_gain(&self) -> f32 {
         if self.output_level_db <= Self::OUTPUT_RANGE.0 {
             0.0
         } else {
-            10f32.powf((self.output_level_db + self.boost_db) / 20.0)
+            10f32.powf(self.output_level_db / 20.0)
         }
     }
 }
@@ -222,7 +228,8 @@ pub struct HostSignal {
     test_active: bool,
     levels: HostLevels,
     input_gain: Glide,
-    output_gain: Glide,
+    tone_gain: Glide,
+    master_gain: Glide,
     monitor_gain: Glide,
     gate: Gate,
     reference: crate::reference::Reference,
@@ -230,6 +237,9 @@ pub struct HostSignal {
     source_underruns: u64,
     raw_tap: Option<crate::session_media::Producer>,
     raw_dropped: u64,
+    session_return: Option<crate::session_media::Consumer>,
+    return_gain: Glide,
+    return_underruns: u64,
     venue: crate::venue::VenueEq,
 }
 /// Downward gate on the trimmed guitar signal: opens within about 1 ms, holds
@@ -333,12 +343,26 @@ impl Glide {
             return;
         }
         for (l, r) in left.iter_mut().zip(right.iter_mut()) {
-            self.current += (self.target - self.current) * self.coefficient;
+            self.step();
             *l *= self.current;
             *r *= self.current;
         }
         if (self.current - self.target).abs() < 1e-6 {
             self.current = self.target;
+        }
+    }
+    /// One frame of glide. In f32 the step can round to nothing short of
+    /// the target (about 5e-5 away near 2.0); land on it then, or the glide
+    /// would stall there and never take the fast path.
+    #[inline]
+    fn step(&mut self) {
+        if self.current != self.target {
+            let next = self.current + (self.target - self.current) * self.coefficient;
+            self.current = if next == self.current {
+                self.target
+            } else {
+                next
+            };
         }
     }
 }
@@ -352,7 +376,8 @@ impl HostSignal {
             test_active: false,
             levels,
             input_gain: Glide::new(rate, levels.input_gain()),
-            output_gain: Glide::new(rate, levels.output_gain()),
+            tone_gain: Glide::new(rate, levels.tone_gain()),
+            master_gain: Glide::new(rate, levels.master_gain()),
             monitor_gain: Glide::new(rate, 1.0),
             gate: Gate::new(rate, levels.gate_db),
             reference: crate::reference::Reference::new(rate),
@@ -360,6 +385,9 @@ impl HostSignal {
             source_underruns: 0,
             raw_tap: None,
             raw_dropped: 0,
+            session_return: None,
+            return_gain: Glide::new(rate, 1.0),
+            return_underruns: 0,
             venue: crate::venue::VenueEq::new(rate),
         }
     }
@@ -379,6 +407,25 @@ impl HostSignal {
         tap: Option<crate::session_media::Producer>,
     ) -> Option<crate::session_media::Producer> {
         std::mem::replace(&mut self.raw_tap, tap)
+    }
+    /// Connects the session mix return: interleaved stereo frames (left,
+    /// right) added after the rig's tone gain and before venue EQ. Returns the
+    /// previous return for the caller to release off the audio thread.
+    pub fn set_session_return(
+        &mut self,
+        frames: Option<crate::session_media::Consumer>,
+    ) -> Option<crate::session_media::Consumer> {
+        std::mem::replace(&mut self.session_return, frames)
+    }
+    /// Level of the session mix return, gliding like every other level.
+    pub fn set_return_level(&mut self, gain: f32) {
+        if gain.is_finite() && (0.0..=4.0).contains(&gain) {
+            self.return_gain.target = gain;
+        }
+    }
+    /// Blocks in which the session return ran dry and silence was mixed.
+    pub fn return_underruns(&self) -> u64 {
+        self.return_underruns
     }
     pub fn set_venue_eq(&mut self, bands: &[crate::venue::VenueBand], bypass: bool) {
         self.venue.set(bands);
@@ -430,7 +477,8 @@ impl HostSignal {
                 if levels.validate().is_ok() {
                     self.levels = levels;
                     self.input_gain.target = levels.input_gain();
-                    self.output_gain.target = levels.output_gain();
+                    self.tone_gain.target = levels.tone_gain();
+                    self.master_gain.target = levels.master_gain();
                     self.gate.set(levels.gate_db);
                 }
             }
@@ -491,10 +539,13 @@ impl HostSignal {
             right.fill(0.0);
             return;
         }
+        // [DES-SIGNAL]: rig → tone gain → (W0) → session mix → venue EQ →
+        // mono fold → Master → Mute.
+        self.tone_gain.apply(left, right);
         self.test_tone(left, right);
-        self.output_gain.apply(left, right);
-        // Venue correction sits after the rig (and, later, the session mix)
-        // and before mono fold, so a mono PA hears the corrected sum.
+        self.mix_return(left, right);
+        // Venue correction sits after the mix and before mono fold, so a mono
+        // PA hears the corrected sum.
         self.venue.apply(left, right);
         if self.levels.mono {
             for (l, r) in left.iter_mut().zip(right.iter_mut()) {
@@ -503,7 +554,34 @@ impl HostSignal {
                 *r = sum;
             }
         }
+        self.master_gain.apply(left, right);
         self.monitor_gain.apply(left, right);
+    }
+    fn mix_return(&mut self, left: &mut [f32], right: &mut [f32]) {
+        let Some(frames) = &mut self.session_return else {
+            return;
+        };
+        // Pop in stack-sized chunks: no allocation, any block size.
+        let mut chunk = [0.0f32; 256];
+        let mut short = false;
+        for (left, right) in left.chunks_mut(128).zip(right.chunks_mut(128)) {
+            let want = left.len() * 2;
+            let got = frames.pop(&mut chunk[..want]);
+            if got < want {
+                chunk[got..want].fill(0.0);
+                short = true;
+            }
+            for (i, (l, r)) in left.iter_mut().zip(right.iter_mut()).enumerate() {
+                // The glide is per frame, as in Glide::apply.
+                self.return_gain.step();
+                let g = self.return_gain.current;
+                *l += chunk[2 * i] * g;
+                *r += chunk[2 * i + 1] * g;
+            }
+        }
+        if short {
+            self.return_underruns += 1;
+        }
     }
     fn test_tone(&mut self, left: &mut [f32], right: &mut [f32]) {
         if !self.test_active {
@@ -786,7 +864,7 @@ mod host_tests {
             boost_db: 12.0,
             ..HostLevels::default()
         };
-        assert_eq!(muted.output_gain(), 0.0);
+        assert_eq!(muted.master_gain(), 0.0);
         assert!(
             HostLevels {
                 boost_db: 24.5,
@@ -948,6 +1026,231 @@ mod host_tests {
         let expected: Vec<f32> = l.iter().map(|v| v * 0.5).collect();
         signal.output(&mut l, &mut r);
         assert_eq!(l.to_vec(), expected);
+    }
+    /// The output chain before the CF-01 split: one glide of Master plus boost,
+    /// then mono fold, then the mute glide.
+    struct BeforeSplit {
+        gain: Glide,
+        monitor: Glide,
+        mono: bool,
+    }
+    impl BeforeSplit {
+        fn combined(levels: &HostLevels) -> f32 {
+            if levels.output_level_db <= HostLevels::OUTPUT_RANGE.0 {
+                0.0
+            } else {
+                10f32.powf((levels.output_level_db + levels.boost_db) / 20.0)
+            }
+        }
+        fn output(&mut self, left: &mut [f32], right: &mut [f32]) {
+            self.gain.apply(left, right);
+            if self.mono {
+                for (l, r) in left.iter_mut().zip(right.iter_mut()) {
+                    let sum = (*l + *r) * 0.5;
+                    *l = sum;
+                    *r = sum;
+                }
+            }
+            self.monitor.apply(left, right);
+        }
+    }
+    #[test]
+    fn the_default_path_matches_the_chain_before_the_split() {
+        let rate = 48000;
+        let start = HostLevels {
+            output_level_db: -3.0,
+            boost_db: 4.5,
+            ..HostLevels::default()
+        };
+        let mut signal = HostSignal::new(rate, true, start);
+        let mut before = BeforeSplit {
+            gain: Glide::new(rate, BeforeSplit::combined(&start)),
+            monitor: Glide::new(rate, 1.0),
+            mono: false,
+        };
+        // Master moves, mono flips and mute ramps in and out, with a constant
+        // preset boost: the split is the same product, glide for glide.
+        let script: [(usize, Option<HostLevels>, Option<bool>); 7] = [
+            (0, None, None),
+            (
+                40,
+                Some(HostLevels {
+                    output_level_db: -12.0,
+                    ..start
+                }),
+                None,
+            ),
+            (
+                90,
+                Some(HostLevels {
+                    mono: true,
+                    output_level_db: -12.0,
+                    ..start
+                }),
+                None,
+            ),
+            (140, None, Some(true)),
+            (200, None, Some(false)),
+            (
+                260,
+                Some(HostLevels {
+                    output_level_db: -60.0,
+                    ..start
+                }),
+                None,
+            ),
+            (
+                330,
+                Some(HostLevels {
+                    output_level_db: 6.0,
+                    ..start
+                }),
+                None,
+            ),
+        ];
+        let mut worst = 0.0f32;
+        let mut settled = 0.0f32;
+        for block in 0..600usize {
+            for (at, levels, mute) in &script {
+                if *at == block {
+                    if let Some(levels) = levels {
+                        signal.command(HostUtility::Levels { levels: *levels });
+                        before.gain.target = BeforeSplit::combined(levels);
+                        before.mono = levels.mono;
+                    }
+                    if let Some(mute) = mute {
+                        signal.command(HostUtility::OutputMute { enabled: *mute });
+                        before.monitor.target = if *mute { 0.0 } else { 1.0 };
+                    }
+                }
+            }
+            let mut l: Vec<f32> = (0..96)
+                .map(|i| ((block * 96 + i) as f32 * 0.031).sin() * 0.7)
+                .collect();
+            let mut r: Vec<f32> = l.iter().map(|v| v * -0.4).collect();
+            let (mut bl, mut br) = (l.clone(), r.clone());
+            signal.output(&mut l, &mut r);
+            before.output(&mut bl, &mut br);
+            for (a, b) in l.iter().chain(&r).zip(bl.iter().chain(&br)) {
+                worst = worst.max((a - b).abs());
+                if block >= 500 {
+                    settled = settled.max((a - b).abs());
+                }
+            }
+        }
+        // Inside ramps the two glides land on their targets on slightly
+        // different frames: at most about −90 dB below a 2.3 peak.
+        assert!(worst < 1e-4, "{worst}");
+        // Once settled the split is the same product, to float rounding.
+        assert!(settled < 1e-6, "{settled}");
+    }
+    #[test]
+    fn a_boost_change_differs_only_inside_its_ramp() {
+        let rate = 48000;
+        let start = HostLevels::default();
+        let mut signal = HostSignal::new(rate, true, start);
+        let mut before = BeforeSplit {
+            gain: Glide::new(rate, 1.0),
+            monitor: Glide::new(rate, 1.0),
+            mono: false,
+        };
+        let boosted = HostLevels {
+            boost_db: 6.0,
+            output_level_db: -6.0,
+            ..start
+        };
+        signal.command(HostUtility::Levels { levels: boosted });
+        before.gain.target = BeforeSplit::combined(&boosted);
+        let mut during = 0.0f32;
+        let mut after = 0.0f32;
+        for block in 0..200 {
+            let (mut l, mut r) = ([0.5f32; 96], [0.5f32; 96]);
+            let (mut bl, mut br) = (l, r);
+            signal.output(&mut l, &mut r);
+            before.output(&mut bl, &mut br);
+            let diff = l
+                .iter()
+                .zip(&bl)
+                .fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+            if block < 50 {
+                during = during.max(diff);
+            } else if block >= 100 {
+                after = after.max(diff);
+            }
+        }
+        // Two 10 ms glides in series are a little slower than one; both end
+        // at the same level.
+        assert!(during < 0.1, "{during}");
+        assert!(after < 1e-6, "{after}");
+    }
+    #[test]
+    fn the_session_return_skips_boost_and_follows_master_and_mute() {
+        use crate::session_media::ring;
+        let rate = 48000;
+        let levels = HostLevels {
+            boost_db: 6.0,
+            ..HostLevels::default()
+        };
+        let mut signal = HostSignal::new(rate, true, levels);
+        let (mut tx, rx) = ring(4096);
+        assert!(signal.set_session_return(Some(rx)).is_none());
+        let frame = |tx: &mut crate::session_media::Producer, n: usize| {
+            for _ in 0..n {
+                tx.push(&[0.25, -0.125]);
+            }
+        };
+        // Rig silent, track at unity: the track is not boosted.
+        frame(&mut tx, 64);
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        signal.output(&mut l, &mut r);
+        assert_eq!((l, r), ([0.25; 64], [-0.125; 64]));
+        // The rig is boosted and the track is added after it.
+        frame(&mut tx, 64);
+        let (mut l, mut r) = ([0.1; 64], [0.1; 64]);
+        signal.output(&mut l, &mut r);
+        let boost = 10f32.powf(6.0 / 20.0);
+        assert!((l[0] - (0.1 * boost + 0.25)).abs() < 1e-6);
+        assert!((r[0] - (0.1 * boost - 0.125)).abs() < 1e-6);
+        // Master −60 dB silences the track too; Mute also does.
+        signal.command(HostUtility::Levels {
+            levels: HostLevels {
+                output_level_db: -60.0,
+                ..levels
+            },
+        });
+        for _ in 0..250 {
+            frame(&mut tx, 64);
+            let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+            signal.output(&mut l, &mut r);
+        }
+        frame(&mut tx, 64);
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        signal.output(&mut l, &mut r);
+        assert!(l.iter().chain(&r).all(|v| v.abs() < 1e-5));
+        // A dry return mixes silence and is counted; the rig keeps playing.
+        signal.command(HostUtility::Levels { levels });
+        for _ in 0..250 {
+            let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+            signal.output(&mut l, &mut r);
+        }
+        let underruns = signal.return_underruns();
+        assert!(underruns >= 250);
+        let (mut l, mut r) = ([0.1; 64], [0.1; 64]);
+        signal.output(&mut l, &mut r);
+        assert!((l[63] - 0.1 * boost).abs() < 1e-5);
+        // Return level glides; disconnecting hands the ring back.
+        signal.set_return_level(0.5);
+        signal.set_return_level(f32::NAN);
+        for _ in 0..250 {
+            frame(&mut tx, 64);
+            let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+            signal.output(&mut l, &mut r);
+        }
+        frame(&mut tx, 64);
+        let (mut l, mut r) = ([0.0; 64], [0.0; 64]);
+        signal.output(&mut l, &mut r);
+        assert!((l[63] - 0.125).abs() < 1e-5);
+        assert!(signal.set_session_return(None).is_some());
     }
     #[test]
     fn mono_sums_both_sides_and_cancels_opposite_polarity() {
