@@ -5341,6 +5341,52 @@ test('device portrait permanent deletion previews a disposable preset and keeps 
   expect(removed.ok(), await removed.text()).toBe(true);
 });
 
+test('device portrait TONE3000 original deletes from its row after a review', async ({
+  page,
+  request,
+}) => {
+  const bytes = Buffer.from(
+    readFileSync(new URL('authored-legacy.t3kpreset', fixtures)),
+  );
+  const offset = bytes.indexOf(Buffer.from('Fixture'));
+  expect(offset).toBeGreaterThan(0);
+  bytes.write('DelOrg', offset, 'utf8');
+  const imported = await request.post('/api/v1/presets', {
+    data: bytes,
+    headers: { 'Content-Type': 'application/octet-stream' },
+  });
+  expect(imported.ok()).toBe(true);
+  const preset = await imported.json();
+  await page.goto('/#library/tone3000');
+  const row = page.locator(`[data-testid="preset-${preset.sha256}"]`);
+  await row.getByRole('button', { name: /^More for / }).click();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  const dialog = page.getByRole('dialog', {
+    name: 'Delete preset',
+    exact: true,
+  });
+  await expect(
+    dialog.getByRole('button', { name: 'Delete permanently', exact: true }),
+  ).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(
+    (await request.get(`/api/v1/presets/${preset.sha256}/original`)).ok(),
+  ).toBe(true);
+  await row.getByRole('button', { name: /^More for / }).click();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await dialog
+    .getByRole('button', { name: 'Delete permanently', exact: true })
+    .click();
+  await expect(
+    dialog.getByText('Preset deleted.', { exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  expect(
+    (await request.get(`/api/v1/presets/${preset.sha256}/original`)).ok(),
+  ).toBe(false);
+});
+
 test('device portrait set-list drag and keyboard order agree with picker and Perform', async ({
   page,
   request,

@@ -281,6 +281,21 @@ export function Library({
                     },
               ]
             : []),
+          ...(!isOwned
+            ? [
+                {
+                  label: 'Delete…',
+                  onSelect: () =>
+                    setMineDialog({
+                      action: 'delete',
+                      kind: 'original',
+                      id,
+                      name,
+                    }),
+                  disabled: !connected || loadingId !== null,
+                },
+              ]
+            : []),
           ...(isOwned
             ? [
                 {
@@ -433,31 +448,33 @@ export function Library({
   ) {
     return (
       <div className="library-search-row">
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">Search presets</span>
-          <MagnifyingGlass
-            aria-hidden="true"
-            size={18}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-          />
-          <input
-            type="search"
-            className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-3 pl-10"
-            placeholder={placeholder}
-            value={value}
-            onChange={(event) => set(event.target.value)}
-          />
-        </label>
-        {value && (
-          <Button
-            variant="ghost"
-            className="w-11 px-0"
-            aria-label="Clear preset search"
-            onClick={() => set('')}
-          >
-            <X aria-hidden="true" />
-          </Button>
-        )}
+        <div className="library-search-field">
+          <label className="relative block min-w-0">
+            <span className="sr-only">Search presets</span>
+            <MagnifyingGlass
+              aria-hidden="true"
+              size={18}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              type="search"
+              className="h-11 w-full min-w-0 rounded-md border border-input bg-card pr-11 pl-10"
+              placeholder={placeholder}
+              value={value}
+              onChange={(event) => set(event.target.value)}
+            />
+          </label>
+          {value && (
+            <Button
+              variant="ghost"
+              className="library-search-clear w-11 px-0"
+              aria-label="Clear preset search"
+              onClick={() => set('')}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          )}
+        </div>
         {extra}
       </div>
     );

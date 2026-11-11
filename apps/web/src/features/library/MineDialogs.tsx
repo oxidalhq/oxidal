@@ -7,7 +7,7 @@ import { DeletePresetDialog } from '../../PresetManagement';
 
 export type MineTarget = {
   action: 'rename' | 'delete';
-  kind: 'rig' | 'owned';
+  kind: 'rig' | 'owned' | 'original';
   id: string;
   name: string;
 };
