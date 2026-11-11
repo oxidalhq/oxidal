@@ -62,7 +62,10 @@ it('has four to eight distinct scenes, one lead lift, mixes that fit', () => {
         : recipe.voices.length;
     const names = recipe.scenes.map((s) => s.name);
     expect(new Set(names).size, recipe.id).toBe(names.length);
-    const mixes = recipe.scenes.map((s) => s.mix.join());
+    // No near-copies: two scenes differ in their mix or in effect settings.
+    const mixes = recipe.scenes.map(
+      (s) => `${s.mix.join()}|${JSON.stringify(s.controls ?? {})}`,
+    );
     expect(new Set(mixes).size, recipe.id).toBe(mixes.length);
     for (const scene of recipe.scenes) expect(scene.mix).toHaveLength(width);
     expect(recipe.scenes[2]!.level, recipe.id).toBeGreaterThan(1);
@@ -106,7 +109,15 @@ it('uses Oxidal Swell in the ambient presets', () => {
       r.genres.includes('Ambient') &&
       JSON.stringify(r).includes('Oxidal Swell'),
   );
-  expect(swelled.length).toBeGreaterThanOrEqual(2);
+  expect(swelled.length).toBeGreaterThanOrEqual(5);
+  // Swell time changes by scene in the presets built around it.
+  for (const id of ['L01', 'L02', 'L08', 'L12']) {
+    const recipe = lv2ShowcaseRecipes.find((r) => r.id === id)!;
+    expect(
+      recipe.scenes.some((s) => s.controls?.swell?.time !== undefined),
+      id,
+    ).toBe(true);
+  }
 });
 
 it('keeps inspiration free of proper names', () => {

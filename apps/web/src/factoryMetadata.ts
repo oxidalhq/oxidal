@@ -165,6 +165,14 @@ export function factoryMetadata(recipe: FactoryRecipe): FactoryMetadata {
   };
 }
 
+/** Shortest text that can name a style and an era, and that can say what
+ * each scene is for. */
+const minimumInspiration = 40;
+const minimumPerformance = 60;
+const placeholderText = /\b(todo|tbd|fixme|placeholder|lorem ipsum)\b/i;
+const unfinishedText = (text: string, minimum: number) =>
+  text.trim().length < minimum || placeholderText.test(text);
+
 /** Problems with a recipe's authored metadata; empty when it is valid. */
 export function validateFactoryMetadata(recipe: FactoryRecipe): string[] {
   const problems: string[] = [];
@@ -194,6 +202,10 @@ export function validateFactoryMetadata(recipe: FactoryRecipe): string[] {
   }
   if (recipe.inspiration.length > 600) problems.push('Inspiration too long');
   if (recipe.performance.length > 800) problems.push('Performance too long');
+  if (unfinishedText(recipe.inspiration, minimumInspiration))
+    problems.push('Inspiration is missing or a placeholder');
+  if (unfinishedText(recipe.performance, minimumPerformance))
+    problems.push('Performance is missing or a placeholder');
   return problems;
 }
 

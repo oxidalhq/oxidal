@@ -4,12 +4,11 @@ import { factoryVoiceIds, factoryVoices } from './factoryVoices.ts';
 /**
  * @see docs/factory-collection.md
  */
-it('records tone ids, titles and tiers for the TONE3000 showcase voices', () => {
+it('records tone ids and tiers for the TONE3000 showcase voices', () => {
   const showcase = factoryVoiceIds.filter((id) => factoryVoices[id].tiers);
   expect(showcase.length).toBeGreaterThanOrEqual(25);
   for (const id of showcase) {
     const voice = factoryVoices[id];
-    expect(voice.title?.length, id).toBeGreaterThan(2);
     expect(voice.tiers!.length).toBeGreaterThan(0);
     expect(voice.captures[0]!.tone).toBeGreaterThan(0);
   }
@@ -18,10 +17,12 @@ it('records tone ids, titles and tiers for the TONE3000 showcase voices', () => 
     expect(factoryVoices[ir].kind).toBe('ir');
 });
 
-it('keeps voice characters free of product names', () => {
+it('stores no provider title and keeps voice characters free of product names', () => {
   const marks =
-    /fender|marshall|vox|mesa|roland|ampeg|darkglass|boss|ibanez|soldano|peavey|friedman|diezel|tube screamer|jcm|ac30|dumble|centaur|sansamp|jhs/i;
-  for (const id of factoryVoiceIds)
-    if (factoryVoices[id].tiers && id !== 'plexi-crunch')
-      expect(factoryVoices[id].character, id).not.toMatch(marks);
+    /fender|marshall|vox|mesa|roland|ampeg|darkglass|boss|ibanez|soldano|peavey|friedman|diezel|tube screamer|jcm|ac30|dumble|centaur|sansamp|jhs|plexi|blackface|rectifier|\b800\b/i;
+  for (const id of factoryVoiceIds) {
+    // A label falls back to the voice's own description of the sound.
+    expect(factoryVoices[id], id).not.toHaveProperty('title');
+    expect(factoryVoices[id].character, id).not.toMatch(marks);
+  }
 });

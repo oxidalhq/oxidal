@@ -32,8 +32,10 @@ export const toolRecipes: FactoryRecipe[] = [
     techniques: ['Pitch', 'Utility'],
     engine: 'hybrid',
     complexity: 'simple',
-    inspiration: 'TODO(WP-C): describe the style and era.',
-    performance: 'TODO(WP-C): describe how the four scenes are used live.',
+    inspiration:
+      'Guitar-as-bass demo recording: an octave-down pitch block into a warm vintage bass stack.',
+    performance:
+      'Octave is the plain octave-down bass. Sub adds a generated octave below for weight, Compressed evens out the notes for recording, and Boost is the sub voice a little louder. Play clean single notes.',
     before: [octave(), nam('bass-vintage')],
     voices: [
       voice('Octave'),
@@ -54,8 +56,10 @@ export const toolRecipes: FactoryRecipe[] = [
     techniques: ['Pitch', 'Utility'],
     engine: 'hybrid',
     complexity: 'layered',
-    inspiration: 'TODO(WP-C): describe the style and era.',
-    performance: 'TODO(WP-C): describe how the four scenes are used live.',
+    inspiration:
+      'Guitar-as-bass for heavy riffs: an octave-down pitch block into a gritty rock bass amp with a fuzz and a sub layer.',
+    performance:
+      'Clean is the octave-down bass amp. Fuzz adds the fuzz for heavy riffs, Sub adds a generated octave below, and Boost is the fuzz voice a little louder. Keep notes short and clear.',
     before: [octave(), nam('bass-grit')],
     voices: [
       voice('Clean'),
@@ -70,14 +74,16 @@ export const toolRecipes: FactoryRecipe[] = [
     name: 'Two Strings',
     era: 'Modern',
     description:
-      'A plexi-style guitar and an octave-down vintage bass played together from one guitar. Switch between guitar, bass, both, and a bass-heavy stack. Two amps run at once.',
+      'A raw stack guitar and an octave-down vintage bass played together from one guitar. Switch between guitar, bass, both, and a bass-heavy stack. Two amps run at once.',
     categories: ['Modern', 'Bass', 'Guitar and bass'],
     genres: ['Bass', 'Classic rock'],
     techniques: ['Pitch', 'Guitar and bass'],
     engine: 'hybrid',
     complexity: 'layered',
-    inspiration: 'TODO(WP-C): describe the style and era.',
-    performance: 'TODO(WP-C): describe how the four scenes are used live.',
+    inspiration:
+      'Two-piece rock bands of the 2000s: one guitar feeding a raw guitar stack and, an octave down, a vintage bass stack.',
+    performance:
+      'Guitar is the guitar stack alone. Bass is the octave-down bass stack alone, Both plays them together, and Bass heavy leans on the bass stack for riffs.',
     before: [],
     voices: [
       voice('Guitar', nam('plexi-crunch')),
@@ -102,8 +108,10 @@ export const toolRecipes: FactoryRecipe[] = [
     techniques: ['Pitch', 'Guitar and bass'],
     engine: 'hybrid',
     complexity: 'layered',
-    inspiration: 'TODO(WP-C): describe the style and era.',
-    performance: 'TODO(WP-C): describe how the four scenes are used live.',
+    inspiration:
+      'Home demo recording: a chorused clean guitar over an octave-down bass with a short echo.',
+    performance:
+      'Guitar is the chorused clean amp alone. Bass is the octave-down bass alone, Duo plays them together, and Bass forward leans on the bass for a fuller low end.',
     before: [],
     voices: [
       voice('Guitar', nam('blackface-clean'), chorus()),

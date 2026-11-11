@@ -112,10 +112,30 @@ describe('recipe metadata', () => {
     });
   });
 
-  it('keeps inspiration and performance text style-only placeholders or short text', () => {
-    for (const recipe of allFactoryRecipes) {
-      expect(recipe.inspiration).not.toBe('');
-      expect(recipe.performance).not.toBe('');
+  it('rejects missing, short and placeholder inspiration and performance text', () => {
+    const base = allFactoryRecipes.find((r) => r.id === 'C01')!;
+    for (const text of [
+      '',
+      '   ',
+      'Warm clean.',
+      'TODO(WP-C): describe the style and era of this sound in a sentence or two.',
+      'Placeholder until the listening pass on the unit is finished and written up.',
+      'tbd: the style, the era and the kind of gear this sound is modelled on',
+    ]) {
+      expect(
+        validateFactoryMetadata({ ...base, inspiration: text }),
+        text,
+      ).toContain('Inspiration is missing or a placeholder');
+      expect(
+        validateFactoryMetadata({ ...base, performance: text }),
+        text,
+      ).toContain('Performance is missing or a placeholder');
+    }
+    // Finished text everywhere, retired recipes included.
+    for (const recipe of [...allFactoryRecipes, ...factoryRecipes]) {
+      expect(validateFactoryMetadata(recipe), recipe.id).toEqual([]);
+      expect(recipe.inspiration, recipe.id).not.toMatch(/TODO/i);
+      expect(recipe.performance, recipe.id).not.toMatch(/TODO/i);
     }
   });
 });

@@ -4,6 +4,7 @@ import {
   flyHall,
   flyRoom,
   fx,
+  keyed,
   pitch,
   silk,
   orbit,
@@ -11,6 +12,7 @@ import {
   voice,
   type Effect,
   type FactoryRecipe,
+  type SceneSettings,
 } from '../factoryRecipes.ts';
 
 /**
@@ -18,17 +20,27 @@ import {
  * preset keeps scenes 1 to 4 in the fixed order (base, rhythm, lead with the
  * one deliberate +3 dB lift, ambient or special); scenes 5 and up are used
  * only where the sound earns them. Scenes are mixes of parallel voices or
- * paths that share one output chain.
+ * paths that share one output chain, and may also set effect controls: a
+ * Freeze scene switches Oxidal Hold on, and swell time changes with the scene.
+ * A Hold block sits where it always hears the guitar (on the shared chain or
+ * on a routed path), so it can freeze what was just played.
  *
  * @see docs/factory-collection.md
  */
 
 // --- Local building blocks -------------------------------------------------
 
-/** A scene at unity loudness. */
-const sc = (name: string, mix: number[], level = 1) => ({ name, mix, level });
+/** A scene at unity loudness, with any effect settings it changes. */
+const sc = (
+  name: string,
+  mix: number[],
+  controls?: SceneSettings,
+  level = 1,
+) => ({ name, mix, level, ...(controls ? { controls } : {}) });
 /** The lead scene: the one deliberate level lift (+3 dB). */
-const lead = (name: string, mix: number[]) => sc(name, mix, 1.41);
+const lead = (name: string, mix: number[], controls?: SceneSettings) =>
+  sc(name, mix, controls, 1.41);
+const holdOn = { hold: 1 };
 
 const dub = (delay: number, feedback: number, mix: number, tone = 0.3) =>
   fx('MDA DubDelay', {
@@ -64,10 +76,12 @@ const swell = (time: number, sensitivity = 60, release = 600) =>
     curve: 60,
     mix: 100,
   });
-const hold = (attack: number, release: number, level = -6) =>
+/** Hold on a path of its own: only the frozen sound comes out. On the shared
+ * chain (`through`), the playing passes and the frozen sound joins it. */
+const hold = (attack: number, release: number, level = -6, through = false) =>
   fx('Oxidal Hold (Stereo)', {
     hold: 0,
-    dry: 0,
+    dry: through ? 1 : 0,
     level,
     attack,
     release,
@@ -181,60 +195,61 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
     id: 'L01',
     name: 'Slow Weather',
     description:
-      'A slow pad that blooms under sustained chords. The swell block fades each note in; an optional Hold layer freezes a chord under the playing.',
+      'A slow pad that blooms under sustained chords. The swell block fades each note in, slower or faster by scene; the Freeze scene holds the chord you are playing under what you play next.',
     categories: ['Ambient', 'Swell', 'Hold'],
     genres: ['Ambient', 'Post-rock'],
-    techniques: ['Swell', 'Hold', 'Parallel routing'],
+    techniques: ['Swell', 'Hold', 'Parallel routing', 'Scene settings'],
     engine: 'lv2',
     complexity: 'complex',
     inspiration:
       'Slow, swelling guitar beds from 1990s ambient and post-rock records: no pick attack, long chords, a deep hall behind everything.',
     performance:
-      'Bed is the plain guitar into the hall. Swell fades each chord in. Lead is the bed with a gentle lift for melodies. Wash opens the pad fully. For Freeze, play a chord, switch Hold on in the Hold block, then choose Freeze. Swell only drops the picked attack altogether.',
+      'Bed is the plain guitar into the hall. Swell fades each chord in over about a second and a half. Lead is the bed with a gentle lift for melodies. Wash slows the swell to nearly three seconds and pulls the dry guitar back. Freeze holds the chord that is ringing when you choose it, so you can play over it; any other scene lets it fade over four seconds. Swell only drops the picked attack altogether with a quicker swell for single lines.',
     before: [darc(-35, 0.5, 0.03, 1)],
-    voices: [
-      dry(),
-      voice('Swell', swell(1400), silk()),
-      voice('Held layer', hold(900, 4000)),
+    voices: [dry(), voice('Swell', keyed('swell', swell(1400)), silk())],
+    after: [
+      keyed('hold', hold(900, 4000, -6, true)),
+      dub(0.5, 0.55, 0.3),
+      bigHall(7, 55, 60),
     ],
-    after: [dub(0.5, 0.55, 0.3), bigHall(7, 55, 60)],
     scenes: [
-      sc('Bed', [1, 0, 0]),
-      sc('Swell', [0.7, 0.8, 0]),
-      lead('Lead', [0.9, 0.3, 0]),
-      sc('Wash', [0.4, 0.8, 0.5]),
-      sc('Freeze', [0.4, 0.3, 1]),
-      sc('Swell only', [0, 1, 0]),
+      sc('Bed', [1, 0]),
+      sc('Swell', [0.7, 0.8]),
+      lead('Lead', [0.9, 0.3]),
+      sc('Wash', [0.4, 0.9], { swell: { time: 2800 } }),
+      sc('Freeze', [0.6, 0.5], { hold: holdOn }),
+      sc('Swell only', [0, 1], { swell: { time: 700 } }),
     ],
   },
   {
     id: 'L02',
     name: 'Glass Atrium',
     description:
-      'A high shimmer over a clear guitar. An octave-up voice feeds a shimmering reverb, with a long cathedral wash and an octave-down choir.',
+      'A high shimmer over a clear guitar. An octave-up voice feeds a shimmering reverb, with a swelled cathedral wash, an octave-down choir and a frozen chord.',
     categories: ['Ambient', 'Shimmer', 'Pitch'],
     genres: ['Ambient', 'Post-rock'],
-    techniques: ['Pitch', 'Shimmer'],
+    techniques: ['Pitch', 'Shimmer', 'Swell', 'Hold', 'Scene settings'],
     engine: 'lv2',
     complexity: 'complex',
     inspiration:
       'Bright, spacious cathedral textures from 2000s post-rock: simple chords, a high halo, and room for notes to ring.',
     performance:
-      'Clean keeps the direct guitar. Halo adds the octave shimmer under chords. Lead lifts the direct sound for melodies. Cathedral opens a long wash for held chords. Octave down adds a dark choir under open strings.',
+      'Clean keeps the direct guitar. Halo adds the octave shimmer under chords. Lead lifts the direct sound for melodies. Cathedral opens a long wash that swells in behind each chord. Octave down adds a dark choir under open strings and slows the swell. Frozen holds the chord that is ringing when you choose it, halo included, so you can play over it.',
     before: [darc(-30, 0.45, 0.02, 0.5)],
     voices: [
       dry(),
       voice('Halo', pitch(12), shimmer(4)),
-      voice('Cathedral', shimmer(7)),
+      voice('Cathedral', keyed('swell', swell(1200, 55, 800)), shimmer(7)),
       voice('Under', pitch(-12), shimmer(5)),
     ],
-    after: [flyHall(4, 20)],
+    after: [keyed('hold', hold(800, 5000, -6, true)), flyHall(4, 20)],
     scenes: [
       sc('Clean', [1, 0, 0, 0]),
       sc('Halo', [0.8, 0.55, 0, 0]),
       lead('Lead', [0.9, 0.25, 0, 0]),
       sc('Cathedral', [0.6, 0.2, 0.8, 0]),
-      sc('Octave down', [0.6, 0, 0.3, 0.7]),
+      sc('Octave down', [0.6, 0, 0.3, 0.7], { swell: { time: 2400 } }),
+      sc('Frozen', [0.7, 0.45, 0.3, 0], { hold: holdOn }),
     ],
   },
   {
@@ -423,13 +438,19 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
       'A dry path in parallel with reversed echoes, a frozen layer and a ring-modulated ruin, all through one hall.',
     categories: ['Experimental', 'Reverse', 'Hold'],
     genres: ['Experimental', 'Ambient'],
-    techniques: ['Reverse delay', 'Hold', 'Parallel routing'],
+    techniques: [
+      'Reverse delay',
+      'Hold',
+      'Swell',
+      'Parallel routing',
+      'Scene settings',
+    ],
     engine: 'lv2',
     complexity: 'complex',
     inspiration:
       'Backwards-tape and drone textures from late-1960s studio experiments and 1990s ambient records: sparse notes, long decays, and some deliberate damage.',
     performance:
-      'Dry is the guitar alone. Reverse plays each note backwards under the dry sound. Lead keeps the dry sound upfront with reversed notes behind and a lift. Frozen needs Hold switched on while a chord rings. Ruin adds ring modulation and bit loss for a metallic bed.',
+      'Dry is the guitar alone. Reverse plays each note backwards under the dry sound; a short swell ahead of the reverse delay takes the pick click off the end of each reversed note. Lead keeps the dry sound upfront with reversed notes behind and a lift. Frozen holds the chord that is ringing when you choose it. Ruin adds ring modulation and bit loss for a metallic bed. Frozen ruin keeps the held chord under the ruin.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -439,8 +460,11 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
       {
         paths: [
           path('Dry', []),
-          path('Reverse', [reverseEcho(1.2, 0.3)]),
-          path('Frozen', [hold(600, 6000, -3)]),
+          path('Reverse', [
+            keyed('swell', swell(250, 60, 400)),
+            reverseEcho(1.2, 0.3),
+          ]),
+          path('Frozen', [keyed('hold', hold(600, 6000, -3))]),
           path('Ruin', [
             fx('MDA RingMod', { freq: 0.1, fine: 0.2, feedback: 0.3 }),
             degrade(0.3, 0.4),
@@ -451,9 +475,10 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
     scenes: [
       sc('Dry', [1, 0, 0, 0]),
       sc('Reverse', [0.3, 1, 0, 0]),
-      lead('Lead', [0.8, 0.6, 0, 0]),
-      sc('Frozen', [0.3, 0.2, 1, 0]),
+      lead('Lead', [0.8, 0.6, 0, 0], { swell: { time: 120 } }),
+      sc('Frozen', [0.3, 0.2, 1, 0], { hold: holdOn }),
       sc('Ruin', [0.3, 0, 0, 0.9]),
+      sc('Frozen ruin', [0.2, 0, 0.8, 0.7], { hold: holdOn }),
     ],
   },
   {
@@ -561,13 +586,20 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
       'Three parallel paths under one hall: an octave shimmer, a reversed echo and a slow octave pad.',
     categories: ['Ambient', 'Parallel routing', 'Pitch'],
     genres: ['Ambient', 'Experimental'],
-    techniques: ['Parallel routing', 'Pitch', 'Reverse delay', 'Hold'],
+    techniques: [
+      'Parallel routing',
+      'Pitch',
+      'Reverse delay',
+      'Hold',
+      'Swell',
+      'Scene settings',
+    ],
     engine: 'lv2',
     complexity: 'complex',
     inspiration:
       'Layered atmospheric guitars from 2000s post-rock and film scores: one sustained note answered by several slow, different textures.',
     performance:
-      'Dry is the guitar alone. Sky adds the shimmer path. Lead keeps the dry sound upfront with a touch of shimmer and a lift. All opens every path. Pad only and Reverse only solo one path each for quiet sections.',
+      'Dry is the guitar alone. Sky adds the shimmer path, which swells in behind each note. Lead keeps the dry sound upfront with a touch of shimmer and a lift. All opens every path, slows the swell and holds the chord you were playing as a pad an octave down. Pad only leaves that held pad by itself. Reverse only solos the reversed echo for quiet sections.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -577,9 +609,13 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
       {
         paths: [
           path('Dry', []),
-          path('Shimmer', [pitch(12), shimmer(5)]),
+          path('Shimmer', [
+            keyed('swell', swell(900, 55, 700)),
+            pitch(12),
+            shimmer(5),
+          ]),
           path('Reverse', [reverseEcho(1.5)]),
-          path('Octave pad', [pitch(-12), hold(1500, 5000, -4)]),
+          path('Octave pad', [pitch(-12), keyed('hold', hold(1500, 5000, -4))]),
         ],
       },
     ],
@@ -587,8 +623,11 @@ export const lv2ShowcaseRecipes: FactoryRecipe[] = [
       sc('Dry', [1, 0, 0, 0]),
       sc('Sky', [0.6, 0.8, 0, 0]),
       lead('Lead', [1, 0.3, 0, 0]),
-      sc('All', [0.5, 0.6, 0.6, 0.6]),
-      sc('Pad only', [0, 0, 0, 1]),
+      sc('All', [0.5, 0.6, 0.6, 0.6], {
+        hold: holdOn,
+        swell: { time: 1800 },
+      }),
+      sc('Pad only', [0, 0, 0, 1], { hold: holdOn }),
       sc('Reverse only', [0, 0, 1, 0]),
     ],
   },

@@ -3,6 +3,7 @@ import {
   flyHall,
   flyRoom,
   fx,
+  keyed,
   nam,
   orbit,
   pitch,
@@ -11,6 +12,7 @@ import {
   voice,
   type Effect,
   type FactoryRecipe,
+  type SceneSettings,
 } from '../factoryRecipes.ts';
 
 /**
@@ -26,18 +28,24 @@ import {
 
 /** Scene weights are relative; every non-lead scene is normalised to the same
  * power and the third scene (the lead) sits about 2 dB above it, so scenes are
- * level-matched by construction. Mixes never exceed 1. */
+ * level-matched by construction. Mixes never exceed 1. A row may also set
+ * effect controls for its scene: Hold on for a freeze, a swell time, an echo
+ * level. */
 const BASE_POWER = 0.64;
 const LEAD_POWER = 1;
-const scenes = (rows: [name: string, weights: number[]][]) =>
-  rows.map(([name, weights], index) => {
+const scenes = (
+  rows: [name: string, weights: number[], controls?: SceneSettings][],
+) =>
+  rows.map(([name, weights, controls], index) => {
     const power = index === 2 ? LEAD_POWER : BASE_POWER;
     const scale = Math.sqrt(power / weights.reduce((s, w) => s + w * w, 0));
     return {
       name,
       mix: weights.map((w) => Math.round(w * scale * 1000) / 1000),
+      ...(controls ? { controls } : {}),
     };
   });
+const holdOn = { hold: 1 };
 
 const comp = (threshold = -24) =>
   fx('x42 Compressor Stereo', {
@@ -118,6 +126,19 @@ const highPass = (freq: number) =>
   fx('Invada High Pass Filter (stereo)', { freq });
 const octaveDown = () =>
   fx('Oxidal Pitch (Stereo)', { semitones: -12, window: 2, input_mode: 0 });
+const detune = (semitones: number) =>
+  fx('Oxidal Pitch (Stereo)', { semitones, step: 0, window: 1, input_mode: 0 });
+/** A clean boost ahead of a high-gain rig: level up, drive low. */
+const boost = () => fx('GxTubeScreamer', { fslider0_: -8, fslider2_: 0.12 });
+/** An echo that scenes bring in; silent until a scene raises its mix. */
+const leadEcho = () =>
+  fx('MDA DubDelay', {
+    delay: 0.3,
+    feedback: 0.3,
+    fb_tone: 0.35,
+    lfo_depth: 0,
+    fx_mix: 0,
+  });
 const path = (name: string, steps: Effect[] = [], pan?: number) => ({
   name,
   steps,
@@ -162,13 +183,19 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       'A jangling edge-of-breakup amp with four parallel paths: dotted echo, shimmer, swell and a frozen tail.',
     categories: ['Edge of breakup', 'Pop', 'Parallel routing'],
     genres: ['Edge of breakup', 'Pop'],
-    techniques: ['Parallel routing', 'Swell', 'Hold', 'Pitch'],
+    techniques: [
+      'Parallel routing',
+      'Swell',
+      'Hold',
+      'Pitch',
+      'Scene settings',
+    ],
     engine: 'hybrid',
     complexity: 'complex',
     inspiration:
       'Big-room pop and rock guitar of the 1980s: chiming rhythm parts under dotted echoes and a wide hall.',
     performance:
-      'Chime is the open rhythm. Dotted adds the rhythmic echo, Lead pushes one path forward, Shimmer lifts an octave into the hall. Swell and Freeze are for the bridge and the outro.',
+      'Chime is the open rhythm. Dotted adds the rhythmic echo, Lead pushes the amp forward with a little echo, Shimmer lifts an octave into the hall. Swell fades each chord in for the bridge. Freeze holds the chord that is ringing when you choose it, for the outro; leaving the scene lets it go.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -182,7 +209,7 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
           path('Dotted', [echoAt(0.3)]),
           path('Shimmer', [shimmer()], 0.3),
           path('Swell', [swell(1500)]),
-          path('Freeze', [hold()]),
+          path('Freeze', [keyed('hold', hold())]),
         ],
       },
     ],
@@ -192,7 +219,7 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       ['Lead', [1, 0.4, 0, 0, 0]],
       ['Shimmer', [0.7, 0, 0.8, 0, 0]],
       ['Swell', [0.3, 0, 0, 1, 0]],
-      ['Freeze', [0.3, 0, 0, 0, 1]],
+      ['Freeze', [0.5, 0, 0, 0, 1], { hold: holdOn }],
     ]),
   },
   {
@@ -283,38 +310,41 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
     id: 'HY06',
     name: 'Modern Metal',
     description:
-      'Two modern high-gain amps panned left and right, a clean amp, a tracked sub and an octave below.',
+      'A saturated high-gain rig doubled left and right behind a low cut and a tight boost, with a clean amp for the break, a tracked sub and a lead echo.',
     categories: ['Modern metal', 'Parallel routing'],
     genres: ['Modern metal'],
-    techniques: ['Parallel routing', 'Pitch'],
+    techniques: ['Parallel routing', 'Double tracking', 'Scene settings'],
     engine: 'hybrid',
     complexity: 'complex',
     inspiration:
-      'Tight 2000s and 2010s metal rhythm: double-tracked width, a low end held in check and a clean amp for the break.',
+      'Tight 2000s and 2010s metal rhythm: one saturated high-gain rig double-tracked for width, a boost and a low cut in front to hold the low end in check, and a clean amp for the break.',
     performance:
-      'Rhythm is the wide double. Tight narrows to one side for palm mutes, Lead leans on one amp. Ambient clean is the break. Octave and Chug add weight under the riff.',
+      'Rhythm is the wide double with a light boost. Tight raises the low cut and pushes the boost harder for fast palm mutes. Lead keeps both sides, adds the level lift and brings in the echo. Ambient clean is the chorused clean amp with echo for the break. Chug lowers the cut and adds the tracked sub under slow riffs. There is no noise gate in this chain: use the one in your guitar profile.',
     topology: 'routed',
-    before: [highPass(85)],
+    before: [keyed('cut', highPass(90)), keyed('boost', boost())],
     voices: [],
-    after: [flyRoom()],
+    after: [keyed('echo', leadEcho()), flyRoom()],
     route: [
       {
         paths: [
-          path('Left amp', [nam('modern-tight')], -0.8),
-          path('Right amp', [nam('modern-dark')], 0.8),
-          path('Clean', [nam('two-rock-clean')]),
-          path('Sub', [sub(0.3)]),
-          path('Octave', [octaveDown()]),
+          path('Left rig', [nam('peavey-5150-rig')], -0.8),
+          // A few cents flat, so the two sides differ like two takes.
+          path('Right rig', [detune(-0.08), nam('peavey-5150-rig')], 0.8),
+          path('Clean', [nam('two-rock-clean'), silk()]),
+          path('Sub', [sub(0.3), lowPass(180)]),
         ],
       },
     ],
     scenes: scenes([
-      ['Rhythm', [1, 1, 0, 0, 0]],
-      ['Tight', [1, 0.4, 0, 0, 0]],
-      ['Lead', [0.7, 1, 0, 0, 0]],
-      ['Ambient clean', [0, 0, 1, 0, 0]],
-      ['Octave', [0.8, 0.8, 0, 0, 0.5]],
-      ['Chug', [1, 1, 0, 0.6, 0]],
+      ['Rhythm', [1, 1, 0, 0]],
+      [
+        'Tight',
+        [1, 1, 0, 0],
+        { cut: { freq: 135 }, boost: { fslider0_: -4, fslider2_: 0.2 } },
+      ],
+      ['Lead', [1, 1, 0, 0], { echo: { fx_mix: 0.2 } }],
+      ['Ambient clean', [0, 0, 1, 0], { echo: { fx_mix: 0.3 } }],
+      ['Chug', [1, 1, 0, 0.5], { cut: { freq: 70 } }],
     ]),
   },
   {
@@ -366,13 +396,13 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       'A shimmering clean amp with swell, reverse and frozen paths for long builds.',
     categories: ['Post-rock', 'Ambient', 'Parallel routing'],
     genres: ['Post-rock', 'Ambient'],
-    techniques: ['Parallel routing', 'Swell', 'Hold'],
+    techniques: ['Parallel routing', 'Swell', 'Hold', 'Scene settings'],
     engine: 'hybrid',
     complexity: 'complex',
     inspiration:
       'Instrumental post-rock of the late 1990s and 2000s: volume swells, reversed notes and slow builds to a big hall.',
     performance:
-      'Clean is the opening figure. Swell fades each note in, Crescendo layers swell and reverse for the peak, Wash is the aftermath. Freeze holds a chord; Reverse plays notes backwards.',
+      'Clean is the opening figure. Swell fades each note in over nearly two seconds. Crescendo shortens the swell and layers it with reversed notes for the peak, with the level lift. Wash slows the swell right down for the aftermath. Freeze holds the chord that is ringing when you choose it; leaving the scene lets it go. Reverse plays notes backwards.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -383,18 +413,18 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       {
         paths: [
           path('Dry'),
-          path('Swell', [swell(1800)]),
+          path('Swell', [keyed('swell', swell(1800))]),
           path('Reverse', [reverse(1.2)]),
-          path('Freeze', [hold()]),
+          path('Freeze', [keyed('hold', hold())]),
         ],
       },
     ],
     scenes: scenes([
       ['Clean', [1, 0, 0, 0]],
       ['Swell', [0.5, 0.8, 0, 0]],
-      ['Crescendo', [0.4, 1, 0.3, 0]],
-      ['Wash', [0.3, 0.5, 0.5, 0]],
-      ['Freeze', [0.2, 0, 0, 1]],
+      ['Crescendo', [0.4, 1, 0.3, 0], { swell: { time: 800 } }],
+      ['Wash', [0.3, 0.5, 0.5, 0], { swell: { time: 3000 } }],
+      ['Freeze', [0.4, 0, 0, 1], { hold: holdOn }],
       ['Reverse', [0.5, 0, 1, 0]],
     ]),
   },
@@ -657,13 +687,19 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       'A clean amp with a shimmer, a ducking delay and a held, chorused pad on parallel paths.',
     categories: ['Ambient', 'Experimental', 'Parallel routing'],
     genres: ['Ambient', 'Experimental'],
-    techniques: ['Parallel routing', 'Hold', 'Pitch'],
+    techniques: [
+      'Parallel routing',
+      'Hold',
+      'Swell',
+      'Pitch',
+      'Scene settings',
+    ],
     engine: 'hybrid',
     complexity: 'complex',
     inspiration:
       'Ambient guitar from the mid-1980s onward: soft attacks, long reverb tails and repeats that step aside while you play.',
     performance:
-      'Bed is the dry guitar. Duck adds echoes that get quiet while you play, Lead floats one line over them, Cathedral blends shimmer and a held pad. Pad only and Drone are for the finale.',
+      'Bed is the dry guitar. Duck adds echoes that get quiet while you play, Lead floats one line over them. Cathedral swells a shimmer in behind each chord and holds the chord that is ringing when you choose it as a chorused pad. Pad only leaves that held pad by itself, and Drone adds a slower shimmer and the echoes over it for the finale. Going back to Bed lets the pad go.',
     topology: 'routed',
     before: [],
     voices: [],
@@ -674,9 +710,9 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       {
         paths: [
           path('Dry'),
-          path('Shimmer', [shimmer()], 0.3),
+          path('Shimmer', [keyed('swell', swell(1200)), shimmer()], 0.3),
           path('Ducked echo', [duck(520)]),
-          path('Pad', [hold(), silk()], -0.3),
+          path('Pad', [keyed('hold', hold()), silk()], -0.3),
         ],
       },
     ],
@@ -684,9 +720,9 @@ export const hybridShowcaseRecipes: FactoryRecipe[] = [
       ['Bed', [1, 0, 0, 0]],
       ['Duck', [0.8, 0, 0.8, 0]],
       ['Lead', [1, 0, 0.35, 0]],
-      ['Cathedral', [0.3, 0.8, 0, 0.6]],
-      ['Pad only', [0, 0, 0, 1]],
-      ['Drone', [0, 0.6, 0.4, 0.8]],
+      ['Cathedral', [0.3, 0.8, 0, 0.6], { hold: holdOn }],
+      ['Pad only', [0, 0, 0, 1], { hold: holdOn }],
+      ['Drone', [0, 0.6, 0.4, 0.8], { hold: holdOn, swell: { time: 2400 } }],
     ]),
   },
 ];

@@ -8,6 +8,12 @@ import {
   factoryRecipes,
   factoryMissingPlugins,
   factoryRoles,
+  keyed,
+  pitch,
+  recipeEffects,
+  sceneControlProblems,
+  type FactoryRecipe,
+  type SceneSettings,
 } from './factoryRecipes';
 import { allFactoryRecipes } from './factoryCatalog';
 import { songbookRecipes } from './songbookRecipes';
@@ -305,4 +311,215 @@ it('builds routed genre presets with nested splits, pan, polarity and path scene
     ).inputGains;
   expect(merge('left')[0]).toBe(1);
   expect(merge('right')[0]).toBe(0.5);
+  // A routed scene's level scales its mix: Lead lifts the crunch amp by 1.2.
+  const leadScene = rooms.extensions['urn:oxidal:scenes:1'].scenes[2];
+  expect(leadScene.name).toBe('Lead');
+  expect(leadScene.gains).toContainEqual({
+    node: 'merge-r1-right',
+    port: 1,
+    value: 1.2,
+  });
+  expect(leadScene.gains).toContainEqual({
+    node: 'merge-r1-left',
+    port: 1,
+    value: 0.6,
+  });
+});
+
+const everyRole = Object.fromEntries(
+  [...factoryVoiceIds, 'clean', 'crunch', 'heavy', 'bass'].map((role) => [
+    role,
+    source,
+  ]),
+);
+
+it('lets scenes set effect controls the engine admits, on blocks that exist', () => {
+  let recipesWithSettings = 0;
+  for (const recipe of allFactoryRecipes) {
+    expect(sceneControlProblems(recipe, plugins), recipe.id).toEqual([]);
+    if (!recipe.scenes.some((scene) => scene.controls)) continue;
+    recipesWithSettings += 1;
+    const m = JSON.parse(
+      buildFactoryRecipe(
+        recipe,
+        plugins,
+        everyRole,
+        'profile',
+        crypto.randomUUID(),
+        defaults,
+      ).manifest_json,
+    );
+    expect(validate(m), JSON.stringify(validate.errors)).toBe(true);
+    type Control = { node: string; symbol: string; value: number };
+    const scenes: { controls: Control[] }[] =
+      m.extensions['urn:oxidal:scenes:1'].scenes;
+    const keys = (scene: { controls: Control[] }) =>
+      scene.controls.map((c) => `${c.node}:${c.symbol}`).sort();
+    const block = (node: string) =>
+      m.oxidal.lv2.find((l: { id: string }) => l.id === node) as
+        { pluginUri: string; controls: Record<string, number> } | undefined;
+    for (const scene of scenes) {
+      // Every scene sets the same controls, as the preset format requires.
+      expect(keys(scene), recipe.id).toEqual(keys(scenes[0]!));
+      expect(new Set(keys(scene)).size).toBe(scene.controls.length);
+      expect(scene.controls.length).toBeGreaterThan(0);
+      expect(scene.controls.length).toBeLessThanOrEqual(32);
+      for (const control of scene.controls) {
+        const where = `${recipe.id} ${control.node}.${control.symbol}`;
+        expect(block(control.node), where).toBeDefined();
+        const plugin = plugins.find(
+          (p) => p.uri === block(control.node)!.pluginUri,
+        )!;
+        // The engine's admission rule for a scene control.
+        expect(
+          plugin.ports.some((p) => p.latency),
+          where,
+        ).toBe(false);
+        const port = plugin.ports.find(
+          (p) => p.symbol === control.symbol && p.control && p.input && !p.atom,
+        )!;
+        expect(port, where).toBeDefined();
+        expect(Number.isFinite(port.minimum), where).toBe(true);
+        expect(Number.isFinite(port.maximum), where).toBe(true);
+        expect(port.minimum!, where).toBeLessThan(port.maximum!);
+        if (port.logarithmic) expect(port.minimum!, where).toBeGreaterThan(0);
+        expect(control.value, where).toBeGreaterThanOrEqual(port.minimum!);
+        expect(control.value, where).toBeLessThanOrEqual(port.maximum!);
+        if (port.integer)
+          expect(Number.isInteger(control.value), where).toBe(true);
+        if (port.toggled)
+          expect([port.minimum, port.maximum], where).toContain(control.value);
+      }
+    }
+    // The blocks start on the first scene's values.
+    for (const control of scenes[0]!.controls)
+      expect(block(control.node)!.controls[control.symbol]).toBe(control.value);
+    // At least one scene really differs from the first.
+    expect(
+      scenes.some(
+        (scene) =>
+          JSON.stringify(scene.controls) !==
+          JSON.stringify(scenes[0]!.controls),
+      ),
+      recipe.id,
+    ).toBe(true);
+  }
+  expect(recipesWithSettings).toBeGreaterThanOrEqual(10);
+});
+
+it('rejects scene controls the engine would refuse', () => {
+  const base = allFactoryRecipes.find((r) => r.id === 'L01')!;
+  const withScene = (controls: SceneSettings): FactoryRecipe => ({
+    ...base,
+    scenes: base.scenes.map((scene, index) =>
+      index === 1 ? { ...scene, controls } : scene,
+    ),
+  });
+  const problems = (controls: SceneSettings, catalog = plugins) =>
+    sceneControlProblems(withScene(controls), catalog);
+  expect(problems({ nowhere: { time: 100 } })).toContain(
+    'nowhere.time: no block has this key',
+  );
+  expect(problems({ swell: { speed: 1 } })).toContain(
+    'swell.speed: Oxidal Swell (Stereo) has no such control',
+  );
+  expect(problems({ swell: { time: 5 } })).toContain(
+    'swell.time: 5 is not a value this control takes',
+  );
+  expect(problems({ hold: { hold: 0.5 } })).toContain(
+    'hold.hold: 0.5 is not a value this control takes',
+  );
+  const change = (symbol: string, patch: object) =>
+    plugins.map((p) => ({
+      ...p,
+      ports: p.ports.map((port) =>
+        port.symbol === symbol ? { ...port, ...patch } : port,
+      ),
+    }));
+  expect(problems({}, change('time', { minimum: 0 }))).toContain(
+    'swell.time: logarithmic control reaches zero',
+  );
+  expect(problems({}, change('hold', { maximum: null }))).toContain(
+    'hold.hold: the control has no range',
+  );
+  // Oxidal Pitch reports latency, so its controls cannot change by scene.
+  const pitched: FactoryRecipe = {
+    ...base,
+    before: [keyed('shift', pitch(12))],
+    scenes: base.scenes.map((scene, index) =>
+      index === 1 ? { ...scene, controls: { shift: { semitones: 7 } } } : scene,
+    ),
+  };
+  expect(sceneControlProblems(pitched, plugins)).toContain(
+    'shift.semitones: Oxidal Pitch (Stereo) reports latency',
+  );
+  expect(() =>
+    buildFactoryRecipe(
+      withScene({ nowhere: { time: 100 } }),
+      plugins,
+      {},
+      'profile',
+    ),
+  ).toThrow('no block has this key');
+  const serial = factoryRecipes.find((r) => r.topology === 'serial')!;
+  expect(
+    sceneControlProblems(
+      {
+        ...serial,
+        before: [keyed('shift', pitch(12)), ...serial.before],
+        scenes: [{ name: 'One', mix: [], controls: { shift: { step: 0 } } }],
+      },
+      plugins,
+    ),
+  ).toContain('A serial recipe has no scenes to set controls');
+});
+
+it('switches Hold on in a scene wherever a preset uses it, on a block that hears the guitar', () => {
+  let presets = 0;
+  for (const recipe of allFactoryRecipes) {
+    const holds = recipeEffects(recipe).flatMap((e) =>
+      'plugin' in e && e.plugin === 'Oxidal Hold (Stereo)' ? [e] : [],
+    );
+    if (!holds.length) continue;
+    presets += 1;
+    for (const hold of holds) {
+      expect(hold.key, recipe.id).toBeDefined();
+      const on = recipe.scenes.map(
+        (scene) => scene.controls?.[hold.key!]?.hold === 1,
+      );
+      expect(on.includes(true), recipe.id).toBe(true);
+      // The first scene never starts frozen.
+      expect(on[0], recipe.id).toBe(false);
+      // A scene send ahead of the block would leave it nothing to capture.
+      expect(
+        recipe.voices.some((v) => v.effects.includes(hold)),
+        recipe.id,
+      ).toBe(false);
+    }
+    for (const scene of recipe.scenes)
+      if (/freeze|frozen/i.test(scene.name))
+        expect(
+          Object.values(scene.controls ?? {}).some((c) => c.hold === 1),
+          `${recipe.id} ${scene.name}`,
+        ).toBe(true);
+  }
+  expect(presets).toBeGreaterThanOrEqual(9);
+});
+
+it('gives every preset in the collection at least four scenes', () => {
+  for (const recipe of allFactoryRecipes) {
+    expect(recipe.scenes.length, recipe.id).toBeGreaterThanOrEqual(4);
+    expect(recipe.scenes.length, recipe.id).toBeLessThanOrEqual(8);
+    expect(new Set(recipe.scenes.map((s) => s.name)).size, recipe.id).toBe(
+      recipe.scenes.length,
+    );
+    expect(recipe.topology, recipe.id).not.toBe('serial');
+  }
+  // The retired two-amp and punk recipes are back under names that do not
+  // clash with a showcase preset.
+  const names = allFactoryRecipes.map((r) => r.name);
+  expect(names).toContain('Double Parlour');
+  expect(names).toContain('Short Fuse');
+  expect(allFactoryRecipes.map((r) => r.id)).not.toContain('X07');
+  expect(allFactoryRecipes.map((r) => r.id)).not.toContain('H06');
 });

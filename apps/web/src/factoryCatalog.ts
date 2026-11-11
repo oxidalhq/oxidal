@@ -5,8 +5,9 @@ import { tone3000ShowcaseRecipes } from './recipes/tone3000Showcase.ts';
 import { songbookRecipes } from './songbookRecipes.ts';
 import { toolRecipes } from './toolRecipes.ts';
 
-/** Earlier recipes replaced by a Sprint 12 showcase preset of the same name
- * (decision D-3: keep, re-tag, retire the weak ones). */
+/** Earlier recipes left out of the collection: each was replaced by a showcase
+ * preset of the same name, or is an unfinished serial stack with no scenes
+ * (X07, H06). Their source stays in `factoryRecipes.ts`. */
 const retiredRecipeIds = new Set([
   'A02',
   'A04',
@@ -14,13 +15,13 @@ const retiredRecipeIds = new Set([
   'S01',
   'S04',
   'X02',
-  'P01',
   'P04',
   'C05',
-  'K02',
   'C03',
   'R02',
   'R04',
+  'X07',
+  'H06',
 ]);
 
 /** Every recipe the collection browser, the builders and the tests know about.

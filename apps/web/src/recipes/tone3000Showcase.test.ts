@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import catalog from '../fixtures/factory-lv2.json';
 import type { Lv2Plugin } from '../api';
 import type { RigNativeSource } from '../generated/contract';
-import { buildFactoryRecipe, factoryRoles } from '../factoryRecipes.ts';
+import {
+  buildFactoryRecipe,
+  factoryRoles,
+  recipeEffects,
+} from '../factoryRecipes.ts';
 import { validateFactoryMetadata } from '../factoryMetadata.ts';
 import { factoryVoices, isFactoryVoice } from '../factoryVoices.ts';
 import {
@@ -72,17 +76,60 @@ describe('TONE3000 showcase recipes', () => {
           recipe.engine as keyof typeof tone3000CaptureBudget
         ],
       );
-      // Captures only: no LV2 blocks before, between or after.
-      const blocks = [
-        ...recipe.before,
-        ...recipe.voices.flatMap((v) => v.effects),
-        ...recipe.after,
-      ];
+      // Captures only: no LV2 blocks anywhere, and no scene effect settings.
+      const blocks = recipeEffects(recipe);
+      expect(blocks.length, recipe.name).toBeGreaterThan(0);
       expect(
         blocks.every((b) => 'native' in b),
         recipe.name,
       ).toBe(true);
+      expect(
+        recipe.scenes.every((s) => !s.controls),
+        recipe.name,
+      ).toBe(true);
     }
+  });
+
+  it('has at least three complex presets in each tier, and they really are', () => {
+    for (const tier of [lite, full]) {
+      const complex = tier.filter((r) => r.complexity === 'complex');
+      expect(complex.length).toBeGreaterThanOrEqual(3);
+      for (const recipe of complex) {
+        // Parallel paths mixed after the captures, some of them panned, and
+        // scenes that re-mix them rather than select one.
+        expect(recipe.topology, recipe.name).toBe('routed');
+        expect(recipe.techniques, recipe.name).toContain('Parallel routing');
+        const text = JSON.stringify(recipe.route);
+        expect(text, recipe.name).toMatch(/"pan":/);
+        expect((text.match(/"name":/g) ?? []).length).toBeGreaterThanOrEqual(3);
+        expect(
+          recipe.scenes.filter((s) => s.mix.filter((m) => m > 0).length > 1)
+            .length,
+          recipe.name,
+        ).toBeGreaterThanOrEqual(2);
+      }
+    }
+    // The genres A2 Full lacked are covered.
+    for (const genre of ['Country', 'Jazz', 'Ambient', 'Post-rock'] as const)
+      expect(
+        full.some((r) => r.genres.includes(genre)),
+        genre,
+      ).toBe(true);
+    // The three-capture A2 Lite budget is used.
+    expect(lite.some((r) => captureCount(factoryRoles(r)) === 3)).toBe(true);
+  });
+
+  it('has no near-copy scenes and no tier twins', () => {
+    for (const recipe of tone3000ShowcaseRecipes) {
+      // Two scenes never drive the same voices equally hard.
+      const mixes = recipe.scenes.map((s) => s.mix.join());
+      expect(new Set(mixes).size, recipe.name).toBe(mixes.length);
+    }
+    const shape = (r: (typeof lite)[number]) =>
+      JSON.stringify([r.voices, r.route, r.scenes.map((s) => s.mix)]);
+    for (const a of lite)
+      for (const b of full)
+        expect(shape(a), `${a.name} / ${b.name}`).not.toBe(shape(b));
   });
 
   it('has four to eight scenes, one mix entry per voice and text', () => {
@@ -92,8 +139,13 @@ describe('TONE3000 showcase recipes', () => {
       expect(new Set(recipe.scenes.map((s) => s.name)).size).toBe(
         recipe.scenes.length,
       );
+      const width =
+        recipe.topology === 'routed'
+          ? (recipe.route!.find((s) => 'paths' in s) as { paths: unknown[] })
+              .paths.length
+          : recipe.voices.length;
       for (const scene of recipe.scenes) {
-        expect(scene.mix).toHaveLength(recipe.voices.length);
+        expect(scene.mix).toHaveLength(width);
         expect(scene.mix.every((m) => m >= 0 && m <= 1)).toBe(true);
         expect(scene.level).toBeGreaterThan(0);
         expect(scene.level).toBeLessThanOrEqual(2.5);
