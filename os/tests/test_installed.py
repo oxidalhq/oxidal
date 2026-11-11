@@ -161,16 +161,18 @@ class InstalledTests(unittest.TestCase):
                         'urn:oxidal:plugin:hold#stereo',
                         'urn:oxidal:plugin:swell#stereo',
                         'urn:oxidal:plugin:pitch#stereo',
-                        'http://guitarix.sourceforge.net/plugins/gx_reverb_stereo#_reverb_stereo',
-                        'http://guitarix.sourceforge.net/plugins/gx_zita_rev1_stereo#_zita_rev1_stereo',
-                        'http://invadarecords.com/plugins/lv2/filter/hpf/stereo',
-                        'http://drobilla.net/plugins/mda/Tracker',
-                    }.issubset(admitted), 'Factory effects missing from the installed image')
+                    }.issubset(admitted), 'Oxidal effects missing from the installed image')
+                    # Third-party effect packs are the player's to install.
+                    self.assertFalse([uri for uri in admitted if not uri.startswith('urn:oxidal:')],
+                        'The image must not carry third-party effects')
 
                     factory_catalog = json.loads((home / 'factory/catalog.json').read_text())
                     expected_scenes = {}
                     for sound in factory_catalog['sounds']:
                         manifest = json.loads(sound['request']['manifest_json'])
+                        # Only examples built from Oxidal's own effects are saved on a fresh image.
+                        if any(e['pluginUri'] not in admitted for e in manifest['oxidal']['lv2']):
+                            continue
                         expected_scenes[manifest['id']] = len(
                             manifest.get('extensions', {})
                             .get('urn:oxidal:scenes:1', {})
@@ -180,7 +182,7 @@ class InstalledTests(unittest.TestCase):
                         '--marker', temporary + '/factory-installed.json']
                     subprocess.run(seed_command, check=True)
                     seeded = json.loads(get('/api/v1/presets/rigs'))['presets']
-                    self.assertEqual(len(seeded), len(factory_catalog['sounds']))
+                    self.assertEqual(len(seeded), len(expected_scenes))
                     self.assertTrue(all(p['origin'] == 'oxidal_example' and p['native_instances'] == 0
                         for p in seeded))
                     self.assertEqual(

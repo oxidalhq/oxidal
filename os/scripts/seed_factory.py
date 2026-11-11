@@ -1,6 +1,10 @@
 """Install asset-free examples once through the local daemon; never starts audio.
 
-The persistent completion marker prevents deleted examples reappearing on reboot.
+The image carries no third-party effect packs: the player installs those. An
+example is saved here only when every effect it uses is already on the unit;
+the others are left for the web interface, which saves each one as soon as its
+pack is installed. The persistent completion marker prevents deleted examples
+reappearing on reboot.
 Partial retries reuse deterministic immutable manifests. No credentials or network
 providers are accessed. @see docs/factory-collection.md
 """
@@ -43,6 +47,29 @@ def check_metadata(metadata):
         raise ValueError('Factory seed metadata must describe an LV2-only sound')
 
 
+def playable(sound, plugins, layouts):
+    """Whether this unit has every effect of the example, exactly as it was designed."""
+    manifest = json.loads(sound['request']['manifest_json'])
+    for effect in manifest['oxidal']['lv2']:
+        plugin = plugins.get(effect['pluginUri'])
+        if not plugin or plugin['unsupported']:
+            return False
+        if any(p['atom'] for p in plugin['ports']):
+            actual = {'controls': sorted(p['symbol'] for p in plugin['ports'] if p['control'] and p['input']),
+                      'atoms': sorted(p['symbol'] for p in plugin['ports'] if p['atom'])}
+            if layouts.get(plugin['uri']) != actual:
+                return False
+        controls = {p['symbol']: p for p in plugin['ports'] if p['input'] and p['control']}
+        if set(controls) != set(effect['controls']):
+            return False
+        for symbol, value in effect['controls'].items():
+            port = controls[symbol]
+            if ((port['minimum'] is not None and value < port['minimum'])
+                    or (port['maximum'] is not None and value > port['maximum'])):
+                return False
+    return True
+
+
 def seed(catalog, marker, api=request):
     if marker.exists():
         return 0
@@ -50,7 +77,7 @@ def seed(catalog, marker, api=request):
         raise ValueError('Factory catalog exceeds budget')
     data = json.loads(catalog.read_text())
     sounds = data.get('sounds', [])
-    if data.get('version') != 1 or not 1 <= len(sounds) <= 32:
+    if data.get('version') != 1 or not 1 <= len(sounds) <= 64:
         raise ValueError('Invalid factory catalog')
     # Validate the entire bank before making the first publication.
     for sound in sounds:
@@ -61,25 +88,7 @@ def seed(catalog, marker, api=request):
                 or manifest['extensions']['urn:oxidal:authoring']['origin'] != 'oxidal_example'):
             raise ValueError('Factory seed must contain asset-free Oxidal examples')
     plugins = {p['uri']: p for p in api('plugins/lv2?sample_rate=48000')['plugins']}
-    for sound in sounds:
-        manifest = json.loads(sound['request']['manifest_json'])
-        for effect in manifest['oxidal']['lv2']:
-            plugin = plugins.get(effect['pluginUri'])
-            if not plugin or plugin['unsupported']:
-                raise ValueError('Factory effect unavailable: ' + effect['pluginUri'])
-            if any(p['atom'] for p in plugin['ports']):
-                actual = {'controls': sorted(p['symbol'] for p in plugin['ports'] if p['control'] and p['input']),
-                          'atoms': sorted(p['symbol'] for p in plugin['ports'] if p['atom'])}
-                if data.get('scalar_layouts', {}).get(plugin['uri']) != actual:
-                    raise ValueError('Factory effect needs portable state: ' + effect['pluginUri'])
-            controls = {p['symbol']: p for p in plugin['ports'] if p['input'] and p['control']}
-            if set(controls) != set(effect['controls']):
-                raise ValueError('Factory effect controls changed')
-            for symbol, value in effect['controls'].items():
-                port = controls[symbol]
-                if ((port['minimum'] is not None and value < port['minimum'])
-                        or (port['maximum'] is not None and value > port['maximum'])):
-                    raise ValueError('Factory effect control out of range')
+    sounds = [sound for sound in sounds if playable(sound, plugins, data.get('scalar_layouts', {}))]
     revisions = []
     for sound in sounds:
         published = api('presets/rigs', sound['request'])

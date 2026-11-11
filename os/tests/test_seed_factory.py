@@ -84,3 +84,35 @@ class FactoryMetadataTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     seed_factory.seed(self.catalog(root, bad), root / 'bad.json',
                         lambda *_: self.fail('No API call before validation'))
+
+
+class FactoryAvailabilityTests(unittest.TestCase):
+    def test_examples_whose_effects_are_not_installed_are_left_for_later(self):
+        def sound(name, uri):
+            manifest = {'resources': [], 'tone3000': {'instances': []},
+                'extensions': {'urn:oxidal:authoring': {'origin': 'oxidal_example'}},
+                'oxidal': {'lv2': [{'pluginUri': uri, 'controls': {'mix': .5}}]}}
+            return {'id': name, 'description': name, 'categories': ['Ambient'],
+                'request': {'manifest_json': json.dumps(manifest), 'resources': {}}}
+        port = {'symbol': 'mix', 'control': True, 'input': True, 'atom': False, 'minimum': 0, 'maximum': 1}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            catalog = root / 'catalog.json'
+            catalog.write_text(json.dumps({'version': 1, 'sounds': [
+                sound('own', 'urn:oxidal:plugin:swell#stereo'), sound('pack', 'urn:example:not-installed'),
+                sound('range', 'urn:example:other-version')]}))
+            published = []
+            def api(path, request=None):
+                if path.startswith('plugins/'):
+                    return {'plugins': [
+                        {'uri': 'urn:oxidal:plugin:swell#stereo', 'unsupported': False, 'ports': [port]},
+                        {'uri': 'urn:example:other-version', 'unsupported': False,
+                            'ports': [dict(port, maximum=.25)]}]}
+                if path == 'presets/rigs':
+                    published.append(json.loads(request['manifest_json'])['oxidal']['lv2'][0]['pluginUri'])
+                    return {'revision': 'a' * 64}
+                return {'revision': 1}
+            self.assertEqual(seed_factory.seed(catalog, root / 'done.json', api), 1)
+            self.assertEqual(published, ['urn:oxidal:plugin:swell#stereo'])
+            # One run only: a pack installed later is finished by the web interface.
+            self.assertEqual(seed_factory.seed(catalog, root / 'done.json', lambda *_: self.fail('No retry')), 0)
