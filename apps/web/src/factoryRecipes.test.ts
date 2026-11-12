@@ -523,3 +523,24 @@ it('gives every preset in the collection at least four scenes', () => {
   expect(allFactoryRecipes.map((r) => r.id)).not.toContain('X07');
   expect(allFactoryRecipes.map((r) => r.id)).not.toContain('H06');
 });
+
+it('never builds a split or a merge with a single path', () => {
+  for (const recipe of allFactoryRecipes) {
+    const m = JSON.parse(
+      buildFactoryRecipe(
+        recipe,
+        plugins,
+        everyRole,
+        'profile',
+        undefined,
+        defaults,
+      ).manifest_json,
+    );
+    for (const node of m.oxidal.graph.nodes) {
+      if (node.kind === 'split')
+        expect(node.audioOutputs, `${recipe.id} ${node.id}`).toBeGreaterThan(1);
+      if (node.kind === 'merge')
+        expect(node.audioInputs, `${recipe.id} ${node.id}`).toBeGreaterThan(1);
+    }
+  }
+});

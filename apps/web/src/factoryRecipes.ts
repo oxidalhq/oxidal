@@ -2326,7 +2326,10 @@ export function buildFactoryRecipe(
     return { ...result, manifest_json: JSON.stringify(manifest) };
   }
   const common = rig.chain(recipe.before.map(effect), rig.input);
+  // One voice needs no split or merge: its send sits straight on the chain.
+  const single = recipe.voices.length === 1;
   const split = common.map((from, side) => {
+    if (single) return from.node;
     const id = `scene-input-${side}`;
     rig.host.graph.nodes.push({
       id,
@@ -2348,7 +2351,7 @@ export function buildFactoryRecipe(
         inputGains: [recipe.scenes[0]!.mix[index]!],
       });
       rig.host.graph.edges.push({
-        from: { node, port: index },
+        from: single ? common[side]! : { node, port: index },
         to: { node: id, port: 0 },
       });
       rig.labels[id] = `${v.name} send`;
@@ -2357,6 +2360,7 @@ export function buildFactoryRecipe(
     return rig.chain(v.effects.map(effect), [feed[0]!, feed[1]!]);
   });
   const sum = [0, 1].map((side) => {
+    if (single) return ends[0]![side]!;
     const id = `scene-return-${side}`;
     rig.host.graph.nodes.push({
       id,
