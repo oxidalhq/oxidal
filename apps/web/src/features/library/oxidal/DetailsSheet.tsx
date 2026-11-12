@@ -3,7 +3,7 @@ import { AdjustmentDialog } from '../../../AdjustmentDialog';
 import { libraryCatalog } from '../../../api';
 import { friendlyError } from '../../../lib/friendlyError';
 import { setListMember } from '../setList';
-import { factoryTopologySummary } from '../../../factoryRecipes';
+import { factoryRoles, factoryTopologySummary } from '../../../factoryRecipes';
 import { Button } from '../../../components/ui/button';
 import { DialogFooter } from '../../../components/ui/dialog';
 import {
@@ -11,11 +11,14 @@ import {
   complexityLabel,
   engineLabel,
   loadEstimate,
+  roleLabel,
   sceneGuide,
   type CardState,
   type SoundItem,
 } from './oxidalSounds.model';
 import { cardLine, primaryFor, type CardHandlers } from './cardActions';
+import { isFactoryVoice, primaryCapture } from '../../../factoryVoices';
+import { ToneLink } from './ToneLink';
 import type { OxidalSounds } from './useOxidalSounds';
 import './oxidal.css';
 
@@ -49,6 +52,19 @@ export function DetailsSheet({
         : 'Everything is installed'
       : cardLine(item, state, unit).replace(/^Needs: /, '');
   const guide = item.recipe ? sceneGuide(item.recipe) : [];
+  // Every suggested tone with its TONE3000 page, so it can be checked first.
+  const tones = item.recipe
+    ? [...new Set(factoryRoles(item.recipe))].flatMap((role) =>
+        isFactoryVoice(role) ? [{ role, capture: primaryCapture(role) }] : [],
+      )
+    : [];
+  // Whether this unit's tones are known yet; until then say nothing.
+  const known = ['tone', 'signed-out', 'ready', 'build'].includes(state.kind);
+  const missing = new Set(
+    state.kind === 'tone' || state.kind === 'signed-out'
+      ? state.missing.map((t) => t.role)
+      : [],
+  );
   const listed = useSetListPlace(item.built?.revision);
   const [setList, setSetList] = useState('');
   const [adding, setAdding] = useState(false);
@@ -108,7 +124,37 @@ export function DetailsSheet({
             </>
           )}
           <dt>Needs</dt>
-          <dd>{needs}</dd>
+          <dd>
+            {tones.length > 0 &&
+            (state.kind === 'tone' || state.kind === 'signed-out') ? (
+              <>Tones from TONE3000 ({missing.size} not on this unit yet)</>
+            ) : (
+              needs
+            )}
+          </dd>
+          {tones.length > 0 && (
+            <>
+              <dt>Tones</dt>
+              <dd>
+                <ul className="oxidal-tone-refs">
+                  {tones.map(({ role, capture }) => (
+                    <li key={role}>
+                      <span>{roleLabel(role)}</span>
+                      <span className="caption">
+                        <ToneLink tone={capture.tone} />
+                        {capture.model !== undefined &&
+                          ` · model ${capture.model}`}
+                        {known &&
+                          (missing.has(role)
+                            ? ' · not on this unit'
+                            : ' · on this unit')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          )}
           <dt>Load</dt>
           <dd>{loadEstimate(item, unit.facts.frames)}</dd>
         </dl>

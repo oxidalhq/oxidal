@@ -243,9 +243,14 @@ it('Get tones: lists the missing tone with its size, downloads, builds, then Pla
     within(card).getByRole('button', { name: `Get tones: ${BROWN}` }),
   );
   const dialog = await screen.findByRole('dialog');
-  expect(
-    await within(dialog).findByText(/Plexi test capture · by maker/),
-  ).toBeVisible();
+  const link = await within(dialog).findByRole('link', {
+    name: 'Plexi test capture',
+  });
+  expect(link).toHaveAttribute('href', 'https://www.tone3000.com/tones/65578');
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(within(dialog).getByText(/· by maker/)).toBeVisible();
+  expect(within(dialog).getByText('Model: A2 (418470)')).toBeVisible();
+  expect(within(dialog).getByText(/^For: /)).toBeVisible();
   expect(within(dialog).getByText('18 MB')).toBeVisible();
   expect(
     within(dialog).getByText('Already on this unit: 0 of 1'),
@@ -484,6 +489,10 @@ it('Details: one sheet with scenes, chain, needs and load; S-9 Make my copy leav
   expect(within(sheet).getByText('How to play it')).toBeVisible();
   expect(within(sheet).getByText('Chain')).toBeVisible();
   expect(within(sheet).getByText('Needs')).toBeVisible();
+  // Every suggested tone links to its TONE3000 page, without a request.
+  expect(
+    within(sheet).getByRole('link', { name: 'Tone 65578' }),
+  ).toHaveAttribute('href', 'https://www.tone3000.com/tones/65578');
   expect(within(sheet).getByText('Load')).toBeVisible();
   expect(within(sheet).getByRole('button', { name: 'Play' })).toBeEnabled();
   // D-8: the read-only sound joins the set list by reference.

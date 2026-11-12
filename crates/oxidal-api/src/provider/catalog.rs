@@ -298,10 +298,18 @@ pub(super) async fn fetch<T: serde::de::DeserializeOwned>(
         .map_err(|_| "Cannot reach TONE3000; local presets remain available")?;
     match response.status().as_u16() {
         200 => (),
-        401 => return Err("TONE3000 authorization expired; reconnect your account"),
-        403 | 404 => return Err("This tone or model is unavailable to your account"),
-        429 => return Err("TONE3000 request limit reached; wait before retrying"),
-        _ => return Err("TONE3000 request failed; retry shortly"),
+        401 => return Err("TONE3000 authorization expired (HTTP 401); reconnect your account"),
+        403 => return Err("TONE3000 refused this tone or model for your account (HTTP 403)"),
+        404 => return Err("This tone or model is not on TONE3000 (HTTP 404)"),
+        429 => {
+            return Err(
+                "TONE3000 request limit reached (HTTP 429); wait a few minutes before retrying",
+            );
+        }
+        500 => return Err("TONE3000 had an internal error (HTTP 500); retry shortly"),
+        502 | 504 => return Err("TONE3000 did not answer in time (HTTP 502/504); retry shortly"),
+        503 => return Err("TONE3000 is unavailable (HTTP 503); retry shortly"),
+        _ => return Err("TONE3000 request failed with an unexpected status; retry shortly"),
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response

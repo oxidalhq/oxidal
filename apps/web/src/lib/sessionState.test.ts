@@ -38,7 +38,9 @@ it('returns only to a page inside Oxidal', () => {
 
 it('tells a missing sign-in from a missing internet connection', () => {
   expect(
-    remoteProblem('TONE3000 authorization expired; reconnect your account'),
+    remoteProblem(
+      'TONE3000 authorization expired (HTTP 401); reconnect your account',
+    ),
   ).toBe('account');
   expect(remoteProblem('Connect your TONE3000 account before browsing')).toBe(
     'account',
@@ -47,6 +49,8 @@ it('tells a missing sign-in from a missing internet connection', () => {
     remoteProblem('Cannot reach TONE3000; local presets remain available'),
   ).toBe('offline');
   expect(
-    remoteProblem('TONE3000 request limit reached; wait before retrying'),
+    remoteProblem(
+      'TONE3000 request limit reached (HTTP 429); wait a few minutes before retrying',
+    ),
   ).toBeNull();
 });

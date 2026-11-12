@@ -4,6 +4,7 @@ import { ArrowSquareOut } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { tone3000Tone, toneImage, type TonePage } from './api';
 import { GearIcon, GearLabel } from './GearIcon';
+import { toneLink } from './toneLink';
 
 type Tone = TonePage['data'][number];
 
@@ -11,22 +12,6 @@ type Tone = TonePage['data'][number];
 const known = new Map<number, Tone>();
 
 const licenses: Record<string, string> = { t3k: 'TONE3000 license' };
-
-/** The tone's page, only ever on TONE3000 over HTTPS: the address comes from a web API. */
-function toneLink(tone: Pick<Tone, 'id' | 'url'>) {
-  try {
-    const url = new URL(tone.url);
-    if (
-      url.protocol === 'https:' &&
-      (url.hostname === 'tone3000.com' ||
-        url.hostname.endsWith('.tone3000.com'))
-    )
-      return url.href;
-  } catch {
-    /* Fall through to the tone's own page. */
-  }
-  return `https://www.tone3000.com/tones/${tone.id}`;
-}
 
 /**
  * What the selected block is, from TONE3000: its picture, name, author, gear

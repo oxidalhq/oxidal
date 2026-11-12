@@ -143,7 +143,7 @@ async fn catalog_rejects_redirects_overlarge_replies_wrong_targets_and_rate_limi
     let (account, server, root) = account(app).await;
     assert_eq!(
         account.tones(favorites()).await.unwrap_err(),
-        "TONE3000 request limit reached; wait before retrying"
+        "TONE3000 request limit reached (HTTP 429); wait a few minutes before retrying"
     );
     assert!(
         account

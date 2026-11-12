@@ -18,6 +18,7 @@ import {
   errorDetails,
   friendlyError,
 } from '../../../lib/friendlyError';
+import { ToneLink } from './ToneLink';
 import {
   missingTones,
   roleLabel,
@@ -33,8 +34,10 @@ type Info =
       state: 'ok';
       title: string;
       creator: string;
+      url: string;
       size: string;
       model: number;
+      modelName: string;
     }
   | { state: 'removed' }
   | { state: 'error'; message: string; detail: string };
@@ -62,7 +65,7 @@ async function describeTone(
 ): Promise<Info> {
   try {
     const tone = await tone3000Tone(capture.tone, signal);
-    let found: { id: number; size?: string | null } | undefined;
+    let found: { id: number; name: string; size?: string | null } | undefined;
     for (let page = 1; page <= 5 && !found; page++) {
       const models = await tone3000Models(capture.tone, page, signal, format);
       found =
@@ -76,8 +79,10 @@ async function describeTone(
       state: 'ok',
       title: tone.title,
       creator: tone.user.display_name || tone.user.username,
+      url: tone.url,
       size: found.size ?? '',
       model: found.id,
+      modelName: found.name,
     };
   } catch (cause) {
     if (removedError(cause)) return { state: 'removed' };
@@ -285,16 +290,34 @@ export function GetTonesDialog({
                   <li key={tone.role} className="oxidal-tone-row">
                     {capture ? (
                       <>
-                        <span>
-                          {info?.state === 'ok'
-                            ? `${info.title} · by ${info.creator}`
-                            : roleLabel(tone.role)}
-                          {info?.state === 'removed' &&
-                            ' · removed from TONE3000'}
-                          {info?.state === 'error' &&
-                            ' · could not read (reason below)'}
-                          {!info && ' · reading…'}
-                        </span>
+                        <div className="oxidal-tone-what">
+                          <span className="caption">
+                            For: {roleLabel(tone.role)}
+                          </span>
+                          <span>
+                            <ToneLink
+                              tone={capture.tone}
+                              url={info?.state === 'ok' ? info.url : undefined}
+                            >
+                              {info?.state === 'ok'
+                                ? info.title
+                                : `TONE3000 tone ${capture.tone}`}
+                            </ToneLink>
+                            {info?.state === 'ok' && ` · by ${info.creator}`}
+                            {info?.state === 'removed' &&
+                              ' · removed from TONE3000'}
+                            {info?.state === 'error' &&
+                              ' · could not read (reason below)'}
+                            {!info && ' · reading…'}
+                          </span>
+                          <span className="caption">
+                            {info?.state === 'ok'
+                              ? `Model: ${info.modelName} (${info.model})`
+                              : capture.model !== undefined
+                                ? `Model ${capture.model}`
+                                : 'First model of the tone'}
+                          </span>
+                        </div>
                         <span className="caption">
                           {info?.state === 'ok' ? info.size : ''}
                         </span>
