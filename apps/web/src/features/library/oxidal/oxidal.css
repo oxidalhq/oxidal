@@ -135,3 +135,17 @@
   justify-content: space-between;
   gap: 0.25rem 0.75rem;
 }
+/* Why a tone could not be read: the reason, and the device's own words. */
+.oxidal-tone-errors {
+  display: grid;
+  gap: 0.5rem;
+}
+.oxidal-tone-errors p {
+  margin: 0;
+}
+.oxidal-tone-errors code {
+  display: block;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+}

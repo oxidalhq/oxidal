@@ -307,6 +307,31 @@ it('S-5: a tone already removed when the dialog opens blocks the download', asyn
   ).toBeVisible();
 });
 
+it('a tone that cannot be read says why, with the device words under Details', async () => {
+  vi.mocked(tone3000Tone).mockRejectedValue(
+    new DeviceError(
+      'TONE3000 answered 503 Service Unavailable',
+      'unavailable',
+      502,
+    ),
+  );
+  const { user, card } = await openBrown();
+  await user.click(
+    within(card).getByRole('button', { name: `Get tones: ${BROWN}` }),
+  );
+  const dialog = await screen.findByRole('dialog');
+  const alert = await within(dialog).findByRole('alert');
+  expect(alert).toHaveTextContent(
+    'Could not read TONE3000. TONE3000 answered 503 Service Unavailable.',
+  );
+  expect(alert).toHaveTextContent(
+    'HTTP 502 · unavailable · TONE3000 answered 503 Service Unavailable',
+  );
+  expect(
+    within(dialog).getByRole('button', { name: 'Download' }),
+  ).toBeDisabled();
+});
+
 it('Sign in: signed out offers sign-in first; after sign-in the same Get tones dialog returns (S-4)', async () => {
   vi.mocked(tone3000Account).mockResolvedValue({
     phase: 'disconnected',

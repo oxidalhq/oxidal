@@ -86,8 +86,20 @@ const presetValidator = ajv.compile<Preset>({
 async function presetResponse(response: Response): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok)
-    throw deviceError(body, response.status, 'Preset operation failed');
+    throw deviceError(
+      body,
+      response.status,
+      `The device answered HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''} with no explanation`,
+    );
   return body;
+}
+/** The first schema mismatch in a response, for Details: where and what. */
+function schemaProblem(
+  errors: { instancePath?: string; message?: string }[] | null | undefined,
+): string {
+  const first = errors?.[0];
+  if (!first) return 'unexpected shape';
+  return `${first.instancePath || 'response'} ${first.message ?? 'is invalid'}`;
 }
 export async function presetLibrary(): Promise<Preset[]> {
   const body = await presetResponse(await fetch('/api/v1/presets'));
@@ -474,7 +486,10 @@ export async function tone3000Tone(
     $defs: schema.$defs,
     $ref: '#/$defs/Tone',
   });
-  if (!validate(body)) throw new Error('Incompatible TONE3000 tone details');
+  if (!validate(body))
+    throw new Error(
+      `Incompatible TONE3000 tone details (${schemaProblem(validate.errors)})`,
+    );
   return body;
 }
 export async function tone3000Models(
@@ -494,7 +509,10 @@ export async function tone3000Models(
       cache: 'no-store',
     }),
   );
-  if (!modelsValidator(body)) throw new Error('Incompatible model catalog');
+  if (!modelsValidator(body))
+    throw new Error(
+      `Incompatible model catalog (${schemaProblem(modelsValidator.errors)})`,
+    );
   return body;
 }
 export async function stageTone3000(

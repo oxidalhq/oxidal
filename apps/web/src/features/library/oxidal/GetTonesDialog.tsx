@@ -13,7 +13,11 @@ import {
 } from '../../../components/ui/select';
 import { factoryRoles, type FactoryRole } from '../../../factoryRecipes';
 import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
-import { DeviceError, friendlyError } from '../../../lib/friendlyError';
+import {
+  DeviceError,
+  errorDetails,
+  friendlyError,
+} from '../../../lib/friendlyError';
 import {
   missingTones,
   roleLabel,
@@ -33,7 +37,16 @@ type Info =
       model: number;
     }
   | { state: 'removed' }
-  | { state: 'error'; message: string };
+  | { state: 'error'; message: string; detail: string };
+
+/** What went wrong in the device's or browser's own words, with the HTTP
+ * status and error kind when the device sent them. */
+function technical(cause: unknown): string {
+  const text = errorDetails(cause);
+  return cause instanceof DeviceError
+    ? `HTTP ${cause.status} · ${cause.code} · ${text}`
+    : text;
+}
 
 const removedError = (cause: unknown) =>
   cause instanceof DeviceError &&
@@ -68,7 +81,11 @@ async function describeTone(
     };
   } catch (cause) {
     if (removedError(cause)) return { state: 'removed' };
-    return { state: 'error', message: friendlyError(cause, 'read TONE3000') };
+    return {
+      state: 'error',
+      message: friendlyError(cause, 'read TONE3000'),
+      detail: technical(cause),
+    };
   }
 }
 
@@ -168,10 +185,23 @@ export function GetTonesDialog({
     const c = captureOf(t);
     return c && !infos[keyOf(c)];
   });
-  const unreadable = pending.find((t) => {
+  const failures = pending.flatMap((t) => {
     const c = captureOf(t);
-    return c && infos[keyOf(c)]?.state === 'error';
+    const info = c ? infos[keyOf(c)] : undefined;
+    return info?.state === 'error' ? [{ role: t.role, ...info }] : [];
   });
+  const unreadable = failures.length > 0;
+  // One line per different reason, naming the tones it applies to.
+  const reasons = [...new Set(failures.map((f) => f.message))].map(
+    (message) => {
+      const same = failures.filter((f) => f.message === message);
+      return {
+        message,
+        tones: same.map((f) => roleLabel(f.role)),
+        details: [...new Set(same.map((f) => f.detail))],
+      };
+    },
+  );
 
   async function go() {
     stop.current = false;
@@ -261,7 +291,8 @@ export function GetTonesDialog({
                             : roleLabel(tone.role)}
                           {info?.state === 'removed' &&
                             ' · removed from TONE3000'}
-                          {info?.state === 'error' && ' · could not read'}
+                          {info?.state === 'error' &&
+                            ' · could not read (reason below)'}
                           {!info && ' · reading…'}
                         </span>
                         <span className="caption">
@@ -322,7 +353,24 @@ export function GetTonesDialog({
               </p>
             )}
             {unreadable && (
-              <p role="alert">Could not read TONE3000. Check the connection.</p>
+              <div role="alert" className="oxidal-tone-errors">
+                {reasons.map((reason) => (
+                  <div key={reason.message}>
+                    <p>
+                      {reason.message}
+                      {failures.length > 1 && ` (${reason.tones.join(', ')})`}
+                    </p>
+                    <details>
+                      <summary className="caption">Details</summary>
+                      {reason.details.map((detail) => (
+                        <code key={detail} className="caption">
+                          {detail}
+                        </code>
+                      ))}
+                    </details>
+                  </div>
+                ))}
+              </div>
             )}
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
