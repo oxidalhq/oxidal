@@ -95,7 +95,9 @@ export function cardLine(
     case 'heavy':
       return `${state.count} captures; your stream fits ${state.limit}.`;
     case 'unavailable':
-      return `This unit does not have: ${state.plugins.join(', ')}.`;
+      return state.plugins.every((name) => name.startsWith('Oxidal '))
+        ? `Needs ${state.plugins.join(', ')}, which comes with a newer Oxidal system. Update this unit to play it.`
+        : `Needs ${state.plugins.join(', ')}, which no effect pack provides. Install it on this unit, then open Library again.`;
     case 'loading':
       return '';
   }

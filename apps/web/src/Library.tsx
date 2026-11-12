@@ -486,9 +486,6 @@ export function Library({
   ) {
     return (
       <div className="library-group" data-active={group === id}>
-        <span className="library-group-label" aria-hidden="true">
-          {label}
-        </span>
         <TabsList aria-label={`${label} sections`} className="library-tabs">
           {list.map((id) => (
             <TabsTrigger key={id} value={id}>

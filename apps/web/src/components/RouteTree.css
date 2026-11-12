@@ -44,11 +44,19 @@
   place-items: center;
   width: 1.75rem;
   height: 1.75rem;
+  /* Buttons default to the touch height; the circle keeps its own size and
+     the area around it takes the touch instead. */
+  min-height: 0;
   padding: 0;
   border: 1px solid var(--wire);
   border-radius: 50%;
   background: var(--background);
   color: var(--muted-foreground);
+}
+.route-gap-add::after {
+  content: '';
+  position: absolute;
+  inset: -0.5rem;
 }
 .route-gap-add:hover,
 .route-gap-add:focus-visible {

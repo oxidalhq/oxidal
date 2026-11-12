@@ -26,7 +26,7 @@ const chip = (state: CardState): string => {
         ? `⚠ Needs ${state.fitsAt}-frame buffer`
         : '⚠ Too heavy';
     case 'unavailable':
-      return 'Not available';
+      return 'Update needed';
     case 'loading':
       return 'Checking…';
   }

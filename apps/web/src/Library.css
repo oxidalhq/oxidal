@@ -671,32 +671,34 @@
   border-top: 1px solid var(--border);
 }
 
-/* Sprint 12: two groups of section tabs; on a phone a Sounds | Media switch
-   shows one group, and its sections scroll sideways. */
+/* One bar of section tabs: sounds first, then media after a divider. On a
+   phone a Sounds | Media switch shows one group, scrolling sideways. */
 .library-groups {
-  display: grid;
-  gap: 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  width: fit-content;
+  max-width: 100%;
   margin-bottom: 0.75rem;
-  min-width: 0;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  background: var(--muted);
 }
 .library-group {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
   min-width: 0;
 }
-.library-group-label {
-  flex: none;
-  width: 3.5rem;
-  color: var(--muted-foreground);
-  font-size: var(--text-xs);
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.library-group + .library-group {
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--border);
 }
 .library-tabs {
-  flex: 1 1 auto;
+  flex-wrap: nowrap;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -711,11 +713,24 @@
   display: none;
 }
 @media (max-width: 599px) {
+  .library-groups {
+    display: grid;
+    width: auto;
+    padding: 0;
+    background: none;
+  }
   .library-group-switch {
     display: flex;
   }
-  .library-group-label,
   .library-group[data-active='false'] {
     display: none;
+  }
+  .library-group + .library-group {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .library-tabs {
+    padding: 0.25rem;
+    background: var(--muted);
   }
 }
