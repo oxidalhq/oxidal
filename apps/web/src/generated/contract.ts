@@ -2040,6 +2040,13 @@ export interface Guitars {
   active?: string | null;
   guitars: Guitar[];
   /**
+   * Presets that always play with one guitar: preset key (as boosts use
+   * it) to guitar id. Starting such a preset selects its guitar.
+   */
+  presets?: {
+    [k: string]: string;
+  };
+  /**
    * The guitar presets were set up with: Measure matches others to its strum.
    */
   reference?: string | null;

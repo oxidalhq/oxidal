@@ -83,3 +83,19 @@ one boot record. Stale reviews return 409, and Protect returns 423. Existing
 readable; schema-2 records without an embedded policy use the legacy
 `boot-follow.json` preference. Owner `set_boot {enabled:false}` still clears
 startup without stopping audio.
+
+## Guitars
+
+Each guitar has a profile: an input trim and an optional gate, applied before
+every preset, so a hotter guitar does not need its own presets. One guitar is
+active at a time, and there are three ways to change it:
+
+- **By hand.** The Guitar row on Perform, or the guitar button beside Level.
+- **From a footswitch.** MIDI → Device controls → **Next guitar** selects the
+  next profile and wraps after the last.
+- **With the preset.** In the guitar dialog, **Always use … for this preset**
+  makes the playing preset remember that guitar. Starting the preset then
+  selects it. A guitar chosen by hand afterwards stays until another preset
+  starts. Deleting a guitar forgets the presets that remembered it.
+
+Even out does not depend on the active guitar and never changes it.

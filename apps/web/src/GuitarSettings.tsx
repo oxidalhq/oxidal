@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StateNotice } from './components/ui/state-notice';
-import type { GuitarProfiles } from './api';
+import { boosts, type GuitarProfiles } from './api';
 import { Guitar as GuitarIcon, Minus, Plus } from '@phosphor-icons/react';
 import { AdjustmentDialog } from './AdjustmentDialog';
 import { Button } from './components/ui/button';
@@ -557,6 +557,16 @@ export function GuitarSwitch({
 export function GuitarPicker() {
   const { profiles, busy, save } = useGuitars();
   const [open, setOpen] = useState(false);
+  // The preset playing when the choice opened: it can remember a guitar.
+  const [preset, setPreset] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const abort = new AbortController();
+    boosts(undefined, abort.signal)
+      .then((state) => setPreset(state?.playing[0] ?? null))
+      .catch(() => setPreset(null));
+    return () => abort.abort();
+  }, [open]);
   if (
     profiles == null ||
     profiles === 'unsupported' ||
@@ -599,6 +609,44 @@ export function GuitarPicker() {
               </button>
             ))}
           </div>
+          {preset &&
+            (() => {
+              const kept = profiles.guitars.find(
+                (g) => g.id === profiles.presets?.[preset],
+              );
+              const rest = Object.fromEntries(
+                Object.entries(profiles.presets ?? {}).filter(
+                  ([key]) => key !== preset,
+                ),
+              );
+              return kept ? (
+                <div className="action-row">
+                  <p className="caption">
+                    This preset switches to {kept.name} when it starts.
+                  </p>
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => void save({ ...profiles, presets: rest })}
+                  >
+                    Forget
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() =>
+                    void save({
+                      ...profiles,
+                      presets: { ...rest, [preset]: active.id },
+                    })
+                  }
+                >
+                  Always use {active.name} for this preset
+                </Button>
+              );
+            })()}
         </AdjustmentDialog>
       )}
     </>

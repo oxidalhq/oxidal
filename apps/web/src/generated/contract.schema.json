@@ -5068,6 +5068,13 @@
             "$ref": "#/$defs/Guitar"
           }
         },
+        "presets": {
+          "description": "Presets that always play with one guitar: preset key (as boosts use\nit) to guitar id. Starting such a preset selects its guitar.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "reference": {
           "description": "The guitar presets were set up with: Measure matches others to its strum.",
           "type": [

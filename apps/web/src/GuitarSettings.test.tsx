@@ -7,10 +7,14 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { guitarProfiles, monitoring, type GuitarProfiles } from './api';
+import { boosts, guitarProfiles, monitoring, type GuitarProfiles } from './api';
 import { gateFor, trimFor } from './useGuitars';
 vi.unmock('./GuitarSettings');
-vi.mock('./api', () => ({ guitarProfiles: vi.fn(), monitoring: vi.fn() }));
+vi.mock('./api', () => ({
+  boosts: vi.fn(async () => null),
+  guitarProfiles: vi.fn(),
+  monitoring: vi.fn(),
+}));
 const { GuitarPicker, GuitarSettings } = await import('./GuitarSettings');
 
 // jsdom has no modal dialog.
@@ -271,4 +275,44 @@ it('offers no picker with fewer than two guitars', async () => {
   render(<GuitarPicker />);
   await act(async () => {});
   expect(screen.queryByRole('button', { name: /Guitar:/ })).toBeNull();
+});
+
+it('lets the playing preset remember a guitar, and forget it', async () => {
+  saved = {
+    guitars: [
+      { id: 'jiva', name: 'Jiva', trim_db: 0, peak_dbfs: -8 },
+      { id: 'st', name: 'Steinberger', trim_db: 4, peak_dbfs: -14 },
+    ],
+    reference: 'jiva',
+    active: 'st',
+    presets: { 'scenes:other': 'jiva' },
+  };
+  vi.mocked(boosts).mockResolvedValue({
+    boosts: {},
+    playing: ['scenes:song', 'scenes:song#scene-1'],
+    calibrated_db: 0,
+    applied_db: 0,
+  } as never);
+  render(<GuitarPicker />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Guitar: Steinberger' }),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: 'Always use Steinberger for this preset',
+    }),
+  );
+  await act(async () => {});
+  expect(saved.presets).toEqual({
+    'scenes:other': 'jiva',
+    'scenes:song': 'st',
+  });
+  expect(
+    await screen.findByText(
+      'This preset switches to Steinberger when it starts.',
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Forget' }));
+  await act(async () => {});
+  expect(saved.presets).toEqual({ 'scenes:other': 'jiva' });
 });

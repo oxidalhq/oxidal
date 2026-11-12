@@ -56,7 +56,7 @@ pub(crate) fn key_tone3000(id: &str, owned: bool) -> String {
 pub(crate) fn key_scene(preset: &str, scene: &str) -> String {
     format!("scenes:{preset}#{scene}")
 }
-fn valid_key(key: &str) -> bool {
+pub(crate) fn valid_key(key: &str) -> bool {
     let id = |s: &str| {
         (1..=128).contains(&s.len())
             && s.bytes()
@@ -228,6 +228,10 @@ async fn playing(shared: &Shared) -> Vec<String> {
 /// output's. Called after every confirmed playback command and boost change.
 pub(crate) async fn follow(shared: &Shared) -> BoostState {
     let playing = playing(shared).await;
+    // Even Out plays through every preset; none of them may switch the guitar.
+    if !shared.calibration.running() {
+        crate::guitars::follow_preset(shared, &playing).await;
+    }
     let boosts = shared.boosts.current();
     let calibrated_db = shared.calibration.current().total(&playing);
     let (lo, hi) = HostLevels::OFFSET_RANGE;

@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::{io::Write, path::PathBuf, sync::Arc};
 
 const MAX_GUITARS: usize = 16;
+const MAX_PRESETS: usize = 1024;
 const GATE_MARGIN_DB: f32 = 6.0;
 
 /// Server-owned provenance for a guitar measurement. ALSA's stable card name is
@@ -86,6 +87,10 @@ pub struct Guitars {
     /// The guitar presets were set up with: Measure matches others to its strum.
     pub reference: Option<String>,
     pub active: Option<String>,
+    /// Presets that always play with one guitar: preset key (as boosts use
+    /// it) to guitar id. Starting such a preset selects its guitar.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub presets: std::collections::BTreeMap<String, String>,
 }
 
 impl Guitars {
@@ -96,6 +101,15 @@ impl Guitars {
         };
         let mut ids = std::collections::HashSet::new();
         let (lo, hi) = HostLevels::INPUT_RANGE;
+        if self.presets.len() > MAX_PRESETS
+            || !self.presets.iter().all(|(key, guitar)| {
+                crate::boosts::valid_key(key)
+                    && !key.contains('#')
+                    && self.guitars.iter().any(|g| &g.id == guitar)
+            })
+        {
+            return Err("A remembered guitar must belong to a preset and a known guitar".into());
+        }
         if self.guitars.len() > MAX_GUITARS
             || !known(&self.reference)
             || !known(&self.active)
@@ -238,6 +252,9 @@ fn migrate(mut value: serde_json::Value) -> Option<Guitars> {
 pub(crate) struct Store {
     path: PathBuf,
     value: std::sync::Mutex<Guitars>,
+    /// The preset whose remembered guitar was last applied, so choosing
+    /// another guitar by hand lasts until the preset changes.
+    followed: std::sync::Mutex<Option<String>>,
 }
 impl Store {
     pub(crate) fn load(path: PathBuf) -> Self {
@@ -251,6 +268,7 @@ impl Store {
         Self {
             path,
             value: std::sync::Mutex::new(value),
+            followed: std::sync::Mutex::new(None),
         }
     }
     pub(crate) fn current(&self) -> Guitars {
@@ -296,6 +314,11 @@ pub(super) async fn update(
         .ok()
         .and_then(|duration| u64::try_from(duration.as_millis()).ok())
         .unwrap_or(0);
+    let mut guitars = guitars;
+    // Deleting a guitar forgets the presets that remembered it.
+    let ids: std::collections::HashSet<String> =
+        guitars.guitars.iter().map(|g| g.id.clone()).collect();
+    guitars.presets.retain(|_, guitar| ids.contains(guitar));
     let guitars = reconcile_verifications(
         &shared.guitars.current(),
         guitars,
@@ -329,6 +352,13 @@ async fn apply(shared: &Shared, guitars: Guitars) -> Result<Guitars, String> {
 }
 
 impl Guitars {
+    /// The guitar a preset remembers, when it is not the one already active.
+    pub fn switch_for(&self, preset: &str) -> Option<String> {
+        self.presets
+            .get(preset)
+            .filter(|wanted| self.active.as_ref() != Some(wanted))
+            .cloned()
+    }
     /// The guitar after the active one, wrapping; the first when none is active.
     pub fn next(&self) -> Option<&Guitar> {
         let position = self
@@ -338,6 +368,28 @@ impl Guitars {
         self.guitars
             .get(position.map_or(0, |i| (i + 1) % self.guitars.len().max(1)))
     }
+}
+
+/// A preset that remembers a guitar selects it when it starts playing. Called
+/// with the keys of what is sounding; acts once per change of preset, so a
+/// guitar chosen by hand afterwards stays until another preset plays.
+pub(crate) async fn follow_preset(shared: &Shared, playing: &[String]) {
+    let preset = playing.first().cloned();
+    let changed = shared.guitars.followed.lock().is_ok_and(|mut followed| {
+        let changed = *followed != preset;
+        *followed = preset.clone();
+        changed
+    });
+    let Some(key) = preset.filter(|_| changed) else {
+        return;
+    };
+    let mut guitars = shared.guitars.current();
+    let Some(wanted) = guitars.switch_for(&key) else {
+        return;
+    };
+    guitars.active = Some(wanted);
+    // A refused change leaves the guitar as it was; it never fails playback.
+    let _ = apply(shared, guitars).await;
 }
 
 /// Footswitch action: play through the next guitar's profile. Resolves to its name.
@@ -398,7 +450,29 @@ mod tests {
             guitars: vec![guitar("jiva", 0.0), guitar("steinberger", 4.0)],
             reference: None,
             active: Some("steinberger".into()),
+            ..Guitars::default()
         }
+    }
+    #[test]
+    fn a_preset_remembers_one_known_guitar() {
+        let mut g = Guitars {
+            guitars: vec![guitar("a", 0.0), guitar("b", 3.0)],
+            active: Some("a".into()),
+            presets: [("scenes:song-1".to_owned(), "b".to_owned())].into(),
+            ..Guitars::default()
+        };
+        g.validate().unwrap();
+        assert_eq!(g.switch_for("scenes:song-1").as_deref(), Some("b"));
+        assert_eq!(g.switch_for("scenes:song-2"), None);
+        g.active = Some("b".into());
+        assert_eq!(g.switch_for("scenes:song-1"), None, "already playing it");
+        let text = serde_json::to_string(&Guitars::default()).unwrap();
+        assert!(!text.contains("presets"), "empty map is omitted");
+        g.presets.insert("scenes:song-2".into(), "gone".into());
+        assert!(g.validate().is_err(), "unknown guitar");
+        g.presets.clear();
+        g.presets.insert("scenes:song-1#scene-1".into(), "a".into());
+        assert!(g.validate().is_err(), "a scene is not a preset");
     }
     #[test]
     fn next_guitar_wraps_and_starts_at_the_first() {
@@ -406,6 +480,7 @@ mod tests {
             guitars: vec![guitar("a", 0.0), guitar("b", 3.0), guitar("c", -2.0)],
             reference: None,
             active: None,
+            ..Guitars::default()
         };
         assert_eq!(g.next().map(|n| n.id.as_str()), Some("a"));
         g.active = Some("b".into());
