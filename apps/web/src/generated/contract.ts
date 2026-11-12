@@ -2433,6 +2433,10 @@ export interface Disabled {
 export interface Navigation {
   backing?: BackingTriggers;
   /**
+   * Selects the next guitar profile, wrapping after the last.
+   */
+  guitar?: Trigger | null;
+  /**
    * Flips the output mute, like the Mute button.
    */
   mute?: Trigger | null;

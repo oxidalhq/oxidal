@@ -7698,6 +7698,17 @@
           "description": "Backing-track player switches and level knob.",
           "$ref": "#/$defs/BackingTriggers"
         },
+        "guitar": {
+          "description": "Selects the next guitar profile, wrapping after the last.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Trigger"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "mute": {
           "description": "Flips the output mute, like the Mute button.",
           "anyOf": [

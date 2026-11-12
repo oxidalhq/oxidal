@@ -125,6 +125,11 @@ pub(crate) fn start(shared: Weak<Shared>, mut events: mpsc::Receiver<Event>) {
                         record(&shared, &result);
                         result.ok()
                     }
+                    DeviceAction::GuitarNext => {
+                        let result = crate::guitars::select_next(&shared).await;
+                        record(&shared, &result);
+                        result.ok()
+                    }
                     backing => backing_action(&shared, backing).await.ok(),
                 };
                 continue;

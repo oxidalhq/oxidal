@@ -2,7 +2,7 @@ import { Button } from './components/ui/button';
 import type { MidiMap } from './api';
 
 type Navigation = NonNullable<MidiMap['navigation']>;
-export type NavigationKey = 'previous' | 'next' | 'mute' | 'tuner';
+export type NavigationKey = 'previous' | 'next' | 'mute' | 'tuner' | 'guitar';
 type Trigger = NonNullable<Navigation['previous']>;
 
 const rows: [NavigationKey, string][] = [
@@ -10,6 +10,7 @@ const rows: [NavigationKey, string][] = [
   ['next', 'Next preset'],
   ['mute', 'Mute output'],
   ['tuner', 'Tuner'],
+  ['guitar', 'Next guitar'],
 ];
 
 /** Shows both the friendly and the raw MIDI number so neither is guessed. */
@@ -49,7 +50,8 @@ export function PresetNavigation({
             Previous and Next move through the Mine set-list and stop at the
             first and last preset. Mute silences the output until pressed again.
             Tuner opens the global tuner overlay from any screen when a browser
-            is connected.
+            is connected. Next guitar switches to the next guitar profile and
+            wraps after the last.
           </p>
         </div>
       </div>

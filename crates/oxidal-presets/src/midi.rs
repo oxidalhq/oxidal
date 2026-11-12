@@ -263,6 +263,9 @@ pub struct Navigation {
     /// Opens the global tuner overlay when a browser is connected.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tuner: Option<Trigger>,
+    /// Selects the next guitar profile, wrapping after the last.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guitar: Option<Trigger>,
     /// Backing-track player switches and level knob.
     #[serde(default, skip_serializing_if = "BackingTriggers::is_empty")]
     pub backing: BackingTriggers,
@@ -317,6 +320,7 @@ pub enum DeviceAction {
     Next,
     MuteToggle,
     TunerOpen,
+    GuitarNext,
     BackingPlayPause,
     BackingStop,
     BackingNext,
@@ -335,6 +339,7 @@ impl Navigation {
             && self.next.is_none()
             && self.mute.is_none()
             && self.tuner.is_none()
+            && self.guitar.is_none()
             && self.backing.is_empty()
     }
 
@@ -348,6 +353,8 @@ impl Navigation {
             Some(DeviceAction::MuteToggle)
         } else if self.tuner.is_some_and(|t| t.matches(message)) {
             Some(DeviceAction::TunerOpen)
+        } else if self.guitar.is_some_and(|t| t.matches(message)) {
+            Some(DeviceAction::GuitarNext)
         } else {
             self.backing_action(message)
         }
@@ -379,7 +386,7 @@ impl Navigation {
     }
 
     fn triggers(&self) -> impl Iterator<Item = Trigger> {
-        [self.previous, self.next, self.mute, self.tuner]
+        [self.previous, self.next, self.mute, self.tuner, self.guitar]
             .into_iter()
             .chain(self.backing.triggers())
             .flatten()
@@ -1388,6 +1395,7 @@ mod tests {
                 controller: Some(23),
             }),
             backing: BackingTriggers::default(),
+            guitar: None,
         };
         let saved = store
             .replace(update(nav, vec![], &initial.revision))
@@ -1402,6 +1410,7 @@ mod tests {
                 mute: None,
                 tuner: None,
                 backing: BackingTriggers::default(),
+                guitar: None,
             },
             // Mute may not reuse Previous either.
             Navigation {
@@ -1410,6 +1419,7 @@ mod tests {
                 mute: Some(program(2)),
                 tuner: None,
                 backing: BackingTriggers::default(),
+                guitar: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1420,6 +1430,7 @@ mod tests {
                 mute: None,
                 tuner: None,
                 backing: BackingTriggers::default(),
+                guitar: None,
             },
             Navigation {
                 previous: Some(Trigger {
@@ -1430,6 +1441,7 @@ mod tests {
                 mute: None,
                 tuner: None,
                 backing: BackingTriggers::default(),
+                guitar: None,
             },
         ] {
             assert!(matches!(
@@ -1571,6 +1583,7 @@ mod tests {
                 mute: None,
                 tuner: None,
                 backing: BackingTriggers::default(),
+                guitar: None,
             },
         };
         let update = |layouts: Vec<SavedLayout>, revision: &str| MidiMapUpdate {
@@ -1844,5 +1857,29 @@ mod tests {
             vec![]
         );
         fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn a_guitar_switch_selects_the_next_guitar_and_is_a_device_control() {
+        let nav = Navigation {
+            guitar: Some(Trigger {
+                program: None,
+                controller: Some(30),
+            }),
+            ..Navigation::default()
+        };
+        assert!(!nav.is_empty());
+        nav.validate(&BTreeMap::new()).unwrap();
+        let press = |value| Message::Control {
+            channel: 0,
+            controller: 30,
+            value,
+        };
+        assert_eq!(nav.action(press(127)), Some(DeviceAction::GuitarNext));
+        assert_eq!(nav.action(press(0)), None, "a release does nothing");
+        let clash = Navigation {
+            mute: nav.guitar,
+            ..nav
+        };
+        assert!(clash.validate(&BTreeMap::new()).is_err());
     }
 }

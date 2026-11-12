@@ -48,6 +48,7 @@ const GraphAuthor = lazy(() =>
 import { useScreenSession } from './useScreenSession';
 import { ResourceStrip } from './ResourceStrip';
 import { OPEN_TUNER_EVENT, requestTuner } from './tunerNavigation';
+import { GUITARS_CHANGED_EVENT } from './useGuitars';
 import { TunerButton } from './TunerButton';
 import { refreshMonitorFeed } from './monitorFeed';
 import { publishPlayer } from './lib/playerFeed';
@@ -144,6 +145,14 @@ function InstrumentApp() {
         ) {
           lastTunerAction.current = action.seq;
           requestTuner();
+        } else if (
+          action.seq !== lastTunerAction.current &&
+          action.ok &&
+          action.message.startsWith('Guitar: ')
+        ) {
+          // A footswitch chose another guitar: every guitar control reads again.
+          lastTunerAction.current = action.seq;
+          window.dispatchEvent(new Event(GUITARS_CHANGED_EVENT));
         } else {
           lastTunerAction.current = action.seq;
         }

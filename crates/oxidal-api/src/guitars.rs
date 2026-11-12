@@ -305,24 +305,53 @@ pub(super) async fn update(
     if let Err(e) = guitars.validate() {
         return failure(StatusCode::UNPROCESSABLE_ENTITY, &e);
     }
+    match apply(&shared, guitars).await {
+        Ok(saved) => ([(header::CACHE_CONTROL, "no-store")], Json(saved)).into_response(),
+        Err(e) => failure(StatusCode::CONFLICT, &e),
+    }
+}
+
+/// Applies the active guitar's trim and gate, live and for later starts, then
+/// saves the profiles.
+async fn apply(shared: &Shared, guitars: Guitars) -> Result<Guitars, String> {
     let levels = guitars.own(HostLevels {
         ..shared.levels.current()
     });
-    if let Err(e) = crate::levels::apply_running(&shared, levels).await {
-        return failure(StatusCode::CONFLICT, &e);
-    }
+    crate::levels::apply_running(shared, levels).await?;
     let (store, unit) = (shared.guitars.clone(), shared.levels.clone());
-    match tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         unit.save(levels)?;
         store.save(guitars)?;
         Ok::<_, String>(store.current())
     })
     .await
-    {
-        Ok(Ok(saved)) => ([(header::CACHE_CONTROL, "no-store")], Json(saved)).into_response(),
-        Ok(Err(e)) => failure(StatusCode::CONFLICT, &e),
-        Err(_) => failure(StatusCode::INTERNAL_SERVER_ERROR, "Guitar task failed"),
+    .map_err(|_| "Guitar task failed".to_owned())?
+}
+
+impl Guitars {
+    /// The guitar after the active one, wrapping; the first when none is active.
+    pub fn next(&self) -> Option<&Guitar> {
+        let position = self
+            .active
+            .as_ref()
+            .and_then(|id| self.guitars.iter().position(|g| &g.id == id));
+        self.guitars
+            .get(position.map_or(0, |i| (i + 1) % self.guitars.len().max(1)))
     }
+}
+
+/// Footswitch action: play through the next guitar's profile. Resolves to its name.
+pub(crate) async fn select_next(shared: &Shared) -> Result<String, String> {
+    if let Some(reason) = shared.protect.refuse(false) {
+        return Err(reason.to_owned());
+    }
+    let mut guitars = shared.guitars.current();
+    let Some(next) = guitars.next().cloned() else {
+        return Err("Add a guitar in Guitars first".to_owned());
+    };
+    guitars.active = Some(next.id);
+    apply(shared, guitars).await?;
+    Ok(format!("Guitar: {}", next.name))
 }
 
 #[cfg(test)]
@@ -370,6 +399,22 @@ mod tests {
             reference: None,
             active: Some("steinberger".into()),
         }
+    }
+    #[test]
+    fn next_guitar_wraps_and_starts_at_the_first() {
+        let mut g = Guitars {
+            guitars: vec![guitar("a", 0.0), guitar("b", 3.0), guitar("c", -2.0)],
+            reference: None,
+            active: None,
+        };
+        assert_eq!(g.next().map(|n| n.id.as_str()), Some("a"));
+        g.active = Some("b".into());
+        assert_eq!(g.next().map(|n| n.id.as_str()), Some("c"));
+        g.active = Some("c".into());
+        assert_eq!(g.next().map(|n| n.id.as_str()), Some("a"));
+        g.guitars.clear();
+        g.active = None;
+        assert!(g.next().is_none());
     }
     #[test]
     fn the_active_guitar_plays_with_its_own_trim() {

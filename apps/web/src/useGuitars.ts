@@ -2,6 +2,9 @@ import { friendlyError } from './lib/friendlyError';
 import { useEffect, useState } from 'react';
 import { guitarProfiles, type GuitarProfiles } from './api';
 
+/** Sent on the window when the active guitar changed outside this view. */
+export const GUITARS_CHANGED_EVENT = 'oxidal:guitars-changed';
+
 /** Unit guitar profiles; null while loading, 'unsupported' on an older daemon. */
 export function useGuitars() {
   const [profiles, setProfiles] = useState<
@@ -9,6 +12,7 @@ export function useGuitars() {
   >(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reads, setReads] = useState(0);
   useEffect(() => {
     const abort = new AbortController();
     guitarProfiles(undefined, abort.signal)
@@ -18,6 +22,11 @@ export function useGuitars() {
           setError(friendlyError(cause, 'read your guitars'));
       });
     return () => abort.abort();
+  }, [reads]);
+  useEffect(() => {
+    const read = () => setReads((n) => n + 1);
+    window.addEventListener(GUITARS_CHANGED_EVENT, read);
+    return () => window.removeEventListener(GUITARS_CHANGED_EVENT, read);
   }, []);
   async function save(next: GuitarProfiles) {
     setBusy(true);
