@@ -30,7 +30,7 @@ import { factoryVoices, isFactoryVoice } from '../../../factoryVoices';
 import { friendlyError } from '../../../lib/friendlyError';
 import { playScenes } from '../../../presetChoices';
 import { presetCopy } from '../newPreset';
-import { installPack } from './finish';
+import { installPack, matchLevels } from './finish';
 import {
   builtName,
   cardState,
@@ -335,19 +335,31 @@ export function useOxidalSounds({
     setCancelling(false);
     try {
       const reused = known ?? item.built?.revision;
-      const revision = reused ?? (await build(item, ['Starting audio']));
+      const revision =
+        reused ?? (await build(item, ['Matching its level', 'Starting audio']));
       if (!revision) return;
       if (cancelled.current) {
         setError('Stopped before starting audio.');
         return;
       }
       setBusy(true);
+      let unmatched = '';
+      if (!reused) {
+        // First play: measure it once so it is as loud as the other presets.
+        setProgress({
+          label: item.name,
+          steps: ['Matching its level', 'Starting audio'],
+          current: 0,
+        });
+        unmatched = await matchLevels();
+      }
       setProgress({
         label: item.name,
         steps: ['Starting audio'],
         current: 0,
       });
       await playScenes(revision);
+      if (unmatched) setNotice(unmatched);
       onOpenRig?.();
     } catch (cause) {
       setError(friendlyError(cause, `play ${item.name}`));
@@ -398,7 +410,19 @@ export function useOxidalSounds({
         tried.current.add(item.key);
         if (await build(item, [], {}, { plugins: lv2, captures })) saved++;
       }
-      if (saved > 1) setNotice(`${saved} sounds are ready to play.`);
+      if (saved) {
+        setBusy(true);
+        setProgress({
+          label: saved > 1 ? `${saved} sounds` : 'Matching level',
+          steps: ['Matching levels'],
+          current: 0,
+        });
+        const unmatched = await matchLevels();
+        setBusy(false);
+        setProgress(null);
+        if (unmatched) setNotice(unmatched);
+        else if (saved > 1) setNotice(`${saved} sounds are ready to play.`);
+      }
       return saved;
     } finally {
       finishing.current = false;

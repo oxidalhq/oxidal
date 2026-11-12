@@ -1,4 +1,5 @@
 import {
+  calibration,
   changeEffectPack,
   effectPacks,
   installedLv2,
@@ -55,6 +56,35 @@ export async function installPack(id: string): Promise<void> {
     throw new Error(
       state.message || `${pack?.name ?? id} could not be installed.`,
     );
+}
+
+/**
+ * Measure the sounds that were just saved, so they play at the same loudness
+ * as everything else on the unit. Uses Even out: silent, only new or changed
+ * sounds, and whatever was playing is put back. Resolves to why it could not
+ * be done, or an empty string. Never rejects: a sound is still playable.
+ * @see docs/factory-collection.md
+ */
+export async function matchLevels(): Promise<string> {
+  const skipped = (why: string) =>
+    `Its level is not matched yet${why ? `: ${why}` : ''}. Use Even out in Levels.`;
+  try {
+    let state = await calibration('run');
+    // A unit without Even out has nothing to match against.
+    if (!state) return '';
+    for (let i = 0; i < 1200 && state?.progress.running; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      state = await calibration();
+    }
+    if (!state) return '';
+    if (state.progress.running) return skipped('measuring is still running');
+    if (state.progress.error) return skipped(state.progress.error);
+    if (state.progress.failed?.length)
+      return skipped(state.progress.failed[0] ?? '');
+    return '';
+  } catch (cause) {
+    return skipped(cause instanceof Error ? cause.message : '');
+  }
 }
 
 /** Save one finished preset with its description. Resolves to its revision. */
@@ -168,6 +198,10 @@ export async function finishEffectsOnly(
     progress(`Saving ${recipe.name}…`);
     await saveRecipe(recipe, context);
     saved++;
+  }
+  if (saved) {
+    progress('Matching levels…');
+    await matchLevels();
   }
   return saved;
 }

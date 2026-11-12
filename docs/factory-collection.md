@@ -40,6 +40,11 @@ install completed, so they appear in the preset picker at once. A sound that
 already had everything is saved the first time you play it. If a pack does not
 install, the card says why.
 
+A sound is measured once when it is saved, silently and for a few seconds per
+scene, so it plays as loud as the other presets on the unit. If it cannot be
+measured, the card says so and the sound still plays; use **Even out** in
+Levels later.
+
 The capture budget is provisional: a 96-frame stream carries three distinct
 Lite captures or two Full captures, in proportion to the buffer size. The
 LV2 load shown in Details, about 1.5 % of a buffer per block, is a planning

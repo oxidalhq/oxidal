@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
+  calibration,
   changeEffectPack,
   effectPacks,
   installedLv2,
@@ -9,10 +10,11 @@ import {
 } from '../../../api';
 import catalog from '../../../fixtures/factory-lv2.json';
 import { lv2ShowcaseRecipes } from '../../../recipes/lv2Showcase';
-import { effectsOnlyNeeds, finishEffectsOnly } from './finish';
+import { effectsOnlyNeeds, finishEffectsOnly, matchLevels } from './finish';
 
 /** @see docs/factory-collection.md */
 vi.mock('../../../api', () => ({
+  calibration: vi.fn(async () => null),
   installedLv2: vi.fn(),
   libraryCatalog: vi.fn(),
   effectPacks: vi.fn(),
@@ -127,4 +129,44 @@ it('sounds already saved on the unit are left alone', async () => {
   } as never);
   expect(await finishEffectsOnly(sounds, () => {})).toBe(0);
   expect(changeEffectPack).not.toHaveBeenCalled();
+});
+
+const levels = (progress = {}) =>
+  ({
+    target_lufs: -20,
+    entries: [],
+    progress: {
+      running: false,
+      done: 0,
+      total: 0,
+      measured: 0,
+      current: null,
+      failed: [],
+      error: null,
+      ...progress,
+    },
+  }) as never;
+
+it('measures newly saved sounds and waits for the run to end', async () => {
+  vi.useFakeTimers();
+  vi.mocked(calibration)
+    .mockResolvedValueOnce(levels({ running: true }))
+    .mockResolvedValueOnce(levels({ running: true }))
+    .mockResolvedValueOnce(levels({ measured: 4 }));
+  const done = matchLevels();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(await done).toBe('');
+  expect(vi.mocked(calibration).mock.calls[0]?.[0]).toBe('run');
+  vi.useRealTimers();
+});
+
+it('says why a level could not be matched, without failing', async () => {
+  vi.mocked(calibration).mockResolvedValueOnce(
+    levels({ error: 'Stop the effects preset before evening out' }),
+  );
+  expect(await matchLevels()).toBe(
+    'Its level is not matched yet: Stop the effects preset before evening out. Use Even out in Levels.',
+  );
+  vi.mocked(calibration).mockRejectedValueOnce(new Error('offline'));
+  expect(await matchLevels()).toContain('offline');
 });
