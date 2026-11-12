@@ -576,14 +576,16 @@ export async function downloadVoice(
   return body;
 }
 /** Captures already downloaded to this device. */
+/** Captures made for Oxidal sounds, and TONE3000 models already downloaded
+ * (for example in Tones and IRs) that can become one without a download. */
 export async function voiceCaptures(
   signal?: AbortSignal,
-): Promise<VoiceCapture[]> {
+): Promise<Contract['voice_list']> {
   const body = await presetResponse(
     await fetch('/api/v1/tone3000/voice', { signal, cache: 'no-store' }),
   );
   if (!voiceListValidator(body)) throw new Error('Incompatible capture list');
-  return body.captures;
+  return body;
 }
 
 export type GraphAudioState = Contract['graph_audio_state'];

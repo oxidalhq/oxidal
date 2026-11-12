@@ -10,7 +10,7 @@ use axum::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 const MAX_CATALOG: usize = 1024 * 1024;
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, JsonSchema)]
@@ -198,10 +198,12 @@ impl Account {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T, &'static str> {
-        let _permit = self
-            .requests
-            .try_acquire()
-            .map_err(|_| "TONE3000 is busy; retry shortly")?;
+        // Requests wait their turn: a dialog that reads several tones at once
+        // must not have all but one refused.
+        let _permit = tokio::time::timeout(Duration::from_secs(20), self.requests.acquire())
+            .await
+            .map_err(|_| "TONE3000 requests are queued behind a slow one; retry shortly")?
+            .map_err(|_| "TONE3000 requests stopped")?;
         let access = self.access().await?;
         let value = fetch(&access, path, query).await?;
         // A disconnected/replaced/refreshed account cannot deliver an earlier account's reply.

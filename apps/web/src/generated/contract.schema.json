@@ -3791,6 +3791,26 @@
         "kind"
       ]
     },
+    "DownloadedModel": {
+      "type": "object",
+      "properties": {
+        "model_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "tone_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tone_id",
+        "model_id"
+      ]
+    },
     "DraftScene": {
       "description": "A scene drafted with Save as new scene.",
       "type": "object",
@@ -13188,6 +13208,14 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/VoiceCapture"
+          }
+        },
+        "downloaded": {
+          "description": "TONE3000 models already downloaded to this unit, for example in Tones\nand IRs, that are not yet a capture: adding one needs no download.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DownloadedModel"
           }
         }
       },

@@ -1,4 +1,9 @@
-import type { CardState, SoundItem, UnitFacts } from './oxidalSounds.model';
+import type {
+  CardState,
+  MissingTone,
+  SoundItem,
+  UnitFacts,
+} from './oxidalSounds.model';
 import { roleLabel, sceneLine } from './oxidalSounds.model';
 import type { OxidalSounds } from './useOxidalSounds';
 
@@ -18,6 +23,10 @@ export type Primary = {
   reason?: string;
   run: () => void;
 };
+
+/** Every missing tone is already downloaded: adding them needs no TONE3000. */
+const allKept = (missing: MissingTone[]) =>
+  missing.length > 0 && missing.every((t) => t.named && t.kept !== undefined);
 
 const PROTECT_REASON =
   'Protect is on, so packs cannot be installed. Turn Protect off in Settings first.';
@@ -46,7 +55,7 @@ export function primaryFor(
       };
     case 'tone':
       return {
-        label: 'Get tones',
+        label: allKept(state.missing) ? 'Add tones' : 'Get tones',
         disabled: !idle,
         run: () => handlers.getTones(item),
       };
@@ -87,7 +96,9 @@ export function cardLine(
     case 'build':
       return 'Everything is installed.';
     case 'tone':
-      return `Needs: ${state.missing.map((t) => roleLabel(t.role)).join(' · ')}`;
+      return allKept(state.missing)
+        ? 'Its tones are downloaded on this unit. Add them to play it.'
+        : `Needs: ${state.missing.map((t) => roleLabel(t.role)).join(' · ')}`;
     case 'signed-out':
       return `Needs ${state.missing.length} ${state.missing.length === 1 ? 'tone' : 'tones'} from your TONE3000 account.`;
     case 'pack':

@@ -65,6 +65,40 @@ pub struct VoiceReady {
 #[serde(deny_unknown_fields)]
 pub struct VoiceList {
     pub captures: Vec<VoiceCapture>,
+    /// TONE3000 models already downloaded to this unit, for example in Tones
+    /// and IRs, that are not yet a capture: adding one needs no download.
+    #[serde(default)]
+    pub downloaded: Vec<DownloadedModel>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DownloadedModel {
+    pub tone_id: u64,
+    pub model_id: u64,
+}
+
+/// Downloaded TONE3000 models kept on this unit: tone, model and asset id.
+/// Bounded: at most 64 pages of 64 models are read.
+fn downloaded_models(root: &Path) -> Vec<(u64, u64, String)> {
+    let store = oxidal_presets::ModelStore::new(root.join("audition-models"));
+    let mut found = Vec::new();
+    let mut after: Option<String> = None;
+    for _ in 0..64 {
+        let Ok((rows, next)) = store.page(after.as_deref(), true) else {
+            break;
+        };
+        found.extend(
+            rows.into_iter()
+                .filter(|(_, asset)| asset.tone_id != 0)
+                .map(|(id, asset)| (asset.tone_id, asset.model_id, id)),
+        );
+        match next {
+            Some(next) => after = Some(next),
+            None => break,
+        }
+    }
+    found
 }
 
 /// `tone:model` to owned preset id, kept beside the library.
@@ -139,8 +173,25 @@ fn present(root: &Path) -> Result<Vec<VoiceCapture>, &'static str> {
 
 pub(crate) async fn list(State(shared): State<Arc<Shared>>) -> Response {
     let root = shared.config.preset_dir.clone();
-    match tokio::task::spawn_blocking(move || present(&root)).await {
-        Ok(Ok(captures)) => Json(VoiceList { captures }).into_response(),
+    let listed = tokio::task::spawn_blocking(move || {
+        let captures = present(&root)?;
+        let downloaded = downloaded_models(&root)
+            .into_iter()
+            .filter(|(tone, model, _)| {
+                !captures
+                    .iter()
+                    .any(|c| c.tone_id == *tone && c.model_id == *model)
+            })
+            .map(|(tone_id, model_id, _)| DownloadedModel { tone_id, model_id })
+            .collect();
+        Ok::<_, &'static str>(VoiceList {
+            captures,
+            downloaded,
+        })
+    })
+    .await;
+    match listed {
+        Ok(Ok(list)) => Json(list).into_response(),
         Ok(Err(error)) => failure(StatusCode::INTERNAL_SERVER_ERROR, error),
         Err(_) => failure(StatusCode::INTERNAL_SERVER_ERROR, "Capture list stopped"),
     }
@@ -192,27 +243,46 @@ pub(crate) async fn create(
         Ok(Err(error)) => return failure(StatusCode::INTERNAL_SERVER_ERROR, error),
         Err(_) => return failure(StatusCode::INTERNAL_SERVER_ERROR, "Capture check stopped"),
     }
-    let staged = match shared
-        .account
-        .stage_model(
-            StageModel {
-                tone_id: request.tone_id,
-                model_id: request.model_id,
-            },
-            root.join("audition-models"),
-            Some(shared.library_access.clone()),
-        )
+    // A model already downloaded, for example in Tones and IRs, is used as it
+    // is: TONE3000 is not asked again.
+    let (tone, model) = (request.tone_id, request.model_id);
+    let kept = {
+        let root = root.clone();
+        tokio::task::spawn_blocking(move || {
+            downloaded_models(&root)
+                .into_iter()
+                .find(|(t, m, _)| *t == tone && *m == model)
+                .map(|(_, _, id)| id)
+        })
         .await
-    {
-        Ok(staged) => staged,
-        Err(error) => return failure(StatusCode::BAD_GATEWAY, error),
+        .ok()
+        .flatten()
+    };
+    let fetched = kept.is_none();
+    let staged_id = if let Some(id) = kept {
+        id
+    } else {
+        match shared
+            .account
+            .stage_model(
+                StageModel {
+                    tone_id: request.tone_id,
+                    model_id: request.model_id,
+                },
+                root.join("audition-models"),
+                Some(shared.library_access.clone()),
+            )
+            .await
+        {
+            Ok(staged) => staged.id,
+            Err(error) => return failure(StatusCode::BAD_GATEWAY, error),
+        }
     };
     let _library = shared.library_access.read().await;
-    let id = match run_worker(&worker, &root, &name, &staged.id).await {
+    let id = match run_worker(&worker, &root, &name, &staged_id).await {
         Ok(id) => id,
         Err(error) => return failure(StatusCode::BAD_GATEWAY, &error),
     };
-    let (tone, model) = (request.tone_id, request.model_id);
     let saved = {
         let root = root.clone();
         tokio::task::spawn_blocking(move || {
@@ -230,7 +300,7 @@ pub(crate) async fn create(
                 model_id: model,
                 source,
             },
-            downloaded: true,
+            downloaded: fetched,
         })
         .into_response(),
         Ok(Err(error)) => failure(StatusCode::INTERNAL_SERVER_ERROR, error),
@@ -315,6 +385,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         path
+    }
+
+    #[test]
+    fn a_model_downloaded_in_tones_and_irs_is_found_by_tone_and_model() {
+        let root = temp("kept");
+        let bytes = b"{\"version\":\"0.5\"}".to_vec();
+        let sha256 = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(&bytes))
+        };
+        let id = oxidal_presets::ModelStore::new(root.join("audition-models"))
+            .stage(
+                &oxidal_presets::ModelAsset {
+                    schema: 1,
+                    tone_id: 88775,
+                    model_id: 501,
+                    title: "Kept".into(),
+                    name: "Kept A2".into(),
+                    format: "nam".into(),
+                    sha256,
+                    tone: serde_json::json!({"id":88775,"title":"Kept","format":"nam"}),
+                },
+                &bytes,
+            )
+            .unwrap();
+        assert_eq!(downloaded_models(&root), vec![(88775, 501, id)]);
+        // A unit with no downloads lists none and is not an error.
+        assert!(downloaded_models(&temp("none")).is_empty());
     }
 
     #[test]

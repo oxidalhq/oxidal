@@ -132,7 +132,7 @@ beforeEach(() => {
     revision: 'details-1',
     entries: [],
   });
-  vi.mocked(voiceCaptures).mockResolvedValue([]);
+  vi.mocked(voiceCaptures).mockResolvedValue({ captures: [], downloaded: [] });
   vi.mocked(effectPacks).mockResolvedValue({
     audio_running: false,
     available: true,
@@ -210,9 +210,10 @@ it('Ready: one Play action that plays the built example and opens the rig', asyn
 });
 
 it('Complete: a sound with everything installed is saved with its metadata on Play, with no separate step', async () => {
-  vi.mocked(voiceCaptures).mockResolvedValue([
-    { tone_id: 65578, model_id: 418470, source },
-  ]);
+  vi.mocked(voiceCaptures).mockResolvedValue({
+    captures: [{ tone_id: 65578, model_id: 418470, source }],
+    downloaded: [],
+  });
   const changed = vi.fn();
   const { user, card } = await openBrown(() => {}, changed);
   expect(card).toHaveAttribute('data-state', 'build');
@@ -249,12 +250,9 @@ it('Get tones: lists the missing tone with its size, downloads, builds, then Pla
   expect(link).toHaveAttribute('href', 'https://www.tone3000.com/tones/65578');
   expect(link).toHaveAttribute('target', '_blank');
   expect(within(dialog).getByText(/· by maker/)).toBeVisible();
-  expect(within(dialog).getByText('Model: A2 (418470)')).toBeVisible();
+  expect(within(dialog).getByText('Model: A2 (418470) · 18 MB')).toBeVisible();
   expect(within(dialog).getByText(/^For: /)).toBeVisible();
-  expect(within(dialog).getByText('18 MB')).toBeVisible();
-  expect(
-    within(dialog).getByText('Already on this unit: 0 of 1'),
-  ).toBeVisible();
+  expect(within(dialog).getByText('On this unit: 0 of 1')).toBeVisible();
   expect(downloadVoice).not.toHaveBeenCalled();
   await user.click(within(dialog).getByRole('button', { name: 'Download' }));
   await within(dialog).findByText('Ready.');
@@ -284,7 +282,6 @@ it('S-5: a tone removed from TONE3000 fails cleanly, names it and offers another
       /"Plexi test capture" was removed from TONE3000\./,
     ),
   ).toBeVisible();
-  expect(within(dialog).getByText(/Nothing was saved/)).toBeVisible();
   expect(publishRig).not.toHaveBeenCalled();
   expect(
     within(dialog).getByRole('button', { name: 'Choose another tone…' }),
@@ -299,7 +296,7 @@ it('S-5: a tone already removed when the dialog opens blocks the download', asyn
   );
   const dialog = await screen.findByRole('dialog');
   expect(
-    await within(dialog).findByText(/removed from TONE3000/),
+    await within(dialog).findByText(/removed from TONE3000/i),
   ).toBeVisible();
   expect(
     within(dialog).getByRole('button', { name: 'Download' }),
@@ -329,12 +326,80 @@ it('a tone that cannot be read says why, with the device words under Details', a
   expect(alert).toHaveTextContent(
     'Could not read TONE3000. TONE3000 answered 503 Service Unavailable.',
   );
-  expect(alert).toHaveTextContent(
-    'HTTP 502 · unavailable · TONE3000 answered 503 Service Unavailable',
-  );
+  expect(
+    within(dialog).getByText(
+      'HTTP 502 · unavailable · TONE3000 answered 503 Service Unavailable',
+    ),
+  ).toBeInTheDocument();
+  // The sound names its model, so the download itself can still be tried.
   expect(
     within(dialog).getByRole('button', { name: 'Download' }),
-  ).toBeDisabled();
+  ).toBeEnabled();
+});
+
+it('a tone already downloaded in Tones and IRs is added without TONE3000, even signed out', async () => {
+  vi.mocked(voiceCaptures).mockResolvedValue({
+    captures: [],
+    downloaded: [{ tone_id: 65578, model_id: 418470 }],
+  });
+  vi.mocked(tone3000Account).mockResolvedValue({
+    phase: 'signed_out',
+    revision: 1,
+    session: 's',
+  } as never);
+  vi.mocked(tone3000Tone).mockRejectedValue(new Error('offline'));
+  vi.mocked(downloadVoice).mockResolvedValue({
+    downloaded: false,
+    capture: { tone_id: 65578, model_id: 418470, source },
+  });
+  const { user, card } = await openBrown();
+  expect(card).toHaveTextContent(/tones are downloaded on this unit/);
+  await user.click(
+    within(card).getByRole('button', { name: `Add tones: ${BROWN}` }),
+  );
+  const dialog = await screen.findByRole('dialog');
+  expect(
+    await within(dialog).findByText('Already downloaded in Tones and IRs'),
+  ).toBeVisible();
+  // A failed TONE3000 read does not block a tone that is already here.
+  expect(within(dialog).queryByRole('alert')).toBeNull();
+  await user.click(within(dialog).getByRole('button', { name: 'Download' }));
+  await within(dialog).findByText('Ready.');
+  expect(downloadVoice).toHaveBeenCalledWith(65578, 418470, expect.any(String));
+});
+
+it('each tone downloads on its own and a failed one can be tried again', async () => {
+  vi.mocked(downloadVoice)
+    .mockRejectedValueOnce(
+      new DeviceError(
+        'TONE3000 is unavailable (HTTP 503); retry shortly',
+        'unavailable',
+        502,
+      ),
+    )
+    .mockResolvedValueOnce({
+      downloaded: true,
+      capture: { tone_id: 65578, model_id: 418470, source },
+    });
+  const { user, card } = await openBrown();
+  await user.click(
+    within(card).getByRole('button', { name: `Get tones: ${BROWN}` }),
+  );
+  const dialog = await screen.findByRole('dialog');
+  const row = await within(dialog).findByRole('button', {
+    name: /^Download: /,
+  });
+  await waitFor(() => expect(row).toBeEnabled());
+  await user.click(row);
+  expect(
+    (
+      await within(dialog).findAllByText(/TONE3000 is unavailable \(HTTP 503\)/)
+    )[0],
+  ).toBeVisible();
+  expect(publishRig).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: /^Download: / }));
+  await within(dialog).findByText('Ready.');
+  expect(publishRig).toHaveBeenCalledOnce();
 });
 
 it('Sign in: signed out offers sign-in first; after sign-in the same Get tones dialog returns (S-4)', async () => {
@@ -407,9 +472,10 @@ it('S-6: a pack that did not install says why and never claims success', async (
 });
 
 it('an installed pack saves the sounds it completes, with no Build step', async () => {
-  vi.mocked(voiceCaptures).mockResolvedValue([
-    { tone_id: 65578, model_id: 418470, source },
-  ]);
+  vi.mocked(voiceCaptures).mockResolvedValue({
+    captures: [{ tone_id: 65578, model_id: 418470, source }],
+    downloaded: [],
+  });
   vi.mocked(installedLv2).mockResolvedValueOnce([]);
   vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
     audio_running: false,

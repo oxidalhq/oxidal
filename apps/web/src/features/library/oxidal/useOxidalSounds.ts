@@ -67,6 +67,7 @@ export function useOxidalSounds({
   const [downloaded, setDownloaded] = useState<Record<string, RigNativeSource>>(
     {},
   );
+  const [kept, setKept] = useState<Set<string>>(() => new Set());
   const [bindings, setBindings] = useState<
     Partial<Record<FactoryRole, RigNativeSource>>
   >({});
@@ -147,12 +148,23 @@ export function useOxidalSounds({
       if (lv2.status === 'fulfilled') setPlugins(lv2.value);
       if (src.status === 'fulfilled') setSources(src.value);
       if (defs.status === 'fulfilled') setDefaults(defs.value.settings);
-      if (caps.status === 'fulfilled')
+      if (caps.status === 'fulfilled') {
         setDownloaded(
           Object.fromEntries(
-            caps.value.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
+            caps.value.captures.map((c) => [
+              `${c.tone_id}:${c.model_id}`,
+              c.source,
+            ]),
           ),
         );
+        setKept(
+          new Set(
+            (caps.value.downloaded ?? []).map(
+              (d) => `${d.tone_id}:${d.model_id}`,
+            ),
+          ),
+        );
+      }
       if (pk.status === 'fulfilled') {
         setPacks(pk.value.packs);
         setAudioRunning(pk.value.audio_running);
@@ -206,6 +218,7 @@ export function useOxidalSounds({
       ready,
       plugins,
       captures: new Set(Object.keys(downloaded)),
+      kept,
       bindings,
       signedIn,
       protectOn,
@@ -219,6 +232,7 @@ export function useOxidalSounds({
       ready,
       plugins,
       downloaded,
+      kept,
       bindings,
       signedIn,
       protectOn,
@@ -383,7 +397,7 @@ export function useOxidalSounds({
       ]);
       const captures = caps
         ? Object.fromEntries(
-            caps.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
+            caps.captures.map((c) => [`${c.tone_id}:${c.model_id}`, c.source]),
           )
         : downloaded;
       const now: UnitFacts = {

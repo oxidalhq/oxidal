@@ -3534,10 +3534,19 @@ export interface VenueProfile {
 }
 export interface VoiceList {
   captures: VoiceCapture[];
+  /**
+   * TONE3000 models already downloaded to this unit, for example in Tones
+   * and IRs, that are not yet a capture: adding one needs no download.
+   */
+  downloaded?: DownloadedModel[];
 }
 export interface VoiceCapture {
   model_id: number;
   source: RigNativeSource;
+  tone_id: number;
+}
+export interface DownloadedModel {
+  model_id: number;
   tone_id: number;
 }
 export interface VoiceReady {

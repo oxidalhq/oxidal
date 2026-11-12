@@ -47,10 +47,11 @@ impl Account {
         if request.tone_id == 0 || request.model_id == 0 {
             return Err("Select a tone and model");
         }
-        let _permit = self
-            .requests
-            .try_acquire()
-            .map_err(|_| "TONE3000 is busy; retry shortly")?;
+        let _permit =
+            tokio::time::timeout(std::time::Duration::from_secs(20), self.requests.acquire())
+                .await
+                .map_err(|_| "TONE3000 requests are queued behind a slow one; retry shortly")?
+                .map_err(|_| "TONE3000 requests stopped")?;
         let access = self.access().await?;
         let tone: Tone = fetch(&access, &format!("tones/{}", request.tone_id), &[]).await?;
         let model: DownloadModel =

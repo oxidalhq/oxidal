@@ -185,6 +185,9 @@ export type UnitFacts = {
   plugins: Lv2Plugin[];
   /** `tone:model` of captures already on this unit. */
   captures: Set<string>;
+  /** `tone:model` of TONE3000 models downloaded here (for example in Tones
+   * and IRs) that are not a capture yet: adding one needs no download. */
+  kept?: Set<string>;
   /** Saved tones the player chose for roles that name no TONE3000 tone. */
   bindings: Partial<Record<FactoryRole, RigNativeSource>>;
   /** Null when the account state could not be read. */
@@ -199,7 +202,14 @@ export type UnitFacts = {
 
 /** A tone a recipe still needs: a named TONE3000 capture or a saved tone. */
 export type MissingTone =
-  | { role: FactoryRole; named: true; tone: number; model?: number }
+  | {
+      role: FactoryRole;
+      named: true;
+      tone: number;
+      model?: number;
+      /** The model already downloaded to this unit, when there is one. */
+      kept?: number;
+    }
   | { role: FactoryRole; named: false };
 
 /** The key of an installed capture that satisfies a suggestion: its exact
@@ -236,6 +246,20 @@ export function missingTones(item: SoundItem, facts: UnitFacts): MissingTone[] {
       );
       if (present) return [];
       const capture = primaryCapture(role);
+      // Any suggested capture already downloaded counts, first one first.
+      for (const c of factoryVoices[role].captures) {
+        const key = installedKey(facts.kept ?? [], c);
+        if (key)
+          return [
+            {
+              role,
+              named: true,
+              tone: c.tone,
+              model: c.model,
+              kept: Number(key.split(':')[1]),
+            },
+          ];
+      }
       return [{ role, named: true, tone: capture.tone, model: capture.model }];
     },
   );
@@ -285,7 +309,9 @@ export function cardState(item: SoundItem, facts: UnitFacts): CardState {
   if (plugins.length) return { kind: 'unavailable', plugins };
   const missing = missingTones(item, facts);
   if (missing.length)
-    return facts.signedIn === false
+    // Tones already downloaded need no TONE3000 sign-in to be added.
+    return facts.signedIn === false &&
+      missing.some((t) => !t.named || t.kept === undefined)
       ? { kind: 'signed-out', missing }
       : { kind: 'tone', missing };
   return { kind: 'build' };

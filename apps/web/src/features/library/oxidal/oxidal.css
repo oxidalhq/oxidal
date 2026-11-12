@@ -180,3 +180,16 @@
   display: grid;
   gap: 0.0625rem;
 }
+.oxidal-tone-row[data-state='done'] .oxidal-tone-status {
+  font-weight: 600;
+}
+.oxidal-tone-row[data-state='failed'] .oxidal-tone-status {
+  color: var(--destructive, currentColor);
+}
+.oxidal-tone-row {
+  padding-block: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.oxidal-tone-row:last-child {
+  border-bottom: 0;
+}
