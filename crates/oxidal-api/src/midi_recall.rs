@@ -378,7 +378,7 @@ async fn stop_graph(shared: &Shared) -> Result<(), String> {
     Ok(())
 }
 
-fn stream(shared: &Shared) -> Option<oxidal_audio::StreamConfig> {
+pub(crate) fn stream(shared: &Shared) -> Option<oxidal_audio::StreamConfig> {
     shared
         .playback
         .snapshot()

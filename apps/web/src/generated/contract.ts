@@ -3477,6 +3477,11 @@ export interface TunerState {
    */
   output_muted: boolean;
   reading?: TunerReading | null;
+  /**
+   * The tuner opened the interface itself: nothing else is playing, so
+   * there is no sound to hear.
+   */
+  standalone?: boolean;
 }
 export interface TunerUpdate {
   enabled: boolean;

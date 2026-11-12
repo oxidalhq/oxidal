@@ -8,8 +8,9 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { GlobalTuner } from './GlobalTuner';
-import { tuner, type TunerState } from './api';
+import { tuner as tunerApi, type TunerState } from './api';
 vi.mock('./api', () => ({ tuner: vi.fn() }));
+const tuner = vi.mocked(tunerApi);
 vi.mock('./AdjustmentDialog', () => ({
   AdjustmentDialog: ({
     children,
@@ -94,23 +95,39 @@ it('lets the player hear the guitar, change the reference and fill the screen', 
   expect(localStorage.getItem('oxidal.tuner.full')).toBe('1');
 });
 
-it('says to play a preset when no audio runs, and starts by itself once it does', async () => {
-  vi.mocked(tuner).mockResolvedValue({
-    available: false,
-    enabled: false,
-    output_muted: false,
-  });
-  render(<GlobalTuner onClose={vi.fn()} />);
-  expect(await screen.findByText('Play a preset to tune')).toBeVisible();
-  expect(screen.getByRole('radio', { name: 'Mute' })).toBeDisabled();
-  expect(tuner).not.toHaveBeenCalledWith(expect.anything());
+it('opens the input by itself when nothing plays, stays silent and closes its session', async () => {
+  const alone = { ...listening(), standalone: true };
   vi.mocked(tuner).mockImplementation(async (update) =>
     update
-      ? listening()
-      : { available: true, enabled: false, output_muted: false },
+      ? alone
+      : tuner.mock.calls.some(([sent]) => sent?.enabled)
+        ? alone
+        : { available: false, enabled: false, output_muted: false },
   );
+  const onClose = vi.fn();
+  render(<GlobalTuner onClose={onClose} />);
   await waitFor(() =>
     expect(tuner).toHaveBeenCalledWith({ enabled: true, output_muted: true }),
   );
   expect(await screen.findByText('Play one string')).toBeVisible();
+  expect(screen.getByText(/opened the input by itself/)).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Hear sound' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+  expect(tuner).toHaveBeenCalledWith({ enabled: false });
+});
+
+it('says why when the interface cannot be opened', async () => {
+  vi.mocked(tuner).mockImplementation(async (update) => {
+    if (update)
+      throw new Error(
+        'The tuner could not open the audio interface: no device',
+      );
+    return { available: false, enabled: false, output_muted: false };
+  });
+  render(<GlobalTuner onClose={vi.fn()} />);
+  expect(
+    await screen.findByText(/could not open the audio interface/),
+  ).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Mute' })).toBeDisabled();
 });

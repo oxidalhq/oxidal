@@ -12638,6 +12638,11 @@
               "type": "null"
             }
           ]
+        },
+        "standalone": {
+          "description": "The tuner opened the interface itself: nothing else is playing, so\nthere is no sound to hear.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,

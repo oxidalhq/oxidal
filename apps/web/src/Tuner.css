@@ -40,9 +40,10 @@
 }
 .tuner-face {
   display: grid;
-  grid-template-rows: auto minmax(7rem, 1fr) auto auto;
+  grid-template-rows: minmax(12rem, 1fr) auto auto;
   gap: 0.75rem;
   min-width: 0;
+  min-height: 0;
   padding: 1.25rem;
   border: 1px solid var(--border);
   border-radius: var(--panel-radius);
@@ -53,41 +54,57 @@
 .tuner[data-in-tune='true'] .tuner-face {
   color: var(--tuner-lock);
 }
-.tuner-note {
-  font: 650 clamp(4rem, 18vmin, 11rem) / 1 var(--font-mono);
-  letter-spacing: -0.04em;
+/* The dial scales as one drawing, so the note grows with the screen. */
+.tuner-dial {
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  max-height: min(46dvh, 22rem);
 }
-.tuner-note sub {
-  bottom: 0;
-  margin-left: 0.1em;
-  font-size: 0.35em;
-  letter-spacing: 0;
-  opacity: 0.7;
+/* Full screen: the dial takes what the note, reading and controls leave. */
+.tuner-full .tuner-dial {
+  height: calc(100dvh - 23rem);
+  max-height: none;
 }
-.tuner-strobe {
-  position: relative;
-  display: grid;
-  gap: 0.375rem;
-  min-height: 7rem;
-  padding-block: 0.5rem;
-  border-block: 2px solid currentColor;
+@media (max-width: 599px) {
+  .tuner-full .tuner-dial {
+    height: calc(100dvh - 27rem);
+  }
 }
-.tuner-strobe-row {
-  min-height: 1rem;
-  background-image: linear-gradient(90deg, currentColor 50%, transparent 50%);
-  background-size: calc(100% / var(--bars)) 100%;
-  background-repeat: repeat-x;
+.tuner-rings circle {
+  fill: none;
+  stroke: currentColor;
 }
-.tuner-strobe[data-idle='true'] .tuner-strobe-row {
+.tuner-dial[data-idle='true'] .tuner-rings {
   opacity: 0.25;
 }
-/* The fixed mark the bars are read against. */
-.tuner-strobe-mark {
-  position: absolute;
-  inset: -0.5rem auto -0.5rem 50%;
-  width: 2px;
-  background: currentColor;
-  opacity: 0.6;
+.tuner-mark {
+  fill: currentColor;
+}
+.tuner-trace,
+.tuner-trace-reference {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tuner-trace-reference {
+  opacity: 0.3;
+}
+.tuner-dial[data-idle='true'] .tuner-trace {
+  display: none;
+}
+.tuner-note {
+  fill: currentColor;
+  font: 650 64px / 1 var(--font-mono);
+  letter-spacing: -0.04em;
+  text-anchor: middle;
+}
+.tuner-octave {
+  font-size: 24px;
+  letter-spacing: 0;
+  opacity: 0.7;
 }
 .tuner-reading {
   display: grid;
@@ -120,6 +137,10 @@
   font: 500 var(--text-xs) var(--font-mono);
   opacity: 0.75;
 }
+.tuner-alone {
+  margin: 0;
+  text-align: center;
+}
 .tuner-controls {
   display: flex;
   flex-wrap: wrap;
@@ -142,19 +163,24 @@
   width: var(--touch-target);
   padding: 0;
 }
-/* A low, wide screen (a phone on its side): note beside the strobe. */
+/* A low, wide screen (a phone on its side): the dial beside the reading. */
 @media (orientation: landscape) and (max-height: 500px) {
   .tuner-face {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: minmax(5rem, 1fr) auto auto;
+    grid-template-columns: minmax(9rem, 40%) minmax(0, 1fr);
+    grid-template-rows: 1fr auto;
     align-items: center;
   }
-  .tuner-note {
+  .tuner-dial,
+  .tuner-full .tuner-dial {
     grid-row: 1 / -1;
-    font-size: clamp(3rem, 30vmin, 7rem);
+    height: calc(100dvh - 13.5rem);
+    min-height: 7rem;
   }
-  .tuner-strobe {
-    min-height: 5rem;
+  .tuner-reading {
+    align-self: end;
+  }
+  .tuner-hz {
+    align-self: start;
   }
 }
 :root[data-display='epaper'] .tuner-face {

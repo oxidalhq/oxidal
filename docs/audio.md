@@ -104,18 +104,21 @@ Even out does not depend on the active guitar and never changes it.
 
 Oxidal has its own tuner. It listens to the raw interface input, before trim,
 gate and effects, so it works under any playing preset, with or without a
-TONE3000 chain. It needs audio to be running: with nothing playing there is no
-open input, and the tuner view says so and starts by itself once a preset
-plays.
+TONE3000 chain. With nothing playing it opens the interface itself, using the
+last audio settings: a pass-through session that is always muted and ends when
+the tuner closes, or 15 seconds after its view stops asking. A unit that has
+never played anything has no audio settings yet and says so.
 
 The detector runs inside the audio worker with fixed buffers and a bounded
 share of each block. It reads from a five-string bass's low B (about 31 Hz) to
 1.6 kHz and resolves synthetic string tones to within 0.2 cents in tests; it
 has not been compared against a reference tuner on real instruments.
 
-The view is a strobe: rows of bars drift right when the note is sharp, left
-when it is flat, and stand still in tune (within 1 cent). It mutes the outputs
+The view is a round strobe dial: two rings turn clockwise when the note is
+sharp, the other way when it is flat, and stand still in tune (within 1 cent).
+Under the note a sine trace slides against a fixed reference trace and lies on
+it in tune. It mutes the outputs
 while open and puts the previous monitoring back on close, can fill the screen,
 has a dark look for the stage and a black-on-white look for daylight, and a
-reference pitch from 430 to 450 Hz. On E-paper the rows do not animate. The
+reference pitch from 430 to 450 Hz. On E-paper nothing animates. The
 tuner stays available under Protect.
