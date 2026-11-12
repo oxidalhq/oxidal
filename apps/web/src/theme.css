@@ -31,9 +31,12 @@
   --warning: #e8e5dd;
   --warning-foreground: var(--foreground);
   --wire: #8a867c;
-  --tuner-surface: #261f16;
+  --tuner-surface: #0d0b08;
   --tuner-amber: #edbd70;
-  --tuner-green: #8dcb9a;
+  --tuner-green: #7fd694;
+  --tuner-day-surface: #ffffff;
+  --tuner-day-ink: #000000;
+  --tuner-day-green: #0b6b2e;
 
   /* Block LEDs, shared with footswitch LEDs. Never used as fills. */
   --led-amp: #d08a1a;
@@ -168,6 +171,7 @@
   --tuner-surface: #ffffff;
   --tuner-amber: #000000;
   --tuner-green: #000000;
+  --tuner-day-green: #000000;
   --secondary: #ffffff;
   --muted: #ffffff;
   --muted-foreground: #000000;

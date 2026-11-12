@@ -100,6 +100,7 @@ fn utility(command: &HostUtility) -> bool {
         HostUtility::OutputMute { .. }
             | HostUtility::OutputMuteToggle
             | HostUtility::HearYourself { .. }
+            | HostUtility::Tuner { .. }
     )
 }
 

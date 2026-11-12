@@ -1079,7 +1079,7 @@ test('rig tuner is accessible outside preset authoring and survives rotation', a
     const dialog = page.getByRole('dialog', { name: 'Tuner', exact: true });
     await expect(dialog).toBeVisible();
     await expect(
-      dialog.getByText(/standalone input tuner is not available/),
+      dialog.getByText('Play a preset to tune', { exact: true }),
     ).toBeVisible();
     await expect(
       dialog.getByRole('radio', { name: 'Mute', exact: true }),

@@ -2584,15 +2584,14 @@ test('mixed rig authoring presents confirmed controls and recalls isolated offli
     .poll(async () => (await get()).control.authoring[0].status.layout)
     .toEqual(layoutBefore);
   await page.getByRole('button', { name: 'Open tuner', exact: true }).click();
-  await expect(rig.getByLabel('Tuner reading')).toBeVisible();
-  await expect
-    .poll(async () => (await get()).control.authoring[0].status.tools.tuner)
-    .not.toBeNull();
+  await expect(
+    page.getByRole('dialog').getByLabel('Detected note'),
+  ).toBeVisible();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Close dialog', exact: true })
     .click();
-  await expect(rig.getByLabel('Tuner reading')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await rig.getByText('Preset settings · routing and engine').click();
   await rig
     .getByRole('button', { name: 'Use stereo chains', exact: true })

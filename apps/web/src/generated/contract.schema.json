@@ -289,6 +289,12 @@
     "tone_query": {
       "$ref": "#/$defs/ToneQuery"
     },
+    "tuner_state": {
+      "$ref": "#/$defs/TunerState"
+    },
+    "tuner_update": {
+      "$ref": "#/$defs/TunerUpdate"
+    },
     "unit_levels": {
       "$ref": "#/$defs/HostLevels"
     },
@@ -378,6 +384,8 @@
     "audio_devices",
     "unit_levels",
     "guitars",
+    "tuner_state",
+    "tuner_update",
     "boosts",
     "boost_update",
     "calibration",
@@ -5265,6 +5273,22 @@
         },
         "test_tone_active": {
           "type": "boolean"
+        },
+        "tuner": {
+          "description": "The input tuner's newest pitch; none without a clear note.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TunerReading"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tuner_enabled": {
+          "description": "Whether the input tuner is listening.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -5323,6 +5347,24 @@
           "additionalProperties": false,
           "required": [
             "kind"
+          ]
+        },
+        {
+          "description": "Oxidal's input tuner: listens to the raw input under any preset.",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "tuner"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "enabled"
           ]
         },
         {
@@ -12570,6 +12612,59 @@
         "frequency",
         "confidence",
         "level"
+      ]
+    },
+    "TunerState": {
+      "description": "What the tuner view shows.",
+      "type": "object",
+      "properties": {
+        "available": {
+          "description": "Audio is running, so there is an input to listen to.",
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "output_muted": {
+          "description": "The outputs are muted (the tuner mutes them by default).",
+          "type": "boolean"
+        },
+        "reading": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TunerReading"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "enabled",
+        "output_muted"
+      ]
+    },
+    "TunerUpdate": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "output_muted": {
+          "description": "Also mute or unmute the outputs; omitted leaves them alone.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled"
       ]
     },
     "UploadFormat": {

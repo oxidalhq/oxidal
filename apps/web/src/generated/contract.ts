@@ -106,6 +106,10 @@ export type HostUtility =
       kind: "output_mute_toggle";
     }
   | {
+      enabled: boolean;
+      kind: "tuner";
+    }
+  | {
       kind: "test_tone";
     }
   | {
@@ -1028,6 +1032,8 @@ export interface Contract {
   terminal_state: TerminalState;
   tone_page: Page;
   tone_query: ToneQuery;
+  tuner_state: TunerState;
+  tuner_update: TunerUpdate;
   unit_levels: HostLevels;
   validation: Validation;
   venue_request: VenueRequest;
@@ -1925,6 +1931,14 @@ export interface HostState {
    */
   reference?: ReferenceReading | null;
   test_tone_active: boolean;
+  /**
+   * The input tuner's newest pitch; none without a clear note.
+   */
+  tuner?: TunerReading | null;
+  /**
+   * Whether the input tuner is listening.
+   */
+  tuner_enabled?: boolean;
 }
 /**
  * Where the worker's backing player is, reported with every telemetry snapshot.
@@ -3448,6 +3462,28 @@ export interface ToneQuery {
   gear?: Gear | null;
   page?: number;
   query?: string;
+}
+/**
+ * What the tuner view shows.
+ */
+export interface TunerState {
+  /**
+   * Audio is running, so there is an input to listen to.
+   */
+  available: boolean;
+  enabled: boolean;
+  /**
+   * The outputs are muted (the tuner mutes them by default).
+   */
+  output_muted: boolean;
+  reading?: TunerReading | null;
+}
+export interface TunerUpdate {
+  enabled: boolean;
+  /**
+   * Also mute or unmute the outputs; omitted leaves them alone.
+   */
+  output_muted?: boolean | null;
 }
 export interface Validation {
   errors: string[];

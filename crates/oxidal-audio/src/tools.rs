@@ -19,7 +19,7 @@ pub enum Command {
     Cancel,
     Poll,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TunerReading {
     pub frequency: f64,
@@ -129,6 +129,10 @@ pub enum HostUtility {
     /// Flip the output mute. The worker owns the state, so a footswitch needs no
     /// mirrored copy that could disagree with the screen.
     OutputMuteToggle,
+    /// Oxidal's input tuner: listens to the raw input under any preset.
+    Tuner {
+        enabled: bool,
+    },
     TestTone,
     StopTestTone,
     Levels {
@@ -238,9 +242,16 @@ pub struct HostState {
     /// The worker's Record DI or reamp job, when one has run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capture: Option<crate::capture::CaptureStatus>,
+    /// Whether the input tuner is listening.
+    #[serde(default)]
+    pub tuner_enabled: bool,
+    /// The input tuner's newest pitch; none without a clear note.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tuner: Option<TunerReading>,
 }
 #[derive(Debug)]
 pub struct HostSignal {
+    tuner: crate::tuner::Tuner,
     hear: bool,
     output_muted: bool,
     rate: u32,
@@ -393,6 +404,7 @@ impl Glide {
 impl HostSignal {
     pub fn new(rate: u32, hear: bool, levels: HostLevels) -> Self {
         Self {
+            tuner: crate::tuner::Tuner::new(rate),
             hear,
             output_muted: false,
             rate,
@@ -508,6 +520,7 @@ impl HostSignal {
                 self.output_muted = !self.output_muted;
                 self.monitor_gain.target = if self.output_muted { 0.0 } else { 1.0 };
             }
+            HostUtility::Tuner { enabled } => self.tuner.set(enabled),
             HostUtility::TestTone => {
                 if !self.test_active {
                     self.test_frame = 0;
@@ -557,6 +570,8 @@ impl HostSignal {
                 .capture
                 .as_ref()
                 .and_then(crate::capture::Capture::status),
+            tuner_enabled: self.tuner.enabled(),
+            tuner: self.tuner.reading(),
         }
     }
     pub fn input(&mut self, left: &mut [f32], right: &mut [f32]) {
@@ -583,6 +598,8 @@ impl HostSignal {
                 capture.add_lost(dropped);
             }
         }
+        // The tuner hears the same raw input, before trim, gate and mute.
+        self.tuner.input(left);
         // The riff stands in for a guitar at the reference level: no trim or gate.
         if self.reference.active() {
             self.reference.input(left, right);

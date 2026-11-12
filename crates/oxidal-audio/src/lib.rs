@@ -12,6 +12,7 @@ pub mod reference;
 pub mod session_media;
 pub mod structure;
 pub mod tools;
+pub mod tuner;
 pub mod venue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

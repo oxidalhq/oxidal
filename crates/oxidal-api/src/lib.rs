@@ -39,6 +39,7 @@ mod rig_recovery;
 mod scene_draft;
 mod storage_lock;
 mod terminal;
+mod tuner;
 mod venues;
 use axum::{
     Json, Router,
@@ -196,6 +197,8 @@ pub struct Contract {
     pub audio_devices: oxidal_audio::AudioDevices,
     pub unit_levels: oxidal_audio::tools::HostLevels,
     pub guitars: guitars::Guitars,
+    pub tuner_state: tuner::TunerState,
+    pub tuner_update: tuner::TunerUpdate,
     pub boosts: boosts::BoostState,
     pub boost_update: boosts::BoostUpdate,
     pub calibration: calibration::CalibrationState,
@@ -523,6 +526,7 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
             get(audio_boot::startup).post(audio_boot::set_startup),
         )
         .route("/guitars", get(guitars::state).post(guitars::update))
+        .route("/tuner", get(tuner::state).post(tuner::update))
         .route("/boosts", get(boosts::state).post(boosts::update))
         .route("/scene-blends", get(blends::state).post(blends::update))
         .route(

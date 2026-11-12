@@ -921,6 +921,34 @@ export async function guitarProfiles(
   return body;
 }
 
+export type TunerState = Contract['tuner_state'];
+export type TunerUpdate = Contract['tuner_update'];
+const tunerValidator = ajv.compile<TunerState>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/TunerState',
+});
+/** Oxidal's input tuner; an update starts or stops it. Null on older units. */
+export async function tuner(
+  update?: TunerUpdate,
+  signal?: AbortSignal,
+): Promise<TunerState | null> {
+  const response = await fetch(
+    '/api/v1/tuner',
+    update
+      ? {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(update),
+          signal,
+        }
+      : { signal },
+  );
+  if (response.status === 404) return null;
+  const body = await presetResponse(response);
+  if (!tunerValidator(body)) throw new Error('Incompatible tuner state');
+  return body;
+}
+
 export type BoostState = Contract['boosts'];
 const boostsValidator = ajv.compile<BoostState>({
   $defs: schema.$defs,
