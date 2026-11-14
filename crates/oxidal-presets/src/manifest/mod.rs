@@ -2,7 +2,10 @@
 //! plugin, resolve resource files, or change the playing rig.
 //! @see docs/presets/format.md
 mod scenes;
-pub use scenes::{MAX_SCENE_CONTROLS, SCENES_EXTENSION, Scene, SceneControl, SceneGain, Scenes};
+pub use scenes::{
+    MAX_SCENE_CONTROLS, SCENES_CONTROLS_EXTENSION, SCENES_EXTENSION, Scene, SceneControl,
+    SceneGain, Scenes, UNSUPPORTED_SCENES,
+};
 mod strict;
 #[cfg(test)]
 mod tests;
@@ -102,7 +105,10 @@ impl Manifest {
     /// optional metadata is preserved, never treated as a sonic capability.
     pub fn check_required_extensions(&self) -> Result<()> {
         if self.required_extensions.iter().any(|key| {
-            key != SCENES_EXTENSION && key != NATIVE_SETTINGS_EXTENSION && key != GAIN_EXTENSION
+            key != SCENES_EXTENSION
+                && key != SCENES_CONTROLS_EXTENSION
+                && key != NATIVE_SETTINGS_EXTENSION
+                && key != GAIN_EXTENSION
         }) {
             return Err(Error::Invalid("Unsupported required preset extension"));
         }

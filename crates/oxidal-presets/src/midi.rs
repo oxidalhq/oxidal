@@ -1235,6 +1235,72 @@ mod tests {
     }
 
     #[test]
+    fn a_duplicate_follows_its_source_by_scene_id_and_keeps_the_source_map() {
+        let root = root("follow");
+        let store = MidiMapStore::new(root.clone());
+        let scene = |scene: &str, program| Binding {
+            scene: scene.into(),
+            program: Some(program),
+            controller: None,
+        };
+        let off = |program| Disabled {
+            kind: AssignmentKind::Scene,
+            program: Some(program),
+            controller: None,
+        };
+        // Nothing to follow: no map is written.
+        assert!(!store.follow(&entry('a'), &entry('b'), &[]).unwrap());
+        assert!(store.snapshot().unwrap().entries.is_empty());
+        let revision = store.snapshot().unwrap().revision;
+        store
+            .replace(MidiMapUpdate {
+                expected_revision: revision,
+                input: Some("hw:Controller,0,0".into()),
+                channel: 1,
+                template: None,
+                navigation: Navigation::default(),
+                saved_layouts: vec![],
+                extra_inputs: vec![],
+                entries: vec![MidiMapEntry {
+                    entry: entry('a'),
+                    bindings: vec![scene("clean", 1), scene("lead", 2), scene("gone", 3)],
+                    branch_bindings: vec![],
+                    parameter_bindings: vec![],
+                    disabled: vec![off(2), off(3)],
+                }],
+            })
+            .unwrap();
+        // The copy's scenes are in another order and one is gone: bindings
+        // follow the scene id, and the removed scene's binding and its
+        // switched-off marker are dropped.
+        let scenes = ["lead".to_owned(), "clean".to_owned()];
+        assert!(store.follow(&entry('a'), &entry('b'), &scenes).unwrap());
+        let map = store.snapshot().unwrap();
+        let of = |id| map.entries.iter().find(|e| e.entry == entry(id)).cloned();
+        let copy = of('b').unwrap();
+        assert_eq!(copy.bindings, vec![scene("clean", 1), scene("lead", 2)]);
+        assert_eq!(copy.disabled, vec![off(2)]);
+        // Unlike a save, the source keeps its own map unchanged.
+        assert_eq!(of('a').unwrap().bindings.len(), 3);
+        // Following a preset onto itself changes nothing.
+        assert!(store.follow(&entry('a'), &entry('a'), &scenes).unwrap());
+        assert_eq!(store.snapshot().unwrap(), map);
+        // An existing map of the target wins: a retry never overwrites it.
+        store.configure(entry('c'), settings(9)).unwrap();
+        let before = store.snapshot().unwrap();
+        assert!(store.follow(&entry('a'), &entry('c'), &scenes).unwrap());
+        assert_eq!(store.snapshot().unwrap(), before);
+        // A copy keeping none of the source's scenes gets no empty map.
+        assert!(
+            store
+                .follow(&entry('a'), &entry('d'), &["new".to_owned()])
+                .unwrap()
+        );
+        assert_eq!(store.snapshot().unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn device_is_global_while_mappings_follow_immutable_preset_identity() {
         let root = root("identity");
         let store = MidiMapStore::new(root.clone());

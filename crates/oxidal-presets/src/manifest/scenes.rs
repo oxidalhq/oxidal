@@ -4,7 +4,17 @@
 use super::*;
 use std::collections::BTreeSet;
 
+/// Scenes that mix prepared paths. Saved presets may also carry scene
+/// `controls` under this version: they are read, but new writers use
+/// [`SCENES_CONTROLS_EXTENSION`] for them.
 pub const SCENES_EXTENSION: &str = "urn:oxidal:scenes:1";
+/// Scenes that also set plugin controls. A reader that only knows version 1
+/// refuses it as an unsupported required extension instead of failing to
+/// parse it. Writers use it only when a scene sets a control.
+pub const SCENES_CONTROLS_EXTENSION: &str = "urn:oxidal:scenes:2";
+const SCENES_PREFIX: &str = "urn:oxidal:scenes:";
+/// The refusal for a scenes version this reader does not know.
+pub const UNSUPPORTED_SCENES: &str = "Unsupported scenes format: this preset needs a newer Oxidal";
 /// Most plugin controls one scene may set. Every scene of a preset sets the
 /// same controls, so this also bounds the host's ramp slots.
 pub const MAX_SCENE_CONTROLS: usize = 32;
@@ -48,16 +58,26 @@ impl Manifest {
     /// Scenes are sonic data: require explicit support rather than allowing an
     /// older reader to silently discard their meaning. Initial mix remains the
     /// graph's gains, so Save/recovery use the existing confirmed scalar path.
+    /// Version 1 and version 2 are both read; any other scenes version is
+    /// refused as unsupported rather than read as invalid.
     pub fn scenes(&self) -> Result<Option<Scenes>> {
-        let Some(extension) = self.extensions.get(SCENES_EXTENSION) else {
+        let bad = || Error::Invalid("Invalid prepared scene definitions");
+        let known = |key: &str| key == SCENES_EXTENSION || key == SCENES_CONTROLS_EXTENSION;
+        if self
+            .extensions
+            .keys()
+            .chain(&self.required_extensions)
+            .any(|key| key.starts_with(SCENES_PREFIX) && !known(key))
+        {
+            return Err(Error::Invalid(UNSUPPORTED_SCENES));
+        }
+        let mut present = [SCENES_EXTENSION, SCENES_CONTROLS_EXTENSION]
+            .into_iter()
+            .filter_map(|key| self.extensions.get(key).map(|extension| (key, extension)));
+        let Some((key, extension)) = present.next() else {
             return Ok(None);
         };
-        let bad = || Error::Invalid("Invalid prepared scene definitions");
-        if !self
-            .required_extensions
-            .iter()
-            .any(|key| key == SCENES_EXTENSION)
-        {
+        if present.next().is_some() || !self.required_extensions.iter().any(|k| k == key) {
             return Err(bad());
         }
         let definition: Scenes =

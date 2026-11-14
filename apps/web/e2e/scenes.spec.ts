@@ -7,12 +7,11 @@ import {
 } from '@playwright/test';
 
 /**
- * Set list, Duplicate and scene management against the real daemon (FR-8,
- * FR-9): Duplicate leaves "Name copy" outside the set list and opens it
- * stopped (S-10), the starter set list appends (S-20) and is offered once on
- * a fresh unit (S-1), and the scene menu reorders with MIDI bindings following
- * the scene (S-13), refuses to delete the last scene (S-12) and shows what
- * Copy to preset… skips before copying (S-11). Rig audio is a transport
+ * Set list, Duplicate and scene management against the real daemon: Duplicate leaves "Name copy" outside the set list and opens it
+ * stopped, the starter set list appends and is offered once on
+ * a fresh unit, and the scene menu reorders with MIDI bindings following
+ * the scene, refuses to delete the last scene and shows what
+ * Copy to preset… skips before copying. Rig audio is a transport
  * fixture; publishing, the library catalog and the MIDI map are real.
  */
 type Scene = { id: string; name: string; value: number };
@@ -153,7 +152,7 @@ function audioWrites(page: Page) {
   return writes;
 }
 
-test('library sections: Duplicate makes "Name copy" in Mine outside the set list and opens it stopped (S-10)', async ({
+test('library sections: Duplicate makes "Name copy" in Mine outside the set list and opens it stopped', async ({
   page,
   request,
 }, info) => {
@@ -202,9 +201,10 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
       await request.get(`/api/v1/presets/rigs/${copy.id}`)
     ).json();
     expect(
-      document.manifest.extensions['urn:oxidal:scenes:1'].scenes.map(
-        (s: { name: string }) => s.name,
-      ),
+      (
+        document.manifest.extensions['urn:oxidal:scenes:2'] ??
+        document.manifest.extensions['urn:oxidal:scenes:1']
+      ).scenes.map((s: { name: string }) => s.name),
     ).toEqual(['Clean', 'Lead']);
     // The Set list shows it under "Not in the set list", ready to add.
     await page.getByRole('tab', { name: 'Set list', exact: true }).click();
@@ -223,7 +223,7 @@ test('library sections: Duplicate makes "Name copy" in Mine outside the set list
   }
 });
 
-/** The starter Oxidal sounds as read-only examples (D-8), in starter order. */
+/** The starter Oxidal sounds as read-only examples, in starter order. */
 const STARTER = [
   'Two Rooms',
   'Pocket Wire',
@@ -255,7 +255,7 @@ async function installStarter(request: APIRequestContext) {
   return ids;
 }
 
-test('library sections: Add starter set list appends after the existing entries (S-20)', async ({
+test('library sections: Add starter set list appends after the existing entries', async ({
   page,
   request,
 }, info) => {
@@ -301,7 +301,7 @@ test('library sections: Add starter set list appends after the existing entries 
   }
 });
 
-test('library sections: a fresh unit offers the starter set list once (S-1)', async ({
+test('library sections: a fresh unit offers the starter set list once', async ({
   page,
 }) => {
   const example = (name: string, i: number) => ({
@@ -378,7 +378,9 @@ async function mockRig(
     const document = await (
       await request.get(`/api/v1/presets/rigs/${rev}`)
     ).json();
-    const scenes = document.manifest.extensions['urn:oxidal:scenes:1'];
+    const scenes =
+      document.manifest.extensions['urn:oxidal:scenes:2'] ??
+      document.manifest.extensions['urn:oxidal:scenes:1'];
     count++;
     return {
       ...baseline,
@@ -469,7 +471,7 @@ async function bindings(request: APIRequestContext, revision: string) {
   ).map((b: { scene: string; controller: number }) => [b.scene, b.controller]);
 }
 
-test('mixed rig authoring: scenes move with their MIDI bindings and the last scene cannot be deleted (S-12, S-13)', async ({
+test('mixed rig authoring: scenes move with their MIDI bindings and the last scene cannot be deleted', async ({
   page,
   request,
 }, info) => {
@@ -492,7 +494,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
     await expect(
       pads.getByRole('button', { name: 'Scene 2: Lead' }),
     ).toBeVisible();
-    // S-13: Move left from the pad's menu. The binding follows the scene.
+    // Move left from the pad's menu. The binding follows the scene.
     await page.getByRole('button', { name: 'More for scene Lead' }).click();
     const menu = page.getByRole('dialog', { name: 'Scene 2: Lead' });
     await expect(
@@ -516,7 +518,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
     // The saved preset kept its place and name: one preset in Mine.
     const items = (await catalog(request)).items;
     expect(items.find((i) => i.id === moved)!.name).toBe(name);
-    // Delete Clean, then the last scene is refused with the reason (S-12).
+    // Delete Clean, then the last scene is refused with the reason.
     await page.getByRole('button', { name: 'More for scene Clean' }).click();
     await page
       .getByRole('dialog', { name: 'Scene 2: Clean' })
@@ -545,7 +547,7 @@ test('mixed rig authoring: scenes move with their MIDI bindings and the last sce
   }
 });
 
-test('mixed rig authoring: Copy to preset says what copies and refuses presets with nothing in common (S-11)', async ({
+test('mixed rig authoring: Copy to preset says what copies and refuses presets with nothing in common', async ({
   page,
   request,
 }, info) => {
@@ -611,12 +613,13 @@ test('mixed rig authoring: Copy to preset says what copies and refuses presets w
       await request.get(`/api/v1/presets/rigs/${saved.id}`)
     ).json();
     expect(
-      document.manifest.extensions['urn:oxidal:scenes:1'].scenes.map(
-        (s: { name: string; gains: { value: number }[] }) => [
-          s.name,
-          s.gains[0]!.value,
-        ],
-      ),
+      (
+        document.manifest.extensions['urn:oxidal:scenes:2'] ??
+        document.manifest.extensions['urn:oxidal:scenes:1']
+      ).scenes.map((s: { name: string; gains: { value: number }[] }) => [
+        s.name,
+        s.gains[0]!.value,
+      ]),
     ).toEqual([
       ['Rhythm', 0.8],
       ['Lead', 0.5],

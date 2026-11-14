@@ -48,6 +48,7 @@ import {
   type RouteSplit,
 } from '../../rigRoute';
 import { keepScenes } from '../../sceneEdit';
+import { readScenes } from '../../sceneFormat';
 import { presetNameError } from './newPreset';
 
 /** The scan rate for plugin metadata; nothing is processed here. */
@@ -146,8 +147,7 @@ export function OfflineEditor({
         (i) => i.kind === 'rig' && i.id === revision,
       );
       setName(listed?.name ?? document.manifest.name);
-      const scenes = document.manifest.extensions['urn:oxidal:scenes:1'] as
-        { branches?: unknown[] } | undefined;
+      const scenes = readScenes<{ branches?: unknown[] }>(document.manifest);
       const base = {
         document,
         plugins,

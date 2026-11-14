@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { installedLv2, type Lv2Plugin, type RigControl } from '../../api';
+import { controlLabel } from '../../lv2Control';
 import {
   MAX_SCENE_CONTROLS,
   blockLabel,
@@ -106,8 +107,8 @@ export function useSceneSettings({ rig, vm }: RigViewProps) {
           node: target.node,
           symbol: target.symbol,
           label: manifest
-            ? `${blockLabel(manifest, target.node)} · ${control.label}`
-            : control.label,
+            ? `${blockLabel(manifest, target.node)} · ${controlLabel(control.label)}`
+            : controlLabel(control.label),
           value: control.value,
           display: control.display,
           stepped:

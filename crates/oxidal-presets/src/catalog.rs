@@ -1405,7 +1405,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(members(&added), ['b', 'd']);
-        // S-20: the starter appends after the existing entries; members keep
+        // the starter appends after the existing entries; members keep
         // their place and nothing is replaced.
         let reference = |id: &str| crate::LibraryReference {
             kind: LibraryKind::Rig,

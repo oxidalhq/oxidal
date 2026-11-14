@@ -12,6 +12,7 @@ import {
   type NativeDraft,
 } from './rigDraft';
 import type { Lv2Plugin, Preset } from './api';
+import { scenesKey } from './sceneFormat';
 const validator = new Ajv({ strict: false }).compile(schema);
 const mono: Lv2Plugin = {
   name: 'Mono gain',
@@ -233,9 +234,9 @@ it('builds parallel scene branches with shared post effects and exact stereo sel
         e.from.node === 'scene-left' || e.from.node === 'scene-right',
     ),
   ).toHaveLength(2);
-  const scenes = manifest.extensions['urn:oxidal:scenes:1'].scenes;
+  const scenes = manifest.extensions[scenesKey(manifest)!].scenes;
   expect(scenes).toHaveLength(2);
-  const branches = manifest.extensions['urn:oxidal:scenes:1'].branches;
+  const branches = manifest.extensions[scenesKey(manifest)!].branches;
   expect(branches).toHaveLength(2);
   expect(branches[0].gains).toEqual([
     { node: 'scene-left', port: 0, value: 1 },
@@ -268,7 +269,7 @@ it('keeps outgoing branch histories by selecting input gates and unity-summing o
   }[];
   expect(nodes.find((n) => n.id === 'scene-left')!.inputGains).toEqual([1, 1]);
   expect(nodes.find((n) => n.id === 'scene-right')!.inputGains).toEqual([1, 1]);
-  const extension = manifest.extensions['urn:oxidal:scenes:1'];
+  const extension = manifest.extensions[scenesKey(manifest)!];
   expect(extension.scenes[0].gains).toEqual([
     { node: 'scene-feed-left-0', port: 0, value: 1 },
     { node: 'scene-feed-left-1', port: 0, value: 0 },

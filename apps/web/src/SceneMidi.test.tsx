@@ -282,7 +282,7 @@ it('learns Program Change for a scene and CC for an independent switch', async (
     <SceneMidi state={{ ...current }} disabled={false} onCommand={vi.fn()} />,
   );
   await waitFor(() =>
-    expect(screen.getByLabelText('Branch Boost CC')).toHaveValue(42),
+    expect(screen.getByLabelText('Path Boost CC')).toHaveValue(42),
   );
 });
 

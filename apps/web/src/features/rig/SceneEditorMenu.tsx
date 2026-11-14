@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { AdjustmentDialog } from '../../AdjustmentDialog';
 import { Button } from '../../components/ui/button';
 import {
+  installedLv2,
   publishRig,
   rigDocument,
   rigLibrary,
+  type Lv2Plugin,
   type RigDocument,
   type RigPage,
 } from '../../api';
@@ -20,6 +22,7 @@ import {
   sceneCopyPlan,
   type SceneCopyPlan,
 } from '../../sceneEdit';
+import { readScenes } from '../../sceneFormat';
 import type { RigViewProps } from './useMixedRigSession';
 import { rigBusy } from './mixedRigViewModel';
 
@@ -34,9 +37,9 @@ type Step =
  * The scene menu (⋯ or hold a pad, or Scene ⋯ for the playing scene):
  * Rename, Duplicate scene, Copy to preset…, Move left, Move right, Delete….
  * Each change saves the preset through the scene save path; MIDI bindings
- * name the scene, so they follow it when it moves (S-13). The last scene
- * cannot be deleted (S-12). Copy to preset… shows what is skipped before
- * anything is copied (S-11).
+ * name the scene, so they follow it when it moves. The last scene
+ * cannot be deleted. Copy to preset… shows what is skipped before
+ * anything is copied.
  * @see docs/interface.md
  */
 export function SceneMenu({
@@ -152,6 +155,7 @@ export function SceneMenu({
         source={rig.matching}
         sceneId={sceneId}
         sceneName={scene.name}
+        rate={vm.state.configured?.stream?.input?.sample_rate ?? 48000}
         onClose={onClose}
         onDone={onDone}
       />
@@ -223,17 +227,23 @@ export function SceneMenu({
   );
 }
 
-/** Copy to preset…: choose a preset in Mine, see what differs, then copy. */
+/**
+ * Copy to preset…: choose a preset in Mine, see what differs, then copy.
+ * Settings are named by their label; the effects catalog adds named values.
+ */
 function CopyToPreset({
   source,
   sceneId,
   sceneName,
+  rate,
   onClose,
   onDone,
 }: {
   source: RigDocument | null;
   sceneId: string;
   sceneName: string;
+  /** The stream's sample rate, for the effects catalog. */
+  rate: number;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -243,6 +253,18 @@ function CopyToPreset({
   const [plan, setPlan] = useState<SceneCopyPlan | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [plugins, setPlugins] = useState<Lv2Plugin[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    // Without the catalog, settings are still named by their label.
+    void Promise.resolve()
+      .then(() => installedLv2(rate))
+      .then((list) => alive && setPlugins(list ?? []))
+      .catch(() => alive && setPlugins([]));
+    return () => {
+      alive = false;
+    };
+  }, [rate]);
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -275,13 +297,14 @@ function CopyToPreset({
     };
   }, [source?.revision]);
   useEffect(() => {
-    if (!chosen || !source) return;
+    // The plan waits for the catalog, which settles to empty if it fails.
+    if (!chosen || !source || !plugins) return;
     let alive = true;
     void rigDocument(chosen)
       .then((document) => {
         if (!alive) return;
         setTarget(document);
-        setPlan(sceneCopyPlan(source, sceneId, document));
+        setPlan(sceneCopyPlan(source, sceneId, document, plugins));
       })
       .catch((cause: unknown) => {
         if (alive) setError(friendlyError(cause, 'read that preset'));
@@ -289,7 +312,7 @@ function CopyToPreset({
     return () => {
       alive = false;
     };
-  }, [chosen, source, sceneId]);
+  }, [chosen, source, sceneId, plugins]);
   async function copy() {
     if (!source || !target) return;
     setBusy(true);
@@ -297,10 +320,8 @@ function CopyToPreset({
     try {
       await publishRig(copySceneTo(source, sceneId, target));
       const count =
-        (
-          target.manifest.extensions['urn:oxidal:scenes:1'] as
-            { scenes?: unknown[] } | undefined
-        )?.scenes?.length ?? 0;
+        readScenes<{ scenes?: unknown[] }>(target.manifest)?.scenes?.length ??
+        0;
       onClose();
       onDone(
         `"${sceneName}" copied to ${target.manifest.name} as scene ${count + 1}.`,

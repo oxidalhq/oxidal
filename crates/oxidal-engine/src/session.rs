@@ -936,19 +936,20 @@ mod scene_control_tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn a_refused_scene_control_leaves_the_mix_plugins_and_scene_unchanged() {
+    /// Two paths into a merge, then an effect whose gain both scenes set,
+    /// with the scenes stored under `key`.
+    fn scene_rig(key: &str) -> serde_json::Value {
         let edge = |a: &str, ap: u8, b: &str, bp: u8| json!({"from":{"node":a,"port":ap},"to":{"node":b,"port":bp}});
         let scene = |id: &str, a: f64, b: f64, gain: f64| {
             json!({"id":id,"name":id,
                 "gains":[{"node":"merge","port":0,"value":a},{"node":"merge","port":1,"value":b}],
                 "controls":[{"node":"fx","symbol":"gain","value":gain}]})
         };
-        let value = json!({"format":"oxidal.preset","formatVersion":1,
+        json!({"format":"oxidal.preset","formatVersion":1,
             "id":"0b8f8d4e-9a39-4a43-a0f2-3c8f3b6d9a12","name":"Refused scene",
             "tone3000":{"instances":[]},"resources":[],
-            "requiredExtensions":["urn:oxidal:scenes:1"],
-            "extensions":{"urn:oxidal:scenes:1":{"fade_ms":10,
+            "requiredExtensions":[key],
+            "extensions":{key:{"fade_ms":10,
                 "scenes":[scene("a",1.0,0.0,0.5),scene("b",0.0,1.0,1.5)]}},
             "oxidal":{"graph":{"nodes":[
                 {"id":"in","kind":"input","audioInputs":0,"audioOutputs":2},
@@ -959,11 +960,42 @@ mod scene_control_tests {
                 "edges":[edge("in",0,"split",0),edge("split",0,"merge",0),edge("split",1,"merge",1),
                     edge("merge",0,"fx",0),edge("in",1,"fx",1),edge("fx",0,"out",0),edge("fx",1,"out",1)]},
             "lv2":[{"id":"fx","pluginUri":"urn:oxidal:test:contract","controls":{"gain":0.5,"feedback":0},
-                "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}});
-        let bundle =
-            Bundle::from_parts(serde_json::to_vec(&value).unwrap(), Default::default()).unwrap();
+                "assets":[],"requiredFeatures":[]}],"recall":{"tails":"cut"}}})
+    }
+    fn prepare(key: &str) -> Result<Session, String> {
+        let value = scene_rig(key);
+        let bundle = Bundle::from_parts(serde_json::to_vec(&value).unwrap(), Default::default())
+            .map_err(|e| e.to_string())?;
         let world = World::bundle(oxidal_lv2::qualification_bundle()).unwrap();
-        let mut session = Session::new(bundle, &world, 48000.0, 64, 1 << 20).unwrap();
+        Session::new(bundle, &world, 48000.0, 64, 1 << 20)
+    }
+    #[test]
+    fn scenes_with_controls_prepare_from_either_version_and_an_unknown_one_is_unsupported() {
+        use oxidal_presets::manifest::{
+            SCENES_CONTROLS_EXTENSION, SCENES_EXTENSION, UNSUPPORTED_SCENES,
+        };
+        // Version 1 with controls: presets saved before version 2 still play.
+        for key in [SCENES_EXTENSION, SCENES_CONTROLS_EXTENSION] {
+            let mut session = prepare(key).unwrap();
+            let before = session.snapshot();
+            session
+                .select_scene(SceneCommand {
+                    session: before.session.clone(),
+                    expected_revision: before.revision,
+                    scene: "b".into(),
+                    release_ms: None,
+                })
+                .unwrap();
+            assert_eq!(session.snapshot().scene.as_deref(), Some("b"), "{key}");
+        }
+        match prepare("urn:oxidal:scenes:3") {
+            Err(error) => assert_eq!(error, UNSUPPORTED_SCENES),
+            Ok(_) => panic!("an unknown scenes version prepared"),
+        }
+    }
+    #[test]
+    fn a_refused_scene_control_leaves_the_mix_plugins_and_scene_unchanged() {
+        let mut session = prepare("urn:oxidal:scenes:1").unwrap();
         let before = session.snapshot();
         assert_eq!(before.scene.as_deref(), Some("a"));
         // A target the prepared rig never admitted (out of range, unknown

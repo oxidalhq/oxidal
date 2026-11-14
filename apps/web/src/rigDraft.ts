@@ -384,7 +384,7 @@ export function sceneRig(
 ): RigPublish {
   const tones = effects.filter((e): e is NativeDraft => e.kind === 'native');
   if (tones.some((e) => e.stage))
-    throw new Error('Use whole saved tones for scene branches.');
+    throw new Error('Use whole saved tones for scene paths.');
   if (tones.length < 2 || tones.length > 64)
     throw new Error('Choose 2–64 saved tones for this scene layout.');
   const post = effects.filter((e) => e.kind === 'lv2');

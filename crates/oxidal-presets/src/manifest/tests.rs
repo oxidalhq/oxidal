@@ -442,3 +442,46 @@ fn scene_controls_round_trip_and_reject_foreign_partial_or_unbounded_targets() {
         v["extensions"][SCENES_EXTENSION]["branches"] = json!([branch, other]);
     }));
 }
+/// Move a manifest's scenes to another version key, required list included.
+fn scenes_as(mut value: Value, key: &str) -> Value {
+    let extension = value["extensions"]
+        .as_object_mut()
+        .unwrap()
+        .remove(SCENES_EXTENSION)
+        .unwrap();
+    value["extensions"][key] = extension;
+    value["requiredExtensions"] = json!([key]);
+    value
+}
+#[test]
+fn scenes_read_both_versions_and_refuse_an_unknown_one_as_unsupported() {
+    let parse = |value: &Value| Manifest::parse(&serde_json::to_vec(value).unwrap());
+    // Version 1 with controls stays readable: presets saved before version 2.
+    let legacy = parse(&scene_controls_manifest()).unwrap();
+    legacy.check_required_extensions().unwrap();
+    // Version 2 carries the same scenes.
+    let current = parse(&scenes_as(
+        scene_controls_manifest(),
+        SCENES_CONTROLS_EXTENSION,
+    ))
+    .unwrap();
+    current.check_required_extensions().unwrap();
+    assert_eq!(current.scenes().unwrap(), legacy.scenes().unwrap());
+    // A version this reader does not know is unsupported, not invalid.
+    let future = scenes_as(scene_controls_manifest(), "urn:oxidal:scenes:3");
+    assert_eq!(parse(&future).unwrap_err().to_string(), UNSUPPORTED_SCENES);
+    // Even when only the required list names it.
+    let mut named = scene_controls_manifest();
+    named["requiredExtensions"] = json!([SCENES_EXTENSION, "urn:oxidal:scenes:9"]);
+    named["extensions"]["urn:oxidal:scenes:9"] = json!({});
+    assert_eq!(parse(&named).unwrap_err().to_string(), UNSUPPORTED_SCENES);
+    // Both versions at once, or version 2 not marked required, is invalid.
+    let mut both = scenes_as(scene_controls_manifest(), SCENES_CONTROLS_EXTENSION);
+    both["extensions"][SCENES_EXTENSION] =
+        scene_controls_manifest()["extensions"][SCENES_EXTENSION].clone();
+    both["requiredExtensions"] = json!([SCENES_EXTENSION, SCENES_CONTROLS_EXTENSION]);
+    assert!(parse(&both).is_err());
+    let mut optional = scenes_as(scene_controls_manifest(), SCENES_CONTROLS_EXTENSION);
+    optional["requiredExtensions"] = json!([]);
+    assert!(parse(&optional).is_err());
+}

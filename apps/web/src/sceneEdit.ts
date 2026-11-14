@@ -1,6 +1,8 @@
-import type { RigDocument } from './api';
+import type { Lv2Plugin, RigDocument } from './api';
+import { controlLabel, scalePointLabel } from './lv2Control';
 import type { RigPublish, SceneControl } from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft';
+import { readScenes, sealScenes, writeScenes } from './sceneFormat';
 
 /**
  * Effects on one scene of a preset with scenes. A scene is a whole TONE3000
@@ -32,7 +34,7 @@ export function branchEffects(graph: Graph, branch: string): string[] {
 /** The preset as a publish request that keeps every TONE3000 resource. */
 function publish(manifest: Manifest, revision: string): RigPublish {
   return {
-    manifest_json: JSON.stringify(manifest),
+    manifest_json: JSON.stringify(sealScenes(manifest)),
     resources: Object.fromEntries(
       manifest.resources.map((r) => [
         r.id,
@@ -70,8 +72,7 @@ export function addSceneEffect(
   if (effect.kind !== 'lv2') throw new Error('Only effects go after a scene.');
   const manifest = clone(document, live, name);
   const host = manifest.oxidal;
-  const scenes = manifest.extensions['urn:oxidal:scenes:1'] as
-    { branches: { id: string }[] } | undefined;
+  const scenes = readScenes<{ branches: { id: string }[] }>(manifest);
   const port = scenes?.branches.findIndex((b) => b.id === branch) ?? -1;
   if (!host || port < 0) throw new Error('This scene cannot take an effect.');
   const sums = ['scene-left', 'scene-right'];
@@ -156,15 +157,14 @@ type ScenesExtension = {
 /** The daemon's limits (`scene_draft.rs`, `manifest/scenes.rs`). */
 export const MAX_SCENES = 64;
 export const MAX_SCENE_CONTROLS = 32;
-/** Why the last scene cannot be deleted (S-12). */
+/** Why the last scene cannot be deleted. */
 export const LAST_SCENE = 'A preset needs one scene.';
 const controlKey = (c: { node: string; symbol: string }) =>
   `${c.node}:${c.symbol}`;
 const gainKey = (g: { node: string; port: number }) => `${g.node}:${g.port}`;
 
 function scenesOf(manifest: Manifest): ScenesExtension {
-  const extension = manifest.extensions['urn:oxidal:scenes:1'] as
-    ScenesExtension | undefined;
+  const extension = readScenes<ScenesExtension>(manifest);
   if (!extension?.scenes?.length || !manifest.oxidal)
     throw new Error('This preset has no scenes.');
   return extension;
@@ -223,7 +223,7 @@ export function renameScene(
 
 /**
  * Move a scene one pad left or right. MIDI bindings name the scene, not its
- * position, so they follow it (S-13).
+ * position, so they follow it.
  */
 export function moveScene(
   document: RigDocument,
@@ -248,7 +248,7 @@ export function moveScene(
 }
 
 /**
- * Delete a scene and its MIDI binding. The last scene cannot go (S-12). When
+ * Delete a scene and its MIDI binding. The last scene cannot go. When
  * the deleted scene is the one playing, the preset reopens on its neighbour.
  */
 export function deleteScene(
@@ -500,8 +500,7 @@ function shownBlock(manifest: Manifest, node: string): string {
 
 /** A scene level's path by its display name, never a node id. */
 function shownPath(manifest: Manifest, gain: Gain): string {
-  const extension = manifest.extensions['urn:oxidal:scenes:1'] as
-    ScenesExtension | undefined;
+  const extension = readScenes<ScenesExtension>(manifest);
   const branch = extension?.branches?.find((b) =>
     b.gains.some((g) => gainKey(g) === gainKey(gain)),
   );
@@ -519,10 +518,41 @@ function shownPath(manifest: Manifest, gain: Gain): string {
 const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
+ * A scene setting by its control's label, never its symbol: "Delay time".
+ * With the effects catalog, a named or on/off value is added: "Mode (Hall)".
+ */
+function shownSetting(
+  manifest: Manifest,
+  control: SceneControl,
+  plugins: readonly Lv2Plugin[] = [],
+): string {
+  const label = controlLabel(control.symbol);
+  const uri = manifest.oxidal?.lv2.find(
+    (l) => l.id === control.node,
+  )?.pluginUri;
+  const port = plugins
+    .find((p) => p.uri === uri)
+    ?.ports.find((p) => p.symbol === control.symbol);
+  const named =
+    scalePointLabel(port?.scale_points, control.value) ??
+    (port?.toggled
+      ? control.value > (port.minimum ?? 0)
+        ? 'On'
+        : 'Off'
+      : undefined);
+  return named ? `${label} (${named})` : label;
+}
+
+/**
  * Which settings of `scene` have the same place in `target`: a level whose
  * path is the same sound there, a setting whose effect is the same plugin.
  */
-function sceneMatch(source: Manifest, scene: SceneDef, target: Manifest) {
+function sceneMatch(
+  source: Manifest,
+  scene: SceneDef,
+  target: Manifest,
+  plugins: readonly Lv2Plugin[] = [],
+) {
   const shape = scenesOf(target).scenes[0]!;
   const targetName = target.name;
   const gainKeys = new Set(shape.gains.map(gainKey));
@@ -548,17 +578,18 @@ function sceneMatch(source: Manifest, scene: SceneDef, target: Manifest) {
   for (const control of scene.controls ?? []) {
     const block = shownBlock(source, control.node);
     const theirs = plugin(target, control.node);
+    const setting = shownSetting(source, control, plugins);
     if (theirs === undefined)
       skipped.add(
-        `${targetName} has no ${block.replace(/^An /, 'an ')} block: its ${control.symbol} setting is skipped.`,
+        `${targetName} has no ${block.replace(/^An /, 'an ')} block: its ${setting} setting is skipped.`,
       );
     else if (theirs !== plugin(source, control.node))
       skipped.add(
-        `${block} is a different effect in ${targetName}: its ${control.symbol} setting is skipped.`,
+        `${block} is a different effect in ${targetName}: its ${setting} setting is skipped.`,
       );
     else if (!controlKeys.has(controlKey(control)))
       skipped.add(
-        `${targetName}'s scenes do not change ${block.replace(/^An /, 'an ')} ${control.symbol}: it is skipped.`,
+        `${targetName}'s scenes do not change ${block.replace(/^An /, 'an ')} ${setting}: it is skipped.`,
       );
     else controls.set(controlKey(control), control.value);
   }
@@ -570,7 +601,7 @@ function sceneMatch(source: Manifest, scene: SceneDef, target: Manifest) {
   for (const control of shape.controls ?? [])
     if (!controls.has(controlKey(control)))
       kept.add(
-        `${shownBlock(target, control.node)} keeps ${targetName}'s own ${control.symbol} setting.`,
+        `${shownBlock(target, control.node)} keeps ${targetName}'s own ${controlLabel(control.symbol)} setting.`,
       );
   const refused =
     gains.size || controls.size
@@ -579,11 +610,15 @@ function sceneMatch(source: Manifest, scene: SceneDef, target: Manifest) {
   return { gains, controls, skipped, kept, refused };
 }
 
-/** Compare a scene with the scenes of another preset. */
+/**
+ * Compare a scene with the scenes of another preset. With the effects
+ * catalog, skipped settings also name a named or on/off value.
+ */
 export function sceneCopyPlan(
   source: RigDocument,
   sceneId: string,
   target: RigDocument,
+  plugins: readonly Lv2Plugin[] = [],
 ): SceneCopyPlan {
   const scene = scenesOf(source.manifest).scenes.find((s) => s.id === sceneId);
   if (!scene) throw new Error('That scene is not in this preset.');
@@ -591,6 +626,7 @@ export function sceneCopyPlan(
     source.manifest,
     scene,
     target.manifest,
+    plugins,
   );
   return {
     exact: !skipped.size && !kept.size && !refused,
@@ -672,8 +708,7 @@ export function updateScenes(
   controls: Record<string, SceneControl[]> = {},
 ): RigPublish {
   const manifest = clone(document, live, name);
-  const extension = manifest.extensions['urn:oxidal:scenes:1'] as
-    { scenes?: SceneDef[] } | undefined;
+  const extension = readScenes<{ scenes?: SceneDef[] }>(manifest);
   if (
     !manifest.oxidal ||
     (!Object.keys(updates).length &&
@@ -724,7 +759,7 @@ export function updateScenes(
 }
 
 /**
- * Effect settings in scenes (D-6). Every scene sets the same controls, so a
+ * Effect settings in scenes. Every scene sets the same controls, so a
  * control drafted for one scene is added to all of them: the others keep the
  * value the preset has now. Added scenes get the whole set too. The effect
  * itself starts at the starting scene's value.
@@ -824,8 +859,10 @@ export function keepScenes(
   document: RigDocument,
   request: RigPublish,
 ): RigPublish {
-  const before = document.manifest.extensions['urn:oxidal:scenes:1'] as
-    { branches?: unknown[]; scenes?: { gains: Gain[] }[] } | undefined;
+  const before = readScenes<{
+    branches?: unknown[];
+    scenes?: { gains: Gain[] }[];
+  }>(document.manifest);
   if (!before) return request;
   if (before.branches?.length)
     throw new Error(
@@ -869,8 +906,6 @@ export function keepScenes(
     throw new Error(
       'A preset with scenes needs a split. Keep at least one split with two paths.',
     );
-  manifest.extensions['urn:oxidal:scenes:1'] = scenes;
-  if (!manifest.requiredExtensions.includes('urn:oxidal:scenes:1'))
-    manifest.requiredExtensions.push('urn:oxidal:scenes:1');
+  writeScenes(manifest, scenes);
   return { ...request, manifest_json: JSON.stringify(manifest) };
 }

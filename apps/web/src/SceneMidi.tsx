@@ -576,7 +576,7 @@ export function MidiControls({
                   {!!branches.length && (
                     <fieldset className="space-y-2">
                       <legend className="font-semibold">
-                        Independent branches
+                        Independent paths
                       </legend>
                       {branches.map((branch, index) => {
                         const binding = draft?.branch_bindings?.find(
@@ -606,7 +606,7 @@ export function MidiControls({
                               variant="ghost"
                               className="midi-branch-toggle"
                               aria-pressed={!!binding}
-                              aria-label={`Map branch ${branch.name}`}
+                              aria-label={`Map path ${branch.name}`}
                               disabled={disabled}
                               onClick={() =>
                                 setDraft(
@@ -638,7 +638,7 @@ export function MidiControls({
                                     CC
                                     <input
                                       type="number"
-                                      aria-label={`Branch ${branch.name} CC`}
+                                      aria-label={`Path ${branch.name} CC`}
                                       min={0}
                                       max={127}
                                       value={binding.controller}
@@ -664,7 +664,7 @@ export function MidiControls({
                                       }
                                     >
                                       <SelectTrigger
-                                        aria-label={`Branch ${branch.name} behavior`}
+                                        aria-label={`Path ${branch.name} behavior`}
                                       >
                                         <SelectValue />
                                       </SelectTrigger>
@@ -708,7 +708,7 @@ export function MidiControls({
                                   {learning?.kind === 'branch' &&
                                     learning.branch === branch.id && (
                                       <span role="status" className="caption">
-                                        Press the branch footswitch
+                                        Press the footswitch for this path
                                       </span>
                                     )}
                                 </div>

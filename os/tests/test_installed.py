@@ -173,9 +173,10 @@ class InstalledTests(unittest.TestCase):
                         # Only examples built from Oxidal's own effects are saved on a fresh image.
                         if any(e['pluginUri'] not in admitted for e in manifest['oxidal']['lv2']):
                             continue
+                        extensions = manifest.get('extensions', {})
                         expected_scenes[manifest['id']] = len(
-                            manifest.get('extensions', {})
-                            .get('urn:oxidal:scenes:1', {})
+                            (extensions.get('urn:oxidal:scenes:2')
+                             or extensions.get('urn:oxidal:scenes:1', {}))
                             .get('scenes', [])
                         )
                     seed_command = ['python3', str(home / 'factory/seed.py'),

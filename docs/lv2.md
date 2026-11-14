@@ -406,7 +406,8 @@ Source: [Dragonfly Hall implementation](https://github.com/michaelwillis/dragonf
 ## Scene changes and stepped controls
 
 A scene is a mix of already running branches plus, optionally, values for
-plugin controls. Each scene in `urn:oxidal:scenes:1` lists merge gains
+plugin controls. Each scene in `urn:oxidal:scenes:1` (or `urn:oxidal:scenes:2`
+when any scene sets controls) lists merge gains
 (`gains`: node, port, value) and may list `controls` (node, symbol, value in
 the plugin's native units). Selecting a scene ramps the gains sample by sample
 over the preset's `fade_ms`, retargeting from the audible gain if a ramp is
@@ -448,7 +449,7 @@ Scene controls follow these rules:
 
 `crates/oxidal-engine/tests/scene_controls.rs` covers the ramp bound, the
 exact landing, retargeting, live edits, the silent and midpoint switches,
-refused targets, and S-18 on SWH `delay_c`: changing the delay time from 100 to
+refused targets, and the no-click check on SWH `delay_c`: changing the delay time from 100 to
 150 ms over a 200 ms fade raises the largest sample step of a 220 Hz sine by
 about 1.3× (the read speed change), while the same change as an instant edit
 gives a step about 37× the steady one. Oxidal Swell's swell time is a
