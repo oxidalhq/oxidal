@@ -1,12 +1,14 @@
 import {
   chorus,
   compressor,
+  coreScenes,
   echo,
   fx,
+  keyed,
+  leadLift,
   nam,
   pitch,
   room,
-  selections,
   sub,
   voice,
   type FactoryRecipe,
@@ -35,15 +37,20 @@ export const toolRecipes: FactoryRecipe[] = [
     inspiration:
       'Guitar-as-bass demo recording: an octave-down pitch block into a warm vintage bass stack.',
     performance:
-      'Octave is the plain octave-down bass. Sub adds a generated octave below for weight, Compressed evens out the notes for recording, and Boost is the sub voice a little louder. Play clean single notes.',
+      'Octave is the plain octave-down bass. Compressed evens out the notes for recording, Boost squeezes them harder with the level lift so a line sits forward, and Sub adds a generated octave below for weight. Play clean single notes.',
     before: [octave(), nam('bass-vintage')],
     voices: [
       voice('Octave'),
       voice('Sub', sub(0.6)),
-      voice('Comp', compressor()),
+      voice('Comp', keyed('comp', compressor())),
     ],
     after: [],
-    scenes: selections(['Octave', 'Sub', 'Compressed', 'Boost']),
+    scenes: coreScenes(
+      ['Octave', [1, 0, 0]],
+      ['Compressed', [0, 0, 1]],
+      ['Boost', [0, 0, 1], leadLift, { comp: { THRESHOLD: -28 } }],
+      ['Sub', [0, 1, 0]],
+    ),
   },
   {
     id: 'T02',
@@ -59,15 +66,20 @@ export const toolRecipes: FactoryRecipe[] = [
     inspiration:
       'Guitar-as-bass for heavy riffs: an octave-down pitch block into a gritty rock bass amp with a fuzz and a sub layer.',
     performance:
-      'Clean is the octave-down bass amp. Fuzz adds the fuzz for heavy riffs, Sub adds a generated octave below, and Boost is the fuzz voice a little louder. Keep notes short and clear.',
+      'Clean is the octave-down bass amp. Fuzz adds the fuzz for heavy riffs, Boost compresses the fuzz harder with the level lift for a sustained line, and Sub adds a generated octave below. Keep notes short and clear.',
     before: [octave(), nam('bass-grit')],
     voices: [
       voice('Clean'),
       voice('Fuzz', fx('GxBigMuffPi')),
       voice('Sub', sub(0.5)),
     ],
-    after: [compressor()],
-    scenes: selections(['Clean', 'Fuzz', 'Sub', 'Boost']),
+    after: [keyed('comp', compressor())],
+    scenes: coreScenes(
+      ['Clean', [1, 0, 0]],
+      ['Fuzz', [0, 1, 0]],
+      ['Boost', [0, 1, 0], leadLift, { comp: { THRESHOLD: -28 } }],
+      ['Sub', [0, 0, 1]],
+    ),
   },
   {
     id: 'T03',

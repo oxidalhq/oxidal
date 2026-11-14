@@ -6,6 +6,7 @@ import type {
   SceneControl,
 } from './generated/contract';
 import { rigBuilder, type DraftEffect } from './rigDraft.ts';
+import { readScenes, sealScenes } from './sceneFormat.ts';
 import type { FactoryVoiceId } from './factoryVoices.ts';
 import type {
   FactoryComplexity,
@@ -75,7 +76,7 @@ export type Effect =
 /** Effect settings one scene changes: block key, then control symbol. A scene
  * that leaves a setting out keeps the block's own value. */
 export type SceneSettings = Record<string, Record<string, number>>;
-type RecipeScene = {
+export type RecipeScene = {
   name: string;
   mix: number[];
   level?: number;
@@ -284,7 +285,26 @@ export const voice = (name: string, ...effects: Effect[]): Voice => ({
   name,
   effects,
 });
-export const selections = (names: [string, string, string, string]) =>
+/** The lead's one deliberate level lift over the other scenes, about 1 dB. */
+export const leadLift = 1.12;
+/** Scenes in the collection's fixed core order: 1 clean or base, 2 rhythm,
+ * 3 the lead with the level lift, 4 ambient or special. Each row is a name,
+ * the send into each voice, an optional level and optional effect settings. */
+export const coreScenes = (
+  ...rows: [
+    name: string,
+    mix: number[],
+    level?: number,
+    controls?: SceneSettings,
+  ][]
+): RecipeScene[] =>
+  rows.map(([name, mix, level, controls]) => ({
+    name,
+    mix,
+    level: level ?? 1,
+    ...(controls ? { controls } : {}),
+  }));
+const selections = (names: [string, string, string, string]) =>
   names.map((name, i) => ({
     name,
     mix: [i === 0 ? 1 : 0, i === 1 || i === 3 ? 1 : 0, i === 2 ? 1 : 0],
@@ -306,19 +326,19 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Articulate studio cleans from 1980s and 1990s pop and country sessions: an even, compressed clean combo with a little chorus width.',
     performance:
-      'Dry is the bare amp for strummed parts. Soft compression evens out picked lines, Wide adds chorus for arpeggios, and Lead is the compressed voice with the level lift for fills and solos.',
+      'Dry is the bare amp for strummed parts. Soft compression evens out picked lines, Lead is the compressed voice with the level lift and a little more room for fills and solos, and Wide adds chorus in a larger room for arpeggios and ringing chords.',
     before: [nam('clean')],
     voices: [
       voice('Dry'),
       voice('Soft compression', compressor()),
       voice('Wide', chorus()),
     ],
-    after: [room()],
-    scenes: selections(['Dry', 'Soft compression', 'Wide', 'Lead']).map(
-      (scene, index) => ({
-        ...scene,
-        level: index === 1 ? 2 : index === 3 ? 2.24 : 1,
-      }),
+    after: [keyed('room', room())],
+    scenes: coreScenes(
+      ['Dry', [1, 0, 0]],
+      ['Soft compression', [0, 1, 0], 2],
+      ['Lead', [0, 1, 0], 2 * leadLift, { room: { dry_wet: 20 } }],
+      ['Wide', [0, 0, 1], 1, { room: { dry_wet: 22, roomsize: 0.6 } }],
     ),
   },
   {
@@ -333,7 +353,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Intimate jazz and neo-soul chord playing from the 1970s onward: a dark, warm clean combo in a small room.',
     performance:
-      'Intimate is the dark comping sound. Open adds a light chorus for wider chords, Gentle motion brings in a slow tremolo for ballads, and Solo is the chorused voice a little louder for melody lines.',
+      'Intimate is the dark comping sound. Open adds a light chorus for wider chords, Solo is the chorused voice with the level lift and a little more room for melody lines, and Gentle motion brings in a slow tremolo for ballads.',
     before: [
       nam('clean'),
       fx('Invada Low Pass Filter (stereo)', { freq: 6200 }),
@@ -343,9 +363,12 @@ export const factoryRecipes: FactoryRecipe[] = [
       voice('Open', chorus()),
       voice('Motion', fx('GxTremolo', { depth: 0.25, freq: 2.4, dry_wet: 60 })),
     ],
-    after: [room()],
-    scenes: selections(['Intimate', 'Open', 'Gentle motion', 'Solo']).map(
-      (scene, index) => ({ ...scene, level: index === 2 ? 1.55 : scene.level }),
+    after: [keyed('room', room())],
+    scenes: coreScenes(
+      ['Intimate', [1, 0, 0]],
+      ['Open', [0, 1, 0]],
+      ['Solo', [0, 1, 0], leadLift, { room: { dry_wet: 18 } }],
+      ['Gentle motion', [0, 0, 1], 1.55],
     ),
   },
   {
@@ -382,15 +405,20 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Roots and electric blues from the 1950s to the 1970s: a small crunch amp that follows the pick, with overdrive pedals in front and a short echo behind.',
     performance:
-      'Touch is the amp alone; play softly for clean and dig in for grit. Push adds a mid-forward overdrive for rhythm, Grain swaps it for a rougher distortion, and Lead is the overdrive voice a little louder for solos.',
+      'Touch is the amp alone; play softly for clean and dig in for grit. Push adds a mid-forward overdrive for rhythm, Lead is the overdrive with the level lift and more of the echo for solos, and Grain swaps in a rougher distortion for a raw verse.',
     before: [],
     voices: [
       voice('Touch'),
       voice('Push', drive()),
       voice('Grain', fx('GxRat')),
     ],
-    after: [nam('crunch'), echo(0.12), room()],
-    scenes: selections(['Touch', 'Push', 'Grain', 'Lead']),
+    after: [nam('crunch'), keyed('echo', echo(0.12)), room()],
+    scenes: coreScenes(
+      ['Touch', [1, 0, 0]],
+      ['Push', [0, 1, 0]],
+      ['Lead', [0, 1, 0], leadLift, { echo: { fx_mix: 0.24 } }],
+      ['Grain', [0, 0, 1]],
+    ),
   },
   {
     id: 'R04',
@@ -431,15 +459,20 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Open classic-rock crunch of the late 1960s and 1970s: one loud amp at the edge, pushed by an overdrive or a rougher distortion.',
     performance:
-      'Edge is the amp alone for open chords. Rhythm adds the overdrive for riffs, Grain swaps in the rougher distortion for a rawer verse, and Lead is the overdrive voice a little louder for solos.',
+      'Edge is the amp alone for open chords. Rhythm adds the overdrive for riffs, Lead is the overdrive with the level lift and a larger room for solos, and Grain swaps in the rougher distortion for a rawer verse.',
     before: [],
     voices: [
       voice('Edge'),
       voice('Rhythm', drive()),
       voice('Grain', fx('GxRat')),
     ],
-    after: [nam('crunch'), room()],
-    scenes: selections(['Edge', 'Rhythm', 'Grain', 'Lead']),
+    after: [nam('crunch'), keyed('room', room())],
+    scenes: coreScenes(
+      ['Edge', [1, 0, 0]],
+      ['Rhythm', [0, 1, 0]],
+      ['Lead', [0, 1, 0], leadLift, { room: { dry_wet: 20, roomsize: 0.5 } }],
+      ['Grain', [0, 0, 1]],
+    ),
   },
   {
     id: 'H01',
@@ -453,7 +486,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Articulate modern-metal rhythm of the 2000s and 2010s: a high-gain amp with the low end trimmed and a boost in front.',
     performance:
-      'Rhythm is the amp alone. Tight trims the lows and adds the boost for fast palm mutes, Attack trims further without the boost for the clearest picking, and Lead is the Tight voice a little louder.',
+      'Rhythm is the amp alone. Tight trims the lows and adds the boost for fast palm mutes, Lead is the Tight voice with the level lift and more echo, and Attack trims further without the boost for the clearest picking.',
     before: [],
     voices: [
       voice('Rhythm'),
@@ -464,8 +497,13 @@ export const factoryRecipes: FactoryRecipe[] = [
       ),
       voice('Attack', fx('Invada High Pass Filter (stereo)', { freq: 130 })),
     ],
-    after: [nam('heavy'), echo(0.09)],
-    scenes: selections(['Rhythm', 'Tight', 'Attack', 'Lead']),
+    after: [nam('heavy'), keyed('echo', echo(0.09))],
+    scenes: coreScenes(
+      ['Rhythm', [1, 0, 0]],
+      ['Tight', [0, 1, 0]],
+      ['Lead', [0, 1, 0], leadLift, { echo: { fx_mix: 0.2 } }],
+      ['Attack', [0, 0, 1]],
+    ),
   },
   {
     id: 'B02',
@@ -786,15 +824,25 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Psychedelic sustained leads of the late 1960s and 1970s: fuzz into a cranked amp, a rotary speaker and a long echo.',
     performance:
-      'Edge is the amp alone. Fuzz is the long-sustain voice, Rotary puts a driven sound through a slow rotary speaker for chords, and Echo lead is the fuzz voice a little louder over the echo.',
+      'Edge is the amp alone. Fuzz is the long-sustain voice with a short echo, Echo lead is the fuzz with the level lift and long repeats, and Rotary puts a driven sound through a slow rotary speaker for chords.',
     before: [],
     voices: [
       voice('Edge'),
       voice('Fuzz', fx('GxBigMuffPi')),
       voice('Rotary', drive(), rotary(0.18)),
     ],
-    after: [nam('crunch'), echo(0.25), room()],
-    scenes: selections(['Edge', 'Fuzz', 'Rotary', 'Echo lead']),
+    after: [nam('crunch'), keyed('echo', echo(0.15)), room()],
+    scenes: coreScenes(
+      ['Edge', [1, 0, 0]],
+      ['Fuzz', [0, 1, 0]],
+      [
+        'Echo lead',
+        [0, 1, 0],
+        leadLift,
+        { echo: { fx_mix: 0.38, feedback: 0.55 } },
+      ],
+      ['Rotary', [0, 0, 1], 1, { echo: { fx_mix: 0.22 } }],
+    ),
   },
   {
     id: 'H02',
@@ -809,7 +857,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Low-tuned heavy rhythm of the 2000s and 2010s: a high-gain amp fed by a pitch block that drops the guitar two semitones.',
     performance:
-      'Native tuning is the amp at pitch. Downshift plays the same amp two semitones lower with a boost, Atmosphere puts a long hall before the amp for a washed, downshifted break, and Lead is the Downshift voice a little louder.',
+      'Native tuning is the amp at pitch. Downshift plays the same amp two semitones lower with a boost, Lead pushes that boost harder with the level lift, and Atmosphere puts a long hall before the amp for a washed, downshifted break.',
     before: [],
     voices: [
       voice('Native tuning'),
@@ -817,12 +865,17 @@ export const factoryRecipes: FactoryRecipe[] = [
         'Downshift',
         pitch(-2),
         fx('Invada High Pass Filter (stereo)', { freq: 75 }),
-        drive(),
+        keyed('boost', drive()),
       ),
       voice('Atmosphere', pitch(-2), hall(100, 4)),
     ],
     after: [nam('heavy')],
-    scenes: selections(['Native tuning', 'Downshift', 'Atmosphere', 'Lead']),
+    scenes: coreScenes(
+      ['Native tuning', [1, 0, 0]],
+      ['Downshift', [0, 1, 0]],
+      ['Lead', [0, 1, 0], leadLift, { boost: { fslider2_: 0.5 } }],
+      ['Atmosphere', [0, 0, 1]],
+    ),
   },
   {
     id: 'H03',
@@ -895,10 +948,13 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Supportive soul, jazz and pop bass from the 1960s to the 1980s: one warm bass amp shaped three ways.',
     performance:
-      'Round is the darkest voice for ballads. Finger is the plain amp for everyday fingerstyle, Pick adds compression and a gentle top cut for picked lines, and Forward is the Finger voice a little louder.',
+      'Round is the darkest voice for ballads. Finger is the plain amp for everyday fingerstyle, Forward is the compressed pick voice with the level lift for picked lines and fills, and Muted closes the filter right down for a thumb-muted, dub-style part.',
     before: [nam('bass')],
     voices: [
-      voice('Round', fx('Invada Low Pass Filter (stereo)', { freq: 1800 })),
+      voice(
+        'Round',
+        keyed('round', fx('Invada Low Pass Filter (stereo)', { freq: 1800 })),
+      ),
       voice('Finger'),
       voice(
         'Pick',
@@ -907,7 +963,13 @@ export const factoryRecipes: FactoryRecipe[] = [
       ),
     ],
     after: [fx('Invada High Pass Filter (stereo)', { freq: 30 })],
-    scenes: selections(['Round', 'Finger', 'Pick', 'Forward']),
+    scenes: coreScenes(
+      ['Round', [1, 0, 0]],
+      ['Finger', [0, 1, 0]],
+      ['Forward', [0, 0, 1], leadLift],
+      // A darker filter sounds quieter: a small trim keeps it level.
+      ['Muted', [1, 0, 0], 1.06, { round: { freq: 900 } }],
+    ),
   },
   {
     id: 'B03',
@@ -1129,7 +1191,7 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Worn-tape bedroom pop and lo-fi guitar of the 2000s and 2010s: a clean amp through tape wobble and a narrowed band.',
     performance:
-      'Clear is the clean amp with its echo. Worn adds tape movement and saturation, Narrow cuts the lows and highs for a small-speaker sound, and Forward is the worn voice a little louder.',
+      'Clear is the clean amp with its echo. Worn adds tape movement and saturation, Forward is the worn voice with the level lift and more echo for a melody, and Narrow cuts the lows and highs for a small-speaker sound.',
     before: [nam('clean')],
     voices: [
       voice('Clear'),
@@ -1141,8 +1203,13 @@ export const factoryRecipes: FactoryRecipe[] = [
         fx('Invada Low Pass Filter (stereo)', { freq: 2400 }),
       ),
     ],
-    after: [echo(0.12)],
-    scenes: selections(['Clear', 'Worn', 'Narrow', 'Forward']),
+    after: [keyed('echo', echo(0.12))],
+    scenes: coreScenes(
+      ['Clear', [1, 0, 0]],
+      ['Worn', [0, 1, 0]],
+      ['Forward', [0, 1, 0], leadLift, { echo: { fx_mix: 0.24 } }],
+      ['Narrow', [0, 0, 1]],
+    ),
   },
   {
     id: 'X02',
@@ -1276,24 +1343,32 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Elastic funk bass of the 1970s: peak-controlled bass into an auto-wah or a phaser, then one bass amp.',
     performance:
-      'Pocket is the compressed bass into the amp. Envelope adds the auto-wah for bouncing single-note lines, Motion swaps it for a slow phaser, and Accent is the envelope voice a little louder for fills.',
+      'Pocket is the compressed bass into the amp. Envelope adds the auto-wah for bouncing single-note lines, Accent opens the wah wider with the level lift for fills, and Motion swaps it for a slow phaser.',
     before: [studioComp(-22)],
     voices: [
       voice('Pocket'),
       voice(
         'Envelope',
-        fx('FOMP Auto-wah', {
-          drive: 3,
-          decay: 0.22,
-          range: 0.65,
-          freq: 0.35,
-          mix: 0.6,
-        }),
+        keyed(
+          'wah',
+          fx('FOMP Auto-wah', {
+            drive: 3,
+            decay: 0.22,
+            range: 0.65,
+            freq: 0.35,
+            mix: 0.6,
+          }),
+        ),
       ),
       voice('Motion', orbit(0.4, 4)),
     ],
     after: [nam('bass')],
-    scenes: selections(['Pocket', 'Envelope', 'Motion', 'Accent']),
+    scenes: coreScenes(
+      ['Pocket', [1, 0, 0]],
+      ['Envelope', [0, 1, 0]],
+      ['Accent', [0, 1, 0], leadLift, { wah: { range: 0.85, mix: 0.75 } }],
+      ['Motion', [0, 0, 1]],
+    ),
   },
   {
     id: 'K05',
@@ -1307,15 +1382,20 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Psychedelic rock and new-wave rhythm from the late 1960s to the early 1980s: a crunch amp through a liquid chorus or a six-stage phaser.',
     performance:
-      'Crunch is the amp with short reflections. Liquid adds the chorus for arpeggios, Chrome swaps it for the phaser on held chords, and Lead is the chorus voice a little louder.',
+      'Crunch is the amp with short reflections. Liquid adds the chorus for arpeggios, Lead is the chorus voice with the level lift and stronger reflections, and Chrome swaps it for the phaser on held chords.',
     before: [nam('crunch')],
     voices: [
       voice('Crunch'),
       voice('Liquid', silk()),
       voice('Chrome', orbit(0.32, 6)),
     ],
-    after: [flyRoom()],
-    scenes: selections(['Crunch', 'Liquid', 'Chrome', 'Lead']),
+    after: [keyed('room', flyRoom())],
+    scenes: coreScenes(
+      ['Crunch', [1, 0, 0]],
+      ['Liquid', [0, 1, 0]],
+      ['Lead', [0, 1, 0], leadLift, { room: { early_level: 32 } }],
+      ['Chrome', [0, 0, 1]],
+    ),
   },
   {
     id: 'A05',
@@ -1353,18 +1433,20 @@ export const factoryRecipes: FactoryRecipe[] = [
     inspiration:
       'Close, late-night neo-soul guitar of the 1990s and 2000s: an even, compressed sound with a soft chorus or a slow tremolo in a small room.',
     performance:
-      'Close is the compressed dry sound. Silk adds the chorus for chords, Pulse moves to the slow tremolo for sparse parts, and Lift is the chorus voice a little louder for melody lines.',
+      'Close is the compressed dry sound. Silk adds the chorus for chords, Lift is the chorus voice with the level lift and stronger reflections for melody lines, and Pulse moves to the slow tremolo in a larger room for sparse parts.',
     before: [studioComp(-26)],
     voices: [
       voice('Close'),
       voice('Silk', silk()),
       voice('Pulse', fx('GxTremolo', { depth: 0.2, freq: 1.7, dry_wet: 60 })),
     ],
-    after: [flyRoom()],
-    scenes: selections(['Close', 'Silk', 'Pulse', 'Lift']).map((s, i) => ({
-      ...s,
-      level: i === 2 ? 1.55 : s.level,
-    })),
+    after: [keyed('room', flyRoom())],
+    scenes: coreScenes(
+      ['Close', [1, 0, 0]],
+      ['Silk', [0, 1, 0]],
+      ['Lift', [0, 1, 0], leadLift, { room: { early_level: 32 } }],
+      ['Pulse', [0, 0, 1], 1.55, { room: { early_level: 30, size: 24 } }],
+    ),
   },
   {
     id: 'X05',
@@ -2050,11 +2132,9 @@ function applySceneControls(
   if (!settings.length) return;
   const lv2 = manifest.oxidal!.lv2;
   const controlsOf = (node: string) => lv2.find((l) => l.id === node)!.controls;
-  const scenes = (
-    manifest.extensions['urn:oxidal:scenes:1'] as {
-      scenes: { controls?: SceneControl[] }[];
-    }
-  ).scenes;
+  const scenes = readScenes<{ scenes: { controls?: SceneControl[] }[] }>(
+    manifest,
+  )!.scenes;
   const base = settings.map(({ key, symbol }) => {
     const node = ids.get(key)!;
     return { node, symbol, value: controlsOf(node)[symbol]! };
@@ -2112,6 +2192,7 @@ function buildRouted(
   profile: string,
   id: string,
   keys: Map<string, string>,
+  scenesFit: () => void,
   defaults?: NativeDefaultSettings,
 ) {
   const name = recipe.era ? recipe.name : `Oxidal · ${recipe.name}`;
@@ -2220,6 +2301,7 @@ function buildRouted(
         ),
       })),
     };
+    scenesFit();
     applySceneControls(manifest, recipe, keys);
   }
   Object.assign(manifest.extensions['urn:oxidal:authoring']!, {
@@ -2229,7 +2311,7 @@ function buildRouted(
     factory_version: 1,
     factory_topology: 'routed',
   });
-  return { ...result, manifest_json: JSON.stringify(manifest) };
+  return { ...result, manifest_json: JSON.stringify(sealScenes(manifest)) };
 }
 
 /** Build from explicit local bindings; never match captures by a guessed name.
@@ -2249,8 +2331,12 @@ export function buildFactoryRecipe(
     profile,
     false,
   );
-  const unfit = sceneControlProblems(recipe, plugins);
-  if (unfit.length) throw new Error(`${recipe.name}: ${unfit.join('; ')}.`);
+  // Checked once every block is built, so a missing or incompatible effect
+  // is reported as itself first.
+  const scenesFit = () => {
+    const unfit = sceneControlProblems(recipe, plugins);
+    if (unfit.length) throw new Error(`${recipe.name}: ${unfit.join('; ')}.`);
+  };
   let sequence = 0;
   const keys = new Map<string, string>();
   const effect = (e: Effect): DraftEffect => {
@@ -2300,7 +2386,7 @@ export function buildFactoryRecipe(
     };
   };
   if (recipe.topology === 'routed')
-    return buildRouted(recipe, effect, profile, id, keys, defaults);
+    return buildRouted(recipe, effect, profile, id, keys, scenesFit, defaults);
   if (recipe.topology === 'serial') {
     if (recipe.voices.length !== 1 || recipe.scenes.length !== 0)
       throw new Error(
@@ -2417,6 +2503,7 @@ export function buildFactoryRecipe(
       ],
     })),
   };
+  scenesFit();
   applySceneControls(manifest, recipe, keys);
   Object.assign(manifest.extensions['urn:oxidal:authoring']!, {
     origin: 'oxidal_example',
@@ -2427,5 +2514,5 @@ export function buildFactoryRecipe(
       .filter((n) => n.id.startsWith('scene-'))
       .map((n) => n.id),
   });
-  return { ...result, manifest_json: JSON.stringify(manifest) };
+  return { ...result, manifest_json: JSON.stringify(sealScenes(manifest)) };
 }

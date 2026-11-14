@@ -13,6 +13,7 @@ import {
   tone3000CaptureBudget,
   tone3000ShowcaseRecipes,
 } from './tone3000Showcase.ts';
+import { scenesKey } from '../sceneFormat';
 
 /**
  * @see docs/factory-collection.md
@@ -39,9 +40,12 @@ const lite = tone3000ShowcaseRecipes.filter(
 const full = tone3000ShowcaseRecipes.filter(
   (r) => r.engine === 'tone3000-a2-full',
 );
-const captureCount = (roles: string[]) =>
-  roles.filter(
-    (role) => !isFactoryVoice(role) || factoryVoices[role].kind !== 'ir',
+/** NAM instances: every capture block counts, IRs do not. */
+const instances = (recipe: (typeof tone3000ShowcaseRecipes)[number]) =>
+  recipeEffects(recipe).filter(
+    (e) =>
+      'native' in e &&
+      (!isFactoryVoice(e.native) || factoryVoices[e.native].kind !== 'ir'),
   ).length;
 
 describe('TONE3000 showcase recipes', () => {
@@ -70,8 +74,8 @@ describe('TONE3000 showcase recipes', () => {
           recipe.engine === 'tone3000-a2-lite' ? 'a2-lite' : 'a2-full',
         );
       }
-      expect(captureCount(roles), recipe.name).toBeGreaterThanOrEqual(1);
-      expect(captureCount(roles), recipe.name).toBeLessThanOrEqual(
+      expect(instances(recipe), recipe.name).toBeGreaterThanOrEqual(1);
+      expect(instances(recipe), recipe.name).toBeLessThanOrEqual(
         tone3000CaptureBudget[
           recipe.engine as keyof typeof tone3000CaptureBudget
         ],
@@ -115,8 +119,8 @@ describe('TONE3000 showcase recipes', () => {
         full.some((r) => r.genres.includes(genre)),
         genre,
       ).toBe(true);
-    // The three-capture A2 Lite budget is used.
-    expect(lite.some((r) => captureCount(factoryRoles(r)) === 3)).toBe(true);
+    // The A2 Lite budget is used.
+    expect(lite.some((r) => instances(r) >= 3)).toBe(true);
   });
 
   it('has no near-copy scenes and no tier twins', () => {
@@ -125,6 +129,26 @@ describe('TONE3000 showcase recipes', () => {
       const mixes = recipe.scenes.map((s) => s.mix.join());
       expect(new Set(mixes).size, recipe.name).toBe(mixes.length);
     }
+    // An A2 Full preset built on an A2 Lite preset's capture plays it with a
+    // different scene design: none of its scenes drives that capture alone
+    // about as hard, at about the same level, as a Lite scene does.
+    const near = (a: number, b: number, by: number) => Math.abs(a - b) < by;
+    for (const a of lite.filter((r) => r.voices.length === 1))
+      for (const b of full) {
+        const at = b.voices.findIndex(
+          (v) =>
+            JSON.stringify(v.effects) === JSON.stringify(a.voices[0]!.effects),
+        );
+        if (at < 0) continue;
+        for (const scene of b.scenes)
+          for (const theirs of a.scenes)
+            expect(
+              scene.mix.every((m, i) => i === at || m === 0) &&
+                near(scene.mix[at]!, theirs.mix[0]!, 0.08) &&
+                near(scene.level!, theirs.level!, 0.12),
+              `${b.name} ${scene.name} / ${a.name} ${theirs.name}`,
+            ).toBe(false);
+      }
     const shape = (r: (typeof lite)[number]) =>
       JSON.stringify([r.voices, r.route, r.scenes.map((s) => s.mix)]);
     for (const a of lite)
@@ -169,7 +193,7 @@ describe('TONE3000 showcase recipes', () => {
       const manifest = JSON.parse(request.manifest_json);
       expect(manifest.name).toBe(`Oxidal · ${recipe.name}`);
       expect(
-        manifest.extensions['urn:oxidal:scenes:1'].scenes,
+        manifest.extensions[scenesKey(manifest)!].scenes,
         recipe.name,
       ).toHaveLength(recipe.scenes.length);
     }

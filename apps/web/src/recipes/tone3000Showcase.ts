@@ -20,17 +20,18 @@ import type { FactoryGenre } from '../factoryMetadata.ts';
  * their scenes are true blends, with pan. Levels are provisional until the
  * owner's listening pass on the Pi.
  *
- * Capture budget at the owner's 96-frame stream (provisional until WP-X
- * measures it): A2 Lite up to 3 distinct captures, A2 Full up to 2. Cabinet IRs
- * do not count as captures.
+ * Capture budget at 96 frames, measured on a Pi 5 (docs/capacity.md): A2 Lite
+ * up to 4 NAM instances, A2 Full up to 3. Each capture block is an instance,
+ * even when two paths share a capture; cabinet IRs do not count.
  *
  * @see docs/factory-collection.md
  */
 
-/** Distinct captures a preset of each tier may keep loaded (provisional). */
+/** NAM instances a preset of each tier may keep loaded at 96 frames; the
+ * Library's capture budget (docs/capacity.md). */
 export const tone3000CaptureBudget = {
-  'tone3000-a2-lite': 3,
-  'tone3000-a2-full': 2,
+  'tone3000-a2-lite': 4,
+  'tone3000-a2-full': 3,
 } as const;
 
 type Tier = keyof typeof tone3000CaptureBudget;
@@ -564,15 +565,15 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
     inspiration:
       'Open, bell-like American combo cleans from 1960s studio sessions, with the kind of transparent overdrive session players added later for a lead that still sounds like the amp.',
     performance:
-      'Clean is the bare amp for chords and arpeggios. Push leans the amp in for fuller rhythm. Lead moves to the overdriven path with the level lift. Bloom blends a little of the overdriven path under the clean one for a thicker, sustaining chord sound.' +
+      'Clean is the bare amp for chords and arpeggios. Drive plays rhythm through the overdriven path, lightly, so the amp still sounds like itself. Lead drives that path harder with the level lift. Bloom blends a little of the overdriven path under the clean one for a thicker, sustaining chord sound.' +
       dryNote,
     voices: [
       voice('Bell', nam('blackface-clean')),
       voice('Sing', nam('drive-kot'), nam('blackface-clean')),
     ],
     scenes: [
-      ['Clean', [0.4, 0], 1.7],
-      ['Push', [0.65, 0], 1.35],
+      ['Clean', [0.5, 0], 1.5],
+      ['Drive', [0, 0.45], 1.5],
       ['Lead', [0, 0.9], 1.4],
       ['Bloom', [0.3, 0.35], 1.6],
     ],
@@ -609,15 +610,15 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
     inspiration:
       '1970s funk and 1980s new wave rhythm guitar: two contrasting clean amps recorded together, one flat and fast, one round and bell-like.',
     performance:
-      'Flat is the solid-state clean alone for the tightest muted parts. Pair adds the bell-like combo on the other side for a wide groove. Lead leans on the bell-like combo with the level lift for single-note lines. Bell is the combo alone for rounder chords.' +
+      'Pair is both amps, one on each side, for a wide groove. Flat leans on the solid-state clean, with only a touch of the combo, for the tightest muted parts. Lead leans on the bell-like combo with the level lift for single-note lines. Bell is the combo alone for rounder chords.' +
       blendNote,
     paths: [
       lane('Flat', -0.5, nam('jc-clean')),
       lane('Bell', 0.5, nam('blackface-clean')),
     ],
     scenes: blend([
-      ['Flat', [1, 0]],
       ['Pair', [1, 1]],
+      ['Flat', [1, 0.2]],
       ['Lead', [0.5, 1]],
       ['Bell', [0, 1]],
     ]),
@@ -679,15 +680,15 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
     inspiration:
       'Late-1970s and early-1980s stadium rock: a loud, open stack that cleans up when you play softer, pushed by an overdrive when the solo comes.',
     performance:
-      'Rhythm is open and loose. Crunch leans the stack in for riffs. Lead moves to the overdriven path with the level lift. Thick blends the plain and overdriven paths into the fattest rhythm sound.' +
+      'Open is the plain stack played softly, so it cleans up. Pushed plays riffs through the overdriven path. Lead drives that path as hard as it goes with the level lift. Thick blends the plain and overdriven paths into the fattest rhythm sound.' +
       dryNote,
     voices: [
       voice('Stack', nam('plexi-crunch')),
       voice('Pushed', nam('drive-ts9'), nam('plexi-crunch')),
     ],
     scenes: [
-      ['Rhythm', [0.5, 0], 1.5],
-      ['Crunch', [0.8, 0], 1.3],
+      ['Open', [0.35, 0], 1.65],
+      ['Pushed', [0, 0.6], 1.35],
       ['Lead', [0, 1], 1.4],
       ['Thick', [0.4, 0.45], 1.45],
     ],
@@ -836,7 +837,7 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
     id: 'A2F-13',
     name: 'Double Low',
     description:
-      'A bi-amp bass: a round tube head through an eight-by-ten impulse, the same head driven by a gritty driver, and the driver straight into the cabinet for a clear top. Two captures; scenes blend the three.',
+      'A bi-amp bass: a round tube head through an eight-by-ten impulse, the same head driven by a gritty driver, and the dry bass straight into the cabinet impulse for a clear top. Two captures; scenes blend the three.',
     categories: ['Bass', 'TONE3000'],
     genres: ['Bass', 'Hard rock'],
     techniques: ['Parallel routing', 'Bi-amp'],
@@ -844,7 +845,7 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
     inspiration:
       'Bi-amped rock bass from the 1970s onward: a clean, round low end with a driven signal blended over it, so the grit never eats the fundamental.',
     performance:
-      'Clean is the tube head alone for fingerstyle lines. Grit blends the driven head over it for rock parts. Solo is the driven head with the direct driver on top and the level lift. Bi-amp keeps the clean head for the lows and adds only the direct driver for a clear, growling top. Stack runs all three for the heaviest sections.' +
+      'Clean is the tube head alone for fingerstyle lines. Grit blends the driven head over it for rock parts. Solo is the driven head with the direct cabinet on top and the level lift. Bi-amp keeps the clean head for the lows and adds the direct cabinet for a clear, defined top.' +
       blendNote,
     paths: [
       lane('Clean', 0, nam('svt-head'), nam('ir-ampeg-810')),
@@ -855,14 +856,13 @@ export const tone3000ShowcaseRecipes: FactoryRecipe[] = [
         nam('svt-head'),
         nam('ir-ampeg-810'),
       ),
-      lane('Direct grit', -0.25, nam('drive-sansamp'), nam('ir-ampeg-810')),
+      lane('Direct', -0.25, nam('ir-ampeg-810')),
     ],
     scenes: blend([
       ['Clean', [1, 0, 0]],
       ['Grit', [0.6, 0.8, 0]],
-      ['Solo', [0, 1, 0.5]],
+      ['Solo', [0, 1, 0.4]],
       ['Bi-amp', [0.8, 0, 0.6]],
-      ['Stack', [0.5, 0.6, 0.6]],
     ]),
   }),
   full({

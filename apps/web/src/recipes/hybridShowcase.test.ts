@@ -16,6 +16,7 @@ import {
 import type { Lv2Plugin } from '../api';
 import type { RigNativeSource } from '../generated/contract';
 import { hybridShowcaseRecipes } from './hybridShowcase';
+import { scenesKey } from '../sceneFormat';
 
 const plugins = catalog as Lv2Plugin[];
 const source: RigNativeSource = {
@@ -128,7 +129,7 @@ for (const recipe of hybridShowcaseRecipes) {
     );
     const m = JSON.parse(request.manifest_json);
     expect(validate(m), JSON.stringify(validate.errors)).toBe(true);
-    const sceneList = m.extensions['urn:oxidal:scenes:1'].scenes;
+    const sceneList = m.extensions[scenesKey(m)!].scenes;
     expect(sceneList).toHaveLength(recipe.scenes.length);
     const keys = (scene: { gains: { node: string; port: number }[] }) =>
       scene.gains.map((g) => `${g.node}:${g.port}`).sort();

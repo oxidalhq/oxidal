@@ -33,12 +33,13 @@ import {
  */
 
 /**
- * Distinct NAM captures one audio stream carries at the reference buffer.
- * PROVISIONAL until measured on the Pi (Sprint 12 WP-X): docs/capacity.md has
- * the measured instance counts per buffer size. Other buffer sizes scale the
- * budget in proportion to the frames, rounded down.
+ * NAM instances one preset may keep loaded at the reference buffer. Measured
+ * on a Pi 5 at 96 × 3: 5 A2 Full and 7 A2 Lite instances ran cleanly, so the
+ * budget keeps about 60 % of that for effects and jitter (docs/capacity.md).
+ * Other buffer sizes scale the budget in proportion to the frames, rounded
+ * down.
  */
-export const CAPTURE_BUDGET = { frames: 96, lite: 3, full: 2 } as const;
+export const CAPTURE_BUDGET = { frames: 96, lite: 4, full: 3 } as const;
 /** Buffers offered as a fix; larger ones add too much delay to play live. */
 const LARGEST_FIX_FRAMES = 512;
 /** Rough LV2 cost in percent of one audio buffer per block, shown in Details
@@ -149,17 +150,17 @@ export function soundItems(
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Captures a recipe keeps loaded: shared captures count once. */
+/**
+ * NAM instances a recipe keeps loaded. Every block that uses a capture is its
+ * own instance, even when two paths share the capture; IRs are not NAM.
+ */
 function captureCount(item: SoundItem): number {
   if (!item.recipe) return item.meta.namInstances;
-  return new Set(
-    factoryRoles(item.recipe).flatMap((role) => {
-      if (!isFactoryVoice(role)) return [`role:${role}`];
-      if (factoryVoices[role].kind === 'ir') return [];
-      const capture = primaryCapture(role);
-      return [`${capture.tone}:${capture.model ?? ''}`];
-    }),
-  ).size;
+  return recipeEffects(item.recipe).filter(
+    (e) =>
+      'native' in e &&
+      (!isFactoryVoice(e.native) || factoryVoices[e.native].kind !== 'ir'),
+  ).length;
 }
 
 /** Captures one stream carries; A2 Full models are heavier than Lite. */

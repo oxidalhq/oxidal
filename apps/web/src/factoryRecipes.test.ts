@@ -26,6 +26,7 @@ import {
 } from './factoryVoices';
 import type { RigNativeSource } from './generated/contract';
 import type { Lv2Plugin } from './api';
+import { scenesKey } from './sceneFormat';
 const plugins = catalog as Lv2Plugin[];
 const source: RigNativeSource = {
   preset: {
@@ -76,22 +77,22 @@ it('builds portable scene instruments and complex serial chains from installed m
     }
     expect([...counts.values()].every((n) => n === 1)).toBe(true);
     if (recipe.topology === 'serial') {
-      expect(m.extensions['urn:oxidal:scenes:1']).toBeUndefined();
+      expect(m.extensions[scenesKey(m)!]).toBeUndefined();
       expect(m.extensions['urn:oxidal:authoring'].factory_topology).toBe(
         'serial',
       );
     } else if (recipe.topology === 'routed') {
       // Routed presets open in the routing editor and scenes mix their paths.
       expect(chainRoute(m.oxidal.graph)).not.toBeNull();
-      const scenes = m.extensions['urn:oxidal:scenes:1'].scenes;
+      const scenes = m.extensions[scenesKey(m)!].scenes;
       expect(scenes).toHaveLength(recipe.scenes.length);
       const keys = (scene: { gains: { node: string; port: number }[] }) =>
         scene.gains.map((g) => `${g.node}:${g.port}`).sort();
       for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
     } else {
-      expect(m.extensions['urn:oxidal:scenes:1'].scenes).toHaveLength(4);
+      expect(m.extensions[scenesKey(m)!].scenes).toHaveLength(4);
       // Every scene covers the same full gain set; recalls cannot leak a prior mix.
-      const scenes = m.extensions['urn:oxidal:scenes:1'].scenes;
+      const scenes = m.extensions[scenesKey(m)!].scenes;
       const keys = (scene: { gains: { node: string; port: number }[] }) =>
         scene.gains.map((g) => `${g.node}:${g.port}`).sort();
       for (const scene of scenes) expect(keys(scene)).toEqual(keys(scenes[0]));
@@ -124,7 +125,7 @@ it('builds the dual-NAM serial example as one ordered path, not parallel scenes'
   const manifest = JSON.parse(request.manifest_json);
   expect(manifest.tone3000.instances).toHaveLength(2);
   expect(manifest.oxidal.lv2).toHaveLength(6);
-  expect(manifest.extensions['urn:oxidal:scenes:1']).toBeUndefined();
+  expect(manifest.extensions[scenesKey(manifest)!]).toBeUndefined();
   const processing = manifest.oxidal.graph.nodes.filter(
     (node: { kind: string }) => !['input', 'output'].includes(node.kind),
   );
@@ -193,12 +194,15 @@ it('builds every songbook preset from named voices and tags it by era', () => {
   for (const recipe of songbookRecipes) {
     expect(recipe.era).toBeDefined();
     expect(recipe.categories[0]).toBe(recipe.era);
-    expect(recipe.scenes.map((scene) => scene.name)).toEqual([
+    // The core order: the softer base, rhythm, the lead with the lift, then a
+    // fourth scene of the preset's own.
+    expect(recipe.scenes.map((scene) => scene.name).slice(0, 3)).toEqual([
+      'Intro',
       'Rhythm',
       'Lead',
-      'Intro',
-      'Boost',
     ]);
+    expect(recipe.scenes).toHaveLength(4);
+    expect(recipe.scenes[2]!.level).toBeGreaterThan(recipe.scenes[1]!.level!);
     const roles = factoryRoles(recipe);
     expect(roles.length).toBeGreaterThan(0);
     expect(roles.every((role) => isFactoryVoice(role))).toBe(true);
@@ -289,7 +293,7 @@ it('builds routed genre presets with nested splits, pan, polarity and path scene
   expect(node('merge-r2-left').inputGains).toEqual([0.4, -0.6]);
   const route = chainRoute(m.oxidal.graph)!;
   expect(route.filter((s) => typeof s !== 'string')).toHaveLength(1);
-  const solo = m.extensions['urn:oxidal:scenes:1'].scenes[2];
+  const solo = m.extensions[scenesKey(m)!].scenes[2];
   expect(solo.name).toBe('Solo');
   expect(solo.gains).toContainEqual({
     node: 'merge-r1-right',
@@ -312,7 +316,7 @@ it('builds routed genre presets with nested splits, pan, polarity and path scene
   expect(merge('left')[0]).toBe(1);
   expect(merge('right')[0]).toBe(0.5);
   // A routed scene's level scales its mix: Lead lifts the crunch amp by 1.2.
-  const leadScene = rooms.extensions['urn:oxidal:scenes:1'].scenes[2];
+  const leadScene = rooms.extensions[scenesKey(rooms)!].scenes[2];
   expect(leadScene.name).toBe('Lead');
   expect(leadScene.gains).toContainEqual({
     node: 'merge-r1-right',
@@ -352,7 +356,7 @@ it('lets scenes set effect controls the engine admits, on blocks that exist', ()
     expect(validate(m), JSON.stringify(validate.errors)).toBe(true);
     type Control = { node: string; symbol: string; value: number };
     const scenes: { controls: Control[] }[] =
-      m.extensions['urn:oxidal:scenes:1'].scenes;
+      m.extensions[scenesKey(m)!].scenes;
     const keys = (scene: { controls: Control[] }) =>
       scene.controls.map((c) => `${c.node}:${c.symbol}`).sort();
     const block = (node: string) =>
@@ -508,6 +512,12 @@ it('switches Hold on in a scene wherever a preset uses it, on a block that hears
 
 it('gives every preset in the collection at least four scenes', () => {
   for (const recipe of allFactoryRecipes) {
+    // No scene repeats another's mix and settings at a different level: the
+    // fourth scene is a sound of its own, not the lead a little quieter.
+    const sounds = recipe.scenes.map((s) =>
+      JSON.stringify([s.mix, s.controls ?? {}]),
+    );
+    expect(new Set(sounds).size, recipe.id).toBe(sounds.length);
     expect(recipe.scenes.length, recipe.id).toBeGreaterThanOrEqual(4);
     expect(recipe.scenes.length, recipe.id).toBeLessThanOrEqual(8);
     expect(new Set(recipe.scenes.map((s) => s.name)).size, recipe.id).toBe(

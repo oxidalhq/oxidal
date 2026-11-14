@@ -266,7 +266,7 @@ it('Get tones: lists the missing tone with its size, downloads, builds, then Pla
   await waitFor(() => expect(playScenes).toHaveBeenCalledWith('a'.repeat(64)));
 });
 
-it('S-5: a tone removed from TONE3000 fails cleanly, names it and offers another tone', async () => {
+it('a tone removed from TONE3000 fails cleanly, names it and offers another tone', async () => {
   vi.mocked(downloadVoice).mockRejectedValue(new Error('gone'));
   const { user, card } = await openBrown();
   await user.click(
@@ -288,7 +288,7 @@ it('S-5: a tone removed from TONE3000 fails cleanly, names it and offers another
   ).toBeVisible();
 });
 
-it('S-5: a tone already removed when the dialog opens blocks the download', async () => {
+it('a tone already removed when the dialog opens blocks the download', async () => {
   vi.mocked(tone3000Tone).mockRejectedValue(notFound());
   const { user, card } = await openBrown();
   await user.click(
@@ -402,7 +402,7 @@ it('each tone downloads on its own and a failed one can be tried again', async (
   expect(publishRig).toHaveBeenCalledOnce();
 });
 
-it('Sign in: signed out offers sign-in first; after sign-in the same Get tones dialog returns (S-4)', async () => {
+it('Sign in: signed out offers sign-in first; after sign-in the same Get tones dialog returns', async () => {
   vi.mocked(tone3000Account).mockResolvedValue({
     phase: 'disconnected',
     revision: 1,
@@ -427,7 +427,7 @@ it('Sign in: signed out offers sign-in first; after sign-in the same Get tones d
   expect(within(dialog).getByText(`Get tones for ${BROWN}`)).toBeVisible();
 });
 
-it('Install pack: missing pack is the one action; Protect disables it with the reason (S-6)', async () => {
+it('Install pack: missing pack is the one action; Protect disables it with the reason', async () => {
   vi.mocked(installedLv2).mockResolvedValue([]);
   vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
     audio_running: false,
@@ -451,7 +451,7 @@ it('Install pack: missing pack is the one action; Protect disables it with the r
   );
 });
 
-it('S-6: a pack that did not install says why and never claims success', async () => {
+it('a pack that did not install says why and never claims success', async () => {
   vi.mocked(installedLv2).mockResolvedValue([]);
   vi.mocked(changeEffectPack).mockImplementation(async (id) => ({
     audio_running: false,
@@ -497,7 +497,7 @@ it('an installed pack saves the sounds it completes, with no Build step', async 
   ).toBe(true);
 });
 
-it('S-6: with Protect on, Install pack is disabled and says why', async () => {
+it('with Protect on, Install pack is disabled and says why', async () => {
   vi.mocked(installedLv2).mockResolvedValue([]);
   vi.mocked(protectState).mockResolvedValue({ on: true });
   const { card } = await openBrown();
@@ -510,7 +510,7 @@ it('S-6: with Protect on, Install pack is disabled and says why', async () => {
   expect(changeEffectPack).not.toHaveBeenCalled();
 });
 
-it('S-7: Too heavy shows the reason and the buffer that fits, with no Play or Build', async () => {
+it('Too heavy shows the reason and the buffer that fits, with no Play or Build', async () => {
   vi.mocked(rigAudioState).mockResolvedValue({
     configured: { stream: { input: { period_frames: 16 } } },
     phase: 'running',
@@ -529,7 +529,7 @@ it('S-7: Too heavy shows the reason and the buffer that fits, with no Play or Bu
   ).toBeVisible();
 });
 
-it('Details: one sheet with scenes, chain, needs and load; S-9 Make my copy leaves the original unchanged', async () => {
+it('Details: one sheet with scenes, chain, needs and load; Make my copy leaves the original unchanged', async () => {
   vi.mocked(rigLibrary).mockResolvedValue({
     native_profile: 'profile',
     presets: [entry(BROWN, 'r1')],
@@ -561,7 +561,7 @@ it('Details: one sheet with scenes, chain, needs and load; S-9 Make my copy leav
   ).toHaveAttribute('href', 'https://www.tone3000.com/tones/65578');
   expect(within(sheet).getByText('Load')).toBeVisible();
   expect(within(sheet).getByRole('button', { name: 'Play' })).toBeEnabled();
-  // D-8: the read-only sound joins the set list by reference.
+  // the read-only sound joins the set list by reference.
   await user.click(
     within(sheet).getByRole('button', { name: 'Add to set list' }),
   );
@@ -585,7 +585,7 @@ it('Details: one sheet with scenes, chain, needs and load; S-9 Make my copy leav
   await screen.findByText(/Brown Crunch copy is in Mine/);
 });
 
-it('S-2: search, filters and group persist across a reload, and the summary counts them', async () => {
+it('search, filters and group persist across a reload, and the summary counts them', async () => {
   const user = userEvent.setup();
   const view = render(<OxidalSounds connected onChanged={() => {}} />);
   const search = await screen.findByRole('searchbox', {
@@ -629,4 +629,56 @@ it('explains an unreadable unit and keeps browsing available', async () => {
   render(<OxidalSounds connected onChanged={() => {}} />);
   expect(await screen.findByText('Oxidal sounds unavailable')).toBeVisible();
   expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
+});
+
+it('an effect no pack provides makes the card Update needed, with no action but Details', async () => {
+  // Oxidal's own Hold is missing: no effect pack can supply it.
+  vi.mocked(installedLv2).mockResolvedValue(
+    (catalog as { uri: string }[]).filter(
+      (p) => p.uri !== 'urn:oxidal:plugin:hold#stereo',
+    ) as never,
+  );
+  const user = userEvent.setup();
+  render(<OxidalSounds connected onChanged={() => {}} onOpenRig={() => {}} />);
+  await user.type(
+    await screen.findByRole('searchbox', { name: 'Search Oxidal sounds' }),
+    'Slow Weather',
+  );
+  const card = await screen.findByRole('article', { name: 'Slow Weather' });
+  await waitFor(() =>
+    expect(card).toHaveAttribute('data-state', 'unavailable'),
+  );
+  expect(within(card).getByText('Update needed')).toBeVisible();
+  expect(
+    within(card).getByText(
+      /Oxidal Hold \(Stereo\), which comes with a newer Oxidal system/,
+    ),
+  ).toBeVisible();
+  // Nothing to install, build or play: only the details.
+  expect(
+    within(card)
+      .getAllByRole('button')
+      .map((b) => b.textContent),
+  ).toEqual(['Details']);
+});
+
+it('a pack install that fails outright says why, saves nothing and offers it again', async () => {
+  vi.mocked(installedLv2).mockResolvedValue([]);
+  vi.mocked(changeEffectPack).mockRejectedValue(
+    new Error('The connection to the unit was lost.'),
+  );
+  const { user, card } = await openBrown();
+  const install = within(card).getByRole('button', {
+    name: `Install pack: ${BROWN}`,
+  });
+  await user.click(install);
+  expect(
+    await screen.findByText(
+      'Could not install the pack. The connection to the unit was lost.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText(/Installed\./)).toBeNull();
+  expect(publishRig).not.toHaveBeenCalled();
+  await waitFor(() => expect(install).toBeEnabled());
+  expect(card).toHaveAttribute('data-state', 'pack');
 });

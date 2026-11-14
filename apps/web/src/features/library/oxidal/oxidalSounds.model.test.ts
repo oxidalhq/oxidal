@@ -54,24 +54,25 @@ const item = (
 });
 
 describe('capture budget', () => {
-  it('allows 3 Lite and 2 Full captures at 96 frames', () => {
-    expect(captureLimit('tone3000-a2-lite', CAPTURE_BUDGET.frames)).toBe(3);
-    expect(captureLimit('tone3000-a2-full', CAPTURE_BUDGET.frames)).toBe(2);
-    expect(captureLimit('hybrid', 96)).toBe(3);
+  it('allows 4 Lite and 3 Full NAM instances at 96 frames', () => {
+    expect(captureLimit('tone3000-a2-lite', CAPTURE_BUDGET.frames)).toBe(4);
+    expect(captureLimit('tone3000-a2-full', CAPTURE_BUDGET.frames)).toBe(3);
+    expect(captureLimit('hybrid', 96)).toBe(4);
   });
   it('names the smallest buffer that carries a heavy sound', () => {
-    expect(bufferThatFits('tone3000-a2-full', 3)).toBe(192);
+    expect(bufferThatFits('tone3000-a2-full', 4)).toBe(128);
     expect(bufferThatFits('tone3000-a2-full', 99)).toBeNull();
   });
-  it('S-7: three captures on a stream that fits two is Too heavy with the fitting buffer', () => {
-    const state = cardState(item(), facts());
-    expect(state).toEqual({ kind: 'heavy', count: 3, limit: 2, fitsAt: 192 });
-    const fits = cardState(item(), facts({ frames: 192 }));
+  it('four instances on a stream that fits three is Too heavy with the fitting buffer', () => {
+    const heavy = item({ namInstances: 4 });
+    const state = cardState(heavy, facts());
+    expect(state).toEqual({ kind: 'heavy', count: 4, limit: 3, fitsAt: 128 });
+    const fits = cardState(heavy, facts({ frames: 128 }));
     expect(fits.kind).not.toBe('heavy');
   });
   it('is Too heavy even when already built, so Play is never offered', () => {
     const built = {
-      ...item(),
+      ...item({ namInstances: 4 }),
       built: { name: 'Test', revision: 'r', scenes: [] },
     };
     expect(cardState(built, facts()).kind).toBe('heavy');

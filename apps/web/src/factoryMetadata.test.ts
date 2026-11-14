@@ -118,7 +118,7 @@ describe('recipe metadata', () => {
       '',
       '   ',
       'Warm clean.',
-      'TODO(WP-C): describe the style and era of this sound in a sentence or two.',
+      'TODO: describe the style and era of this sound in a sentence or two.',
       'Placeholder until the listening pass on the unit is finished and written up.',
       'tbd: the style, the era and the kind of gear this sound is modelled on',
     ]) {

@@ -19,6 +19,22 @@ Heavier models cost more than the lightest ones, so a set of large A2 models fit
 fewer instances than these figures. At 256 frames, 7 instances from heavy presets
 fit and 10 did not.
 
+### A2 models at 96 frames
+
+Measured 2026-11-14 at 96 frames × 3 periods (2.0 ms per buffer) with Oxidal
+sounds that use TONE3000 A2 captures, outputs muted, 45 to 90 s per run:
+
+| NAM size | Ran cleanly     | Failed                  | Peak at last pass |
+| -------- | --------------- | ----------------------- | ----------------- |
+| A2 Full  | 5 (3 of 3 runs) | 6 (one xrun), 8         | 1.82–1.89 ms      |
+| A2 Lite  | 7 (2 of 3 runs) | 8 (deadline misses), 11 | 1.93–1.96 ms      |
+
+Each block that uses a capture is its own instance, even when two paths use the
+same capture. Oxidal sounds therefore keep at most 4 A2 Lite or 3 A2 Full
+instances per preset at 96 frames, which leaves room for effects; a heavier
+sound asks for a larger buffer. Keeping two such presets ready together can
+exceed these figures at 96 frames: use 128 frames for that.
+
 ## How many effects
 
 Effects cost far less than NAM. One NAM followed by up to 32 stereo effects ran
