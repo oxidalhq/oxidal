@@ -233,6 +233,13 @@ finally:
         if not owns_set(state):
             result['restore_skipped_external_change'] = True
             print('Another rig is selected; leaving it unchanged', flush=True)
+        elif original['phase'] != 'running':
+            # The snapshot was taken while stopped: release the interface again
+            # instead of starting a rig that was not playing.
+            action({'kind': 'stop'})
+            settle()
+            result['restored_configuration'] = True
+            print('Stopped, as before the test', flush=True)
         else:
             restored = start(original['configured'])
             # Playback start is confirmed before the API's preset/scene output
