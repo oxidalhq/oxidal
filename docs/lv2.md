@@ -298,8 +298,17 @@ needs its own review. The four Calf effects use events ports only for interface
 updates: they declare no configure variables, MIDI input or state interface
 (Calf 0.90.3 `makerdf.cpp`/`lv2wrap.cpp`), so `scalar-state.json` lists their exact
 scalar layouts, like Dragonfly Hall. Existing Guitarix fixture entries match the
-Debian 13 metadata. A run on the Pi itself is still required before these
-effects count as qualified on the device.
+Debian 13 metadata. All of them were run on the Pi itself on 2026-11-14.
+
+The fixture also adds these ZamAudio and DISTRHO Ports effects, run on the Pi on
+2026-11-14 with the packs installed: ZamVerb, ZamGrains, ZamTube, ZamAutoSat,
+ZamEQ2, ZamGEQ31, ZaMultiCompX2, MVerb, MaGigaverb, MaFreeverb, 3 Band EQ, Ping
+Pong Pan, Cycle Shifter and Soul Force. All are scalar-only with no added
+latency. Left out: ZaMaximX2 (480 frames of latency, 10 ms at 48 kHz), ZamDelay
+(an Atom input for host tempo, which needs its own review like GxDigitalDelay),
+ProM and glBars (meters), and ZamHeadX2 and ZamPhono (headphone and phono
+utilities). No gate qualifies yet: ZamGate and ZamGateX2 are rejected for their
+sidechain inputs.
 
 ## Graph snapshots
 

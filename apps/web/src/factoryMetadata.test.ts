@@ -90,6 +90,14 @@ describe('recipe metadata', () => {
     ).toContain('Engine disagrees with the NAM roles');
   });
 
+  it('names the pack of every ZamAudio and DISTRHO Ports effect', () => {
+    for (const name of ['ZamVerb', 'ZamGrains', 'ZaMultiCompX2'])
+      expect(factoryPackFor(name), name).toBe('zam');
+    for (const name of ['MVerb', 'MaGigaverb', '3 Band EQ', 'Soul Force'])
+      expect(factoryPackFor(name), name).toBe('dpf');
+    expect(factoryPackFor('Oxidal Hold (Stereo)')).toBeUndefined();
+  });
+
   it('derives packs, tones and counts from the blocks', () => {
     for (const recipe of allFactoryRecipes)
       for (const name of factoryPluginNames(recipe))

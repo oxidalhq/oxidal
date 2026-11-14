@@ -60,6 +60,11 @@ const packByPrefix: [RegExp, string][] = [
   [/^FOMP/, 'fomp'],
   [/^Calf/, 'calf'],
   [/^Reverse Delay/, 'swh'],
+  [/^Za[mM]/, 'zam'],
+  [
+    /^(MVerb|MaGigaverb|MaFreeverb|3 Band EQ|Ping Pong Pan|Cycle Shifter|Soul Force)$/,
+    'dpf',
+  ],
 ];
 
 /** The effect pack that supplies a plugin; Oxidal's own plugins need none. */

@@ -135,7 +135,7 @@ const SPECS: [Spec; 10] = [
         package: "zam-plugins",
         size_mib: 8,
         usable_plugins: 12,
-        qualification: "ARM64 container harness (Debian 13)",
+        qualification: "ARM64 harness and this Pi",
     },
     Spec {
         id: "dpf",
@@ -144,7 +144,7 @@ const SPECS: [Spec; 10] = [
         package: "dpf-plugins-lv2",
         size_mib: 10,
         usable_plugins: 9,
-        qualification: "ARM64 container harness (Debian 13)",
+        qualification: "ARM64 harness and this Pi",
     },
 ];
 
