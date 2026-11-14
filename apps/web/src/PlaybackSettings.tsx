@@ -34,7 +34,11 @@ import { MixedPlaybackSettings } from './MixedPlaybackSettings';
 import { AudioReconfigure } from './AudioReconfigure';
 import { BufferFinder } from './BufferFinder';
 import { bufferMs } from './bufferTiming';
-import { canResumeAudio, resumeUnavailable } from './audioResume';
+import {
+  canResumeAudio,
+  checkSavedStream,
+  resumeUnavailable,
+} from './audioResume';
 
 function configurationLabel(configuration: AudioProbe) {
   const channels =
@@ -181,6 +185,23 @@ export function PlaybackSettings({
       }
       setBusy(false);
     }
+  }
+  /** Resume after checking the saved input and output, unless already checked. */
+  async function resumeNative() {
+    if (!state?.configured) return;
+    if (!nativeResumeReady) {
+      setBusy(true);
+      setError('');
+      try {
+        await checkSavedStream(state.configured.stream);
+      } catch (cause) {
+        setError(friendlyError(cause, 'check the saved input and output'));
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+    await command({ kind: 'resume' });
   }
   const preset = presets.find((p) => `${p.owned}/${p.id}` === selected);
   const routedInputMap = input
@@ -399,10 +420,8 @@ export function PlaybackSettings({
               </>
             ) : state?.configured ? (
               <Button
-                disabled={
-                  !connected || busy || transitioning || !nativeResumeReady
-                }
-                onClick={() => void command({ kind: 'resume' })}
+                disabled={!connected || busy || transitioning}
+                onClick={() => void resumeNative()}
               >
                 Resume audio
               </Button>

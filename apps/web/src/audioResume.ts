@@ -1,4 +1,4 @@
-import type { AudioProbe } from './api';
+import { probeAudio, type AudioProbe } from './api';
 
 function sameProbe(checked: AudioProbe | null, saved: AudioProbe) {
   return (
@@ -21,5 +21,22 @@ export function canResumeAudio(
   return sameProbe(input, stream.input) && sameProbe(output, stream.output);
 }
 
+/**
+ * Check a stopped session's exact saved input and output, as Check does, so
+ * Resume never needs a separate check first. Throws when the interface no
+ * longer accepts them; nothing is started then.
+ */
+export async function checkSavedStream(stream: {
+  input: AudioProbe;
+  output: AudioProbe;
+}) {
+  const input = await probeAudio(stream.input);
+  const output = await probeAudio(stream.output);
+  if (!canResumeAudio(stream, input.configuration, output.configuration))
+    throw new Error(
+      "The interface no longer accepts this session's saved input and output. Reconnect it, or check the audio settings above.",
+    );
+}
+
 export const resumeUnavailable =
-  "Reconnect and check this session's saved input and output above before resuming.";
+  "Resume checks this session's saved input and output first.";

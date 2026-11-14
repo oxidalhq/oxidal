@@ -12,7 +12,11 @@ import {
   type GraphAudioAction,
   type AudioProbe,
 } from './api';
-import { canResumeAudio, resumeUnavailable } from './audioResume';
+import {
+  canResumeAudio,
+  checkSavedStream,
+  resumeUnavailable,
+} from './audioResume';
 
 /** Settings operate on the same effects owner as the playing chain. */
 export function EffectsPlaybackSettings({
@@ -55,6 +59,22 @@ export function EffectsPlaybackSettings({
   const stream = state.configured.stream;
   const resumeReady =
     state.device_owned || canResumeAudio(stream, input, output);
+  /** Restart, or resume after checking the saved input and output. */
+  async function resume() {
+    if (!resumeReady) {
+      setBusy(true);
+      setError('');
+      try {
+        await checkSavedStream(stream);
+      } catch (cause) {
+        setError(friendlyError(cause, 'check the saved input and output'));
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+    await command({ kind: 'restart' });
+  }
   return (
     <section className="control-stack" aria-label="Playback controls">
       <div className="section-heading">
@@ -75,8 +95,8 @@ export function EffectsPlaybackSettings({
         )}
         <Button
           variant="outline"
-          disabled={!connected || busy || transitioning || !resumeReady}
-          onClick={() => void command({ kind: 'restart' })}
+          disabled={!connected || busy || transitioning}
+          onClick={() => void resume()}
         >
           {state.device_owned ? 'Restart audio' : 'Resume audio'}
         </Button>

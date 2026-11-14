@@ -1,14 +1,29 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MixedPlaybackSettings } from './MixedPlaybackSettings';
-import type { AudioProbe, RigAudioState } from './api';
+import {
+  probeAudio,
+  rigAudioCommand,
+  type AudioProbe,
+  type RigAudioState,
+} from './api';
 
 vi.mock('./api', () => ({
+  probeAudio: vi.fn(),
   rigAudioCommand: vi.fn(),
   rigAudioState: vi.fn(),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
+});
 
 const input: AudioProbe = {
   endpoint: 'hw:CARD=Jogg,DEV=0',
@@ -48,7 +63,13 @@ const stopped = {
   },
 } as unknown as RigAudioState;
 
-it('keeps Resume disabled while the saved interface is absent', () => {
+it('Resume checks the saved interface itself, then resumes', async () => {
+  vi.mocked(probeAudio).mockImplementation(async (request) => ({
+    configuration: request,
+    buffer_frames: request.period_frames * request.periods,
+    streaming_available: false,
+  }));
+  vi.mocked(rigAudioCommand).mockResolvedValue(stopped);
   render(
     <MixedPlaybackSettings
       state={stopped}
@@ -58,8 +79,29 @@ it('keeps Resume disabled while the saved interface is absent', () => {
       onState={vi.fn()}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Resume audio' })).toBeDisabled();
-  expect(screen.getByText(/Reconnect and check this session/)).toBeVisible();
+  expect(screen.getByText(/Resume checks this session/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Resume audio' }));
+  await waitFor(() =>
+    expect(rigAudioCommand).toHaveBeenCalledWith(stopped, { kind: 'restart' }),
+  );
+  expect(probeAudio).toHaveBeenCalledWith(input);
+  expect(probeAudio).toHaveBeenCalledWith(output);
+});
+
+it('Resume starts nothing when the saved interface is gone', async () => {
+  vi.mocked(probeAudio).mockRejectedValue(new Error('No such device'));
+  render(
+    <MixedPlaybackSettings
+      state={stopped}
+      connected
+      input={null}
+      output={null}
+      onState={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Resume audio' }));
+  expect(await screen.findByRole('alert')).toBeVisible();
+  expect(rigAudioCommand).not.toHaveBeenCalled();
 });
 
 it('enables Resume after both saved directions pass the exact check', () => {
