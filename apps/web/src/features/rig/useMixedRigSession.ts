@@ -47,6 +47,14 @@ import {
   type SceneDraft,
   type SceneGain,
 } from './mixedRigViewModel';
+import { applyTogether } from './pathSides';
+import {
+  type RigHistory,
+  afterStep,
+  historyTarget,
+  parseHistory,
+  recordEdit,
+} from './rigHistory';
 
 /**
  * State and commands of the sounding mixed rig: confirmed-state polling, the
@@ -100,7 +108,7 @@ export function useMixedRigSession({
   } | null>(null);
   const [adding, setAdding] = useState(false);
   /** The rig canvas's open chooser: a gap's Add or split menu, an effect to
-   * add or split in at a gap, or the effect replacing a block (S-15). */
+   * add or split in at a gap, or the effect replacing a block. */
   const [canvasChoice, setCanvasChoice] = useState<
     | { kind: 'gap' | 'add' | 'split'; at: RouteAt }
     | { kind: 'replace'; id: string }
@@ -456,7 +464,10 @@ export function useMixedRigSession({
       promoting.current = false;
     }
   }
-  async function command(action: RigAudioAction) {
+  /** One confirmed command. An edit of an Oxidal sound or a TONE3000 chain
+   * then makes its copy in Mine, unless `promote` is false because the caller
+   * sends more commands that belong to the same change and promotes after. */
+  async function command(action: RigAudioAction, promote = true) {
     if (!current.current || sending.current) return;
     const control = current.current.control;
     if (action.kind === 'branch' && control?.scene)
@@ -517,7 +528,10 @@ export function useMixedRigSession({
         next = await rigAudioCommand(current.current, action);
         accept(next);
       }
-      if (['authoring', 'control', 'eq', 'model'].includes(action.kind))
+      if (
+        promote &&
+        ['authoring', 'control', 'eq', 'model'].includes(action.kind)
+      )
         await promoteMixedEdit(next);
       return true;
     } catch (cause) {
@@ -545,7 +559,7 @@ export function useMixedRigSession({
       withMix && editingScene
         ? { ...drafts, [editingScene.id]: editingSceneGains }
         : drafts;
-    // Effect settings drafted with Update scene (D-6), plus any the caller adds.
+    // Effect settings drafted with Update scene, plus any the caller adds.
     const controls = {
       ...(sceneUpdates?.session === current.current?.control?.session
         ? (sceneUpdates?.controls ?? {})
@@ -565,46 +579,64 @@ export function useMixedRigSession({
     );
   }
   /** One confirmed control command against the latest confirmed state. */
-  async function setControl(target: RigControl['target'], value: number) {
+  async function setControl(
+    target: RigControl['target'],
+    value: number,
+    promote = true,
+  ) {
     const cursor = current.current?.control;
     return (
       !!cursor &&
-      !!(await command({
-        kind: 'control',
-        command: {
-          session: cursor.session,
-          expected_revision: cursor.revision,
-          target,
-          value,
+      !!(await command(
+        {
+          kind: 'control',
+          command: {
+            session: cursor.session,
+            expected_revision: cursor.revision,
+            target,
+            value,
+          },
         },
-      }))
+        promote,
+      ))
     );
   }
   /**
-   * Sets a path's left and right merge gains (level, pan, polarity). The API
-   * takes one control per command, so when a later side fails the sides
-   * already set are put back: a pan is never left half applied.
+   * Sets a path's left and right merge gains (level, pan, polarity) as one
+   * change. The API takes one control per command, so when a later side fails
+   * the sides already set are put back: a pan is never left half applied. An
+   * Oxidal sound or TONE3000 chain makes its copy in Mine only once both
+   * sides are set, never between them.
    */
   async function setPathSides(values: [RigControl['target'], number][]) {
-    const applied: [RigControl['target'], number][] = [];
-    for (const [target, value] of values) {
-      const before = current.current?.control?.controls.find(
-        (c) => JSON.stringify(c.target) === JSON.stringify(target),
-      )?.value;
-      if (await setControl(target, value)) {
-        if (before !== undefined) applied.unshift([target, before]);
-        continue;
+    const result = await applyTogether(
+      values,
+      (target) =>
+        current.current?.control?.controls.find(
+          (c) => JSON.stringify(c.target) === JSON.stringify(target),
+        )?.value,
+      (target, value) => setControl(target, value, false),
+    );
+    if (result === 'applied') {
+      const after = current.current;
+      // Only an Oxidal sound or a TONE3000 chain is copied; Mine is not.
+      if (!after || sourceOrigin === 'mine' || copyOnEdit) return;
+      setBusy(true);
+      try {
+        await promoteMixedEdit(after);
+      } catch (cause) {
+        if (alive.current) setError(friendlyError(cause, 'update the rig'));
+      } finally {
+        if (alive.current) setBusy(false);
       }
-      if (!applied.length) return;
-      let restored = true;
-      for (const [done, earlier] of applied)
-        restored = (await setControl(done, earlier)) && restored;
-      if (restored)
-        setError(
-          'That path change did not go through, so the path is back as it was. Try again.',
-        );
-      return;
-    }
+    } else if (result === 'restored')
+      setError(
+        'That path change did not go through, so the path is back as it was. Try again.',
+      );
+    else if (result === 'partial')
+      setError(
+        'That path change went through on one side only. Check the path’s level and pan, then try again.',
+      );
   }
   /**
    * Recalls a scene; a drafted update then replaces its saved snapshot live.
@@ -690,6 +722,21 @@ export function useMixedRigSession({
   const setPerforming = (on: boolean) => setPerform({ on });
   /** An edit waiting for the player to accept losing unsaved block edits. */
   const [unsaved, setUnsaved] = useState<(() => Promise<void>) | null>(null);
+  /** This tab's Undo and Redo through the revisions its edits published. */
+  const [history, setHistory] = useState<RigHistory | null>(readHistory);
+  useEffect(() => {
+    try {
+      if (history) sessionStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+      else sessionStorage.removeItem(HISTORY_KEY);
+    } catch {
+      /* storage unavailable: the history lives only in this page */
+    }
+  }, [history]);
+  /** The exact manifest each revision was published with, so stepping back
+   * gives the same revision rather than a re-encoded copy of it. */
+  const publishedJson = useRef(new Map<string, string>());
+  /** Undo or Redo waiting for the player to accept losing unsaved changes. */
+  const [stepping, setStepping] = useState<-1 | 1 | null>(null);
   /** Builds the next version of this preset, plays it and hides the one it
    * replaces, so the library keeps one preset. Edits to the blocks inside a
    * TONE3000 chain that were not saved are not carried over, so the player
@@ -746,6 +793,21 @@ export function useMixedRigSession({
         }
         request.source = { kind: 'rig', id: opened.revision };
         const published = await publishRig(request);
+        publishedJson.current.set(published.revision, request.manifest_json);
+        // An edit of a preset in Mine replaces it and can be undone; the
+        // first edit of anything else makes a copy, undone with Discard copy.
+        setHistory((h) =>
+          recordEdit(
+            h,
+            {
+              // The manifest just published: its id is the saved preset's.
+              preset: manifest.id,
+              from: opened.revision,
+              to: published.revision,
+            },
+            origin === 'mine' && manifest.id === opened.manifest.id,
+          ),
+        );
         await playScenes(published.revision);
         accept(await rigAudioState());
         // The daemon puts the new revision in the earlier one's place (7.2).
@@ -765,8 +827,65 @@ export function useMixedRigSession({
     if (changed) setUnsaved(() => run);
     else return run();
   }
+  const undoTarget = historyTarget(history, revision, -1);
+  const redoTarget = historyTarget(history, revision, 1);
+  /**
+   * Undo (-1) or Redo (1): republishes the earlier or later revision with the
+   * playing one as its source, so it takes the playing one's place in the
+   * library and its MIDI assignments and Keep ready move with it; then plays
+   * it. Changes made since the last edit and not saved are not carried, so
+   * the player confirms first (`confirmed`).
+   */
+  function stepHistory(step: -1 | 1, confirmed = false) {
+    const target = step < 0 ? undoTarget : redoTarget;
+    const opened = document?.revision === revision ? document : null;
+    if (!target || !opened || editing) return;
+    setStepping(null);
+    if (!confirmed && view?.changed) {
+      setStepping(step);
+      return;
+    }
+    const run = async () => {
+      clearEdit();
+      setEditing(true);
+      setError('');
+      try {
+        const earlier = await rigDocument(target);
+        const manifest_json =
+          publishedJson.current.get(target) ?? JSON.stringify(earlier.manifest);
+        const published = await publishRig({
+          manifest_json,
+          resources: Object.fromEntries(
+            earlier.manifest.resources.map((r) => [
+              r.id,
+              { kind: 'bundle', revision: target, resource: r.id },
+            ]),
+          ),
+          source: { kind: 'rig', id: opened.revision },
+        });
+        publishedJson.current.set(published.revision, manifest_json);
+        setHistory((h) =>
+          h && h.revisions[h.at] === opened.revision
+            ? afterStep(h, step, published.revision)
+            : h,
+        );
+        await playScenes(published.revision);
+        accept(await rigAudioState());
+      } catch (cause) {
+        if (alive.current)
+          failEdit(
+            cause,
+            step < 0 ? 'undo the change' : 'redo the change',
+            () => void run(),
+          );
+      } finally {
+        if (alive.current) setEditing(false);
+      }
+    };
+    return run();
+  }
   /** Rebuilds this preset with a change to its chain of blocks. A preset
-   * with scene lanes keeps its scenes and edits inside them (S-15). */
+   * with scene lanes keeps its scenes and edits inside them. */
   function editChain(change: (route: Route) => Route) {
     return rebuild(({ opened, plugins, live, name, profile }) => {
       const route = change(readRoute(opened, plugins, live));
@@ -993,6 +1112,7 @@ export function useMixedRigSession({
         delete_models: false,
       });
       setCopyOnEdit(null);
+      setHistory((h) => (h?.revisions.includes(copy.copy) ? null : h));
     } catch (cause) {
       setError(
         `The original is playing, but the copy remains in Mine: ${errorDetails(cause)}`,
@@ -1109,6 +1229,11 @@ export function useMixedRigSession({
     setPerforming,
     unsaved,
     setUnsaved,
+    undoTarget,
+    redoTarget,
+    stepHistory,
+    stepping,
+    setStepping,
     rebuild,
     editChain,
     shift,
@@ -1165,6 +1290,18 @@ function readSceneDraft(): SceneDraft | null {
     )
       return null;
     return draft;
+  } catch {
+    return null;
+  }
+}
+
+const HISTORY_KEY = 'oxidal.mixed.history';
+/** The Undo and Redo history this tab kept, if it is well formed. */
+function readHistory(): RigHistory | null {
+  try {
+    return parseHistory(
+      JSON.parse(sessionStorage.getItem(HISTORY_KEY) ?? 'null'),
+    );
   } catch {
     return null;
   }

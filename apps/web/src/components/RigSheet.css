@@ -1,4 +1,4 @@
-/* Phones (S-15): a closable block sheet docks to the bottom of the screen
+/* Phones: a closable block sheet docks to the bottom of the screen
    while the chain stays scrollable above it; it never grows past 60 % of the
    screen and scrolls inside. Content after the sheet is never covered. */
 @media (max-width: 640px) {

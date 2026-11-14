@@ -45,7 +45,7 @@ export function PathLevel({
     if (Math.abs(l - left) > 0.0001 || Math.abs(r - right) > 0.0001)
       void onCommit(l, r);
   };
-  /** Step buttons for E-paper, where there is no dragging (S-17). */
+  /** Step buttons for E-paper, where there is no dragging. */
   const step = (
     key: 'level' | 'pan',
     delta: number,

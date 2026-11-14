@@ -48,13 +48,15 @@ type Props = {
   onMove?: (id: string, at: RouteAt) => void;
   onKey?: (id: string, key: MoveKey) => void;
   disabled?: boolean;
-  /** E-paper: the chain as a numbered list, buttons only (S-17). */
+  /** E-paper: the chain as a numbered list, buttons only. */
   list?: boolean;
+  /** Paths folded from a graph for drawing only: their levels are not known. */
+  plain?: boolean;
   label?: string;
 };
 
 /**
- * The rig canvas (S-15): one renderer for a straight chain, any routing tree
+ * The rig canvas: one renderer for a straight chain, any routing tree
  * and scene lanes. Blocks sit on a wire with a + in every gap; a split stacks
  * its paths, each captioned with its level and pan; an empty path says
  * "+ Add effect". Blocks drag to any gap, within or across paths, and Alt+arrow
@@ -205,7 +207,9 @@ function RowSteps(
               <span className="route-path-caption">
                 {scene
                   ? `${path + 1} ${scene.names[path] ?? ''}${sounding ? ' · Sounding' : ''}`
-                  : caption(step, path)}
+                  : props.plain
+                    ? `Path ${path + 1}`
+                    : caption(step, path)}
               </span>
               <div className="route-row">
                 {branch.length ? (
@@ -387,7 +391,9 @@ function ListSplit(props: Props & { split: Split }) {
                   ? scene.sounding === path
                     ? '(sounding)'
                     : ''
-                  : `(${caption(split, path).split(' · ').slice(1).join(', ')})`}
+                  : props.plain
+                    ? ''
+                    : `(${caption(split, path).split(' · ').slice(1).join(', ')})`}
               </span>
               {!!branch.length && (
                 <ol>

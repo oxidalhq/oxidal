@@ -9,6 +9,7 @@ import {
   type Stereo,
 } from './rigDraft';
 import { readBlock } from './rigEdit';
+import { readScenes, sealScenes } from './sceneFormat';
 
 /**
  * The general routing model (7.26): a chain of blocks where a split holds any
@@ -26,6 +27,9 @@ export type RouteSplit = {
   /** Right merge gains, only when a path is panned (7.26). */
   rightGains?: number[];
   branches: Step[][];
+  /** Steps at the start of every path that stay first there: a scene's tone.
+   * Nothing is placed or moved ahead of them. */
+  lead?: number;
 };
 type Step = DraftEffect | RouteSplit;
 export type Route = Step[];
@@ -47,7 +51,8 @@ export function routeLanes(route: Route): DraftEffect[][] {
   return routePaths<DraftEffect>(route, isSplit);
 }
 
-/** The preset as a route; effect knobs take their live values. */
+/** The preset as a route; effect knobs take their live values. The scene
+ * lanes' split keeps each scene's tone first (`lead`). */
 export function readRoute(
   document: RigDocument,
   plugins: Lv2Plugin[],
@@ -57,6 +62,7 @@ export function readRoute(
   const ids = host && chainRoute(host.graph);
   if (!host || !ids)
     throw new Error('This preset’s routing cannot be edited here.');
+  const scenes = ids[sceneSplitIndex(ids, sceneTones(document.manifest))];
   const map = (steps: IdStep[]): Route =>
     steps.map((s) =>
       typeof s === 'string'
@@ -68,6 +74,7 @@ export function readRoute(
             gains: s.gains,
             ...(s.rightGains ? { rightGains: s.rightGains } : {}),
             branches: s.branches.map(map),
+            ...(s === scenes ? { lead: 1 } : {}),
           },
     );
   return map(ids);
@@ -570,7 +577,7 @@ export function routePathGain(
   return routePathMix(route, split, path, { ...mix, level: gain });
 }
 
-/* ---------- The rig canvas: gaps, moves across paths, replace (S-15). ---------- */
+/* ---------- The rig canvas: gaps, moves across paths, replace. ---------- */
 
 /** The most outputs one split node may have in the engine, so the most paths. */
 export const MAX_PATHS = 64;
@@ -579,14 +586,16 @@ export const MAX_PATHS = 64;
  * of path `path` of split `split`; a split counts as one step. */
 export type RouteAt = { split: string | null; path: number; index: number };
 
-function listAt(route: Route, at: RouteAt): Step[] {
-  const list =
-    at.split === null ? route : findSplit(route, at.split)?.branches[at.path];
+/** The list a gap is in, and the first index a block may take there (after a
+ * scene's tone on a scene path). */
+function listAt(route: Route, at: RouteAt): { list: Step[]; lead: number } {
+  const owner = at.split === null ? null : findSplit(route, at.split);
+  const list = at.split === null ? route : owner?.branches[at.path];
   if (!list) throw new Error('That place is no longer in this preset.');
-  return list;
+  return { list, lead: Math.min(owner?.lead ?? 0, list.length) };
 }
-const within = (list: unknown[], index: number) =>
-  Math.max(0, Math.min(list.length, index));
+const within = (list: unknown[], index: number, lead = 0) =>
+  Math.max(lead, Math.min(list.length, index));
 
 /** Adds `effect` at a gap. */
 export function routeInsertAt(
@@ -595,8 +604,8 @@ export function routeInsertAt(
   effect: DraftEffect,
 ): Route {
   const next = clone(route);
-  const list = listAt(next, at);
-  list.splice(within(list, at.index), 0, effect);
+  const { list, lead } = listAt(next, at);
+  list.splice(within(list, at.index, lead), 0, effect);
   return next;
 }
 
@@ -607,8 +616,8 @@ export function routeSplitAt(
   effect: DraftEffect,
 ): Route {
   const next = clone(route);
-  const list = listAt(next, at);
-  list.splice(within(list, at.index), 0, newSplit([[effect], []]));
+  const { list, lead } = listAt(next, at);
+  list.splice(within(list, at.index, lead), 0, newSplit([[effect], []]));
   return next;
 }
 
@@ -644,8 +653,8 @@ export function routeMoveTo(route: Route, id: string, at: RouteAt): Route {
   const from = locate(next, id);
   if (!from) return route;
   const block = from.list[from.index]!;
-  const list = listAt(next, at);
-  const index = within(list, at.index);
+  const { list, lead } = listAt(next, at);
+  const index = within(list, at.index, lead);
   if (list === from.list && (index === from.index || index === from.index + 1))
     return route;
   list.splice(index, 0, { ...(block as DraftEffect) });
@@ -655,7 +664,8 @@ export function routeMoveTo(route: Route, id: string, at: RouteAt): Route {
 
 /**
  * Move ◀ / Move ▶: one place earlier or later. Next to a split the block steps
- * into its first path; at either end of a path it steps out of its split.
+ * into its first path (after a scene's tone); at either end of a path, or next
+ * to a scene's tone, it steps out of its split.
  */
 export function routeStep(route: Route, id: string, step: -1 | 1): Route {
   const next = clone(route);
@@ -664,13 +674,13 @@ export function routeStep(route: Route, id: string, step: -1 | 1): Route {
   if (!at) return route;
   const block = at.list[at.index]!;
   const to = at.index + step;
-  if (to >= 0 && to < at.list.length) {
+  if (to >= (at.owner?.lead ?? 0) && to < at.list.length) {
     const neighbour = at.list[to]!;
     at.list.splice(at.index, 1);
     if (isSplit(neighbour)) {
       const path = neighbour.branches[0]!;
       if (step < 0) path.push(block);
-      else path.unshift(block);
+      else path.splice(Math.min(neighbour.lead ?? 0, path.length), 0, block);
     } else at.list.splice(to, 0, block);
     return tidy(next, dry);
   }
@@ -690,7 +700,11 @@ export function routePathStep(route: Route, id: string, step: -1 | 1): Route {
   if (!at || !to) return route;
   const block = at.list[at.index]!;
   lift(at.list, block, dry);
-  to.splice(within(to, at.index), 0, block);
+  to.splice(
+    within(to, at.index, Math.min(at.owner!.lead ?? 0, to.length)),
+    0,
+    block,
+  );
   return tidy(next, dry);
 }
 
@@ -716,7 +730,7 @@ export function routeDuplicate(route: Route, id: string): Route {
   return next;
 }
 
-/* ---------- Presets with scene lanes (S-15). ---------- */
+/* ---------- Presets with scene lanes. ---------- */
 
 type Manifest = RigDocument['manifest'];
 type AnyStep = IdStep | Step;
@@ -729,8 +743,9 @@ const stepId = (s: AnyStep | undefined) =>
 
 /** The TONE3000 tone of each scene branch, in scene order (none without). */
 export function sceneTones(manifest: Manifest | undefined): string[] {
-  const ext = manifest?.extensions['urn:oxidal:scenes:1'] as
-    { branches?: { id?: unknown }[] } | undefined;
+  const ext = manifest
+    ? readScenes<{ branches?: { id?: unknown }[] }>(manifest)
+    : undefined;
   return Array.isArray(ext?.branches)
     ? ext.branches.flatMap((b) => (typeof b.id === 'string' ? [b.id] : []))
     : [];
@@ -751,9 +766,10 @@ export function sceneSplitIndex(steps: AnyStep[], tones: string[]): number {
 
 /**
  * The next version of a preset with scene lanes. Each scene's path keeps its
- * tone first; everything after it, splits included, and everything after the
- * scenes is rebuilt in the existing manifest, so the scenes, their gates, the
- * TONE3000 chains and their resources are untouched.
+ * tone first. Everything ahead of the scenes, everything after a scene's tone
+ * (splits included) and everything after the scenes is rebuilt in the
+ * existing manifest, so the scenes, their gates, the TONE3000 chains and their
+ * resources are untouched and every saved scene recalls as before.
  */
 export function buildSceneRoute(
   document: RigDocument,
@@ -765,29 +781,27 @@ export function buildSceneRoute(
     ? chainRoute(document.manifest.oxidal.graph)
     : null;
   const was = before?.[sceneSplitIndex(before, tones)];
-  if (
-    !before ||
-    sceneSplitIndex(before, tones) !== 0 ||
-    typeof was !== 'object'
-  )
+  if (!before || typeof was !== 'object')
     throw new Error('This preset’s routing cannot be edited here.');
-  const scene = route[0];
-  if (
-    sceneSplitIndex(route, tones) !== 0 ||
-    !isSplit(scene) ||
-    scene.split !== was.split
-  )
+  const sceneAt = sceneSplitIndex(route, tones);
+  const scene = route[sceneAt];
+  if (sceneAt < 0 || !isSplit(scene) || scene.split !== was.split)
     throw new Error(
       'Each scene keeps its own path, with its tone first. Add or remove scenes with the scene pads.',
     );
   const blocks = uniqueBlocks(route);
   validateStages(blocks);
-  const after = [
+  const ahead = route.slice(0, sceneAt);
+  const behind = route.slice(sceneAt + 1);
+  const rebuilt = [
+    ...ahead,
     ...scene.branches.flatMap((b) => b.slice(1)),
-    ...route.slice(1),
+    ...behind,
   ];
-  if (routeBlocks(after).some((b) => b.kind !== 'lv2'))
-    throw new Error('Only effects go after a scene’s tone.');
+  if (routeBlocks(rebuilt).some((b) => b.kind !== 'lv2'))
+    throw new Error(
+      'Only effects go ahead of the scenes or after a scene’s tone.',
+    );
   const manifest: Manifest = JSON.parse(JSON.stringify(document.manifest));
   if (name) manifest.name = name.trim();
   const authoring = (manifest.extensions['urn:oxidal:authoring'] ??= {});
@@ -795,8 +809,11 @@ export function buildSceneRoute(
   const labels = (authoring.labels ??= {}) as Record<string, string>;
   const host = manifest.oxidal!;
   const edges = host.graph.edges;
+  const splitL = `${scene.split}-left`;
+  const splitR = `${scene.split}-right`;
   const mergeL = `${scene.merge}-left`;
   const mergeR = `${scene.merge}-right`;
+  const input = host.graph.nodes.find((n) => n.kind === 'input')?.id ?? 'in';
   const output = host.graph.nodes.find((n) => n.kind === 'output')?.id ?? 'out';
   /** Every node after `starts` and before `stops`: the part that is rebuilt. */
   const reach = (starts: string[], stops: Set<string>) => {
@@ -817,10 +834,11 @@ export function buildSceneRoute(
     return found;
   };
   const removed = new Set([
+    ...reach([input], new Set([splitL, splitR])),
     ...tones.flatMap((t) => [...reach([t], new Set([mergeL, mergeR]))]),
     ...reach([mergeL, mergeR], new Set([output])),
   ]);
-  const starts = new Set([...tones, mergeL, mergeR]);
+  const starts = new Set([input, ...tones, mergeL, mergeR]);
   const instances = new Set(
     host.graph.nodes.filter((n) => removed.has(n.id)).map((n) => n.instance),
   );
@@ -843,6 +861,14 @@ export function buildSceneRoute(
       { from: from[0], to: to[0] },
       { from: from[1], to: to[1] },
     );
+  const head = place(ahead, [
+    { node: input, port: 0 },
+    { node: input, port: 1 },
+  ]);
+  link(head, [
+    { node: splitL, port: 0 },
+    { node: splitR, port: 0 },
+  ]);
   scene.branches.forEach((branch, port) => {
     const tone = stepId(branch[0])!;
     const end = place(branch.slice(1), [
@@ -854,7 +880,7 @@ export function buildSceneRoute(
       { node: mergeR, port },
     ]);
   });
-  const end = place(route.slice(1), [
+  const end = place(behind, [
     { node: mergeL, port: 0 },
     { node: mergeR, port: 0 },
   ]);
@@ -865,15 +891,16 @@ export function buildSceneRoute(
   // Scene settings of an effect that was removed or replaced go with it, as
   // `keepScenes` does for presets without scene lanes.
   const effects = new Set(host.lv2.map((l) => l.id));
-  const scenes = manifest.extensions['urn:oxidal:scenes:1'] as
-    { scenes?: { controls?: { node: string }[] }[] } | undefined;
+  const scenes = readScenes<{ scenes?: { controls?: { node: string }[] }[] }>(
+    manifest,
+  );
   for (const item of scenes?.scenes ?? []) {
     if (!item.controls) continue;
     item.controls = item.controls.filter((c) => effects.has(c.node));
     if (!item.controls.length) delete item.controls;
   }
   return {
-    manifest_json: JSON.stringify(manifest),
+    manifest_json: JSON.stringify(sealScenes(manifest)),
     resources: Object.fromEntries(
       manifest.resources.map((r) => [
         r.id,

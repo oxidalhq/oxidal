@@ -150,6 +150,17 @@ impl Store {
 }
 
 impl Store {
+    /// Duplicate (Library) of a saved TONE3000 copy: the new copy starts with
+    /// the source copy's boost.
+    pub(crate) fn copy_owned(&self, from: &str, to: &str) -> Result<(), String> {
+        let mut boosts = self.current();
+        let Some(db) = boosts.boosts.get(&key_tone3000(from, true)).copied() else {
+            return Ok(());
+        };
+        boosts.boosts.insert(key_tone3000(to, true), db);
+        boosts.validate()?;
+        self.save(boosts)
+    }
     /// Duplicate (Library): the copy starts with the source's preset and scene
     /// boosts, under its own preset id.
     pub(crate) fn copy_preset(&self, from: &str, to: &str) -> Result<(), String> {

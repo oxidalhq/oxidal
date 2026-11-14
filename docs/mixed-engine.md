@@ -25,7 +25,11 @@ choose goes on Path 1 and Path 2 starts dry, with **+ Add effect** to fill it.
 - **E-paper.** With the E-paper display setting the chain is a numbered list
   with path labels and buttons only. There is no dragging; level and pan use
   raise and lower steps.
-- **Scenes.** In a scene preset each scene is a path of the top split.
+- **Scenes.** In a scene preset each scene is a path of the scene split. Effects
+  can go ahead of the scenes (shared by every scene), inside a scene after its
+  tone, and after the scenes (shared again).
+- **Read-only drawings.** A preset whose routing the editor cannot read is still
+  drawn with its blocks and paths, but it cannot be rearranged there.
 
 ## Serial composition from saved tones
 

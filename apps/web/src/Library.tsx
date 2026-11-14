@@ -40,6 +40,7 @@ import { PresetRow } from './features/library/PresetRow';
 import { OfflineEditor } from './features/library/OfflineEditor';
 import { NewPresetDialog } from './features/library/NewPresetDialog';
 import { CreatedPreset } from './features/library/CreatedPreset';
+import { duplicatePreset } from './features/library/setList';
 import { friendlyError } from './lib/friendlyError';
 import { BackingTracks } from './components/media/BackingTracks';
 import { DiReamps } from './components/media/DiReamps';
@@ -171,6 +172,7 @@ export function Library({
   const [importMessage, setImportMessage] = useState('');
   const [importError, setImportError] = useState('');
   const [error, setError] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
   const [copiesError, setCopiesError] = useState('');
   const generation = useRef(0);
   const importing = useRef<AbortController | null>(null);
@@ -233,6 +235,18 @@ export function Library({
       setLoadingId(null);
     }
   }
+  /** Duplicate a saved TONE3000 chain: "Name copy" in Mine, not in the set list. */
+  async function duplicateOwned(id: string) {
+    setError('');
+    setCopyMessage('');
+    try {
+      const { copy } = await duplicatePreset({ kind: 'owned', id });
+      setCopyMessage(`"${copy.name}" is in Mine. It is not in the set list.`);
+      setPresets(await presetLibrary());
+    } catch (cause) {
+      setError(friendlyError(cause, 'duplicate this preset'));
+    }
+  }
   function toneRow(
     id: string,
     name: string,
@@ -266,6 +280,15 @@ export function Library({
             disabled: !connected || loadingId !== null,
           },
           { label: 'Download', href: download, download: true },
+          ...(isOwned
+            ? [
+                {
+                  label: 'Duplicate',
+                  onSelect: () => void duplicateOwned(id),
+                  disabled: !connected || loadingId !== null,
+                },
+              ]
+            : []),
           ...(setList && inSetList !== null
             ? [
                 inSetList
@@ -532,6 +555,7 @@ export function Library({
             {error}
           </StateNotice>
         )}
+        {copyMessage && <p role="status">{copyMessage}</p>}
         {preview && (
           <PresetDetailsDialog
             entry={preview}

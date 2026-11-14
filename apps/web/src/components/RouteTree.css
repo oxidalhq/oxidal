@@ -1,4 +1,4 @@
-/* The rig canvas (S-15): blocks on a wire, a + in every gap, splits stack
+/* The rig canvas: blocks on a wire, a + in every gap, splits stack
    their paths with a caption each. It scrolls sideways on every width. */
 .route-canvas {
   min-width: 0;
@@ -130,7 +130,7 @@ span.route-empty {
   }
 }
 
-/* E-paper: the chain as a numbered list with path labels (S-17). */
+/* E-paper: the chain as a numbered list with path labels. */
 .route-list,
 .route-list ol {
   display: grid;

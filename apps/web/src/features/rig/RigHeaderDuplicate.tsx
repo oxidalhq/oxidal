@@ -8,17 +8,21 @@ import './RigHeaderDuplicate.css';
 
 /**
  * Rig header Duplicate: "Name copy" of the saved preset in Mine, with its
- * scenes, MIDI and levels, not in the set list. The copy opens stopped, in the
- * editor that never changes audio; what is playing keeps playing.
+ * scenes, MIDI and levels, not in the set list. A preset with scenes or
+ * effects opens stopped, in the editor that never changes audio; a TONE3000
+ * chain saved in Mine is copied the same way and waits in Mine. What is
+ * playing keeps playing.
  * @see docs/interface.md
  */
 export function RigHeaderDuplicate({
-  revision,
+  entry,
   connected,
   disabled,
   changed,
 }: {
-  revision: string | null | undefined;
+  /** The saved preset to copy: a preset with scenes or effects, or a
+   * TONE3000 chain saved in Mine. */
+  entry: { kind: 'rig' | 'owned'; id: string } | null;
   connected: boolean;
   disabled: boolean;
   /** The playing preset has edits that are not saved yet. */
@@ -28,15 +32,21 @@ export function RigHeaderDuplicate({
   const [message, setMessage] = useState('');
   const [opened, setOpened] = useState<string | null>(null);
   async function duplicate() {
-    if (!revision) return;
+    if (!entry) return;
     setBusy(true);
     setMessage('');
     try {
-      const { copy } = await duplicatePreset({ kind: 'rig', id: revision });
-      setMessage(
-        `Opened "${copy.name}", stopped. It is in Mine, not in the set list.${changed ? ' Edits you have not saved are not in the copy.' : ''}`,
-      );
-      setOpened(copy.id);
+      const { copy } = await duplicatePreset(entry);
+      const unsaved = changed
+        ? ' Edits you have not saved are not in the copy.'
+        : '';
+      if (copy.kind === 'rig') {
+        setMessage(
+          `Opened "${copy.name}", stopped. It is in Mine, not in the set list.${unsaved}`,
+        );
+        setOpened(copy.id);
+      } else
+        setMessage(`"${copy.name}" is in Mine, not in the set list.${unsaved}`);
     } catch (cause) {
       setMessage(friendlyError(cause, 'duplicate this preset'));
     } finally {
@@ -53,7 +63,7 @@ export function RigHeaderDuplicate({
             ? 'Duplicate copies the saved preset; save first to include your edits'
             : 'Make a copy in Mine'
         }
-        disabled={disabled || busy || !revision || !connected}
+        disabled={disabled || busy || !entry || !connected}
         onClick={() => void duplicate()}
       >
         <Copy aria-hidden="true" />

@@ -32,8 +32,8 @@ menu holds the occasional actions:
 | MIDI                          | Plays the preset and opens its MIDI assignments.                       |
 | Rename, Delete…               | Rename it, or remove it after a confirmation.                          |
 
-A saved TONE3000 chain in Mine offers Play, Details, Download, Add to / Remove
-from set list, Rename and Delete…. It has no Duplicate.
+A saved TONE3000 chain in Mine offers Play, Details, Download, Duplicate, Add
+to / Remove from set list, Rename and Delete….
 
 **Keep ready** loads up to a few presets beside the playing one so switching
 has no gap. Editing the sound of a read-only example creates a copy in Mine
@@ -63,7 +63,9 @@ Previous and Next stop at the ends of the set list.
 
 **Duplicate** copies a preset in Mine, including its scenes, MIDI assignments,
 boosts and measured levels, as "Name copy". The copy is not in the set list.
-Rig also offers Duplicate for the preset it has open.
+Rig also offers Duplicate for the preset it has open. A saved TONE3000 chain
+copies with its MIDI assignments and boost; Even out measures the copy's level
+again. A TONE3000 original cannot be duplicated: use Save copy.
 
 ## Scene management
 

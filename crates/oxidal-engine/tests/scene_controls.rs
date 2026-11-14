@@ -1,5 +1,5 @@
 //! Scene control targets: host ramps for continuous plugin controls and
-//! silent switching for stepped ones (S-18: no click on a scene change).
+//! silent switching for stepped ones (no click on a scene change).
 //! @see docs/lv2.md
 #![cfg(feature = "qualification")]
 use oxidal_engine::{
@@ -315,7 +315,7 @@ fn a_stepped_control_in_a_branch_switches_only_while_the_branch_is_silent() {
     assert_eq!(control(&session.snapshot(), "fx", "gain"), 1.0);
 }
 
-/// S-18 on a real effect: an interpolating delay on the shared chain whose
+/// No click on a real effect: an interpolating delay on the shared chain whose
 /// time differs between scenes. A sine shows any jump in the read position.
 #[test]
 fn switching_scenes_with_a_delay_time_difference_produces_no_discontinuity() {
@@ -386,7 +386,7 @@ fn switching_scenes_with_a_delay_time_difference_produces_no_discontinuity() {
     // A 50 ms change over the 200 ms fade reads the delay line 25 % slower:
     // the sine's slope grows by about that much (measured 1.31×), never a
     // jump. The instant edit sweeps the whole change within one block
-    // (measured 37× the steady slope): that is the click S-18 forbids.
+    // (measured 37× the steady slope): that is the click this test forbids.
     assert!(ramp <= normal * 1.4, "steady {normal}, ramp {ramp}");
     assert!(
         step > ramp * 10.0,

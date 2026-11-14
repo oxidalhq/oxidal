@@ -80,7 +80,7 @@ async function edit(
 export const setListMember = (entry: Entry, member: boolean) =>
   edit(entry, { kind: 'set_list', member });
 
-/** Append the installed starter presets after the existing entries (S-20). */
+/** Append the installed starter presets after the existing entries. */
 async function addStarter(): Promise<{
   catalog: LibraryCatalog;
   added: number;

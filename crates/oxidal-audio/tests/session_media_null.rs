@@ -91,7 +91,7 @@ fn a_streamed_di_file_replaces_the_input_while_the_raw_input_is_recorded() {
     }
     std::fs::write(&di_path, &bytes).unwrap();
 
-    // Reader thread: 64 KiB file reads into a 2 s ring, as [DES-ENGINE] specifies.
+    // Reader thread: 64 KiB file reads into a 2 s ring.
     let (mut di_tx, di_rx) = ring(2 * RATE as usize);
     let reader_path = di_path.clone();
     let reader = std::thread::spawn(move || {

@@ -11,7 +11,7 @@ import {
 import type { RigViewProps } from './useMixedRigSession';
 
 /**
- * The rig canvas's choosers (S-15): a gap's + offers Add effect or Split here;
+ * The rig canvas's choosers: a gap's + offers Add effect or Split here;
  * either, "+ Add effect" on a path and Replace… then choose the effect.
  * @see docs/interface.md
  */

@@ -776,7 +776,7 @@ pub(crate) async fn cancel_upload(
 }
 
 /// A 24-bit PCM WAV made from the play-ready render: how DI recordings and
-/// reamp results leave the device (FR-18). Files over 4 GiB are refused.
+/// reamp results leave the device. Files over 4 GiB are refused.
 pub(crate) async fn download_wav(
     State(shared): State<Arc<Shared>>,
     Path(id): Path<String>,

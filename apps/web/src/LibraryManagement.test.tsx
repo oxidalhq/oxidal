@@ -237,7 +237,7 @@ it('the ⋯ menu removes a preset from the set list and keeps it in Mine', async
   ).toBeInTheDocument();
   expect(screen.getByText('Not in the set list (2)')).toBeInTheDocument();
 });
-it('S-20: Add starter set list appends after the existing entries', async () => {
+it('Add starter set list appends after the existing entries', async () => {
   await view();
   vi.mocked(libraryCatalog).mockResolvedValueOnce(catalog);
   vi.mocked(libraryCatalog).mockResolvedValueOnce(catalog);

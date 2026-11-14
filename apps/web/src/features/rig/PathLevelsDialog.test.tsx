@@ -63,7 +63,7 @@ function props(editChain = vi.fn()) {
   };
 }
 
-it('asks before removing a path with effects, naming the path and count (S-16)', () => {
+it('asks before removing a path with effects, naming the path and count', () => {
   const { editChain, view } = props();
   render(<PathLevelsDialog {...view} />);
   fireEvent.click(screen.getByRole('button', { name: 'Remove path 1' }));

@@ -7,6 +7,7 @@ import {
 } from '../../sceneEdit';
 import type { RigAudioState, RigControl, RigDocument } from '../../api';
 import {
+  type IdStep,
   type RigBlockVM,
   type RigLaneVM,
   blockKind,
@@ -22,6 +23,8 @@ import { controlGroup } from '../../rigControls';
 import { createElement } from 'react';
 import { lv2Control } from '../../lv2Control';
 import { rigNodeLabel } from '../../rigDraft';
+import { graphRoute } from './graphRoute';
+import { readScenes } from '../../sceneFormat';
 
 /**
  * Pure view model of the sounding mixed rig: the selected block, its controls,
@@ -41,6 +44,12 @@ export const END = 'end';
 export const PATH = 'path';
 
 export type SceneGain = { node: string; port: number; value: number };
+
+/** Every block id of a routing tree, in order. */
+const stepIds = (steps: IdStep[]): string[] =>
+  steps.flatMap((step) =>
+    typeof step === 'string' ? [step] : step.branches.flatMap(stepIds),
+  );
 
 type RigActivity = {
   edit?: unknown;
@@ -67,8 +76,9 @@ export const rigBusy = (vm: { disabled: boolean }, rig: RigActivity): boolean =>
 type SceneBranchDef = { id: string; name?: string; gains: SceneGain[] };
 /** The scene paths a preset with scene lanes declares, in lane order. */
 function sceneBranchDefs(document: RigDocument | null): SceneBranchDef[] {
-  const extension = document?.manifest.extensions['urn:oxidal:scenes:1'] as
-    { branches?: SceneBranchDef[] } | undefined;
+  const extension = document
+    ? readScenes<{ branches?: SceneBranchDef[] }>(document.manifest)
+    : undefined;
   return Array.isArray(extension?.branches)
     ? extension.branches.filter(
         (branch) =>
@@ -93,7 +103,7 @@ export type SceneDraft = {
   session: string;
   gains: Record<string, SceneGain[]>;
   added?: NewScene[];
-  /** Effect settings changed with Update scene, by scene id (D-6). */
+  /** Effect settings changed with Update scene, by scene id. */
   controls?: Record<string, SceneControl[]>;
 };
 
@@ -437,13 +447,9 @@ export function mixedRigViewModel({
     }
     return [...byName].map(([name, value]) => ({ name, value }));
   })();
-  const sceneExtension = matching?.manifest.extensions[
-    'urn:oxidal:scenes:1'
-  ] as
-    | {
-        branches?: { id?: unknown }[];
-      }
-    | undefined;
+  const sceneExtension = matching
+    ? readScenes<{ branches?: { id?: unknown }[] }>(matching.manifest)
+    : undefined;
   // Named gain snapshots also use the scenes extension, but they are not one
   // TONE3000 branch per scene. Only the composer's explicit branch catalogue
   // may be presented as scene lanes.
@@ -542,8 +548,8 @@ export function mixedRigViewModel({
       ],
     };
   });
-  // Presets with effects: a straight chain, or a split into lanes, drawn like
-  // every other chain. Other shapes keep the routing view.
+  // Presets with effects: a straight chain, or a split into lanes, for the
+  // Perform lanes. The rig canvas draws every shape from `canvasRoute`.
   const chainIds =
     !sceneLanes.length && matching?.manifest.oxidal
       ? chainLanes(matching.manifest.oxidal.graph)
@@ -589,7 +595,7 @@ export function mixedRigViewModel({
         empty: true,
       }),
   }));
-  // The rig canvas draws the whole routing tree, scene lanes included (S-15).
+  // The rig canvas draws the whole routing tree, scene lanes included.
   const fullRoute = matching?.manifest.oxidal
     ? chainRoute(matching.manifest.oxidal.graph)
     : null;
@@ -613,19 +619,37 @@ export function mixedRigViewModel({
           })(),
         }
       : null;
-  /** The canvas draws and edits the route; scene presets only with their
-   * scene lanes intact. Other shapes keep the routing view. */
-  const editable = !!fullRoute && (!sceneBranchIds.length || sceneAt === 0);
-  const routeIds = (function collect(steps: NonNullable<typeof fullRoute>) {
-    return steps.flatMap((step): string[] =>
-      typeof step === 'string' ? [step] : step.branches.flatMap(collect),
-    );
-  })(editable ? fullRoute! : []);
-  /** Nodes the canvas draws; the routing view shows the rest. */
+  const routeIds = stepIds(fullRoute ?? []);
+  /** The canvas edits the route; a scene preset while its scene lanes are a
+   * top-level split, with effects ahead of, inside and after them, and no
+   * TONE3000 block but the scenes' tones. */
+  const editable =
+    !!fullRoute &&
+    (!sceneBranchIds.length ||
+      (sceneAt >= 0 &&
+        routeIds.every(
+          (id) =>
+            sceneBranchIds.includes(id) ||
+            nodes.find((n) => n.id === id)?.kind !== 'tone3000',
+        )));
+  /** What the one chain renderer draws: the route, or for any other shape the
+   * graph folded into paths for drawing only. */
+  const canvasRoute: IdStep[] | null = matching?.manifest.oxidal
+    ? (fullRoute ?? graphRoute(matching.manifest.oxidal.graph))
+    : null;
+  /** Nodes the canvas draws as their own tiles, with the routing row: every
+   * block of an editable route. A drawing-only canvas leaves out a TONE3000
+   * block whose blocks are not known yet: its models stay listed in the panel. */
+  const canvasIds = stepIds(canvasRoute ?? []).filter(
+    (id) =>
+      editable ||
+      nodes.find((n) => n.id === id)?.kind !== 'tone3000' ||
+      nativeTiles(nodes.find((n) => n.id === id)!).length > 0,
+  );
   const lanedNodes = new Set([
-    ...routeIds,
+    ...canvasIds,
     // Mono adapters belong to their effect's tile, never a tile of their own.
-    ...(routeIds.length
+    ...(canvasIds.length
       ? nodes.filter((n) => /-(mono|stereo)$/.test(n.id))
       : []
     ).map((n) => n.id),
@@ -645,16 +669,13 @@ export function mixedRigViewModel({
   const selectedInScene =
     !!sceneCanvas &&
     !!selectedSpot?.owners.some((o) => o.split === sceneCanvas.split);
-  /** Move ◀ / Move ▶ stop at the ends of the chain and before a scene's tone. */
+  /** Move ◀ / Move ▶ stop at the ends of the chain. Next to a scene's tone
+   * Move ◀ steps out ahead of the scenes; the tone itself never moves. */
   const place = (() => {
     if (!selectedSpot) return { first: true, last: true };
     const top = !selectedSpot.owners.length;
-    const afterTone =
-      selectedInScene &&
-      selectedSpot.owners.length === 1 &&
-      selectedSpot.index <= 1;
     return {
-      first: (top && selectedSpot.index === 0) || afterTone,
+      first: top && selectedSpot.index === 0,
       last: top && selectedSpot.index === selectedSpot.length - 1,
     };
   })();
@@ -781,6 +802,7 @@ export function mixedRigViewModel({
     laneTarget,
     selectedLaneTile,
     fullRoute,
+    canvasRoute,
     routeSplits,
     sceneCanvas,
     selectedSpot,

@@ -26,7 +26,7 @@ export function PathLevelsDialog({ rig, vm }: RigViewProps) {
   const { editChain, routingSplit, setPathSides, setRoutingSplit } = rig;
   const { editable, fullRoute, state } = vm;
   const waiting = rigBusy(vm, rig);
-  /** Remove path waiting for confirmation: it has effects (S-16). */
+  /** Remove path waiting for confirmation: it has effects. */
   const [removing, setRemoving] = useState<{
     split: string;
     path: number;

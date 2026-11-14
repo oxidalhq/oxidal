@@ -3161,46 +3161,6 @@ textarea {
   margin: 0;
 }
 
-/* Actual hybrid routing: parallel branches share a column; only real paths connect. */
-.mixed-routing-scroll {
-  overflow: auto;
-  max-height: 55dvh;
-  padding: 4px;
-  overscroll-behavior: contain;
-}
-.mixed-routing-scroll:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.mixed-routing-canvas {
-  position: relative;
-}
-.mixed-routing-lines {
-  position: absolute;
-  pointer-events: none;
-  overflow: visible;
-}
-.mixed-routing-lines marker polygon {
-  fill: var(--wire);
-  stroke: none;
-}
-.mixed-routing-lines path {
-  fill: none;
-  stroke: var(--wire);
-  stroke-width: 1;
-  shape-rendering: crispEdges;
-}
-.mixed-routing-node {
-  position: absolute;
-}
-.mixed-node {
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  /* Centre the tile face (3.5rem) on the topology wire at half the 132px cell. */
-  padding-top: calc(66px - 1.75rem);
-}
-
 /* Grid gaps own spacing; retain full-sized inputs without doubled field margins. */
 .audio-routing-fields > .field {
   margin-block: 0;

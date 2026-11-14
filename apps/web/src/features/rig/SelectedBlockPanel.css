@@ -1,5 +1,5 @@
-/* Selected block panel: header, Arrange row, Routing row (WP-R1). The name has
-   its own row so action groups never squeeze it to one letter per line (S-14);
+/* Selected block panel: header, Arrange row, Routing row. The name has
+   its own row so action groups never squeeze it to one letter per line;
    a long name truncates and keeps a title tooltip. */
 .selected-block {
   display: grid;
@@ -44,7 +44,7 @@
   margin: 0;
 }
 
-/* Step buttons replace dragging where there is no motion (E-paper, S-17). */
+/* Step buttons replace dragging where there is no motion (E-paper). */
 .path-mix-steps {
   display: none;
   gap: 0.25rem;

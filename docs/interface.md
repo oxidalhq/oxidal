@@ -26,6 +26,14 @@ From **Library → New preset**, combine saved native tones with supported
 installed LV2 effects. Compatible saved tones can be split into linked amp and
 cab stages, with effects between them. See [mixed rig setup and limits](mixed-engine.md#separate-ampcab-authoring).
 
+In Rig, **Undo** and **Redo** in the header step through the revisions saved
+while you edit this preset (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z or Ctrl+Y; not while
+typing in a field). Each step asks first and replays the earlier revision, with
+its MIDI assignments. MIDI assignments removed with a block do not come back.
+Undo starts again when the first edit of an Oxidal sound or TONE3000 chain makes
+your copy; Discard copy is the way back from that. **Remove** on a block asks
+before it removes the block and its settings.
+
 ## Scenes and ready presets
 
 Scene pads recall routing inside the playing preset. Switching a branch on or

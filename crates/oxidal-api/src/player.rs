@@ -722,7 +722,7 @@ async fn seek(shared: &Shared, inner: &mut Inner, frame: u64) -> Result<(), Refu
     Ok(())
 }
 
-/// Stops whatever plays and cues another track at its start, stopped (D-3).
+/// Stops whatever plays and cues another track at its start, stopped.
 async fn cue_by_id(
     shared: &Shared,
     inner: &mut Inner,
@@ -736,7 +736,7 @@ async fn cue_by_id(
             "That track is no longer in Library".to_owned(),
         )
     })?;
-    // DI recordings and reamp results play here too (FR-18); Previous/Next
+    // DI recordings and reamp results play here too; Previous/Next
     // still move through the Backing list only.
     if inner.state == PlayerState::Playing {
         let command = inner.stop_command();

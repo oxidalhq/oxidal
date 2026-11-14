@@ -645,7 +645,7 @@ impl HostSignal {
             right.fill(0.0);
             return;
         }
-        // [DES-SIGNAL]: rig → tone gain → (W0) → session mix → venue EQ →
+        // rig → tone gain → (W0) → session mix → venue EQ →
         // mono fold → Master → Mute.
         self.tone_gain.apply(left, right);
         // W0: the rig's own sound, before the backing track and room EQ.
@@ -1108,7 +1108,7 @@ mod host_tests {
         };
         signal.command(cut(false));
         let tone = |i: usize| (std::f32::consts::TAU * 1000.0 * i as f32 / rate as f32).sin() * 0.5;
-        // The input path never sees venue correction (FR-15).
+        // The input path never sees venue correction.
         let (mut l, mut r) = ([0.0f32; 480], [0.0f32; 480]);
         for (i, s) in l.iter_mut().enumerate() {
             *s = tone(i);

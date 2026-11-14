@@ -935,7 +935,7 @@ it('copies a path into a third path through the routing tree (7.26)', async () =
     within(dialog).getByRole('button', { name: '+ Add dry path' }),
   ).toBeVisible();
   // Phones draw the same canvas, scrolling sideways: a + in each gap of a
-  // path offers Add effect or Split here for that place (S-15).
+  // path offers Add effect or Split here for that place.
   narrow = true;
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
   const chain = await screen.findByRole('group', { name: 'Signal chain' });

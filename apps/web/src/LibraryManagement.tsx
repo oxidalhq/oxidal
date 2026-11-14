@@ -263,7 +263,7 @@ export function LibraryManagement({
                       },
                       {
                         label: 'Duplicate',
-                        disabled: item.kind !== 'rig',
+                        disabled: item.kind !== 'rig' && item.kind !== 'owned',
                         onSelect: () =>
                           void run(
                             'duplicate this preset',

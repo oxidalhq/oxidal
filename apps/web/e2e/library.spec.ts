@@ -11,7 +11,7 @@ import { openSounds } from './display';
 test('library sections have their own links and old links redirect', async ({
   page,
 }) => {
-  // S-3: an old Discover link lands on Oxidal sounds.
+  // an old Discover link lands on Oxidal sounds.
   await page.goto('/#library/discover');
   await expect(
     page.getByRole('tab', { name: 'Oxidal sounds', selected: true }),

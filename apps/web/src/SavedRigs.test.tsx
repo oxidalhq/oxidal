@@ -258,7 +258,7 @@ it('shows one action menu for a Mine row and the empty state when nothing is sav
   expect(await screen.findByText('No presets yet')).toBeVisible();
 });
 
-it('S-10: Duplicate makes "Name copy" in Mine, outside the set list, and opens it stopped', async () => {
+it('Duplicate makes "Name copy" in Mine, outside the set list, and opens it stopped', async () => {
   vi.mocked(rigLibrary).mockResolvedValue({
     presets: [
       {

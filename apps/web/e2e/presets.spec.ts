@@ -3289,7 +3289,7 @@ for (const layout of ['serial', 'scenes'] as const) {
       const id = (await state()).control.branches.find(
         (b: { name: string }) => b.name === name,
       ).id;
-      await rig.locator(`.mixed-node[data-node="${id}"] .rig-tile`).click();
+      await rig.locator(`[data-node="${id}"] button`).first().click();
       return rig.getByRole('button', {
         name: `Toggle path ${name}`,
         exact: true,
@@ -3355,10 +3355,10 @@ for (const layout of ['serial', 'scenes'] as const) {
       await page.getByRole('option', { name: 'CC press', exact: true }).click();
       await rig.getByLabel('MIDI number 2', { exact: true }).fill('20');
       await rig
-        .getByRole('button', { name: 'Map branch Clean', exact: true })
+        .getByRole('button', { name: 'Map path Clean', exact: true })
         .click();
-      await rig.getByLabel('Branch Clean CC', { exact: true }).fill('64');
-      await rig.getByLabel('Branch Clean behavior', { exact: true }).click();
+      await rig.getByLabel('Path Clean CC', { exact: true }).fill('64');
+      await rig.getByLabel('Path Clean behavior', { exact: true }).click();
       await page
         .getByRole('option', { name: 'CC on/off', exact: true })
         .click();
@@ -3421,7 +3421,7 @@ for (const layout of ['serial', 'scenes'] as const) {
           rig.getByLabel('MIDI number 2', { exact: true }),
         ).toHaveValue('20');
         await expect(
-          rig.getByLabel('Branch Clean behavior', { exact: true }),
+          rig.getByLabel('Path Clean behavior', { exact: true }),
         ).toHaveValue('gate');
 
         await page.evaluate(() => window.scrollTo(0, 0));
@@ -3512,7 +3512,10 @@ for (const layout of ['serial', 'scenes'] as const) {
         ),
       ).toHaveLength(4);
       expect(
-        savedDoc.manifest.extensions['urn:oxidal:scenes:1'].scenes,
+        (
+          savedDoc.manifest.extensions['urn:oxidal:scenes:2'] ??
+          savedDoc.manifest.extensions['urn:oxidal:scenes:1']
+        ).scenes,
       ).toHaveLength(2);
     }
     await command('rig-audio', { kind: 'stop' });
@@ -4748,7 +4751,9 @@ test('mixed rig authoring presents parallel routing and guarded Save on small sc
   expect(a.x).toBe(b.x);
   expect(b.y).toBeGreaterThan(a.y + a.height);
   expect(cab.x).toBeGreaterThan(a.x + a.width);
-  await expect(rig.locator('.mixed-routing-lines path')).toHaveCount(2);
+  await expect(rig.getByRole('group', { name: 'Split · 2 paths' })).toHaveCount(
+    1,
+  );
   for (const button of await rig.locator('[data-node] button').all()) {
     expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
@@ -4814,7 +4819,7 @@ test('mixed rig authoring keeps a long selected block name on its own row beside
   page,
   request,
 }, info) => {
-  // Presentation fixture (S-14): three paths, so all four routing buttons show.
+  // Presentation fixture: three paths, so all four routing buttons show.
   const plugin = {
     name: 'Stereo effect',
     uri: 'urn:fixture:stereo',
@@ -5735,7 +5740,7 @@ test('device portrait preset details edit and category search never recall audio
   );
 });
 
-/* ---------- Rig canvas (S-15, S-16, S-17): a mocked unit that rebuilds. ---------- */
+/* ---------- Rig canvas: a mocked unit that rebuilds. ---------- */
 
 const canvasPlugin = (name: string) =>
   ({
@@ -5914,7 +5919,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
   page,
   request,
 }, info) => {
-  // S-15 and S-16 on a preset with two scenes; an echo sits after Lead's tone.
+  // Adding and splitting on a preset with two scenes; an echo sits after Lead's tone.
   const preset = {
     sha256: 'a'.repeat(64),
     name: 'Tone',
@@ -5971,7 +5976,7 @@ test('mixed rig authoring splits inside scene lanes and asks before removing a p
       branches: [['clean'], ['lead', { branches: [['echo'], [hall]] }]],
     },
   ]);
-  // S-16: removing a path with effects names the path and how many.
+  // removing a path with effects names the path and how many.
   await rig.getByRole('button', { name: 'Echo', exact: true }).click();
   await expect(routing).toContainText('Path 1 of 2');
   await routing.getByRole('button', { name: 'Remove path' }).click();
@@ -6001,7 +6006,7 @@ test('mixed rig authoring builds a split and changes a level with buttons only o
   page,
   request,
 }, info) => {
-  // S-17: no drag and no sliders; the chain is a numbered list.
+  // no drag and no sliders; the chain is a numbered list.
   const route: Route = [canvasEffect('Echo'), canvasEffect('Verb')];
   const unit = await mockCanvasUnit(
     page,

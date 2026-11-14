@@ -538,7 +538,6 @@ export async function stageTone3000(
 }
 
 export type VoiceReady = Contract['voice_ready'];
-export type VoiceCapture = Contract['voice_ready']['capture'];
 const voiceReadyValidator = ajv.compile<VoiceReady>({
   $defs: schema.$defs,
   $ref: '#/$defs/VoiceReady',

@@ -90,6 +90,8 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
     path: number;
     effects: number;
   } | null>(null);
+  /** Remove asks first: one tap on a phone or E-paper never loses a block. */
+  const [removingBlock, setRemovingBlock] = useState(false);
   if (
     !running ||
     !selectedView ||
@@ -238,8 +240,10 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
           </Button>
           <Button
             variant="ghost"
+            aria-label={`Remove ${label}`}
+            aria-haspopup="dialog"
             disabled={busy}
-            onClick={() => void editChain((route) => routeRemove(route, id))}
+            onClick={() => setRemovingBlock(true)}
           >
             <Trash aria-hidden="true" /> Remove
           </Button>
@@ -323,6 +327,28 @@ export function SelectedBlockPanel({ rig, vm }: RigViewProps) {
             </p>
           )}
         </div>
+      )}
+      {removingBlock && (
+        <AdjustmentDialog
+          title={`Remove ${label}`}
+          onCancel={() => setRemovingBlock(false)}
+        >
+          <p>Remove {label} and its settings from this preset?</p>
+          <div className="action-row">
+            <Button variant="outline" onClick={() => setRemovingBlock(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                setRemovingBlock(false);
+                void editChain((route) => routeRemove(route, id));
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </AdjustmentDialog>
       )}
       {removing && (
         <AdjustmentDialog
