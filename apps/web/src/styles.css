@@ -190,9 +190,23 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
+/* Settings tabs carry an icon beside the label; on narrow screens the icon
+   sits above the label so three tabs still fit a row. */
+.settings-workspace > .ui-tabs-list .settings-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.settings-workspace > .ui-tabs-list .settings-tab svg {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+}
 /* Nine settings destinations, About included, use three balanced rows of
-   three before they fit as one strip; no orphaned final tab (7.18). */
-@media (max-width: 900px) {
+   three before they fit as one strip; no orphaned final tab (7.18). With
+   icons the strip needs about 1015px, so the grid holds until 1040px. */
+@media (max-width: 1040px) {
   .settings-workspace > .ui-tabs-list {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -202,6 +216,14 @@ h2 {
     min-width: 0;
     padding-inline: 0.25rem;
     text-align: center;
+  }
+  .settings-workspace > .ui-tabs-list .settings-tab {
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .settings-workspace > .ui-tabs-list .settings-tab svg {
+    width: 1.35em;
+    height: 1.35em;
   }
 }
 @media (max-width: 380px) {

@@ -326,11 +326,14 @@ export function PlaybackSettings({
         {boot}
       </>
     );
+  // The rig's panel only offers the rig's Resume, so keep the TONE3000
+  // player's panel (its Resume and Start audio with…) after the player stops.
   if (
     mixed?.configured &&
     mixed.phase !== 'unavailable' &&
     !state?.device_owned &&
-    !effects?.device_owned
+    !effects?.device_owned &&
+    (mixed.device_owned || lastOwner !== 'native')
   )
     return (
       <>

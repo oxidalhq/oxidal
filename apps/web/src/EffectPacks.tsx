@@ -87,7 +87,9 @@ export function EffectPacks({
     return () => {
       active = false;
     };
-  }, [connected]);
+    // Read again when audio starts or stops: the device's own audio flag
+    // decides whether Install and Remove are offered.
+  }, [connected, audioRunning]);
 
   useEffect(() => {
     if (!connected || !state?.job) return;

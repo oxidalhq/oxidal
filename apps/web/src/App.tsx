@@ -27,6 +27,15 @@ import {
   ChartLine,
   Guitar,
   GearSix,
+  SpeakerHigh,
+  WifiHigh,
+  UserCircle,
+  PianoKeys,
+  Faders,
+  Monitor,
+  Cpu,
+  Wrench,
+  Info,
 } from '@phosphor-icons/react';
 import { Button } from './components/ui/button';
 import { Switch } from './components/ui/switch';
@@ -90,6 +99,18 @@ import {
  * @see docs/architecture.md
  */
 /** Settings destinations, each with its own link such as `#settings/accounts`. */
+/** One icon per Settings section, beside its label. */
+const settingsIcons = {
+  audio: <SpeakerHigh aria-hidden="true" />,
+  connections: <WifiHigh aria-hidden="true" />,
+  accounts: <UserCircle aria-hidden="true" />,
+  midi: <PianoKeys aria-hidden="true" />,
+  effects: <Faders aria-hidden="true" />,
+  display: <Monitor aria-hidden="true" />,
+  device: <Cpu aria-hidden="true" />,
+  maintenance: <Wrench aria-hidden="true" />,
+  about: <Info aria-hidden="true" />,
+} as const;
 const settingsSections = [
   'audio',
   'connections',
@@ -772,8 +793,13 @@ function InstrumentApp() {
                 {(
                   Object.keys(settingsLabels) as (keyof typeof settingsLabels)[]
                 ).map((section) => (
-                  <TabsTrigger key={section} value={section}>
-                    {settingsLabels[section]}
+                  <TabsTrigger
+                    key={section}
+                    value={section}
+                    className="settings-tab"
+                  >
+                    {settingsIcons[section]}
+                    <span>{settingsLabels[section]}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>

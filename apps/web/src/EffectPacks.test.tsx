@@ -119,6 +119,23 @@ it('refuses changes while audio plays and confirms removal in a dialog', async (
   );
 });
 
+it('offers Install again after audio stops, without a reload', async () => {
+  // The device reported audio running when the screen opened.
+  vi.mocked(effectPacks).mockResolvedValueOnce({
+    ...inventory,
+    audio_running: true,
+  });
+  vi.mocked(effectPacks).mockResolvedValue(inventory);
+  const view = render(<EffectPacks connected audioRunning />);
+  expect(await screen.findByRole('button', { name: 'Install' })).toBeDisabled();
+
+  view.rerender(<EffectPacks connected audioRunning={false} />);
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Install' })).toBeEnabled(),
+  );
+  expect(screen.queryByText(/Stop audio before installing/)).toBeNull();
+});
+
 it('keeps apt actions unavailable while the active system root is locked', async () => {
   vi.mocked(effectPacks).mockResolvedValue({
     ...inventory,
