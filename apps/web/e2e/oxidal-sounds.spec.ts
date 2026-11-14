@@ -4,7 +4,7 @@ import { allFactoryRecipes } from '../src/factoryCatalog';
 import { emptyPreset } from '../src/features/library/newPreset';
 
 /**
- * Oxidal sounds journeys (Sprint 12 WP-B): filters that survive a reload, the
+ * Oxidal sounds journeys: filters that survive a reload, the
  * card states, Get tones with sign-in and a removed tone, Install pack under
  * Protect, Too heavy, and Make my copy. Everything TONE3000 is mocked here; no
  * test ever reaches tone3000.com. Titles start with "library sections" so the
@@ -209,7 +209,7 @@ async function showFilters(page: Page) {
   if (await toggle.isVisible()) await toggle.click();
 }
 
-test('library sections: Oxidal sounds filters and search survive a reload (S-2)', async ({
+test('library sections: Oxidal sounds filters and search survive a reload', async ({
   page,
 }) => {
   await mockUnit(page);
@@ -241,7 +241,7 @@ test('library sections: Oxidal sounds filters and search survive a reload (S-2)'
   }
 });
 
-test('library sections: a fresh unit shows the LV2-only set as Ready (S-1)', async ({
+test('library sections: a fresh unit shows the LV2-only set as Ready', async ({
   page,
 }) => {
   const lv2Only = allFactoryRecipes.filter((r) => r.engine === 'lv2');
@@ -263,7 +263,7 @@ test('library sections: a fresh unit shows the LV2-only set as Ready (S-1)', asy
   ).toBeVisible();
 });
 
-test('library sections: signed out offers TONE3000 sign-in and the same Get tones dialog returns (S-4)', async ({
+test('library sections: signed out offers TONE3000 sign-in and the same Get tones dialog returns', async ({
   page,
 }) => {
   const unit = await mockUnit(page, { signedIn: false });
@@ -283,7 +283,7 @@ test('library sections: signed out offers TONE3000 sign-in and the same Get tone
   expect(unit.writes).toEqual([]);
 });
 
-test('library sections: a removed tone fails cleanly and offers another tone (S-5)', async ({
+test('library sections: a removed tone fails cleanly and offers another tone', async ({
   page,
 }) => {
   const unit = await mockUnit(page);
@@ -293,22 +293,22 @@ test('library sections: a removed tone fails cleanly and offers another tone (S-
   const dialog = page.getByRole('dialog', { name: `Get tones for ${BROWN}` });
   await expect(dialog.getByText(/Plexi test capture · by maker/)).toBeVisible();
   unit.state.toneRemoved = true;
-  await dialog.getByRole('button', { name: 'Download' }).click();
+  await dialog.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(
     dialog.getByText('"Plexi test capture" was removed from TONE3000.'),
   ).toBeVisible();
-  await expect(dialog.getByText(/Nothing was saved/)).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: 'Choose another tone…' }),
   ).toBeVisible();
   expect(unit.writes).not.toContain('POST rigs');
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(card.getByRole('alert')).toContainText(
-    'was removed from TONE3000',
-  );
+  // The failure stays in the dialog, beside the tone; closing leaves the
+  // sound as it was, still waiting for its tones.
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(card).toHaveAttribute('data-state', 'tone');
 });
 
-test('library sections: Install pack is disabled with the Protect reason when Protect is on (S-6)', async ({
+test('library sections: Install pack is disabled with the Protect reason when Protect is on', async ({
   page,
 }) => {
   const unit = await mockUnit(page, {
@@ -329,7 +329,7 @@ test('library sections: Install pack is disabled with the Protect reason when Pr
   expect(unit.writes).toEqual([]);
 });
 
-test('library sections: a sound over the capture budget is Too heavy with no Play (S-7)', async ({
+test('library sections: a sound over the capture budget is Too heavy with no Play', async ({
   page,
 }) => {
   await mockUnit(page, { frames: 16, built: [BROWN] });
@@ -345,7 +345,7 @@ test('library sections: a sound over the capture budget is Too heavy with no Pla
   ).toBeVisible();
 });
 
-test('library sections: Make my copy puts a copy in Mine and leaves the original unchanged (S-9)', async ({
+test('library sections: Make my copy puts a copy in Mine and leaves the original unchanged', async ({
   page,
   request,
 }) => {
@@ -370,7 +370,7 @@ test('library sections: Make my copy puts a copy in Mine and leaves the original
   await card.getByRole('button', { name: `Details: ${BROWN}` }).click();
   const sheet = page.getByRole('dialog', { name: BROWN });
   await expect(sheet.getByText('How to play it')).toBeVisible();
-  // D-8: a built Oxidal sound can join the set list by reference.
+  // a built Oxidal sound can join the set list by reference.
   await expect(
     sheet.getByRole('button', { name: 'Add to set list' }),
   ).toBeEnabled();

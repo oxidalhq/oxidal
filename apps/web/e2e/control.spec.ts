@@ -483,7 +483,15 @@ test('shared surfaces retain their theme and width contracts', async ({
             .filter((element) => {
               if (!element.checkVisibility()) return false;
               const box = element.getBoundingClientRect();
-              return box.right > innerWidth + 1 || box.left < -1;
+              if (box.right <= innerWidth + 1 && box.left >= -1) return false;
+              // Content of a sideways-scrolling strip (section tabs, the
+              // chain) is clipped by its scroller; the scroller itself is
+              // checked on its own.
+              for (let a = element.parentElement; a; a = a.parentElement) {
+                if (['auto', 'scroll'].includes(getComputedStyle(a).overflowX))
+                  return false;
+              }
+              return true;
             })
             .slice(0, 8)
             .map((element) => ({

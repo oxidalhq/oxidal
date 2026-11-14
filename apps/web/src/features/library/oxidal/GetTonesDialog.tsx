@@ -187,12 +187,14 @@ export function GetTonesDialog({
     })();
     return () => controller.abort();
   }, [wanted, attempt]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set again on mount: StrictMode runs this cleanup once before the real
+    // mount, which would otherwise leave every download ignored.
+    closed.current = false;
+    return () => {
       closed.current = true;
-    },
-    [],
-  );
+    };
+  }, []);
 
   const named = initial.filter(
     (t): t is Extract<MissingTone, { named: true }> => t.named,
