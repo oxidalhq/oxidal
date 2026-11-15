@@ -123,14 +123,11 @@ export function ResourceStrip({
           <dd>{clips ?? '—'}</dd>
         </div>
       </dl>
-      {(!connected || disconnected || failed || (state && !fresh)) && (
-        <p
-          className="resource-alert"
-          data-warning={
-            !connected || disconnected || failed || status === 'Audio stale'
-          }
-          role="status"
-        >
+      {/* Only a problem takes a row: stopped, starting or waiting for meters
+          is already shown by the dashes, and a row coming and going on every
+          preset switch would shift the page. */}
+      {(!connected || disconnected || failed || status === 'Audio stale') && (
+        <p className="resource-alert" data-warning role="status">
           {!connected || disconnected
             ? 'Connection lost · reconnecting'
             : failed

@@ -116,14 +116,17 @@ it('shows a measured zero and recovered xruns instead of treating zero as unavai
   expect(screen.getByText('Xruns').parentElement).toHaveTextContent('6');
 });
 
-it('keeps stopped audio visible without showing a normal running badge', async () => {
+it('names stopped audio for screen readers without adding a row that shifts the page', async () => {
   vi.mocked(monitoring).mockResolvedValue({
     ...snapshot(1, 'stopped'),
     graph_phase: 'stopped',
   });
   render(<ResourceStrip displayMode="stage" connected />);
   await act(async () => {});
-  expect(screen.getByRole('status')).toHaveTextContent('Audio stopped');
+  expect(screen.getByTestId('resource-state')).toHaveTextContent(
+    'Audio stopped',
+  );
+  expect(screen.queryByRole('status')).toBeNull();
 });
 
 it('retains a session peak after the recent callback window becomes quiet', async () => {
