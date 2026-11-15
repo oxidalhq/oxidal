@@ -2952,11 +2952,55 @@ textarea {
 .resource-strip-state > button[data-warning='true'] {
   color: var(--destructive);
 }
-.resource-alert {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: var(--text-xs);
+/* App notices float just under the sticky strip: a problem appearing or
+   clearing never moves the page (components/ui/notices.tsx). */
+.notice-tray {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: max(0.5rem, var(--safe-right));
+  z-index: 30;
+  display: grid;
+  justify-items: end;
+  gap: 0.375rem;
+  width: min(32rem, calc(100% - 1rem));
+  pointer-events: none;
+}
+.notice-tray:empty {
+  display: none;
+}
+.notice-tray-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--muted-foreground);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  font-size: var(--text-sm);
+  pointer-events: auto;
+}
+.notice-tray-item > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.notice-tray-item[data-tone='error'] {
+  border-inline-start-color: var(--destructive);
+}
+.notice-tray-item[data-tone='error'] > span {
   color: var(--destructive);
+  font-weight: 600;
+}
+.notice-tray-item[data-tone='warning'] {
+  border-inline-start-color: var(--control-accent);
+}
+:root[data-display='epaper'] .notice-tray-item {
+  box-shadow: none;
+  border-width: 2px;
 }
 @media (max-width: 600px) {
   .resource-strip {
@@ -3067,10 +3111,6 @@ textarea {
     align-items: stretch;
     flex-direction: column;
   }
-}
-
-.resource-alert[data-warning='false'] {
-  color: var(--muted-foreground);
 }
 
 .resource-strip {

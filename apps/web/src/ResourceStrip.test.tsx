@@ -129,6 +129,20 @@ it('names stopped audio for screen readers without adding a row that shifts the 
   expect(screen.queryByRole('status')).toBeNull();
 });
 
+it('posts a failed audio worker to the notice tray with a way to Audio setup', async () => {
+  vi.mocked(monitoring).mockResolvedValue(snapshot(1, 'stopped'));
+  const onAudioSetup = vi.fn();
+  render(
+    <ResourceStrip displayMode="stage" connected onAudioSetup={onAudioSetup} />,
+  );
+  await act(async () => {});
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Audio stopped unexpectedly',
+  );
+  screen.getByRole('button', { name: 'Audio setup' }).click();
+  expect(onAudioSetup).toHaveBeenCalledOnce();
+});
+
 it('retains a session peak after the recent callback window becomes quiet', async () => {
   const reading = {
     ...snapshot(1, 'running'),

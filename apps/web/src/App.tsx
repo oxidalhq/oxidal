@@ -83,6 +83,7 @@ import { ControlEditor } from './ControlEditor';
 import { SessionMediaProvider } from './components/media/SessionMediaProvider';
 import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
 import { MediaSheets } from './components/media/PlayerSheet';
+import { useNotice } from './components/ui/notices';
 import {
   capabilities,
   midiAction,
@@ -237,6 +238,7 @@ function InstrumentApp() {
   }, [displayMode]);
   const [focusedBlock, setFocusedBlock] = useState('nam-a');
   const [error, setError] = useState('');
+  useNotice('device', error ? { tone: 'error', text: error } : null);
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
   const [midiValue, setMidiValue] = useState(64);
@@ -505,7 +507,14 @@ function InstrumentApp() {
           slow={displayMode === 'epaper'}
         />
       )}
-      <ResourceStrip displayMode={displayMode} connected={connected} />
+      <ResourceStrip
+        displayMode={displayMode}
+        connected={connected}
+        onAudioSetup={() => {
+          showSettings();
+          setSettingsSection('audio');
+        }}
+      />
       <div className="workspace">
         <main>
           <div
@@ -620,11 +629,6 @@ function InstrumentApp() {
               >
                 Audio setup
               </Button>
-            </div>
-          )}
-          {error && (
-            <div className="error" role="alert">
-              {error}
             </div>
           )}
           {!state ? (

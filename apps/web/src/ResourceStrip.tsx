@@ -1,16 +1,24 @@
+import { NoticeTray } from './components/ui/NoticeTray';
+import { useNotice } from './components/ui/notices';
 import { useMonitorFeed } from './monitorFeed';
 import { processingHeadroom } from './processingHeadroom';
 
 const percent = (n: number | null | undefined) =>
   n == null ? '—' : `${n.toFixed(0)}%`;
 
-/** Persistent measured resources; diagnostics can freeze without freezing this strip. */
+/**
+ * Persistent measured resources; diagnostics can freeze without freezing this
+ * strip. It also holds the app's notice tray, so problems float under it
+ * instead of adding a row that shifts the page.
+ */
 export function ResourceStrip({
   displayMode,
   connected,
+  onAudioSetup,
 }: {
   displayMode: string;
   connected: boolean;
+  onAudioSetup?: () => void;
 }) {
   const feed = useMonitorFeed(displayMode === 'epaper' ? 5000 : 1000);
   const state = feed.snapshot;
@@ -78,6 +86,28 @@ export function ResourceStrip({
                   )
                 ? 'Audio unavailable'
                 : 'Audio stopped';
+  // Stopped, starting or waiting for meters is already shown by the dashes;
+  // only a problem posts a notice.
+  useNotice(
+    'connection',
+    !connected || disconnected
+      ? { tone: 'warning', text: 'Connection lost · reconnecting' }
+      : null,
+  );
+  useNotice(
+    'audio',
+    connected && !disconnected && failed
+      ? {
+          tone: 'error',
+          text: 'Audio stopped unexpectedly',
+          action: onAudioSetup
+            ? { label: 'Audio setup', run: onAudioSetup }
+            : undefined,
+        }
+      : connected && !disconnected && status === 'Audio stale'
+        ? { tone: 'warning', text: 'Audio meters are stale' }
+        : null,
+  );
   return (
     <aside
       className="resource-strip"
@@ -123,18 +153,7 @@ export function ResourceStrip({
           <dd>{clips ?? '—'}</dd>
         </div>
       </dl>
-      {/* Only a problem takes a row: stopped, starting or waiting for meters
-          is already shown by the dashes, and a row coming and going on every
-          preset switch would shift the page. */}
-      {(!connected || disconnected || failed || status === 'Audio stale') && (
-        <p className="resource-alert" data-warning role="status">
-          {!connected || disconnected
-            ? 'Connection lost · reconnecting'
-            : failed
-              ? 'Audio stopped unexpectedly · open diagnostics'
-              : status}
-        </p>
-      )}
+      <NoticeTray />
     </aside>
   );
 }
