@@ -16,11 +16,20 @@ import {
   presetDetails,
 } from './api';
 import {
+  saveReadySound,
+  unsavedReadySounds,
+} from './features/library/oxidal/readySounds';
+import { allFactoryRecipes } from './factoryCatalog';
+import {
   assertAuditionOwner,
   controlGroup,
   confirmedControlDisplay,
   movedBlockOrder,
 } from './rigControls';
+vi.mock('./features/library/oxidal/readySounds', () => ({
+  unsavedReadySounds: vi.fn().mockResolvedValue([]),
+  saveReadySound: vi.fn(),
+}));
 vi.mock('./api', () => ({
   nativeState: vi.fn(),
   presetLibrary: vi.fn(),
@@ -41,6 +50,7 @@ beforeEach(() => {
     entries: [],
   });
   vi.mocked(libraryCatalog).mockResolvedValue({ revision: 'empty', items: [] });
+  vi.mocked(unsavedReadySounds).mockResolvedValue([]);
 });
 afterEach(() => {
   cleanup();
@@ -523,4 +533,33 @@ it('summarises every preset in one form with zero counts left out', () => {
       name: 'A',
     }),
   ).toBe('NAM chain');
+});
+
+it('offers ready Oxidal sounds that are not saved yet, and saves one before playing it', async () => {
+  library();
+  const recipe = allFactoryRecipes.find((r) => r.id === 'OX-01')!;
+  const revision = 'e'.repeat(64);
+  vi.mocked(unsavedReadySounds).mockResolvedValue([recipe]);
+  vi.mocked(saveReadySound).mockResolvedValue(revision);
+  const select = vi.fn();
+  render(
+    <RigPresetSelector current={state} disabled={false} onSelect={select} />,
+  );
+  const picker = screen.getByRole('button', { name: 'Playing preset: Amp A' });
+  await waitFor(() => expect(picker).toBeEnabled());
+  fireEvent.click(picker);
+  fireEvent.click(await screen.findByRole('tab', { name: /Oxidal sounds 1/ }));
+  const row = screen.getByRole('button', { name: /saved when chosen/ });
+  expect(row).toHaveTextContent(recipe.name);
+  fireEvent.click(row);
+  await waitFor(() =>
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'scenes',
+        revision,
+        origin: 'oxidal_example',
+      }),
+    ),
+  );
+  expect(saveReadySound).toHaveBeenCalledWith(recipe);
 });

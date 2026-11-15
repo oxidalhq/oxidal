@@ -32,7 +32,7 @@ import { builtName } from './oxidalSounds.model';
  */
 
 /** What saving a finished preset needs from this unit. */
-type FinishContext = {
+export type FinishContext = {
   plugins: Lv2Plugin[];
   profile: string;
   defaults?: NativeDefaultSettings;
@@ -88,7 +88,7 @@ export async function matchLevels(): Promise<string> {
 }
 
 /** Save one finished preset with its description. Resolves to its revision. */
-async function saveRecipe(
+export async function saveRecipe(
   recipe: FactoryRecipe,
   context: FinishContext,
   signal?: AbortSignal,

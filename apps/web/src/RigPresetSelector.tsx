@@ -20,6 +20,13 @@ import {
   type PresetChoice as Choice,
 } from './presetChoices';
 import { useSessionState } from './lib/sessionState';
+import { friendlyError } from './lib/friendlyError';
+import type { FactoryRecipe } from './factoryRecipes';
+import { builtName } from './features/library/oxidal/oxidalSounds.model';
+import {
+  saveReadySound,
+  unsavedReadySounds,
+} from './features/library/oxidal/readySounds';
 
 type Source = Choice['origin'] | 'setlist';
 const SOURCES: [Source, string][] = [
@@ -64,6 +71,23 @@ export function RigPresetSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState<Choice | null>(null);
+  /** Oxidal sounds ready on this unit but not saved yet: saved when chosen. */
+  const [unsaved, setUnsaved] = useState<FactoryRecipe[]>([]);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
+  useEffect(() => {
+    if (pads || !open) return;
+    let active = true;
+    void unsavedReadySounds().then(
+      (found) => {
+        if (active) setUnsaved(found);
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [pads, open, refresh]);
   // The playing row is scrolled into view once each time the list opens;
   // the rig view redraws constantly, and scrolling on every redraw would
   // pull the list back while the player scrolls it.
@@ -110,6 +134,31 @@ export function RigPresetSelector({
   );
   function choose(item: Choice | undefined) {
     if (item && !disabled && !loading) onSelect(item);
+  }
+  /** Save a ready Oxidal sound, then play it like any saved preset. */
+  async function saveAndChoose(recipe: FactoryRecipe) {
+    if (disabled || saving) return;
+    setSaving(recipe.id);
+    setSaveError('');
+    try {
+      const revision = await saveReadySound(recipe);
+      setOpen(false);
+      onSelect({
+        kind: 'scenes',
+        revision,
+        name: builtName(recipe),
+        scenes: recipe.scenes.map((scene) => scene.name),
+        topology: recipe.topology === 'serial' ? 'serial' : 'scenes',
+        nativeInstances: 0,
+        lv2Instances: 0,
+        origin: 'oxidal_example',
+      });
+      setRefresh((v) => v + 1);
+    } catch (cause) {
+      setSaveError(friendlyError(cause, `save ${recipe.name}`));
+    } finally {
+      setSaving(null);
+    }
   }
   if (pads) {
     const previous = index > 0 ? pickerItems[index - 1] : undefined;
@@ -250,6 +299,13 @@ export function RigPresetSelector({
     (current?.inSetList
       ? 'setlist'
       : (current?.origin ?? (setList.length ? 'setlist' : 'mine')));
+  const unsavedShown = found
+    ? unsaved.filter((r) =>
+        `${r.name} ${r.description}`.toLowerCase().includes(found),
+      )
+    : shownSource === 'oxidal_example'
+      ? unsaved
+      : [];
   const shown = found
     ? foundItems
     : shownSource === 'setlist'
@@ -369,7 +425,8 @@ export function RigPresetSelector({
                 >
                   {label}{' '}
                   <span className="preset-picker-count">
-                    {items.filter((item) => inSource(item, origin)).length}
+                    {items.filter((item) => inSource(item, origin)).length +
+                      (origin === 'oxidal_example' ? unsaved.length : 0)}
                   </span>
                 </button>
               ))}
@@ -432,8 +489,29 @@ export function RigPresetSelector({
                 </li>
               );
             })}
+            {unsavedShown.map((recipe) => (
+              <li key={`unsaved:${recipe.id}`} className="preset-picker-entry">
+                <span className="preset-picker-number" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="preset-picker-row"
+                  data-preset={`unsaved:${recipe.id}`}
+                  disabled={disabled || loading || !!saving}
+                  onClick={() => void saveAndChoose(recipe)}
+                >
+                  <span>{builtName(recipe)}</span>
+                  <span className="preset-picker-scenes">
+                    {saving === recipe.id
+                      ? 'Saving…'
+                      : `${recipe.scenes.length} scenes · saved when chosen`}
+                    {found && ' · Oxidal sounds'}
+                  </span>
+                </button>
+              </li>
+            ))}
           </ul>
-          {!loading && !shown.length && (
+          {saveError && <p role="alert">{saveError}</p>}
+          {!loading && !shown.length && !unsavedShown.length && (
             <p role="status">
               {found ? 'No presets match.' : 'Nothing here yet.'}
             </p>
