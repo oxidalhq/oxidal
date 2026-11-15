@@ -906,6 +906,7 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "axum",
+ "crc32fast",
  "ebur128",
  "getrandom 0.2.17",
  "image",
@@ -918,6 +919,7 @@ dependencies = [
  "oxidal-graph",
  "oxidal-lv2",
  "oxidal-presets",
+ "oxidal-splitter",
  "oxidal-tone3000",
  "reqwest",
  "rubato",
@@ -927,6 +929,7 @@ dependencies = [
  "sha2",
  "symphonia",
  "tokio",
+ "tower",
  "tower-http",
 ]
 
@@ -1061,6 +1064,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "oxidal-splitter"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
