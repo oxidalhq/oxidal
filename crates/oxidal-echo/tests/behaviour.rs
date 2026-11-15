@@ -42,7 +42,10 @@ fn the_first_digital_repeat_arrives_at_time_within_one_sample() {
 
 #[test]
 fn each_division_gives_the_right_delay_at_120_bpm() {
+    // Longest first; 4 bars (8 s) and 2 bars (4 s) play at the 4 s limit.
     let seconds = [
+        4.0,
+        4.0,
         2.0,
         1.5,
         1.0,
@@ -53,6 +56,7 @@ fn each_division_gives_the_right_delay_at_120_bpm() {
         0.25,
         1.0 / 6.0,
         0.125,
+        1.0 / 12.0,
     ];
     assert_eq!(seconds.len(), DIVISIONS.len());
     for (rate, mode) in [
@@ -85,7 +89,7 @@ fn each_division_gives_the_right_delay_at_120_bpm() {
             .repeats_only()
             .set(controls::SYNC, 1.0)
             .set(controls::BPM, 90.0)
-            .set(controls::DIVISION, 5.0);
+            .set(controls::DIVISION, 7.0);
         let at = first_repeat(&rig.run(&impulse(rig.samples(0.6)))[0]);
         assert!((at as f64 - 0.5 * f64::from(rate)).abs() <= 2.0);
     }

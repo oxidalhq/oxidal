@@ -45,6 +45,28 @@ pub fn soft_clip(x: f32) -> f32 {
     x / (1.0 + x * x).sqrt()
 }
 
+/// Tempo divisions shared by Oxidal's tempo-synced effects, longest first:
+/// each label with its length in quarter notes (a bar is four). One list, so a
+/// division saved in a preset means the same note value in every effect.
+pub const TEMPO_DIVISIONS: [(&str, f32); 13] = [
+    ("4 bars", 16.0),
+    ("2 bars", 8.0),
+    ("1 bar", 4.0),
+    ("1/2 dotted", 3.0),
+    ("1/2", 2.0),
+    ("1/4 dotted", 1.5),
+    ("1/4", 1.0),
+    ("1/8 dotted", 0.75),
+    ("1/4 triplet", 2.0 / 3.0),
+    ("1/8", 0.5),
+    ("1/8 triplet", 1.0 / 3.0),
+    ("1/16", 0.25),
+    ("1/16 triplet", 1.0 / 6.0),
+];
+
+/// Index of the quarter note in [`TEMPO_DIVISIONS`], the default division.
+pub const QUARTER_NOTE_DIVISION: usize = 6;
+
 /// The smallest prime at or above `n`, for choosing delay lengths that share
 /// no common factor so echoes do not pile up on one period.
 pub fn prime_at_or_above(n: usize) -> usize {

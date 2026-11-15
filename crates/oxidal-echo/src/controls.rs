@@ -43,7 +43,7 @@ pub const CONTROLS: [Control; 14] = [
     control("time", 20.0, 4000.0, 380.0),
     control("sync", 0.0, 1.0, 0.0),
     control("bpm", 40.0, 240.0, 120.0),
-    control("division", 0.0, 9.0, 4.0),
+    control("division", 0.0, 12.0, 6.0),
     control("feedback", 0.0, 110.0, 35.0),
     control("tone", 0.0, 100.0, 50.0),
     control("mod", 0.0, 100.0, 20.0),
@@ -101,19 +101,8 @@ impl Mode {
 }
 
 /// Length of each Division scale point in beats (a quarter note is one beat),
-/// with its label, in scale-point order.
-pub const DIVISIONS: [(&str, f32); 10] = [
-    ("1/1", 4.0),
-    ("1/2 dotted", 3.0),
-    ("1/2", 2.0),
-    ("1/4 dotted", 1.5),
-    ("1/4", 1.0),
-    ("1/8 dotted", 0.75),
-    ("1/4 triplet", 2.0 / 3.0),
-    ("1/8", 0.5),
-    ("1/8 triplet", 1.0 / 3.0),
-    ("1/16", 0.25),
-];
+/// with its label, in scale-point order: the list every Oxidal effect shares.
+pub const DIVISIONS: [(&str, f32); 13] = oxidal_dsp::TEMPO_DIVISIONS;
 
 /// Which of the four playback heads sound for each Heads scale point: bit 0
 /// is head 1 (the shortest), bit 3 is head 4 (the longest, at Time).
@@ -226,7 +215,10 @@ mod tests {
         let mut controls = defaults();
         controls[SYNC] = 1.0;
         controls[BPM] = 120.0;
-        let expected = [
+        // Quarter-note lengths at 120 BPM (0.5 s a beat), longest first.
+        let expected: [f32; 13] = [
+            8.0,
+            4.0,
             2.0,
             1.5,
             1.0,
@@ -237,14 +229,16 @@ mod tests {
             0.25,
             1.0 / 6.0,
             0.125,
+            1.0 / 12.0,
         ];
         for (index, seconds) in expected.iter().enumerate() {
             controls[DIVISION] = index as f32;
             let settings = Settings::from_controls(&controls);
+            let seconds = seconds.min(MAX_SECONDS);
             assert!((settings.seconds - seconds).abs() < 1.0e-6, "{index}");
         }
-        // A whole note at 40 BPM is 6 s: longer than the memory, so it is 4 s.
-        controls[DIVISION] = 0.0;
+        // A bar at 40 BPM is 6 s: longer than the memory, so it is 4 s.
+        controls[DIVISION] = 2.0;
         controls[BPM] = 40.0;
         assert_eq!(Settings::from_controls(&controls).seconds, MAX_SECONDS);
     }

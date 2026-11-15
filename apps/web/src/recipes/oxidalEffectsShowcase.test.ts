@@ -333,8 +333,8 @@ describe('Oxidal effects showcase', () => {
     expect(direct.scenes).toEqual(service.scenes);
     expect(service.scenes).toHaveLength(8);
     const echo = blocks(service).find((b) => b.key === 'echo')!;
-    expect(echo.controls).toMatchObject({ sync: 1, division: 5 });
-    expect(service.scenes.some((s) => s.controls?.echo?.division === 4)).toBe(
+    expect(echo.controls).toMatchObject({ sync: 1, division: 7 });
+    expect(service.scenes.some((s) => s.controls?.echo?.division === 6)).toBe(
       true,
     );
     expect(service.scenes.some((s) => s.controls?.bloom?.freeze === 1)).toBe(

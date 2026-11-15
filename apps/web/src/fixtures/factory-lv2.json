@@ -11706,48 +11706,60 @@
         "logarithmic": false,
         "latency": false,
         "minimum": 0.0,
-        "maximum": 9.0,
-        "default": 4.0,
+        "maximum": 12,
+        "default": 6,
         "scale_points": [
           {
-            "value": 0.0,
-            "label": "1/1"
+            "label": "4 bars",
+            "value": 0
           },
           {
-            "value": 1.0,
-            "label": "1/2 dotted"
+            "label": "2 bars",
+            "value": 1
           },
           {
-            "value": 2.0,
-            "label": "1/2"
+            "label": "1 bar",
+            "value": 2
           },
           {
-            "value": 3.0,
-            "label": "1/4 dotted"
+            "label": "1/2 dotted",
+            "value": 3
           },
           {
-            "value": 4.0,
-            "label": "1/4"
+            "label": "1/2",
+            "value": 4
           },
           {
-            "value": 5.0,
-            "label": "1/8 dotted"
+            "label": "1/4 dotted",
+            "value": 5
           },
           {
-            "value": 6.0,
-            "label": "1/4 triplet"
+            "label": "1/4",
+            "value": 6
           },
           {
-            "value": 7.0,
-            "label": "1/8"
+            "label": "1/8 dotted",
+            "value": 7
           },
           {
-            "value": 8.0,
-            "label": "1/8 triplet"
+            "label": "1/4 triplet",
+            "value": 8
           },
           {
-            "value": 9.0,
-            "label": "1/16"
+            "label": "1/8",
+            "value": 9
+          },
+          {
+            "label": "1/8 triplet",
+            "value": 10
+          },
+          {
+            "label": "1/16",
+            "value": 11
+          },
+          {
+            "label": "1/16 triplet",
+            "value": 12
           }
         ]
       },
@@ -12144,56 +12156,60 @@
         "logarithmic": false,
         "latency": false,
         "minimum": 0.0,
-        "maximum": 11.0,
-        "default": 5.0,
+        "maximum": 12,
+        "default": 6,
         "scale_points": [
           {
-            "value": 0.0,
-            "label": "4 bars"
+            "label": "4 bars",
+            "value": 0
           },
           {
-            "value": 1.0,
-            "label": "2 bars"
+            "label": "2 bars",
+            "value": 1
           },
           {
-            "value": 2.0,
-            "label": "1 bar"
+            "label": "1 bar",
+            "value": 2
           },
           {
-            "value": 3.0,
-            "label": "1/2"
+            "label": "1/2 dotted",
+            "value": 3
           },
           {
-            "value": 4.0,
-            "label": "1/4 dotted"
+            "label": "1/2",
+            "value": 4
           },
           {
-            "value": 5.0,
-            "label": "1/4"
+            "label": "1/4 dotted",
+            "value": 5
           },
           {
-            "value": 6.0,
-            "label": "1/8 dotted"
+            "label": "1/4",
+            "value": 6
           },
           {
-            "value": 7.0,
-            "label": "1/4 triplet"
+            "label": "1/8 dotted",
+            "value": 7
           },
           {
-            "value": 8.0,
-            "label": "1/8"
+            "label": "1/4 triplet",
+            "value": 8
           },
           {
-            "value": 9.0,
-            "label": "1/8 triplet"
+            "label": "1/8",
+            "value": 9
           },
           {
-            "value": 10.0,
-            "label": "1/16"
+            "label": "1/8 triplet",
+            "value": 10
           },
           {
-            "value": 11.0,
-            "label": "1/16 triplet"
+            "label": "1/16",
+            "value": 11
+          },
+          {
+            "label": "1/16 triplet",
+            "value": 12
           }
         ]
       },

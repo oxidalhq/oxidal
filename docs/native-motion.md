@@ -13,16 +13,16 @@ Oxidal's own modulation effect: nine effects behind one Mode control and one set
 | Rate     | `rate`     | 0.05–12 Hz       | 0.8 Hz  | Speed, log (Ring: carrier 20 Hz–2 kHz)           |
 | Sync     | `sync`     | off/on           | off     | Speed from Tempo and Division (not Ring)         |
 | Tempo    | `bpm`      | 40–240 BPM       | 120     | Tempo for Sync; a plain control                  |
-| Division | `division` | 0–11 (see below) | 1/4     | Length of one sweep with Sync                    |
+| Division | `division` | 0–12 (see below) | 1/4     | Length of one sweep with Sync                    |
 | Depth    | `depth`    | 0–100%           | 50%     | How far the effect moves (see Depth)             |
 | Feedback | `feedback` | −100…100%        | 0%      | Ringing; negative hollow (Flanger, Phaser, Vibe) |
 | Tone     | `tone`     | 0–100%           | 50%     | Brightness or position (not Tremolo)             |
-| Shape    | `shape`    | A, B, C (0–2)    | A       | Variant per mode                                 |
+| Shape    | `shape`    | A, B, C (0–2)    | A       | Variant per mode; the rig names it for the mode  |
 | Stereo   | `stereo`   | 0–180°           | 90°     | Right lead over left (stereo only)               |
 | Fast     | `fast`     | off/on           | off     | Slow/fast rotors (Rotary only)                   |
 | Mix      | `mix`      | 0–100%           | 50%     | 0 is bit-exact dry                               |
 
-Division: 4 bar, 2 bar, 1 bar, 1/2, 1/4 dotted, 1/4, 1/8 dotted, 1/4 triplet, 1/8, 1/8 triplet, 1/16, 1/16 triplet.
+Division (shared with Echo): 4 bars, 2 bars, 1 bar, 1/2 dotted, 1/2, 1/4 dotted, 1/4, 1/8 dotted, 1/4 triplet, 1/8, 1/8 triplet, 1/16, 1/16 triplet.
 
 ## Modes
 

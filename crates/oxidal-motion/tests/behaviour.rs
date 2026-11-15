@@ -84,7 +84,7 @@ fn every_division_matches_its_note_value_at_120_bpm() {
     // And the tempo scales it: a quarter note at 90 BPM is 1.5 Hz.
     let gain = tremolo_gain(
         RATE,
-        &[("sync", 1.0), ("bpm", 90.0), ("division", 5.0)],
+        &[("sync", 1.0), ("bpm", 90.0), ("division", 6.0)],
         3.0,
     );
     assert!(within(repetition_hertz(&gain[2_400..], RATE), 1.5, 0.02));

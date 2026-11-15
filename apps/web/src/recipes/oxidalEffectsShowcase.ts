@@ -69,7 +69,7 @@ const ECHO = {
   ping: 7,
 };
 /** Echo divisions used here. */
-const DIV = { half: 2, quarter: 4, eighthDotted: 5, eighth: 7, triplet: 8 };
+const DIV = { half: 4, quarter: 6, eighthDotted: 7, eighth: 9, triplet: 10 };
 /** Echo head choices used here. */
 const HEADS = { one: 0, oneTwo: 4, all: 14 };
 const MOTION = {

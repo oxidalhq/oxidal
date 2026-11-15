@@ -41,7 +41,7 @@ pub const CONTROLS: [Control; 12] = [
     control("rate", 0.05, 12.0, 0.8),
     control("sync", 0.0, 1.0, 0.0),
     control("bpm", 40.0, 240.0, 120.0),
-    control("division", 0.0, 11.0, 5.0),
+    control("division", 0.0, 12.0, 6.0),
     control("depth", 0.0, 100.0, 50.0),
     control("feedback", -100.0, 100.0, 0.0),
     control("tone", 0.0, 100.0, 50.0),
@@ -95,21 +95,9 @@ impl Mode {
 }
 
 /// The note values of the Division control: its name and how many quarter
-/// notes one sweep of the oscillator lasts (a bar is four of them).
-pub const DIVISIONS: [(&str, f32); 12] = [
-    ("4 bars", 16.0),
-    ("2 bars", 8.0),
-    ("1 bar", 4.0),
-    ("1/2", 2.0),
-    ("1/4 dotted", 1.5),
-    ("1/4", 1.0),
-    ("1/8 dotted", 0.75),
-    ("1/4 triplet", 2.0 / 3.0),
-    ("1/8", 0.5),
-    ("1/8 triplet", 1.0 / 3.0),
-    ("1/16", 0.25),
-    ("1/16 triplet", 1.0 / 6.0),
-];
+/// notes one sweep of the oscillator lasts (a bar is four of them). The list
+/// every Oxidal effect shares.
+pub const DIVISIONS: [(&str, f32); 13] = oxidal_dsp::TEMPO_DIVISIONS;
 
 /// The value of control `index` from the host's port values: clamped to its
 /// range, and its default when missing or not a number.
@@ -209,7 +197,7 @@ mod tests {
         assert_eq!(settings.mode, Mode::Chorus);
         assert_eq!(settings.rate, 0.8);
         assert!(!settings.sync && !settings.fast);
-        assert_eq!(settings.division, 5);
+        assert_eq!(settings.division, 6);
         assert_eq!(
             (settings.depth, settings.mix, settings.tone),
             (0.5, 0.5, 0.5)
@@ -226,7 +214,7 @@ mod tests {
         assert_eq!(high.mode, Mode::Ring);
         assert_eq!(
             (high.rate, high.bpm, high.division, high.shape),
-            (12.0, 240.0, 11, 2)
+            (12.0, 240.0, 12, 2)
         );
         assert_eq!(
             (high.depth, high.feedback, high.mix, high.stereo),

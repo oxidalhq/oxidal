@@ -109,7 +109,7 @@ fn sync_division_and_fast_switch_without_a_click() {
     for mode in Mode::ALL {
         for (name, low, high) in [
             ("sync", 0.0, 1.0),
-            ("division", 0.0, 11.0),
+            ("division", 0.0, 12.0),
             ("fast", 0.0, 1.0),
         ] {
             let at = |value: f32| {

@@ -7,22 +7,22 @@ Oxidal's own delay: eight echo kinds behind one Mode control, up to 4 s, tempo d
 
 ## Controls
 
-| Control  | Symbol     | Range      | Default | What it does                                                  |
-| -------- | ---------- | ---------- | ------- | ------------------------------------------------------------- |
-| Mode     | `mode`     | 8 choices  | Digital | The kind of echo                                              |
-| Time     | `time`     | 20 ms–4 s  | 380 ms  | Delay time, log (Sync off)                                    |
-| Sync     | `sync`     | off, on    | off     | Time from BPM and Division                                    |
-| BPM      | `bpm`      | 40–240     | 120     | Tempo for Sync; a plain control                               |
-| Division | `division` | 10 choices | 1/4     | 1/1 to 1/16, dotted and triplets; over 4 s plays 4 s          |
-| Feedback | `feedback` | 0–110%     | 35%     | Repeats recirculated; above 100 settles at a steady level     |
-| Tone     | `tone`     | 0–100%     | 50%     | Repeat colour: dark to thin (Filter: sweep centre)            |
-| Mod      | `mod`      | 0–100%     | 20%     | Wow, drift, duck depth, sweep depth or chorus, by mode        |
-| Age      | `age`      | 0–100%     | 30%     | Darker, saturated, more flutter (Tape, Heads); noise (Bucket) |
-| Heads    | `heads`    | 15 choices | All     | Which of four heads sound (Heads only)                        |
-| Spacing  | `spacing`  | 0–100%     | 0%      | 0 even, 100 golden-ratio head spacing (Heads only)            |
-| Width    | `width`    | 0–100%     | 50%     | 0 mono repeats, 100 widest (stereo only)                      |
-| Mix      | `mix`      | 0–100%     | 20%     | 0 dry, 50 equal, 100 repeats only; lowered, the tail rings on |
-| Hold     | `hold`     | off, on    | off     | Loops memory unchanged and closes input                       |
+| Control  | Symbol     | Range      | Default | What it does                                                         |
+| -------- | ---------- | ---------- | ------- | -------------------------------------------------------------------- |
+| Mode     | `mode`     | 8 choices  | Digital | The kind of echo                                                     |
+| Time     | `time`     | 20 ms–4 s  | 380 ms  | Delay time, log (Sync off)                                           |
+| Sync     | `sync`     | off, on    | off     | Time from BPM and Division                                           |
+| BPM      | `bpm`      | 40–240     | 120     | Tempo for Sync; a plain control                                      |
+| Division | `division` | 0–12       | 1/4     | 4 bars to 1/16 triplet (list shared with Motion); over 4 s plays 4 s |
+| Feedback | `feedback` | 0–110%     | 35%     | Repeats recirculated; above 100 settles at a steady level            |
+| Tone     | `tone`     | 0–100%     | 50%     | Repeat colour: dark to thin (Filter: sweep centre)                   |
+| Mod      | `mod`      | 0–100%     | 20%     | Wow, drift, duck depth, sweep depth or chorus, by mode               |
+| Age      | `age`      | 0–100%     | 30%     | Darker, saturated, more flutter (Tape, Heads); noise (Bucket)        |
+| Heads    | `heads`    | 15 choices | All     | Which of four heads sound (Heads only)                               |
+| Spacing  | `spacing`  | 0–100%     | 0%      | 0 even, 100 golden-ratio head spacing (Heads only)                   |
+| Width    | `width`    | 0–100%     | 50%     | 0 mono repeats, 100 widest (stereo only)                             |
+| Mix      | `mix`      | 0–100%     | 20%     | 0 dry, 50 equal, 100 repeats only; lowered, the tail rings on        |
+| Hold     | `hold`     | off, on    | off     | Loops memory unchanged and closes input                              |
 
 ## Modes
 
