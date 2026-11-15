@@ -300,6 +300,11 @@ updates: they declare no configure variables, MIDI input or state interface
 scalar layouts, like Dragonfly Hall. Existing Guitarix fixture entries match the
 Debian 13 metadata. All of them were run on the Pi itself on 2026-11-14.
 
+The fixture also holds four more Guitarix effects that ran on the Pi the same
+day: GxEchoCat (a three-head tape echo), GxTubeDelay, GxTubeTremelo and
+GxSustainer. Calf Rotary Speaker and Pulsator and Dragonfly Plate and Room also
+ran, but have event ports and wait for a review of their exact scalar layouts.
+
 The fixture also adds these ZamAudio and DISTRHO Ports effects, run on the Pi on
 2026-11-14 with the packs installed: ZamVerb, ZamGrains, ZamTube, ZamAutoSat,
 ZamEQ2, ZamGEQ31, ZaMultiCompX2, MVerb, MaGigaverb, MaFreeverb, 3 Band EQ, Ping

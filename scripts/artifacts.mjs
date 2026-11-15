@@ -158,6 +158,36 @@ if (appliance) {
     join(staging, 'lv2/oxidal-swell.lv2'),
     { recursive: true },
   );
+  // Oxidal's own Rust effects: one shared object per crate, with its TTL
+  // files and NOTICE, as an LV2 bundle. @see docs/native-effects.md
+  const effects = ['bloom', 'sustain', 'echo', 'motion'];
+  run(
+    'cargo',
+    [
+      'build',
+      '--locked',
+      '--release',
+      '--lib',
+      ...effects.flatMap((effect) => ['-p', `oxidal-${effect}`]),
+    ],
+    { env: buildEnv },
+  );
+  for (const effect of effects) {
+    const bundle = join(staging, `lv2/oxidal-${effect}.lv2`);
+    mkdirSync(bundle, { recursive: true });
+    copyFileSync(
+      join(
+        process.env.CARGO_TARGET_DIR ?? join(root, 'target'),
+        'release',
+        `liboxidal_${effect}.so`,
+      ),
+      join(bundle, `oxidal_${effect}.so`),
+    );
+    const crate = join(root, `crates/oxidal-${effect}`);
+    for (const file of ['manifest.ttl', `${effect}.ttl`])
+      copyFileSync(join(crate, 'lv2', file), join(bundle, file));
+    copyFileSync(join(crate, 'NOTICE'), join(bundle, 'NOTICE'));
+  }
   const pitchBuild = join(root, '.local/pitch-appliance');
   const nativeSource = join(root, '.local/tone3000/source');
   run('cmake', [
