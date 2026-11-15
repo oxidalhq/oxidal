@@ -190,6 +190,17 @@ h2 {
   border-top: 1px solid var(--border);
   padding-top: 1.25rem;
 }
+/* Library and Levels tabs carry an icon beside the label, like Settings. */
+.icon-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.icon-tab svg {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+}
 /* Settings tabs carry an icon beside the label; on narrow screens the icon
    sits above the label so three tabs still fit a row. */
 .settings-workspace > .ui-tabs-list .settings-tab {

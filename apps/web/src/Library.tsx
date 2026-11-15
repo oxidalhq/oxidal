@@ -12,7 +12,18 @@ import {
   type AudioState,
   type Preset,
 } from './api';
-import { MagnifyingGlass, Plus, X } from '@phosphor-icons/react';
+import {
+  CloudArrowDown,
+  Equalizer,
+  ListNumbers,
+  MagnifyingGlass,
+  MusicNotes,
+  Plug,
+  Plus,
+  Sparkle,
+  User,
+  X,
+} from '@phosphor-icons/react';
 import { LibraryManagement } from './LibraryManagement';
 import { ArtworkDeck } from './AssetArtwork';
 import { NativeEditor } from './NativeEditor';
@@ -64,6 +75,16 @@ const sectionLabels: Record<Section, string> = {
   tones: 'Tones and IRs',
   backing: 'Backing tracks',
   di: 'DI and reamps',
+};
+/** One icon per Library section, beside its label. */
+const sectionIcons: Record<Section, ReactNode> = {
+  mine: <User aria-hidden="true" />,
+  oxidal: <Sparkle aria-hidden="true" />,
+  tone3000: <CloudArrowDown aria-hidden="true" />,
+  setlist: <ListNumbers aria-hidden="true" />,
+  tones: <Equalizer aria-hidden="true" />,
+  backing: <MusicNotes aria-hidden="true" />,
+  di: <Plug aria-hidden="true" />,
 };
 /** Links from before Sprint 12 keep working: they land on the new section. */
 const legacySections: Record<string, Section> = {
@@ -511,8 +532,9 @@ export function Library({
       <div className="library-group" data-active={group === id}>
         <TabsList aria-label={`${label} sections`} className="library-tabs">
           {list.map((id) => (
-            <TabsTrigger key={id} value={id}>
-              {sectionLabels[id]}
+            <TabsTrigger key={id} value={id} className="icon-tab">
+              {sectionIcons[id]}
+              <span>{sectionLabels[id]}</span>
             </TabsTrigger>
           ))}
         </TabsList>

@@ -8,9 +8,11 @@ import {
 import { StateNotice } from './components/ui/state-notice';
 import {
   CheckCircle,
+  Gauge,
   Guitar,
   Pulse,
   SpeakerHigh,
+  Stethoscope,
   WarningCircle,
 } from '@phosphor-icons/react';
 import {
@@ -322,9 +324,18 @@ export function SoundCheck({
         onValueChange={(value) => setView(value as SoundCheckView)}
       >
         <TabsList aria-label="Levels sections">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="loudness">Loudness</TabsTrigger>
-          <TabsTrigger value="diagnostics">Diagnostics</TabsTrigger>
+          <TabsTrigger value="overview" className="icon-tab">
+            <Gauge aria-hidden="true" />
+            <span>Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="loudness" className="icon-tab">
+            <SpeakerHigh aria-hidden="true" />
+            <span>Loudness</span>
+          </TabsTrigger>
+          <TabsTrigger value="diagnostics" className="icon-tab">
+            <Stethoscope aria-hidden="true" />
+            <span>Diagnostics</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
