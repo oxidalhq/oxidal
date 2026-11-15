@@ -1,5 +1,7 @@
 # AGENTS.md — Oxidal
 
+Use plain language in code names, comments, UI text, and documentation. Name the specific thing, such as source file, model version, licence, or build details. Avoid jargon such as `provenance`.
+
 Oxidal is a software monorepo containing Rust crates (`crates/`), a React/TypeScript web interface (`apps/web/`), OS recipes (`os/`), and shared tooling (`scripts/`). Product architecture is documented in `docs/architecture.md`; setup and commands are in README.md and `docs/development.md`.
 
 The daemon provides loopback HTTP/SSE control, rig validation, simulated MIDI synchronization, owned numeric preview/commit/cancel transactions, and immutable native preset import/list/download. The optional native worker supports offline preset loading, 39 qualified offline global controls, five per-block controls and capability-gated staged NAM size, owned-copy save and reload; physical playback remains unqualified. NAM Linear/LSTM inference has independent parity/allocation tests. The `oxidal-audio` crate and Settings inspector provide hardware discovery and exact non-streaming probes on Linux with the ALSA feature; see docs/audio.md. The optional Linux LV2/graph core is qualified separately below; live graph structural replacement, physical MIDI qualification and WaveNet/A2 in the owned NAM crate remain unfinished; the optional TONE3000 worker does exercise native A2.
@@ -69,8 +71,8 @@ native-worker unification, physical MIDI and physical deadlines remain open.
 Whole-native mixed nodes now accept verified live NAM/IR replacement and insertion,
 with shared native preparation, confirmed descriptors, per-resident recovery/boot
 recall and isolated embedded-model Save. Extracted stages permit same-role model
-replacement; Save rebakes an isolated guarded source pair and retains exact original
-provenance plus local scalar/EQ recipes. Isolated replay resets histories before
+replacement; Save rebakes an isolated guarded source pair and retains the exact original
+source details plus local scalar/EQ recipes. Isolated replay resets histories before
 PCM. The maintained suites exercise this path; physical no-dropout timing and full
 authoring remain open. See docs/mixed-engine.md.
 

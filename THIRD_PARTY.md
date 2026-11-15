@@ -69,3 +69,16 @@ including requirements for attribution, authenticated delivery and commercial us
 
 TONE3000, JUCE, NAM and other names belong to their respective owners. Inclusion of
 an integration or notice does not imply endorsement or affiliation.
+
+## Logos on the About page
+
+`apps/web/public/brand/credits/` holds other projects' logos, shown only to
+credit and link to them. They remain the property of their owners and are not
+covered by Oxidal's licence.
+
+| File               | Project            | Source                                                                                           |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------ |
+| `rust.svg`         | Rust               | [rust-lang.org logo](https://www.rust-lang.org/logos/rust-logo-blk.svg)                          |
+| `tone3000.svg`     | TONE3000           | Wordmark in TONE3000's own [plugin repository](https://github.com/tone-3000/tone3000-plugin)     |
+| `nam.png`          | Neural Amp Modeler | Site icon of [neuralampmodeler.com](https://www.neuralampmodeler.com), resized to 128 px         |
+| `agenticflowx.svg` | AgenticFlowX       | `assets/agenticflow_icon_minimal.svg` in [AgenticFlowX/afx](https://github.com/AgenticFlowX/afx) |

@@ -3,13 +3,24 @@
 </p>
 
 <p align="center">
-  <strong>A Rust-powered, device-local guitar and bass processor built around Raspberry Pi 5.</strong>
+  <strong>A multi-effects amp modeler for guitar and bass, built in Rust around Raspberry Pi 5.</strong>
+</p>
+
+<p align="center">
+  Built with <a href="https://www.rust-lang.org"><img src="apps/web/public/brand/credits/rust.svg" alt="" height="20" align="center"> Rust</a> ·
+  Powered by <a href="https://www.tone3000.com"><img src="apps/web/public/brand/credits/tone3000.svg" alt="TONE3000" height="16" align="center"></a>
+  and <a href="https://www.neuralampmodeler.com"><img src="apps/web/public/brand/credits/nam.png" alt="NAM" height="20" align="center"></a> ·
+  Built with <a href="https://github.com/AgenticFlowX/afx"><img src="apps/web/public/brand/credits/agenticflowx.svg" alt="" height="20" align="center"> AgenticFlowX</a>
 </p>
 
 > [!WARNING]
 > **Active development.** The software, installation process and hardware support are still evolving. Use a fresh SD card for Raspberry Pi experiments.
 
 ![Oxidal running the Afterlight example rig](docs/assets/screenshots/rig-afterlight.jpeg)
+
+Oxidal turns a Raspberry Pi 5 and your audio interface into a complete
+multi-effects rig: amp and cabinet models, effects, scenes and a Set list,
+backing tracks with live stems, and practice tools, all played from a browser.
 
 - **Tone source:** Neural Amp Modeler (NAM) captures for amp heads, cabinets and full rigs, plus impulse responses.
 - **Effects:** Oxidal's own Rust LV2 effects and a qualified set of third-party LV2 plugins.
@@ -18,13 +29,13 @@
 
 ## Tone and effects
 
-| Area               | What it does                                                                                                                                        | Docs                                      |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| NAM                | Loads licensed NAM captures (amp, cabinet, full chain); IRs for cabinet and room.                                                                   | [audio](docs/audio.md)                    |
-| TONE3000 presets   | Imports compatible `.t3kpreset` files with their native rig structure. Presets and captures are not bundled.                                        | [native adapter](docs/native-tone3000.md) |
-| Oxidal effects     | Bloom (reverb), Echo (delay), Motion (modulation), Sustain (infinite sustain), Hold, Swell, Pitch. Mono and stereo LV2 plugins, zero added latency. | [Oxidal effects](docs/native-effects.md)  |
-| Third-party LV2    | Curated drive, fuzz, compression, filter, modulation, pitch, delay and reverb from Guitarix, Invada, MDA, SWH, x42, FOMP, Dragonfly, ZAM and DPF.   | [LV2 compatibility](docs/lv2.md)          |
-| Factory collection | Oxidal-authored effects-only presets, sets and rigs (worship, genre and hybrid showcases).                                                          | [factory](docs/factory-collection.md)     |
+| Area               | What it does                                                                                                                                             | Docs                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| NAM                | Loads licensed NAM captures (amp, cabinet, full chain); IRs for cabinet and room.                                                                        | [audio](docs/audio.md)                    |
+| TONE3000 presets   | Imports compatible `.t3kpreset` files with their native rig structure. Presets and captures are not bundled.                                             | [native adapter](docs/native-tone3000.md) |
+| Oxidal effects     | Bloom (reverb), Echo (delay), Motion (modulation), Sustain (infinite sustain), Hold and Swell: Oxidal's own code. Pitch ports the TONE3000 pitch engine. | [Oxidal effects](docs/native-effects.md)  |
+| Third-party LV2    | Curated drive, fuzz, compression, filter, modulation, pitch, delay and reverb from Guitarix, Invada, MDA, SWH, x42, FOMP, Dragonfly, ZAM and DPF.        | [LV2 compatibility](docs/lv2.md)          |
+| Factory collection | Oxidal-authored effects-only presets, sets and rigs (worship, genre and hybrid showcases).                                                               | [factory](docs/factory-collection.md)     |
 
 - LV2 support is a qualified compatibility profile, not a claim that every LV2 plugin works.
 - Not distributed: TONE3000 presets, NAM captures, IRs, provider downloads. Players supply assets they are licensed to use; test `.t3kpreset` files are parser fixtures with no model weights.
@@ -47,6 +58,8 @@
 - **Rigs:** native processors and LV2 effects in serial, parallel and scene-based paths.
 - **Scenes and MIDI:** preloaded scenes, switched from the browser or a mapped MIDI controller; supported layouts keep delay and reverb trails.
 - **Sound Check:** interface setup, level matching, live audio and processing health.
+- **Backing tracks and stems:** play WAV or MP3 songs over your rig, split them into 4 or 6 stems on the device, and mute or level each part as it plays. See [session media](docs/media.md).
+- **Practice:** A–B loops, 0.5× to 1.5× speed that keeps pitch, and a click that follows the song.
 
 ```mermaid
 flowchart LR
@@ -102,6 +115,12 @@ flowchart LR
 | Backend            | Rust, Axum, Tokio                                    | Local HTTP API, event streams, library, worker supervision. |
 | Audio and DSP      | ALSA, NAM, native TONE3000 integration, LV2, Rust    | Audio I/O, capture playback, effect hosting, own effects.   |
 | Appliance services | Raspberry Pi OS Lite, systemd, NetworkManager, nginx | Headless boot, services, Wi-Fi/hotspot, HTTPS.              |
+
+## How it is built
+
+Oxidal is built with [AgenticFlowX](https://github.com/AgenticFlowX/afx)
+spec-driven development. Every feature starts as a spec, design and task list,
+and the code links back to those documents with `@see` references.
 
 ## Rust crates
 
