@@ -455,6 +455,7 @@ function InstrumentApp() {
         <a className="wordmark" href="/" aria-label="Oxidal home">
           <span className="brand-wordmark" aria-hidden="true" />
         </a>
+        <NowPlaying placement="masthead" />
 
         <nav aria-label="Instrument navigation">
           {(['rig', 'guitars', 'library', 'monitor', 'settings'] as const).map(
@@ -495,7 +496,6 @@ function InstrumentApp() {
             ),
           )}
         </nav>
-        <NowPlaying placement="masthead" />
       </header>
       <NowPlaying placement="strip" />
       {tunerOpen && (

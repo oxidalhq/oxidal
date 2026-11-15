@@ -1,7 +1,7 @@
 /* Session media: the backing player's now-playing surfaces, full player,
-   Backing tracks list and import queue (Sprint 09). Placement by width:
-   masthead chip from 1024 px, a strip under the masthead from 600 px, a bottom
-   bar on phones and on e-paper at every width. */
+   Backing tracks list and import queue. Placement by width: in the masthead
+   between the wordmark and the navigation from 1200 px, a strip under the
+   masthead from 600 px, a bottom bar on phones and on e-paper. */
 
 @import '../../MasterLevel.css';
 
@@ -9,13 +9,14 @@
   display: none;
   min-width: 0;
 }
-@media (min-width: 1024px) {
+@media (min-width: 1200px) {
   .now-playing[data-placement='masthead'] {
     display: flex;
     flex: 0 1 auto;
+    margin-right: auto;
   }
 }
-@media (min-width: 600px) and (max-width: 1023px) {
+@media (min-width: 600px) and (max-width: 1199px) {
   .now-playing[data-placement='strip'] {
     display: flex;
   }
@@ -97,38 +98,52 @@
   padding-inline: 0.625rem;
 }
 
-/* Masthead chip and the tablet strip sit on the ink faceplate. */
-.now-playing[data-placement='masthead'],
-.now-playing[data-placement='strip'] {
+/* The masthead player and the strip sit on the ink faceplate. */
+.now-playing[data-placement='masthead'] {
   color: var(--enclosure-foreground);
 }
 .now-playing[data-placement='masthead'] .now-playing-item {
-  padding: 0 0.25rem 0 0.25rem;
+  padding: 0 0.25rem;
   border: 1px solid var(--enclosure-border);
   border-radius: var(--radius);
 }
-.now-playing[data-placement='masthead'] .oxidal-button,
+.now-playing[data-placement='masthead'] .now-playing-line {
+  flex-wrap: nowrap;
+}
+.now-playing[data-placement='masthead'] .oxidal-button {
+  border-color: var(--enclosure-border);
+  background: transparent;
+  color: var(--enclosure-foreground);
+}
+.now-playing[data-placement='masthead'] .oxidal-button:hover {
+  background: var(--enclosure-border);
+}
+.now-playing[data-placement='masthead'] .oxidal-button[data-variant='default'] {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-foreground);
+}
+.now-playing[data-placement='masthead'] .media-chip {
+  border-color: var(--enclosure-border);
+}
+.now-playing[data-placement='strip'] {
+  color: var(--enclosure-foreground);
+}
 .now-playing[data-placement='strip'] .oxidal-button {
   border-color: var(--enclosure-border);
   background: transparent;
   color: var(--enclosure-foreground);
 }
-.now-playing[data-placement='masthead'] .oxidal-button:hover,
 .now-playing[data-placement='strip'] .oxidal-button:hover {
   background: var(--enclosure-border);
 }
-.now-playing[data-placement='masthead'] .oxidal-button[data-variant='default'],
 .now-playing[data-placement='strip'] .oxidal-button[data-variant='default'] {
   border-color: var(--brand);
   background: var(--brand);
   color: var(--brand-foreground);
 }
-.now-playing[data-placement='masthead'] .media-chip,
 .now-playing[data-placement='strip'] .media-chip {
   border-color: var(--enclosure-border);
-}
-.now-playing[data-placement='masthead'] .now-playing-line {
-  flex-wrap: nowrap;
 }
 .now-playing[data-placement='strip'] {
   padding: 0.25rem max(var(--page-space), var(--safe-right)) 0.25rem

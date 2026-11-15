@@ -116,8 +116,8 @@ the full player, Perform and Library never disagree. Source:
 - **Safe retries.** Each action has a fresh request ID; a lost response is
   retried once with the same ID. Next, Previous, seek and skip carry the cued
   track, so a command from a screen that missed a change is refused.
-- **Where it shows.** A masthead chip from 1024 px, a strip under the masthead
-  from 600 px and a bar above the safe area on phones and in E-paper mode. It is
+- **Where it shows.** In the masthead between the wordmark and the navigation
+  from 1200 px, a strip under the masthead from 600 px and a bar above the safe area on phones and in E-paper mode. It is
   hidden while nothing is cued. The full player opens over any page. Perform
   has one backing row, and Library has a Backing tracks section.
 - **Imports.** Files go up in 8 MiB chunks. A refused offset resumes from the

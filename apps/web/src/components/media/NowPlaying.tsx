@@ -4,10 +4,10 @@ import { CompactTransport } from './TransportBar';
 import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
 
 /**
- * The always-visible backing player: a chip in the masthead on desktop, a
- * strip under the masthead on tablets and Fold open, a bar above the safe
- * area on phones and e-paper. CSS shows the one that fits; all three read the
- * same snapshot. Hidden while nothing is cued, and until the first snapshot.
+ * The always-visible backing player: in the masthead between the wordmark and
+ * the navigation on wide screens, a strip under the masthead on tablets, a
+ * bar above the safe area on phones and e-paper. CSS shows the one that
+ * fits; all three read the same snapshot. Hidden while nothing is cued, and until the first snapshot.
  * Tapping the title opens the full player.
  * @see docs/media.md
  */
