@@ -1,0 +1,45 @@
+@prefix lv2: <http://lv2plug.in/ns/lv2core#> .
+@prefix doap: <http://usefulinc.com/ns/doap#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix units: <http://lv2plug.in/ns/extensions/units#> .
+
+# @see docs/native-sustain.md
+<urn:oxidal:plugin:sustain#mono> a lv2:Plugin, lv2:DynamicsPlugin ;
+    doap:name "Oxidal Sustain (Mono)" ; doap:license <https://www.apache.org/licenses/LICENSE-2.0> ;
+    rdfs:comment "Sustain keeps every single note sounding at a steady level until you mute it or play the next one, with nothing to press. While the string rings it follows bends and vibrato; when the string has died it holds the last pitch. Mode chooses the note itself (Normal), a harmonic of it (Harmonic) or a note that blooms into the harmonic like amplifier feedback (Mix); Harmonic picks which one; Bloom is how long Mix takes. Drive sets how soon and how firmly the sustain takes over; Sensitivity how readily a mute or a new note is recognised; Tone the brightness of the sustained sound; Level its volume. Dry off leaves only the sustained sound. A chord is held as a whole. Place it before drive and amp blocks. No latency." ;
+    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:port
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "on" ; lv2:name "On" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "mode" ; lv2:name "Mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+        lv2:scalePoint [ rdfs:label "Normal" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Harmonic" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Mix" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "harmonic" ; lv2:name "Harmonic" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+        lv2:scalePoint [ rdfs:label "Octave" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Octave and fifth" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Two octaves" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "drive" ; lv2:name "Drive" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 65 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "bloom" ; lv2:name "Bloom" ; lv2:minimum 100 ; lv2:maximum 10000 ; lv2:default 2000 ; lv2:portProperty <http://lv2plug.in/ns/ext/port-props#logarithmic> ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "sensitivity" ; lv2:name "Sensitivity" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 60 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; lv2:symbol "level" ; lv2:name "Level" ; lv2:minimum -24 ; lv2:maximum 6 ; lv2:default 0 ; units:unit units:db ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; lv2:symbol "dry" ; lv2:name "Dry" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 9 ; lv2:symbol "in_l" ; lv2:name "Input" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 10 ; lv2:symbol "out_l" ; lv2:name "Output" ] .
+
+<urn:oxidal:plugin:sustain#stereo> a lv2:Plugin, lv2:DynamicsPlugin ;
+    doap:name "Oxidal Sustain (Stereo)" ; doap:license <https://www.apache.org/licenses/LICENSE-2.0> ;
+    rdfs:comment "Stereo Sustain: it listens to both sides together, keeps the dry signal in stereo and adds the same sustained note to both sides. On, Mode, Harmonic, Drive, Bloom, Sensitivity, Tone, Level and Dry work as in the mono plugin. No latency." ;
+    lv2:minorVersion 0 ; lv2:microVersion 1 ; lv2:optionalFeature lv2:hardRTCapable ;
+    lv2:port
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 0 ; lv2:symbol "on" ; lv2:name "On" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 1 ; lv2:symbol "mode" ; lv2:name "Mode" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+        lv2:scalePoint [ rdfs:label "Normal" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Harmonic" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Mix" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 2 ; lv2:symbol "harmonic" ; lv2:name "Harmonic" ; lv2:minimum 0 ; lv2:maximum 2 ; lv2:default 0 ; lv2:portProperty lv2:integer, lv2:enumeration ;
+        lv2:scalePoint [ rdfs:label "Octave" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 0 ], [ rdfs:label "Octave and fifth" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 1 ], [ rdfs:label "Two octaves" ; <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> 2 ] ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 3 ; lv2:symbol "drive" ; lv2:name "Drive" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 65 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 4 ; lv2:symbol "bloom" ; lv2:name "Bloom" ; lv2:minimum 100 ; lv2:maximum 10000 ; lv2:default 2000 ; lv2:portProperty <http://lv2plug.in/ns/ext/port-props#logarithmic> ; units:unit units:ms ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 5 ; lv2:symbol "sensitivity" ; lv2:name "Sensitivity" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 50 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 6 ; lv2:symbol "tone" ; lv2:name "Tone" ; lv2:minimum 0 ; lv2:maximum 100 ; lv2:default 60 ; units:unit units:pc ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 7 ; lv2:symbol "level" ; lv2:name "Level" ; lv2:minimum -24 ; lv2:maximum 6 ; lv2:default 0 ; units:unit units:db ],
+      [ a lv2:InputPort, lv2:ControlPort ; lv2:index 8 ; lv2:symbol "dry" ; lv2:name "Dry" ; lv2:minimum 0 ; lv2:maximum 1 ; lv2:default 1 ; lv2:portProperty lv2:toggled, lv2:integer ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 9 ; lv2:symbol "in_l" ; lv2:name "Input left" ],
+      [ a lv2:InputPort, lv2:AudioPort ; lv2:index 10 ; lv2:symbol "in_r" ; lv2:name "Input right" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 11 ; lv2:symbol "out_l" ; lv2:name "Output left" ],
+      [ a lv2:OutputPort, lv2:AudioPort ; lv2:index 12 ; lv2:symbol "out_r" ; lv2:name "Output right" ] .
