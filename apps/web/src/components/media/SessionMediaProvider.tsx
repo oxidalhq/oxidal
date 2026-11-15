@@ -8,9 +8,11 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  currentSplit,
   mediaLibrary,
   monitoring,
   playerCommand,
+  songSplitJob,
   type MediaLibrary,
   type PlayerSnapshot,
 } from '../../api';
@@ -25,7 +27,14 @@ import {
   type PlayerCommand,
   type SessionMedia,
   type ShownState,
+  type SplitActivity,
 } from './sessionMedia';
+
+/** How often the device's split is checked while one runs and while idle. */
+const SPLIT_RUNNING_MS = 1500;
+const SPLIT_IDLE_MS = 6000;
+/** A finished split stays visible this long. */
+const SPLIT_DONE_MS = 15000;
 
 /** Pending feedback lasts at most this long; then the device's state shows. */
 const PENDING_MS = 300;
@@ -37,6 +46,10 @@ const cueBound = new Set<PlayerCommand['kind']>([
   'next',
   'seek_to',
   'skip_by',
+  'set_practice_range',
+  'set_click',
+  'set_speed',
+  'set_stem_mix',
 ]);
 const levelKinds = new Set<PlayerCommand['kind']>([
   'set_level',
@@ -75,6 +88,9 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
   const [library, setLibrary] = useState<MediaLibrary | null>(null);
   const [libraryError, setLibraryError] = useState('');
   const [sheet, setSheet] = useState<MediaSheet>(null);
+  const [split, setSplit] = useState<SplitActivity | null>(null);
+  const splitCheck = useRef<() => void>(() => {});
+  const refreshSplit = useCallback(() => splitCheck.current(), []);
   const [announcement, setAnnouncement] = useState('');
   const current = useRef<PlayerSnapshot | null>(null);
   const busy = useRef(false);
@@ -234,6 +250,61 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
         ? 'stalled'
         : player.state;
 
+  // The one split on the device, followed from every page. When it ends, the
+  // library reloads and the result stays visible for a short while.
+  useEffect(() => {
+    let alive = true;
+    let timer = 0;
+    let running: string | null = null;
+    let cleared = 0;
+    async function check() {
+      window.clearTimeout(timer);
+      try {
+        const current = await currentSplit();
+        if (!alive) return;
+        if (current) {
+          running = current.source;
+          setSplit({
+            source: current.source,
+            mode: current.job.mode,
+            percent: current.job.progress?.percent ?? 0,
+            phase: 'running',
+          });
+        } else if (running) {
+          const source = running;
+          running = null;
+          const done = await songSplitJob(source).catch(() => null);
+          if (!alive) return;
+          setSplit(
+            done && done.phase !== 'running'
+              ? { source, mode: done.mode, percent: 100, phase: done.phase }
+              : null,
+          );
+          refreshLibrary();
+          window.clearTimeout(cleared);
+          cleared = window.setTimeout(
+            () => setSplit((now) => (now?.phase === 'running' ? now : null)),
+            SPLIT_DONE_MS,
+          );
+        }
+      } catch {
+        // The next check tries again; a missing endpoint means no splitter.
+      }
+      if (alive)
+        timer = window.setTimeout(
+          () => void check(),
+          running ? SPLIT_RUNNING_MS * (slow ? 2 : 1) : SPLIT_IDLE_MS,
+        );
+    }
+    splitCheck.current = () => void check();
+    void check();
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      window.clearTimeout(cleared);
+    };
+  }, [refreshLibrary, slow]);
+
   const value = useMemo<SessionMedia>(
     () => ({
       ready: true,
@@ -255,6 +326,8 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
       queue,
       sheet,
       setSheet,
+      split,
+      refreshSplit,
     }),
     [
       player,
@@ -273,6 +346,8 @@ export function SessionMediaProvider({ children }: { children: ReactNode }) {
       uploads,
       queue,
       sheet,
+      split,
+      refreshSplit,
     ],
   );
   return (

@@ -1410,6 +1410,42 @@ export type AssetUpdate = Contract['media_asset_update'];
 export type UploadState = Contract['media_upload_state'];
 export type PlayerSnapshot = Contract['player_snapshot'];
 export type PlayerRequest = Contract['player_request'];
+export type SongView = Contract['song_view'];
+export type SongList = Contract['song_list'];
+export type SongImportStems = Contract['song_import_stems'];
+export type SongSaveMix = Contract['song_save_mix'];
+export type SongMixRevision = Contract['song_mix_revision'];
+export type SavedSongMix = SongView['mixes'][number];
+export type SongSplitJob = Contract['song_split_job'];
+export type SongStartSplit = Contract['song_start_split'];
+export type SongLinks = Contract['song_links'];
+export type SongLinkUpdate = Contract['song_link_update'];
+export type PracticeTiming = Contract['practice_timing'];
+const songValidator = ajv.compile<SongView>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SongView',
+});
+const savedMixValidator = ajv.compile<SavedSongMix>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SavedMix',
+});
+const splitJobValidator = ajv.compile<SongSplitJob>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SplitJob',
+});
+type SplitOptions = Contract['song_split_options'];
+const splitOptionsValidator = ajv.compile<SplitOptions>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Options',
+});
+const songLinksValidator = ajv.compile<SongLinks>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Links',
+});
+const timingValidator = ajv.compile<PracticeTiming>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/Timing',
+});
 const mediaLibraryValidator = ajv.compile<MediaLibrary>({
   $defs: schema.$defs,
   $ref: '#/$defs/MediaLibrary',
@@ -1469,6 +1505,141 @@ export async function deleteAsset(id: string): Promise<void> {
 export const originalPath = (id: string) =>
   `/api/v1/media/assets/${encodeURIComponent(id)}/original`;
 
+const songPath = (source: string) =>
+  `/api/v1/media/songs/${encodeURIComponent(source)}`;
+
+type CurrentSplit = Contract['song_current_split'];
+const currentSplitValidator = ajv.compile<CurrentSplit>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/CurrentSplit',
+});
+
+/** The split running on this device, or null. */
+export async function currentSplit(): Promise<CurrentSplit | null> {
+  const body = await presetResponse(await fetch('/api/v1/media/split-job'));
+  if (body === null) return null;
+  if (!currentSplitValidator(body)) throw new Error('Incompatible split job');
+  return body;
+}
+
+const songListValidator = ajv.compile<SongList>({
+  $defs: schema.$defs,
+  $ref: '#/$defs/SongList',
+});
+
+/** Every song with stems, newest first. */
+export async function songList(): Promise<SongList> {
+  const body = await presetResponse(await fetch('/api/v1/media/songs'));
+  if (!songListValidator(body)) throw new Error('Incompatible song list');
+  return body;
+}
+
+export async function songView(source: string): Promise<SongView> {
+  const body = await presetResponse(await fetch(songPath(source)));
+  if (!songValidator(body)) throw new Error('Incompatible song');
+  return body;
+}
+
+export async function importSongStems(
+  request: SongImportStems,
+): Promise<MediaAsset> {
+  const body: unknown = await presetResponse(
+    await fetch('/api/v1/media/songs/import-stems', json('POST', request)),
+  );
+  if (!mediaAssetValidator(body)) throw new Error('Incompatible backing track');
+  return body;
+}
+
+export async function saveSongMix(
+  source: string,
+  update: SongSaveMix,
+): Promise<SavedSongMix> {
+  const body = await presetResponse(
+    await fetch(`${songPath(source)}/mixes`, json('POST', update)),
+  );
+  if (!savedMixValidator(body)) throw new Error('Incompatible stem mix');
+  return body;
+}
+
+export async function deleteSongMix(source: string, target: SongMixRevision) {
+  const response = await fetch(
+    `${songPath(source)}/mixes`,
+    json('DELETE', target),
+  );
+  if (!response.ok) await presetResponse(response);
+}
+
+export async function splitOptions(): Promise<SplitOptions> {
+  const body = await presetResponse(await fetch('/api/v1/media/split-options'));
+  if (!splitOptionsValidator(body))
+    throw new Error('Incompatible split options');
+  return body;
+}
+
+export async function songSplitJob(
+  source: string,
+): Promise<SongSplitJob | null> {
+  const body = await presetResponse(
+    await fetch(`${songPath(source)}/split-job`),
+  );
+  if (body === null) return null;
+  if (!splitJobValidator(body)) throw new Error('Incompatible split job');
+  return body;
+}
+
+export async function startSongSplit(
+  source: string,
+  request: SongStartSplit,
+): Promise<SongSplitJob> {
+  const body = await presetResponse(
+    await fetch(`${songPath(source)}/split-job`, json('POST', request)),
+  );
+  if (!splitJobValidator(body)) throw new Error('Incompatible split job');
+  return body;
+}
+
+export async function cancelSongSplit(source: string) {
+  const response = await fetch(`${songPath(source)}/split-job`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) await presetResponse(response);
+}
+
+export async function songLinks(update?: SongLinkUpdate): Promise<SongLinks> {
+  const body = await presetResponse(
+    await fetch('/api/v1/media/song-links', update && json('POST', update)),
+  );
+  if (!songLinksValidator(body)) throw new Error('Incompatible backing links');
+  return body;
+}
+
+export async function practiceTiming(
+  asset: string,
+  analyse = false,
+): Promise<PracticeTiming | null> {
+  const body = await presetResponse(
+    await fetch(`/api/v1/media/assets/${encodeURIComponent(asset)}/timing`, {
+      method: analyse ? 'POST' : 'GET',
+    }),
+  );
+  if (body === null) return null;
+  if (!timingValidator(body)) throw new Error('Incompatible song timing');
+  return body;
+}
+
+export const stemWavPath = (source: string, split: string, role: string) =>
+  `${songPath(source)}/splits/${encodeURIComponent(split)}/stems/${encodeURIComponent(role)}/wav`;
+export const stemArchivePath = (source: string, split: string) =>
+  `${songPath(source)}/splits/${encodeURIComponent(split)}/stems.zip`;
+
+export async function deleteSongSplit(source: string, split: string) {
+  const response = await fetch(
+    `${songPath(source)}/splits/${encodeURIComponent(split)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) await presetResponse(response);
+}
+
 /** A chunk sent at an offset the device has not confirmed; resume from `state`. */
 export class OffsetConflict extends Error {
   constructor(readonly state: UploadState) {
@@ -1479,10 +1650,14 @@ export class OffsetConflict extends Error {
 export async function startUpload(
   name: string,
   size: number,
+  stem = false,
 ): Promise<UploadState> {
   return uploadBody(
     await presetResponse(
-      await fetch('/api/v1/media/uploads', json('POST', { name, size })),
+      await fetch(
+        '/api/v1/media/uploads',
+        json('POST', stem ? { name, size, stem } : { name, size }),
+      ),
     ),
   );
 }

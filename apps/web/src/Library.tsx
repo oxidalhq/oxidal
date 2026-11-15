@@ -17,6 +17,7 @@ import {
   Equalizer,
   ListNumbers,
   MagnifyingGlass,
+  Faders,
   MusicNotes,
   Plug,
   Plus,
@@ -54,6 +55,7 @@ import { CreatedPreset } from './features/library/CreatedPreset';
 import { duplicatePreset } from './features/library/setList';
 import { friendlyError } from './lib/friendlyError';
 import { BackingTracks } from './components/media/BackingTracks';
+import { StemSongs } from './components/media/StemSongs';
 import { DiReamps } from './components/media/DiReamps';
 import './Library.css';
 
@@ -64,7 +66,7 @@ const soundSections = [
   'setlist',
   'tones',
 ] as const;
-const mediaSections = ['backing', 'di'] as const;
+const mediaSections = ['backing', 'stems', 'di'] as const;
 const sections = [...soundSections, ...mediaSections] as const;
 type Section = (typeof sections)[number];
 const sectionLabels: Record<Section, string> = {
@@ -74,6 +76,7 @@ const sectionLabels: Record<Section, string> = {
   setlist: 'Set list',
   tones: 'Tones and IRs',
   backing: 'Backing tracks',
+  stems: 'Stems',
   di: 'DI and reamps',
 };
 /** One icon per Library section, beside its label. */
@@ -84,6 +87,7 @@ const sectionIcons: Record<Section, ReactNode> = {
   setlist: <ListNumbers aria-hidden="true" />,
   tones: <Equalizer aria-hidden="true" />,
   backing: <MusicNotes aria-hidden="true" />,
+  stems: <Faders aria-hidden="true" />,
   di: <Plug aria-hidden="true" />,
 };
 /** Links from before Sprint 12 keep working: they land on the new section. */
@@ -107,7 +111,7 @@ function migrateLegacyHash() {
 /**
  * Library: two groups. Sounds holds Mine (rigs and your TONE3000 chains in one
  * list), Oxidal sounds, TONE3000, the Set list and Tones and IRs; Media holds
- * Backing tracks and DI and reamps. Each section has its own link
+ * Backing tracks, Stems and DI and reamps. Each section has its own link
  * (`#library/tones`); earlier links (`presets`, `sounds`, `discover`) land on
  * the section that replaced them.
  * @see docs/presets/format.md
@@ -833,6 +837,9 @@ export function Library({
         </TabsContent>
         <TabsContent value="backing">
           <BackingTracks connected={connected} />
+        </TabsContent>
+        <TabsContent value="stems">
+          <StemSongs connected={connected} />
         </TabsContent>
       </Tabs>
     </section>

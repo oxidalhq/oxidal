@@ -622,3 +622,549 @@
   padding: 0;
   margin: 0;
 }
+
+/* ---- Stems, mixes and practice ---- */
+
+/* Stems and mixes: a wider media sheet with a compact mixer. Selection is ink
+   inversion (pressed outline buttons); oxide stays on Save and Play. */
+@media (min-width: 1024px) {
+  .adjustment-dialog.media-sheet.stem-sheet {
+    width: 34rem;
+  }
+}
+
+.stem-section {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.stem-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.stem-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.stem-section-head h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+.stem-section .caption {
+  margin: 0;
+}
+
+/* Split choice: two cards, one per stem count. */
+.stem-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+}
+.stem-mode {
+  position: relative;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+}
+.stem-mode input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.stem-mode strong {
+  font-size: var(--text-md);
+}
+.stem-mode span {
+  color: var(--muted-foreground);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.stem-mode[data-checked] {
+  border-color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--foreground);
+}
+.stem-mode:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.stem-mode[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.stem-bar {
+  height: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--foreground);
+  border-radius: 999px;
+}
+.stem-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width 0.4s ease;
+}
+
+/* Saved mixes and starting points wrap as rows of chips. */
+.stem-chips,
+.stem-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+.stem-quick .caption {
+  margin-right: 0.25rem;
+}
+.stem-quick .stem-quick-item {
+  min-height: 2.25rem;
+  padding-block: 0.25rem;
+  font-weight: 500;
+}
+
+/* One row per stem: name, M/S, level, readout, download. */
+.stem-mixer {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.stem-row {
+  display: grid;
+  grid-template-columns: 4.5rem auto minmax(5rem, 1fr) 4.25rem auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+.stem-row + .stem-row {
+  border-top: 1px solid var(--border);
+}
+.stem-row-name {
+  font-weight: 650;
+}
+.stem-row-toggles,
+.stem-row-steps {
+  display: flex;
+  gap: 0.25rem;
+}
+.stem-row .stem-toggle {
+  width: 2.25rem;
+  font-weight: 700;
+}
+.stem-row-gain {
+  min-height: var(--touch-target);
+  padding: 0 0.25rem;
+  border-radius: var(--radius);
+  text-align: right;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.stem-row-gain:not(:disabled):hover {
+  background: var(--accent);
+}
+.stem-row-gain:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.stem-row-gain:disabled {
+  color: inherit;
+}
+.stem-row[data-silent] .stem-row-name,
+.stem-row[data-silent] .stem-row-gain {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+.stem-row[data-silent] .stem-row-level {
+  opacity: 0.4;
+}
+
+.stem-name {
+  display: grid;
+  gap: 0.25rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.stem-name input,
+.stem-link-form select {
+  min-height: var(--touch-target);
+  padding: 0 0.625rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: var(--text-md);
+  font-weight: 400;
+}
+
+.stem-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+.stem-save-spacer {
+  flex: 1;
+}
+
+/* Links to rigs and Set list entries. */
+.stem-links {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.stem-links h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 650;
+}
+.stem-link-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stem-link-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.stem-link-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.stem-link-form select {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+/* The Cue control beside a rig or Set list entry. */
+.stem-cue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.stem-cue > svg {
+  flex: none;
+}
+.stem-cue-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stem-cue[data-missing] .stem-cue-title {
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 599px) {
+  .stem-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'name toggles download'
+      'level level gain';
+    row-gap: 0;
+  }
+  .stem-row-name {
+    grid-area: name;
+  }
+  .stem-row-toggles {
+    grid-area: toggles;
+  }
+  .stem-row > :last-child {
+    grid-area: download;
+  }
+  .stem-row-level,
+  .stem-row-steps {
+    grid-area: level;
+  }
+  .stem-row-gain {
+    grid-area: gain;
+  }
+}
+
+/* Import stems: one row per part with its chosen file. */
+.stem-file-row {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: calc(var(--touch-target) + 0.5rem);
+  padding: 0.25rem 0.5rem;
+}
+.stem-file-row + .stem-file-row {
+  border-top: 1px solid var(--border);
+}
+.stem-file-name {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stem-file-name[data-empty] {
+  color: var(--muted-foreground);
+}
+
+/* The Stems button in a backing row keeps only its icon on phones. */
+@media (max-width: 599px) {
+  .media-stems-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+/* Practice tools in the backing player. */
+.practice {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.practice-wave {
+  width: 100%;
+  height: 4.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.practice-peak {
+  stroke: var(--muted-foreground);
+  stroke-width: 0.7;
+}
+.practice-beat {
+  stroke: var(--foreground);
+  stroke-width: 0.4;
+}
+.practice-region {
+  fill: var(--foreground);
+  opacity: 0.12;
+}
+.practice-region[data-active] {
+  fill: var(--brand);
+  opacity: 0.22;
+}
+.practice-head {
+  stroke: var(--brand);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+.practice-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.practice-row .caption {
+  margin: 0;
+  font-weight: 400;
+}
+.practice-label {
+  min-width: 4.5rem;
+  font-weight: 600;
+}
+.practice-click {
+  display: grid;
+  gap: 0.5rem;
+}
+.practice-bpm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.practice-bpm input {
+  width: 5.5rem;
+  min-height: var(--touch-target);
+  padding: 0 0.5rem;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
+.practice-level {
+  flex: 1 1 8rem;
+  max-width: 14rem;
+}
+.practice-tempo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+.practice-tempo .practice-octave {
+  min-width: 2.5rem;
+  padding-inline: 0.375rem;
+  font-family: var(--font-mono);
+}
+
+/* What a backing row is: a song with stems, or a mix made from one. */
+.media-chip[data-kind='stems'] {
+  border-color: var(--foreground);
+}
+.media-chip[data-kind='mix'] {
+  border-color: var(--muted);
+  background: var(--muted);
+}
+.stem-row:not([data-download]) {
+  grid-template-columns: 4.5rem auto minmax(5rem, 1fr) 4.25rem;
+}
+.stem-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.stem-transport .media-main {
+  min-width: 6.5rem;
+}
+.stem-transport-text {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.stem-songs {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stem-song {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.stem-song-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.stem-song-title,
+.stem-song-mix {
+  display: grid;
+  min-width: 0;
+}
+.stem-song-title strong {
+  font-size: var(--text-md);
+}
+.stem-song-mixes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stem-song-mixes li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+.stem-song-mixes li + li {
+  border-top: 1px solid var(--border);
+}
+.stem-song-mix {
+  flex: 1;
+}
+.stem-song-mix .caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stem-pick {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stem-pick .oxidal-button {
+  width: 100%;
+  justify-content: space-between;
+}
+.stem-section-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* The device's split in the masthead, on every page. */
+.split-status {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 18rem;
+  min-height: 2.25rem;
+  overflow: hidden;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--enclosure-border);
+  border-radius: var(--radius);
+  color: var(--enclosure-foreground);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.split-status:hover {
+  border-color: var(--enclosure-foreground);
+}
+.split-status:focus-visible {
+  outline: 2px solid var(--enclosure-foreground);
+  outline-offset: 2px;
+}
+.split-status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.split-status-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--brand);
+  transition: width 0.6s ease;
+}
+.split-status[data-phase='failed'],
+.split-status[data-phase='interrupted'] {
+  border-color: var(--enclosure-foreground);
+}
+@media (max-width: 899px) {
+  .split-status-text {
+    display: none;
+  }
+}

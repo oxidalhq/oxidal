@@ -1,15 +1,25 @@
-import { useRef, useState } from 'react';
-import { Pause, Play, UploadSimple } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+import { Faders, Pause, Play, UploadSimple } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
-import { originalPath, setPlayerOrder, type MediaAsset } from '../../api';
+import {
+  originalPath,
+  setPlayerOrder,
+  songList,
+  wavPath,
+  type MediaAsset,
+} from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatTime } from '../../lib/playerClock';
 import { MediaRow, type MenuItem } from './MediaRow';
 import { StateChip } from './StateChip';
+import { splitLabel } from './stemMix';
 import { DeleteDialog, RenameDialog } from './TrackDialogs';
 import { UploadQueue } from './UploadQueue';
 import {
   PROTECT_REASON,
+  canSplitBackingTrack,
+  isStemSong,
+  mixSourceOf,
   channelsLabel,
   durationOf,
   formatLabel,
@@ -34,6 +44,8 @@ export function BackingTracks({ connected }: { connected: boolean }) {
   const protect = useProtect();
   const file = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
+  // Songs with stems and how they were made, such as "6 stems".
+  const [stemKinds, setStemKinds] = useState<Map<string, string>>(new Map());
   const [dialog, setDialog] = useState<{
     kind: 'rename' | 'delete';
     asset: MediaAsset;
@@ -42,6 +54,28 @@ export function BackingTracks({ connected }: { connected: boolean }) {
   const free = space
     ? Math.max(0, space.availableBytes - space.reserveBytes)
     : null;
+
+  useEffect(() => {
+    let active = true;
+    songList().then(
+      ({ songs }) => {
+        if (!active) return;
+        setStemKinds(
+          new Map(
+            songs.map((song) => [
+              song.source,
+              song.splits.map((split) => splitLabel(split, song.splits))[0] ??
+                'Stems',
+            ]),
+          ),
+        );
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [library]);
 
   async function play(asset: MediaAsset) {
     setError('');
@@ -114,6 +148,27 @@ export function BackingTracks({ connected }: { connected: boolean }) {
       ) : (
         <ol className="media-rows" aria-label="Backing list">
           {tracks.map((track, index) => {
+            const imported = isStemSong(track);
+            const mixOf = mixSourceOf(track);
+            const song = mixOf
+              ? tracks.find((candidate) => candidate.id === mixOf)
+              : undefined;
+            const mixes = tracks.filter(
+              (candidate) => mixSourceOf(candidate) === track.id,
+            ).length;
+            const stemKind = stemKinds.get(track.id);
+            const hasStems = !!stemKind || imported;
+            const openStems = () =>
+              media.setSheet(
+                song
+                  ? { kind: 'stems', source: song.id, mix: track.id }
+                  : { kind: 'stems', source: track.id },
+              );
+            const splitting =
+              media.split?.source === track.id &&
+              media.split.phase === 'running'
+                ? media.split.percent
+                : null;
             const cued = player?.track?.id === track.id;
             const playing = cued && player?.state === 'playing';
             const menu: MenuItem[] = [
@@ -127,6 +182,19 @@ export function BackingTracks({ connected }: { connected: boolean }) {
                 onSelect: () =>
                   media.setSheet({ kind: 'details', asset: track.id }),
               },
+              ...(hasStems || song || canSplitBackingTrack(track)
+                ? [
+                    {
+                      label: song
+                        ? 'Edit this mix'
+                        : hasStems
+                          ? 'Stems and mixes'
+                          : 'Split into stems…',
+                      disabled: !connected,
+                      onSelect: openStems,
+                    },
+                  ]
+                : []),
               {
                 label: 'Rename',
                 disabled: locked,
@@ -145,8 +213,8 @@ export function BackingTracks({ connected }: { connected: boolean }) {
               },
               'separator',
               {
-                label: 'Download original',
-                href: originalPath(track.id),
+                label: track.source ? 'Download original' : 'Download WAV',
+                href: track.source ? originalPath(track.id) : wavPath(track.id),
                 download: true,
               },
               {
@@ -162,38 +230,77 @@ export function BackingTracks({ connected }: { connected: boolean }) {
                 name={track.title}
                 cued={cued}
                 state={
-                  cued && <StateChip state={playing ? 'playing' : 'cued'} />
+                  <>
+                    {mixOf && (
+                      <span className="media-chip" data-kind="mix">
+                        Mix
+                      </span>
+                    )}
+                    {splitting !== null ? (
+                      <span className="media-chip" data-kind="stems">
+                        Splitting {splitting}%
+                      </span>
+                    ) : (
+                      hasStems && (
+                        <span className="media-chip" data-kind="stems">
+                          {stemKind ?? 'Stems'}
+                        </span>
+                      )
+                    )}
+                    {cued && <StateChip state={playing ? 'playing' : 'cued'} />}
+                  </>
                 }
                 sub={[
                   formatTime(durationOf(track)),
-                  channelsLabel(
-                    track.source?.channels ?? track.renders[0]?.channels ?? 2,
-                  ),
-                  formatLabel(track),
+                  mixOf
+                    ? `Mix of ${song?.title ?? 'a removed song'}`
+                    : channelsLabel(
+                        track.source?.channels ??
+                          track.renders[0]?.channels ??
+                          2,
+                      ),
+                  mixOf ? null : imported ? null : formatLabel(track),
+                  mixes ? `${mixes} ${mixes === 1 ? 'mix' : 'mixes'}` : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
                 actions={
-                  playing ? (
-                    <Button
-                      variant="outline"
-                      aria-label={`Pause ${track.title}`}
-                      onClick={() => void send({ kind: 'pause' })}
-                    >
-                      <Pause aria-hidden="true" weight="fill" />
-                      Pause
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      aria-label={`Play ${track.title}`}
-                      disabled={!connected}
-                      onClick={() => void play(track)}
-                    >
-                      <Play aria-hidden="true" weight="fill" />
-                      Play
-                    </Button>
-                  )
+                  <>
+                    {(hasStems || song || splitting !== null) && (
+                      <Button
+                        variant="ghost"
+                        aria-label={`${song ? 'Edit mix' : 'Stems'}: ${track.title}`}
+                        title={song ? 'Edit this mix' : 'Stems and mixes'}
+                        disabled={!connected}
+                        onClick={openStems}
+                      >
+                        <Faders aria-hidden="true" />
+                        <span className="media-stems-label">
+                          {song ? 'Edit' : 'Stems'}
+                        </span>
+                      </Button>
+                    )}
+                    {playing ? (
+                      <Button
+                        variant="outline"
+                        aria-label={`Pause ${track.title}`}
+                        onClick={() => void send({ kind: 'pause' })}
+                      >
+                        <Pause aria-hidden="true" weight="fill" />
+                        Pause
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        aria-label={`Play ${track.title}`}
+                        disabled={!connected}
+                        onClick={() => void play(track)}
+                      >
+                        <Play aria-hidden="true" weight="fill" />
+                        Play
+                      </Button>
+                    )}
+                  </>
                 }
                 menu={menu}
               />

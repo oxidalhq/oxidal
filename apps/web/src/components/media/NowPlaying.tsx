@@ -1,7 +1,50 @@
-import { MusicNote } from '@phosphor-icons/react';
+import { MusicNote, Scissors } from '@phosphor-icons/react';
 import { StateChip } from './StateChip';
 import { CompactTransport } from './TransportBar';
 import { stateWord, useSessionMedia, useTimeText } from './sessionMedia';
+
+const SPLIT_WORDS = {
+  running: 'Splitting',
+  ready: 'Stems ready',
+  failed: 'Split failed',
+  cancelled: 'Split cancelled',
+  interrupted: 'Split stopped',
+} as const;
+
+/**
+ * The device's split, on every page: progress while it runs and the result for
+ * a short while after. Tapping it opens that song's stems.
+ * @see docs/media.md#stem-mix-recipes
+ */
+export function SplitStatus() {
+  const { split, tracks, setSheet, ready } = useSessionMedia();
+  if (!ready || !split) return null;
+  const title =
+    tracks.find((track) => track.id === split.source)?.title ?? 'a song';
+  const running = split.phase === 'running';
+  const text = running
+    ? `Splitting ${title}`
+    : `${SPLIT_WORDS[split.phase]}: ${title}`;
+  return (
+    <button
+      type="button"
+      className="split-status"
+      data-phase={split.phase}
+      aria-label={`${text}${running ? `, ${split.percent}%` : ''}. Open stems`}
+      onClick={() => setSheet({ kind: 'stems', source: split.source })}
+    >
+      <Scissors aria-hidden="true" weight="bold" />
+      <span className="split-status-text">{text}</span>
+      {running && <span className="media-mono">{split.percent}%</span>}
+      {running && (
+        <i
+          className="split-status-bar"
+          style={{ width: `${split.percent}%` }}
+        />
+      )}
+    </button>
+  );
+}
 
 /**
  * The always-visible backing player: in the masthead between the wordmark and

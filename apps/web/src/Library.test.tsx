@@ -29,6 +29,7 @@ vi.mock('./components/media/BackingTracks', () => ({
   BackingTracks: () => null,
 }));
 vi.mock('./LibraryManagement', () => ({ LibraryManagement: () => null }));
+vi.mock('./components/media/StemSongs', () => ({ StemSongs: () => null }));
 afterEach(() => {
   cleanup();
   window.location.hash = '';

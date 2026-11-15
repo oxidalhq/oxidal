@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   protectState,
   type MediaAsset,
@@ -16,7 +23,17 @@ export type MediaSheet =
   | { kind: 'player' }
   | { kind: 'list' }
   | { kind: 'details'; asset: string }
+  /** Stems and mixes for a song, optionally opened on one mix. */
+  | { kind: 'stems'; source: string; mix?: string }
   | null;
+
+/** A split on this device: running, or just finished and still worth showing. */
+export interface SplitActivity {
+  source: string;
+  mode: 'four' | 'six';
+  percent: number;
+  phase: 'running' | 'ready' | 'failed' | 'cancelled' | 'interrupted';
+}
 
 /**
  * What a surface shows for the player. `stalled` is not a device state: it is
@@ -58,6 +75,10 @@ export interface SessionMedia {
   queue: UploadQueue | null;
   sheet: MediaSheet;
   setSheet: (sheet: MediaSheet) => void;
+  /** The device's split, shown on every page while it runs. */
+  split?: SplitActivity | null;
+  /** Check the split now, for example right after starting one. */
+  refreshSplit?: () => void;
 }
 
 const inert: SessionMedia = {
@@ -184,6 +205,54 @@ export function channelsLabel(channels: number): string {
     : channels === 2
       ? 'Stereo'
       : `${channels} channels`;
+}
+
+/** The song a saved stem mix was rendered from, if this track is one. */
+export function mixSourceOf(asset: MediaAsset): string | null {
+  const details = asset.provenance as
+    { splitMix?: { source?: unknown } } | null | undefined;
+  const source = details?.splitMix?.source;
+  return typeof source === 'string' ? source : null;
+}
+
+/** A backing song assembled from uploaded stems. */
+export function isStemSong(asset: MediaAsset): boolean {
+  const details = asset.provenance as { importedStems?: unknown } | null;
+  return !!details && typeof details === 'object' && 'importedStems' in details;
+}
+
+type LiveRecipe = Extract<PlayerCommand, { kind: 'set_stem_mix' }>['recipe'];
+
+/**
+ * Sends live stem mixes as they change. While one is in flight only the
+ * newest waits, so a slider drag never queues a backlog.
+ */
+export function useStemMixSender() {
+  const { send } = useSessionMedia();
+  const sending = useRef(false);
+  const waiting = useRef<LiveRecipe | null>(null);
+  return useCallback(
+    async (recipe: LiveRecipe) => {
+      if (sending.current) {
+        waiting.current = recipe;
+        return;
+      }
+      sending.current = true;
+      let next: LiveRecipe | null = recipe;
+      while (next) {
+        waiting.current = null;
+        await send({ kind: 'set_stem_mix', recipe: next });
+        next = waiting.current;
+      }
+      sending.current = false;
+    },
+    [send],
+  );
+}
+
+export function canSplitBackingTrack(asset: MediaAsset): boolean {
+  const format = asset.source?.container.toLowerCase();
+  return asset.kind === 'backing' && (format === 'wav' || format === 'mp3');
 }
 
 /** "MP3" or "WAV", from the stored source. */

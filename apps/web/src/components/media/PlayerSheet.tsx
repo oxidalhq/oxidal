@@ -6,6 +6,9 @@ import { originalPath, updateAsset, type MediaAsset } from '../../api';
 import { deviceSentence } from '../../lib/friendlyError';
 import { formatDb, formatTime } from '../../lib/playerClock';
 import { PositionBar } from './PositionBar';
+import { PracticeControls } from './PracticeControls';
+import { LiveStemsPanel } from './StemMixer';
+import { StemMixEditor } from './StemMixEditor';
 import { StateChip } from './StateChip';
 import { FullTransport } from './TransportBar';
 import { DeleteDialog, RenameDialog } from './TrackDialogs';
@@ -205,6 +208,8 @@ function FullPlayer({ onClose }: { onClose: () => void }) {
             Stop track
           </Button>
           <PlayerLevel />
+          <LiveStemsPanel />
+          <PracticeControls key={track.id} />
           <div className="media-repeat" role="group" aria-label="Repeat">
             <strong aria-hidden="true">Repeat</strong>
             <div className="segmented">
@@ -477,6 +482,27 @@ function TrackDetails({
  * the Backing list picker and a track's details. Closing returns to the page.
  * @see docs/media.md
  */
+function StemsSheet({
+  sheet,
+  onClose,
+}: {
+  sheet: { source: string; mix?: string };
+  onClose: () => void;
+}) {
+  const { tracks } = useSessionMedia();
+  const protect = useProtect();
+  const source = tracks.find((track) => track.id === sheet.source);
+  return source ? (
+    <StemMixEditor
+      key={`${source.id}:${sheet.mix ?? ''}`}
+      source={source}
+      initialMix={sheet.mix}
+      locked={protect}
+      onClose={onClose}
+    />
+  ) : null;
+}
+
 export function MediaSheets() {
   const media = useSessionMedia();
   const { sheet, tracks } = media;
@@ -487,6 +513,8 @@ export function MediaSheets() {
   if (!media.ready || !sheet) return null;
   if (sheet.kind === 'player') return <FullPlayer onClose={close} />;
   if (sheet.kind === 'list') return <BackingList onClose={close} />;
+  if (sheet.kind === 'stems')
+    return <StemsSheet sheet={sheet} onClose={close} />;
   const asset = tracks.find((track) => track.id === sheet.asset);
   // A new stored trim (from here or another client) starts the form afresh.
   return asset ? (

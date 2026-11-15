@@ -81,7 +81,7 @@ import { AudioSettings } from './AudioSettings';
 import { About } from './About';
 import { ControlEditor } from './ControlEditor';
 import { SessionMediaProvider } from './components/media/SessionMediaProvider';
-import { NowPlaying } from './components/media/NowPlaying';
+import { NowPlaying, SplitStatus } from './components/media/NowPlaying';
 import { MediaSheets } from './components/media/PlayerSheet';
 import {
   capabilities,
@@ -456,6 +456,7 @@ function InstrumentApp() {
           <span className="brand-wordmark" aria-hidden="true" />
         </a>
         <NowPlaying placement="masthead" />
+        <SplitStatus />
 
         <nav aria-label="Instrument navigation">
           {(['rig', 'guitars', 'library', 'monitor', 'settings'] as const).map(

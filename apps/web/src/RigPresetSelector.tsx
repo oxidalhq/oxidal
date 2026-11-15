@@ -12,6 +12,7 @@ import { detailsMatch } from './presetMetadata';
 import { PresetManagement } from './PresetManagement';
 import './PresetPicker.css';
 import { Button } from './components/ui/button';
+import { CueLinkedMix } from './components/media/SongLinkControls';
 import {
   choiceKey as key,
   choiceSource,
@@ -127,6 +128,13 @@ export function RigPresetSelector({
       : items.filter((item) => item.origin === 'mine')
     : items;
   const index = pickerItems.findIndex((p) => key(p) === selected);
+  const active = items.find((item) => key(item) === selected);
+  const backingPreset =
+    active?.kind === 'scenes'
+      ? { kind: 'rig' as const, id: active.revision }
+      : active?.owned
+        ? { kind: 'owned' as const, id: active.id }
+        : null;
   const size = all ? Math.max(pickerItems.length, 8) : 8;
   const currentBank = Math.min(
     Math.max(0, Math.ceil(pickerItems.length / size) - 1),
@@ -198,6 +206,13 @@ export function RigPresetSelector({
           </span>
         </h3>
         {all && steps}
+        {backingPreset && active?.inSetList && (
+          <CueLinkedMix
+            preset={backingPreset}
+            scope="set_list"
+            disabled={disabled}
+          />
+        )}
         <div className="preset-pad-grid">
           {pickerItems
             .slice(currentBank * size, currentBank * size + size)
@@ -366,6 +381,9 @@ export function RigPresetSelector({
         </span>
         <CaretDown aria-hidden="true" />
       </button>
+      {backingPreset && (
+        <CueLinkedMix preset={backingPreset} scope="rig" disabled={disabled} />
+      )}
       {error && (
         <div className="rig-preset-error" role="status">
           <span>{error}</span>
