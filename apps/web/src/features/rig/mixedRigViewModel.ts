@@ -1,4 +1,5 @@
 import { GearIcon } from '../../GearIcon';
+import { oxidalEffectControls } from '../../oxidalEffectLabels';
 import {
   type NewScene,
   type SceneControl,
@@ -165,8 +166,12 @@ export function mixedRigViewModel({
     outputGain: 'Output gain',
     mix: 'Mix',
   };
-  const controls = (
-    state.control?.controls.filter((c) => c.target.node === selected?.id) ?? []
+  const selectedPluginUri = matching?.manifest.oxidal?.lv2.find(
+    (p) => p.id === selected?.instance,
+  )?.pluginUri;
+  const controls = oxidalEffectControls(
+    state.control?.controls.filter((c) => c.target.node === selected?.id) ?? [],
+    selectedPluginUri,
   ).map((c) => {
     // A guarded stage has exactly one source block; its selected tile supplies
     // context. Keep qualified globals and whole/multi-block labels unchanged.
