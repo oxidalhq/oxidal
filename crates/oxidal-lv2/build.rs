@@ -16,19 +16,34 @@ fn main() {
         "linux",
         "LV2 qualification currently requires Linux"
     );
-    assert_eq!(
-        env::var("HOST").unwrap(),
-        env::var("TARGET").unwrap(),
-        "Use a native Linux build host"
-    );
-    let flags = Command::new("pkg-config")
+    for name in [
+        "CC",
+        "AR",
+        "PKG_CONFIG",
+        "PKG_CONFIG_LIBDIR",
+        "PKG_CONFIG_SYSROOT_DIR",
+    ] {
+        println!("cargo:rerun-if-env-changed={name}");
+    }
+    if env::var("HOST") != env::var("TARGET") {
+        assert!(
+            ["CC", "AR", "PKG_CONFIG_LIBDIR"]
+                .iter()
+                .all(|name| env::var_os(name).is_some()),
+            "Set CC, AR and PKG_CONFIG_LIBDIR for the Linux target"
+        );
+    }
+    let compiler = env::var_os("CC").unwrap_or_else(|| "cc".into());
+    let archiver = env::var_os("AR").unwrap_or_else(|| "ar".into());
+    let pkg_config = env::var_os("PKG_CONFIG").unwrap_or_else(|| "pkg-config".into());
+    let flags = Command::new(pkg_config)
         .args(["--cflags", "--libs", "lilv-0"])
         .output()
         .expect("Install pkg-config and liblilv-dev");
     assert!(flags.status.success(), "Install liblilv-dev and lv2-dev");
     let flags = String::from_utf8(flags.stdout).unwrap();
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
-    let mut cc = Command::new("cc");
+    let mut cc = Command::new(&compiler);
     cc.args([
         "-std=c11",
         "-Wall",
@@ -45,7 +60,7 @@ fn main() {
         cc.arg(flag);
     }
     run(&mut cc);
-    run(Command::new("ar")
+    run(Command::new(archiver)
         .arg("crs")
         .arg(out.join("liboxidal_lv2.a"))
         .arg(out.join("host.o")));
@@ -66,7 +81,8 @@ fn main() {
     for name in ["manifest.ttl", "plugin.ttl"] {
         std::fs::copy(format!("tests/fixtures/{name}"), bundle.join(name)).unwrap();
     }
-    run(Command::new("cc")
+    let mut fixture = Command::new(compiler);
+    fixture
         .args([
             "-std=c11",
             "-Wall",
@@ -78,6 +94,10 @@ fn main() {
             "-pthread",
             "-o",
         ])
-        .arg(bundle.join("plugin.so")));
+        .arg(bundle.join("plugin.so"));
+    for flag in flags.split_whitespace().filter(|s| s.starts_with("-I")) {
+        fixture.arg(flag);
+    }
+    run(&mut fixture);
     println!("cargo:rustc-env=OXIDAL_LV2_FIXTURE={}", bundle.display());
 }
