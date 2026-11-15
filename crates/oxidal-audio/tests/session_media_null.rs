@@ -292,6 +292,10 @@ fn a_backing_track_plays_to_its_end_without_audio_thread_allocation() {
             from: 0,
             seq: 1,
             repeat: false,
+            range: None,
+            click: None,
+            speed: None,
+            stems: None,
             gain_db: 0.0,
         },
     });

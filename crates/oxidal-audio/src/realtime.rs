@@ -21,6 +21,13 @@ pub fn leave() {
     imp::leave();
 }
 
+/// Lowers the calling thread to the idle CPU policy and idle disk class, for
+/// preparation work (stem splits, mix renders) that runs beside live audio.
+/// Child processes started from the thread inherit both.
+pub fn idle() {
+    imp::idle();
+}
+
 #[cfg(all(target_os = "linux", feature = "alsa"))]
 mod imp {
     pub fn enter() -> String {
@@ -53,6 +60,23 @@ mod imp {
             libc::pthread_setschedparam(libc::pthread_self(), libc::SCHED_OTHER, &param);
         }
     }
+    pub fn idle() {
+        const IOPRIO_WHO_PROCESS: libc::c_long = 1;
+        const IOPRIO_CLASS_IDLE: libc::c_long = 3;
+        const IOPRIO_CLASS_SHIFT: libc::c_long = 13;
+        let param = libc::sched_param { sched_priority: 0 };
+        // SAFETY: valid policy and parameter for the current thread; the
+        // ioprio call names the calling thread (0) with a valid class.
+        unsafe {
+            libc::pthread_setschedparam(libc::pthread_self(), libc::SCHED_IDLE, &param);
+            libc::syscall(
+                libc::SYS_ioprio_set,
+                IOPRIO_WHO_PROCESS,
+                0 as libc::c_long,
+                IOPRIO_CLASS_IDLE << IOPRIO_CLASS_SHIFT,
+            );
+        }
+    }
 }
 
 #[cfg(not(all(target_os = "linux", feature = "alsa")))]
@@ -61,4 +85,5 @@ mod imp {
         "realtime: unavailable on this platform".into()
     }
     pub fn leave() {}
+    pub fn idle() {}
 }

@@ -56,6 +56,83 @@ impl JsonSchema for MediaId {
 }
 
 /// What the daemon asks the worker's backing player to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct LoopRange {
+    pub a: u64,
+    pub b: u64,
+}
+
+impl LoopRange {
+    pub fn valid(self, frames: u64) -> bool {
+        self.a < self.b && self.b <= frames
+    }
+    pub fn contains(self, frame: u64) -> bool {
+        (self.a..self.b).contains(&frame)
+    }
+    pub fn wrap(self, frame: u64) -> u64 {
+        self.a + frame.saturating_sub(self.a) % (self.b - self.a)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Click {
+    Manual {
+        bpm_tenths: u16,
+        first_frame: u64,
+        level_db: f32,
+    },
+    Detected {
+        timing: MediaId,
+        level_db: f32,
+    },
+}
+
+impl Click {
+    pub fn valid(self, frames: u64) -> bool {
+        match self {
+            Self::Manual {
+                bpm_tenths,
+                first_frame,
+                level_db,
+            } => {
+                (300..=3000).contains(&bpm_tenths)
+                    && first_frame < frames
+                    && (-60.0..=0.0).contains(&level_db)
+            }
+            Self::Detected { level_db, .. } => (-60.0..=0.0).contains(&level_db),
+        }
+    }
+}
+
+/// Stem files a song split stores, in this order, as
+/// `songs/{source}/splits/{split}/{name}.f32` (stereo f32 at the stream rate).
+pub const STEM_NAMES: [&str; 6] = ["vocals", "drums", "bass", "other", "guitar", "piano"];
+
+/// Play a split's stems instead of one render, mixed live with `gains`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StemMix {
+    pub source: MediaId,
+    pub split: MediaId,
+    /// Linear gain per entry of [`STEM_NAMES`]; 0 is silent. Absent stems
+    /// must be 0.
+    pub gains: [f32; 6],
+    /// Bit `i` set when the split has stem `STEM_NAMES[i]`.
+    pub present: u8,
+}
+impl StemMix {
+    fn valid(&self) -> bool {
+        self.present != 0 && self.present < 1 << STEM_NAMES.len() && valid_stem_gains(&self.gains)
+    }
+}
+fn valid_stem_gains(gains: &[f32; 6]) -> bool {
+    gains
+        .iter()
+        .all(|g| g.is_finite() && (0.0..=4.0).contains(g))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BackingCommand {
@@ -68,7 +145,20 @@ pub enum BackingCommand {
         from: u64,
         seq: u32,
         repeat: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        range: Option<LoopRange>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        click: Option<Click>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        speed: Option<u16>,
+        /// Play these stems mixed live instead of the asset's render.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stems: Option<StemMix>,
         gain_db: f32,
+    },
+    /// New live stem gains for the playing stems, heard after the read-ahead.
+    StemGains {
+        gains: [f32; 6],
     },
     /// Fade out and stop. The last frame stays in the status.
     Stop {
@@ -89,10 +179,24 @@ impl BackingCommand {
                 channels,
                 frames,
                 from,
+                range,
+                click,
+                speed,
+                stems,
                 gain_db,
                 ..
-            } => (1..=2).contains(&channels) && frames > 0 && from < frames && valid_gain(gain_db),
+            } => {
+                (1..=2).contains(&channels)
+                    && stems.is_none_or(|stems| channels == 2 && stems.valid())
+                    && frames > 0
+                    && from < frames
+                    && valid_gain(gain_db)
+                    && range.is_none_or(|range| range.valid(frames) && range.contains(from))
+                    && click.is_none_or(|click| click.valid(frames))
+                    && speed.is_none_or(|speed| (50..=150).contains(&speed))
+            }
             Self::Gain { gain_db } => valid_gain(gain_db),
+            Self::StemGains { gains } => valid_stem_gains(&gains),
             Self::Stop { .. } | Self::Repeat { .. } => true,
         }
     }
@@ -125,6 +229,9 @@ const RING_SECONDS: u32 = 2;
 /// Fade in only once this much is buffered.
 const START_SECONDS: f32 = 0.100;
 const READ_BYTES: usize = 64 * 1024;
+/// Live stem changes are heard after the read-ahead, so stems keep it short.
+const STEM_RING_SECONDS: f32 = 0.5;
+const STEM_CHUNK_FRAMES: usize = 2048;
 
 enum ReaderCommand {
     Open {
@@ -134,8 +241,13 @@ enum ReaderCommand {
         from: u64,
         seq: u32,
         repeat: bool,
+        range: Option<LoopRange>,
+        click: Option<Click>,
+        speed: u16,
+        stems: Option<StemMix>,
     },
     Repeat(bool),
+    StemGains([f32; 6]),
     Close,
 }
 
@@ -162,6 +274,9 @@ pub struct Backing {
     /// Frames in the asset, and where the current ring starts.
     total: u64,
     repeat: bool,
+    range: Option<LoopRange>,
+    speed: u16,
+    fraction: u16,
     want_playing: bool,
     started: bool,
     fade: f32,
@@ -170,7 +285,7 @@ pub struct Backing {
     gain_target: f32,
     gain_step: f32,
     status: BackingStatus,
-    scratch: [f32; 512],
+    scratch: [f32; 768],
 }
 impl std::fmt::Debug for Backing {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -210,6 +325,9 @@ pub fn start(rate: u32, root: PathBuf) -> Backing {
         wanted: 0,
         total: 0,
         repeat: false,
+        range: None,
+        speed: 100,
+        fraction: 0,
         want_playing: false,
         started: false,
         fade: 0.0,
@@ -218,7 +336,7 @@ pub fn start(rate: u32, root: PathBuf) -> Backing {
         gain_target: 0.0,
         gain_step: 1.0 - (-1.0 / (GAIN_GLIDE_SECONDS / 4.0 * rate as f32)).exp(),
         status: BackingStatus::default(),
-        scratch: [0.0; 512],
+        scratch: [0.0; 768],
     }
 }
 
@@ -253,6 +371,10 @@ impl Backing {
                 from,
                 seq,
                 repeat,
+                range,
+                click,
+                speed,
+                stems,
                 gain_db,
             } => {
                 // Ask first: if the reader's queue is full, keep playing as before.
@@ -263,6 +385,10 @@ impl Backing {
                     from,
                     seq,
                     repeat,
+                    range,
+                    click,
+                    speed: speed.unwrap_or(100),
+                    stems,
                 };
                 if self.commands.try_send(open).is_err() {
                     return;
@@ -270,6 +396,9 @@ impl Backing {
                 self.wanted = seq;
                 self.total = frames;
                 self.repeat = repeat;
+                self.range = range;
+                self.speed = speed.unwrap_or(100);
+                self.fraction = 0;
                 self.want_playing = true;
                 if self.current.is_some() {
                     self.switching = true;
@@ -300,6 +429,10 @@ impl Backing {
                 }
             }
             BackingCommand::Gain { gain_db } => self.gain_target = gain(gain_db),
+            BackingCommand::StemGains { gains } => {
+                // A full queue drops this change; the daemon resends on the next edit.
+                let _ = self.commands.try_send(ReaderCommand::StemGains(gains));
+            }
             BackingCommand::Repeat { repeat } => {
                 if self
                     .commands
@@ -372,7 +505,7 @@ impl Backing {
             let needed = ((START_SECONDS * self.rate as f32) as u64)
                 .min(self.total.saturating_sub(self.status.frame))
                 .max(1) as usize
-                * 2;
+                * 3;
             if self
                 .current
                 .as_ref()
@@ -390,22 +523,32 @@ impl Backing {
             let frames = left.len();
             let leaving = !self.want_playing || self.switching;
             // Only pop what the track still has, so the end lands exactly.
-            let remaining = if self.repeat || leaving {
+            let remaining = if self.repeat || self.range.is_some() || leaving {
                 frames
             } else {
-                (self.total.saturating_sub(self.status.frame) as usize).min(frames)
+                remaining_at_speed(
+                    self.status.frame,
+                    self.fraction,
+                    self.total,
+                    self.speed,
+                    frames,
+                )
             };
             let got = self.current.as_mut().map_or(0, |current| {
-                current.pop(&mut self.scratch[..remaining * 2]) / 2
+                current.pop(&mut self.scratch[..remaining * 3]) / 3
             });
             if got < remaining && !leaving {
                 short = true;
             }
             for i in 0..frames {
-                let (l, r) = if i < got {
-                    (self.scratch[2 * i], self.scratch[2 * i + 1])
+                let (l, r, click) = if i < got {
+                    (
+                        self.scratch[3 * i],
+                        self.scratch[3 * i + 1],
+                        self.scratch[3 * i + 2],
+                    )
                 } else {
-                    (0.0, 0.0)
+                    (0.0, 0.0, 0.0)
                 };
                 self.fade = if leaving {
                     (self.fade - self.fade_step).max(0.0)
@@ -414,8 +557,8 @@ impl Backing {
                 };
                 self.gain += (self.gain_target - self.gain) * self.gain_step;
                 let g = self.fade * self.gain;
-                left[i] += l * g;
-                right[i] += r * g;
+                left[i] += l * g + click * self.fade;
+                right[i] += r * g + click * self.fade;
             }
             if leaving {
                 if self.fade <= 0.0 {
@@ -424,11 +567,13 @@ impl Backing {
                 }
                 continue;
             }
-            self.status.frame += got as u64;
-            if self.repeat && self.total > 0 {
+            advance(&mut self.status.frame, &mut self.fraction, self.speed, got);
+            if let Some(range) = self.range {
+                self.status.frame = range.wrap(self.status.frame);
+            } else if self.repeat && self.total > 0 {
                 self.status.frame %= self.total;
             }
-            if !self.repeat && self.status.frame >= self.total {
+            if !self.repeat && self.range.is_none() && self.status.frame >= self.total {
                 self.status.frame = self.total;
                 self.status.ended = true;
                 self.status.playing = false;
@@ -470,7 +615,7 @@ fn reader(
     retired: Receiver<Consumer>,
 ) {
     crate::realtime::leave();
-    let capacity = (rate * RING_SECONDS * 2) as usize;
+    let capacity = (rate * RING_SECONDS * 3) as usize;
     let mut track: Option<Track> = None;
     let mut bytes = vec![0u8; READ_BYTES];
     let mut stereo = Vec::with_capacity(READ_BYTES / 2);
@@ -497,22 +642,29 @@ fn reader(
                 from,
                 seq,
                 repeat,
+                range,
+                click,
+                speed,
+                stems,
             }) => {
                 track = None;
-                let path = root
-                    .join("assets")
-                    .join(asset.as_str())
-                    .join(format!("play-{rate}.f32"));
-                let opened = std::fs::File::open(&path).and_then(|mut file| {
-                    let expected = frames * u64::from(channels) * 4;
-                    if file.metadata()?.len() != expected {
-                        return Err(std::io::Error::other("render size differs"));
-                    }
-                    file.seek(SeekFrom::Start(from * u64::from(channels) * 4))?;
-                    Ok(file)
-                });
+                let opened = Input::open(&root, rate, asset, channels, frames, stems).and_then(
+                    |mut input| {
+                        input.seek(from)?;
+                        Ok(input)
+                    },
+                );
                 match opened {
-                    Ok(file) => {
+                    Ok(input) => {
+                        let (chunk, capacity) = if stems.is_some() {
+                            (
+                                STEM_CHUNK_FRAMES,
+                                ((rate as f32 * STEM_RING_SECONDS) as usize * 3)
+                                    .max(STEM_CHUNK_FRAMES * 3 * 4),
+                            )
+                        } else {
+                            (READ_BYTES / (usize::from(channels) * 4), capacity)
+                        };
                         let (producer, consumer) = ring(capacity);
                         if arrivals
                             .send(Arrival::Track {
@@ -524,12 +676,20 @@ fn reader(
                             return;
                         }
                         track = Some(Track {
-                            file,
+                            input,
                             producer,
-                            channels: usize::from(channels),
+                            chunk,
                             repeat,
+                            range: range.unwrap_or(LoopRange { a: 0, b: frames }),
+                            section: range.is_some(),
+                            position: from,
+                            click: click.and_then(|click| ClickRender::load(&root, rate, click)),
+                            speed,
+                            fraction: 0,
+                            stretch: (speed != 100).then(|| crate::stretch::Stretch::new(rate)),
                             done: false,
                             carry: Vec::new(),
+                            frames: Vec::with_capacity(chunk),
                         });
                     }
                     Err(_) => {
@@ -545,6 +705,15 @@ fn reader(
                     if repeat {
                         track.done = false;
                     }
+                }
+            }
+            Some(ReaderCommand::StemGains(gains)) => {
+                if let Some(Track {
+                    input: Input::Stems { gains: current, .. },
+                    ..
+                }) = &mut track
+                {
+                    *current = gains;
                 }
             }
             Some(ReaderCommand::Close) => track = None,
@@ -565,15 +734,259 @@ fn reader(
     }
 }
 
+enum ClickBeats {
+    Manual { first: u64, period: u64 },
+    Detected(Vec<u64>),
+}
+
+struct ClickRender {
+    beats: ClickBeats,
+    pulse: Vec<f32>,
+}
+
+impl ClickRender {
+    fn load(root: &std::path::Path, rate: u32, settings: Click) -> Option<Self> {
+        let (beats, level) = match settings {
+            Click::Manual {
+                bpm_tenths,
+                first_frame,
+                level_db,
+            } => (
+                ClickBeats::Manual {
+                    first: first_frame,
+                    period: ((u64::from(rate) * 600 + u64::from(bpm_tenths / 2))
+                        / u64::from(bpm_tenths))
+                    .max(1),
+                },
+                level_db,
+            ),
+            Click::Detected { timing, level_db } => {
+                #[derive(Deserialize)]
+                struct Document {
+                    rate: u32,
+                    beats: Vec<u64>,
+                }
+                let path = root
+                    .join("timing")
+                    .join(format!("{}.json", timing.as_str()));
+                let file = std::fs::File::open(path).ok()?;
+                let record: Document = serde_json::from_reader(file.take(16 << 20)).ok()?;
+                if record.rate == 0
+                    || record.beats.is_empty()
+                    || record.beats.windows(2).any(|pair| pair[0] >= pair[1])
+                {
+                    return None;
+                }
+                let source = u128::from(record.rate);
+                let positions = record
+                    .beats
+                    .into_iter()
+                    .map(|position| {
+                        u64::try_from(
+                            (u128::from(position) * u128::from(rate) + source / 2) / source,
+                        )
+                        .ok()
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                (ClickBeats::Detected(positions), level_db)
+            }
+        };
+        let peak = gain(level);
+        let length = (rate / 35).max(1);
+        let pulse = (0..length)
+            .map(|i| {
+                let phase = i as f32 / rate as f32 * std::f32::consts::TAU * 1400.0;
+                phase.sin() * peak * (1.0 - i as f32 / length as f32).powi(2)
+            })
+            .collect();
+        Some(Self { beats, pulse })
+    }
+
+    fn sample(&self, frame: u64) -> f32 {
+        let delta = match &self.beats {
+            ClickBeats::Manual { first, period } => {
+                frame.checked_sub(*first).map(|elapsed| elapsed % period)
+            }
+            ClickBeats::Detected(beats) => {
+                let index = beats.partition_point(|&beat| beat <= frame);
+                index.checked_sub(1).map(|index| frame - beats[index])
+            }
+        };
+        delta
+            .and_then(|value| self.pulse.get(value as usize))
+            .copied()
+            .unwrap_or(0.0)
+    }
+}
+
+/// Where a track's audio comes from: one render, or a split's stems mixed
+/// with live gains. Both read stereo frames at the stream rate.
+enum Input {
+    Render {
+        file: std::fs::File,
+        channels: usize,
+    },
+    Stems {
+        files: Vec<(usize, std::fs::File)>,
+        gains: [f32; 6],
+    },
+}
+impl Input {
+    fn open(
+        root: &std::path::Path,
+        rate: u32,
+        asset: MediaId,
+        channels: u16,
+        frames: u64,
+        stems: Option<StemMix>,
+    ) -> std::io::Result<Self> {
+        let sized = |path: PathBuf, expected: u64| {
+            let file = std::fs::File::open(path)?;
+            if file.metadata()?.len() != expected {
+                return Err(std::io::Error::other("render size differs"));
+            }
+            Ok(file)
+        };
+        let Some(stems) = stems else {
+            let path = root
+                .join("assets")
+                .join(asset.as_str())
+                .join(format!("play-{rate}.f32"));
+            return Ok(Self::Render {
+                file: sized(path, frames * u64::from(channels) * 4)?,
+                channels: usize::from(channels),
+            });
+        };
+        let dir = root
+            .join("songs")
+            .join(stems.source.as_str())
+            .join("splits")
+            .join(stems.split.as_str());
+        let files = STEM_NAMES
+            .iter()
+            .enumerate()
+            .filter(|&(index, _)| stems.present & (1 << index) != 0)
+            .map(|(index, name)| Ok((index, sized(dir.join(format!("{name}.f32")), frames * 8)?)))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        Ok(Self::Stems {
+            files,
+            gains: stems.gains,
+        })
+    }
+
+    fn seek(&mut self, frame: u64) -> std::io::Result<()> {
+        match self {
+            Self::Render { file, channels } => {
+                file.seek(SeekFrom::Start(frame * *channels as u64 * 4))?;
+            }
+            Self::Stems { files, .. } => {
+                for (_, file) in files {
+                    file.seek(SeekFrom::Start(frame * 8))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Reads up to `out.len()` frames from the current position and returns
+    /// how many were read; 0 at the end of the files.
+    fn read(&mut self, out: &mut [[f32; 2]], bytes: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Self::Render { file, channels } => {
+                let stride = *channels * 4;
+                let want = out.len().min(bytes.len() / stride) * stride;
+                let read = fill_from(file, &mut bytes[..want])? / stride;
+                for (frame, sample) in out
+                    .iter_mut()
+                    .zip(bytes[..read * stride].chunks_exact(stride))
+                {
+                    let left = f32::from_le_bytes(sample[..4].try_into().expect("left sample"));
+                    let right = if *channels == 2 {
+                        f32::from_le_bytes(sample[4..8].try_into().expect("right sample"))
+                    } else {
+                        left
+                    };
+                    *frame = [left, right];
+                }
+                Ok(read)
+            }
+            Self::Stems { files, gains } => {
+                let frames = out.len().min(bytes.len() / 8);
+                out[..frames].fill([0.0; 2]);
+                let mut shortest = frames;
+                for (index, file) in files.iter_mut() {
+                    let read = fill_from(file, &mut bytes[..frames * 8])? / 8;
+                    shortest = shortest.min(read);
+                    let level = gains[*index];
+                    if level == 0.0 {
+                        continue;
+                    }
+                    for (frame, sample) in out.iter_mut().zip(bytes[..read * 8].chunks_exact(8)) {
+                        frame[0] +=
+                            level * f32::from_le_bytes(sample[..4].try_into().expect("left"));
+                        frame[1] +=
+                            level * f32::from_le_bytes(sample[4..].try_into().expect("right"));
+                    }
+                }
+                for frame in &mut out[..shortest] {
+                    *frame = [frame[0].clamp(-1.0, 1.0), frame[1].clamp(-1.0, 1.0)];
+                }
+                Ok(shortest)
+            }
+        }
+    }
+
+    fn read_at(
+        &mut self,
+        from: u64,
+        target: &mut [[f32; 2]],
+        bytes: &mut [u8],
+    ) -> std::io::Result<()> {
+        self.seek(from)?;
+        let mut done = 0;
+        while done < target.len() {
+            let read = self.read(&mut target[done..], bytes)?;
+            if read == 0 {
+                return Err(std::io::ErrorKind::UnexpectedEof.into());
+            }
+            done += read;
+        }
+        Ok(())
+    }
+}
+
+/// Reads until `buffer` is full or the file ends; returns the bytes read.
+fn fill_from(file: &mut std::fs::File, buffer: &mut [u8]) -> std::io::Result<usize> {
+    let mut read = 0;
+    while read < buffer.len() {
+        let n = file.read(&mut buffer[read..])?;
+        if n == 0 {
+            break;
+        }
+        read += n;
+    }
+    Ok(read)
+}
+
 struct Track {
-    file: std::fs::File,
+    input: Input,
     producer: Producer,
-    channels: usize,
+    /// Frames read per chunk.
+    chunk: usize,
     repeat: bool,
+    range: LoopRange,
+    section: bool,
+    position: u64,
+    click: Option<ClickRender>,
+    speed: u16,
+    fraction: u16,
+    stretch: Option<crate::stretch::Stretch>,
     /// Reached the end with Repeat off; wait for commands.
     done: bool,
     /// Stereo samples read but not yet accepted by a full ring.
     carry: Vec<f32>,
+    /// Frames of the current chunk, reused between reads.
+    frames: Vec<[f32; 2]>,
 }
 impl Track {
     /// Moves one chunk into the ring. `Ok(false)` means the ring is full.
@@ -583,38 +996,38 @@ impl Track {
             self.carry.drain(..taken);
             return Ok(self.carry.is_empty());
         }
-        if self.done || self.producer.free() < bytes.len() / 4 * 2 {
+        if self.done || self.producer.free() < self.chunk * 3 {
             return Ok(false);
         }
-        let frame_bytes = self.channels * 4;
-        let want = bytes.len() / frame_bytes * frame_bytes;
-        let mut read = 0;
-        while read < want {
-            let n = self.file.read(&mut bytes[read..want])?;
-            if n == 0 {
-                break;
-            }
-            read += n;
+        if self.stretch.is_some() {
+            return self.stretched(bytes, stereo);
         }
-        let read = read / frame_bytes * frame_bytes;
+        let frames = (self.range.b - self.position).min(self.chunk as u64) as usize;
+        self.frames.resize(frames, [0.0; 2]);
+        let read = if frames == 0 {
+            0
+        } else {
+            self.input.read(&mut self.frames, bytes)?
+        };
         if read == 0 {
-            if self.repeat {
-                self.file.seek(SeekFrom::Start(0))?;
+            if (self.repeat || self.section) && self.position == self.range.b {
+                self.position = self.range.a;
+                self.input.seek(self.position)?;
                 return Ok(true);
             }
             self.done = true;
             return Ok(false);
         }
         stereo.clear();
-        for frame in bytes[..read].chunks_exact(frame_bytes) {
-            let l = f32::from_le_bytes([frame[0], frame[1], frame[2], frame[3]]);
-            let r = if self.channels == 2 {
-                f32::from_le_bytes([frame[4], frame[5], frame[6], frame[7]])
-            } else {
-                l
-            };
+        for &[l, r] in &self.frames[..read] {
             stereo.push(l);
             stereo.push(r);
+            stereo.push(
+                self.click
+                    .as_ref()
+                    .map_or(0.0, |click| click.sample(self.position)),
+            );
+            self.position += 1;
         }
         let taken = self.producer.push(stereo);
         if taken < stereo.len() {
@@ -622,6 +1035,60 @@ impl Track {
         }
         Ok(true)
     }
+
+    fn stretched(&mut self, bytes: &mut [u8], output: &mut Vec<f32>) -> std::io::Result<bool> {
+        let stretch = self.stretch.as_mut().expect("stretched track");
+        if self.position >= self.range.b {
+            if !self.repeat && !self.section {
+                self.done = true;
+                return Ok(false);
+            }
+            self.position = self.range.wrap(self.position);
+            stretch.reset();
+        }
+        let count = remaining_at_speed(
+            self.position,
+            self.fraction,
+            self.range.b,
+            self.speed,
+            stretch.hop(),
+        );
+        let source = &mut self.input;
+        let rendered = stretch.grain(
+            self.position,
+            self.range.a,
+            self.range.b,
+            count,
+            |from, input| source.read_at(from, input, bytes),
+        )?;
+        output.clear();
+        let mut frame = self.position;
+        let mut fraction = self.fraction;
+        for &[l, r] in rendered {
+            output.extend_from_slice(&[
+                l,
+                r,
+                self.click.as_ref().map_or(0.0, |click| click.sample(frame)),
+            ]);
+            advance(&mut frame, &mut fraction, self.speed, 1);
+        }
+        self.position = frame;
+        self.fraction = fraction;
+        let taken = self.producer.push(output);
+        self.carry.extend_from_slice(&output[taken..]);
+        Ok(true)
+    }
+}
+
+fn advance(frame: &mut u64, fraction: &mut u16, speed: u16, output: usize) {
+    let ticks = output as u64 * u64::from(speed) + u64::from(*fraction);
+    *frame = frame.saturating_add(ticks / 100);
+    *fraction = (ticks % 100) as u16;
+}
+
+fn remaining_at_speed(frame: u64, fraction: u16, end: u64, speed: u16, max: usize) -> usize {
+    let ticks = (u128::from(end.saturating_sub(frame)) * 100).saturating_sub(u128::from(fraction));
+    ticks.div_ceil(u128::from(speed)).min(max as u128) as usize
 }
 
 #[cfg(test)]
@@ -667,6 +1134,10 @@ mod tests {
             from,
             seq,
             repeat,
+            range: None,
+            click: None,
+            speed: None,
+            stems: None,
             gain_db: 0.0,
         }
     }
@@ -688,6 +1159,99 @@ mod tests {
 
     fn frame_of(sample: f32) -> u64 {
         (sample * 100_000.0).round() as u64
+    }
+
+    #[test]
+    fn stems_mix_live_and_a_mute_is_heard_within_the_short_read_ahead() {
+        const SOURCE: &str = "01JD2W8T3N8M4K6V0P7Q9R1S2V";
+        const SPLIT: &str = "01JD2W8T3N8M4K6V0P7Q9R1S2W";
+        let (root, asset) = render(8, 2);
+        let frames = u64::from(RATE) * 4;
+        let dir = root.join("songs").join(SOURCE).join("splits").join(SPLIT);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Vocals at 0.25 and drums at 0.125 on both channels.
+        for (name, level) in [("vocals", 0.25f32), ("drums", 0.125)] {
+            let bytes: Vec<u8> = (0..frames * 2).flat_map(|_| level.to_le_bytes()).collect();
+            std::fs::write(dir.join(format!("{name}.f32")), bytes).unwrap();
+        }
+        let mut backing = start(RATE, root.clone());
+        backing.command(BackingCommand::Play {
+            asset,
+            channels: 2,
+            frames,
+            from: 0,
+            seq: 1,
+            repeat: false,
+            range: None,
+            click: None,
+            speed: None,
+            stems: Some(StemMix {
+                source: MediaId::parse(SOURCE).unwrap(),
+                split: MediaId::parse(SPLIT).unwrap(),
+                gains: [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                present: 0b11,
+            }),
+            gain_db: 0.0,
+        });
+        let both = run(&mut backing, 4000, |b| {
+            b.status().frame > u64::from(RATE / 4)
+        });
+        assert!(
+            (both.last().unwrap() - 0.375).abs() < 1e-4,
+            "{}",
+            both.last().unwrap()
+        );
+
+        // Mute vocals: within the stem read-ahead only the drums remain.
+        backing.command(BackingCommand::StemGains {
+            gains: [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+        });
+        let start_frame = backing.status().frame;
+        let after = run(&mut backing, 8000, |b| {
+            b.status().frame > start_frame + u64::from(RATE)
+        });
+        assert!(
+            (after.last().unwrap() - 0.125).abs() < 1e-4,
+            "{}",
+            after.last().unwrap()
+        );
+        let heard_at = after
+            .iter()
+            .position(|&sample| (sample - 0.125).abs() < 1e-4)
+            .unwrap();
+        assert!(
+            (heard_at as f32) < RATE as f32 * (STEM_RING_SECONDS + 0.1),
+            "mute heard after {heard_at} frames"
+        );
+        assert_eq!(backing.status().underruns, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_split_with_a_missing_stem_file_is_reported_missing() {
+        let (root, asset) = render(8, 2);
+        let mut backing = start(RATE, root.clone());
+        backing.command(BackingCommand::Play {
+            asset,
+            channels: 2,
+            frames: 4800,
+            from: 0,
+            seq: 3,
+            repeat: false,
+            range: None,
+            click: None,
+            speed: None,
+            stems: Some(StemMix {
+                source: asset,
+                split: asset,
+                gains: [1.0; 6],
+                present: 0b1,
+            }),
+            gain_db: 0.0,
+        });
+        run(&mut backing, 2000, |b| b.status().missing);
+        assert!(backing.status().missing);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -715,6 +1279,160 @@ mod tests {
             "no gap or repeat"
         );
         assert_eq!(*audible.last().unwrap(), frames - 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn practice_section_wraps_at_b_and_never_reads_outside_the_range() {
+        let frames = 24_000;
+        let range = LoopRange { a: 3000, b: 9000 };
+        let (root, asset) = render(frames, 1);
+        let mut backing = start(RATE, root.clone());
+        backing.command(BackingCommand::Play {
+            asset,
+            channels: 1,
+            frames,
+            from: range.a,
+            seq: 1,
+            repeat: false,
+            range: Some(range),
+            click: None,
+            speed: None,
+            stems: None,
+            gain_db: 0.0,
+        });
+        let output = run(&mut backing, 300, |_| false);
+        let audible: Vec<u64> = output
+            .iter()
+            .skip_while(|sample| **sample == 0.0)
+            .skip(480)
+            .map(|value| frame_of(*value))
+            .collect();
+        assert!(audible.len() > 12_000);
+        assert!(audible.iter().all(|&frame| range.contains(frame)));
+        assert!(
+            audible
+                .windows(2)
+                .all(|pair| pair[1] == range.wrap(pair[0] + 1))
+        );
+        assert!(backing.status().playing && !backing.status().ended);
+        assert_eq!(backing.status().underruns, 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn practice_speed_changes_duration_while_retaining_tone_pitch() {
+        let frames = u64::from(RATE);
+        for speed in [50, 75, 125, 150] {
+            let (root, asset) = render(frames, 1);
+            let pcm = (0..frames)
+                .flat_map(|frame| {
+                    let phase = frame as f32 / RATE as f32 * std::f32::consts::TAU * 440.0;
+                    (0.25 * phase.sin()).to_le_bytes()
+                })
+                .collect::<Vec<_>>();
+            std::fs::write(
+                root.join("assets")
+                    .join(ID)
+                    .join(format!("play-{RATE}.f32")),
+                pcm,
+            )
+            .unwrap();
+            let mut backing = start(RATE, root.clone());
+            backing.command(BackingCommand::Play {
+                asset,
+                channels: 1,
+                frames,
+                from: 0,
+                seq: 1,
+                repeat: false,
+                range: None,
+                click: None,
+                speed: Some(speed),
+                stems: None,
+                gain_db: 0.0,
+            });
+            // This is a reader/consumer timing check. Pace the synthetic
+            // consumer at the actual 128-frame deadline.
+            let mut output = Vec::new();
+            for _ in 0..2000 {
+                let (mut left, mut right) = ([0.0; 128], [0.0; 128]);
+                backing.mix(&mut left, &mut right);
+                output.extend_from_slice(&left);
+                if backing.status().ended {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs_f64(128.0 / f64::from(RATE)));
+            }
+            assert!(backing.status().ended, "speed {speed}");
+            assert_eq!(backing.status().underruns, 0, "speed {speed}");
+            let start = output
+                .iter()
+                .position(|sample| sample.abs() > 1e-7)
+                .unwrap();
+            let expected = (frames * 100).div_ceil(u64::from(speed)) as usize;
+            assert!(output.len() - start <= expected + 128);
+            assert!(output.len() - start >= expected - 2);
+            let region = &output[start + 8000..start + 16_000];
+            let crossings = region
+                .windows(2)
+                .filter(|pair| pair[0] <= 0.0 && pair[1] > 0.0)
+                .count();
+            let measured = crossings as f64 * RATE as f64 / region.len() as f64;
+            assert!(
+                (measured - 440.0).abs() < 22.0,
+                "speed {speed}: {measured} Hz"
+            );
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn manual_click_has_its_own_level_and_follows_the_loop() {
+        let frames = 48_000;
+        let range = LoopRange { a: 4000, b: 16_000 };
+        let (root, asset) = render(frames, 1);
+        std::fs::write(
+            root.join("assets")
+                .join(ID)
+                .join(format!("play-{RATE}.f32")),
+            vec![0u8; frames as usize * 4],
+        )
+        .unwrap();
+        let mut backing = start(RATE, root.clone());
+        backing.command(BackingCommand::Play {
+            asset,
+            channels: 1,
+            frames,
+            from: range.a,
+            seq: 1,
+            repeat: false,
+            range: Some(range),
+            click: Some(Click::Manual {
+                bpm_tenths: 2400,
+                first_frame: 8000,
+                level_db: -12.0,
+            }),
+            speed: None,
+            stems: None,
+            gain_db: -90.0,
+        });
+        let output = run(&mut backing, 500, |_| false);
+        let first = output
+            .iter()
+            .position(|sample| sample.abs() > 0.01)
+            .unwrap();
+        assert!(
+            output[first + 12_000..first + 12_100]
+                .iter()
+                .any(|sample| sample.abs() > 0.01)
+        );
+        assert!(
+            output[first + 2000..first + 11_900]
+                .iter()
+                .all(|sample| *sample == 0.0)
+        );
+        assert_eq!(backing.status().underruns, 0);
         std::fs::remove_dir_all(root).unwrap();
     }
 

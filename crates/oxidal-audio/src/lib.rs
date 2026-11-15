@@ -10,6 +10,7 @@ pub mod midi;
 pub mod realtime;
 pub mod reference;
 pub mod session_media;
+mod stretch;
 pub mod structure;
 pub mod tools;
 pub mod tuner;
