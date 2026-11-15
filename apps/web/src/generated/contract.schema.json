@@ -196,6 +196,9 @@
     "player_snapshot": {
       "$ref": "#/$defs/PlayerSnapshot"
     },
+    "practice_timing": {
+      "$ref": "#/$defs/Timing"
+    },
     "preset": {
       "$ref": "#/$defs/Inspection"
     },
@@ -258,6 +261,39 @@
     },
     "snapshot": {
       "$ref": "#/$defs/Snapshot"
+    },
+    "song_current_split": {
+      "$ref": "#/$defs/CurrentSplit"
+    },
+    "song_import_stems": {
+      "$ref": "#/$defs/ImportStems"
+    },
+    "song_link_update": {
+      "$ref": "#/$defs/Update"
+    },
+    "song_links": {
+      "$ref": "#/$defs/Links"
+    },
+    "song_list": {
+      "$ref": "#/$defs/SongList"
+    },
+    "song_mix_revision": {
+      "$ref": "#/$defs/MixRevision"
+    },
+    "song_save_mix": {
+      "$ref": "#/$defs/SaveMix"
+    },
+    "song_split_job": {
+      "$ref": "#/$defs/SplitJob"
+    },
+    "song_split_options": {
+      "$ref": "#/$defs/Options"
+    },
+    "song_start_split": {
+      "$ref": "#/$defs/StartSplit"
+    },
+    "song_view": {
+      "$ref": "#/$defs/SongView"
     },
     "stage_model": {
       "$ref": "#/$defs/StageModel"
@@ -322,6 +358,18 @@
     "media_upload_request",
     "media_upload_state",
     "media_asset_update",
+    "song_view",
+    "song_list",
+    "song_current_split",
+    "song_import_stems",
+    "song_save_mix",
+    "song_mix_revision",
+    "song_split_job",
+    "song_start_split",
+    "song_split_options",
+    "song_links",
+    "song_link_update",
+    "practice_timing",
     "player_snapshot",
     "player_request",
     "player_order",
@@ -1902,7 +1950,6 @@
       ]
     },
     "BackingCommand": {
-      "description": "What the daemon asks the worker's backing player to do.",
       "oneOf": [
         {
           "description": "Play a render from `from` (a frame), fading in once 100 ms is buffered.\nSent again with a new `seq` to seek: the old position fades out first.",
@@ -1916,6 +1963,16 @@
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0
+            },
+            "click": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Click"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "frames": {
               "type": "integer",
@@ -1935,6 +1992,16 @@
               "type": "string",
               "const": "play"
             },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LoopRange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "repeat": {
               "type": "boolean"
             },
@@ -1942,6 +2009,26 @@
               "type": "integer",
               "format": "uint32",
               "minimum": 0
+            },
+            "speed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "stems": {
+              "description": "Play these stems mixed live instead of the asset's render.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/StemMix2"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false,
@@ -1954,6 +2041,30 @@
             "seq",
             "repeat",
             "gain_db"
+          ]
+        },
+        {
+          "description": "New live stem gains for the playing stems, heard after the read-ahead.",
+          "type": "object",
+          "properties": {
+            "gains": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "float"
+              },
+              "maxItems": 6,
+              "minItems": 6
+            },
+            "kind": {
+              "type": "string",
+              "const": "stem_gains"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "gains"
           ]
         },
         {
@@ -3009,6 +3120,63 @@
         "clips"
       ]
     },
+    "Click": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "bpm_tenths": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "first_frame": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "manual"
+            },
+            "level_db": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "bpm_tenths",
+            "first_frame",
+            "level_db"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "detected"
+            },
+            "level_db": {
+              "type": "number",
+              "format": "float"
+            },
+            "timing": {
+              "$ref": "#/$defs/MediaId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "timing",
+            "level_db"
+          ]
+        }
+      ]
+    },
     "Collection": {
       "type": "string",
       "enum": [
@@ -3498,7 +3666,7 @@
           }
         },
         "target": {
-          "$ref": "#/$defs/Target"
+          "$ref": "#/$defs/Target2"
         },
         "toggle": {
           "type": "boolean"
@@ -3533,7 +3701,7 @@
           "type": "string"
         },
         "target": {
-          "$ref": "#/$defs/Target"
+          "$ref": "#/$defs/Target2"
         },
         "value": {
           "type": "number",
@@ -3647,6 +3815,23 @@
         "rate",
         "channels",
         "trimDb"
+      ]
+    },
+    "CurrentSplit": {
+      "description": "The one split running on this device, wherever it was started.",
+      "type": "object",
+      "properties": {
+        "job": {
+          "$ref": "#/$defs/SplitJob"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "job"
       ]
     },
     "DetailsCatalog": {
@@ -5620,6 +5805,25 @@
         }
       ]
     },
+    "ImportStems": {
+      "type": "object",
+      "properties": {
+        "stems": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StemUpload"
+          }
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "stems"
+      ]
+    },
     "InputMode": {
       "type": "string",
       "enum": [
@@ -6138,6 +6342,25 @@
         "action"
       ]
     },
+    "Links": {
+      "type": "object",
+      "properties": {
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Resolved"
+          }
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "links"
+      ]
+    },
     "LiveControl": {
       "description": "Native playback controls use normalized values; display text comes from the DSP.",
       "type": "object",
@@ -6282,6 +6505,35 @@
         }
       ]
     },
+    "LiveStemMix": {
+      "description": "The live stem mix: change it with `set_stem_mix` while it plays.",
+      "type": "object",
+      "properties": {
+        "recipe": {
+          "$ref": "#/$defs/MixRecipe"
+        },
+        "roles": {
+          "description": "Stems this split has, in display order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StemRole"
+          }
+        },
+        "source": {
+          "type": "string"
+        },
+        "split": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "split",
+        "roles",
+        "recipe"
+      ]
+    },
     "LocalModel": {
       "type": "object",
       "properties": {
@@ -6377,6 +6629,27 @@
         "data"
       ]
     },
+    "LoopRange": {
+      "description": "What the daemon asks the worker's backing player to do.",
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "b": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "a",
+        "b"
+      ]
+    },
     "MappingFile": {
       "type": "object",
       "properties": {
@@ -6447,7 +6720,7 @@
           "default": 0
         },
         "state": {
-          "$ref": "#/$defs/Phase"
+          "$ref": "#/$defs/Phase2"
         }
       },
       "additionalProperties": false,
@@ -7216,6 +7489,109 @@
       "additionalProperties": false,
       "required": [
         "entry"
+      ]
+    },
+    "MixLink": {
+      "type": "object",
+      "properties": {
+        "mix": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "mix"
+      ]
+    },
+    "MixRecipe": {
+      "description": "The editable settings saved with a generated stereo mix.\n@see docs/media.md#stem-mix-recipes",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "bass": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "drums": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "mode": {
+              "type": "string",
+              "const": "four"
+            },
+            "other": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "vocals": {
+              "$ref": "#/$defs/StemMix"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "vocals",
+            "drums",
+            "bass",
+            "other"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bass": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "drums": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "guitar": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "mode": {
+              "type": "string",
+              "const": "six"
+            },
+            "other": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "piano": {
+              "$ref": "#/$defs/StemMix"
+            },
+            "vocals": {
+              "$ref": "#/$defs/StemMix"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "vocals",
+            "drums",
+            "bass",
+            "other",
+            "guitar",
+            "piano"
+          ]
+        }
+      ]
+    },
+    "MixRevision": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision"
       ]
     },
     "Mode": {
@@ -8093,6 +8469,20 @@
         "controls"
       ]
     },
+    "Options": {
+      "type": "object",
+      "properties": {
+        "modes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SplitMode"
+          }
+        }
+      },
+      "required": [
+        "modes"
+      ]
+    },
     "Origin": {
       "type": "string",
       "enum": [
@@ -8391,7 +8781,7 @@
           "default": "absolute"
         },
         "target": {
-          "$ref": "#/$defs/Target"
+          "$ref": "#/$defs/Target2"
         }
       },
       "additionalProperties": false,
@@ -8423,6 +8813,16 @@
       ]
     },
     "Phase": {
+      "type": "string",
+      "enum": [
+        "running",
+        "ready",
+        "failed",
+        "cancelled",
+        "interrupted"
+      ]
+    },
+    "Phase2": {
       "type": "string",
       "enum": [
         "idle",
@@ -8585,6 +8985,116 @@
         {
           "type": "object",
           "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_practice_range"
+            },
+            "range": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LoopRange"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "click": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Click"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "set_click"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_speed"
+            },
+            "percent": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "percent"
+          ]
+        },
+        {
+          "description": "Cue a song's split stems, mixed live. If that song is already cued its\nposition and play state are kept.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "cue_stems"
+            },
+            "recipe": {
+              "$ref": "#/$defs/MixRecipe"
+            },
+            "source": {
+              "$ref": "#/$defs/MediaId"
+            },
+            "split": {
+              "$ref": "#/$defs/MediaId"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "split",
+            "recipe"
+          ]
+        },
+        {
+          "description": "New live mix for the cued stems.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "set_stem_mix"
+            },
+            "recipe": {
+              "$ref": "#/$defs/MixRecipe"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "recipe"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "db": {
               "type": "number",
               "format": "float"
@@ -8667,6 +9177,16 @@
     "PlayerSnapshot": {
       "type": "object",
       "properties": {
+        "click": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Click"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "frame": {
           "description": "Frame at the moment this snapshot was taken. While `Playing`, clients\nadvance it locally until the next snapshot.",
           "type": "integer",
@@ -8691,6 +9211,16 @@
             "type": "string"
           }
         },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LoopRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "reason": {
           "type": [
             "string",
@@ -8705,8 +9235,28 @@
           "format": "uint64",
           "minimum": 0
         },
+        "speedPercent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
         "state": {
           "$ref": "#/$defs/PlayerState"
+        },
+        "stems": {
+          "description": "Stems playing live instead of a render, with the mix being heard.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiveStemMix"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "track": {
           "anyOf": [
@@ -9881,6 +10431,34 @@
         "cleanup_pending"
       ]
     },
+    "Resolved": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mix": {
+          "$ref": "#/$defs/MixLink"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "mix"
+      ]
+    },
     "ResourceSource": {
       "oneOf": [
         {
@@ -10534,6 +11112,37 @@
         "float"
       ]
     },
+    "SaveMix": {
+      "type": "object",
+      "properties": {
+        "recipe": {
+          "$ref": "#/$defs/MixRecipe"
+        },
+        "replace": {
+          "description": "A new ID is returned when this field is absent (Save as).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MixRevision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "split": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "split",
+        "recipe"
+      ]
+    },
     "SaveState": {
       "type": "object",
       "properties": {
@@ -10617,6 +11226,38 @@
         "id",
         "name",
         "profile"
+      ]
+    },
+    "SavedMix": {
+      "type": "object",
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "#/$defs/MixRecipe"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "split": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "title",
+        "split",
+        "asset",
+        "recipe"
       ]
     },
     "SavedNetwork": {
@@ -10899,6 +11540,13 @@
       "required": [
         "fade_ms",
         "scenes"
+      ]
+    },
+    "Scope": {
+      "type": "string",
+      "enum": [
+        "rig",
+        "set_list"
       ]
     },
     "Settings": {
@@ -11332,6 +11980,48 @@
         "right"
       ]
     },
+    "SongList": {
+      "description": "Every song with stems, newest first, for Library's Stems tab.",
+      "type": "object",
+      "properties": {
+        "songs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SongView"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "songs"
+      ]
+    },
+    "SongView": {
+      "type": "object",
+      "properties": {
+        "mixes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SavedMix"
+          }
+        },
+        "source": {
+          "type": "string"
+        },
+        "splits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Split"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "splits",
+        "mixes"
+      ]
+    },
     "SourceStatus": {
       "description": "Connection state of one extra controller.",
       "type": "object",
@@ -11394,6 +12084,131 @@
       "required": [
         "block_id",
         "bins"
+      ]
+    },
+    "Split": {
+      "description": "A separation worker publishes this manifest last. Each role has a fixed\nfilename and shares the rate, channel count and frame count.",
+      "type": "object",
+      "properties": {
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "importedRoles": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/StemRole"
+          }
+        },
+        "mode": {
+          "$ref": "#/$defs/SplitMode"
+        },
+        "modelSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "sourceSha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourceSha256",
+        "mode",
+        "rate",
+        "frames"
+      ]
+    },
+    "SplitJob": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/SplitMode"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "progress": {
+          "description": "Live progress while the job runs in this daemon; absent once stored.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SplitProgress"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "requestId",
+        "mode",
+        "phase"
+      ]
+    },
+    "SplitMode": {
+      "type": "string",
+      "enum": [
+        "four",
+        "six"
+      ]
+    },
+    "SplitProgress": {
+      "type": "object",
+      "properties": {
+        "percent": {
+          "description": "0 to 100 across the whole job.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "stage": {
+          "$ref": "#/$defs/SplitStage"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "percent"
+      ]
+    },
+    "SplitStage": {
+      "description": "What a running split is doing, with an overall percentage for one bar.",
+      "type": "string",
+      "enum": [
+        "preparing",
+        "separating",
+        "saving"
       ]
     },
     "StageModel": {
@@ -11588,6 +12403,22 @@
       "required": [
         "revision",
         "stream"
+      ]
+    },
+    "StartSplit": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/SplitMode"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "requestId"
       ]
     },
     "StartupCapture": {
@@ -11840,6 +12671,94 @@
       "required": [
         "connected",
         "events"
+      ]
+    },
+    "StemMix": {
+      "description": "Saved settings for one stem. Store fixed tenths of a decibel so a reopened\neditor can restore exactly the control value that was used for rendering.",
+      "type": "object",
+      "properties": {
+        "gain_tenths_db": {
+          "type": "integer",
+          "format": "int32",
+          "maximum": 60,
+          "minimum": -240
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "solo": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "muted",
+        "solo",
+        "gain_tenths_db"
+      ]
+    },
+    "StemMix2": {
+      "description": "Play a split's stems instead of one render, mixed live with `gains`.",
+      "type": "object",
+      "properties": {
+        "gains": {
+          "description": "Linear gain per entry of [`STEM_NAMES`]; 0 is silent. Absent stems\nmust be 0.",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "float"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
+        "present": {
+          "description": "Bit `i` set when the split has stem `STEM_NAMES[i]`.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "source": {
+          "$ref": "#/$defs/MediaId"
+        },
+        "split": {
+          "$ref": "#/$defs/MediaId"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "split",
+        "gains",
+        "present"
+      ]
+    },
+    "StemRole": {
+      "description": "The role from the split manifest, independent of the model's tensor order.",
+      "type": "string",
+      "enum": [
+        "vocals",
+        "drums",
+        "bass",
+        "other",
+        "guitar",
+        "piano"
+      ]
+    },
+    "StemUpload": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/StemRole"
+        },
+        "upload": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "upload"
       ]
     },
     "StopRequest": {
@@ -12172,6 +13091,22 @@
       ]
     },
     "Target": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "$ref": "#/$defs/LibraryReference"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "preset"
+      ]
+    },
+    "Target2": {
       "oneOf": [
         {
           "type": "object",
@@ -12484,6 +13419,54 @@
         "directory"
       ]
     },
+    "Timing": {
+      "type": "object",
+      "properties": {
+        "beats": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "bpm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "frames": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "peaks": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "float"
+          }
+        },
+        "rate": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "rate",
+        "frames",
+        "beats",
+        "peaks"
+      ]
+    },
     "Tone": {
       "type": "object",
       "properties": {
@@ -12692,6 +13675,32 @@
         "enabled"
       ]
     },
+    "Update": {
+      "type": "object",
+      "properties": {
+        "expected": {
+          "type": "string"
+        },
+        "mix": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MixLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "target"
+      ]
+    },
     "UploadFormat": {
       "type": "string",
       "enum": [
@@ -12710,6 +13719,11 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "stem": {
+          "description": "Keep the upload staged for a song import instead of making a Library track.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -12781,7 +13795,7 @@
       "type": "object",
       "properties": {
         "target": {
-          "$ref": "#/$defs/Target"
+          "$ref": "#/$defs/Target2"
         },
         "value": {
           "type": "number",

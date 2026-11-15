@@ -40,6 +40,19 @@ pub(crate) struct ImportRequest {
 /// Progress callback: fraction of the source decoded, 0–1.
 pub(crate) type Progress<'a> = &'a mut dyn FnMut(f64);
 
+/// Decode a stem with the same rate conversion as backing track import.
+pub(crate) fn render_stem(
+    source: &Path,
+    wav: bool,
+    rate: u32,
+    target: &Path,
+    store: &Store,
+    allowed: impl Fn() -> bool,
+) -> Result<(u64, u16), MediaError> {
+    let rendered = render(source, wav, rate, target, store, &mut |_| {}, allowed)?;
+    Ok((rendered.frames, rendered.channels))
+}
+
 /// SHA-256 of the original, to spot an import that is already in Library.
 pub(crate) fn hash_file(path: &Path) -> Result<String, MediaError> {
     let mut file = fs::File::open(path)?;
@@ -86,6 +99,7 @@ pub(crate) fn import(
             &staging.file(&render_name)?,
             store,
             progress,
+            || true,
         )?;
         let trim_db = trim_for(rendered.loudness_lufs, rendered.peak_dbfs);
         let manifest = MediaManifest {
@@ -208,6 +222,7 @@ fn render(
     target: &Path,
     store: &Store,
     progress: Progress<'_>,
+    allowed: impl Fn() -> bool,
 ) -> Result<Rendered, MediaError> {
     let file = fs::File::open(source)?;
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
@@ -358,6 +373,9 @@ fn render(
     };
     let mut corrupt = 0usize;
     loop {
+        if !allowed() {
+            return Err(reject("Stem preparation interrupted"));
+        }
         let packet = match format.next_packet() {
             Ok(packet) => packet,
             Err(DecodeError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,

@@ -320,7 +320,7 @@ impl Staging {
     }
 }
 
-fn create_private_dir(path: &Path) -> io::Result<()> {
+pub(crate) fn create_private_dir(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path)?;
     #[cfg(unix)]
     {
@@ -330,7 +330,7 @@ fn create_private_dir(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn sync_dir(path: &Path) -> io::Result<()> {
+pub(crate) fn sync_dir(path: &Path) -> io::Result<()> {
     // Directory fsync makes renames durable on Linux; elsewhere it may be refused.
     match fs::File::open(path).and_then(|d| d.sync_all()) {
         Ok(()) => Ok(()),
@@ -339,7 +339,7 @@ fn sync_dir(path: &Path) -> io::Result<()> {
     }
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let tmp = path.with_extension("json.tmp");
     let mut file = fs::File::create(&tmp)?;
     file.write_all(bytes)?;
@@ -408,8 +408,12 @@ impl Store {
         }
         found.sort();
         for name in found {
-            if let Err(reason) = self.check(&name) {
-                self.quarantine(&name, &reason)?;
+            match self.check(&name) {
+                Err(reason) => self.quarantine(&name, &reason)?,
+                Ok(manifest) if crate::songs::obsolete_render(self, &manifest) => {
+                    self.delete(&name)?;
+                }
+                Ok(_) => {}
             }
         }
         for entry in fs::read_dir(self.root.join("quarantine"))? {
@@ -479,12 +483,14 @@ impl Store {
         &self.quarantined
     }
 
-    /// Every valid asset, oldest first.
+    /// Valid listed assets in order. Superseded mix renders are private.
     pub fn list(&self) -> Result<Vec<MediaManifest>, MediaError> {
         let mut assets = Vec::new();
         for entry in fs::read_dir(self.root.join("assets"))? {
             let name = entry?.file_name().to_string_lossy().into_owned();
-            if let Ok(manifest) = self.check(&name) {
+            if let Ok(manifest) = self.check(&name)
+                && crate::songs::visible_render(self, &manifest)
+            {
                 assets.push(manifest);
             }
         }
@@ -612,8 +618,10 @@ impl Store {
     }
 
     pub fn lease(&self, id: &str) -> Result<Lease, MediaError> {
-        self.manifest(id)?;
         let mut leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
+        if !crate::songs::visible_render(self, &self.manifest(id)?) {
+            return Err(MediaError::NotFound);
+        }
         *leases.entry(id.to_owned()).or_default() += 1;
         Ok(Lease {
             id: id.to_owned(),
@@ -626,6 +634,20 @@ impl Store {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .contains_key(id)
+    }
+
+    /// A dependent metadata edit that must exclude new readers until the
+    /// old entry has been unpublished. The closure must not acquire a lease.
+    pub(crate) fn without_lease<T>(
+        &self,
+        id: &str,
+        edit: impl FnOnce() -> Result<T, MediaError>,
+    ) -> Result<T, MediaError> {
+        let leases = self.leases.lock().unwrap_or_else(|e| e.into_inner());
+        if leases.contains_key(id) {
+            return Err(MediaError::Leased);
+        }
+        edit()
     }
 
     /// Deletes an asset unless it is in use. It disappears from `assets/` in

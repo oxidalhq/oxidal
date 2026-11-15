@@ -45,6 +45,9 @@ pub struct UploadRequest {
     /// The file's name on the sending device; becomes the default title.
     pub name: String,
     pub size: u64,
+    /// Keep the upload staged for a song import instead of making a Library track.
+    #[serde(default)]
+    pub stem: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -111,6 +114,7 @@ pub(crate) struct ImportChoice {
 #[derive(Debug)]
 struct Upload {
     state: UploadState,
+    stem: bool,
     touched: Instant,
     writing: bool,
 }
@@ -226,7 +230,7 @@ impl Uploads {
 }
 
 /// The stream rate renders are made for: the saved startup sound's, else 48 kHz.
-fn stream_rate(shared: &Shared) -> u32 {
+pub(crate) fn stream_rate(shared: &Shared) -> u32 {
     use crate::audio_boot::Choice;
     match shared.boot.snapshot() {
         Ok(Some(Choice::Native { settings, .. })) => settings.stream.input.sample_rate,
@@ -272,7 +276,7 @@ fn split_name(name: &str) -> Result<(String, UploadFormat), &'static str> {
     ))
 }
 
-fn media_error(error: MediaError) -> Response {
+pub(crate) fn media_error(error: MediaError) -> Response {
     match error {
         MediaError::NotFound => failure(StatusCode::NOT_FOUND, "That file is no longer in Library"),
         MediaError::Leased => failure(
@@ -292,7 +296,7 @@ fn media_error(error: MediaError) -> Response {
     }
 }
 
-fn store(shared: &Shared) -> Result<Arc<crate::media::Store>, Box<Response>> {
+pub(crate) fn store(shared: &Shared) -> Result<Arc<crate::media::Store>, Box<Response>> {
     shared.media.as_ref().map(Arc::clone).map_err(|reason| {
         Box::new(failure(
             StatusCode::SERVICE_UNAVAILABLE,
@@ -301,7 +305,7 @@ fn store(shared: &Shared) -> Result<Arc<crate::media::Store>, Box<Response>> {
     })
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, MediaError> + Send + 'static,
 ) -> Result<T, Box<Response>> {
     match tokio::task::spawn_blocking(work).await {
@@ -313,7 +317,7 @@ async fn blocking<T: Send + 'static>(
     }
 }
 
-fn no_store(status: StatusCode, body: impl Serialize) -> Response {
+pub(crate) fn no_store(status: StatusCode, body: impl Serialize) -> Response {
     (status, [(header::CACHE_CONTROL, "no-store")], Json(body)).into_response()
 }
 
@@ -348,7 +352,31 @@ pub(crate) async fn remove(State(shared): State<Arc<Shared>>, Path(id): Path<Str
         Ok(store) => store,
         Err(response) => return *response,
     };
-    match blocking(move || store.delete(&id)).await {
+    let worker = shared.clone();
+    match blocking(move || {
+        if let Ok(manifest) = store.manifest(&id) {
+            if crate::songs::imported_stems(&manifest) {
+                let _permit = worker
+                    .song_write
+                    .try_acquire()
+                    .map_err(|_| MediaError::Leased)?;
+                if !crate::songs::view(&store, &id)?.mixes.is_empty() {
+                    return Err(MediaError::Invalid(
+                        "Delete the saved mixes for this stem song first".into(),
+                    ));
+                }
+                return store.delete(&id);
+            }
+            if crate::songs::owns_asset(&store, &manifest) {
+                return Err(MediaError::Invalid(
+                    "Manage this track and its mixes from the song editor".into(),
+                ));
+            }
+        }
+        store.delete(&id)
+    })
+    .await
+    {
         Ok(()) => {
             crate::player::library_changed(&shared).await;
             StatusCode::NO_CONTENT.into_response()
@@ -378,6 +406,61 @@ impl Uploads {
             .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .map(|u| u.state.clone())
+    }
+
+    pub(crate) fn claim_stems(&self, ids: &[String]) -> Result<StemUploads, MediaError> {
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
+        let states = ids
+            .iter()
+            .map(|id| {
+                let upload = open.get(id).ok_or(MediaError::NotFound)?;
+                if !upload.stem || !upload.state.complete {
+                    return Err(MediaError::Invalid(
+                        "Finish uploading each stem first".into(),
+                    ));
+                }
+                if upload.writing {
+                    return Err(MediaError::Leased);
+                }
+                Ok(upload.state.clone())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for id in ids {
+            open.get_mut(id).expect("validated upload").writing = true;
+        }
+        Ok(StemUploads {
+            open: Arc::clone(&self.open),
+            states,
+        })
+    }
+}
+
+pub(crate) struct StemUploads {
+    open: Open,
+    pub states: Vec<UploadState>,
+}
+
+impl StemUploads {
+    pub(crate) fn consume(self, store: &crate::media::Store) {
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
+        for state in &self.states {
+            if let Ok(path) = store.upload_part(&state.id) {
+                let _ = std::fs::remove_file(path);
+            }
+            open.remove(&state.id);
+        }
+    }
+}
+
+impl Drop for StemUploads {
+    fn drop(&mut self) {
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
+        for state in &self.states {
+            if let Some(upload) = open.get_mut(&state.id) {
+                upload.writing = false;
+                upload.touched = Instant::now();
+            }
+        }
     }
 }
 
@@ -458,6 +541,7 @@ pub(crate) async fn create_upload(
             id,
             Upload {
                 state: state.clone(),
+                stem: request.stem,
                 touched: Instant::now(),
                 writing: false,
             },
@@ -565,7 +649,7 @@ pub(crate) async fn append_chunk(
     }
     upload.state.offset += length;
     upload.state.complete = upload.state.offset == upload.state.size;
-    let job = upload.state.complete.then(|| Job {
+    let job = (upload.state.complete && !upload.stem).then(|| Job {
         id: id.clone(),
         request: crate::media_import::ImportRequest {
             title: upload.state.title.clone(),
@@ -660,6 +744,11 @@ pub(crate) async fn update_asset(
         Err(response) => return *response,
     };
     match blocking(move || {
+        if update.title.is_some() && crate::songs::generated_mix(&store.manifest(&id)?).is_some() {
+            return Err(MediaError::Invalid(
+                "Rename this mix from the song editor".into(),
+            ));
+        }
         store.update(&id, |manifest| {
             if let Some(title) = update.title {
                 manifest.title = title.trim().to_owned();
@@ -755,12 +844,20 @@ pub(crate) async fn cancel_upload(
         Ok(store) => store,
         Err(response) => return *response,
     };
-    let removed = shared
-        .uploads
-        .open
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(&id);
+    let removed = {
+        let mut open = shared
+            .uploads
+            .open
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if open
+            .get(&id)
+            .is_some_and(|upload| upload.stem && upload.writing)
+        {
+            return failure(StatusCode::CONFLICT, "That stem upload is in use");
+        }
+        open.remove(&id)
+    };
     if removed.is_none() {
         return failure(StatusCode::NOT_FOUND, "That upload has expired");
     }
@@ -786,6 +883,7 @@ pub(crate) async fn download_wav(
         Err(response) => return *response,
     };
     let lookup = blocking(move || {
+        let lease = store.lease(&id)?;
         let manifest = store.manifest(&id)?;
         let render = manifest
             .renders
@@ -793,71 +891,12 @@ pub(crate) async fn download_wav(
             .cloned()
             .ok_or(MediaError::NotFound)?;
         let path = store.file(&id, &render.file)?;
-        Ok((manifest, render, path))
+        Ok((manifest, render, path, lease))
     })
     .await;
-    let (manifest, render, path) = match lookup {
+    let (manifest, render, path, lease) = match lookup {
         Ok(found) => found,
         Err(response) => return *response,
-    };
-    let data = render.frames * u64::from(render.channels) * 3;
-    let Ok(data_len) = u32::try_from(data).map(|d| d.min(u32::MAX - 36)) else {
-        return failure(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "WAV export is limited to 4 GiB",
-        );
-    };
-    if u64::from(data_len) != data {
-        return failure(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "WAV export is limited to 4 GiB",
-        );
-    }
-    let Ok(mut file) = tokio::fs::File::open(&path).await else {
-        return failure(StatusCode::NOT_FOUND, "That file is no longer in Library");
-    };
-    let channels = render.channels;
-    let rate = render.rate;
-    let mut header = Vec::with_capacity(44);
-    header.extend_from_slice(b"RIFF");
-    header.extend_from_slice(&(36 + data_len).to_le_bytes());
-    header.extend_from_slice(b"WAVEfmt ");
-    header.extend_from_slice(&16u32.to_le_bytes());
-    header.extend_from_slice(&1u16.to_le_bytes());
-    header.extend_from_slice(&channels.to_le_bytes());
-    header.extend_from_slice(&rate.to_le_bytes());
-    header.extend_from_slice(&(rate * u32::from(channels) * 3).to_le_bytes());
-    header.extend_from_slice(&(channels * 3).to_le_bytes());
-    header.extend_from_slice(&24u16.to_le_bytes());
-    header.extend_from_slice(b"data");
-    header.extend_from_slice(&data_len.to_le_bytes());
-    let stream = async_stream::stream! {
-        use tokio::io::AsyncReadExt;
-        yield Ok::<Bytes, std::io::Error>(Bytes::from(header));
-        let mut buffer = vec![0_u8; 64 * 1024];
-        let mut carry = Vec::new();
-        loop {
-            match file.read(&mut buffer).await {
-                Ok(0) => break,
-                Ok(n) => {
-                    carry.extend_from_slice(&buffer[..n]);
-                    let whole = carry.len() / 4 * 4;
-                    let mut out = Vec::with_capacity(whole / 4 * 3);
-                    for b in carry[..whole].chunks_exact(4) {
-                        let v = f32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-                        let v = if v.is_finite() { v.clamp(-1.0, 1.0) } else { 0.0 };
-                        let i = (v * 8_388_607.0).round() as i32;
-                        out.extend_from_slice(&i.to_le_bytes()[..3]);
-                    }
-                    carry.drain(..whole);
-                    yield Ok(Bytes::from(out));
-                }
-                Err(error) => {
-                    yield Err(error);
-                    return;
-                }
-            }
-        }
     };
     let safe: String = manifest
         .title
@@ -870,14 +909,71 @@ pub(crate) async fn download_wav(
             }
         })
         .collect();
+    wav_download(
+        path,
+        render.frames,
+        render.channels,
+        render.rate,
+        safe.trim(),
+        lease,
+    )
+    .await
+}
+
+pub(crate) async fn wav_download(
+    path: std::path::PathBuf,
+    frames: u64,
+    channels: u16,
+    rate: u32,
+    name: &str,
+    lease: crate::media::Lease,
+) -> Response {
+    let Some(wav_header) = crate::media_wav::header(frames, channels, rate) else {
+        return failure(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "WAV export is limited to 4 GiB",
+        );
+    };
+    let data = frames * u64::from(channels) * 3;
+    let pad = data % 2;
+    let Ok(mut file) = tokio::fs::File::open(&path).await else {
+        return failure(StatusCode::NOT_FOUND, "That file is no longer in Library");
+    };
+    let stream = async_stream::stream! {
+        use tokio::io::AsyncReadExt;
+        let _lease = lease;
+        yield Ok::<Bytes, std::io::Error>(Bytes::copy_from_slice(&wav_header));
+        let mut buffer = vec![0_u8; 64 * 1024];
+        let mut carry = Vec::new();
+        loop {
+            match file.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    carry.extend_from_slice(&buffer[..n]);
+                    let whole = carry.len() / 4 * 4;
+                    let mut out = Vec::with_capacity(whole / 4 * 3);
+                    crate::media_wav::encode(&carry[..whole], &mut out);
+                    carry.drain(..whole);
+                    yield Ok(Bytes::from(out));
+                }
+                Err(error) => {
+                    yield Err(error);
+                    return;
+                }
+            }
+        }
+        if pad != 0 {
+            yield Ok(Bytes::from_static(&[0]));
+        }
+    };
     (
         [
             (header::CONTENT_TYPE, "audio/wav".to_owned()),
             (
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"{}.wav\"", safe.trim()),
+                format!("attachment; filename=\"{name}.wav\""),
             ),
-            (header::CONTENT_LENGTH, (44 + data).to_string()),
+            (header::CONTENT_LENGTH, (44 + data + pad).to_string()),
             (header::CACHE_CONTROL, "no-store".to_owned()),
         ],
         axum::body::Body::from_stream(stream),

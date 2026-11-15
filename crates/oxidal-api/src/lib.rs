@@ -2,6 +2,7 @@ mod artwork;
 mod audio;
 mod audio_boot;
 mod audit;
+mod background;
 mod backup;
 mod blends;
 mod boosts;
@@ -19,6 +20,8 @@ mod local_models;
 pub mod media;
 mod media_api;
 mod media_import;
+mod media_wav;
+mod media_zip;
 mod midi_map;
 mod midi_recall;
 mod monitor;
@@ -37,8 +40,14 @@ mod rig_library;
 mod rig_playback;
 mod rig_recovery;
 mod scene_draft;
+mod song_api;
+mod song_links;
+mod songs;
+mod split_jobs;
+mod stem_import;
 mod storage_lock;
 mod terminal;
+mod timing;
 mod tuner;
 mod venues;
 use axum::{
@@ -135,6 +144,18 @@ pub struct Contract {
     pub media_upload_request: media_api::UploadRequest,
     pub media_upload_state: media_api::UploadState,
     pub media_asset_update: media_api::AssetUpdate,
+    pub song_view: songs::SongView,
+    pub song_list: songs::SongList,
+    pub song_current_split: split_jobs::CurrentSplit,
+    pub song_import_stems: stem_import::ImportStems,
+    pub song_save_mix: songs::SaveMix,
+    pub song_mix_revision: songs::MixRevision,
+    pub song_split_job: split_jobs::SplitJob,
+    pub song_start_split: split_jobs::StartSplit,
+    pub song_split_options: split_jobs::Options,
+    pub song_links: song_links::Links,
+    pub song_link_update: song_links::Update,
+    pub practice_timing: timing::Timing,
     pub player_snapshot: player::PlayerSnapshot,
     pub player_request: player::PlayerRequest,
     pub player_order: player::PlayerOrder,
@@ -285,6 +306,8 @@ struct Shared {
     keep_ready: keep_ready::Store,
     media: Result<Arc<media::Store>, String>,
     uploads: media_api::Uploads,
+    song_write: Arc<tokio::sync::Semaphore>,
+    split_jobs: split_jobs::Jobs,
     player: player::Player,
     venues: venues::Venues,
     captures: capture::Captures,
@@ -382,6 +405,8 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
     let shared = Arc::new(Shared {
         media,
         uploads: media_api::Uploads::default(),
+        song_write: Arc::new(tokio::sync::Semaphore::new(1)),
+        split_jobs: split_jobs::Jobs::load(),
         player,
         venues,
         captures: capture::Captures::new(protect.job_flag()),
@@ -630,11 +655,46 @@ pub fn router_with_shutdown(config: Config) -> Result<(Router, WorkersStopped), 
         .route("/player/commands", post(player::command))
         .route("/player/order", axum::routing::put(player::reorder))
         .route("/media", get(media_api::library))
+        .route("/media/songs", get(song_api::list))
+        .route("/media/songs/{source}", get(song_api::view))
+        .route("/media/songs/import-stems", post(song_api::import_stems))
+        .route(
+            "/media/songs/{source}/splits/{split}",
+            axum::routing::delete(song_api::remove_split),
+        )
+        .route("/media/split-options", get(split_jobs::options))
+        .route("/media/split-job", get(split_jobs::current))
+        .route(
+            "/media/song-links",
+            get(song_links::view).post(song_links::update),
+        )
+        .route(
+            "/media/songs/{source}/split-job",
+            get(split_jobs::status)
+                .post(split_jobs::start)
+                .delete(split_jobs::cancel),
+        )
+        .route(
+            "/media/songs/{source}/mixes",
+            post(song_api::save_mix).delete(song_api::remove_mix),
+        )
+        .route(
+            "/media/songs/{source}/splits/{split}/stems/{role}/wav",
+            get(song_api::download_stem),
+        )
+        .route(
+            "/media/songs/{source}/splits/{split}/stems.zip",
+            get(song_api::download_stems),
+        )
         .route(
             "/media/assets/{id}",
             axum::routing::delete(media_api::remove).patch(media_api::update_asset),
         )
         .route("/media/assets/{id}/original", get(media_api::download))
+        .route(
+            "/media/assets/{id}/timing",
+            get(timing::read).post(timing::analyse),
+        )
         .route("/media/uploads/{id}/import", post(media_api::import_copy))
         .route("/media/uploads", post(media_api::create_upload))
         .route(

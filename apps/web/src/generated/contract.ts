@@ -137,19 +137,31 @@ export type HostUtility =
       kind: "venue";
       venue?: VenueApplied | null;
     };
-/**
- * What the daemon asks the worker's backing player to do.
- */
 export type BackingCommand =
   | {
       asset: MediaId;
       channels: number;
+      click?: Click | null;
       frames: number;
       from: number;
       gain_db: number;
       kind: "play";
+      range?: LoopRange | null;
       repeat: boolean;
       seq: number;
+      speed?: number | null;
+      /**
+       * Play these stems mixed live instead of the asset's render.
+       */
+      stems?: StemMix2 | null;
+    }
+  | {
+      /**
+       * @minItems 6
+       * @maxItems 6
+       */
+      gains: [number, number, number, number, number, number];
+      kind: "stem_gains";
     }
   | {
       kind: "stop";
@@ -164,6 +176,18 @@ export type BackingCommand =
       repeat: boolean;
     };
 export type MediaId = string;
+export type Click =
+  | {
+      bpm_tenths: number;
+      first_frame: number;
+      kind: "manual";
+      level_db: number;
+    }
+  | {
+      kind: "detected";
+      level_db: number;
+      timing: MediaId;
+    };
 export type CaptureCommand =
   | {
       kind: "record_di";
@@ -195,7 +219,7 @@ export type CaptureCommand =
       seq: number;
     };
 export type BranchMode = "toggle" | "gate";
-export type Target =
+export type Target2 =
   | {
       kind: "native";
       node: string;
@@ -392,7 +416,7 @@ export type StructureEdit =
     };
 export type ChainLane = "left" | "right";
 export type InputMode = "stereo" | "left" | "right" | "dual";
-export type Phase = "idle" | "listening" | "done" | "timeout";
+export type Phase2 = "idle" | "listening" | "done" | "timeout";
 export type ModelPhase = "verifying" | "preparing" | "ready" | "applying" | "applied" | "failed" | "cancelled";
 export type AudioPhase = "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 export type CalibrationAction = "run" | "run_all" | "cancel" | "reset";
@@ -743,6 +767,28 @@ export type PlayerCommand =
       repeat: boolean;
     }
   | {
+      kind: "set_practice_range";
+      range?: LoopRange | null;
+    }
+  | {
+      click?: Click | null;
+      kind: "set_click";
+    }
+  | {
+      kind: "set_speed";
+      percent: number;
+    }
+  | {
+      kind: "cue_stems";
+      recipe: MixRecipe;
+      source: MediaId;
+      split: MediaId;
+    }
+  | {
+      kind: "set_stem_mix";
+      recipe: MixRecipe;
+    }
+  | {
       db: number;
       kind: "set_level";
     }
@@ -750,8 +796,33 @@ export type PlayerCommand =
       delta_db: number;
       kind: "adjust_level";
     };
+/**
+ * The editable settings saved with a generated stereo mix.
+ * @see docs/media.md#stem-mix-recipes
+ */
+export type MixRecipe =
+  | {
+      bass: StemMix;
+      drums: StemMix;
+      mode: "four";
+      other: StemMix;
+      vocals: StemMix;
+    }
+  | {
+      bass: StemMix;
+      drums: StemMix;
+      guitar: StemMix;
+      mode: "six";
+      other: StemMix;
+      piano: StemMix;
+      vocals: StemMix;
+    };
 export type Origin = "ui" | "midi" | "api";
 export type PlayerState = ("empty" | "ready" | "playing" | "paused" | "ended") | "interrupted" | "unavailable";
+/**
+ * The role from the split manifest, independent of the model's tensor order.
+ */
+export type StemRole = "vocals" | "drums" | "bass" | "other" | "guitar" | "piano";
 export type RigAudioAction =
   | {
       command: HostUtility;
@@ -854,6 +925,13 @@ export type ResourceSource =
       resource: string;
       revision: string;
     };
+export type SplitMode = "four" | "six";
+export type Phase = "running" | "ready" | "failed" | "cancelled" | "interrupted";
+/**
+ * What a running split is doing, with an overall percentage for one bar.
+ */
+export type SplitStage = "preparing" | "separating" | "saving";
+export type Scope = "rig" | "set_list";
 /**
  * What starts when Oxidal starts (7.25). `Pinned` keeps the exact saved
  * session; `Follow` replaces it with each preset the player explicitly plays.
@@ -1002,6 +1080,7 @@ export interface Contract {
   player_order: PlayerOrder;
   player_request: PlayerRequest;
   player_snapshot: PlayerSnapshot;
+  practice_timing: Timing;
   preset: Inspection;
   preset_details: DetailsCatalog;
   preset_details_update: DetailsUpdate;
@@ -1022,6 +1101,17 @@ export interface Contract {
   scene_draft: SceneDraftState;
   scene_draft_update: SceneDraftUpdate;
   snapshot: Snapshot;
+  song_current_split: CurrentSplit;
+  song_import_stems: ImportStems;
+  song_link_update: Update;
+  song_links: Links;
+  song_list: SongList;
+  song_mix_revision: MixRevision;
+  song_save_mix: SaveMix;
+  song_split_job: SplitJob;
+  song_split_options: Options;
+  song_start_split: StartSplit;
+  song_view: SongView;
   stage_model: StageModel;
   staged_model: StagedModel;
   startup_state: StartupState;
@@ -1104,6 +1194,32 @@ export interface HostLevels {
    * Master output level in dB, applied after the rig (−60 to +12; −60 is silent).
    */
   output_level_db: number;
+}
+/**
+ * What the daemon asks the worker's backing player to do.
+ */
+export interface LoopRange {
+  a: number;
+  b: number;
+}
+/**
+ * Play a split's stems instead of one render, mixed live with `gains`.
+ */
+export interface StemMix2 {
+  /**
+   * Linear gain per entry of [`STEM_NAMES`]; 0 is silent. Absent stems
+   * must be 0.
+   *
+   * @minItems 6
+   * @maxItems 6
+   */
+  gains: [number, number, number, number, number, number];
+  /**
+   * Bit `i` set when the split has stem `STEM_NAMES[i]`.
+   */
+  present: number;
+  source: MediaId;
+  split: MediaId;
 }
 /**
  * What the outputs should use now: settings, or bypassed (flat, no trim).
@@ -1191,7 +1307,7 @@ export interface ExtraInput {
 export interface ParameterBinding {
   controller: number;
   mode?: "absolute" | "toggle" | "relative_twos_complement" | "relative_offset64";
-  target: Target;
+  target: Target2;
 }
 export interface StreamConfig {
   hear_yourself?: boolean;
@@ -1435,7 +1551,7 @@ export interface Measurement {
   peakSharpness?: number | null;
   polarityFlipped?: boolean | null;
   progress?: number;
-  state: Phase;
+  state: Phase2;
 }
 export interface Spectrum {
   bins: number[];
@@ -2377,6 +2493,10 @@ export interface UploadRequest {
    */
   name: string;
   size: number;
+  /**
+   * Keep the upload staged for a song import instead of making a Library track.
+   */
+  stem?: boolean;
 }
 export interface UploadState {
   complete: boolean;
@@ -2803,7 +2923,17 @@ export interface PlayerRequest {
    */
   requestId: string;
 }
+/**
+ * Saved settings for one stem. Store fixed tenths of a decibel so a reopened
+ * editor can restore exactly the control value that was used for rendering.
+ */
+export interface StemMix {
+  gain_tenths_db: number;
+  muted: boolean;
+  solo: boolean;
+}
 export interface PlayerSnapshot {
+  click?: Click | null;
   /**
    * Frame at the moment this snapshot was taken. While `Playing`, clients
    * advance it locally until the next snapshot.
@@ -2818,12 +2948,30 @@ export interface PlayerSnapshot {
    * The Backing list, in Library order (asset IDs).
    */
   order: string[];
+  range?: LoopRange | null;
   reason?: string | null;
   repeat: boolean;
   revision: number;
+  speedPercent?: number | null;
   state: PlayerState;
+  /**
+   * Stems playing live instead of a render, with the mix being heard.
+   */
+  stems?: LiveStemMix | null;
   track?: CuedTrack | null;
   underruns: number;
+}
+/**
+ * The live stem mix: change it with `set_stem_mix` while it plays.
+ */
+export interface LiveStemMix {
+  recipe: MixRecipe;
+  /**
+   * Stems this split has, in display order.
+   */
+  roles: StemRole[];
+  source: string;
+  split: string;
 }
 export interface CuedTrack {
   channels: number;
@@ -2832,6 +2980,14 @@ export interface CuedTrack {
   rate: number;
   title: string;
   trimDb: number;
+}
+export interface Timing {
+  beats: number[];
+  bpm?: number | null;
+  frames: number;
+  peaks: number[];
+  rate: number;
+  source: string;
 }
 export interface DetailsCatalog {
   entries: DetailsEntry[];
@@ -2985,7 +3141,7 @@ export interface NodeModels {
   node: string;
 }
 export interface Value {
-  target: Target;
+  target: Target2;
   value: number;
 }
 export interface NodeWorking {
@@ -2995,7 +3151,7 @@ export interface NodeWorking {
 export interface ControlCommand {
   expected_revision: number;
   session: string;
-  target: Target;
+  target: Target2;
   value: number;
 }
 export interface EqCommand {
@@ -3104,7 +3260,7 @@ export interface Control {
    * edit dialog can offer "Ping-pong" rather than "2"; empty when none.
    */
   scale_points?: ScalePoint[];
-  target: Target;
+  target: Target2;
   toggle: boolean;
   value: number;
 }
@@ -3388,6 +3544,114 @@ export interface SceneGain2 {
  */
 export interface SceneDraftUpdate {
   draft?: SceneDraft | null;
+}
+/**
+ * The one split running on this device, wherever it was started.
+ */
+export interface CurrentSplit {
+  job: SplitJob;
+  source: string;
+}
+export interface SplitJob {
+  error?: string | null;
+  id: string;
+  mode: SplitMode;
+  phase: Phase;
+  /**
+   * Live progress while the job runs in this daemon; absent once stored.
+   */
+  progress?: SplitProgress | null;
+  requestId: string;
+}
+export interface SplitProgress {
+  /**
+   * 0 to 100 across the whole job.
+   */
+  percent: number;
+  stage: SplitStage;
+}
+export interface ImportStems {
+  stems: StemUpload[];
+  title: string;
+}
+export interface StemUpload {
+  role: StemRole;
+  upload: string;
+}
+export interface Update {
+  expected: string;
+  mix?: MixLink | null;
+  target: Target;
+}
+export interface MixLink {
+  mix: string;
+  source: string;
+}
+export interface Target {
+  preset: LibraryReference;
+  scope: Scope;
+}
+export interface Links {
+  links: Resolved[];
+  revision: string;
+}
+export interface Resolved {
+  asset?: string | null;
+  mix: MixLink;
+  target: Target;
+  title?: string | null;
+}
+/**
+ * Every song with stems, newest first, for Library's Stems tab.
+ */
+export interface SongList {
+  songs: SongView[];
+}
+export interface SongView {
+  mixes: SavedMix[];
+  source: string;
+  splits: Split[];
+}
+export interface SavedMix {
+  asset: string;
+  id: string;
+  recipe: MixRecipe;
+  revision: string;
+  split: string;
+  title: string;
+}
+/**
+ * A separation worker publishes this manifest last. Each role has a fixed
+ * filename and shares the rate, channel count and frame count.
+ */
+export interface Split {
+  frames: number;
+  id: string;
+  importedRoles?: StemRole[] | null;
+  mode: SplitMode;
+  modelSha256?: string | null;
+  rate: number;
+  sourceSha256: string;
+}
+export interface MixRevision {
+  id: string;
+  revision: string;
+}
+export interface SaveMix {
+  recipe: MixRecipe;
+  /**
+   * A new ID is returned when this field is absent (Save as).
+   */
+  replace?: MixRevision | null;
+  split: string;
+  title: string;
+}
+export interface Options {
+  modes: SplitMode[];
+}
+export interface StartSplit {
+  mode: SplitMode;
+  requestId: string;
 }
 export interface StageModel {
   model_id: number;
