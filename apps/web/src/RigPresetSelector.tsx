@@ -1,5 +1,5 @@
 import { Loading } from './components/ui/loading';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CaretDown,
   CaretLeft,
@@ -21,8 +21,9 @@ import {
 } from './presetChoices';
 import { useSessionState } from './lib/sessionState';
 
-type Source = Choice['origin'];
+type Source = Choice['origin'] | 'setlist';
 const SOURCES: [Source, string][] = [
+  ['setlist', 'Set list'],
   ['mine', 'Mine'],
   ['oxidal_example', 'Oxidal sounds'],
   ['tone3000', 'TONE3000'],
@@ -63,6 +64,13 @@ export function RigPresetSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [preview, setPreview] = useState<Choice | null>(null);
+  // The playing row is scrolled into view once each time the list opens;
+  // the rig view redraws constantly, and scrolling on every redraw would
+  // pull the list back while the player scrolls it.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (!open) revealed.current = false;
+  }, [open]);
   // The chooser's source tab, kept for this browser tab (7.27).
   const [source, setSource] = useSessionState<Source | null>(
     'preset-chooser-source',
@@ -84,8 +92,15 @@ export function RigPresetSelector({
     };
   }, [refresh, playing.refresh]);
   const selected = playing.key;
+  /** The Library set list, in its order. */
+  const setList = items.filter((item) => item.inSetList);
+  const inSource = (item: Choice, source: Source) =>
+    source === 'setlist' ? !!item.inSetList : item.origin === source;
+  // Pads step through the set list; with none yet, through Mine.
   const pickerItems = pads
-    ? items.filter((item) => item.origin === 'mine')
+    ? setList.length
+      ? setList
+      : items.filter((item) => item.origin === 'mine')
     : items;
   const index = pickerItems.findIndex((p) => key(p) === selected);
   const size = all ? Math.max(pickerItems.length, 8) : 8;
@@ -209,9 +224,7 @@ export function RigPresetSelector({
           </div>
         )}
         {!loading && !error && !pickerItems.length && (
-          <p>
-            No presets in Mine yet. Edit an original or add one from Library.
-          </p>
+          <p>No presets in the set list or Mine yet. Add one from Library.</p>
         )}
         <p className="caption">
           Changing preset briefly interrupts audio; changing scene never does.
@@ -224,7 +237,6 @@ export function RigPresetSelector({
     current?.name ??
     playing.name ??
     (loading ? 'Loading presets…' : 'Unsaved preset');
-  const setList = items.filter((item) => item.origin === 'mine');
   /** Set-list number (1-based) of a preset, or 0 when it is not in the set list. */
   const number = (item: Choice | undefined) =>
     item ? setList.findIndex((p) => key(p) === key(item)) + 1 : 0;
@@ -233,10 +245,16 @@ export function RigPresetSelector({
   const foundItems = items.filter((item) =>
     detailsMatch(item.name, item.details, found),
   );
-  const shownSource: Source = source ?? current?.origin ?? 'mine';
+  const shownSource: Source =
+    source ??
+    (current?.inSetList
+      ? 'setlist'
+      : (current?.origin ?? (setList.length ? 'setlist' : 'mine')));
   const shown = found
     ? foundItems
-    : items.filter((item) => item.origin === shownSource);
+    : shownSource === 'setlist'
+      ? setList
+      : items.filter((item) => inSource(item, shownSource));
   const entryOf = (item: Choice) => ({
     kind:
       item.kind === 'scenes'
@@ -351,7 +369,7 @@ export function RigPresetSelector({
                 >
                   {label}{' '}
                   <span className="preset-picker-count">
-                    {items.filter((item) => item.origin === origin).length}
+                    {items.filter((item) => inSource(item, origin)).length}
                   </span>
                 </button>
               ))}
@@ -380,8 +398,10 @@ export function RigPresetSelector({
                     aria-pressed={playingRow}
                     disabled={disabled || loading}
                     ref={(element) => {
-                      if (playingRow && element)
+                      if (playingRow && element && !revealed.current) {
+                        revealed.current = true;
                         element.scrollIntoView({ block: 'center' });
+                      }
                     }}
                     onClick={() => {
                       setOpen(false);

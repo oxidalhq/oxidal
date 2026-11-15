@@ -108,6 +108,36 @@ it('selects original and owned identities without optimistically changing the so
   );
   expect(picker).toBeDisabled();
 });
+it('scrolls the playing preset into view once per opening, not on every redraw', async () => {
+  library();
+  const scroll = vi.fn();
+  const original = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    const select = vi.fn();
+    const view = render(
+      <RigPresetSelector current={state} disabled={false} onSelect={select} />,
+    );
+    const picker = screen.getByRole('button', {
+      name: 'Playing preset: Amp A',
+    });
+    await waitFor(() => expect(picker).toBeEnabled());
+    fireEvent.click(picker);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    // The rig view redraws while audio runs; the open list must stay put.
+    for (let i = 0; i < 5; i++)
+      view.rerender(
+        <RigPresetSelector
+          current={{ ...state }}
+          disabled={false}
+          onSelect={select}
+        />,
+      );
+    expect(scroll).toHaveBeenCalledTimes(1);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = original;
+  }
+});
 it('keeps the current rig visible when the library fails, and permits retry', async () => {
   vi.mocked(presetLibrary).mockRejectedValue(new Error('offline'));
   vi.mocked(rigLibrary).mockResolvedValue({
@@ -325,6 +355,21 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
     ],
     native_profile: 'tone3000-plugin:test',
   });
+  // The rig is in the Library set list; set-list rows carry their number.
+  vi.mocked(libraryCatalog).mockResolvedValue({
+    revision: 'set-one',
+    items: [
+      {
+        kind: 'rig',
+        id: revision,
+        name: 'Clean to heavy',
+        source_name: 'Clean to heavy',
+        archived: false,
+        origin: 'mine',
+        in_set_list: true,
+      },
+    ],
+  });
   const select = vi.fn();
   render(
     <RigPresetSelector current={state} disabled={false} onSelect={select} />,
@@ -334,8 +379,8 @@ it('lists presets with scenes first, tagged by scene count, and plays them as on
   fireEvent.click(picker);
   expect(
     screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\s+/g, ' ')),
-  ).toEqual(['Mine 2', 'Oxidal sounds 0', 'TONE3000 2']);
-  fireEvent.click(screen.getByRole('tab', { name: /Mine/ }));
+  ).toEqual(['Set list 1', 'Mine 2', 'Oxidal sounds 0', 'TONE3000 2']);
+  fireEvent.click(screen.getByRole('tab', { name: /Set list/ }));
   const row = screen.getByRole('button', {
     name: /^Clean to heavy\s*3 scenes · 3 NAM$/,
   });

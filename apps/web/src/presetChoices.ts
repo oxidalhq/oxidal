@@ -26,6 +26,8 @@ type PresetOrigin = 'tone3000' | 'oxidal_example' | 'mine';
 export type PresetChoice = {
   details?: PresetDetails;
   origin: PresetOrigin;
+  /** In the Library set list; items keep the catalog's set-list order. */
+  inSetList?: boolean;
 } & (
   | { kind: 'tone3000'; id: string; owned: boolean; name: string }
   | {
@@ -176,6 +178,7 @@ export async function loadPresetChoices(): Promise<{
           ...items[i]!,
           name: row.item.name,
           origin: row.item.origin ?? items[i]!.origin,
+          inSetList: !!row.item.in_set_list,
         };
     }
     items.sort(
