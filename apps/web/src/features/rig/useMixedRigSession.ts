@@ -728,8 +728,11 @@ export function useMixedRigSession({
   async function choose(choice: PresetChoice, confirmed = false) {
     const { changed } = view!;
     const control = current.current?.control;
+    // On stage a preset change discards unsaved edits without asking, as a
+    // modeller does; the editor asks first.
     if (
       !confirmed &&
+      !performing &&
       discardsSceneEdits(choice, {
         revision,
         modified: !!changed,
