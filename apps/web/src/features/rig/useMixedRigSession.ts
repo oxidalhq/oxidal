@@ -247,10 +247,33 @@ export function useMixedRigSession({
     };
   }, [accept]);
   const revision = state?.configured?.revision;
+  /** Preset documents by revision, fetched ahead of a switch so the new rig
+   * draws at once instead of emptying while its document loads. A revision
+   * is immutable, so a cached document never goes stale. */
+  const documents = useRef(new Map<string, Promise<RigDocument>>());
+  const [loaded, setLoaded] = useState<ReadonlyMap<string, RigDocument>>(
+    () => new Map(),
+  );
+  const loadDocument = useCallback((id: string) => {
+    let pending = documents.current.get(id);
+    if (!pending) {
+      pending = rigDocument(id);
+      documents.current.set(id, pending);
+      pending.then(
+        (d) => {
+          if (alive.current)
+            setLoaded((m) => (m.has(id) ? m : new Map(m).set(id, d)));
+        },
+        // A failed read is not kept, so the next look tries again.
+        () => documents.current.delete(id),
+      );
+    }
+    return pending;
+  }, []);
   useEffect(() => {
     let active = true;
     if (revision)
-      void rigDocument(revision)
+      void loadDocument(revision)
         .then((d) => {
           if (active) {
             setDocument(d);
@@ -263,8 +286,19 @@ export function useMixedRigSession({
     return () => {
       active = false;
     };
-  }, [revision]);
-  const matching = document?.revision === revision ? document : null;
+  }, [revision, loadDocument]);
+  // Prepared presets (set lists, MIDI program changes) load in the background.
+  const preparedKey = (state?.control?.prepared ?? [])
+    .map((p) => p.revision)
+    .join(' ');
+  useEffect(() => {
+    for (const id of preparedKey.split(' '))
+      if (id) void loadDocument(id).catch(() => {});
+  }, [preparedKey, loadDocument]);
+  const matching =
+    document?.revision === revision
+      ? document
+      : ((revision ? loaded.get(revision) : undefined) ?? null);
   const sourceOrigin = (() => {
     const value = matching?.manifest.extensions['urn:oxidal:authoring']?.origin;
     return value === 'tone3000' || value === 'oxidal_example' ? value : 'mine';
@@ -708,8 +742,14 @@ export function useMixedRigSession({
     setDiscarding(null);
     setSwitching(true);
     setError('');
+    // Fetch the new rig's document while the device switches, so it is ready
+    // the moment the new revision is reported.
+    if (choice.kind === 'scenes')
+      void loadDocument(choice.revision).catch(() => {});
     try {
       await playChoice(choice);
+      // Show the new rig now rather than at the next status poll.
+      if (alive.current) await rigAudioState().then(accept, () => {});
     } catch (cause) {
       if (alive.current) setError(friendlyError(cause, 'update the rig'));
     } finally {
