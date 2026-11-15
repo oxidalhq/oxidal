@@ -113,6 +113,13 @@ try:
 finally:
     action({'kind': 'stop'})
     settle()
-    if original['phase'] == 'running':
+    if original.get('configured'):
+        # Put the owner's own rig and stream back, including Hear yourself;
+        # a rig that was stopped is started to restore it and stopped again,
+        # so Resume brings back the owner's sound rather than the last test.
         restored = start(original['configured'])
-        print('Restored', restored['configured']['revision'], flush=True)
+        if original['phase'] != 'running':
+            action({'kind': 'stop'})
+            settle()
+        print('Restored', restored['configured']['revision'],
+              'running' if original['phase'] == 'running' else 'stopped', flush=True)
