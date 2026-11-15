@@ -24,7 +24,7 @@ pub struct Duplex {
     faulted: bool,
     recovered_xruns: u64,
     recovery_window: std::time::Instant,
-    recovery_burst: u8,
+    recovery_burst: u16,
     /// Last completed block, or the last re-prime: a stall is measured from here.
     progress: std::time::Instant,
     meter: crate::meter::Meter,
@@ -33,10 +33,15 @@ pub struct Duplex {
 /// interfaces can come back from a restart with ALSA reporting RUNNING while
 /// neither side moves; without this only the worker's 2 s watchdog would act.
 const STALL: std::time::Duration = std::time::Duration::from_millis(250);
-/// Repeated recovery is itself an unusable audio state. Stop instead of
-/// producing an unbounded crackle loop while the UI continues to say Running.
-const RECOVERY_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
-const MAX_RECOVERY_BURST: u8 = 3;
+/// A small buffer may crackle: each xrun is recovered and counted in the
+/// resource strip, and the player chooses a larger buffer if they hear it.
+/// Only a stream that recovers almost continuously — more than 50 times a
+/// second for five seconds — has stopped being audio, and it stops then. A
+/// few xruns while the first blocks warm up must not end the stream.
+const RECOVERY_WINDOW: std::time::Duration = std::time::Duration::from_secs(5);
+const MAX_RECOVERY_BURST: u16 = 250;
+/// Recoveries logged in full per window; after that every hundredth.
+const LOGGED_RECOVERIES: u16 = 5;
 /// A single block slower than this is logged with its duration.
 const SLOW_BLOCK_US: f64 = 50_000.0;
 
@@ -256,7 +261,8 @@ impl Duplex {
         }
         if self.recovery_burst >= MAX_RECOVERY_BURST {
             return Err(format!(
-                "Audio stream remained unstable after {MAX_RECOVERY_BURST} recoveries in one second ({direction})"
+                "Audio stream remained unstable after {MAX_RECOVERY_BURST} recoveries in {} seconds ({direction}); choose a larger buffer in Settings › Audio",
+                RECOVERY_WINDOW.as_secs()
             ));
         }
         self.recovery_burst += 1;
@@ -283,10 +289,12 @@ impl Duplex {
         self.recovered_xruns = self.recovered_xruns.saturating_add(1);
         // Keep the installed meter protocol compatible. The worker journal exposes
         // recovery until a separately versioned UI/daemon counter update ships.
-        eprintln!(
-            "Recovered ALSA xrun {} ({direction}); duplex re-primed",
-            self.recovered_xruns
-        );
+        if self.recovery_burst <= LOGGED_RECOVERIES || self.recovered_xruns.is_multiple_of(100) {
+            eprintln!(
+                "Recovered ALSA xrun {} ({direction}); duplex re-primed",
+                self.recovered_xruns
+            );
+        }
         // The existing playback start threshold re-primes its queue. DSP state,
         // controls and accumulated meters remain intact; this is not gapless audio.
         self.progress = std::time::Instant::now();
@@ -584,6 +592,15 @@ mod tests {
         }
         assert_eq!(stream.recovered_xruns, 4);
         assert_eq!(stream.telemetry().xruns, Some(4));
+    }
+    #[test]
+    fn warm_up_xruns_at_a_small_buffer_keep_the_stream_running() {
+        let mut stream = Duplex::open_pcm(config(SampleFormat::S24Packed)).unwrap();
+        // The Pi at 48 × 2 recorded three playback xruns within 24 ms of start.
+        for _ in 0..10 {
+            assert_eq!(stream.reprime("Playback").unwrap(), Step::Waiting);
+        }
+        assert_eq!(stream.recovered_xruns, 10);
     }
     #[test]
     fn repeated_xruns_stop_instead_of_crackling_forever() {
