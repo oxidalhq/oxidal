@@ -178,6 +178,18 @@ fn is_playing(shared: &Shared, item: &oxidal_presets::LibraryItem) -> bool {
     }
 }
 
+/// Where Previous or Next goes: the neighbour of the playing preset, or the
+/// list's first (Next) or last (Previous) preset when the playing one is not
+/// in it.
+fn target_index(current: Option<usize>, len: usize, direction: i8) -> Result<usize, &'static str> {
+    match current {
+        Some(current) => step(current, len, direction),
+        None if len == 0 => Err("The Set list is empty. Add presets to it in Library"),
+        None if direction < 0 => Ok(len - 1),
+        None => Ok(0),
+    }
+}
+
 /// The neighbouring set-list position; the ends stop instead of wrapping.
 fn step(current: usize, len: usize, direction: i8) -> Result<usize, &'static str> {
     if direction < 0 {
@@ -241,15 +253,12 @@ fn neighbor(shared: &Shared, item: &oxidal_presets::LibraryItem) -> Neighbor {
 pub(crate) async fn position(shared: &Arc<Shared>) -> Result<MidiPosition, String> {
     let items = set_list(shared).await?;
     let index = items.iter().position(|item| is_playing(shared, item));
+    let target = |direction| target_index(index, items.len(), direction).ok();
     Ok(MidiPosition {
         index,
         length: items.len(),
-        previous: index
-            .and_then(|i| i.checked_sub(1))
-            .map(|i| neighbor(shared, &items[i])),
-        next: index
-            .filter(|i| i + 1 < items.len())
-            .map(|i| neighbor(shared, &items[i + 1])),
+        previous: target(-1).map(|i| neighbor(shared, &items[i])),
+        next: target(1).map(|i| neighbor(shared, &items[i])),
     })
 }
 
@@ -299,13 +308,12 @@ pub(crate) async fn navigate_recorded(
 
 /// Previous (-1) or Next (1) in the current Set list. The ends stop with a
 /// reason instead of wrapping, and a refused recall leaves the sound playing.
+/// From a preset outside the Set list, Next goes to its first preset and
+/// Previous to its last, as a footswitch on a modeller would.
 async fn navigate(shared: &Arc<Shared>, direction: i8) -> Result<String, String> {
     let items = set_list(shared).await?;
-    let current = items
-        .iter()
-        .position(|item| is_playing(shared, item))
-        .ok_or("Play a Set-list preset before using Previous or Next")?;
-    let target = step(current, items.len(), direction)?;
+    let current = items.iter().position(|item| is_playing(shared, item));
+    let target = target_index(current, items.len(), direction)?;
     let item = items[target].clone();
     let name = item.name.clone();
     recall_target(shared, item).await?;
@@ -640,6 +648,11 @@ mod tests {
         assert!(step(0, 3, -1).unwrap_err().contains("first"));
         assert!(step(2, 3, 1).unwrap_err().contains("last"));
         assert!(step(0, 1, 1).unwrap_err().contains("last"));
+        // Outside the Set list: Next enters at the first preset, Previous at the last.
+        assert_eq!(target_index(None, 3, 1), Ok(0));
+        assert_eq!(target_index(None, 3, -1), Ok(2));
+        assert!(target_index(None, 0, 1).unwrap_err().contains("empty"));
+        assert_eq!(target_index(Some(1), 3, 1), Ok(2));
     }
 
     #[test]
