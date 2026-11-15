@@ -349,31 +349,25 @@ export function useOxidalSounds({
     setCancelling(false);
     try {
       const reused = known ?? item.built?.revision;
-      const revision =
-        reused ?? (await build(item, ['Matching its level', 'Starting audio']));
+      const revision = reused ?? (await build(item, ['Starting audio']));
       if (!revision) return;
       if (cancelled.current) {
         setError('Stopped before starting audio.');
         return;
       }
       setBusy(true);
-      let unmatched = '';
-      if (!reused) {
-        // First play: measure it once so it is as loud as the other presets.
-        setProgress({
-          label: item.name,
-          steps: ['Matching its level', 'Starting audio'],
-          current: 0,
-        });
-        unmatched = await matchLevels();
-      }
+      // Play at once. Measuring the level takes over the audio for a while,
+      // so a sound built here is left to Even out in Levels.
       setProgress({
         label: item.name,
         steps: ['Starting audio'],
         current: 0,
       });
       await playScenes(revision);
-      if (unmatched) setNotice(unmatched);
+      if (!reused)
+        setNotice(
+          `${item.name} is playing. Its level is not matched yet: use Even out in Levels.`,
+        );
       onOpenRig?.();
     } catch (cause) {
       setError(friendlyError(cause, `play ${item.name}`));
