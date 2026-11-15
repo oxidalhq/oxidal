@@ -1,0 +1,14 @@
+[package]
+name = "oxidal-lv2-plugin"
+description = "The LV2 plugin interface for Oxidal's own effects"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+# The LV2 C interface needs raw pointers; every unsafe item is in `abi`.
+[lints.rust]
+missing_debug_implementations = "warn"
+[lints.clippy]
+all = "warn"

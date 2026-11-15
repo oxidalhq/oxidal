@@ -942,6 +942,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidal-bloom"
+version = "0.1.0"
+dependencies = [
+ "oxidal-dsp",
+ "oxidal-lv2-plugin",
+]
+
+[[package]]
 name = "oxidal-control"
 version = "0.1.0"
 dependencies = [
@@ -972,6 +980,18 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+]
+
+[[package]]
+name = "oxidal-dsp"
+version = "0.1.0"
+
+[[package]]
+name = "oxidal-echo"
+version = "0.1.0"
+dependencies = [
+ "oxidal-dsp",
+ "oxidal-lv2-plugin",
 ]
 
 [[package]]
@@ -1010,6 +1030,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxidal-lv2-plugin"
+version = "0.1.0"
+
+[[package]]
+name = "oxidal-motion"
+version = "0.1.0"
+dependencies = [
+ "oxidal-dsp",
+ "oxidal-lv2-plugin",
+]
+
+[[package]]
 name = "oxidal-nam"
 version = "0.1.0"
 dependencies = [
@@ -1029,6 +1061,14 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+]
+
+[[package]]
+name = "oxidal-sustain"
+version = "0.1.0"
+dependencies = [
+ "oxidal-dsp",
+ "oxidal-lv2-plugin",
 ]
 
 [[package]]

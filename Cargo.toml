@@ -18,6 +18,8 @@ tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "net", "sig
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 oxidal-graph = { path = "crates/oxidal-graph", version = "0.1.0" }
 oxidal-control = { path = "crates/oxidal-control", version = "0.1.0" }
+oxidal-dsp = { path = "crates/oxidal-dsp", version = "0.1.0" }
+oxidal-lv2-plugin = { path = "crates/oxidal-lv2-plugin", version = "0.1.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
