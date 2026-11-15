@@ -10747,5 +10747,1891 @@
       }
     ],
     "unsupported": null
+  },
+  {
+    "name": "GxEchoCat",
+    "uri": "http://guitarix.sourceforge.net/plugins/gxechocat#echocat",
+    "category": "Delay",
+    "author": "Guitarix team",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "input",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.25
+      },
+      {
+        "index": 1,
+        "symbol": "swell",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 2,
+        "symbol": "sustain",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 3,
+        "symbol": "output",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 4.0,
+        "default": 1.0
+      },
+      {
+        "index": 4,
+        "symbol": "bpm",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 24.0,
+        "maximum": 360.0,
+        "default": 120.0
+      },
+      {
+        "index": 5,
+        "symbol": "head1",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 6,
+        "symbol": "head2",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 7,
+        "symbol": "head3",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 8,
+        "symbol": "out",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 9,
+        "symbol": "in",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "GxTubeDelay",
+    "uri": "http://guitarix.sourceforge.net/plugins/gxtubedelay#tubedelay",
+    "category": "Delay",
+    "author": "Hermann Meyer",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "drive",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      },
+      {
+        "index": 1,
+        "symbol": "delay",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 1.0,
+        "maximum": 2500.0,
+        "default": 160.0
+      },
+      {
+        "index": 2,
+        "symbol": "feedback",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.01,
+        "maximum": 0.7,
+        "default": 0.35
+      },
+      {
+        "index": 3,
+        "symbol": "level",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      },
+      {
+        "index": 4,
+        "symbol": "output",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": -20.0,
+        "maximum": 20.0,
+        "default": 0.0
+      },
+      {
+        "index": 5,
+        "symbol": "out",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 6,
+        "symbol": "in",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "GxTubeTremelo",
+    "uri": "http://guitarix.sourceforge.net/plugins/gxtubetremelo#tubetremelo",
+    "category": "Modulator",
+    "author": "Hermann Meyer",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "sinewave",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 1,
+        "symbol": "depth",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      },
+      {
+        "index": 2,
+        "symbol": "speed",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.1,
+        "maximum": 14.0,
+        "default": 3.0
+      },
+      {
+        "index": 3,
+        "symbol": "drive",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      },
+      {
+        "index": 4,
+        "symbol": "output",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": -20.0,
+        "maximum": 20.0,
+        "default": 0.0
+      },
+      {
+        "index": 5,
+        "symbol": "out",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 6,
+        "symbol": "in",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "GxSustainer",
+    "uri": "http://guitarix.sourceforge.net/plugins/gx_susta_#_susta_",
+    "category": "Distortion",
+    "author": "Guitarix team",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "out",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 1,
+        "symbol": "in",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 2,
+        "symbol": "SUSTAIN",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      },
+      {
+        "index": 3,
+        "symbol": "VOLUME",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.5
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "Oxidal Bloom (Stereo)",
+    "uri": "urn:oxidal:plugin:bloom#stereo",
+    "category": "Reverb",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "mode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 7.0,
+        "default": 1.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Room"
+          },
+          {
+            "value": 1.0,
+            "label": "Hall"
+          },
+          {
+            "value": 2.0,
+            "label": "Plate"
+          },
+          {
+            "value": 3.0,
+            "label": "Spring"
+          },
+          {
+            "value": 4.0,
+            "label": "Cloud"
+          },
+          {
+            "value": 5.0,
+            "label": "Bloom"
+          },
+          {
+            "value": 6.0,
+            "label": "Shimmer"
+          },
+          {
+            "value": 7.0,
+            "label": "Nonlinear"
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "symbol": "decay",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 0.1,
+        "maximum": 60.0,
+        "default": 2.5
+      },
+      {
+        "index": 2,
+        "symbol": "predelay",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 250.0,
+        "default": 10.0
+      },
+      {
+        "index": 3,
+        "symbol": "size",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 4,
+        "symbol": "tone",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 60.0
+      },
+      {
+        "index": 5,
+        "symbol": "lowcut",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 20.0,
+        "maximum": 1000.0,
+        "default": 100.0
+      },
+      {
+        "index": 6,
+        "symbol": "mod",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 30.0
+      },
+      {
+        "index": 7,
+        "symbol": "speed",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 8,
+        "symbol": "shimmer",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 9,
+        "symbol": "interval",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Octave up"
+          },
+          {
+            "value": 1.0,
+            "label": "Fifth up"
+          },
+          {
+            "value": 2.0,
+            "label": "Octave down"
+          }
+        ]
+      },
+      {
+        "index": 10,
+        "symbol": "shape",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Gate"
+          },
+          {
+            "value": 1.0,
+            "label": "Reverse"
+          },
+          {
+            "value": 2.0,
+            "label": "Swell"
+          }
+        ]
+      },
+      {
+        "index": 11,
+        "symbol": "build",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 0.1,
+        "maximum": 5.0,
+        "default": 1.0
+      },
+      {
+        "index": 12,
+        "symbol": "mix",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 30.0
+      },
+      {
+        "index": 13,
+        "symbol": "freeze",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 14,
+        "symbol": "in_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 15,
+        "symbol": "in_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 16,
+        "symbol": "out_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 17,
+        "symbol": "out_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "Oxidal Echo (Stereo)",
+    "uri": "urn:oxidal:plugin:echo#stereo",
+    "category": "Delay",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "mode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 7.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Digital"
+          },
+          {
+            "value": 1.0,
+            "label": "Tape"
+          },
+          {
+            "value": 2.0,
+            "label": "Heads"
+          },
+          {
+            "value": 3.0,
+            "label": "Bucket"
+          },
+          {
+            "value": 4.0,
+            "label": "Reverse"
+          },
+          {
+            "value": 5.0,
+            "label": "Duck"
+          },
+          {
+            "value": 6.0,
+            "label": "Filter"
+          },
+          {
+            "value": 7.0,
+            "label": "Ping"
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "symbol": "time",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 20.0,
+        "maximum": 4000.0,
+        "default": 380.0
+      },
+      {
+        "index": 2,
+        "symbol": "sync",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 3,
+        "symbol": "bpm",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 40.0,
+        "maximum": 240.0,
+        "default": 120.0
+      },
+      {
+        "index": 4,
+        "symbol": "division",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 9.0,
+        "default": 4.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "1/1"
+          },
+          {
+            "value": 1.0,
+            "label": "1/2 dotted"
+          },
+          {
+            "value": 2.0,
+            "label": "1/2"
+          },
+          {
+            "value": 3.0,
+            "label": "1/4 dotted"
+          },
+          {
+            "value": 4.0,
+            "label": "1/4"
+          },
+          {
+            "value": 5.0,
+            "label": "1/8 dotted"
+          },
+          {
+            "value": 6.0,
+            "label": "1/4 triplet"
+          },
+          {
+            "value": 7.0,
+            "label": "1/8"
+          },
+          {
+            "value": 8.0,
+            "label": "1/8 triplet"
+          },
+          {
+            "value": 9.0,
+            "label": "1/16"
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "symbol": "feedback",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 110.0,
+        "default": 35.0
+      },
+      {
+        "index": 6,
+        "symbol": "tone",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 7,
+        "symbol": "mod",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 20.0
+      },
+      {
+        "index": 8,
+        "symbol": "age",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 30.0
+      },
+      {
+        "index": 9,
+        "symbol": "heads",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 14.0,
+        "default": 14.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "1"
+          },
+          {
+            "value": 1.0,
+            "label": "2"
+          },
+          {
+            "value": 2.0,
+            "label": "3"
+          },
+          {
+            "value": 3.0,
+            "label": "4"
+          },
+          {
+            "value": 4.0,
+            "label": "1+2"
+          },
+          {
+            "value": 5.0,
+            "label": "1+3"
+          },
+          {
+            "value": 6.0,
+            "label": "1+4"
+          },
+          {
+            "value": 7.0,
+            "label": "2+3"
+          },
+          {
+            "value": 8.0,
+            "label": "2+4"
+          },
+          {
+            "value": 9.0,
+            "label": "3+4"
+          },
+          {
+            "value": 10.0,
+            "label": "1+2+3"
+          },
+          {
+            "value": 11.0,
+            "label": "1+2+4"
+          },
+          {
+            "value": 12.0,
+            "label": "1+3+4"
+          },
+          {
+            "value": 13.0,
+            "label": "2+3+4"
+          },
+          {
+            "value": 14.0,
+            "label": "All"
+          }
+        ]
+      },
+      {
+        "index": 10,
+        "symbol": "spacing",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 0.0
+      },
+      {
+        "index": 11,
+        "symbol": "width",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 12,
+        "symbol": "mix",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 20.0
+      },
+      {
+        "index": 13,
+        "symbol": "hold",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 14,
+        "symbol": "in_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 15,
+        "symbol": "in_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 16,
+        "symbol": "out_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 17,
+        "symbol": "out_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "Oxidal Motion (Stereo)",
+    "uri": "urn:oxidal:plugin:motion#stereo",
+    "category": "Modulator",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "mode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 8.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Chorus"
+          },
+          {
+            "value": 1.0,
+            "label": "Flanger"
+          },
+          {
+            "value": 2.0,
+            "label": "Phaser"
+          },
+          {
+            "value": 3.0,
+            "label": "Vibe"
+          },
+          {
+            "value": 4.0,
+            "label": "Rotary"
+          },
+          {
+            "value": 5.0,
+            "label": "Tremolo"
+          },
+          {
+            "value": 6.0,
+            "label": "Harmonic"
+          },
+          {
+            "value": 7.0,
+            "label": "Vibrato"
+          },
+          {
+            "value": 8.0,
+            "label": "Ring"
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "symbol": "rate",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 0.05,
+        "maximum": 12.0,
+        "default": 0.8
+      },
+      {
+        "index": 2,
+        "symbol": "sync",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 3,
+        "symbol": "bpm",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 40.0,
+        "maximum": 240.0,
+        "default": 120.0
+      },
+      {
+        "index": 4,
+        "symbol": "division",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 11.0,
+        "default": 5.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "4 bars"
+          },
+          {
+            "value": 1.0,
+            "label": "2 bars"
+          },
+          {
+            "value": 2.0,
+            "label": "1 bar"
+          },
+          {
+            "value": 3.0,
+            "label": "1/2"
+          },
+          {
+            "value": 4.0,
+            "label": "1/4 dotted"
+          },
+          {
+            "value": 5.0,
+            "label": "1/4"
+          },
+          {
+            "value": 6.0,
+            "label": "1/8 dotted"
+          },
+          {
+            "value": 7.0,
+            "label": "1/4 triplet"
+          },
+          {
+            "value": 8.0,
+            "label": "1/8"
+          },
+          {
+            "value": 9.0,
+            "label": "1/8 triplet"
+          },
+          {
+            "value": 10.0,
+            "label": "1/16"
+          },
+          {
+            "value": 11.0,
+            "label": "1/16 triplet"
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "symbol": "depth",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 6,
+        "symbol": "feedback",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": -100.0,
+        "maximum": 100.0,
+        "default": 0.0
+      },
+      {
+        "index": 7,
+        "symbol": "tone",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 8,
+        "symbol": "shape",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "A"
+          },
+          {
+            "value": 1.0,
+            "label": "B"
+          },
+          {
+            "value": 2.0,
+            "label": "C"
+          }
+        ]
+      },
+      {
+        "index": 9,
+        "symbol": "stereo",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 180.0,
+        "default": 90.0
+      },
+      {
+        "index": 10,
+        "symbol": "fast",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 0.0
+      },
+      {
+        "index": 11,
+        "symbol": "mix",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 12,
+        "symbol": "in_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 13,
+        "symbol": "in_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 14,
+        "symbol": "out_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 15,
+        "symbol": "out_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
+  },
+  {
+    "name": "Oxidal Sustain (Stereo)",
+    "uri": "urn:oxidal:plugin:sustain#stereo",
+    "category": "Dynamics",
+    "ports": [
+      {
+        "index": 0,
+        "symbol": "on",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 1.0
+      },
+      {
+        "index": 1,
+        "symbol": "mode",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Normal"
+          },
+          {
+            "value": 1.0,
+            "label": "Harmonic"
+          },
+          {
+            "value": 2.0,
+            "label": "Mix"
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "symbol": "harmonic",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 2.0,
+        "default": 0.0,
+        "scale_points": [
+          {
+            "value": 0.0,
+            "label": "Octave"
+          },
+          {
+            "value": 1.0,
+            "label": "Octave and fifth"
+          },
+          {
+            "value": 2.0,
+            "label": "Two octaves"
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "symbol": "drive",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 65.0
+      },
+      {
+        "index": 4,
+        "symbol": "bloom",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": true,
+        "latency": false,
+        "minimum": 100.0,
+        "maximum": 10000.0,
+        "default": 2000.0
+      },
+      {
+        "index": 5,
+        "symbol": "sensitivity",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 50.0
+      },
+      {
+        "index": 6,
+        "symbol": "tone",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "default": 60.0
+      },
+      {
+        "index": 7,
+        "symbol": "level",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": -24.0,
+        "maximum": 6.0,
+        "default": 0.0
+      },
+      {
+        "index": 8,
+        "symbol": "dry",
+        "audio": false,
+        "control": true,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": true,
+        "toggled": true,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "default": 1.0
+      },
+      {
+        "index": 9,
+        "symbol": "in_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 10,
+        "symbol": "in_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": true,
+        "output": false,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 11,
+        "symbol": "out_l",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      },
+      {
+        "index": 12,
+        "symbol": "out_r",
+        "audio": true,
+        "control": false,
+        "atom": false,
+        "input": false,
+        "output": true,
+        "integer": false,
+        "toggled": false,
+        "logarithmic": false,
+        "latency": false,
+        "minimum": null,
+        "maximum": null,
+        "default": null
+      }
+    ],
+    "unsupported": null
   }
 ]

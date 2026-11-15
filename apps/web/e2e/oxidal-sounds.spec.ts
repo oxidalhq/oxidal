@@ -139,6 +139,8 @@ async function mockUnit(page: Page, unit: Unit = {}) {
         'fomp',
         'calf',
         'swh',
+        'zam',
+        'dpf',
       ].map((id) => ({
         id,
         name: id,

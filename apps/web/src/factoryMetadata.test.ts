@@ -23,8 +23,12 @@ describe('recipe metadata', () => {
       expect(recipe.genres.length).toBeLessThanOrEqual(3);
       for (const genre of recipe.genres) expect(factoryGenres).toContain(genre);
       const derived = factoryDerivedEngine(recipe);
+      // Captures with effects are hybrid, unless the sound is built for one
+      // capture size and says so: its tier then sets its capture budget.
       if (derived === 'tone3000-a2-lite')
         expect(recipe.engine).toMatch(/^tone3000-a2-(lite|full)$/);
+      else if (derived === 'hybrid')
+        expect(recipe.engine).toMatch(/^(hybrid|tone3000-a2-(lite|full))$/);
       else expect(recipe.engine).toBe(derived);
       expect(recipe.engine === 'lv2').toBe(factoryRoles(recipe).length === 0);
     }

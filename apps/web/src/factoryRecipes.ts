@@ -58,6 +58,11 @@ const pluginUris: Record<string, string> = {
   'MDA DubDelay': 'http://drobilla.net/plugins/mda/DubDelay',
   'MDA RezFilter': 'http://drobilla.net/plugins/mda/RezFilter',
   'MDA Tracker': 'http://drobilla.net/plugins/mda/Tracker',
+  GxEchoCat: 'http://guitarix.sourceforge.net/plugins/gxechocat#echocat',
+  GxTubeDelay: 'http://guitarix.sourceforge.net/plugins/gxtubedelay#tubedelay',
+  GxTubeTremelo:
+    'http://guitarix.sourceforge.net/plugins/gxtubetremelo#tubetremelo',
+  GxSustainer: 'http://guitarix.sourceforge.net/plugins/gx_susta_#_susta_',
   // ZamAudio and DISTRHO Ports effects qualified on the Pi (docs/lv2.md).
   ZamVerb: 'urn:zamaudio:ZamVerb',
   ZamGrains: 'urn:zamaudio:ZamGrains',
@@ -75,6 +80,10 @@ const pluginUris: Record<string, string> = {
   'Soul Force': 'http://www.niallmoody.com/ndcplugs/soulforce.htm',
   'Oxidal Hold (Stereo)': 'urn:oxidal:plugin:hold#stereo',
   'Oxidal Swell (Stereo)': 'urn:oxidal:plugin:swell#stereo',
+  'Oxidal Bloom (Stereo)': 'urn:oxidal:plugin:bloom#stereo',
+  'Oxidal Sustain (Stereo)': 'urn:oxidal:plugin:sustain#stereo',
+  'Oxidal Echo (Stereo)': 'urn:oxidal:plugin:echo#stereo',
+  'Oxidal Motion (Stereo)': 'urn:oxidal:plugin:motion#stereo',
 };
 
 /** The original four shared roles, or one of the named factory voices. */

@@ -1,6 +1,7 @@
 import { factoryRecipes, type FactoryRecipe } from './factoryRecipes.ts';
 import { hybridShowcaseRecipes } from './recipes/hybridShowcase.ts';
 import { lv2ShowcaseRecipes } from './recipes/lv2Showcase.ts';
+import { oxidalEffectsShowcaseRecipes } from './recipes/oxidalEffectsShowcase.ts';
 import { tone3000ShowcaseRecipes } from './recipes/tone3000Showcase.ts';
 import { songbookRecipes } from './songbookRecipes.ts';
 import { toolRecipes } from './toolRecipes.ts';
@@ -30,6 +31,7 @@ export const allFactoryRecipes: FactoryRecipe[] = [
   ...lv2ShowcaseRecipes,
   ...tone3000ShowcaseRecipes,
   ...hybridShowcaseRecipes,
+  ...oxidalEffectsShowcaseRecipes,
   ...factoryRecipes.filter((recipe) => !retiredRecipeIds.has(recipe.id)),
   ...songbookRecipes,
   ...toolRecipes,
