@@ -238,7 +238,14 @@ function InstrumentApp() {
   }, [displayMode]);
   const [focusedBlock, setFocusedBlock] = useState('nam-a');
   const [error, setError] = useState('');
+  /** Why the device could not be read; cleared when its state next arrives. */
+  const [reachError, setReachError] = useState('');
   useNotice('device', error ? { tone: 'error', text: error } : null);
+  // While disconnected, the resource strip's "Connection lost" already says it.
+  useNotice(
+    'device-reach',
+    connected && reachError ? { tone: 'error', text: reachError } : null,
+  );
   const [validation, setValidation] = useState('');
   const [draft, setDraft] = useState('');
   const [midiValue, setMidiValue] = useState(64);
@@ -276,7 +283,9 @@ function InstrumentApp() {
   useEffect(() => {
     let active = true;
     let events: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const open = () => {
+      clearTimeout(retry);
       events?.close();
       const source = new EventSource('/api/v1/events');
       events = source;
@@ -286,6 +295,7 @@ function InstrumentApp() {
           if (active && events === source) {
             accept(next);
             setConnected(true);
+            setReachError('');
             refreshMonitorFeed();
           }
         } catch {
@@ -311,14 +321,19 @@ function InstrumentApp() {
         }
       });
       events.onerror = () => {
-        if (active) setConnected(false);
+        if (!active) return;
+        setConnected(false);
+        // The browser retries a dropped stream itself, but gives up for good
+        // when the daemon or proxy answers with an error, as during a restart.
+        if (source.readyState === EventSource.CLOSED && events === source)
+          retry = setTimeout(open, 2000);
       };
       void capabilities()
         .then((info) => {
           if (active) setSimulator(info.midi_transport === 'simulator');
         })
         .catch((e: unknown) => {
-          if (active) setError(friendlyError(e, 'reach Oxidal'));
+          if (active) setReachError(friendlyError(e, 'reach Oxidal'));
         });
     };
     const offline = () => {
@@ -330,6 +345,7 @@ function InstrumentApp() {
     open();
     return () => {
       active = false;
+      clearTimeout(retry);
       events?.close();
       window.removeEventListener('offline', offline);
       window.removeEventListener('online', open);
