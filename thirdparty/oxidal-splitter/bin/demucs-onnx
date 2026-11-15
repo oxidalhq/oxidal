@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+export ORT_DYLIB_PATH="$root/lib/libonnxruntime.so.1.23.2"
+exec "$root/bin/demucs-onnx.real" "$@"

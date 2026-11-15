@@ -1,0 +1,53 @@
+[package]
+name = "demucs-onnx"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Hamidreza Sadeghi"]
+license = "MIT"
+description = "Demucs v4 music source separation on ONNX Runtime, CPU or GPU"
+repository = "https://github.com/hsadeghi/demucs-onnx"
+keywords = ["demucs", "audio", "source-separation", "onnx", "onnxruntime"]
+categories = ["multimedia::audio", "science"]
+
+[lib]
+name = "demucs_onnx"
+path = "src/lib.rs"
+
+[[bin]]
+name = "demucs-onnx"
+path = "src/bin/demucs-onnx.rs"
+
+[dependencies]
+# Pinned: ort is pre-1.0 and its Value API still moves between release
+# candidates. Bump deliberately, not by accident.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = [
+    # Load the separately packaged ONNX Runtime at execution time.
+    "load-dynamic",
+    "api-17",
+    "std",
+] }
+hound = "3.5"
+rayon = "1.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+
+[features]
+default = []
+# Accelerators. Each one needs a matching ONNX Runtime build at run time;
+# see the README for which package to install.
+cuda = ["ort/cuda"]
+tensorrt = ["ort/tensorrt"]
+directml = ["ort/directml"]
+coreml = ["ort/coreml"]
+rocm = ["ort/rocm"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+# Keep the vendored runner outside the Oxidal Cargo workspace.
+[workspace]

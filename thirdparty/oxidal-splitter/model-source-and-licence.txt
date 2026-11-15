@@ -1,0 +1,6 @@
+Demucs models from Meta, exported to ONNX by HRSadeghi.
+Export revision 9128f6ee0f1b8e333b5b8d12613aefb3bebc249a.
+https://huggingface.co/HRSadeghi/demucs-onnx/tree/9128f6ee0f1b8e333b5b8d12613aefb3bebc249a
+The exporter describes the checkpoints as CC BY-NC 4.0 in the model card.
+https://huggingface.co/HRSadeghi/demucs-onnx#licence
+Private owner evaluation kit. The upstream weights' redistribution rights have not been verified for a product release.
