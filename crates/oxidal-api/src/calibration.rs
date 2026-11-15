@@ -710,6 +710,22 @@ async fn restore(shared: &Shared, playing: Playing, stream: &oxidal_audio::Strea
     }
 }
 
+/// After this many presets in a row fail, audio itself is not starting (a
+/// buffer the interface cannot keep up with, a missing interface), so the run
+/// stops instead of reopening the device for every preset in the library.
+const FAILURES_IN_A_ROW: usize = 4;
+
+fn stopped_after_failures(output: &oxidal_audio::AudioProbe) -> String {
+    format!(
+        "Stopped after {FAILURES_IN_A_ROW} presets in a row would not play: audio is not \
+         starting with this interface and buffer ({} × {}, {:.1} ms). Try a larger buffer \
+         in Settings › Audio, then run Even out again; presets already measured are kept.",
+        output.period_frames,
+        output.periods,
+        1000.0 * f64::from(output.period_frames * output.periods) / f64::from(output.sample_rate),
+    )
+}
+
 async fn run(shared: Arc<Shared>, all: bool) {
     let result = run_inner(&shared, all).await;
     shared.calibration.update(|p| {
@@ -796,6 +812,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
     // Factory loudness must reproduce across units and guitar profiles.
     let peak_db = FACTORY_REFERENCE_PEAK_DB;
     let mut outcome = Ok(());
+    let mut in_a_row = 0;
     for item in todo {
         if shared.calibration.cancel.load(Ordering::Acquire) {
             outcome = Err("Cancelled".to_string());
@@ -818,6 +835,7 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
         .await;
         match measured {
             Ok(lufs) => {
+                in_a_row = 0;
                 let mut next = shared.calibration.current();
                 next.measured.insert(
                     item.key.clone(),
@@ -835,11 +853,18 @@ async fn run_inner(shared: &Shared, all: bool) -> Result<(), String> {
                 shared.calibration.update(|p| p.measured += 1);
             }
             // One preset that will not load or play is skipped, not fatal.
-            Err(e) => shared.calibration.update(|p| {
-                p.failed.push(format!("{}: {e}", item.name));
-            }),
+            Err(e) => {
+                in_a_row += 1;
+                shared.calibration.update(|p| {
+                    p.failed.push(format!("{}: {e}", item.name));
+                });
+            }
         }
         shared.calibration.update(|p| p.done += 1);
+        if in_a_row >= FAILURES_IN_A_ROW {
+            outcome = Err(stopped_after_failures(&stream.output));
+            break;
+        }
     }
     restore(shared, playing, &stream).await;
     outcome
@@ -936,6 +961,22 @@ mod tests {
                 .collect(),
         }
     }
+    #[test]
+    fn a_run_that_cannot_start_audio_names_the_buffer() {
+        let output = oxidal_audio::AudioProbe {
+            endpoint: "hw:CARD=Audio,DEV=0".into(),
+            direction: oxidal_audio::Direction::Playback,
+            sample_rate: 48_000,
+            channels: 2,
+            format: oxidal_audio::SampleFormat::S24Packed,
+            period_frames: 48,
+            periods: 2,
+        };
+        let message = stopped_after_failures(&output);
+        assert!(message.contains("4 presets in a row"), "{message}");
+        assert!(message.contains("48 × 2, 2.0 ms"), "{message}");
+    }
+
     #[test]
     fn offsets_use_the_median_when_every_sound_can_reach_it() {
         let c = measured(&[("clean", -26.0), ("crunch", -20.0), ("heavy", -14.0)]);
