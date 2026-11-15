@@ -6,6 +6,13 @@ import {
 import { finishEffectsOnly } from './oxidal/finish';
 import { builtName } from './oxidal/oxidalSounds.model';
 import { lv2ShowcaseRecipes } from '../../recipes/lv2Showcase';
+import { allFactoryRecipes } from '../../factoryCatalog';
+import {
+  oxidalEffectsSetList,
+  oxidalWorshipSetList,
+} from '../../recipes/oxidalEffectsShowcase';
+import type { FactoryRecipe } from '../../factoryRecipes';
+import { saveReadySound, unsavedReadySounds } from './oxidal/readySounds';
 
 /**
  * Set list membership, the starter set list and Duplicate: the explicit
@@ -146,4 +153,76 @@ export function starterMessage(result: {
   return result.before
     ? `Added ${result.added} after your ${result.before} existing entries. Nothing was replaced.${missing}`
     : `Starter set list added: ${result.added} presets.${missing}`;
+}
+
+/** Suggested set lists built from the Oxidal effects sounds. */
+export const suggestedSets = {
+  effects: { name: 'Oxidal effects tour', ids: oxidalEffectsSetList },
+  worship: { name: 'Worship service', ids: oxidalWorshipSetList },
+} as const;
+export type SuggestedSet = keyof typeof suggestedSets;
+
+/** The saved catalog entry of an Oxidal sound, if it is on this unit. */
+function savedEntry(
+  catalog: LibraryCatalog,
+  recipe: FactoryRecipe,
+): CatalogItem | undefined {
+  const name = builtName(recipe);
+  return catalog.items.find(
+    (i) =>
+      i.kind === 'rig' &&
+      i.origin === 'oxidal_example' &&
+      !i.superseded &&
+      (i.source_name === name || i.source_name === recipe.name),
+  );
+}
+
+/**
+ * Add a suggested set in one step: install the effect packs its effects-only
+ * sounds need, save every sound that has what it needs, then append them to
+ * the set list in order. Sounds that still need tones are reported by name.
+ */
+export async function addSuggestedSet(
+  key: SuggestedSet,
+  progress: (label: string) => void,
+): Promise<{ catalog: LibraryCatalog; added: number; waiting: string[] }> {
+  const recipes = suggestedSets[key].ids.flatMap((id) => {
+    const recipe = allFactoryRecipes.find((r) => r.id === id);
+    return recipe ? [recipe] : [];
+  });
+  const effectsOnly = recipes.filter((r) => r.engine === 'lv2');
+  if (effectsOnly.length) await finishEffectsOnly(effectsOnly, progress);
+  const ready = new Set((await unsavedReadySounds()).map((r) => r.id));
+  for (const recipe of recipes)
+    if (ready.has(recipe.id)) {
+      progress(`Saving ${recipe.name}…`);
+      await saveReadySound(recipe);
+    }
+  progress('Adding to the set list…');
+  let catalog = await libraryCatalog();
+  let added = 0;
+  const waiting: string[] = [];
+  for (const recipe of recipes) {
+    const entry = savedEntry(catalog, recipe);
+    if (!entry) waiting.push(recipe.name);
+    else if (!entry.in_set_list) {
+      catalog = await setListMember(entry, true);
+      added++;
+    }
+  }
+  return { catalog, added, waiting };
+}
+
+/** Plain-language result of adding a suggested set. */
+export function suggestedSetMessage(
+  key: SuggestedSet,
+  result: { added: number; waiting: string[] },
+): string {
+  const name = suggestedSets[key].name;
+  const waiting = result.waiting.length
+    ? ` Not added yet, they need tones or packs first: ${result.waiting.join(', ')}. Get them in Oxidal sounds.`
+    : '';
+  return result.added
+    ? `${name}: added ${result.added} to the end of your set list.${waiting}`
+    : `${name} is already in your set list.${waiting}`;
 }

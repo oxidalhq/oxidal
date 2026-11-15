@@ -25,6 +25,10 @@ import {
   setListMember,
   setUpStarter,
   starterMessage,
+  addSuggestedSet,
+  suggestedSetMessage,
+  suggestedSets,
+  type SuggestedSet,
 } from './features/library/setList';
 
 type Item = LibraryCatalog['items'][number];
@@ -58,12 +62,6 @@ export function LibraryManagement({
   const alive = useRef(false);
   const writing = useRef(false);
   const root = useRef<HTMLDivElement>(null);
-  const drag = useSetListDrag(root, (item, before) => {
-    void edit(item, {
-      kind: 'place',
-      before: before ? { kind: before.kind, id: before.id } : null,
-    });
-  });
   useEffect(() => {
     alive.current = true;
     void libraryCatalog()
@@ -150,6 +148,25 @@ export function LibraryManagement({
         () => message,
       );
     })();
+  const drag = useSetListDrag(root, (item, before) => {
+    void edit(item, {
+      kind: 'place',
+      before: before ? { kind: before.kind, id: before.id } : null,
+    });
+  });
+  const suggested = (key: SuggestedSet) =>
+    void (async () => {
+      let message = '';
+      await run(
+        `add ${suggestedSets[key].name}`,
+        async () => {
+          const result = await addSuggestedSet(key, setNotice);
+          message = suggestedSetMessage(key, result);
+          return result.catalog;
+        },
+        () => message,
+      );
+    })();
   // Earlier revisions of presets saved again are history, not Removed items.
   const current = catalog?.items.filter((i) => !i.superseded) ?? [];
   const members = current.filter((i) => i.in_set_list);
@@ -183,6 +200,18 @@ export function LibraryManagement({
         Perform. Hold a handle to drag, or use Move up and Move down. Removed
         entries can be restored.
       </p>
+      <div className="action-row" aria-label="Suggested set lists">
+        {(Object.keys(suggestedSets) as SuggestedSet[]).map((key) => (
+          <Button
+            key={key}
+            variant="outline"
+            disabled={disabled || !catalog}
+            onClick={() => suggested(key)}
+          >
+            <Plus aria-hidden="true" /> Add {suggestedSets[key].name}
+          </Button>
+        ))}
+      </div>
       <div className="action-row">
         <Button
           variant="outline"
