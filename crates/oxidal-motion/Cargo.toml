@@ -1,0 +1,22 @@
+[package]
+name = "oxidal-motion"
+description = "Oxidal Motion: Oxidal's own modulation effect, as an LV2 effect"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+# Safe Rust throughout; the one exception is the exported LV2 entry point.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+[lints.clippy]
+all = "warn"
+
+[dependencies]
+oxidal-dsp.workspace = true
+oxidal-lv2-plugin.workspace = true
