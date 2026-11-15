@@ -6,7 +6,7 @@
  */
 import type { Control } from './generated/contract';
 
-export const MOTION_URI_PREFIX = 'urn:oxidal:plugin:motion#';
+const MOTION_URI_PREFIX = 'urn:oxidal:plugin:motion#';
 
 /** Shape names for each Motion mode, by mode value (0 Chorus … 8 Ring). */
 const motionShapes: readonly (readonly [string, string, string])[] = [
@@ -22,7 +22,7 @@ const motionShapes: readonly (readonly [string, string, string])[] = [
 ];
 
 /** The Shape control of a Motion block with names for its current Mode. */
-export function withMotionShapeNames(control: Control, mode: number): Control {
+function withMotionShapeNames(control: Control, mode: number): Control {
   const names = motionShapes[Math.round(mode)];
   if (!names) return control;
   const scale_points = names.map((label, value) => ({ label, value }));
