@@ -56,8 +56,18 @@ picker and MIDI program changes follow. Membership is explicit:
   genre, after your existing entries and never in their place. A fresh unit
   offers it once; **Not now** stops the offer. Starter entries that are not
   installed are skipped and reported.
+- **Add Oxidal effects tour** and **Add Worship service** append those
+  suggested sets the same way: effect packs for their effects-only sounds are
+  installed, every sound with what it needs is saved, and sounds still waiting
+  for tones are named.
 
-Previous and Next stop at the ends of the set list.
+- Previous and Next stop at the ends of the set list. From a preset outside
+  it, Next goes to the first entry and Previous to the last.
+- The rig's preset picker opens on a **Set list** tab, numbered in this order.
+  Its **Oxidal sounds** tab also lists sounds that have everything they need
+  but are not saved yet; choosing one saves it and plays it.
+- In Perform a preset change discards unsaved edits without asking, as on a
+  modeller; the Rig editor still asks first.
 
 ## Duplicate
 

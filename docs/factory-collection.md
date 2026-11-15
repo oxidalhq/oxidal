@@ -58,6 +58,8 @@ flowchart LR
 | Oxidal effects tour | A suggested order for trying the four effects; only the limit rig needs captures. | Everything On (OX-LIMIT), Eight Rooms (OX-01), Endless Bow (OX-07), Dotted Clock (OX-14), Eight Motions (OX-19), Tape Loop Diary (OX-13), Glass Ceiling (OX-02) |
 | Worship service     | A Sunday service: clean verse to shimmer pad, then sustained leads.               | Sunday Morning (OX-25), Infinite Clean (OX-11), Glass Ceiling (OX-02), Violin Lead (OX-10)                                                                      |
 
+Add either set in one step from **Library → Set list** (**Add Oxidal effects tour**, **Add Worship service**).
+
 One setup per genre:
 
 | Genre           | Setup                    |
