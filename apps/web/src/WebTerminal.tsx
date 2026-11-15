@@ -247,11 +247,11 @@ function TerminalPanel({ mode }: { mode: 'unprivileged' | 'admin' }) {
   );
 }
 export function WebTerminal() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [mode, setMode] = useState<'unprivileged' | 'admin'>('unprivileged');
   return (
     <section className="panel min-w-0" aria-label="Web terminal">
-      <details onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary>Interactive terminal</summary>
         {open && (
           <>

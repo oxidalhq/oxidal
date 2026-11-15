@@ -14,7 +14,7 @@ export function DebugConsole() {
   const [command, setCommand] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [logText, setLogText] = useState('');
   const [logMessage, setLogMessage] = useState('');
   const [copying, setCopying] = useState(false);
@@ -106,7 +106,7 @@ export function DebugConsole() {
   const running = state?.job?.phase === 'running';
   return (
     <section className="panel" aria-label="Debug console">
-      <details onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary>Debug console</summary>
         <div className="action-row my-3">
           <Button
