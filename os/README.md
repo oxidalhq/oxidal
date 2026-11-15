@@ -173,10 +173,29 @@ the selected library plus headroom; only regular image files are written.
 
 The `development` image profile also installs a narrowly scoped local deploy helper
 for repeat testing. `oxidal-admin` may run only `oxidal-development-deploy bins
-SHA256` or `oxidal-development-deploy ui SHA256` without another sudo password.
-The helper reads the fixed `/tmp/oxidal-bins.tgz` or `/tmp/oxidal-ui.tgz`, verifies
-the supplied lowercase SHA-256, rejects links/traversal and enforces file/byte
-budgets. Binary updates are limited to the unprivileged daemon, its audio workers
+SHA256`, `oxidal-development-deploy ui SHA256` or `oxidal-development-deploy
+splitter SHA256` without another sudo password. The helper reads the fixed
+`/tmp/oxidal-bins.tgz`, `/tmp/oxidal-ui.tgz` or `/tmp/oxidal-splitter.tgz`,
+verifies the supplied lowercase SHA-256, rejects links/traversal and enforces
+file/byte budgets. A splitter runtime is streamed into
+`/var/lib/oxidal-splitter/releases/<checksum>/` on the data partition, its model
+checksums are checked, and `/opt/oxidal/splitter/current` is switched to it in
+one rename; the daemon uses it from the next split without a restart. The
+current and previous release are kept. The runtime must stay outside
+`/var/lib/oxidal`, the daemon's private `DynamicUser` state directory, where
+the runner cannot be executed.
+
+From a Mac or Linux checkout with Docker and SSH access, `pnpm deploy:local`
+builds the Linux ARM64 binaries (all workers, appliance features) and the
+splitter runner in `rust:1.95-bookworm`, builds the UI, and installs the
+splitter runtime, binaries and UI in that order. Name parts to deploy fewer,
+for example `pnpm deploy:local ui`, and add `--build-only` to stop before the
+Pi. `OXIDAL_PI` sets the SSH target (default `oxidal-admin@oxidal.local`) and
+`OXIDAL_SPLITTER_MODELS` the folder holding the four model files pinned in
+`thirdparty/oxidal-splitter/SHA256SUMS.models` (default
+`thirdparty/oxidal-splitter/models/`, which Git ignores). An image built
+before the splitter mode existed needs `pnpm deploy:local helper` once; it asks
+for the admin password. Binary updates are limited to the unprivileged daemon, its audio workers
 and the worker-loaded TONE3000 library; the root device/debug/terminal services are
 not replaceable. A failed service restart restores the preceding binaries, and only
 one previous UI/binary set is retained. Normal `appliance` images contain neither

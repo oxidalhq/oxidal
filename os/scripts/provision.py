@@ -199,7 +199,8 @@ def development_deploy_files(profile):
     sudoers = (
         b'# Private development image: scoped Oxidal application deploy only.\n'
         b'oxidal-admin ALL=(root) NOPASSWD: /usr/local/sbin/oxidal-development-deploy bins *, '
-        b'/usr/local/sbin/oxidal-development-deploy ui *\n'
+        b'/usr/local/sbin/oxidal-development-deploy ui *, '
+        b'/usr/local/sbin/oxidal-development-deploy splitter *\n'
     )
     return {
         'usr/local/sbin/oxidal-development-deploy': helper,
