@@ -1,51 +1,82 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
+import { CircleNotch } from '@phosphor-icons/react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '@/lib/cn';
 
-const variants = cva(
-  'oxidal-button inline-flex min-h-[var(--touch-target)] shrink-0 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40',
+/**
+ * The one button. Variants say what pressing it means; sizes follow the
+ * touch target (md = 44 px). Destructive keeps the ink and paper of an
+ * outline button and colours only its word and icon with danger ink, so a
+ * Delete never looks like a Save.
+ */
+const buttonVariants = cva(
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border font-semibold whitespace-nowrap transition-[transform,background-color] duration-[var(--duration-fast)] ease-[var(--ease-out)] select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-[1.125em] [&_svg]:shrink-0',
   {
     variants: {
-      size: {
-        default: '',
-        icon: 'size-[var(--touch-target)] p-0',
-      },
       variant: {
         default:
-          'border-primary bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
+          'border-primary bg-primary text-primary-foreground hover:bg-primary/90',
         outline:
           'border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground',
         secondary:
           'border-border bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground',
         ghost:
-          'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:text-foreground',
+          'border-transparent bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:text-foreground aria-[pressed=true]:text-foreground',
         destructive:
-          'border-destructive bg-destructive text-destructive-foreground hover:bg-destructive/90',
+          'border-border bg-transparent text-danger-ink hover:bg-accent',
+        link: 'h-auto min-h-0 border-transparent bg-transparent p-0 text-foreground underline decoration-wire underline-offset-[0.2em] hover:decoration-foreground',
+      },
+      size: {
+        sm: 'h-9 px-3 text-sm',
+        md: 'min-h-touch px-4 text-sm',
+        lg: 'min-h-13 px-5 text-md',
+        icon: 'size-touch p-0',
+        'icon-sm': 'size-9 p-0',
+        'icon-lg': 'size-13 p-0',
       },
     },
-    defaultVariants: { variant: 'default', size: 'default' },
+    defaultVariants: { variant: 'default', size: 'md' },
   },
 );
 
-/** shadcn-style button primitive with native keyboard and focus behavior.
- * @see docs/architecture.md
- */
+export type ButtonProps = React.ComponentProps<'button'> &
+  VariantProps<typeof buttonVariants> & {
+    /** Render the child element as the button (a link, for example). */
+    asChild?: boolean;
+    /** Shows a spinner and disables the button; the label stays readable. */
+    loading?: boolean;
+  };
+
 export function Button({
   className,
   variant,
   size,
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
-}: React.ComponentProps<'button'> &
-  VariantProps<typeof variants> & { asChild?: boolean }) {
+}: ButtonProps) {
   const Component = asChild ? Slot : 'button';
   return (
     <Component
       data-variant={variant ?? 'default'}
-      className={twMerge(clsx(variants({ variant, size }), className))}
+      data-size={size ?? 'md'}
+      data-loading={loading || undefined}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
-    />
+    >
+      {loading ? (
+        <>
+          <CircleNotch aria-hidden="true" className="animate-spin" />
+          {children}
+        </>
+      ) : (
+        children
+      )}
+    </Component>
   );
 }

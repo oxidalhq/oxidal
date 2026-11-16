@@ -4,20 +4,33 @@ import { Button } from './button';
 
 afterEach(cleanup);
 
-it('renders the variant as a data attribute for styling and tests', () => {
-  render(<Button variant="outline">Open</Button>);
+it('exposes variant and size for styling and tests', () => {
+  render(
+    <Button variant="outline" size="sm">
+      Open
+    </Button>,
+  );
   const button = screen.getByRole('button', { name: 'Open' });
   expect(button).toHaveAttribute('data-variant', 'outline');
+  expect(button).toHaveAttribute('data-size', 'sm');
   expect(button).toBeEnabled();
 });
 
-it('keeps the touch-target height class on the icon size', () => {
+it('disables itself and announces busy while loading', () => {
+  render(<Button loading>Saving</Button>);
+  const button = screen.getByRole('button', { name: 'Saving' });
+  expect(button).toBeDisabled();
+  expect(button).toHaveAttribute('aria-busy', 'true');
+});
+
+it('renders a link when asked to', () => {
   render(
-    <Button size="icon" aria-label="Delete">
-      ×
+    <Button asChild>
+      <a href="#rig">Rig</a>
     </Button>,
   );
-  expect(screen.getByRole('button', { name: 'Delete' }).className).toContain(
-    'size-[var(--touch-target)]',
+  expect(screen.getByRole('link', { name: 'Rig' })).toHaveAttribute(
+    'href',
+    '#rig',
   );
 });
