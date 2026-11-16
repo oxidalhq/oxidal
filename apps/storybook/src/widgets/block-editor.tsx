@@ -20,6 +20,7 @@ import {
 import { Slider } from '../components/ui/slider';
 import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
+import { CabMics } from './cab-mics';
 import { VisualControl } from './visual-control';
 import type { ChainBlockModel } from './chain';
 
@@ -35,6 +36,8 @@ export type BlockControl = {
   main?: boolean;
   /** Group heading in the full editor (Tone, Time, Mix…). */
   group?: string;
+  /** Set by a drawing (mic angle…), not listed as a slider. */
+  hidden?: boolean;
 };
 
 export type BlockModel = ChainBlockModel & {
@@ -43,6 +46,8 @@ export type BlockModel = ChainBlockModel & {
   controls: BlockControl[];
   /** For amps and cabs: the model or impulse response, chosen from a list. */
   source?: { label: string; value: string; options: ComboboxOption[] };
+  /** For cabs: the microphones, A then B (drawn by CabMics). */
+  mics?: string[];
 };
 
 /**
@@ -93,16 +98,20 @@ export function BlockQuickEditor({
           {block.on ? 'On' : 'Off'}
         </Toggle>
       </div>
-      <VisualControl
-        kind={block.kind}
-        role={block.role}
-        controls={block.controls}
-        onControl={onControl}
-        className={cn(
-          'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
-          !block.on && 'text-muted-foreground',
-        )}
-      />
+      {block.mics ? (
+        <CabMics block={block} onControl={onControl} compact />
+      ) : (
+        <VisualControl
+          kind={block.kind}
+          role={block.role}
+          controls={block.controls}
+          onControl={onControl}
+          className={cn(
+            'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+            !block.on && 'text-muted-foreground',
+          )}
+        />
+      )}
       {block.source && onSource && (
         <div className="grid gap-1">
           <Label as="span" className="small-caps text-xs text-muted-foreground">
@@ -187,12 +196,13 @@ export function BlockFullEditor({
   onReset?: () => void;
 }) {
   const groups = new Map<string, BlockControl[]>();
-  for (const control of block.controls) {
+  for (const control of block.controls.filter((c) => !c.hidden)) {
     const key = control.group ?? '';
     groups.set(key, [...(groups.get(key) ?? []), control]);
   }
   return (
     <div data-slot="block-full-editor" className="grid gap-5">
+      {block.mics && <CabMics block={block} onControl={onControl} />}
       <VisualControl
         kind={block.kind}
         role={block.role}

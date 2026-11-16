@@ -55,6 +55,7 @@ import {
   VersionPicker,
   type PresetVersion,
 } from '../widgets/versions';
+import { CabMics } from '../widgets/cab-mics';
 import { VisualControl } from '../widgets/visual-control';
 
 export type RigRoute = Step<BlockModel>[];
@@ -159,16 +160,23 @@ export function RigSurface({
   const changes = React.useMemo(() => diffRoutes(saved, route), [saved, route]);
   const reading = compare === 'saved';
 
-  const control = (id: string, controlId: string, value: number) =>
-    onRoute(
-      updateBlock(route, id, (b) => ({
-        ...b,
-        unsaved: true,
-        controls: b.controls.map((c) =>
-          c.id === controlId ? { ...c, value } : c,
-        ),
-      })),
-    );
+  // Several changes can arrive in one gesture (a mic's position and angle);
+  // each builds on the last, not on the route as it was when drawn.
+  const latest = React.useRef(route);
+  React.useEffect(() => {
+    latest.current = route;
+  }, [route]);
+  const control = (id: string, controlId: string, value: number) => {
+    const next = updateBlock(latest.current, id, (b) => ({
+      ...b,
+      unsaved: true,
+      controls: b.controls.map((c) =>
+        c.id === controlId ? { ...c, value } : c,
+      ),
+    }));
+    latest.current = next;
+    onRoute(next);
+  };
   const toggle = (id: string, on: boolean) =>
     onRoute(updateBlock(route, id, (b) => ({ ...b, on })));
   const shift = (delta: -1 | 1) => {
@@ -357,17 +365,26 @@ export function RigSurface({
                 {block.on ? 'On' : 'Off'}
               </Toggle>
             </div>
-            <VisualControl
-              kind={block.kind}
-              role={block.role}
-              controls={block.controls}
-              onControl={(c, v) => control(block.id, c, v)}
-              disabled={reading}
-              className={cn(
-                'h-24 rounded-lg border border-border bg-card px-2 py-1 text-foreground',
-                !block.on && 'text-muted-foreground',
-              )}
-            />
+            {block.mics ? (
+              <CabMics
+                block={block}
+                onControl={(c, v) => control(block.id, c, v)}
+                compact
+                disabled={reading}
+              />
+            ) : (
+              <VisualControl
+                kind={block.kind}
+                role={block.role}
+                controls={block.controls}
+                onControl={(c, v) => control(block.id, c, v)}
+                disabled={reading}
+                className={cn(
+                  'h-24 rounded-lg border border-border bg-card px-2 py-1 text-foreground',
+                  !block.on && 'text-muted-foreground',
+                )}
+              />
+            )}
           </div>
           <div className="grid grid-cols-4 content-end gap-x-4 gap-y-2">
             {main.map((c) => (

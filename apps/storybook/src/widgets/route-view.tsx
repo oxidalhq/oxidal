@@ -411,7 +411,10 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                     vertical
                       ? 'ml-3 grid border-l-2 border-wire pl-3'
                       : 'flex items-center',
+                    (step.levels?.[b] ?? 0) <= -60 &&
+                      '[&_[data-slot=chain-block]]:border-dashed [&_[data-slot=chain-block]]:bg-transparent [&_[data-slot=chain-block]]:text-muted-foreground',
                   )}
+                  data-silent={(step.levels?.[b] ?? 0) <= -60 || undefined}
                 >
                   <span
                     className={cn(
@@ -420,7 +423,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                     )}
                   >
                     {vertical
-                      ? `Branch ${LETTERS[b]}${branch.length ? '' : ' · dry'}`
+                      ? `Branch ${LETTERS[b]}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= -60 ? ' · silent' : ''}`
                       : LETTERS[b]}
                   </span>
                   {branch.length ? (

@@ -9,15 +9,8 @@ import { LibraryList, type LibraryItem } from '../patterns/library-list';
 import { Workspace } from '../patterns/workspace';
 import { LIBRARY_SECTIONS } from './library.sections';
 import { Songbook } from './songbook';
-import {
-  DI,
-  PRESETS,
-  SETLIST,
-  SOUNDS,
-  STEM_SONGS,
-  TONES,
-  TRACKS,
-} from './fixtures';
+import { SetListSection } from './set-list-section';
+import { DI, PRESETS, SOUNDS, STEM_SONGS, TONES, TRACKS } from './fixtures';
 
 /**
  * Library: eight sections in one workspace, each a LibraryList with its
@@ -132,31 +125,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             <PoweredByTone3000 />
           </div>
         )}
-        {section === 'setlist' && (
-          <LibraryList
-            {...common}
-            items={SETLIST}
-            primary={
-              <Button variant="outline">
-                <Plus /> Add preset
-              </Button>
-            }
-            empty={{
-              title: 'The set list is empty',
-              text: 'Add presets from Mine or Oxidal sounds; drag to order them.',
-            }}
-            actions={[
-              { label: 'Choose backing track', run: () => {} },
-              { label: 'Move up', run: () => {} },
-              { label: 'Move down', run: () => {} },
-              {
-                label: 'Remove from set list',
-                destructive: true,
-                run: () => {},
-              },
-            ]}
-          />
-        )}
+        {section === 'setlist' && <SetListSection />}
         {section === 'songbook' && <Songbook />}
         {section === 'tones' && (
           <LibraryList
