@@ -100,7 +100,7 @@ export function ChainBlock({
       className={cn(
         'group/block relative grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 rounded-pad border border-input bg-card text-left transition-[background-color,transform,box-shadow] duration-[var(--duration-fast)] select-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40',
         size === 'md'
-          ? 'min-h-14 w-40 px-2.5 py-2'
+          ? 'min-h-14 w-44 px-2.5 py-2'
           : 'min-h-16 w-48 px-3 py-2.5',
         !block.on && 'border-dashed text-muted-foreground',
         muted && 'opacity-50 [&_svg]:opacity-50',

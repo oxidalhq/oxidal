@@ -10,11 +10,15 @@ import {
   SquaresFour,
   Trash,
   ArrowsLeftRight,
+  CaretLeft,
+  CaretRight,
 } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { previewOf } from '../lib/preview';
 import {
   blocksOf,
+  branchName,
+  getList,
   isSplit,
   locate,
   moveStep,
@@ -22,8 +26,10 @@ import {
   startBranch,
   updateBlock,
   type ListPath,
+  type Split,
   type Step,
 } from '../lib/route';
+import { Switch } from '../components/ui/switch';
 import { diffRoutes } from '../lib/route-diff';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -79,6 +85,21 @@ function usePhone() {
     return () => query.removeEventListener('change', update);
   }, []);
   return phone;
+}
+
+/** Where a block sits, in words: "Lead › 2 of 4", or "Main line · 3 of 5". */
+function whereOf(route: RigRoute, id: string) {
+  const at = locate(route, id);
+  if (!at) return '';
+  const names: string[] = [];
+  for (let k = 0; k < at.path.length; k += 2) {
+    const split = getList(route, at.path.slice(0, k))[
+      at.path[k]!
+    ] as Split<BlockModel>;
+    names.push(branchName(split, at.path[k + 1]!));
+  }
+  const list = getList(route, at.path);
+  return `${names.length ? names.join(' › ') : 'Main line'} · ${at.index + 1} of ${list.length}`;
 }
 
 function withPreview(route: RigRoute): RigRoute {
@@ -259,6 +280,16 @@ export function RigSurface({
     );
   };
 
+  const stepTo = (delta: -1 | 1) => {
+    if (!block) return;
+    const next = blocks[blocks.indexOf(block) + delta];
+    if (!next) return;
+    setSelected(next.id);
+    document
+      .querySelector(`[data-block="${CSS.escape(next.id)}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+
   const select = (id: string) => {
     setSelected(id);
     if (phone && !editing && !reading) setSheet(true);
@@ -408,31 +439,55 @@ export function RigSurface({
 
       {block && !editing && (
         <div
-          data-slot="block-strip"
-          className="hidden gap-x-6 gap-y-3 border-t border-border px-page py-3 md:grid md:grid-cols-[16rem_minmax(0,1fr)]"
+          data-slot="block-dock"
+          className="sticky bottom-0 z-strip hidden px-page pt-1 pb-3 md:block"
         >
-          <div className="grid gap-1.5">
-            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <Title as="h2" size="sm" className="truncate">
-                  {block.label}
-                </Title>
-                <Caption as="span" className="small-caps text-xs">
-                  {block.caption ?? block.kind}
-                </Caption>
+          <section
+            aria-label={`${block.label} controls`}
+            className={cn(
+              'grid gap-x-5 gap-y-3 rounded-xl border border-foreground/70 bg-raised p-3 shadow-raised lg:grid-cols-[15rem_minmax(12rem,1fr)_17rem]',
+              !block.on && 'border-dashed',
+            )}
+          >
+            <div className="grid content-start gap-2.5">
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Previous block"
+                  disabled={blocks.indexOf(block) <= 0}
+                  onClick={() => stepTo(-1)}
+                >
+                  <CaretLeft />
+                </Button>
+                <div className="grid min-w-0 flex-1 gap-0.5">
+                  <Eyebrow className="truncate">
+                    {whereOf(shown, block.id)}
+                  </Eyebrow>
+                  <Title as="h2" size="sm" className="truncate">
+                    {block.label}
+                  </Title>
+                  <Caption as="span" className="truncate small-caps text-xs">
+                    {block.caption ?? block.kind}
+                  </Caption>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Next block"
+                  disabled={blocks.indexOf(block) >= blocks.length - 1}
+                  onClick={() => stepTo(1)}
+                >
+                  <CaretRight />
+                </Button>
               </div>
-              <span className="flex items-center gap-1">
-                {canSwap && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={reading}
-                    onClick={() => openSwap(block.id)}
-                    aria-label={`Change ${block.label}`}
-                  >
-                    <ArrowsLeftRight /> Change…
-                  </Button>
-                )}
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-1.5">
+                <label
+                  htmlFor={`on-${block.id}`}
+                  className="text-sm font-medium"
+                >
+                  {block.on ? 'Block on' : 'Bypassed'}
+                </label>
                 <MidiTarget
                   id={`${block.id}:on`}
                   label={`${block.label} · on/off`}
@@ -443,87 +498,98 @@ export function RigSurface({
                     toggle(block.id, !block.on)
                   }
                 >
-                  <Toggle
-                    size="sm"
-                    pressed={block.on}
-                    onPressedChange={(on) => toggle(block.id, on)}
+                  <Switch
+                    id={`on-${block.id}`}
+                    checked={block.on}
+                    onCheckedChange={(on) => toggle(block.id, on)}
                     disabled={reading}
-                  >
-                    <span className="sr-only">{block.label} </span>
-                    {block.on ? 'On' : 'Off'}
-                  </Toggle>
-                </MidiTarget>
-              </span>
-            </div>
-            {block.mics ? (
-              <CabMics
-                block={block}
-                onControl={(c, v) => control(block.id, c, v)}
-                compact
-                disabled={reading}
-              />
-            ) : (
-              <VisualControl
-                kind={block.kind}
-                role={block.role}
-                controls={block.controls}
-                onControl={(c, v) => control(block.id, c, v)}
-                disabled={reading}
-                className={cn(
-                  'h-24 rounded-lg border border-border bg-card px-2 py-1 text-foreground',
-                  !block.on && 'text-muted-foreground',
-                )}
-              />
-            )}
-          </div>
-          <div className="grid grid-cols-4 content-end gap-x-4 gap-y-2">
-            {main.map((c) => (
-              <div key={c.id} className="grid min-h-16 content-end gap-0.5">
-                <Label
-                  as="span"
-                  className="small-caps text-xs text-muted-foreground"
-                >
-                  {c.label}
-                </Label>
-                <MidiTarget
-                  id={`${block.id}:${c.id}`}
-                  label={`${block.label} · ${c.label}`}
-                  kind="continuous"
-                  group="Blocks"
-                  onMidi={(m) =>
-                    m.kind === 'cc' &&
-                    control(
-                      block.id,
-                      c.id,
-                      scaleFromMidi(m.value, c.min, c.max, c.step ?? 0.1),
-                    )
-                  }
-                >
-                  <NumberField
-                    className="w-full"
-                    label={`${block.label} ${c.label}`}
-                    value={c.value}
-                    min={c.min}
-                    max={c.max}
-                    step={c.step ?? 0.5}
-                    fine={(c.step ?? 0.5) / 5}
-                    unit={c.unit}
-                    digits={c.step && c.step >= 1 ? 0 : 1}
-                    disabled={reading}
-                    onChange={(value) => control(block.id, c.id, value)}
                   />
                 </MidiTarget>
               </div>
-            ))}
-            {Array.from({ length: Math.max(0, 4 - main.length) }, (_, i) => (
-              <div key={`slot-${i}`} aria-hidden="true" className="min-h-16" />
-            ))}
-            <div className="col-span-4 flex justify-end">
-              <Button size="sm" variant="ghost" onClick={() => setFull(true)}>
-                <Faders /> All controls · {block.controls.length}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {canSwap && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={reading}
+                    onClick={() => openSwap(block.id)}
+                    aria-label={`Change ${block.label}…`}
+                  >
+                    <ArrowsLeftRight /> Change…
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setFull(true)}
+                >
+                  <Faders /> All controls · {block.controls.length}
+                </Button>
+              </div>
             </div>
-          </div>
+            <div className="min-w-0">
+              {block.mics ? (
+                <CabMics
+                  block={block}
+                  onControl={(c, v) => control(block.id, c, v)}
+                  compact
+                  disabled={reading}
+                />
+              ) : (
+                <VisualControl
+                  kind={block.kind}
+                  role={block.role}
+                  controls={block.controls}
+                  onControl={(c, v) => control(block.id, c, v)}
+                  disabled={reading}
+                  className={cn(
+                    'h-32 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+                    !block.on && 'text-muted-foreground',
+                  )}
+                />
+              )}
+            </div>
+            <div className="grid grid-cols-2 content-start gap-x-3 gap-y-2">
+              {main.map((c) => (
+                <div key={c.id} className="grid gap-0.5">
+                  <Label
+                    as="span"
+                    className="small-caps text-xs text-muted-foreground"
+                  >
+                    {c.label}
+                  </Label>
+                  <MidiTarget
+                    id={`${block.id}:${c.id}`}
+                    label={`${block.label} · ${c.label}`}
+                    kind="continuous"
+                    group="Blocks"
+                    onMidi={(m) =>
+                      m.kind === 'cc' &&
+                      control(
+                        block.id,
+                        c.id,
+                        scaleFromMidi(m.value, c.min, c.max, c.step ?? 0.1),
+                      )
+                    }
+                  >
+                    <NumberField
+                      className="w-full"
+                      label={`${block.label} ${c.label}`}
+                      value={c.value}
+                      min={c.min}
+                      max={c.max}
+                      step={c.step ?? 0.5}
+                      fine={(c.step ?? 0.5) / 5}
+                      unit={c.unit}
+                      digits={c.step && c.step >= 1 ? 0 : 1}
+                      disabled={reading}
+                      onChange={(value) => control(block.id, c.id, value)}
+                    />
+                  </MidiTarget>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       )}
 

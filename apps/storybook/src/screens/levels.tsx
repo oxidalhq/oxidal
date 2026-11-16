@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { Badge } from '../components/ui/badge';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
+import { Slider } from '../components/ui/slider';
+import { Switch } from '../components/ui/switch';
 import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { StereoMeter } from '../widgets/meter';
+import { DeviceDashboard } from './device-dashboard';
 
 function series(seed: number, n = 120) {
   const out: number[] = [];
@@ -84,7 +87,75 @@ function History({
  * history — processing against the deadline, host CPU, temperature — with
  * xruns and clips as counts. Everything measured, nothing decorative.
  */
-export function Levels() {
+const VENUES = [
+  { id: 'home', name: 'Home', eq: 'Flat' },
+  { id: 'small', name: 'Small room', eq: 'Low cut 100 Hz · −2 dB at 250 Hz' },
+  { id: 'friday', name: 'Friday gig', eq: 'Low cut 80 Hz · +1.5 dB presence' },
+];
+
+/**
+ * The output, after the mix: master level, mono for a single PA feed, and
+ * the venue EQ profile for the room. These are for the room, not the
+ * preset, so they live here with the meters rather than in the rig or in
+ * Settings › Audio.
+ */
+function Output() {
+  const [level, setLevel] = useState(-3);
+  const [mono, setMono] = useState(false);
+  const [venue, setVenue] = useState('small');
+  const active = VENUES.find((v) => v.id === venue)!;
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader>
+        <CardTitle>Output</CardTitle>
+        <Caption as="span" className="text-xs">
+          After the mix · not saved in presets
+        </Caption>
+      </CardHeader>
+      <div className="grid gap-x-6 gap-y-4 md:grid-cols-3">
+        <Slider
+          label="Master level"
+          min={-60}
+          max={6}
+          step={0.5}
+          value={[level]}
+          onValueChange={([v]) => v !== undefined && setLevel(v)}
+          readout={`${level.toFixed(1)} dB`}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="mono" className="grid gap-0.5">
+            <span className="text-sm font-medium">Mono</span>
+            <Caption as="span" className="text-xs">
+              For a single PA or amp feed.
+            </Caption>
+          </label>
+          <Switch id="mono" checked={mono} onCheckedChange={setMono} />
+        </div>
+        <div className="grid gap-1">
+          <span className="text-sm font-medium">Venue EQ</span>
+          <SegmentedControl
+            size="sm"
+            value={venue}
+            onValueChange={setVenue}
+            aria-label="Venue EQ"
+          >
+            {VENUES.map((v) => (
+              <Segment key={v.id} value={v.id}>
+                {v.name}
+              </Segment>
+            ))}
+          </SegmentedControl>
+          <Caption className="text-xs">{active.eq}</Caption>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function Levels({
+  view: initial = 'meters',
+}: { view?: 'meters' | 'device' } = {}) {
+  const [view, setView] = useState(initial);
   const [range, setRange] = useState('10m');
   const [live, setLive] = useState({ il: -18, ir: -19, ol: -9, or: -10 });
   const [dsp] = useState(() => series(40));
@@ -107,91 +178,118 @@ export function Levels() {
     <>
       <PageHeading
         eyebrow="Levels"
-        title="Meters and history"
-        caption="Live from the audio worker · 96 × 3 · 6 ms"
+        title={view === 'device' ? 'Device details' : 'Output and meters'}
+        caption={
+          view === 'device'
+            ? 'Everything the device reports, over the last ten minutes'
+            : 'What leaves the device, set for the room you are in'
+        }
         actions={
-          <SegmentedControl
-            size="sm"
-            value={range}
-            onValueChange={setRange}
-            aria-label="History range"
-          >
-            <Segment value="1m">1 min</Segment>
-            <Segment value="10m">10 min</Segment>
-            <Segment value="1h">1 h</Segment>
-          </SegmentedControl>
+          <>
+            <SegmentedControl
+              size="sm"
+              value={view}
+              onValueChange={(v) => setView(v as 'meters' | 'device')}
+              aria-label="Levels view"
+            >
+              <Segment value="meters">Output and meters</Segment>
+              <Segment value="device">Device details</Segment>
+            </SegmentedControl>
+            {view === 'meters' && (
+              <SegmentedControl
+                size="sm"
+                value={range}
+                onValueChange={setRange}
+                aria-label="History range"
+              >
+                <Segment value="1m">1 min</Segment>
+                <Segment value="10m">10 min</Segment>
+                <Segment value="1h">1 h</Segment>
+              </SegmentedControl>
+            )}
+          </>
         }
       />
-      <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Now</CardTitle>
-            <Badge tone="live">Running</Badge>
-          </CardHeader>
-          <div className="grid gap-5">
-            <StereoMeter
-              label="Input"
-              left={live.il}
-              right={live.ir}
-              peaks={[live.il + 3, live.ir + 3]}
-              size="lg"
+      {view === 'device' ? (
+        <DeviceDashboard />
+      ) : (
+        <div className="grid gap-4 px-page lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+          <Output />
+          <Card>
+            <CardHeader>
+              <CardTitle>Now</CardTitle>
+              <Badge tone="live">Running</Badge>
+            </CardHeader>
+            <div className="grid gap-5">
+              <StereoMeter
+                label="Input"
+                left={live.il}
+                right={live.ir}
+                peaks={[live.il + 3, live.ir + 3]}
+                size="lg"
+              />
+              <StereoMeter
+                label="Output"
+                left={live.ol}
+                right={live.or}
+                peaks={[live.ol + 2, live.or + 2]}
+                size="lg"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                ['Xruns', '0'],
+                ['Clips', '0'],
+                ['Recovered', '2'],
+              ].map(([k, v]) => (
+                <div
+                  key={k}
+                  className="grid gap-0.5 rounded-lg border border-border p-3"
+                >
+                  <span className="small-caps text-xs font-medium text-muted-foreground">
+                    {k}
+                  </span>
+                  <Readout size="lg">{v}</Readout>
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Last{' '}
+                {range === '1m'
+                  ? 'minute'
+                  : range === '10m'
+                    ? 'ten minutes'
+                    : 'hour'}
+              </CardTitle>
+              <Caption as="span" className="text-xs">
+                The dashed line is the period deadline.
+              </Caption>
+            </CardHeader>
+            <History
+              label="Processing, p95 of the period"
+              data={dsp}
+              unit="%"
+              limit={100}
             />
-            <StereoMeter
-              label="Output"
-              left={live.ol}
-              right={live.or}
-              peaks={[live.ol + 2, live.or + 2]}
-              size="lg"
+            <History
+              label="Host CPU"
+              data={cpu}
+              unit="%"
+              colour="var(--wire)"
             />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              ['Xruns', '0'],
-              ['Clips', '0'],
-              ['Recovered', '2'],
-            ].map(([k, v]) => (
-              <div
-                key={k}
-                className="grid gap-0.5 rounded-lg border border-border p-3"
-              >
-                <span className="small-caps text-xs font-medium text-muted-foreground">
-                  {k}
-                </span>
-                <Readout size="lg">{v}</Readout>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Last{' '}
-              {range === '1m'
-                ? 'minute'
-                : range === '10m'
-                  ? 'ten minutes'
-                  : 'hour'}
-            </CardTitle>
-            <Caption as="span" className="text-xs">
-              The dashed line is the period deadline.
-            </Caption>
-          </CardHeader>
-          <History
-            label="Processing, p95 of the period"
-            data={dsp}
-            unit="%"
-            limit={100}
-          />
-          <History label="Host CPU" data={cpu} unit="%" colour="var(--wire)" />
-          <History
-            label="Temperature"
-            data={temp}
-            unit="°"
-            limit={80}
-            colour="var(--wire)"
-          />
-        </Card>
-      </div>
+            <History
+              label="Temperature"
+              data={temp}
+              unit="°"
+              limit={80}
+              colour="var(--wire)"
+            />
+          </Card>
+        </div>
+      )}
     </>
   );
 }

@@ -289,7 +289,7 @@ ToneChasing.play = async ({ canvasElement }) => {
       );
     } else {
       await userEvent.click(
-        canvas.getByRole('button', { name: `Change ${label}` }),
+        canvas.getByRole('button', { name: `Change ${label}…` }),
       );
     }
     return within(await page.findByRole('dialog', { name: `Change ${label}` }));

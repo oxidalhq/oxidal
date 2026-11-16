@@ -54,6 +54,22 @@ function fraction(db: number) {
  * quiet or clipping block is visible in place. Vertical wires also print
  * the level.
  */
+/** The arrowhead at the end of a wire: which way the signal goes, even when nothing moves. */
+function Arrow({ down = false }: { down?: boolean }) {
+  return (
+    <span
+      data-arrow
+      aria-hidden="true"
+      className={cn(
+        'size-1.5 shrink-0 border-foreground/75',
+        down
+          ? '-mt-1 rotate-45 border-r-2 border-b-2'
+          : '-ml-1 rotate-45 border-t-2 border-r-2',
+      )}
+    />
+  );
+}
+
 function Wire({ level, vertical }: { level?: number; vertical: boolean }) {
   const hot = level !== undefined && level > -1;
   if (vertical)
@@ -62,7 +78,13 @@ function Wire({ level, vertical }: { level?: number; vertical: boolean }) {
         aria-hidden="true"
         className="flex h-6 items-center gap-2 pl-[1.6rem]"
       >
-        <span className="h-full w-px bg-wire" />
+        <span className="relative flex h-full flex-col items-center">
+          <span
+            data-line
+            className="w-0.5 flex-1 wire-flow-down rounded-full"
+          />
+          <Arrow down />
+        </span>
         {level !== undefined && (
           <>
             <span className="relative h-1 w-10 overflow-hidden rounded-full bg-wire/30">
@@ -87,22 +109,24 @@ function Wire({ level, vertical }: { level?: number; vertical: boolean }) {
       </div>
     );
   return (
-    <span
-      aria-hidden="true"
-      className="relative flex w-6 shrink-0 flex-col items-center justify-center gap-1"
-    >
-      <span className="h-px w-full bg-wire" />
-      {level !== undefined && (
-        <span className="absolute top-[calc(50%+4px)] h-0.5 w-5 overflow-hidden rounded-full bg-wire/30">
-          <span
-            className={cn(
-              'absolute inset-y-0 left-0',
-              hot ? 'bg-brand' : 'bg-foreground',
-            )}
-            style={{ width: `${fraction(level) * 100}%` }}
-          />
-        </span>
-      )}
+    <span aria-hidden="true" className="flex w-10 shrink-0 items-center">
+      <span
+        data-line
+        className="relative h-0.5 flex-1 overflow-hidden rounded-full bg-wire/40"
+      >
+        <span
+          data-meter
+          className="absolute inset-y-0 left-0 wire-flow rounded-full transition-[width] duration-150"
+          style={{
+            width:
+              level === undefined
+                ? '100%'
+                : `${Math.max(12, fraction(level) * 100)}%`,
+            ...(hot ? { backgroundColor: 'var(--color-brand)' } : {}),
+          }}
+        />
+      </span>
+      <Arrow />
     </span>
   );
 }
@@ -284,6 +308,35 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const vertical =
     orientation === 'vertical' || (orientation === 'auto' && phone);
   const root = React.useRef<HTMLDivElement>(null);
+  const inner = React.useRef<HTMLDivElement>(null);
+  // Laptops: scale a wide route down to fit (not below 75 %), then scroll.
+  const [scale, setScale] = React.useState(1);
+  React.useLayoutEffect(() => {
+    if (vertical) return;
+    const outer = root.current;
+    const content = inner.current;
+    if (!outer || !content) return;
+    const fit = () => {
+      const style = getComputedStyle(outer);
+      const room =
+        outer.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight);
+      const zoom = parseFloat(getComputedStyle(content).zoom || '1') || 1;
+      const natural = content.getBoundingClientRect().width / zoom;
+      const next =
+        natural > room + 1
+          ? Math.max(0.75, Math.floor((room / natural) * 50) / 50)
+          : 1;
+      setScale((now) => (Math.abs(now - next) < 0.02 ? now : next));
+    };
+    fit();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(fit);
+    observer.observe(outer);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [vertical]);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = React.useRef(false);
   const [lifted, setLifted] = React.useState<string | null>(null);
@@ -425,7 +478,9 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
         out.push(
           <div
             key={step.id}
-            className={cn(vertical ? 'grid gap-1' : 'flex items-center')}
+            className={cn(
+              vertical ? 'grid gap-1' : 'flex shrink-0 items-center',
+            )}
           >
             <SplitNode
               split={step}
@@ -437,7 +492,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
               className={cn(
                 vertical
                   ? 'grid gap-3'
-                  : 'grid gap-3 border-y-0 border-l border-wire py-1 pl-2',
+                  : 'grid shrink-0 grid-cols-[max-content_max-content] gap-y-3 border-x border-wire py-1',
               )}
             >
               {step.branches
@@ -455,59 +510,84 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                     className={cn(
                       vertical
                         ? 'ml-3 grid border-l-2 border-wire pl-3'
-                        : 'flex items-center',
+                        : 'col-span-2 grid grid-cols-subgrid items-center',
                       (step.levels?.[b] ?? 0) <= SILENT_DB &&
-                        '[&_[data-slot=chain-block]]:border-dashed [&_[data-slot=chain-block]]:bg-transparent [&_[data-slot=chain-block]]:text-muted-foreground',
+                        '[&_[data-arrow]]:border-wire [&_[data-line]]:h-px [&_[data-line]]:animate-none [&_[data-line]]:bg-wire [&_[data-line]]:bg-none [&_[data-meter]]:hidden [&_[data-slot=chain-block]]:border-dashed [&_[data-slot=chain-block]]:bg-transparent [&_[data-slot=chain-block]]:text-muted-foreground',
                     )}
                     data-silent={
                       (step.levels?.[b] ?? 0) <= SILENT_DB || undefined
                     }
                   >
+                    {vertical ? (
+                      <span className="py-1 small-caps text-xs font-medium text-muted-foreground">
+                        {`${step.names?.[b]?.trim() ? '' : 'Branch '}${branchName(step, b)}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= SILENT_DB ? ' · silent' : ''}`}
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <span
+                          data-line
+                          aria-hidden="true"
+                          className="h-0.5 w-2 wire-flow rounded-full"
+                        />
+                        <span
+                          className="max-w-24 truncate px-1.5 small-caps text-xs font-medium text-muted-foreground"
+                          title={branchName(step, b)}
+                        >
+                          {branchName(step, b)}
+                        </span>
+                        <span
+                          data-line
+                          aria-hidden="true"
+                          className="h-0.5 min-w-2 flex-1 wire-flow rounded-full"
+                        />
+                        <Arrow />
+                      </span>
+                    )}
                     <span
                       className={cn(
-                        'small-caps text-xs font-medium text-muted-foreground',
-                        vertical
-                          ? 'py-1'
-                          : 'mr-2 max-w-24 min-w-5 shrink-0 truncate text-center',
+                        vertical ? 'contents' : 'flex items-center',
                       )}
-                      title={branchName(step, b)}
                     >
-                      {vertical
-                        ? `${step.names?.[b]?.trim() ? '' : 'Branch '}${branchName(step, b)}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= SILENT_DB ? ' · silent' : ''}`
-                        : branchName(step, b)}
-                    </span>
-                    {branch.length ? (
-                      list(branch, [...path, index, b])
-                    ) : (
-                      <>
-                        {editing ? (
-                          <Gap
-                            path={[...path, index, b]}
-                            index={0}
-                            vertical={vertical}
-                            active={
-                              target ===
-                              `gap:${JSON.stringify([...path, index, b])}:0`
-                            }
-                            onAdd={
-                              onAdd
-                                ? () => onAdd([...path, index, b], 0)
-                                : undefined
-                            }
-                          />
-                        ) : null}
+                      {branch.length ? (
+                        list(branch, [...path, index, b])
+                      ) : (
+                        <>
+                          {editing ? (
+                            <Gap
+                              path={[...path, index, b]}
+                              index={0}
+                              vertical={vertical}
+                              active={
+                                target ===
+                                `gap:${JSON.stringify([...path, index, b])}:0`
+                              }
+                              onAdd={
+                                onAdd
+                                  ? () => onAdd([...path, index, b], 0)
+                                  : undefined
+                              }
+                            />
+                          ) : null}
+                          <span
+                            className={cn(
+                              'small-caps text-xs text-muted-foreground',
+                              vertical
+                                ? 'py-2'
+                                : 'w-24 border-t border-dashed border-wire pt-1 text-center',
+                            )}
+                          >
+                            Dry
+                          </span>
+                        </>
+                      )}
+                      {!vertical && (
                         <span
-                          className={cn(
-                            'small-caps text-xs text-muted-foreground',
-                            vertical
-                              ? 'py-2'
-                              : 'w-24 border-t border-dashed border-wire pt-1 text-center',
-                          )}
-                        >
-                          Dry
-                        </span>
-                      </>
-                    )}
+                          data-line
+                          aria-hidden="true"
+                          className="h-0.5 min-w-3 flex-1 wire-flow rounded-full"
+                        />
+                      )}
+                    </span>
                   </div>
                 ))}
               {foldable(step) && (
@@ -518,7 +598,7 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                     setUnfolded((all) => ({ ...all, [step.id]: folded(step) }))
                   }
                   className={cn(
-                    'inline-flex min-h-8 items-center gap-1.5 justify-self-start rounded-full border border-dashed border-wire px-3 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                    'col-span-2 ml-2 inline-flex min-h-8 items-center gap-1.5 justify-self-start rounded-full border border-dashed border-wire px-3 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
                     vertical && 'ml-3',
                   )}
                 >
@@ -543,10 +623,12 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                 Join
               </span>
             ) : (
-              <span
-                className="mr-1 h-full border-r border-wire"
-                aria-hidden="true"
-              />
+              <span className="flex items-center" aria-hidden="true">
+                <span className="h-px w-2 bg-wire" />
+                <span className="rounded-full border border-wire px-2 py-0.5 small-caps text-2xs text-muted-foreground">
+                  Join
+                </span>
+              </span>
             )}
           </div>,
         );
@@ -590,11 +672,29 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
         className,
       )}
     >
-      <ChainPort label="In" className={cn(vertical && 'justify-self-start')} />
-      <Wire level={inputLevel} vertical={vertical} />
-      {list(route, [])}
-      <Wire level={last ? levels?.[last.id] : undefined} vertical={vertical} />
-      <ChainPort label="Out" className={cn(vertical && 'justify-self-start')} />
+      <div
+        ref={inner}
+        data-scale={scale < 1 ? scale.toFixed(2) : undefined}
+        className={cn(
+          vertical ? 'contents' : 'flex w-max shrink-0 items-center',
+        )}
+        style={!vertical && scale < 1 ? { zoom: scale } : undefined}
+      >
+        <ChainPort
+          label="In"
+          className={cn(vertical && 'justify-self-start')}
+        />
+        <Wire level={inputLevel} vertical={vertical} />
+        {list(route, [])}
+        <Wire
+          level={last ? levels?.[last.id] : undefined}
+          vertical={vertical}
+        />
+        <ChainPort
+          label="Out"
+          className={cn(vertical && 'justify-self-start')}
+        />
+      </div>
       {heard && (
         <span role="status" className="sr-only">
           Hearing the sound without{' '}

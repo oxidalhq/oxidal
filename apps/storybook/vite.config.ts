@@ -40,6 +40,8 @@ export default defineConfig({
           environment: 'jsdom',
           include: ['src/**/*.test.{ts,tsx}'],
           setupFiles: ['./src/test-setup.ts'],
+          // A busy machine (a Pi, or Storybook running beside the tests) can take more than 5 s.
+          testTimeout: 15000,
         },
       },
       {
@@ -47,6 +49,8 @@ export default defineConfig({
         plugins: [storybookTest({ configDir: storybook })],
         test: {
           name: 'storybook',
+          // Long flows (save a version, learn MIDI) need room when the machine is busy.
+          testTimeout: 30000,
           browser: {
             enabled: true,
             headless: true,

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ArrowsClockwise } from '@phosphor-icons/react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Checkbox } from '../components/ui/checkbox';
 import { CollapsibleSection } from '../components/ui/collapsible';
 import { NumberField } from '../components/ui/number-field';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
@@ -24,6 +23,7 @@ import {
   SettingsPage,
 } from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
+import { Effects, NamEngine, PluginPacks } from './settings.effects';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
 import { PretendController, WebMidiButton } from '../widgets/midi-controller';
@@ -191,48 +191,6 @@ function Midi() {
         <WebMidiButton />
       </SettingGroup>
     </MidiProvider>
-  );
-}
-
-function Effects() {
-  return (
-    <>
-      <SettingGroup title="Oxidal effects">
-        {[
-          'Bloom reverb',
-          'Echo delay',
-          'Motion',
-          'Sustain',
-          'Hold',
-          'Swell',
-          'Pitch',
-        ].map((e, i) => (
-          <SettingRow
-            key={e}
-            label={e}
-            caption={
-              i < 4
-                ? 'Safe Rust · built in'
-                : i === 6
-                  ? 'Port of the TONE3000 pitch engine'
-                  : 'Native plugin'
-            }
-          >
-            <Checkbox defaultChecked aria-label={e} />
-          </SettingRow>
-        ))}
-      </SettingGroup>
-      <SettingGroup title="LV2 plugins">
-        <SettingRow
-          label="Qualified set"
-          caption="31 plugins · drives, fuzzes, compressors, filters, delays, reverbs"
-        >
-          <Button size="sm" variant="outline">
-            Manage…
-          </Button>
-        </SettingRow>
-      </SettingGroup>
-    </>
   );
 }
 
@@ -440,7 +398,9 @@ const PAGES: Record<string, () => React.JSX.Element> = {
   connections: Network,
   accounts: Accounts,
   midi: Midi,
+  nam: NamEngine,
   effects: Effects,
+  plugins: () => <PluginPacks />,
   display: Display,
   device: Device,
   maintenance: Maintenance,

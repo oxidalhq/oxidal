@@ -329,10 +329,58 @@
 /* Stage landscape (phone sideways on a stand): the one extra media feature. */
 @custom-media --stage-landscape (orientation: landscape) and (max-height: 500px);
 
+/*
+ * A wire you can hear: an ink line with gaps that drift toward the output,
+ * slowly enough to read as signal, not as a loading bar. Silent paths drop
+ * the flow (see RouteView). Reduced motion and e-paper keep the line still.
+ */
+@utility wire-flow {
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 75%,
+    transparent
+  );
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 9px,
+    var(--color-background) 9px 12px
+  );
+  background-size: 12px 100%;
+  animation: wire-flow 1.2s linear infinite;
+}
+@utility wire-flow-down {
+  background-color: color-mix(
+    in oklab,
+    var(--color-foreground) 75%,
+    transparent
+  );
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0 9px,
+    var(--color-background) 9px 12px
+  );
+  background-size: 100% 12px;
+  animation: wire-flow-down 1.2s linear infinite;
+}
+@keyframes wire-flow {
+  to {
+    background-position: 12px 0;
+  }
+}
+@keyframes wire-flow-down {
+  to {
+    background-position: 0 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0ms;
     --duration-base: 0ms;
+  }
+  .wire-flow,
+  .wire-flow-down {
+    animation: none;
   }
 }
 
