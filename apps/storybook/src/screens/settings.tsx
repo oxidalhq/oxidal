@@ -26,6 +26,10 @@ import { SETTINGS_SECTIONS } from './settings.sections';
 import { AudioChange } from '../patterns/audio-change';
 import { Tone3000Account } from '../patterns/tone3000';
 import { NetworkSettings } from '../patterns/network-settings';
+import {
+  ControllerSetup,
+  ExtraControllers,
+} from '../patterns/controller-setup';
 import { Effects, NamEngine, PluginPacks } from './settings.effects';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
@@ -108,6 +112,8 @@ function Midi() {
           </Button>
         </SettingRow>
       </SettingGroup>
+      <ControllerSetup />
+      <ExtraControllers />
       <SettingGroup title="Switches">
         {[
           'A · Scene 1',
