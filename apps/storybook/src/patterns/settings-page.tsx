@@ -143,7 +143,10 @@ export function SettingRow({
       </div>
       {children && (
         <div
-          className={cn('flex items-center gap-2', !stacked && 'justify-end')}
+          className={cn(
+            'flex flex-wrap items-center gap-2',
+            !stacked && 'justify-end',
+          )}
         >
           {children}
         </div>

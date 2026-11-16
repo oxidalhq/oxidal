@@ -202,7 +202,10 @@ export function RigSurface({
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 self-end sm:grid-cols-4">
             {main.map((control) => (
-              <div key={control.id} className="grid gap-0.5">
+              <div
+                key={control.id}
+                className="grid min-h-16 content-end gap-0.5"
+              >
                 <Label
                   as="span"
                   className="small-caps text-xs text-muted-foreground"
@@ -222,6 +225,10 @@ export function RigSurface({
                   onChange={(value) => onControl(block.id, control.id, value)}
                 />
               </div>
+            ))}
+            {/* Keep four slots so the strip does not jump between blocks. */}
+            {Array.from({ length: Math.max(0, 4 - main.length) }, (_, i) => (
+              <div key={`slot-${i}`} aria-hidden="true" className="min-h-16" />
             ))}
           </div>
         </div>
