@@ -25,6 +25,7 @@ import {
 import { SETTINGS_SECTIONS } from './settings.sections';
 import { AudioChange } from '../patterns/audio-change';
 import { Tone3000Account } from '../patterns/tone3000';
+import { NetworkSettings } from '../patterns/network-settings';
 import { Effects, NamEngine, PluginPacks } from './settings.effects';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
@@ -67,42 +68,6 @@ function Audio() {
           </Button>
           <Button size="sm" variant="destructive">
             Stop
-          </Button>
-        </SettingRow>
-      </SettingGroup>
-    </>
-  );
-}
-
-function Network() {
-  return (
-    <>
-      <SettingGroup title="Wi-Fi">
-        <SettingRow label="Home" caption="Connected · 192.168.1.169">
-          <Badge tone="live">Connected</Badge>
-        </SettingRow>
-        <SettingRow label="Rehearsal room" caption="Saved">
-          <Button size="sm" variant="ghost">
-            Join
-          </Button>
-        </SettingRow>
-        <SettingRow label="Add a network">
-          <Button size="sm" variant="outline">
-            Scan…
-          </Button>
-        </SettingRow>
-      </SettingGroup>
-      <SettingGroup title="Hotspot">
-        <SettingRow
-          id="hotspot"
-          label="Hotspot when no Wi-Fi"
-          caption="Oxidal-7F2A · the phone joins it at the gig."
-        >
-          <Switch id="hotspot" defaultChecked />
-        </SettingRow>
-        <SettingRow label="Hotspot password">
-          <Button size="sm" variant="ghost">
-            Show
           </Button>
         </SettingRow>
       </SettingGroup>
@@ -370,7 +335,7 @@ function About() {
 
 const PAGES: Record<string, () => React.JSX.Element> = {
   audio: Audio,
-  connections: Network,
+  connections: NetworkSettings,
   accounts: Accounts,
   midi: Midi,
   nam: NamEngine,
