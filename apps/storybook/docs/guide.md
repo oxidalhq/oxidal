@@ -24,6 +24,22 @@ disagree, the rule wins and the component gets fixed.
 8. **No decoration.** Graphs show data; motion only confirms an action and
    stops under reduced motion.
 
+## 1a. Who it is for
+
+Oxidal's players are old and young, technical and not, and working
+musicians who need the thing to work at a gig. Many come from Fractal,
+Quad Cortex, HeadRush or Kemper. So:
+
+- Words over symbols: every icon-only control has a name; every state is a
+  word; loading says what is loading, never a bare spinner.
+- Their vocabulary where it is shared: Preset, Scene, Block, Chain, Cab, IR,
+  Capture, Set list, Tap tempo, Tuner. Say "Rig" for the whole thing and
+  "Model" for a NAM capture; never invent a word where one exists.
+- Big enough on stage: the preset name and tuner in the display size;
+  44 px targets, 48 px in the stage modes.
+- Nothing hidden that a Kemper or Fractal player expects to find: the full
+  editor is always one tap behind the quick one.
+
 ## 2. The voice of the type
 
 | Voice   | Use                                                             | How                                                  |
@@ -108,7 +124,12 @@ drift. In short:
   Collapsible. Labels: Badge and Led, the text styles.
 - Containers: Tooltip, Popover, DropdownMenu, Dialog and useConfirm, Sheet.
 - States: Skeleton, Loading, EmptyState, Progress, StepProgress, and the
-  NoticeTray with useNotice and notify.
+  NoticeTray with useNotice and notify. Screens that take a while show their
+  own skeleton (RigSkeleton, LibrarySkeleton, SettingsSkeleton,
+  PlayerSkeleton) inside LoadingScreen, which adds a line after two seconds
+  saying what is still loading and how far.
+- Credits: CreditBadge and Credits for About, PoweredByTone3000 beside every
+  catalogue tone.
 
 `pnpm a11y` runs axe over every story of the built Storybook and is part of
 `pnpm check`.
