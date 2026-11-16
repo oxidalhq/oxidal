@@ -20,6 +20,8 @@ export type Section = {
   label: string;
   icon?: React.ReactNode;
   count?: number;
+  /** What the section is for, in a sentence or two; Settings shows it under the title. */
+  description?: string;
 };
 
 /**

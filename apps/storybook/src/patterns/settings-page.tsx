@@ -83,6 +83,14 @@ export function SettingsPage({
         >
           {title ?? section?.label}
         </h2>
+        {section?.description && (
+          <p
+            data-slot="settings-description"
+            className="m-0 max-w-prose rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground"
+          >
+            {section.description}
+          </p>
+        )}
         {children}
       </section>
     </div>

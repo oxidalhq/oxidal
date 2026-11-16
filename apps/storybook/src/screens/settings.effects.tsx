@@ -108,17 +108,6 @@ export function PluginPacks({ playing = false }: { playing?: boolean }) {
 
   return (
     <>
-      <div className="grid gap-1.5 rounded-lg border border-border bg-card px-4 py-3">
-        <span className="text-sm font-semibold">What LV2 is</span>
-        <Caption>
-          LV2 is the open standard for audio plugins on Linux. These packs are
-          effects made by other people: Oxidal has tried them on the Pi but does
-          not ship them. You choose which to install, each comes from its own
-          source under its own licence, and you can remove it again. Nothing is
-          installed automatically. Effects from installed packs appear in the
-          rig's block chooser.
-        </Caption>
-      </div>
       {playing && (
         <p
           role="status"
@@ -281,10 +270,6 @@ export function NamEngine() {
   const [pitch, setPitch] = useState(true);
   return (
     <>
-      <Caption>
-        For this unit, kept across presets and not saved in them. Changing a
-        setting restarts audio for a moment.
-      </Caption>
       <SettingGroup title="Loudness">
         <SettingRow
           label="Model loudness"

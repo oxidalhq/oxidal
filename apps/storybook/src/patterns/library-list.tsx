@@ -169,7 +169,10 @@ export function LibraryList({
       </DropdownMenu>
     );
   return (
-    <div data-slot="library-list" className={cn('grid gap-3', className)}>
+    <div
+      data-slot="library-list"
+      className={cn('grid content-start gap-3', className)}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex min-h-touch min-w-48 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring">
           <MagnifyingGlass
