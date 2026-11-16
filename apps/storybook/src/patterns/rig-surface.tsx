@@ -19,6 +19,7 @@ import {
   blocksOf,
   branchName,
   getList,
+  insertStep,
   isSplit,
   locate,
   moveStep,
@@ -63,6 +64,7 @@ import {
   type PresetVersion,
 } from '../widgets/versions';
 import { CabMics } from '../widgets/cab-mics';
+import { BlockChooser, type EffectChoice } from './block-chooser';
 import {
   SwapSheet,
   type BlockType,
@@ -151,6 +153,7 @@ export function RigSurface({
   onAdd,
   models,
   blockTypes,
+  effects,
   className,
 }: {
   presetName: string;
@@ -178,10 +181,16 @@ export function RigSurface({
   models?: ModelChoice[];
   /** Block types a block can turn into, keeping its place. */
   blockTypes?: BlockType[];
+  /** With effects, each + opens the block chooser instead of calling onAdd. */
+  effects?: EffectChoice[];
   className?: string;
 }) {
   const phone = usePhone();
   const [swap, setSwap] = React.useState(false);
+  const [adding, setAdding] = React.useState<{
+    path: ListPath;
+    index: number;
+  } | null>(null);
   const before = React.useRef<BlockModel | null>(null);
   const [compare, setCompare] = React.useState<'edited' | 'saved'>('edited');
   const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
@@ -400,7 +409,7 @@ export function RigSurface({
         inputLevel={inputLevel}
         onAudition={onAudition}
         sceneChanged={sceneChanged}
-        onAdd={onAdd}
+        onAdd={effects ? (path, index) => setAdding({ path, index }) : onAdd}
       />
 
       {editing && block && (
@@ -602,6 +611,20 @@ export function RigSurface({
           onControl={control}
           onToggle={toggle}
           onSwap={canSwap ? openSwap : undefined}
+        />
+      )}
+
+      {effects && (
+        <BlockChooser
+          open={Boolean(adding)}
+          onOpenChange={(open) => !open && setAdding(null)}
+          models={models ?? []}
+          effects={effects}
+          onChoose={(added) => {
+            if (adding)
+              onRoute(insertStep(route, adding.path, adding.index, added));
+            setSelected(added.id);
+          }}
         />
       )}
 

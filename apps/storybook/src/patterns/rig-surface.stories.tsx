@@ -12,6 +12,7 @@ import { PARALLEL_ROUTE, SCENES, SERIAL, SERIAL_ROUTE } from './rig.fixtures';
 import { RigSurface, type RigRoute } from './rig-surface';
 import { bigRig } from './big-rig.fixtures';
 import { BLOCK_TYPES, MODELS } from './swap.fixtures';
+import { EFFECTS } from './block-chooser.data';
 import { useRigDemo } from './use-rig-demo';
 
 /**
@@ -60,6 +61,7 @@ function Rig({
       onAdd={rig.onAdd}
       models={swap ? MODELS : undefined}
       blockTypes={swap ? BLOCK_TYPES : undefined}
+      effects={swap ? EFFECTS : undefined}
     />
   );
 }
