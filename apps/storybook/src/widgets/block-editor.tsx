@@ -88,12 +88,8 @@ export function BlockQuickEditor({
             {block.caption ?? block.kind}
           </Caption>
         </div>
-        <Toggle
-          size="sm"
-          pressed={block.on}
-          onPressedChange={onToggle}
-          aria-label={`${block.label} on`}
-        >
+        <Toggle size="sm" pressed={block.on} onPressedChange={onToggle}>
+          <span className="sr-only">{block.label} </span>
           {block.on ? 'On' : 'Off'}
         </Toggle>
       </div>

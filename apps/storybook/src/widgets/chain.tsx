@@ -77,13 +77,22 @@ export function ChainBlock({
     <button
       type="button"
       data-slot="chain-block"
+      aria-label={[
+        block.label,
+        block.caption ?? block.kind,
+        !block.on && 'Off',
+        block.on && block.unsaved && 'Unsaved',
+        block.preview,
+        sceneMark && 'changed by this scene',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       data-block={block.id}
       data-kind={block.kind}
       data-on={block.on}
       data-selected={selected || undefined}
       data-lifted={lifted || undefined}
       aria-pressed={selected}
-      aria-label={`${block.label}${block.on ? '' : ', bypassed'}${block.unsaved ? ', unsaved' : ''}${sceneMark ? ', changed by this scene' : ''}`}
       data-muted={muted || undefined}
       disabled={disabled}
       onClick={() => onSelect(block.id)}
@@ -129,14 +138,14 @@ export function ChainBlock({
           )}
         >
           {block.label}
-        </span>
+        </span>{' '}
         <span
           className={cn(
             'flex min-w-0 items-center gap-1 small-caps text-xs',
             selected ? 'text-background/70' : 'text-muted-foreground',
           )}
         >
-          <span className="truncate">{block.caption ?? block.kind}</span>
+          <span className="truncate">{block.caption ?? block.kind}</span>{' '}
           {!block.on && (
             <Badge
               size="sm"
@@ -155,7 +164,7 @@ export function ChainBlock({
               Unsaved
             </Badge>
           )}
-        </span>
+        </span>{' '}
         {block.preview && (
           <span
             className={cn(

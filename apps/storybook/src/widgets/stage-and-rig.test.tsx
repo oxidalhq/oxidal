@@ -43,13 +43,13 @@ it('footswitches show the tap and hold actions and fire them', () => {
     <Footswitches profile={CONTROLLERS[0]!} state={STATE} onAction={action} />,
   );
   const a = screen.getByRole('button', {
-    name: 'Switch A: Clean, hold for Boost',
+    name: 'A Clean Hold · Boost',
   });
   expect(a).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /Switch B: Crunch/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^B Crunch/ }));
   expect(action).toHaveBeenLastCalledWith({ kind: 'scene', scene: 'b' });
   const c = screen.getByRole('button', {
-    name: /Switch C: Previous, hold for Tuner/,
+    name: 'C Previous Hold · Tuner',
   });
   fireEvent.pointerDown(c);
   act(() => {
@@ -66,9 +66,9 @@ it('every controller profile draws one tile per switch', () => {
     const { unmount } = render(
       <Footswitches profile={profile} state={STATE} onAction={() => {}} />,
     );
-    expect(screen.getAllByRole('button', { name: /^Switch / })).toHaveLength(
-      profile.switches.length,
-    );
+    expect(
+      screen.getAllByRole('button', { name: /^[A-Z0-9▲▼] / }),
+    ).toHaveLength(profile.switches.length);
     unmount();
   }
 });
@@ -163,7 +163,7 @@ it('holding a block hears the rig without it, and a short tap selects', () => {
       orientation="horizontal"
     />,
   );
-  const echo = screen.getByRole('button', { name: 'Echo, bypassed' });
+  const echo = screen.getByRole('button', { name: /^Echo .* Off/ });
   fireEvent.pointerDown(echo);
   act(() => {
     vi.advanceTimersByTime(400);

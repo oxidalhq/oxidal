@@ -110,9 +110,9 @@ it('the chain names bypassed blocks, selects on click and moves with Shift+arrow
       onAdd={() => {}}
     />,
   );
-  await user.click(screen.getByRole('button', { name: 'Plexi, bypassed' }));
+  await user.click(screen.getByRole('button', { name: /^Plexi .*Off/ }));
   expect(select).toHaveBeenCalledWith('b');
-  screen.getByRole('button', { name: 'TS9' }).focus();
+  screen.getByRole('button', { name: /^TS9/ }).focus();
   await user.keyboard('{Shift>}{ArrowRight}{/Shift}');
   expect(move).toHaveBeenCalledWith('a', 0, 2);
   expect(

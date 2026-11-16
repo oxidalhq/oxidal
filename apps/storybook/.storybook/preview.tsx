@@ -39,6 +39,15 @@ const preview: Preview = {
           name: 'iPhone XR',
           styles: { width: '414px', height: '896px' },
         },
+        foldCover: {
+          name: 'Galaxy Z Fold 4, cover',
+          styles: { width: '344px', height: '882px' },
+        },
+        foldInner: {
+          // About the unfolded inner screen; check on the device.
+          name: 'Galaxy Z Fold 4, open',
+          styles: { width: '882px', height: '1104px' },
+        },
         boox: {
           name: 'BOOX (portrait)',
           styles: { width: '768px', height: '1024px' },

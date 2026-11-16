@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Caption } from '../components/ui/text';
 import {
   BlockFullEditor,
@@ -208,4 +209,46 @@ export const FullEditor: StoryObj = {
   name: 'Full editor (delay)',
   parameters: { layout: 'padded' },
   render: () => <Full />,
+};
+
+/**
+ * The tweak-anywhere flow: change the amp's gain, hear the saved version,
+ * see the change listed, and keep it as a new version. On a laptop the
+ * gain is in the strip under the route; on a phone it is in the sheet.
+ */
+Serial.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const page = within(canvasElement.ownerDocument.body);
+  const phone = canvasElement.ownerDocument.defaultView!.innerWidth < 768;
+  if (phone) {
+    await userEvent.click(canvas.getByRole('button', { name: /^Plexi 50/ }));
+    const sheet = await page.findByRole('dialog');
+    const gain = within(sheet).getAllByRole('slider', { name: 'Gain' }).at(-1)!;
+    gain.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await userEvent.keyboard('{Escape}');
+  } else {
+    const gain = canvas.getByRole('slider', { name: 'Plexi 50 Gain' });
+    gain.focus();
+    await userEvent.keyboard('{ArrowUp}');
+  }
+  const changes = await canvas.findByRole('button', { name: /1 change/ });
+  await userEvent.click(canvas.getByRole('radio', { name: 'Saved' }));
+  await expect(canvas.getByText('Hearing the saved version')).toBeVisible();
+  await userEvent.click(canvas.getByRole('radio', { name: 'Edited' }));
+  await userEvent.click(changes);
+  await expect(await page.findByText(/Plexi 50 · Gain 6\.5 →/)).toBeVisible();
+  await userEvent.keyboard('{Escape}');
+  await userEvent.click(canvas.getByRole('button', { name: /Default/ }));
+  await userEvent.click(
+    await page.findByRole('button', { name: 'Save as a new version…' }),
+  );
+  await userEvent.click(
+    await page.findByRole('button', { name: 'Friday gig' }),
+  );
+  await userEvent.click(page.getByRole('button', { name: 'Save version' }));
+  await waitFor(() =>
+    expect(canvas.getByRole('button', { name: /Friday gig/ })).toBeVisible(),
+  );
+  await expect(canvas.queryByRole('button', { name: /1 change/ })).toBeNull();
 };

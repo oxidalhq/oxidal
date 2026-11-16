@@ -20,7 +20,13 @@ import type { RigLaneVM } from '../../../web/src/rigChain';
  */
 const meta: Meta = {
   title: 'Baseline/Current chain view',
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    // The product's current ChainView names its tiles with an aria-label that
+    // leaves out their visible text (WCAG 2.5.3, Label in Name). Recorded as a
+    // finding; the new chain fixes it. Reported, not failed, here.
+    a11y: { test: 'todo' },
+  },
 };
 export default meta;
 

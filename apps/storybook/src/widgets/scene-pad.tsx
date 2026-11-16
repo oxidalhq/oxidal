@@ -43,10 +43,6 @@ export function ScenePad({
       data-active={active || undefined}
       data-fading={fading || undefined}
       aria-pressed={active}
-      aria-label={`Scene ${scene.number ?? ''} ${scene.name}`.replace(
-        /\s+/g,
-        ' ',
-      )}
       disabled={disabled}
       onPointerDown={() => {
         if (!onMenu) return;
@@ -85,7 +81,7 @@ export function ScenePad({
         >
           Scene {scene.number}
         </span>
-      )}
+      )}{' '}
       <span
         className={cn(
           'line-clamp-2 font-semibold',

@@ -34,7 +34,6 @@ export function CreditBadge({
       href={credit.href}
       target="_blank"
       rel="noreferrer"
-      aria-label={`${credit.role} ${credit.name}`}
       className={cn(
         'grid min-w-32 gap-0.5 rounded-lg border px-3.5 py-2 text-center no-underline transition-colors duration-[var(--duration-fast)] focus-visible:outline-2 focus-visible:outline-offset-2',
         dark
@@ -45,7 +44,7 @@ export function CreditBadge({
     >
       <span className="small-caps text-xs font-medium opacity-70">
         {credit.role}
-      </span>
+      </span>{' '}
       <span className="flex h-7 items-center justify-center gap-1.5">
         {credit.logo ? (
           credit.mono ? (
@@ -66,7 +65,7 @@ export function CreditBadge({
           ) : (
             <img
               src={`/brand/credits/${credit.logo}`}
-              alt=""
+              alt={credit.wordmark ? credit.name : ''}
               className={cn('h-5 w-auto', credit.wordmark && 'h-4')}
             />
           )

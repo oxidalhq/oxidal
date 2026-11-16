@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Library } from './library';
 import { Rig } from './rig';
 import { Screen } from './shell';
@@ -77,4 +78,36 @@ export const StageSheet: StoryObj = {
       <Perform sheet />
     </Screen>
   ),
+};
+
+StagePerform.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole('button', { name: /^B Crunch/ }));
+  await expect(await canvas.findByText(/Scene · Crunch/)).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: /^D Next/ }));
+  await expect(
+    await canvas.findByRole('heading', { level: 1, name: 'Ambient swell' }),
+  ).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: /Set list:/ }));
+  const page = within(canvasElement.ownerDocument.body);
+  await userEvent.click(
+    await page.findByRole('button', { name: /^4 · Brown Crunch/ }),
+  );
+  await expect(
+    await canvas.findByRole('heading', { level: 1, name: 'Brown Crunch' }),
+  ).toBeVisible();
+};
+
+LibraryMine.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.type(
+    canvas.getByRole('searchbox', { name: 'Search' }),
+    'lead',
+  );
+  await expect(
+    canvas.getByRole('button', { name: /^Lead boost/ }),
+  ).toBeVisible();
+  await expect(
+    canvas.queryByRole('button', { name: /^Ambient swell/ }),
+  ).toBeNull();
 };

@@ -163,13 +163,9 @@ export function Perform({
     >
       {/* Top: where you are, and the stage settings. */}
       <div className="flex items-center justify-between gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setList(true)}
-          aria-label={`Set list: Friday set, ${index + 1} of ${FRIDAY_SET.length}`}
-        >
-          <span className="small-caps">Friday set</span>
+        <Button variant="outline" size="sm" onClick={() => setList(true)}>
+          <span className="sr-only">Set list: </span>
+          <span className="small-caps max-[379px]:sr-only">Friday set</span>
           <span className="font-mono tabular-nums">
             {index + 1}/{FRIDAY_SET.length}
           </span>
@@ -181,19 +177,15 @@ export function Perform({
               size="sm"
               pressed={showSheet}
               onPressedChange={setShowSheet}
-              aria-label="Show the song's sheet"
             >
-              <Notebook /> Sheet
+              <Notebook /> <span className="max-sm:sr-only">Sheet</span>
             </Toggle>
           )}
-          <Toggle
-            size="sm"
-            pressed={protect}
-            onPressedChange={setProtect}
-            aria-label="Protect"
-          >
+          <Toggle size="sm" pressed={protect} onPressedChange={setProtect}>
             {protect ? <LockSimple weight="fill" /> : <LockSimpleOpen />}
-            {protect ? 'Protected' : 'Editable'}
+            <span className="max-sm:sr-only">
+              {protect ? 'Protected' : 'Editable'}
+            </span>
           </Toggle>
           <Popover>
             <PopoverTrigger asChild>

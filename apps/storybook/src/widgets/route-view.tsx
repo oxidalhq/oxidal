@@ -154,14 +154,16 @@ function SplitNode({
         <button
           type="button"
           data-split={split.id}
-          aria-label={`Split into ${split.branches.length} branches`}
           className={cn(
             'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-foreground bg-background px-2.5 small-caps text-xs font-medium hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             vertical ? 'h-8 justify-self-start' : 'h-7',
           )}
         >
           <GitFork className="size-3.5 rotate-90" />
-          {vertical ? `Split · ${split.branches.length} branches` : 'Split'}
+          Split{' '}
+          <span className={cn(!vertical && 'sr-only')}>
+            · {split.branches.length} branches
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="grid w-72 gap-3">
@@ -502,8 +504,8 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
       onPointerUp={() => lifted && drop()}
       className={cn(
         vertical
-          ? 'grid gap-0 px-page py-2'
-          : 'flex [scrollbar-width:thin] items-center gap-0 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-1rem),transparent)] px-page py-3 outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
+          ? 'relative grid min-w-0 gap-0 px-page py-2'
+          : 'relative flex min-w-0 [scrollbar-width:thin] items-center gap-0 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-1rem),transparent)] px-page py-3 outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
         lifted && 'cursor-grabbing select-none',
         className,
       )}

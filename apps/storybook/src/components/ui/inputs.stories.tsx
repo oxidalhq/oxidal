@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Combobox, type ComboboxOption } from './combobox';
 import { NumberField } from './number-field';
 import { Slider } from './slider';
@@ -162,4 +163,20 @@ function Comboboxes() {
 export const Comboboxes_: StoryObj = {
   name: 'Combobox',
   render: () => <Comboboxes />,
+};
+
+Comboboxes_.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const field = canvas.getByRole('combobox', { name: 'Model' });
+  await userEvent.click(field);
+  await userEvent.type(field, 'twin');
+  await userEvent.keyboard('{Enter}');
+  await expect(await canvas.findByText('Chosen: twin')).toBeVisible();
+};
+
+NumberFields_.play = async ({ canvasElement }) => {
+  const gain = within(canvasElement).getByRole('slider', { name: 'Gain' });
+  gain.focus();
+  await userEvent.keyboard('{ArrowUp}{ArrowUp}');
+  await expect(gain).toHaveAttribute('aria-valuenow', '7.5');
 };

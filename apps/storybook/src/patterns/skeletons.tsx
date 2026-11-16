@@ -78,12 +78,12 @@ const Block = ({ className }: { className?: string }) => (
 export function RigSkeleton() {
   return (
     <div className="grid gap-3">
-      <div className="flex items-end justify-between px-page pt-3">
+      <div className="flex items-end justify-between gap-2 overflow-hidden px-page pt-3">
         <div className="grid gap-1.5">
           <Skeleton className="h-3 w-14" />
           <Skeleton className="h-7 w-56" />
         </div>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2 max-sm:hidden">
           <Skeleton className="h-9 w-20" />
           <Skeleton className="h-9 w-16" />
           <Skeleton className="h-9 w-14" />
@@ -125,7 +125,7 @@ export function LibrarySkeleton({
   return (
     <div className="grid gap-4 px-page pt-3">
       <Skeleton className="h-7 w-28" />
-      <div className="flex gap-4 border-b border-border pb-2">
+      <div className="flex gap-4 overflow-hidden border-b border-border pb-2">
         {[16, 24, 20, 14, 22].map((w, i) => (
           <Skeleton key={i} className="h-4" style={{ width: `${w * 4}px` }} />
         ))}
@@ -183,7 +183,7 @@ export function SettingsSkeleton() {
 export function PlayerSkeleton() {
   return (
     <div className="grid gap-4 px-page pt-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 overflow-hidden">
         <Skeleton className="size-11" />
         <Skeleton className="size-13" />
         <Skeleton className="size-11" />
@@ -194,7 +194,7 @@ export function PlayerSkeleton() {
         <Skeleton className="h-3 w-10" />
         <Skeleton className="h-3 w-10" />
       </div>
-      <div className="flex h-56 gap-3">
+      <div className="flex h-56 gap-3 overflow-hidden">
         {Array.from({ length: 6 }, (_, i) => (
           <div key={i} className="grid w-16 justify-items-center gap-2">
             <Skeleton className="h-3 w-8" />

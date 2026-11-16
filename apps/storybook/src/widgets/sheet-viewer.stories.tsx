@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { parseSong } from '../lib/song';
 import {
   GLASS_ROOM_MARKDOWN,
@@ -54,4 +55,12 @@ export const Markdown: StoryObj = {
 export const LyricsOnly: StoryObj = {
   name: 'Lyrics only',
   render: () => <Viewer source={LYRICS_ONLY_TEXT} format="text" />,
+};
+
+ChordPro.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole('button', { name: 'Bigger text' }));
+  await expect(canvas.getByText('150%')).toBeVisible();
+  await userEvent.click(canvas.getByRole('button', { name: 'Chords' }));
+  await expect(canvasElement.querySelectorAll('[data-chord]')).toHaveLength(0);
 };

@@ -196,7 +196,7 @@ export function RigSurface({
     <section
       data-slot="rig-surface"
       aria-label="Rig"
-      className={cn('grid gap-2', className)}
+      className={cn('grid grid-cols-[minmax(0,1fr)] gap-2', className)}
     >
       <header className="grid gap-2 px-page pt-3">
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
@@ -352,8 +352,8 @@ export function RigSurface({
                 pressed={block.on}
                 onPressedChange={(on) => toggle(block.id, on)}
                 disabled={reading}
-                aria-label={`${block.label} on`}
               >
+                <span className="sr-only">{block.label} </span>
                 {block.on ? 'On' : 'Off'}
               </Toggle>
             </div>

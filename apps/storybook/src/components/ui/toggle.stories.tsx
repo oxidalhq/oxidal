@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import { Repeat, SpeakerSlash, Metronome } from '@phosphor-icons/react';
 import { Toggle, ToggleGroup, ToggleGroupItem } from './toggle';
 import { SegmentedControl, Segment } from './segmented';
@@ -70,4 +71,13 @@ export const Segmented: StoryObj = {
       </SegmentedControl>
     </div>
   ),
+};
+
+Segmented.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const artwork = canvas.getByRole('radio', { name: 'Artwork' });
+  await userEvent.click(artwork);
+  await expect(artwork).toHaveAttribute('data-state', 'on');
+  await userEvent.click(artwork);
+  await expect(artwork).toHaveAttribute('data-state', 'on');
 };

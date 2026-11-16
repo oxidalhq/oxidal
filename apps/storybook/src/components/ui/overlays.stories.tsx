@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, userEvent, within } from 'storybook/test';
 import {
   ArrowsDownUp,
   Copy,
@@ -280,4 +281,35 @@ export const Sheets: StoryObj = {
       <SheetDemo side="right" />
     </div>
   ),
+};
+
+// Interaction tests: these run in Storybook's Interactions panel and in `pnpm test:stories`.
+Confirm.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const page = within(canvasElement.ownerDocument.body);
+  await userEvent.click(canvas.getByRole('button', { name: /Delete…/ }));
+  const dialog = await page.findByRole('dialog', {
+    name: 'Delete “Iron Pulse”?',
+  });
+  await expect(
+    within(dialog).getByRole('button', { name: 'Cancel' }),
+  ).toHaveFocus();
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+  await expect(await canvas.findByText('Deleted')).toBeVisible();
+};
+
+Menu.play = async ({ canvasElement }) => {
+  const page = within(canvasElement.ownerDocument.body);
+  await userEvent.click(
+    within(canvasElement).getByRole('button', { name: 'More actions' }),
+  );
+  const items = await page.findAllByRole('menuitem');
+  await expect(items.map((i) => i.textContent?.trim())).toEqual([
+    'Rename',
+    'Duplicate',
+    'Add to set list',
+    'Download',
+    'Delete…',
+  ]);
+  await userEvent.keyboard('{Escape}');
 };

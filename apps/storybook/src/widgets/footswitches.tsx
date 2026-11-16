@@ -81,6 +81,9 @@ function Switch({
     <button
       type="button"
       data-slot="footswitch"
+      aria-label={[sw.name, tap.label, hold && `Hold · ${hold.label}`]
+        .filter(Boolean)
+        .join(' ')}
       data-on={tap.on || undefined}
       aria-pressed={
         sw.tap.kind === 'previous' ||
@@ -89,7 +92,6 @@ function Switch({
           ? undefined
           : tap.on
       }
-      aria-label={`Switch ${sw.name}: ${tap.label}${hold ? `, hold for ${hold.label}` : ''}`}
       onPointerDown={() => {
         held.current = false;
         if (sw.hold)
@@ -122,7 +124,7 @@ function Switch({
           )}
         >
           {sw.name}
-        </span>
+        </span>{' '}
         <span
           aria-hidden="true"
           className={cn(
@@ -142,7 +144,7 @@ function Switch({
         )}
       >
         {tap.label}
-      </span>
+      </span>{' '}
       {hold && (
         <span
           className={cn(
