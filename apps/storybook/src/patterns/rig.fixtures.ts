@@ -1,5 +1,5 @@
-import type { BlockControl, BlockModel } from '@/widgets/block-editor';
-import type { Scene } from '@/widgets/scene-pad';
+import type { BlockControl, BlockModel } from '../widgets/block-editor';
+import type { Scene } from '../widgets/scene-pad';
 import type { RigLane } from './rig-surface';
 
 const AMPS = [

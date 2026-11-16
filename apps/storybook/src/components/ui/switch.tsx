@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * A setting that stays: on or off, saved when flipped. The whole 44 px row

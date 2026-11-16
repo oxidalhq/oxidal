@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Button } from '@/components/ui/button';
+import { Button } from '../components/ui/button';
 import { Guitars } from './guitars';
 import { Levels } from './levels';
 import { Settings } from './settings';

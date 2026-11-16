@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Guitar, Plus } from '@phosphor-icons/react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { List, ListRow } from '@/components/ui/list-row';
-import { NumberField } from '@/components/ui/number-field';
-import { StepProgress } from '@/components/ui/states';
-import { Caption, Readout } from '@/components/ui/text';
-import { PageHeading } from '@/patterns/app-shell';
-import { Meter } from '@/widgets/meter';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { List, ListRow } from '../components/ui/list-row';
+import { NumberField } from '../components/ui/number-field';
+import { StepProgress } from '../components/ui/states';
+import { Caption, Readout } from '../components/ui/text';
+import { PageHeading } from '../patterns/app-shell';
+import { Meter } from '../widgets/meter';
 import { GUITARS } from './fixtures';
 
 /**

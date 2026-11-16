@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption } from '@/components/ui/text';
+import { Caption } from '../components/ui/text';
 import { Meter, StereoMeter } from './meter';
 import { PresetStepper } from './preset-step';
 import { ResourceStrip } from './resource-strip';

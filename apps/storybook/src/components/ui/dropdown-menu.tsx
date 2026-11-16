@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as MenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * The actions on one thing: Rename, Duplicate, Add to set list, Delete…

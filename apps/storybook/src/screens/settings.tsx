@@ -1,28 +1,28 @@
 import { useState } from 'react';
 import { ArrowsClockwise } from '@phosphor-icons/react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { CollapsibleSection } from '@/components/ui/collapsible';
-import { NumberField } from '@/components/ui/number-field';
-import { Segment, SegmentedControl } from '@/components/ui/segmented';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
+import { CollapsibleSection } from '../components/ui/collapsible';
+import { NumberField } from '../components/ui/number-field';
+import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Caption, Readout, Title } from '@/components/ui/text';
-import { PageHeading } from '@/patterns/app-shell';
-import { Credits } from '@/patterns/credits';
-import { STACK_CREDITS } from '@/patterns/credits.data';
+} from '../components/ui/select';
+import { Switch } from '../components/ui/switch';
+import { Caption, Readout, Title } from '../components/ui/text';
+import { PageHeading } from '../patterns/app-shell';
+import { Credits } from '../patterns/credits';
+import { STACK_CREDITS } from '../patterns/credits.data';
 import {
   SettingGroup,
   SettingRow,
   SettingsPage,
-} from '@/patterns/settings-page';
+} from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
 
 function Audio() {

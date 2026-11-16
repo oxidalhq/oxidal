@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption, Eyebrow, Title } from '@/components/ui/text';
+import { Caption, Eyebrow, Title } from '../components/ui/text';
 
 /**
  * The same composition in each display mode, side by side, so a token change

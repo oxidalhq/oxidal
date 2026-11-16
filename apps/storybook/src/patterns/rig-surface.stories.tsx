@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption } from '@/components/ui/text';
+import { Caption } from '../components/ui/text';
 import {
   BlockQuickEditor,
   BlockFullEditor,
   type BlockModel,
-} from '@/widgets/block-editor';
-import { Chain } from '@/widgets/chain';
+} from '../widgets/block-editor';
+import { Chain } from '../widgets/chain';
 import { NEW_BLOCK, PARALLEL, SCENES, SERIAL } from './rig.fixtures';
-import { previewOf } from '@/lib/preview';
+import { previewOf } from '../lib/preview';
 import { RigSurface, type RigLane } from './rig-surface';
 
 /**

@@ -192,6 +192,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@oxidal/design-system':
+        specifier: workspace:*
+        version: link:../storybook
       '@phosphor-icons/react':
         specifier: 2.1.10
         version: 2.1.10(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

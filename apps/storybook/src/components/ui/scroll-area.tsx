@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * A region that scrolls inside a fixed-height surface (a sheet body, a

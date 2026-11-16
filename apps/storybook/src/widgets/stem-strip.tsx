@@ -1,7 +1,7 @@
 import { SpeakerSlash, Headphones } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Slider } from '@/components/ui/slider';
-import { Toggle } from '@/components/ui/toggle';
+import { cn } from '../lib/cn';
+import { Slider } from '../components/ui/slider';
+import { Toggle } from '../components/ui/toggle';
 
 export type StemRole =
   'vocals' | 'drums' | 'bass' | 'guitar' | 'piano' | 'other';

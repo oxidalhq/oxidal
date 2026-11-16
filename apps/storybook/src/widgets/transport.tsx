@@ -8,11 +8,11 @@ import {
   SkipForward,
   Stop,
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
-import { Readout } from '@/components/ui/text';
-import { formatTime } from '@/lib/time';
+import { cn } from '../lib/cn';
+import { Button } from '../components/ui/button';
+import { Toggle } from '../components/ui/toggle';
+import { Readout } from '../components/ui/text';
+import { formatTime } from '../lib/time';
 
 export type TransportState = 'stopped' | 'cued' | 'playing' | 'paused';
 

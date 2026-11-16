@@ -6,10 +6,10 @@ import {
   Waveform,
   WaveSine,
 } from '@phosphor-icons/react';
-import { Caption } from '@/components/ui/text';
-import { Chain } from '@/widgets/chain';
-import { PARALLEL, SERIAL } from '@/patterns/rig.fixtures';
-import { previewOf } from '@/lib/preview';
+import { Caption } from '../components/ui/text';
+import { Chain } from '../widgets/chain';
+import { PARALLEL, SERIAL } from '../patterns/rig.fixtures';
+import { previewOf } from '../lib/preview';
 // The product's current chain view, drawn with its own CSS, for comparison.
 import { ChainView } from '../../../web/src/ChainView';
 import type { RigLaneVM } from '../../../web/src/rigChain';

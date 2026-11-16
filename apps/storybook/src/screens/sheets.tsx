@@ -1,26 +1,26 @@
 import { useState } from 'react';
 import { Faders, MusicNotes } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { NumberField } from '@/components/ui/number-field';
+import { Button } from '../components/ui/button';
+import { NumberField } from '../components/ui/number-field';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetFooter,
   SheetHeader,
-} from '@/components/ui/sheet';
-import { Caption, Label } from '@/components/ui/text';
-import { Toggle } from '@/components/ui/toggle';
+} from '../components/ui/sheet';
+import { Caption, Label } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
 import {
   StemMixer,
   type StemControls,
   type StemRole,
-} from '@/widgets/stem-strip';
+} from '../widgets/stem-strip';
 import {
   PositionBar,
   Transport,
   type TransportState,
-} from '@/widgets/transport';
+} from '../widgets/transport';
 
 /**
  * The backing player as a sheet over any screen: transport, position with

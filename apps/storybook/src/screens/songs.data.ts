@@ -1,4 +1,4 @@
-import type { SongFormat } from '@/lib/song';
+import type { SongFormat } from '../lib/song';
 import {
   GLASS_ROOM_MARKDOWN,
   HARBOUR_LIGHTS_CHORDPRO,

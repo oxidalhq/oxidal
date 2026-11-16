@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { CircleNotch } from '@phosphor-icons/react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * The one button. Variants say what pressing it means; sizes follow the

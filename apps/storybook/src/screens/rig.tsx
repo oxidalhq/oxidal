@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { RigSurface, type RigLane } from '@/patterns/rig-surface';
-import { SCENES, SERIAL } from '@/patterns/rig.fixtures';
+import { Button } from '../components/ui/button';
+import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { RigSurface, type RigLane } from '../patterns/rig-surface';
+import { SCENES, SERIAL } from '../patterns/rig.fixtures';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {

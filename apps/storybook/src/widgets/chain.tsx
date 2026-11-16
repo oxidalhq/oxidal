@@ -8,8 +8,8 @@ import {
   SpeakerSimpleHigh,
   WaveSine,
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Badge, Led } from '@/components/ui/badge';
+import { cn } from '../lib/cn';
+import { Badge, Led } from '../components/ui/badge';
 
 export type BlockKind = 'amp' | 'cab' | 'pedal' | 'time' | 'mod' | 'lv2';
 

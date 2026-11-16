@@ -1,25 +1,25 @@
 import * as React from 'react';
 import { ArrowsClockwise, Faders } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Badge, Led } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
-import { NumberField } from '@/components/ui/number-field';
+import { cn } from '../lib/cn';
+import { Badge, Led } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Combobox, type ComboboxOption } from '../components/ui/combobox';
+import { NumberField } from '../components/ui/number-field';
 import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-} from '@/components/ui/popover';
+} from '../components/ui/popover';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetFooter,
   SheetHeader,
-} from '@/components/ui/sheet';
-import { Slider } from '@/components/ui/slider';
-import { Caption, Label, Title } from '@/components/ui/text';
-import { Toggle } from '@/components/ui/toggle';
+} from '../components/ui/sheet';
+import { Slider } from '../components/ui/slider';
+import { Caption, Label, Title } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
 import { BlockVisual } from './block-visuals';
 import type { ChainBlockModel } from './chain';
 

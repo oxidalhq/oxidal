@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as SliderPrimitive from '@radix-ui/react-slider';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * A level you set by position: block controls, master level, stem levels.

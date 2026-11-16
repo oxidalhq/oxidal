@@ -1,4 +1,4 @@
-import { cn } from '@/lib/cn';
+import { cn } from '../lib/cn';
 
 export type ResourceReadings = {
   /** Audio processing time as a fraction of the period deadline, p95 and peak. */

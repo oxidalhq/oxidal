@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption } from '@/components/ui/text';
+import { Caption } from '../components/ui/text';
 
 /**
  * Space, radius, layers and motion. One 4 px scale for every gap and inset;

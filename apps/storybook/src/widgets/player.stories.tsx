@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption } from '@/components/ui/text';
+import { Caption } from '../components/ui/text';
 import { StemMixer, type StemControls, type StemRole } from './stem-strip';
 import { PositionBar, Transport, type TransportState } from './transport';
 

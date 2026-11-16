@@ -1,16 +1,16 @@
 import * as React from 'react';
 import { MusicNote, PencilSimple, SquaresFour } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { NumberField } from '@/components/ui/number-field';
-import { Caption, Eyebrow, Label, Title } from '@/components/ui/text';
-import { Toggle } from '@/components/ui/toggle';
-import { BlockEditor, type BlockModel } from '@/widgets/block-editor';
-import { previewOf } from '@/lib/preview';
-import { BlockVisual } from '@/widgets/block-visuals';
-import { Chain, type ChainLaneModel } from '@/widgets/chain';
-import { ScenePads, type Scene } from '@/widgets/scene-pad';
+import { cn } from '../lib/cn';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { NumberField } from '../components/ui/number-field';
+import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
+import { BlockEditor, type BlockModel } from '../widgets/block-editor';
+import { previewOf } from '../lib/preview';
+import { BlockVisual } from '../widgets/block-visuals';
+import { Chain, type ChainLaneModel } from '../widgets/chain';
+import { ScenePads, type Scene } from '../widgets/scene-pad';
 
 export type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
 

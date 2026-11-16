@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * One choice among a few, all visible: List / Artwork, Serial / Parallel,

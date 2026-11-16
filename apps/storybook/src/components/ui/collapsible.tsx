@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 import { CaretRight } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * Detail that most people do not need most of the time: advanced settings,

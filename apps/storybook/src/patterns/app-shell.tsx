@@ -6,15 +6,15 @@ import {
   Waveform,
   ChartLine,
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/button';
-import { NoticeTray } from '@/components/ui/notice-tray';
-import { Caption, Eyebrow, Title } from '@/components/ui/text';
+import { cn } from '../lib/cn';
+import { Button } from '../components/ui/button';
+import { NoticeTray } from '../components/ui/notice-tray';
+import { Caption, Eyebrow, Title } from '../components/ui/text';
 import {
   ResourceStrip,
   type ResourceReadings,
   type ResourceState,
-} from '@/widgets/resource-strip';
+} from '../widgets/resource-strip';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';
 

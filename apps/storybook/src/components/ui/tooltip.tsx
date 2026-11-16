@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * The name of an icon-only control, or a one-line hint. Appears on hover

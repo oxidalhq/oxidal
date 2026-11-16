@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { CaretRight } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
+import { cn } from '../lib/cn';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { Caption, Label } from '@/components/ui/text';
+} from '../components/ui/select';
+import { Caption, Label } from '../components/ui/text';
 import type { Section } from './workspace';
 
 /**

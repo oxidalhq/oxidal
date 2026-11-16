@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 import { Button } from './button';
 
 /**

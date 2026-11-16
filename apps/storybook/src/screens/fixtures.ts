@@ -1,5 +1,5 @@
-import type { LibraryItem } from '@/patterns/library-list';
-import type { ResourceReadings } from '@/widgets/resource-strip';
+import type { LibraryItem } from '../patterns/library-list';
+import type { ResourceReadings } from '../widgets/resource-strip';
 
 /** Realistic data for the screen stories; names from the product's showcase recipes. */
 export const READINGS: ResourceReadings = {

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { parseSong } from '@/lib/song';
+import { parseSong } from '../lib/song';
 import {
   GLASS_ROOM_MARKDOWN,
   HARBOUR_LIGHTS_CHORDPRO,
   LYRICS_ONLY_TEXT,
   NIGHT_DRIVE_TEXT,
-} from '@/screens/songs.fixtures';
+} from '../screens/songs.fixtures';
 import { SheetViewer } from './sheet-viewer';
 
 /**

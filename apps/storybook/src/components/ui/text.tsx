@@ -1,5 +1,5 @@
 import type { ComponentProps, ElementType } from 'react';
-import { cn } from '@/lib/cn';
+import { cn } from '../../lib/cn';
 
 /**
  * The four secondary text styles the product repeats everywhere (the old

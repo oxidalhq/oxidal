@@ -1,4 +1,4 @@
-import { cn } from '@/lib/cn';
+import { cn } from '../lib/cn';
 
 /**
  * The one level meter: master, edge meters on stage, Levels page, Sound

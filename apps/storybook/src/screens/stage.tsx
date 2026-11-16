@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { MusicNote, SpeakerHigh } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
-import { Meter } from '@/widgets/meter';
-import { PresetStepper } from '@/widgets/preset-step';
-import { ScenePads } from '@/widgets/scene-pad';
-import { Transport, PositionBar } from '@/widgets/transport';
-import { SCENES } from '@/patterns/rig.fixtures';
+import { Button } from '../components/ui/button';
+import { Toggle } from '../components/ui/toggle';
+import { Meter } from '../widgets/meter';
+import { PresetStepper } from '../widgets/preset-step';
+import { ScenePads } from '../widgets/scene-pad';
+import { Transport, PositionBar } from '../widgets/transport';
+import { SCENES } from '../patterns/rig.fixtures';
 
 const NAMES = ['Rhythm section', 'Ambient swell', 'Lead boost', 'Brown Crunch'];
 

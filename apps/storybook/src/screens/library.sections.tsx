@@ -8,7 +8,7 @@ import {
   User,
   Waveform,
 } from '@phosphor-icons/react';
-import type { Section } from '@/patterns/workspace';
+import type { Section } from '../patterns/workspace';
 
 export const LIBRARY_SECTIONS: Section[] = [
   { id: 'mine', label: 'Mine', icon: <User />, count: 6 },

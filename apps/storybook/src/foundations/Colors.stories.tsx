@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Caption } from '@/components/ui/text';
+import { Caption } from '../components/ui/text';
 
 /**
  * Colour tokens in the four display modes (switch them in the toolbar).

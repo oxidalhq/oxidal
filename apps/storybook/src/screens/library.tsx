@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { FilePlus, Microphone, Plus, Scissors } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { useConfirm } from '@/components/ui/confirm';
-import { Caption } from '@/components/ui/text';
-import { PageHeading } from '@/patterns/app-shell';
-import { PoweredByTone3000 } from '@/patterns/credits';
-import { LibraryList, type LibraryItem } from '@/patterns/library-list';
-import { Workspace } from '@/patterns/workspace';
+import { Button } from '../components/ui/button';
+import { useConfirm } from '../components/ui/confirm';
+import { Caption } from '../components/ui/text';
+import { PageHeading } from '../patterns/app-shell';
+import { PoweredByTone3000 } from '../patterns/credits';
+import { LibraryList, type LibraryItem } from '../patterns/library-list';
+import { Workspace } from '../patterns/workspace';
 import { LIBRARY_SECTIONS } from './library.sections';
 import { Songbook } from './songbook';
 import {

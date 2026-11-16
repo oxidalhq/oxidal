@@ -4,6 +4,14 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
+  "exports": {
+    "./styles/*": "./src/styles/*",
+    "./components/*": "./src/components/ui/*.tsx",
+    "./notices": "./src/components/ui/notices.ts",
+    "./widgets/*": "./src/widgets/*.tsx",
+    "./patterns/*": "./src/patterns/*.tsx",
+    "./lib/*": "./src/lib/*.ts"
+  },
   "scripts": {
     "dev": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
     "build": "tsc --noEmit && storybook build",

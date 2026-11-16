@@ -7,29 +7,29 @@ import {
   PencilSimple,
   Plus,
 } from '@phosphor-icons/react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Combobox } from '../components/ui/combobox';
 import {
   Dialog,
   DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
-} from '@/components/ui/dialog';
-import { Segment, SegmentedControl } from '@/components/ui/segmented';
+} from '../components/ui/dialog';
+import { Segment, SegmentedControl } from '../components/ui/segmented';
 import {
   Sheet,
   SheetBody,
   SheetContent,
   SheetFooter,
   SheetHeader,
-} from '@/components/ui/sheet';
-import { Caption, Eyebrow, Label, Title } from '@/components/ui/text';
-import { LibraryList } from '@/patterns/library-list';
-import { parseSong, type SongFormat } from '@/lib/song';
+} from '../components/ui/sheet';
+import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
+import { LibraryList } from '../patterns/library-list';
+import { parseSong, type SongFormat } from '../lib/song';
 import { SceneStrip } from './stage-parts';
-import { SheetViewer } from '@/widgets/sheet-viewer';
+import { SheetViewer } from '../widgets/sheet-viewer';
 import {
   KIND_LABEL,
   SONGS,

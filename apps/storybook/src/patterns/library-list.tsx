@@ -1,20 +1,20 @@
 import * as React from 'react';
 import { DotsThree, MagnifyingGlass, Play, X } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Badge, Led } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { cn } from '../lib/cn';
+import { Badge, Led } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { List, ListRow } from '@/components/ui/list-row';
-import { Segment, SegmentedControl } from '@/components/ui/segmented';
-import { EmptyState } from '@/components/ui/states';
-import { Caption } from '@/components/ui/text';
-import type { BlockKind } from '@/widgets/chain';
+} from '../components/ui/dropdown-menu';
+import { List, ListRow } from '../components/ui/list-row';
+import { Segment, SegmentedControl } from '../components/ui/segmented';
+import { EmptyState } from '../components/ui/states';
+import { Caption } from '../components/ui/text';
+import type { BlockKind } from '../widgets/chain';
 
 export type LibraryItem = {
   id: string;

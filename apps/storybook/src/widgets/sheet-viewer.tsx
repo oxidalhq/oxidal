@@ -1,16 +1,16 @@
 import * as React from 'react';
 import { Minus, Pause, Play, Plus, TextAa } from '@phosphor-icons/react';
-import { cn } from '@/lib/cn';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
-import { Caption, Eyebrow, Readout, Title } from '@/components/ui/text';
+import { cn } from '../lib/cn';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Toggle } from '../components/ui/toggle';
+import { Caption, Eyebrow, Readout, Title } from '../components/ui/text';
 import {
   hasChords,
   type ChordPart,
   type Song,
   type SongLine,
-} from '@/lib/song';
+} from '../lib/song';
 
 /** Text sizes the player steps through with A− and A+, in rem. */
 const SHEET_SIZES = [0.875, 1, 1.125, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;

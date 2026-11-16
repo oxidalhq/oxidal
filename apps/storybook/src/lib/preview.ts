@@ -1,4 +1,4 @@
-import type { BlockModel } from '@/widgets/block-editor';
+import type { BlockModel } from '../widgets/block-editor';
 
 /** The preview line each block shows in the chain, from its main values. */
 export function previewOf(block: BlockModel) {

@@ -9,7 +9,7 @@ import {
   UserCircle,
   Wrench,
 } from '@phosphor-icons/react';
-import type { Section } from '@/patterns/workspace';
+import type { Section } from '../patterns/workspace';
 
 export const SETTINGS_SECTIONS: Section[] = [
   { id: 'audio', label: 'Audio', icon: <SpeakerHifi /> },

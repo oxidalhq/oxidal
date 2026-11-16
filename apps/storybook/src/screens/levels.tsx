@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Segment, SegmentedControl } from '@/components/ui/segmented';
-import { Caption, Readout } from '@/components/ui/text';
-import { PageHeading } from '@/patterns/app-shell';
-import { StereoMeter } from '@/widgets/meter';
+import { Badge } from '../components/ui/badge';
+import { Card, CardHeader, CardTitle } from '../components/ui/card';
+import { Segment, SegmentedControl } from '../components/ui/segmented';
+import { Caption, Readout } from '../components/ui/text';
+import { PageHeading } from '../patterns/app-shell';
+import { StereoMeter } from '../widgets/meter';
 
 function series(seed: number, n = 120) {
   const out: number[] = [];
