@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../lib/cn';
+import { MidiTarget } from './midi';
 
 export type Scene = { id: string; name: string; number?: number };
 
@@ -122,16 +123,24 @@ export function ScenePads({
       className={cn('grid grid-cols-2 gap-2 sm:grid-cols-4', className)}
     >
       {scenes.map((scene, index) => (
-        <ScenePad
+        <MidiTarget
           key={scene.id}
-          scene={{ number: index + 1, ...scene }}
-          active={scene.id === active}
-          fading={fading && scene.id === active}
-          disabled={disabled}
-          size={size}
-          onSelect={onSelect}
-          onMenu={onMenu}
-        />
+          id={`scene:${index + 1}`}
+          label={`Scene ${index + 1} · ${scene.name}`}
+          kind="trigger"
+          group="Scenes"
+          onMidi={(m) => (m.kind === 'pc' || m.value > 0) && onSelect(scene.id)}
+        >
+          <ScenePad
+            scene={{ number: index + 1, ...scene }}
+            active={scene.id === active}
+            fading={fading && scene.id === active}
+            disabled={disabled}
+            size={size}
+            onSelect={onSelect}
+            onMenu={onMenu}
+          />
+        </MidiTarget>
       ))}
     </div>
   );

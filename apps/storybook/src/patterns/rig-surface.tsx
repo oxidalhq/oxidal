@@ -57,6 +57,8 @@ import {
 } from '../widgets/versions';
 import { CabMics } from '../widgets/cab-mics';
 import { VisualControl } from '../widgets/visual-control';
+import { MidiTarget } from '../widgets/midi';
+import { scaleFromMidi } from '../lib/midi';
 
 export type RigRoute = Step<BlockModel>[];
 
@@ -355,15 +357,26 @@ export function RigSurface({
                   {block.caption ?? block.kind}
                 </Caption>
               </div>
-              <Toggle
-                size="sm"
-                pressed={block.on}
-                onPressedChange={(on) => toggle(block.id, on)}
-                disabled={reading}
+              <MidiTarget
+                id={`${block.id}:on`}
+                label={`${block.label} · on/off`}
+                kind="switch"
+                group="Blocks"
+                onMidi={(m) =>
+                  (m.kind === 'pc' || m.value > 0) &&
+                  toggle(block.id, !block.on)
+                }
               >
-                <span className="sr-only">{block.label} </span>
-                {block.on ? 'On' : 'Off'}
-              </Toggle>
+                <Toggle
+                  size="sm"
+                  pressed={block.on}
+                  onPressedChange={(on) => toggle(block.id, on)}
+                  disabled={reading}
+                >
+                  <span className="sr-only">{block.label} </span>
+                  {block.on ? 'On' : 'Off'}
+                </Toggle>
+              </MidiTarget>
             </div>
             {block.mics ? (
               <CabMics
@@ -395,19 +408,34 @@ export function RigSurface({
                 >
                   {c.label}
                 </Label>
-                <NumberField
-                  className="w-full"
-                  label={`${block.label} ${c.label}`}
-                  value={c.value}
-                  min={c.min}
-                  max={c.max}
-                  step={c.step ?? 0.5}
-                  fine={(c.step ?? 0.5) / 5}
-                  unit={c.unit}
-                  digits={c.step && c.step >= 1 ? 0 : 1}
-                  disabled={reading}
-                  onChange={(value) => control(block.id, c.id, value)}
-                />
+                <MidiTarget
+                  id={`${block.id}:${c.id}`}
+                  label={`${block.label} · ${c.label}`}
+                  kind="continuous"
+                  group="Blocks"
+                  onMidi={(m) =>
+                    m.kind === 'cc' &&
+                    control(
+                      block.id,
+                      c.id,
+                      scaleFromMidi(m.value, c.min, c.max, c.step ?? 0.1),
+                    )
+                  }
+                >
+                  <NumberField
+                    className="w-full"
+                    label={`${block.label} ${c.label}`}
+                    value={c.value}
+                    min={c.min}
+                    max={c.max}
+                    step={c.step ?? 0.5}
+                    fine={(c.step ?? 0.5) / 5}
+                    unit={c.unit}
+                    digits={c.step && c.step >= 1 ? 0 : 1}
+                    disabled={reading}
+                    onChange={(value) => control(block.id, c.id, value)}
+                  />
+                </MidiTarget>
               </div>
             ))}
             {Array.from({ length: Math.max(0, 4 - main.length) }, (_, i) => (

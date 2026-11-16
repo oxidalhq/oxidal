@@ -41,6 +41,7 @@ import { Meter } from '../widgets/meter';
 import { SheetViewer } from '../widgets/sheet-viewer';
 import { tempoFromTaps } from '../lib/tempo';
 import { TapTempo } from '../widgets/tap-tempo';
+import { MidiTarget } from '../widgets/midi';
 import { Transport } from '../widgets/transport';
 import { TunerFace } from '../widgets/tuner-face';
 import { FRIDAY_SET } from './perform.data';
@@ -181,12 +182,22 @@ export function Perform({
               <Notebook /> <span className="max-sm:sr-only">Sheet</span>
             </Toggle>
           )}
-          <Toggle size="sm" pressed={protect} onPressedChange={setProtect}>
-            {protect ? <LockSimple weight="fill" /> : <LockSimpleOpen />}
-            <span className="max-sm:sr-only">
-              {protect ? 'Protected' : 'Editable'}
-            </span>
-          </Toggle>
+          <MidiTarget
+            id="stage:protect"
+            label="Protect"
+            kind="switch"
+            group="Stage"
+            onMidi={(m) =>
+              (m.kind === 'pc' || m.value > 0) && setProtect((on) => !on)
+            }
+          >
+            <Toggle size="sm" pressed={protect} onPressedChange={setProtect}>
+              {protect ? <LockSimple weight="fill" /> : <LockSimpleOpen />}
+              <span className="max-sm:sr-only">
+                {protect ? 'Protected' : 'Editable'}
+              </span>
+            </Toggle>
+          </MidiTarget>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -306,10 +317,31 @@ export function Perform({
 
       {/* Tempo, tuner, player and output. */}
       <div className="grid gap-2 rounded-lg border border-border bg-card p-2 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-center sm:gap-4">
-        <TapTempo bpm={bpm} onBpm={setBpm} trackBpm={entry.bpm} />
-        <Button variant="outline" onClick={() => setTuner(true)}>
-          <MusicNote /> Tuner
-        </Button>
+        <MidiTarget
+          id="stage:tap"
+          label="Tap tempo"
+          kind="trigger"
+          group="Stage"
+          className="w-fit"
+          onMidi={(m) =>
+            (m.kind === 'pc' || m.value > 0) && act({ kind: 'tap' })
+          }
+        >
+          <TapTempo bpm={bpm} onBpm={setBpm} trackBpm={entry.bpm} />
+        </MidiTarget>
+        <MidiTarget
+          id="stage:tuner"
+          label="Tuner"
+          kind="switch"
+          group="Stage"
+          onMidi={(m) =>
+            (m.kind === 'pc' || m.value > 0) && setTuner((on) => !on)
+          }
+        >
+          <Button variant="outline" onClick={() => setTuner(true)}>
+            <MusicNote /> Tuner
+          </Button>
+        </MidiTarget>
         <div className="flex min-w-0 items-center gap-3">
           <Transport
             compact

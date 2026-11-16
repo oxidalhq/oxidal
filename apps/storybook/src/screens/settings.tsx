@@ -24,6 +24,10 @@ import {
   SettingsPage,
 } from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
+import { DEFAULT_MAP } from '../lib/midi';
+import { MidiBar, MidiProvider } from '../widgets/midi';
+import { PretendController, WebMidiButton } from '../widgets/midi-controller';
+import { MidiMap } from '../widgets/midi-map';
 
 function Audio() {
   const [buffer, setBuffer] = useState('96x3');
@@ -150,7 +154,7 @@ function Accounts() {
 
 function Midi() {
   return (
-    <>
+    <MidiProvider initial={DEFAULT_MAP}>
       <SettingGroup title="Controller">
         <SettingRow
           label="M-Vave Chocolate"
@@ -178,7 +182,15 @@ function Midi() {
           </SettingRow>
         ))}
       </SettingGroup>
-    </>
+      <SettingGroup title="Map">
+        <MidiBar className="mb-2" />
+        <MidiMap />
+      </SettingGroup>
+      <SettingGroup title="Try it without a pedal">
+        <PretendController />
+        <WebMidiButton />
+      </SettingGroup>
+    </MidiProvider>
   );
 }
 
