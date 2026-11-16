@@ -11,7 +11,8 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm build"
+    "check": "pnpm format:check && pnpm lint && pnpm test && pnpm build && pnpm a11y",
+    "a11y": "node scripts/a11y.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
@@ -39,7 +40,9 @@
     "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.1",
     "@storybook/addon-a11y": "10.6.7",
     "@storybook/addon-docs": "10.6.7",
     "@storybook/react-vite": "10.6.7",

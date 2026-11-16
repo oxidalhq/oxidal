@@ -8,7 +8,7 @@ import { Tooltip, TooltipProvider } from './tooltip';
 
 afterEach(cleanup);
 
-it('a clickable row is a button that activates with Enter and ignores trailing clicks', async () => {
+it('a clickable row has a title button that activates with Enter beside its own controls', async () => {
   const user = userEvent.setup();
   const open = vi.fn();
   const more = vi.fn();

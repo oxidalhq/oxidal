@@ -22,7 +22,10 @@ export function ScrollArea({
       className={cn('relative overflow-hidden', className)}
       {...props}
     >
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit] [&>div]:!block">
+      <ScrollAreaPrimitive.Viewport
+        tabIndex={0}
+        className="size-full rounded-[inherit] outline-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring [&>div]:!block"
+      >
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollAreaPrimitive.Scrollbar

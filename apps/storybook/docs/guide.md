@@ -96,5 +96,19 @@ compose widgets; screens compose patterns. Nothing imports upward.
 
 ## 7. Component table
 
-Filled in as components land (Phase 2): purpose, when, when not, variants,
-keyboard, touch, display-mode notes, and the product files it replaces.
+The table of every component — what to use it for, what not, and the
+product files it replaces — is the Storybook page **Guide › Components**
+(`src/guide/Components.mdx`), kept next to the live stories so it cannot
+drift. In short:
+
+- Actions: Button. States that stay: Toggle. One of a few: SegmentedControl.
+  Settings: Switch. Some of many: Checkbox. One of many: Select; by typing:
+  Combobox. Numbers: NumberField; positions: Slider and faders.
+- Structure: Tabs, Card, List and ListRow, Separator, ScrollArea,
+  Collapsible. Labels: Badge and Led, the text styles.
+- Containers: Tooltip, Popover, DropdownMenu, Dialog and useConfirm, Sheet.
+- States: Skeleton, Loading, EmptyState, Progress, StepProgress, and the
+  NoticeTray with useNotice and notify.
+
+`pnpm a11y` runs axe over every story of the built Storybook and is part of
+`pnpm check`.

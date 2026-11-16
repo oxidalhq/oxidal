@@ -25,4 +25,8 @@ export default tseslint.config(
     files: ['**/*.stories.tsx', '.storybook/**/*.{ts,tsx}'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 );
