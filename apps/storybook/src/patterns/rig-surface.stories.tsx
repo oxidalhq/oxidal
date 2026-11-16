@@ -232,3 +232,30 @@ export const ChainAlone: StoryObj = {
     </div>
   ),
 };
+
+function PhoneEditor() {
+  const rig = useRig(SERIAL);
+  const block = rig.lanes[0]!.blocks.find((b) => b.id === 'echo')!;
+  return (
+    <div className="mx-auto grid max-w-[393px] gap-3 rounded-t-lg border border-border bg-raised p-4 shadow-raised">
+      <BlockQuickEditor
+        layout="sheet"
+        block={block}
+        onControl={(control, value) => rig.onControl(block.id, control, value)}
+        onToggle={(on) => rig.onToggleBlock(block.id, on)}
+        onAll={() => {}}
+      />
+      <Caption>
+        On phones the quick editor sits in a bottom sheet with full-width
+        sliders, so a thumb sets the delay without the keyboard covering the
+        screen.
+      </Caption>
+    </div>
+  );
+}
+
+export const QuickEditorPhone: StoryObj = {
+  name: 'Quick editor on a phone (sheet)',
+  parameters: { layout: 'padded' },
+  render: () => <PhoneEditor />,
+};

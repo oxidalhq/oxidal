@@ -8,6 +8,7 @@ import { PoweredByTone3000 } from '@/patterns/credits';
 import { LibraryList, type LibraryItem } from '@/patterns/library-list';
 import { Workspace } from '@/patterns/workspace';
 import { LIBRARY_SECTIONS } from './library.sections';
+import { Songbook } from './songbook';
 import {
   DI,
   PRESETS,
@@ -156,6 +157,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
             ]}
           />
         )}
+        {section === 'songbook' && <Songbook />}
         {section === 'tones' && (
           <LibraryList
             {...common}

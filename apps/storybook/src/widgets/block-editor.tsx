@@ -59,6 +59,7 @@ export function BlockQuickEditor({
   onToggle,
   onSource,
   onAll,
+  layout = 'popover',
   className,
 }: {
   block: BlockModel;
@@ -66,6 +67,12 @@ export function BlockQuickEditor({
   onToggle: (on: boolean) => void;
   onSource?: (value: string | null) => void;
   onAll: () => void;
+  /**
+   * `sheet` (phones) draws the main values as full-width sliders with
+   * readouts, so a thumb sets them without the keyboard taking the screen;
+   * `popover` (laptops) draws drag-or-type fields in two columns.
+   */
+  layout?: 'popover' | 'sheet';
   className?: string;
 }) {
   const values = Object.fromEntries(block.controls.map((c) => [c.id, c.value]));
@@ -118,31 +125,50 @@ export function BlockQuickEditor({
           />
         </div>
       )}
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-        {main.map((control) => (
-          <div key={control.id} className="grid gap-0.5">
-            <Label
-              as="span"
-              className="small-caps text-xs text-muted-foreground"
-            >
-              {control.label}
-            </Label>
-            <NumberField
-              size="sm"
-              className="w-full"
-              label={`${block.label} ${control.label}`}
-              value={control.value}
+      {layout === 'sheet' ? (
+        <div className="grid gap-4">
+          {main.map((control) => (
+            <Slider
+              key={control.id}
+              label={control.label}
               min={control.min}
               max={control.max}
               step={control.step ?? 0.5}
-              fine={(control.step ?? 0.5) / 5}
-              unit={control.unit}
-              digits={control.step && control.step >= 1 ? 0 : 1}
-              onChange={(value) => onControl(control.id, value)}
+              value={[control.value]}
+              onValueChange={([value]) =>
+                value !== undefined && onControl(control.id, value)
+              }
+              readout={`${control.value.toFixed(control.step && control.step >= 1 ? 0 : 1)}${control.unit ? ` ${control.unit}` : ''}`}
             />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          {main.map((control) => (
+            <div key={control.id} className="grid gap-0.5">
+              <Label
+                as="span"
+                className="small-caps text-xs text-muted-foreground"
+              >
+                {control.label}
+              </Label>
+              <NumberField
+                size="sm"
+                className="w-full"
+                label={`${block.label} ${control.label}`}
+                value={control.value}
+                min={control.min}
+                max={control.max}
+                step={control.step ?? 0.5}
+                fine={(control.step ?? 0.5) / 5}
+                unit={control.unit}
+                digits={control.step && control.step >= 1 ? 0 : 1}
+                onChange={(value) => onControl(control.id, value)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         {block.unsaved ? <Badge tone="warning">Unsaved</Badge> : <span />}
         <Button size="sm" variant="ghost" onClick={onAll}>
@@ -260,6 +286,7 @@ export function BlockEditor({
         onOpenChange(false);
         setFull(true);
       }}
+      layout={phone ? 'sheet' : 'popover'}
     />
   );
   return (
