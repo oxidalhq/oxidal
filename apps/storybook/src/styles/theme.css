@@ -149,7 +149,7 @@
   --chart-secondary: #000000;
 }
 
-/* E-paper (BOOX): black and white only; no greys that dither; no shadows. */
+/* E-paper (BOOX): black and white only; no greys that dither; no shadows; no motion. */
 :root[data-display='epaper'] {
   --background: #ffffff;
   --foreground: #000000;
@@ -255,6 +255,18 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --duration-fast: 120ms;
   --duration-base: 200ms;
+  /* The stage's change confirmation: the new name settles in place. */
+  --animate-arrive: arrive 280ms var(--ease-out);
+  @keyframes arrive {
+    from {
+      opacity: 0.15;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   /* Breakpoints: sm 640, md 768, lg 1024, xl 1280. Nothing else. */
   --breakpoint-*: initial;
@@ -322,4 +334,11 @@
     --duration-fast: 0ms;
     --duration-base: 0ms;
   }
+}
+
+:root[data-display='epaper'] *,
+:root[data-display='epaper'] *::before,
+:root[data-display='epaper'] *::after {
+  animation: none !important;
+  transition: none !important;
 }

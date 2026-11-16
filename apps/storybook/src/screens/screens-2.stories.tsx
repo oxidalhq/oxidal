@@ -6,7 +6,7 @@ import { Levels } from './levels';
 import { Settings } from './settings';
 import { PlayerSheet } from './sheets';
 import { Screen } from './shell';
-import { Stage } from './stage';
+import { Perform } from './perform';
 
 const meta: Meta = {
   title: 'Screens/Guitars, Levels, Settings, sheets',
@@ -55,7 +55,7 @@ function WithPlayer() {
   const [open, setOpen] = useState(true);
   return (
     <Screen destination="rig">
-      <Stage />
+      <Perform />
       <div className="fixed right-page bottom-20 z-strip md:bottom-page">
         <Button onClick={() => setOpen(true)}>Open player</Button>
       </div>

@@ -1,13 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  CaretLeft,
-  CaretRight,
-  FilePlus,
-  Link,
-  PencilSimple,
-  Plus,
-} from '@phosphor-icons/react';
-import { Badge } from '../components/ui/badge';
+import { FilePlus, Link, PencilSimple, Plus } from '@phosphor-icons/react';
 import { Button } from '../components/ui/button';
 import { Combobox } from '../components/ui/combobox';
 import {
@@ -25,10 +17,9 @@ import {
   SheetFooter,
   SheetHeader,
 } from '../components/ui/sheet';
-import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
+import { Eyebrow, Label } from '../components/ui/text';
 import { LibraryList } from '../patterns/library-list';
 import { parseSong, type SongFormat } from '../lib/song';
-import { SceneStrip } from './stage-parts';
 import { SheetViewer } from '../widgets/sheet-viewer';
 import {
   KIND_LABEL,
@@ -292,93 +283,6 @@ export function Songbook() {
           onSave={(source, format) => update(entry.id, { source, format })}
         />
       )}
-    </div>
-  );
-}
-
-const SET = [
-  { name: 'Rhythm section', song: 'harbour' },
-  { name: 'Ambient swell', song: 'night' },
-  { name: 'Lead boost', song: null },
-];
-
-/**
- * The stage with the set list's linked sheet: a compact preset line with
- * previous/next on top, the words filling the screen, the scenes in a strip
- * at the bottom. Stepping the set list opens the next song's sheet; an
- * entry with no song shows the scenes large instead.
- */
-export function StageWithSheet() {
-  const [index, setIndex] = useState(0);
-  const [sizes, setSizes] = useState<Record<string, number>>({
-    harbour: 4,
-    night: 4,
-  });
-  const [speed, setSpeed] = useState(4);
-  const [scene, setScene] = useState('b');
-  const item = SET[index]!;
-  const entry = SONGS.find((s) => s.id === item.song);
-  const song = entry ? parseSong(entry.source, entry.format) : null;
-  return (
-    <div
-      data-slot="stage-with-sheet"
-      className="grid h-[calc(100dvh-7rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-2 px-page py-2"
-    >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-        <Button
-          size="icon-lg"
-          variant="outline"
-          aria-label="Previous preset"
-          disabled={index === 0}
-          onClick={() => setIndex(index - 1)}
-        >
-          <CaretLeft weight="bold" />
-        </Button>
-        <div className="grid min-w-0 justify-items-center text-center">
-          <Eyebrow>
-            {index + 1} of {SET.length} · Friday set
-          </Eyebrow>
-          <Title size="lg" className="w-full truncate">
-            {item.name}
-          </Title>
-          {song && (
-            <Caption className="truncate text-xs">
-              {song.title}
-              {song.key ? ` · Key ${song.key}` : ''}
-              {song.capo ? ` · Capo ${song.capo}` : ''}
-            </Caption>
-          )}
-        </div>
-        <Button
-          size="icon-lg"
-          variant="outline"
-          aria-label="Next preset"
-          disabled={index === SET.length - 1}
-          onClick={() => setIndex(index + 1)}
-        >
-          <CaretRight weight="bold" />
-        </Button>
-      </div>
-      {song && entry ? (
-        <SheetViewer
-          key={entry.id}
-          stage
-          song={song}
-          size={sizes[entry.id] ?? 4}
-          onSize={(size) => setSizes((all) => ({ ...all, [entry.id]: size }))}
-          speed={speed}
-          onSpeed={setSpeed}
-          className="min-h-0 border-y border-border"
-        />
-      ) : (
-        <div className="grid content-center justify-items-center gap-2 text-center">
-          <Badge>No song linked</Badge>
-          <Caption>
-            Link a song to this set list entry in Library › Songbook.
-          </Caption>
-        </div>
-      )}
-      <SceneStrip active={scene} onSelect={setScene} large={!song} />
     </div>
   );
 }

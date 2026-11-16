@@ -2,8 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Library } from './library';
 import { Rig } from './rig';
 import { Screen } from './shell';
-import { Stage } from './stage';
-import { StageWithSheet } from './songbook';
+import { Perform } from './perform';
 
 /**
  * Every product screen rebuilt on the system with fixture data, inside the
@@ -35,10 +34,19 @@ export const RigNoAudio: StoryObj = {
 };
 
 export const StagePerform: StoryObj = {
-  name: 'Stage (Perform)',
+  name: 'Stage · 4-switch controller',
   render: () => (
     <Screen destination="rig">
-      <Stage />
+      <Perform />
+    </Screen>
+  ),
+};
+
+export const StageTenSwitches: StoryObj = {
+  name: 'Stage · 10-switch controller',
+  render: () => (
+    <Screen destination="rig">
+      <Perform controller="ten" />
     </Screen>
   ),
 };
@@ -63,10 +71,10 @@ export const LibraryStems = libraryStory('stems', 'Stems');
 export const LibraryDi = libraryStory('di', 'DI and reamps');
 
 export const StageSheet: StoryObj = {
-  name: 'Stage with the linked chord sheet',
+  name: "Stage · with the song's chord sheet",
   render: () => (
     <Screen destination="rig">
-      <StageWithSheet />
+      <Perform sheet />
     </Screen>
   ),
 };
