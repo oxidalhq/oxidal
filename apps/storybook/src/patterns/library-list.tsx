@@ -1,0 +1,282 @@
+import * as React from 'react';
+import { DotsThree, MagnifyingGlass, Play, X } from '@phosphor-icons/react';
+import { cn } from '@/lib/cn';
+import { Badge, Led } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { List, ListRow } from '@/components/ui/list-row';
+import { Segment, SegmentedControl } from '@/components/ui/segmented';
+import { EmptyState } from '@/components/ui/states';
+import { Caption } from '@/components/ui/text';
+import type { BlockKind } from '@/widgets/chain';
+
+export type LibraryItem = {
+  id: string;
+  title: string;
+  caption?: string;
+  kind?: BlockKind;
+  artwork?: string;
+  badge?: { text: string; tone?: 'neutral' | 'live' | 'warning' | 'selected' };
+  playable?: boolean;
+};
+
+export type RowAction = {
+  label: string;
+  destructive?: boolean;
+  run: (id: string) => void;
+};
+
+/**
+ * A Library section: search, a filter row, List or Artwork, and the items
+ * as rows (or cards) that open on tap, play from their leading button and
+ * carry their actions in one menu. The empty state names the way in.
+ */
+export function LibraryList({
+  items,
+  query,
+  onQuery,
+  filters,
+  filter,
+  onFilter,
+  view = 'list',
+  onView,
+  selected,
+  onOpen,
+  onPlay,
+  actions = [],
+  empty,
+  primary,
+  className,
+}: {
+  items: LibraryItem[];
+  query: string;
+  onQuery: (query: string) => void;
+  filters?: { id: string; label: string }[];
+  filter?: string;
+  onFilter?: (id: string) => void;
+  view?: 'list' | 'artwork';
+  onView?: (view: 'list' | 'artwork') => void;
+  selected?: string | null;
+  onOpen: (id: string) => void;
+  onPlay?: (id: string) => void;
+  actions?: RowAction[];
+  empty: { title: string; text?: string };
+  /** The one action for this section: New preset, Import…, Split a track… */
+  primary?: React.ReactNode;
+  className?: string;
+}) {
+  const shown = items.filter(
+    (item) =>
+      !query ||
+      `${item.title} ${item.caption ?? ''}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
+  const menu = (item: LibraryItem) =>
+    actions.length > 0 && (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={`Actions for ${item.title}`}
+          >
+            <DotsThree weight="bold" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          {actions
+            .filter((a) => !a.destructive)
+            .map((action) => (
+              <DropdownMenuItem
+                key={action.label}
+                onSelect={() => action.run(item.id)}
+              >
+                {action.label}
+              </DropdownMenuItem>
+            ))}
+          {actions.some((a) => a.destructive) && <DropdownMenuSeparator />}
+          {actions
+            .filter((a) => a.destructive)
+            .map((action) => (
+              <DropdownMenuItem
+                key={action.label}
+                destructive
+                onSelect={() => action.run(item.id)}
+              >
+                {action.label}
+              </DropdownMenuItem>
+            ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  return (
+    <div data-slot="library-list" className={cn('grid gap-3', className)}>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex min-h-touch min-w-48 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring">
+          <MagnifyingGlass
+            aria-hidden="true"
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+          <input
+            type="search"
+            aria-label="Search"
+            placeholder="Find…"
+            value={query}
+            onChange={(event) => onQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+          />
+          {query && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => onQuery('')}
+              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </label>
+        {primary}
+      </div>
+      {(filters || onView) && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {filters && onFilter && (
+            <SegmentedControl
+              size="sm"
+              value={filter}
+              onValueChange={onFilter}
+              aria-label="Filter"
+            >
+              {filters.map((f) => (
+                <Segment key={f.id} value={f.id}>
+                  {f.label}
+                </Segment>
+              ))}
+            </SegmentedControl>
+          )}
+          {onView && (
+            <SegmentedControl
+              size="sm"
+              value={view}
+              onValueChange={(v) => onView(v as 'list' | 'artwork')}
+              aria-label="View"
+            >
+              <Segment value="list">List</Segment>
+              <Segment value="artwork">Artwork</Segment>
+            </SegmentedControl>
+          )}
+        </div>
+      )}
+      {shown.length === 0 ? (
+        <EmptyState title={query ? `Nothing matches “${query}”` : empty.title}>
+          {query ? 'Try fewer letters.' : empty.text}
+        </EmptyState>
+      ) : view === 'artwork' ? (
+        <ul
+          aria-label="Items"
+          className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3 p-0"
+        >
+          {shown.map((item) => (
+            <li key={item.id} className="relative grid gap-1.5">
+              <button
+                type="button"
+                aria-pressed={item.id === selected}
+                onClick={() => onOpen(item.id)}
+                className={cn(
+                  'grid gap-1.5 rounded-pad text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  item.id === selected &&
+                    '[&>span:first-child]:border-foreground [&>span:first-child]:shadow-raised',
+                )}
+              >
+                <span className="grid aspect-square w-full place-items-center overflow-hidden rounded-pad border border-border bg-card">
+                  {item.artwork ? (
+                    <img
+                      src={item.artwork}
+                      alt=""
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-display text-3xl font-semibold text-muted-foreground">
+                      {item.title.slice(0, 1)}
+                    </span>
+                  )}
+                </span>
+                <span className="truncate text-sm font-medium">
+                  {item.title}
+                </span>
+                {item.caption && (
+                  <Caption as="span" className="truncate text-xs">
+                    {item.caption}
+                  </Caption>
+                )}
+              </button>
+              <span className="absolute top-1 right-1 flex gap-1">
+                {menu(item)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <List>
+          {shown.map((item) => (
+            <ListRow
+              key={item.id}
+              title={item.title}
+              caption={item.caption}
+              selected={item.id === selected}
+              onClick={() => onOpen(item.id)}
+              leading={
+                item.playable && onPlay ? (
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    aria-label={`Play ${item.title}`}
+                    onClick={() => onPlay(item.id)}
+                    className={cn(
+                      item.id === selected &&
+                        'border-background text-background',
+                    )}
+                  >
+                    <Play weight="fill" />
+                  </Button>
+                ) : item.kind ? (
+                  <Led kind={item.kind} className="ml-2" />
+                ) : item.artwork ? (
+                  <img
+                    src={item.artwork}
+                    alt=""
+                    className="size-9 rounded-md border border-border object-cover"
+                  />
+                ) : undefined
+              }
+              trailing={
+                <>
+                  {item.badge && (
+                    <Badge
+                      tone={item.badge.tone}
+                      size="sm"
+                      className={cn(
+                        item.id === selected &&
+                          'border-background/60 text-background',
+                      )}
+                    >
+                      {item.badge.text}
+                    </Badge>
+                  )}
+                  {menu(item)}
+                </>
+              }
+            />
+          ))}
+        </List>
+      )}
+    </div>
+  );
+}

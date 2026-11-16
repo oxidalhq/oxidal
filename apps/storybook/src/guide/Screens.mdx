@@ -1,0 +1,44 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guide/Screens" />
+
+# Screens: coverage
+
+Every screen of the product rebuilt on the system, with the story that
+shows it and the product files it replaces. Open each on the iPhone 16 and
+BOOX viewports and in the four display modes.
+
+| Product screen           | Story                                              | Patterns used                                       | Replaces (`apps/web/src`)                                                    |
+| ------------------------ | -------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Rig (playing)            | Screens › Rig, Stage, Library › Rig · playing      | AppShell, RigSurface, Chain, BlockEditor            | `LiveRig`, `MixedRig`, `ChainView`, `RigSheet`, `RigComposer`, `RouteTree`   |
+| Rig (audio unavailable)  | Screens › … › Rig · audio unavailable              | Card                                                | the inline card in `LiveRig`                                                 |
+| Perform (stage)          | Screens › … › Stage (Perform)                      | PresetStepper, ScenePads, Meter, Transport          | `PerformView`, `PresetSteps`, `EdgeMeter`, `PerformPlayerRow`                |
+| Library · Mine           | Screens › … › Library · Mine                       | Workspace, LibraryList, DropdownMenu, Confirm       | `Library`, `LibraryManagement`, `LibraryRow`, `MediaRow`                     |
+| Library · Oxidal sounds  | Screens › … › Library · Oxidal sounds              | LibraryList with filters                            | `Library` (oxidal), `factoryRecipes`                                         |
+| Library · TONE3000       | Screens › … › Library · TONE3000                   | LibraryList, PoweredByTone3000                      | `ModelLibrary`, `LibraryModelAudition`, `Tone3000Account`                    |
+| Library · Set list       | Screens › … › Library · Set list                   | LibraryList                                         | `Library` (setlist), `SetListMenu`, `useSetListDrag`                         |
+| Library · Tones and IRs  | Screens › … › Library · Tones and IRs              | LibraryList with filters, Led                       | `ModelLibrary`, `ModelPicker`, `ToneDetails`                                 |
+| Library · Backing tracks | Screens › … › Library · Backing tracks             | LibraryList with play                               | `BackingTracks`, `UploadQueue`, `TrackDialogs`                               |
+| Library · Stems          | Screens › … › Library · Stems                      | LibraryList                                         | `StemSongs`, `StemImportForm`                                                |
+| Library · DI and reamps  | Screens › … › Library · DI and reamps              | LibraryList                                         | `DiReamps`                                                                   |
+| Guitars                  | Screens › Guitars, Levels, Settings › Guitars      | Card, List, Meter, NumberField, StepProgress        | `GuitarSettings`, `SoundCheck`, `LevelMatch`, `EvenOut`                      |
+| Levels (Monitoring)      | Screens › … › Levels                               | StereoMeter, Card, SegmentedControl                 | `Monitoring`, `MonitoringHistory`, `chart.tsx`                               |
+| Settings · Audio         | Screens › … › Settings · Audio                     | SettingsPage, SettingRow, Segmented, Select, Switch | `AudioSettings`, `AudioReconfigure`, `BufferFinder`, `BootPlayback`          |
+| Settings · Network       | Screens › … › Settings · Network                   | SettingsPage                                        | `NetworkSettings`                                                            |
+| Settings · Accounts      | Screens › … › Settings · Accounts                  | SettingsPage                                        | `Tone3000Account`                                                            |
+| Settings · MIDI          | Screens › … › Settings · MIDI                      | SettingsPage                                        | `MidiSettings`, `ControllerSetup`, `MidiMapScreen`, `ExtraControllers`       |
+| Settings · Effects       | Screens › … › Settings · Effects                   | SettingsPage, Checkbox                              | `EffectPacks`, `EngineSettings`, `EffectsPlaybackSettings`                   |
+| Settings · Display       | Screens › … › Settings · Display                   | SettingsPage, SegmentedControl                      | the Display tab in `App.tsx`                                                 |
+| Settings · Device        | Screens › … › Settings · Device                    | SettingsPage, NumberField                           | `DevicePower`, `StorageLock`                                                 |
+| Settings · Maintenance   | Screens › … › Settings · Maintenance               | SettingsPage, Collapsible                           | the Maintenance tab, `DebugConsole`                                          |
+| Settings · About         | Screens › … › Settings · About                     | Credits                                             | `About`                                                                      |
+| Player and stems sheets  | Screens › … › Player sheet over the stage          | Sheet, Transport, PositionBar, StemMixer            | `PlayerSheet`, `StemsSheet`, `StemMixer`, `PracticeControls`, `TransportBar` |
+| Block editor             | Patterns › Rig surface › Quick editor, Full editor | BlockEditor, BlockVisual                            | `RigSheet`, `ControlEditor`, `NativeEditor`                                  |
+| Tuner                    | Widgets › … › Tuner on stage                       | TunerFace                                           | `GlobalTuner`, `TunerButton`                                                 |
+| Loading                  | Patterns › Loading screens and credits             | LoadingScreen, skeletons                            | `Loading`, `Reading…` strings                                                |
+| Notices                  | Components › Notices …                             | NoticeTray                                          | `NoticeTray`, `ResourceStrip` alerts, `RecoveryNotice`                       |
+
+Not yet drawn: the debug console (an xterm, kept as is), the rig canvas
+`RouteTree` (replaced by the chain's editing mode, D-4), and the venue EQ
+(`VenueEq`), which follows in the product rewrite with the Slider and a
+graph like the block visuals.
