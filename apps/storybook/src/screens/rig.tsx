@@ -1,13 +1,12 @@
-import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
-import { RigSurface, type RigLane } from '../patterns/rig-surface';
-import { SCENES, SERIAL } from '../patterns/rig.fixtures';
+import { RigSurface } from '../patterns/rig-surface';
+import { SCENES, SERIAL_ROUTE } from '../patterns/rig.fixtures';
+import { useRigDemo } from '../patterns/use-rig-demo';
 
 /** The Rig screen: the rig surface, or the card that says why audio is not playing. */
 export function Rig({ audio = true }: { audio?: boolean }) {
-  const [lanes, setLanes] = useState<RigLane[]>(SERIAL);
-  const [scene, setScene] = useState<string | null>('b');
+  const rig = useRigDemo(SERIAL_ROUTE);
   if (!audio)
     return (
       <div className="grid gap-4 px-page pt-4">
@@ -31,42 +30,23 @@ export function Rig({ audio = true }: { audio?: boolean }) {
     <RigSurface
       presetName="Rhythm section"
       playing
-      unsaved
-      lanes={lanes}
+      route={rig.route}
+      saved={rig.saved}
+      onRoute={rig.onRoute}
+      versions={rig.versions}
+      currentVersion={rig.current}
+      onVersion={rig.onVersion}
+      onSaveVersion={rig.onSaveVersion}
+      onSaveVersionAs={rig.onSaveVersionAs}
+      onMakeDefault={rig.onMakeDefault}
       scenes={SCENES}
-      activeScene={scene}
-      onScene={setScene}
-      onControl={(block, control, value) =>
-        setLanes((all) =>
-          all.map((l) => ({
-            ...l,
-            blocks: l.blocks.map((b) =>
-              b.id === block
-                ? {
-                    ...b,
-                    unsaved: true,
-                    controls: b.controls.map((c) =>
-                      c.id === control ? { ...c, value } : c,
-                    ),
-                  }
-                : b,
-            ),
-          })),
-        )
-      }
-      onToggleBlock={(block, on) =>
-        setLanes((all) =>
-          all.map((l) => ({
-            ...l,
-            blocks: l.blocks.map((b) => (b.id === block ? { ...b, on } : b)),
-          })),
-        )
-      }
-      onSource={() => {}}
-      onAdd={() => {}}
-      onMove={() => {}}
-      onSave={() => {}}
-      onRevert={() => {}}
+      activeScene={rig.scene}
+      onScene={rig.onScene}
+      sceneChanged={rig.sceneChanged}
+      levels={rig.levels}
+      inputLevel={rig.input}
+      onAudition={rig.onAudition}
+      onAdd={rig.onAdd}
     />
   );
 }

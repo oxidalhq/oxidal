@@ -20,7 +20,7 @@ import {
 import { Slider } from '../components/ui/slider';
 import { Caption, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { BlockVisual } from './block-visuals';
+import { VisualControl } from './visual-control';
 import type { ChainBlockModel } from './chain';
 
 export type BlockControl = {
@@ -75,7 +75,6 @@ export function BlockQuickEditor({
   layout?: 'popover' | 'sheet';
   className?: string;
 }) {
-  const values = Object.fromEntries(block.controls.map((c) => [c.id, c.value]));
   const main = block.controls.filter((c) => c.main).slice(0, 4);
   return (
     <div data-slot="block-quick-editor" className={cn('grid gap-3', className)}>
@@ -98,19 +97,16 @@ export function BlockQuickEditor({
           {block.on ? 'On' : 'Off'}
         </Toggle>
       </div>
-      <div
+      <VisualControl
+        kind={block.kind}
+        role={block.role}
+        controls={block.controls}
+        onControl={onControl}
         className={cn(
-          'rounded-lg border border-border bg-background px-2 py-1 text-foreground',
+          'h-20 rounded-lg border border-border bg-background px-2 py-1 text-foreground',
           !block.on && 'text-muted-foreground',
         )}
-      >
-        <BlockVisual
-          kind={block.kind}
-          role={block.role}
-          values={values}
-          className="h-14 w-full"
-        />
-      </div>
+      />
       {block.source && onSource && (
         <div className="grid gap-1">
           <Label as="span" className="small-caps text-xs text-muted-foreground">
@@ -199,17 +195,15 @@ export function BlockFullEditor({
     const key = control.group ?? '';
     groups.set(key, [...(groups.get(key) ?? []), control]);
   }
-  const values = Object.fromEntries(block.controls.map((c) => [c.id, c.value]));
   return (
     <div data-slot="block-full-editor" className="grid gap-5">
-      <div className="rounded-lg border border-border bg-background px-2 py-1">
-        <BlockVisual
-          kind={block.kind}
-          role={block.role}
-          values={values}
-          className="h-20 w-full"
-        />
-      </div>
+      <VisualControl
+        kind={block.kind}
+        role={block.role}
+        controls={block.controls}
+        onControl={onControl}
+        className="h-28 rounded-lg border border-border bg-background px-2 py-1"
+      />
       {[...groups.entries()].map(([group, controls]) => (
         <section key={group} className="grid gap-3">
           {group && (

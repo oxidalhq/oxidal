@@ -1,6 +1,9 @@
 import type { BlockControl, BlockModel } from '../widgets/block-editor';
 import type { Scene } from '../widgets/scene-pad';
-import type { RigLane } from './rig-surface';
+import type { Step } from '../lib/route';
+import type { ChainLaneModel } from '../widgets/chain';
+
+type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
 
 const AMPS = [
   { value: 'plexi', label: 'Plexi 50', caption: 'NAM · 48 kHz' },
@@ -389,6 +392,41 @@ export const SCENES: Scene[] = [
   { id: 'b', name: 'Crunch' },
   { id: 'c', name: 'Lead' },
   { id: 'd', name: 'Ambient' },
+];
+
+/** The serial rig as a route: one path, no splits. */
+export const SERIAL_ROUTE: Step<BlockModel>[] = SERIAL[0]!.blocks;
+
+/**
+ * A Quad-Cortex-style route: gate and drive, then the signal splits into two
+ * amps (Plexi into a Greenback, AC30 into a Blue) and joins, then delay, then
+ * a second split with reverb on one branch and the dry signal on the other.
+ */
+export const PARALLEL_ROUTE: Step<BlockModel>[] = [
+  gate('gate'),
+  drive('ts9'),
+  {
+    split: true,
+    id: 'split-amps',
+    branches: [
+      [
+        amp('amp-a', 'Plexi 50', 'plexi'),
+        cab('cab-a', '4×12 Greenback', 'gb412'),
+      ],
+      [
+        amp('amp-b', 'AC30 top boost', 'ac30'),
+        cab('cab-b', '2×12 Blue', 'blue212'),
+      ],
+    ],
+    levels: [0, -3],
+  },
+  delay('echo'),
+  {
+    split: true,
+    id: 'split-wet',
+    branches: [[reverb('bloom', 'Reverb · Hall')], []],
+    levels: [-4, 0],
+  },
 ];
 
 export const NEW_BLOCK = (): BlockModel => mod(`new-${Date.now()}`);

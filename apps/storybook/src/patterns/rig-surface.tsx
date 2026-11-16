@@ -1,170 +1,283 @@
 import * as React from 'react';
-import { MusicNote, PencilSimple, SquaresFour } from '@phosphor-icons/react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ClockCounterClockwise,
+  Faders,
+  GitFork,
+  MusicNote,
+  PencilSimple,
+  SquaresFour,
+  Trash,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
+import { previewOf } from '../lib/preview';
+import {
+  blocksOf,
+  isSplit,
+  locate,
+  moveStep,
+  removeStep,
+  startBranch,
+  updateBlock,
+  type ListPath,
+  type Step,
+} from '../lib/route';
+import { diffRoutes } from '../lib/route-diff';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { NumberField } from '../components/ui/number-field';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/ui/popover';
+import { Segment, SegmentedControl } from '../components/ui/segmented';
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+} from '../components/ui/sheet';
 import { Caption, Eyebrow, Label, Title } from '../components/ui/text';
 import { Toggle } from '../components/ui/toggle';
-import { BlockEditor, type BlockModel } from '../widgets/block-editor';
-import { previewOf } from '../lib/preview';
-import { BlockVisual } from '../widgets/block-visuals';
-import { Chain, type ChainLaneModel } from '../widgets/chain';
+import {
+  BlockEditor,
+  BlockFullEditor,
+  type BlockModel,
+} from '../widgets/block-editor';
+import { RouteView } from '../widgets/route-view';
 import { ScenePads, type Scene } from '../widgets/scene-pad';
+import {
+  ChangeList,
+  CompareToggle,
+  VersionPicker,
+  type PresetVersion,
+} from '../widgets/versions';
+import { VisualControl } from '../widgets/visual-control';
 
-export type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
+export type RigRoute = Step<BlockModel>[];
+
+function usePhone() {
+  const [phone, setPhone] = React.useState(false);
+  React.useEffect(() => {
+    const query = window.matchMedia('(max-width: 47.99rem)');
+    const update = () => setPhone(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return phone;
+}
+
+function withPreview(route: RigRoute): RigRoute {
+  return route.map((s) =>
+    isSplit(s)
+      ? { ...s, branches: s.branches.map((b) => withPreview(b)) }
+      : { ...s, preview: previewOf(s) },
+  );
+}
 
 /**
- * The rig as one surface, playing and editing (D-4): the heading says what
- * plays; the chain reads left to right with a preview on every block; a
- * tap opens the block's quick editor anchored to it (a popover on laptops,
- * a sheet on phones) with its drawing, main values and model picker; the
- * selected block's drawing and values also sit beneath the chain for
- * one-handed tweaks on stage; "All controls" opens the full sheet. Scenes
- * fold out under the chain. Editing adds the + targets and drag-to-reorder
- * to the same drawing instead of a separate canvas.
+ * The rig: where a sound is shaped. One surface for playing and editing.
+ *
+ * - The heading names the preset and its **version** (Default, Friday gig…);
+ *   edits made anywhere sit on top of that version until you save them over
+ *   it, save them as a new version, or discard them. **Edited / Saved**
+ *   switches what you hear for an instant A/B, and the change count opens
+ *   the list of what changed, each with its own undo.
+ * - **This scene / Whole preset** says where a change goes; blocks the
+ *   playing scene changes carry a small mark.
+ * - The **route** draws the real signal: splits, branches (an empty one is
+ *   dry), joins, splits again. A meter on each wire shows the level after
+ *   each block. Hold a block to hear the sound without it.
+ * - Tap a block: on laptops its drawing and main values open in the strip
+ *   under the route (drag the drawing itself); on phones a bottom sheet with
+ *   sliders. "All controls" is always one tap further.
+ * - **Edit** adds + targets, long-press drag (drop on "Parallel" to run two
+ *   blocks side by side) and a toolbar: earlier, later, parallel, remove.
  */
 export function RigSurface({
   presetName,
   playing = false,
-  unsaved = false,
-  lanes,
-  parallel = false,
+  route,
+  saved,
+  onRoute,
+  versions,
+  currentVersion,
+  onVersion,
+  onSaveVersion,
+  onSaveVersionAs,
+  onMakeDefault,
   scenes,
   activeScene,
-  onControl,
-  onToggleBlock,
-  onSource,
-  onAdd,
-  onMove,
   onScene,
-  onSave,
-  onRevert,
+  sceneChanged,
+  levels,
+  inputLevel,
+  onAudition,
+  onAdd,
   className,
 }: {
   presetName: string;
   playing?: boolean;
-  unsaved?: boolean;
-  lanes: RigLane[];
-  parallel?: boolean;
+  /** The route as edited (what plays). */
+  route: RigRoute;
+  /** The version as saved, for compare and the change list. */
+  saved: RigRoute;
+  onRoute: (route: RigRoute) => void;
+  versions: PresetVersion[];
+  currentVersion: string;
+  onVersion: (id: string) => void;
+  onSaveVersion: () => void;
+  onSaveVersionAs: (name: string) => void;
+  onMakeDefault: (id: string) => void;
   scenes: Scene[];
   activeScene: string | null;
-  onControl: (block: string, control: string, value: number) => void;
-  onToggleBlock: (block: string, on: boolean) => void;
-  onSource?: (block: string, value: string | null) => void;
-  onAdd?: (lane: number, index: number) => void;
-  onMove?: (id: string, lane: number, index: number) => void;
   onScene: (id: string) => void;
-  onSave?: () => void;
-  onRevert?: () => void;
+  sceneChanged?: string[];
+  levels?: Record<string, number>;
+  inputLevel?: number;
+  onAudition?: (id: string | null) => void;
+  onAdd?: (path: ListPath, index: number) => void;
   className?: string;
 }) {
-  const blocks = lanes.flatMap((lane) => lane.blocks);
-  const [selected, setSelected] = React.useState<string | null>(
-    blocks[0]?.id ?? null,
-  );
-  const [open, setOpen] = React.useState(false);
+  const phone = usePhone();
+  const [compare, setCompare] = React.useState<'edited' | 'saved'>('edited');
+  const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
   const [editing, setEditing] = React.useState(false);
   const [showScenes, setShowScenes] = React.useState(false);
-  const root = React.useRef<HTMLElement>(null);
-  const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
+  const [sheet, setSheet] = React.useState(false);
+  const [full, setFull] = React.useState(false);
+  const shown = compare === 'saved' ? saved : route;
+  const blocks = blocksOf(shown);
+  const [selected, setSelected] = React.useState<string | null>(
+    blocks[2]?.id ?? blocks[0]?.id ?? null,
+  );
   const block = blocks.find((b) => b.id === selected) ?? null;
-  const main = block ? block.controls.filter((c) => c.main).slice(0, 4) : [];
-  const values = block
-    ? Object.fromEntries(block.controls.map((c) => [c.id, c.value]))
-    : {};
+  const changes = React.useMemo(() => diffRoutes(saved, route), [saved, route]);
+  const reading = compare === 'saved';
 
-  const chainLanes: ChainLaneModel[] = lanes.map((lane) => ({
-    ...lane,
-    blocks: lane.blocks.map((b) => ({ ...b, preview: previewOf(b) })),
-  }));
+  const control = (id: string, controlId: string, value: number) =>
+    onRoute(
+      updateBlock(route, id, (b) => ({
+        ...b,
+        unsaved: true,
+        controls: b.controls.map((c) =>
+          c.id === controlId ? { ...c, value } : c,
+        ),
+      })),
+    );
+  const toggle = (id: string, on: boolean) =>
+    onRoute(updateBlock(route, id, (b) => ({ ...b, on })));
+  const shift = (delta: -1 | 1) => {
+    if (!selected) return;
+    const at = locate(route, selected);
+    if (!at) return;
+    onRoute(
+      moveStep(
+        route,
+        selected,
+        at.path,
+        delta < 0 ? Math.max(0, at.index - 1) : at.index + 2,
+      ),
+    );
+  };
 
   const select = (id: string) => {
-    const element =
-      root.current?.querySelector<HTMLElement>(
-        `[data-block="${CSS.escape(id)}"]`,
-      ) ?? null;
-    setAnchor(element);
-    if (id === selected) setOpen((was) => !was);
-    else {
-      setSelected(id);
-      setOpen(!editing);
-    }
+    setSelected(id);
+    if (phone && !editing && !reading) setSheet(true);
   };
+
+  const main = block ? block.controls.filter((c) => c.main).slice(0, 4) : [];
 
   return (
     <section
-      ref={root}
       data-slot="rig-surface"
       aria-label="Rig"
-      className={cn('grid gap-3', className)}
+      className={cn('grid gap-2', className)}
     >
-      <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-page pt-3">
-        <div className="grid min-w-0 gap-0.5">
-          <Eyebrow>{playing ? 'Playing' : 'Rig'}</Eyebrow>
-          <div className="flex min-w-0 items-center gap-2">
-            <Title size="md" className="truncate">
-              {presetName}
-            </Title>
-            {playing && <Badge tone="live">Live</Badge>}
-            {unsaved && <Badge tone="warning">Unsaved</Badge>}
+      <header className="grid gap-2 px-page pt-3">
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          <div className="grid min-w-0 gap-1">
+            <Eyebrow>{playing ? 'Playing' : 'Rig'}</Eyebrow>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Title size="md" className="truncate">
+                {presetName}
+              </Title>
+              <VersionPicker
+                presetName={presetName}
+                versions={versions}
+                current={currentVersion}
+                changes={changes.length}
+                onSelect={onVersion}
+                onSave={onSaveVersion}
+                onSaveAs={onSaveVersionAs}
+                onMakeDefault={onMakeDefault}
+                onDiscard={() => onRoute(saved)}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {changes.length > 0 && (
+              <>
+                <CompareToggle value={compare} onChange={setCompare} />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="sm" variant="outline">
+                      <ClockCounterClockwise /> {changes.length}{' '}
+                      {changes.length === 1 ? 'change' : 'changes'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-96">
+                    <ChangeList
+                      changes={changes}
+                      onRevert={(change) =>
+                        change.kind === 'value' &&
+                        control(change.block, change.control, change.from)
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
+            <Toggle
+              size="sm"
+              pressed={showScenes}
+              onPressedChange={setShowScenes}
+            >
+              <SquaresFour /> Scenes
+            </Toggle>
+            <Button size="sm" variant="outline">
+              <MusicNote /> Tuner
+            </Button>
+            <Toggle
+              size="sm"
+              pressed={editing}
+              onPressedChange={setEditing}
+              disabled={reading}
+            >
+              <PencilSimple /> Edit
+            </Toggle>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Toggle
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Caption as="span" className="small-caps text-xs">
+            Changes apply to
+          </Caption>
+          <SegmentedControl
             size="sm"
-            pressed={showScenes}
-            onPressedChange={setShowScenes}
-            aria-label="Show scenes"
+            value={scope}
+            onValueChange={(v) => setScope(v as 'scene' | 'preset')}
+            aria-label="Changes apply to"
           >
-            <SquaresFour /> Scenes
-          </Toggle>
-          <Button size="sm" variant="outline" aria-label="Tuner">
-            <MusicNote /> Tuner
-          </Button>
-          <Toggle
-            size="sm"
-            pressed={editing}
-            onPressedChange={(on) => {
-              setEditing(on);
-              if (on) setOpen(false);
-            }}
-            aria-label="Edit the chain"
-          >
-            <PencilSimple /> Edit
-          </Toggle>
-          {unsaved && (
-            <>
-              <Button size="sm" variant="outline" onClick={onRevert}>
-                Revert
-              </Button>
-              <Button size="sm" onClick={onSave}>
-                Save
-              </Button>
-            </>
-          )}
+            <Segment value="scene">This scene</Segment>
+            <Segment value="preset">Whole preset</Segment>
+          </SegmentedControl>
+          {reading && <Badge tone="selected">Hearing the saved version</Badge>}
         </div>
       </header>
-
-      <Chain
-        lanes={chainLanes}
-        parallel={parallel}
-        selected={selected}
-        onSelect={select}
-        editing={editing}
-        onAdd={onAdd}
-        onMove={onMove}
-      />
-
-      <BlockEditor
-        block={block}
-        open={open}
-        onOpenChange={setOpen}
-        anchor={anchor}
-        onControl={onControl}
-        onToggle={onToggleBlock}
-        onSource={onSource}
-      />
 
       {showScenes && (
         <div className="px-page">
@@ -172,66 +285,157 @@ export function RigSurface({
         </div>
       )}
 
-      {block && (
+      <RouteView
+        route={withPreview(shown)}
+        onChange={(next) => onRoute(next)}
+        selected={selected}
+        onSelect={select}
+        editing={editing && !reading}
+        levels={levels}
+        inputLevel={inputLevel}
+        onAudition={onAudition}
+        sceneChanged={sceneChanged}
+        onAdd={onAdd}
+      />
+
+      {editing && block && (
+        <div
+          role="toolbar"
+          aria-label={`Edit ${block.label}`}
+          className="flex flex-wrap items-center gap-2 border-t border-border px-page py-2"
+        >
+          <span className="mr-1 text-sm font-medium">{block.label}</span>
+          <Button size="sm" variant="outline" onClick={() => shift(-1)}>
+            <ArrowUp /> Earlier
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => shift(1)}>
+            <ArrowDown /> Later
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onRoute(startBranch(route, block.id))}
+          >
+            <GitFork className="rotate-90" /> Parallel path
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => onRoute(removeStep(route, block.id))}
+          >
+            <Trash /> Remove
+          </Button>
+          <Caption as="span" className="text-xs">
+            Or hold a block and drag it; drop on “Parallel” to run it beside
+            another.
+          </Caption>
+        </div>
+      )}
+
+      {block && !editing && (
         <div
           data-slot="block-strip"
-          className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 border-t border-border px-page py-3 md:grid-cols-[14rem_minmax(0,1fr)]"
+          className="hidden gap-x-6 gap-y-3 border-t border-border px-page py-3 md:grid md:grid-cols-[16rem_minmax(0,1fr)]"
         >
           <div className="grid gap-1.5">
-            <div className="flex items-baseline gap-2">
-              <Title as="h2" size="sm" className="truncate">
-                {block.label}
-              </Title>
-              <Caption as="span" className="small-caps text-xs">
-                {block.caption ?? block.kind}
-              </Caption>
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <Title as="h2" size="sm" className="truncate">
+                  {block.label}
+                </Title>
+                <Caption as="span" className="small-caps text-xs">
+                  {block.caption ?? block.kind}
+                </Caption>
+              </div>
+              <Toggle
+                size="sm"
+                pressed={block.on}
+                onPressedChange={(on) => toggle(block.id, on)}
+                disabled={reading}
+                aria-label={`${block.label} on`}
+              >
+                {block.on ? 'On' : 'Off'}
+              </Toggle>
             </div>
-            <div
+            <VisualControl
+              kind={block.kind}
+              role={block.role}
+              controls={block.controls}
+              onControl={(c, v) => control(block.id, c, v)}
+              disabled={reading}
               className={cn(
-                'rounded-lg border border-border bg-card px-2 py-1 text-foreground',
+                'h-24 rounded-lg border border-border bg-card px-2 py-1 text-foreground',
                 !block.on && 'text-muted-foreground',
               )}
-            >
-              <BlockVisual
-                kind={block.kind}
-                role={block.role}
-                values={values}
-                className="h-12 w-full"
-              />
-            </div>
+            />
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 self-end sm:grid-cols-4">
-            {main.map((control) => (
-              <div
-                key={control.id}
-                className="grid min-h-16 content-end gap-0.5"
-              >
+          <div className="grid grid-cols-4 content-end gap-x-4 gap-y-2">
+            {main.map((c) => (
+              <div key={c.id} className="grid min-h-16 content-end gap-0.5">
                 <Label
                   as="span"
                   className="small-caps text-xs text-muted-foreground"
                 >
-                  {control.label}
+                  {c.label}
                 </Label>
                 <NumberField
                   className="w-full"
-                  label={`${block.label} ${control.label}`}
-                  value={control.value}
-                  min={control.min}
-                  max={control.max}
-                  step={control.step ?? 0.5}
-                  fine={(control.step ?? 0.5) / 5}
-                  unit={control.unit}
-                  digits={control.step && control.step >= 1 ? 0 : 1}
-                  onChange={(value) => onControl(block.id, control.id, value)}
+                  label={`${block.label} ${c.label}`}
+                  value={c.value}
+                  min={c.min}
+                  max={c.max}
+                  step={c.step ?? 0.5}
+                  fine={(c.step ?? 0.5) / 5}
+                  unit={c.unit}
+                  digits={c.step && c.step >= 1 ? 0 : 1}
+                  disabled={reading}
+                  onChange={(value) => control(block.id, c.id, value)}
                 />
               </div>
             ))}
-            {/* Keep four slots so the strip does not jump between blocks. */}
             {Array.from({ length: Math.max(0, 4 - main.length) }, (_, i) => (
               <div key={`slot-${i}`} aria-hidden="true" className="min-h-16" />
             ))}
+            <div className="col-span-4 flex justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setFull(true)}>
+                <Faders /> All controls · {block.controls.length}
+              </Button>
+            </div>
           </div>
         </div>
+      )}
+
+      {phone && (
+        <BlockEditor
+          block={block}
+          open={sheet}
+          onOpenChange={setSheet}
+          anchor={null}
+          onControl={control}
+          onToggle={toggle}
+        />
+      )}
+
+      {block && (
+        <Sheet open={full} onOpenChange={setFull}>
+          <SheetContent onOpenChange={setFull}>
+            <SheetHeader
+              title={block.label}
+              description={block.caption ?? block.kind}
+            />
+            <SheetBody>
+              <BlockFullEditor
+                block={block}
+                onControl={(c, v) => control(block.id, c, v)}
+              />
+            </SheetBody>
+            <SheetFooter>
+              <Button variant="outline" onClick={() => setFull(false)}>
+                Done
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
     </section>
   );

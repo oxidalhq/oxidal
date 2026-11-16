@@ -2,19 +2,21 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Caption } from '../components/ui/text';
 import {
-  BlockQuickEditor,
   BlockFullEditor,
+  BlockQuickEditor,
   type BlockModel,
 } from '../widgets/block-editor';
-import { Chain } from '../widgets/chain';
-import { NEW_BLOCK, PARALLEL, SCENES, SERIAL } from './rig.fixtures';
-import { previewOf } from '../lib/preview';
-import { RigSurface, type RigLane } from './rig-surface';
+import { RouteView } from '../widgets/route-view';
+import { PARALLEL_ROUTE, SCENES, SERIAL, SERIAL_ROUTE } from './rig.fixtures';
+import { RigSurface, type RigRoute } from './rig-surface';
+import { useRigDemo } from './use-rig-demo';
 
 /**
- * The rig view per D-4: one drawing for playing and editing, serial and
- * parallel, with the block editor anchored to the chain. Compare with
- * Baseline › Current chain view.
+ * The rig: shape a sound. Try: hold a block to hear the rig without it;
+ * drag a delay's repeats or an amp's tone points; change something and
+ * flip Edited / Saved; open the change list; press Edit, then hold a block
+ * and drop it on "Parallel" beside another; tap a Split for branch levels;
+ * switch the viewport to iPhone 16 for the top-to-bottom route.
  */
 const meta: Meta = {
   title: 'Patterns/Rig surface',
@@ -22,128 +24,104 @@ const meta: Meta = {
 };
 export default meta;
 
-function moveBlock(lanes: RigLane[], id: string, lane: number, index: number) {
-  const next = lanes.map((l) => ({ ...l, blocks: [...l.blocks] }));
-  const from = next.findIndex((l) => l.blocks.some((b) => b.id === id));
-  if (from < 0) return lanes;
-  const at = next[from]!.blocks.findIndex((b) => b.id === id);
-  const [block] = next[from]!.blocks.splice(at, 1);
-  const target = from === lane && at < index ? index - 1 : index;
-  next[lane]?.blocks.splice(target, 0, block!);
-  return next;
-}
-
-function useRig(initial: RigLane[]) {
-  const [lanes, setLanes] = useState(initial);
-  const [unsaved, setUnsaved] = useState(true);
-  const update = (id: string, change: (block: BlockModel) => BlockModel) =>
-    setLanes((all) =>
-      all.map((l) => ({
-        ...l,
-        blocks: l.blocks.map((b) => (b.id === id ? change(b) : b)),
-      })),
-    );
-  return {
-    lanes,
-    unsaved,
-    setUnsaved,
-    onControl: (id: string, control: string, value: number) => {
-      update(id, (b) => ({
-        ...b,
-        unsaved: true,
-        controls: b.controls.map((c) =>
-          c.id === control ? { ...c, value } : c,
-        ),
-      }));
-      setUnsaved(true);
-    },
-    onToggleBlock: (id: string, on: boolean) =>
-      update(id, (b) => ({ ...b, on })),
-    onSource: (id: string, value: string | null) =>
-      update(id, (b) => {
-        const option = b.source?.options.find((o) => o.value === value);
-        return b.source && option
-          ? {
-              ...b,
-              label: option.label,
-              source: { ...b.source, value: option.value },
-            }
-          : b;
-      }),
-    onAdd: (lane: number, index: number) =>
-      setLanes((all) =>
-        all.map((l, i) =>
-          i === lane
-            ? {
-                ...l,
-                blocks: [
-                  ...l.blocks.slice(0, index),
-                  NEW_BLOCK(),
-                  ...l.blocks.slice(index),
-                ],
-              }
-            : l,
-        ),
-      ),
-    onMove: (id: string, lane: number, index: number) =>
-      setLanes((all) => moveBlock(all, id, lane, index)),
-  };
-}
-
-function Rig({
-  initial,
-  parallel,
-  playing,
-}: {
-  initial: RigLane[];
-  parallel?: boolean;
-  playing?: boolean;
-}) {
-  const rig = useRig(initial);
-  const [scene, setScene] = useState<string | null>('b');
+function Rig({ initial }: { initial: RigRoute }) {
+  const rig = useRigDemo(initial);
   return (
     <RigSurface
       presetName="Rhythm section"
-      playing={playing}
-      unsaved={rig.unsaved}
-      lanes={rig.lanes}
-      parallel={parallel}
+      playing
+      route={rig.route}
+      saved={rig.saved}
+      onRoute={rig.onRoute}
+      versions={rig.versions}
+      currentVersion={rig.current}
+      onVersion={rig.onVersion}
+      onSaveVersion={rig.onSaveVersion}
+      onSaveVersionAs={rig.onSaveVersionAs}
+      onMakeDefault={rig.onMakeDefault}
       scenes={SCENES}
-      activeScene={scene}
-      onControl={rig.onControl}
-      onToggleBlock={rig.onToggleBlock}
-      onSource={rig.onSource}
+      activeScene={rig.scene}
+      onScene={rig.onScene}
+      sceneChanged={rig.sceneChanged}
+      levels={rig.levels}
+      inputLevel={rig.input}
+      onAudition={rig.onAudition}
       onAdd={rig.onAdd}
-      onMove={rig.onMove}
-      onScene={setScene}
-      onSave={() => rig.setUnsaved(false)}
-      onRevert={() => rig.setUnsaved(false)}
     />
   );
 }
 
 export const Serial: StoryObj = {
-  render: () => <Rig initial={SERIAL} playing />,
+  render: () => <Rig initial={SERIAL_ROUTE} />,
 };
-export const Parallel: StoryObj = {
-  render: () => <Rig initial={PARALLEL} parallel playing />,
-};
-export const Editing: StoryObj = {
-  render: () => (
-    <div className="grid gap-4">
-      <Rig initial={SERIAL} />
-      <Caption className="px-page">
-        Press Edit: a + appears in every gap (a popover with the catalogue in
-        the product), and a long press lifts a block to drag it; Shift+arrows
-        move the focused block.
-      </Caption>
-    </div>
-  ),
+export const SplitAndJoin: StoryObj = {
+  name: 'Split, join, split again (QC style)',
+  render: () => <Rig initial={PARALLEL_ROUTE} />,
 };
 
+const LEVELS = {
+  gate: -24,
+  ts9: -18,
+  'amp-a': -9,
+  'cab-a': -14,
+  'amp-b': -8,
+  'cab-b': -13,
+  echo: -12,
+  bloom: -15,
+};
+
+function Vertical({ editing = false }: { editing?: boolean }) {
+  const [route, setRoute] = useState<RigRoute>(
+    editing ? SERIAL_ROUTE : PARALLEL_ROUTE,
+  );
+  const [selected, setSelected] = useState<string | null>('amp-a');
+  return (
+    <div className="mx-auto grid max-w-[393px] gap-2 border-x border-border">
+      <RouteView
+        route={route}
+        onChange={setRoute}
+        selected={selected}
+        onSelect={setSelected}
+        orientation="vertical"
+        editing={editing}
+        onAdd={editing ? () => {} : undefined}
+        levels={editing ? undefined : LEVELS}
+        inputLevel={editing ? undefined : -26}
+      />
+      {editing && (
+        <Caption className="px-page">
+          Hold a block, then drop it in a gap or on “Parallel” beside another
+          block.
+        </Caption>
+      )}
+    </div>
+  );
+}
+
+export const PhoneRoute: StoryObj = {
+  name: 'Route on a phone (top to bottom)',
+  render: () => <Vertical />,
+};
+export const PhoneRouteEditing: StoryObj = {
+  name: 'Route on a phone, editing',
+  render: () => <Vertical editing />,
+};
+
+function setControl(
+  block: BlockModel,
+  control: string,
+  value: number,
+): BlockModel {
+  return {
+    ...block,
+    controls: block.controls.map((c) =>
+      c.id === control ? { ...c, value } : c,
+    ),
+  };
+}
+
 function Editors() {
-  const rig = useRig(SERIAL);
-  const blocks = rig.lanes[0]!.blocks;
+  const [blocks, setBlocks] = useState(SERIAL[0]!.blocks);
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       {blocks.map((block) => (
@@ -154,10 +132,17 @@ function Editors() {
           <BlockQuickEditor
             block={block}
             onControl={(control, value) =>
-              rig.onControl(block.id, control, value)
+              setBlocks((all) =>
+                all.map((b) =>
+                  b.id === block.id ? setControl(b, control, value) : b,
+                ),
+              )
             }
-            onToggle={(on) => rig.onToggleBlock(block.id, on)}
-            onSource={(value) => rig.onSource(block.id, value)}
+            onToggle={(on) =>
+              setBlocks((all) =>
+                all.map((b) => (b.id === block.id ? { ...b, on } : b)),
+              )
+            }
             onAll={() => {}}
           />
         </div>
@@ -167,82 +152,24 @@ function Editors() {
 }
 
 export const QuickEditors: StoryObj = {
-  name: 'Quick editor, every kind',
+  name: 'Quick editor, every kind (drag the drawings)',
   parameters: { layout: 'padded' },
   render: () => <Editors />,
 };
 
-function Full() {
-  const rig = useRig(SERIAL);
-  const block = rig.lanes[0]!.blocks.find((b) => b.id === 'echo')!;
-  return (
-    <div className="max-w-md">
-      <BlockFullEditor
-        block={block}
-        onControl={(control, value) => rig.onControl(block.id, control, value)}
-        onReset={() => {}}
-      />
-    </div>
-  );
-}
-
-export const FullEditor: StoryObj = {
-  name: 'Full editor (delay)',
-  parameters: { layout: 'padded' },
-  render: () => <Full />,
-};
-
-const withPreview = (lanes: RigLane[]) =>
-  lanes.map((l) => ({
-    ...l,
-    blocks: l.blocks.map((b) => ({ ...b, preview: previewOf(b) })),
-  }));
-
-export const ChainAlone: StoryObj = {
-  name: 'Chain in every state',
-  parameters: { layout: 'padded' },
-  render: () => (
-    <div className="grid max-w-4xl gap-6">
-      <Chain lanes={withPreview(SERIAL)} selected="amp" onSelect={() => {}} />
-      <Chain
-        lanes={withPreview(SERIAL)}
-        selected="echo"
-        onSelect={() => {}}
-        size="lg"
-      />
-      <Chain
-        lanes={withPreview(PARALLEL)}
-        parallel
-        selected="amp-b"
-        onSelect={() => {}}
-      />
-      <Chain
-        lanes={[{ id: 'empty', blocks: [] }]}
-        selected={null}
-        onSelect={() => {}}
-        editing
-        onAdd={() => {}}
-      />
-      <Chain
-        lanes={withPreview(SERIAL)}
-        selected="amp"
-        onSelect={() => {}}
-        disabled
-      />
-    </div>
-  ),
-};
-
 function PhoneEditor() {
-  const rig = useRig(SERIAL);
-  const block = rig.lanes[0]!.blocks.find((b) => b.id === 'echo')!;
+  const [block, setBlock] = useState(
+    SERIAL[0]!.blocks.find((b) => b.id === 'echo')!,
+  );
   return (
     <div className="mx-auto grid max-w-[393px] gap-3 rounded-t-lg border border-border bg-raised p-4 shadow-raised">
       <BlockQuickEditor
         layout="sheet"
         block={block}
-        onControl={(control, value) => rig.onControl(block.id, control, value)}
-        onToggle={(on) => rig.onToggleBlock(block.id, on)}
+        onControl={(control, value) =>
+          setBlock((b) => setControl(b, control, value))
+        }
+        onToggle={(on) => setBlock((b) => ({ ...b, on }))}
         onAll={() => {}}
       />
       <Caption>
@@ -258,4 +185,27 @@ export const QuickEditorPhone: StoryObj = {
   name: 'Quick editor on a phone (sheet)',
   parameters: { layout: 'padded' },
   render: () => <PhoneEditor />,
+};
+
+function Full() {
+  const [block, setBlock] = useState(
+    SERIAL[0]!.blocks.find((b) => b.id === 'echo')!,
+  );
+  return (
+    <div className="max-w-md">
+      <BlockFullEditor
+        block={block}
+        onControl={(control, value) =>
+          setBlock((b) => setControl(b, control, value))
+        }
+        onReset={() => {}}
+      />
+    </div>
+  );
+}
+
+export const FullEditor: StoryObj = {
+  name: 'Full editor (delay)',
+  parameters: { layout: 'padded' },
+  render: () => <Full />,
 };

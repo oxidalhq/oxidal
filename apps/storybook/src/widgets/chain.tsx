@@ -53,6 +53,8 @@ export function ChainBlock({
   selected = false,
   disabled = false,
   lifted = false,
+  sceneMark = false,
+  muted = false,
   size = 'md',
   onSelect,
   onPointerDown,
@@ -62,6 +64,10 @@ export function ChainBlock({
   selected?: boolean;
   disabled?: boolean;
   lifted?: boolean;
+  /** The playing scene changes this block (state or values). */
+  sceneMark?: boolean;
+  /** Held out of the sound for a moment (hold-to-hear). */
+  muted?: boolean;
   size?: 'md' | 'lg';
   onSelect: (id: string) => void;
   onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
@@ -77,7 +83,8 @@ export function ChainBlock({
       data-selected={selected || undefined}
       data-lifted={lifted || undefined}
       aria-pressed={selected}
-      aria-label={`${block.label}${block.on ? '' : ', bypassed'}${block.unsaved ? ', unsaved' : ''}`}
+      aria-label={`${block.label}${block.on ? '' : ', bypassed'}${block.unsaved ? ', unsaved' : ''}${sceneMark ? ', changed by this scene' : ''}`}
+      data-muted={muted || undefined}
       disabled={disabled}
       onClick={() => onSelect(block.id)}
       onPointerDown={onPointerDown}
@@ -87,6 +94,7 @@ export function ChainBlock({
           ? 'min-h-14 w-40 px-2.5 py-2'
           : 'min-h-16 w-48 px-3 py-2.5',
         !block.on && 'border-dashed text-muted-foreground',
+        muted && 'opacity-50 [&_svg]:opacity-50',
         selected &&
           'border-foreground bg-foreground text-background shadow-raised hover:bg-foreground',
         lifted && 'z-10 scale-105 shadow-raised',
@@ -159,6 +167,15 @@ export function ChainBlock({
           </span>
         )}
       </span>
+      {sceneMark && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute bottom-1 left-1 size-1.5 rotate-45',
+            selected ? 'bg-background' : 'bg-foreground',
+          )}
+        />
+      )}
     </button>
   );
 }
