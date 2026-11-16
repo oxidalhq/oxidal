@@ -65,6 +65,7 @@ import {
 } from '../widgets/versions';
 import { CabMics } from '../widgets/cab-mics';
 import { BlockChooser, type EffectChoice } from './block-chooser';
+import { NamBlockTools } from './nam-block';
 import {
   SwapSheet,
   type BlockType,
@@ -655,6 +656,7 @@ export function RigSurface({
                 block={block}
                 onControl={(c, v) => control(block.id, c, v)}
               />
+              {block.kind === 'amp' && <NamBlockTools />}
             </SheetBody>
             <SheetFooter>
               <Button variant="outline" onClick={() => setFull(false)}>
