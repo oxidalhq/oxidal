@@ -23,6 +23,7 @@ import {
   SettingsPage,
 } from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
+import { AudioChange } from '../patterns/audio-change';
 import { Effects, NamEngine, PluginPacks } from './settings.effects';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
@@ -30,7 +31,6 @@ import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
 
 function Audio() {
-  const [buffer, setBuffer] = useState('96x3');
   const [boot, setBoot] = useState(true);
   return (
     <>
@@ -50,29 +50,8 @@ function Audio() {
             </SelectContent>
           </Select>
         </SettingRow>
-        <SettingRow id="rate" label="Sample rate">
-          <Readout size="sm">48 kHz</Readout>
-        </SettingRow>
-        <SettingRow
-          label="Buffer"
-          caption="Frames × periods. 96 × 3 is 6 ms; smaller may crackle on heavy presets."
-          stacked
-        >
-          <SegmentedControl
-            value={buffer}
-            onValueChange={setBuffer}
-            aria-label="Buffer"
-          >
-            <Segment value="48x2">48 × 2</Segment>
-            <Segment value="96x3">96 × 3</Segment>
-            <Segment value="128x3">128 × 3</Segment>
-            <Segment value="256x3">256 × 3</Segment>
-          </SegmentedControl>
-          <Button size="sm" variant="outline">
-            Buffer finder…
-          </Button>
-        </SettingRow>
       </SettingGroup>
+      <AudioChange />
       <SettingGroup title="Playback">
         <SettingRow
           id="boot"
