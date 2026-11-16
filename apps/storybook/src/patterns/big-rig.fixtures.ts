@@ -5,7 +5,7 @@ import { amp, cab, delay, drive, gate, mod, reverb } from './rig.fixtures';
 /** Size of a NAM capture, as TONE3000 and the NAM trainer name them. */
 export type CaptureSize = 'Standard' | 'Lite' | 'Feather' | 'Nano';
 
-type Branch = {
+export type Branch = {
   name: string;
   size: CaptureSize;
   steps: Step<BlockModel>[];
@@ -133,13 +133,18 @@ export const SILENT = -60;
  * delay, then a second split: hall reverb, shimmer, or dry.
  */
 export function bigRig(count: BranchCount): Step<BlockModel>[] {
-  const used = BRANCHES.slice(0, count);
+  return rigOf(BRANCHES.slice(0, count));
+}
+
+/** The same rig shape around any list of amp branches. */
+export function rigOf(used: Branch[]): Step<BlockModel>[] {
   return [
     gate('gate'),
     {
       split: true,
       id: 'amps',
       branches: used.map((b) => b.steps),
+      names: used.map((b) => b.name),
       levels: used.map((_, i) => (i === 0 ? 0 : SILENT)),
     },
     delay('echo'),
@@ -151,12 +156,32 @@ export function bigRig(count: BranchCount): Step<BlockModel>[] {
         [reverb('shimmer', 'Reverb · Shimmer')],
         [],
       ],
+      names: ['Hall', 'Shimmer', 'Dry'],
       levels: [-6, SILENT, 0],
     },
   ];
 }
 
 export const branchesOf = (count: BranchCount) => BRANCHES.slice(0, count);
+
+/** A new branch for a model: the capture into a 4×12 cab. */
+export function branchFor(
+  model: { id: string; label: string; caption: string },
+  size: CaptureSize,
+  n: number,
+): Branch {
+  return {
+    name: model.label,
+    size,
+    steps: [
+      named(amp(`added-${n}-amp`, '', model.id), model.label, model.caption),
+      cab(`added-${n}-cab`, '4×12 V30', 'v30'),
+    ],
+  };
+}
+
+/** The device keeps this share of each audio period free, so a busy moment never drops out. */
+export const LIMIT = 0.85;
 
 /** A scene of the big rig: the level of each amp branch, the space split, and blocks on or off. */
 export type BigScene = {
@@ -210,7 +235,7 @@ export const BIG_SCENES: BigScene[] = [
   { id: 'wash', name: 'Wash', amps: { 9: 0, 8: -8 }, space: [S, -2, -12] },
 ];
 
-export const scenesFor = (count: BranchCount) =>
+export const scenesFor = (count: number) =>
   BIG_SCENES.filter((s) => Object.keys(s.amps).every((i) => Number(i) < count));
 
 /**
@@ -218,8 +243,8 @@ export const scenesFor = (count: BranchCount) =>
  * only: the Pi measures the real load and the health word reports it.
  */
 export const ESTIMATE: Record<CaptureSize, number> = {
-  Standard: 0.08,
-  Lite: 0.05,
+  Standard: 0.09,
+  Lite: 0.06,
   Feather: 0.03,
   Nano: 0.02,
 };

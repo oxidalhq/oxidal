@@ -17,6 +17,7 @@ import {
   SheetHeader,
 } from '../components/ui/sheet';
 import { Progress } from '../components/ui/states';
+import { Switch } from '../components/ui/switch';
 import {
   Tabs,
   TabsContent,
@@ -39,6 +40,11 @@ export type ModelChoice = {
   licence?: string;
   /** For TONE3000 choices: already downloaded to the device. */
   downloaded?: boolean;
+  /**
+   * How loud the model plays with its level at zero, in dB, measured once
+   * when it is added to the device. Used to match loudness while trying.
+   */
+  loudness?: number;
 };
 
 /** A kind of block a block can become, keeping its place in the route. */
@@ -51,7 +57,13 @@ export type BlockType = {
 
 /** What the block is trying: the model id, or a block type id. */
 export type Trial =
-  { kind: 'model'; choice: ModelChoice } | { kind: 'type'; type: BlockType };
+  | {
+      kind: 'model';
+      choice: ModelChoice;
+      /** dB to add to the block's level so it plays as loud as the original. */
+      trim: number;
+    }
+  | { kind: 'type'; type: BlockType };
 
 const modelKind = (block: BlockModel): ModelChoice['kind'] | null =>
   block.kind === 'amp'
@@ -103,6 +115,10 @@ export function SwapSheet({
   } | null>(null);
   const [downloaded, setDownloaded] = React.useState<Set<string>>(new Set());
   const [original, setOriginal] = React.useState<string | null>(null);
+  const [originalLoudness, setOriginalLoudness] = React.useState<
+    number | undefined
+  >(undefined);
+  const [matching, setMatching] = React.useState(true);
   const timer = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Each time the sheet opens, the block as it is becomes the way back.
@@ -110,6 +126,9 @@ export function SwapSheet({
   if (open && block && openedFor !== block.id) {
     setOpenedFor(block.id);
     setOriginal(block.label);
+    setOriginalLoudness(
+      models.find((m) => m.id === block.source?.value)?.loudness,
+    );
     setTried([]);
     setCurrent(null);
   }
@@ -131,13 +150,19 @@ export function SwapSheet({
   const mine = models.filter((m) => m.from === 'mine' && match(m));
   const catalogue = models.filter((m) => m.from === 'tone3000' && match(m));
 
-  const tryModel = (choice: ModelChoice) => {
+  const trimFor = (choice: ModelChoice, match = matching) =>
+    match && originalLoudness !== undefined && choice.loudness !== undefined
+      ? Math.round((originalLoudness - choice.loudness) * 10) / 10
+      : 0;
+  const tryModel = (choice: ModelChoice, match = matching) => {
     setCurrent(choice.id);
     setTried((all) =>
       [choice, ...all.filter((c) => c.id !== choice.id)].slice(0, 4),
     );
-    onTry({ kind: 'model', choice });
+    onTry({ kind: 'model', choice, trim: trimFor(choice, match) });
   };
+  const playing = models.find((m) => m.id === current);
+  const trim = playing ? trimFor(playing) : 0;
   const get = (choice: ModelChoice) => {
     if (timer.current) clearInterval(timer.current);
     let progress = 0;
@@ -296,6 +321,26 @@ export function SwapSheet({
           </Tabs>
         </SheetBody>
         <SheetFooter className="grid gap-2">
+          {kind && (
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="match-loudness" className="grid gap-0.5">
+                <span className="text-sm font-semibold">Match loudness</span>
+                <Caption as="span" className="text-xs">
+                  {playing && trim !== 0
+                    ? `${playing.label} plays ${Math.abs(trim).toFixed(1)} dB ${trim < 0 ? 'quieter' : 'louder'} to match ${original}.`
+                    : 'Each model you try plays as loud as the one you started with, so louder never wins by itself.'}
+                </Caption>
+              </label>
+              <Switch
+                id="match-loudness"
+                checked={matching}
+                onCheckedChange={(on) => {
+                  setMatching(on);
+                  if (playing) tryModel(playing, on);
+                }}
+              />
+            </div>
+          )}
           {tried.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <Caption as="span" className="small-caps text-xs">

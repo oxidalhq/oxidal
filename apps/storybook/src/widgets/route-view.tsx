@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { GitFork, Plus } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, GitFork, Plus } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import {
   addBranch,
+  blocksOf,
+  branchName,
   branchWith,
   isSplit,
   joinSplit,
   moveStep,
+  nameBranch,
   setBranchLevel,
   type ListPath,
   type Split,
@@ -26,7 +29,7 @@ export type RouteBlock = ChainBlockModel;
 export type Route = Step<RouteBlock>[];
 
 const HOLD_MS = 320;
-const LETTERS = 'ABCDEFGH';
+const SILENT_DB = -60;
 
 /** True below `md`: the chain runs top to bottom so a phone never scrolls sideways. */
 function usePhone() {
@@ -166,22 +169,36 @@ function SplitNode({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="grid w-72 gap-3">
+      <PopoverContent className="grid max-h-[70dvh] w-72 gap-3 overflow-y-auto">
         <span className="text-sm font-semibold">Branches</span>
         {split.branches.map((branch, b) => (
-          <Slider
-            key={b}
-            label={`${LETTERS[b]} · ${branch.length ? branch.map((s) => (isSplit(s) ? 'split' : s.label)).join(', ') : 'Dry'}`}
-            min={-60}
-            max={6}
-            step={0.5}
-            value={[levels[b] ?? 0]}
-            onValueChange={([value]) =>
-              value !== undefined &&
-              onChange((r) => setBranchLevel(r, split.id, b, value))
-            }
-            readout={`${(levels[b] ?? 0) <= -60 ? '−∞' : (levels[b] ?? 0).toFixed(1)} dB`}
-          />
+          <div key={b} className="grid gap-1">
+            {editing && (
+              <input
+                aria-label={`Name of branch ${branchName({ ...split, names: [] }, b)}`}
+                value={split.names?.[b] ?? ''}
+                placeholder={`Branch ${branchName({ ...split, names: [] }, b)}`}
+                onChange={(event) =>
+                  onChange((r) =>
+                    nameBranch(r, split.id, b, event.target.value),
+                  )
+                }
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
+              />
+            )}
+            <Slider
+              label={`${branchName(split, b)} · ${branch.length ? branch.map((s) => (isSplit(s) ? 'split' : s.label)).join(', ') : 'Dry'}`}
+              min={SILENT_DB}
+              max={6}
+              step={0.5}
+              value={[levels[b] ?? 0]}
+              onValueChange={([value]) =>
+                value !== undefined &&
+                onChange((r) => setBranchLevel(r, split.id, b, value))
+              }
+              readout={`${(levels[b] ?? 0) <= SILENT_DB ? '−∞' : (levels[b] ?? 0).toFixed(1)} dB`}
+            />
+          </div>
         ))}
         {editing && (
           <div className="flex flex-wrap gap-2">
@@ -212,7 +229,7 @@ function SplitNode({
 
 /**
  * The signal route, drawn as the engine stores it: blocks on the main line,
- * splits that fan into lettered branches (an empty branch is the dry
+ * splits that fan into named branches (an empty branch is the dry
  * signal), joins, and splits again, nested as deep as needed. Laptops draw
  * it left to right; phones top to bottom, so nothing scrolls sideways.
  *
@@ -221,7 +238,10 @@ function SplitNode({
  * block before it. Editing: + targets in every gap; long-press a block to
  * lift it and drop it in a gap, or on "Parallel" under another block to
  * run the two side by side (Quad Cortex's second row, without fixed rows).
- * The split node's popover sets branch levels, adds a branch or joins back.
+ * The split node's popover sets branch levels, adds a branch or joins back,
+ * and while editing names each branch ("Clean", "Lead"); unnamed branches
+ * use letters. A split with more than three branches folds its silent ones
+ * into one row: by default on phones, on request on laptops.
  */
 export function RouteView<B extends RouteBlock = RouteBlock>({
   route: routeIn,
@@ -269,6 +289,22 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
   const [lifted, setLifted] = React.useState<string | null>(null);
   const [heard, setHeard] = React.useState<string | null>(null);
   const [target, setTarget] = React.useState<string | null>(null);
+  const [unfolded, setUnfolded] = React.useState<Record<string, boolean>>({});
+  // Big splits fold their silent branches into one row: by default on
+  // phones, on request on laptops. Editing always shows every branch.
+  const silentOf = (split: Split<RouteBlock>) =>
+    split.branches
+      .map((branch, b) => ({ branch, b }))
+      .filter(
+        ({ branch, b }) =>
+          (split.levels?.[b] ?? 0) <= SILENT_DB &&
+          !blocksOf(branch).some((x) => x.id === selected),
+      )
+      .map(({ b }) => b);
+  const foldable = (split: Split<RouteBlock>) =>
+    !editing && split.branches.length > 3 && silentOf(split).length > 0;
+  const folded = (split: Split<RouteBlock>) =>
+    foldable(split) && !(unfolded[split.id] ?? !vertical);
   const change = (edit: (r: Route) => Route) => onChange(edit(route));
 
   const clear = () => {
@@ -404,62 +440,103 @@ export function RouteView<B extends RouteBlock = RouteBlock>({
                   : 'grid gap-3 border-y-0 border-l border-wire py-1 pl-2',
               )}
             >
-              {step.branches.map((branch, b) => (
-                <div
-                  key={b}
-                  className={cn(
-                    vertical
-                      ? 'ml-3 grid border-l-2 border-wire pl-3'
-                      : 'flex items-center',
-                    (step.levels?.[b] ?? 0) <= -60 &&
-                      '[&_[data-slot=chain-block]]:border-dashed [&_[data-slot=chain-block]]:bg-transparent [&_[data-slot=chain-block]]:text-muted-foreground',
-                  )}
-                  data-silent={(step.levels?.[b] ?? 0) <= -60 || undefined}
-                >
-                  <span
+              {step.branches
+                .map((branch, b) => ({ branch, b }))
+                .filter(({ branch, b }) => {
+                  if (!folded(step)) return true;
+                  return (
+                    (step.levels?.[b] ?? 0) > SILENT_DB ||
+                    blocksOf(branch).some((x) => x.id === selected)
+                  );
+                })
+                .map(({ branch, b }) => (
+                  <div
+                    key={b}
                     className={cn(
-                      'small-caps text-xs font-medium text-muted-foreground',
-                      vertical ? 'py-1' : 'mr-2 w-5 text-center',
+                      vertical
+                        ? 'ml-3 grid border-l-2 border-wire pl-3'
+                        : 'flex items-center',
+                      (step.levels?.[b] ?? 0) <= SILENT_DB &&
+                        '[&_[data-slot=chain-block]]:border-dashed [&_[data-slot=chain-block]]:bg-transparent [&_[data-slot=chain-block]]:text-muted-foreground',
                     )}
+                    data-silent={
+                      (step.levels?.[b] ?? 0) <= SILENT_DB || undefined
+                    }
                   >
-                    {vertical
-                      ? `Branch ${LETTERS[b]}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= -60 ? ' · silent' : ''}`
-                      : LETTERS[b]}
-                  </span>
-                  {branch.length ? (
-                    list(branch, [...path, index, b])
+                    <span
+                      className={cn(
+                        'small-caps text-xs font-medium text-muted-foreground',
+                        vertical
+                          ? 'py-1'
+                          : 'mr-2 max-w-24 min-w-5 shrink-0 truncate text-center',
+                      )}
+                      title={branchName(step, b)}
+                    >
+                      {vertical
+                        ? `${step.names?.[b]?.trim() ? '' : 'Branch '}${branchName(step, b)}${branch.length ? '' : ' · dry'}${(step.levels?.[b] ?? 0) <= SILENT_DB ? ' · silent' : ''}`
+                        : branchName(step, b)}
+                    </span>
+                    {branch.length ? (
+                      list(branch, [...path, index, b])
+                    ) : (
+                      <>
+                        {editing ? (
+                          <Gap
+                            path={[...path, index, b]}
+                            index={0}
+                            vertical={vertical}
+                            active={
+                              target ===
+                              `gap:${JSON.stringify([...path, index, b])}:0`
+                            }
+                            onAdd={
+                              onAdd
+                                ? () => onAdd([...path, index, b], 0)
+                                : undefined
+                            }
+                          />
+                        ) : null}
+                        <span
+                          className={cn(
+                            'small-caps text-xs text-muted-foreground',
+                            vertical
+                              ? 'py-2'
+                              : 'w-24 border-t border-dashed border-wire pt-1 text-center',
+                          )}
+                        >
+                          Dry
+                        </span>
+                      </>
+                    )}
+                  </div>
+                ))}
+              {foldable(step) && (
+                <button
+                  type="button"
+                  aria-expanded={!folded(step)}
+                  onClick={() =>
+                    setUnfolded((all) => ({ ...all, [step.id]: folded(step) }))
+                  }
+                  className={cn(
+                    'inline-flex min-h-8 items-center gap-1.5 justify-self-start rounded-full border border-dashed border-wire px-3 text-left text-xs text-muted-foreground hover:border-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                    vertical && 'ml-3',
+                  )}
+                >
+                  {folded(step) ? (
+                    <>
+                      <CaretDown aria-hidden="true" className="size-3.5" />
+                      {`Show ${silentOf(step).length} silent: ${silentOf(step)
+                        .map((b) => branchName(step, b))
+                        .join(', ')}`}
+                    </>
                   ) : (
                     <>
-                      {editing ? (
-                        <Gap
-                          path={[...path, index, b]}
-                          index={0}
-                          vertical={vertical}
-                          active={
-                            target ===
-                            `gap:${JSON.stringify([...path, index, b])}:0`
-                          }
-                          onAdd={
-                            onAdd
-                              ? () => onAdd([...path, index, b], 0)
-                              : undefined
-                          }
-                        />
-                      ) : null}
-                      <span
-                        className={cn(
-                          'small-caps text-xs text-muted-foreground',
-                          vertical
-                            ? 'py-2'
-                            : 'w-24 border-t border-dashed border-wire pt-1 text-center',
-                        )}
-                      >
-                        Dry
-                      </span>
+                      <CaretUp aria-hidden="true" className="size-3.5" />
+                      {`Fold ${silentOf(step).length} silent branches`}
                     </>
                   )}
-                </div>
-              ))}
+                </button>
+              )}
             </div>
             {vertical ? (
               <span className="justify-self-start rounded-full border border-wire px-2.5 py-1 small-caps text-xs text-muted-foreground">

@@ -1,8 +1,17 @@
 import { useState } from 'react';
+import { Plus } from '@phosphor-icons/react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, within } from 'storybook/test';
 import { isSplit, updateBlock, type Step } from '../lib/route';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
+import { List, ListRow } from '../components/ui/list-row';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/ui/popover';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { Progress } from '../components/ui/states';
 import { Caption, Eyebrow, Title } from '../components/ui/text';
@@ -12,14 +21,28 @@ import { ScenePads } from '../widgets/scene-pad';
 import {
   BRANCH_COUNTS,
   ESTIMATE,
+  LIMIT,
   SHARED_ESTIMATE,
   SILENT,
-  bigRig,
+  branchFor,
   branchesOf,
+  rigOf,
   scenesFor,
   type BigScene,
+  type Branch,
   type BranchCount,
+  type CaptureSize,
 } from './big-rig.fixtures';
+import { MODELS } from './swap.fixtures';
+
+const SIZES: CaptureSize[] = ['Standard', 'Lite', 'Feather', 'Nano'];
+const CANDIDATES = MODELS.filter((m) => m.kind === 'amp').map((m) => ({
+  model: m,
+  size: SIZES.find((size) => m.caption.includes(size)) ?? 'Standard',
+}));
+const percent = (share: number) => `${Math.round(share * 100)}%`;
+const loadOf = (list: Branch[]) =>
+  list.reduce((sum, b) => sum + ESTIMATE[b.size], 0);
 
 /**
  * One preset with five, seven or ten complete amp sounds side by side, each
@@ -58,27 +81,43 @@ function apply(route: Step<BlockModel>[], scene: BigScene | undefined) {
 }
 
 function ManyAmps({ initial }: { initial: BranchCount }) {
-  const [count, setCount] = useState<BranchCount>(initial);
-  const [base, setBase] = useState(() => bigRig(initial));
+  const [branches, setBranches] = useState(() => branchesOf(initial));
+  const [base, setBase] = useState(() => rigOf(branchesOf(initial)));
+  const count = branches.length;
   const scenes = scenesFor(count);
   const [sceneId, setSceneId] = useState(scenes[0]!.id);
   const [policy, setPolicy] = useState<Policy>('running');
   const [crossfade, setCrossfade] = useState('30');
+  const [added, setAdded] = useState<string | null>(null);
   const scene = scenes.find((s) => s.id === sceneId) ?? scenes[0];
   const route = apply(base, scene);
-  const branches = branchesOf(count);
-  const audible = branches.filter(
-    (_, i) => (scene?.amps[i] ?? SILENT) > SILENT,
-  );
+  const audibleIn = (sc: BigScene | undefined) =>
+    branches.filter((_, i) => (sc?.amps[i] ?? SILENT) > SILENT);
+  const audible = audibleIn(scene);
   const running = policy === 'running' ? branches : audible;
-  const load =
-    SHARED_ESTIMATE + running.reduce((sum, b) => sum + ESTIMATE[b.size], 0);
+  const load = SHARED_ESTIMATE + loadOf(running);
   const pct = Math.round(load * 100);
+  // What the rig can need at once: every branch when they keep running,
+  // otherwise the busiest scene. A new amp must fit on top of that.
+  const busiest = Math.max(0, ...scenes.map((sc) => loadOf(audibleIn(sc))));
+  const committed =
+    SHARED_ESTIMATE + (policy === 'running' ? loadOf(branches) : busiest);
+  const fits = (size: CaptureSize) => committed + ESTIMATE[size] <= LIMIT;
 
   const pick = (next: BranchCount) => {
-    setCount(next);
-    setBase(bigRig(next));
+    setBranches(branchesOf(next));
+    setBase(rigOf(branchesOf(next)));
     setSceneId(scenesFor(next)[0]!.id);
+    setAdded(null);
+  };
+  const add = (candidate: (typeof CANDIDATES)[number]) => {
+    const next = [
+      ...branches,
+      branchFor(candidate.model, candidate.size, branches.length + 1),
+    ];
+    setBranches(next);
+    setBase(rigOf(next));
+    setAdded(candidate.model.label);
   };
 
   return (
@@ -136,6 +175,75 @@ function ManyAmps({ initial }: { initial: BranchCount }) {
             value={Math.min(100, pct)}
             label="Share of each audio period"
           />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-self-start"
+              >
+                <Plus /> Add an amp…
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent aria-label="Add an amp" className="grid w-80 gap-2">
+              <span className="text-sm font-semibold">Add an amp branch</span>
+              <Caption className="text-xs">
+                {percent(Math.max(0, LIMIT - committed))} is free. The device
+                keeps {percent(1 - LIMIT)} of each audio period spare so a busy
+                moment never drops out.
+              </Caption>
+              <List>
+                {CANDIDATES.map((c) => (
+                  <ListRow
+                    key={c.model.id}
+                    title={c.model.label}
+                    caption={`NAM ${c.size} · needs ${percent(ESTIMATE[c.size])}`}
+                    trailing={
+                      fits(c.size) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          aria-label={`Add ${c.model.label}`}
+                          onClick={() => add(c)}
+                        >
+                          Add
+                        </Button>
+                      ) : (
+                        <Badge tone="warning" size="sm">
+                          No room
+                        </Badge>
+                      )
+                    }
+                  />
+                ))}
+              </List>
+              {CANDIDATES.some((c) => !fits(c.size)) && (
+                <div className="grid gap-2 border-t border-border pt-2">
+                  <Caption className="text-xs">
+                    To make room, choose a lighter capture size
+                    {policy === 'running'
+                      ? `, or pause silent branches: then only the busiest scene counts and ${percent(loadOf(branches) - busiest)} is freed.`
+                      : ', or take an amp out of the busiest scene.'}
+                  </Caption>
+                  {policy === 'running' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="justify-self-start"
+                      onClick={() => setPolicy('pause')}
+                    >
+                      Pause silent branches
+                    </Button>
+                  )}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          {added && (
+            <Caption className="text-xs">
+              Added {added}. It stays silent until a scene plays it.
+            </Caption>
+          )}
           <Caption className="text-xs">
             Estimate for this example. On the device, the health word at the top
             reports the measured load.
@@ -211,11 +319,42 @@ export const TenAmps: StoryObj = {
 /** Switch scenes: Crunch silences Clean; Heavy + bass blends two branches. */
 TenAmps.play = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
+  const page = within(canvasElement.ownerDocument.body);
   await expect(canvas.getByText(/10 of 10 amps running/)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /^Scene 3/ }));
   await expect(canvas.getByText(/Playing Crunch: Crunch\./)).toBeVisible();
   await userEvent.click(canvas.getByRole('button', { name: /Heavy \+ bass/ }));
   await expect(canvas.getByText(/Heavy and Bass/)).toBeVisible();
-  await userEvent.click(canvas.getByRole('radio', { name: 'Pause' }));
-  await expect(canvas.getByText(/2 of 10 amps running/)).toBeVisible();
+  // Phones fold the eight silent branches into one row; laptops offer to.
+  const phone = canvasElement.ownerDocument.defaultView!.innerWidth < 768;
+  const fold = canvas.getByRole('button', {
+    name: phone ? /Show 8 silent: Clean, Chime/ : /Fold 8 silent branches/,
+  });
+  await expect(fold).toHaveAttribute('aria-expanded', phone ? 'false' : 'true');
+  await userEvent.click(fold);
+  await expect(
+    canvas.getByRole('button', {
+      name: phone ? /Fold 8 silent branches/ : /Show 8 silent/,
+    }),
+  ).toHaveAttribute('aria-expanded', phone ? 'true' : 'false');
+  // Ten amps leave room for a Feather capture only, until silent branches pause.
+  await userEvent.click(canvas.getByRole('button', { name: /Add an amp/ }));
+  const popover = within(
+    await page.findByRole('dialog', { name: 'Add an amp' }),
+  );
+  await expect(
+    popover.queryByRole('button', { name: 'Add Plexi 50' }),
+  ).toBeNull();
+  await expect(
+    popover.queryByRole('button', { name: 'Add JCM 800 crunch' }),
+  ).toBeNull();
+  await userEvent.click(
+    popover.getByRole('button', { name: 'Add Deluxe reverb' }),
+  );
+  await expect(canvas.getByText(/Added Deluxe reverb/)).toBeVisible();
+  // The popover stays open: nothing else fits now, so it offers to make room.
+  await userEvent.click(
+    popover.getByRole('button', { name: 'Pause silent branches' }),
+  );
+  await expect(canvas.getByText(/2 of 11 amps running/)).toBeVisible();
 };

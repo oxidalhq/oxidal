@@ -12,7 +12,16 @@ export type Split<B> = {
   branches: Step<B>[][];
   /** Level of each branch at the join, in dB. */
   levels?: number[];
+  /** The player's name for each branch ("Clean", "Lead"); unnamed branches use letters. */
+  names?: string[];
 };
+
+/** A branch's name, or its letter: A, B … Z, then 27, 28. */
+export function branchName<B>(split: Split<B>, branch: number): string {
+  const name = split.names?.[branch]?.trim();
+  if (name) return name;
+  return branch < 26 ? String.fromCharCode(65 + branch) : String(branch + 1);
+}
 
 export type Step<B> = B | Split<B>;
 
@@ -237,7 +246,22 @@ export function addBranch<B extends Keyed>(
     ...split,
     branches: [...split.branches, []],
     levels: [...(split.levels ?? split.branches.map(() => 0)), 0],
+    names: split.names && [...split.names, ''],
   }));
+}
+
+/** Name a branch; an empty name goes back to its letter. */
+export function nameBranch<B extends Keyed>(
+  route: Step<B>[],
+  splitId: string,
+  branch: number,
+  name: string,
+): Step<B>[] {
+  return mapSplit(route, splitId, (split) => {
+    const names = split.branches.map((_, b) => split.names?.[b] ?? '');
+    names[branch] = name;
+    return { ...split, names };
+  });
 }
 
 export function setBranchLevel<B extends Keyed>(

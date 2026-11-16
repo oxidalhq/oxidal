@@ -225,8 +225,18 @@ export function RigSurface({
           return { ...trial.type.make(was.id), on: was.on, unsaved: true };
         const { choice } = trial;
         const options = b.source?.options ?? [];
+        // Loudness matching moves the block's own level, from where it was.
+        const controls = was.controls.map((c) =>
+          c.id === 'level' && trial.trim
+            ? {
+                ...c,
+                value: Math.min(c.max, Math.max(c.min, c.value + trial.trim)),
+              }
+            : c,
+        );
         return {
           ...b,
+          controls,
           label: choice.label,
           caption: choice.caption,
           unsaved: true,

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   addBranch,
   blocksOf,
@@ -141,4 +141,20 @@ it('moves a block out of a branch onto the main line and flattens a one-branch s
     [['amp'], ['delay', 'cab']],
     'reverb',
   ]);
+});
+
+describe('branch names', () => {
+  it('uses the name, else a letter past H', async () => {
+    const { branchName, nameBranch } = await import('./route');
+    const split = {
+      split: true as const,
+      id: 's',
+      branches: Array.from({ length: 10 }, (_, i) => [{ id: `b${i}` }]),
+    };
+    expect(branchName(split, 9)).toBe('J');
+    const named = nameBranch([split], 's', 2, 'Crunch');
+    const after = named[0] as typeof split & { names: string[] };
+    expect(branchName(after, 2)).toBe('Crunch');
+    expect(branchName(after, 3)).toBe('D');
+  });
 });

@@ -306,6 +306,9 @@ ToneChasing.play = async ({ canvasElement }) => {
       hidden: true,
     }).length,
   ).toBeGreaterThan(1);
+  await expect(
+    sheet.getByText(/AC30 top boost plays 2\.5 dB quieter to match Twin clean/),
+  ).toBeVisible();
   await userEvent.click(
     sheet.getByRole('button', { name: 'Get and try High gain lead' }),
   );

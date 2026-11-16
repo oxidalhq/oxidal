@@ -63,6 +63,7 @@ export const THREE_SOUNDS: Step<BlockModel>[] = [
       ],
     ],
     levels: [0, -60, -60],
+    names: ['Clean', 'Crunch', 'Lead'],
   },
   pick(SERIAL_ROUTE, 'bloom'),
 ];

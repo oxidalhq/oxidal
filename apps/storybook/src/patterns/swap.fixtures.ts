@@ -9,6 +9,7 @@ import { delay, drive, gate, mod, reverb } from './rig.fixtures';
 export const MODELS: ModelChoice[] = [
   {
     id: 'plexi',
+    loudness: -2,
     label: 'Plexi 50',
     caption: 'NAM · Standard · 48 kHz',
     kind: 'amp',
@@ -16,6 +17,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 'jcm',
+    loudness: 1.5,
     label: 'JCM 800 crunch',
     caption: 'NAM · Lite · 48 kHz',
     kind: 'amp',
@@ -23,6 +25,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 'ac30',
+    loudness: -4,
     label: 'AC30 top boost',
     caption: 'NAM A2 · Standard · 48 kHz',
     kind: 'amp',
@@ -30,6 +33,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 'twin',
+    loudness: -6.5,
     label: 'Twin clean',
     caption: 'NAM · Standard · 44.1 kHz',
     kind: 'amp',
@@ -37,6 +41,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 'b15',
+    loudness: -3,
     label: 'B15 bass',
     caption: 'NAM · Lite · 48 kHz',
     kind: 'amp',
@@ -44,6 +49,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 't3k-dumble',
+    loudness: 0.5,
     label: 'Overdrive special',
     caption: 'NAM A2 · Standard · 48 kHz',
     kind: 'amp',
@@ -54,6 +60,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 't3k-5150',
+    loudness: 3,
     label: 'High gain lead',
     caption: 'NAM · Standard · 48 kHz',
     kind: 'amp',
@@ -63,6 +70,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 't3k-deluxe',
+    loudness: -5,
     label: 'Deluxe reverb',
     caption: 'NAM · Feather · 48 kHz',
     kind: 'amp',
@@ -109,6 +117,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 'ts9',
+    loudness: 0,
     label: 'TS9',
     caption: 'NAM pedal · Lite',
     kind: 'pedal',
@@ -116,6 +125,7 @@ export const MODELS: ModelChoice[] = [
   },
   {
     id: 't3k-rat',
+    loudness: 2,
     label: 'Rat',
     caption: 'NAM pedal · Standard',
     kind: 'pedal',
