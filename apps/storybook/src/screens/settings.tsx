@@ -27,6 +27,11 @@ import { AudioChange } from '../patterns/audio-change';
 import { Tone3000Account } from '../patterns/tone3000';
 import { NetworkSettings } from '../patterns/network-settings';
 import {
+  BootPlayback,
+  DebugConsole,
+  StorageLock,
+} from '../patterns/device-flows';
+import {
   ControllerSetup,
   ExtraControllers,
 } from '../patterns/controller-setup';
@@ -37,7 +42,6 @@ import { PretendController, WebMidiButton } from '../widgets/midi-controller';
 import { MidiMap } from '../widgets/midi-map';
 
 function Audio() {
-  const [boot, setBoot] = useState(true);
   return (
     <>
       <SettingGroup title="Device">
@@ -58,14 +62,8 @@ function Audio() {
         </SettingRow>
       </SettingGroup>
       <AudioChange />
+      <BootPlayback />
       <SettingGroup title="Playback">
-        <SettingRow
-          id="boot"
-          label="Play on boot"
-          caption="Starts the last preset when the device powers up."
-        >
-          <Switch id="boot" checked={boot} onCheckedChange={setBoot} />
-        </SettingRow>
         <SettingRow label="Audio" caption="Running · 0 xruns in 12 min">
           <Button size="sm" variant="outline">
             <ArrowsClockwise /> Restart
@@ -286,6 +284,8 @@ function Maintenance() {
           </Button>
         </SettingRow>
       </CollapsibleSection>
+      <StorageLock />
+      <DebugConsole />
     </>
   );
 }
