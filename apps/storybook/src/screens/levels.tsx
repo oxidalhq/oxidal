@@ -8,6 +8,8 @@ import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { StereoMeter } from '../widgets/meter';
 import { DeviceDashboard } from './device-dashboard';
+import { VenueEq } from '../widgets/venue-eq';
+import { VENUE_PROFILES } from '../widgets/venue-eq.data';
 
 function series(seed: number, n = 120) {
   const out: number[] = [];
@@ -87,11 +89,6 @@ function History({
  * history — processing against the deadline, host CPU, temperature — with
  * xruns and clips as counts. Everything measured, nothing decorative.
  */
-const VENUES = [
-  { id: 'home', name: 'Home', eq: 'Flat' },
-  { id: 'small', name: 'Small room', eq: 'Low cut 100 Hz · −2 dB at 250 Hz' },
-  { id: 'friday', name: 'Friday gig', eq: 'Low cut 80 Hz · +1.5 dB presence' },
-];
 
 /**
  * The output, after the mix: master level, mono for a single PA feed, and
@@ -102,8 +99,6 @@ const VENUES = [
 function Output() {
   const [level, setLevel] = useState(-3);
   const [mono, setMono] = useState(false);
-  const [venue, setVenue] = useState('small');
-  const active = VENUES.find((v) => v.id === venue)!;
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
@@ -112,7 +107,7 @@ function Output() {
           After the mix · not saved in presets
         </Caption>
       </CardHeader>
-      <div className="grid gap-x-6 gap-y-4 md:grid-cols-3">
+      <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
         <Slider
           label="Master level"
           min={-60}
@@ -131,22 +126,10 @@ function Output() {
           </label>
           <Switch id="mono" checked={mono} onCheckedChange={setMono} />
         </div>
-        <div className="grid gap-1">
-          <span className="text-sm font-medium">Venue EQ</span>
-          <SegmentedControl
-            size="sm"
-            value={venue}
-            onValueChange={setVenue}
-            aria-label="Venue EQ"
-          >
-            {VENUES.map((v) => (
-              <Segment key={v.id} value={v.id}>
-                {v.name}
-              </Segment>
-            ))}
-          </SegmentedControl>
-          <Caption className="text-xs">{active.eq}</Caption>
-        </div>
+      </div>
+      <div className="grid gap-2 border-t border-border pt-3">
+        <span className="text-md font-semibold">Venue EQ</span>
+        <VenueEq profiles={VENUE_PROFILES} />
       </div>
     </Card>
   );
