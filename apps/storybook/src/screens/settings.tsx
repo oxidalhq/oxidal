@@ -24,6 +24,7 @@ import {
 } from '../patterns/settings-page';
 import { SETTINGS_SECTIONS } from './settings.sections';
 import { AudioChange } from '../patterns/audio-change';
+import { Tone3000Account } from '../patterns/tone3000';
 import { Effects, NamEngine, PluginPacks } from './settings.effects';
 import { DEFAULT_MAP } from '../lib/midi';
 import { MidiBar, MidiProvider } from '../widgets/midi';
@@ -111,23 +112,18 @@ function Network() {
 
 function Accounts() {
   return (
-    <SettingGroup title="TONE3000">
-      <SettingRow
-        label="Signed in as rix"
-        caption="Keeps tones you choose and shows their creators and licences."
-      >
-        <Button size="sm" variant="outline">
-          Sign out
-        </Button>
-      </SettingRow>
-      <SettingRow
-        id="auto"
-        label="Keep auditioned tones"
-        caption="Saves a copy of any tone you audition for ten seconds or more."
-      >
-        <Switch id="auto" />
-      </SettingRow>
-    </SettingGroup>
+    <>
+      <Tone3000Account initial="connected" />
+      <SettingGroup title="TONE3000">
+        <SettingRow
+          id="auto"
+          label="Keep auditioned tones"
+          caption="Saves a copy of any tone you audition for ten seconds or more."
+        >
+          <Switch id="auto" />
+        </SettingRow>
+      </SettingGroup>
+    </>
   );
 }
 
