@@ -1,0 +1,34 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guide/Container ladder" />
+
+# Container ladder
+
+Use the smallest container that holds the task.
+
+| Need                                              | Container     | Example                               |
+| ------------------------------------------------- | ------------- | ------------------------------------- |
+| Change a value in place                           | Inline        | Fader under the selected block        |
+| A short choice or a small form, context must stay | Popover       | Add block, sort, pick a scene colour  |
+| A list of actions on one thing                    | Dropdown menu | Rename, Duplicate, Delete… on a track |
+| Edit many controls while the screen stays visible | Sheet         | Block controls, the player, stems     |
+| A decision that must be answered before going on  | Dialog        | Confirm delete, audio buffer change   |
+| A workspace of its own                            | Page          | Library, Settings, the rig editor     |
+
+- Phones get bottom sheets; laptops get side sheets.
+- Dialogs never stack on dialogs.
+- A sheet may open a popover or a confirm dialog, nothing more.
+- Popovers and menus close on outside tap and Escape; sheets also close on a
+  downward swipe of the handle.
+- Everything that opens has a visible way to close and returns focus where
+  it came from.
+
+## Writing
+
+- Plain words, the specific thing: "Audio stopped unexpectedly", not "Error".
+- Buttons are verbs: Save, Open, Split, Cue. "Delete…" with an ellipsis when a
+  confirm follows. Never "OK".
+- Captions explain the consequence, not the mechanism.
+- States are words: Playing, Cued, Stale, Disconnected, Unsaved, Protected.
+- Numbers keep their unit and sign: −12.0 dB, 48 × 3 · 6 ms, 120 BPM.
+- Titles are sentence case. Small caps carry labels, so no uppercase strings.

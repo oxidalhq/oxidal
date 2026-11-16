@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import './theme.css';
+
+/* Base text and surfaces come from the tokens, never from utilities. */
+html,
+body,
+#storybook-root {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus is always visible and always the ring colour. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

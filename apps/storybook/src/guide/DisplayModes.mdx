@@ -1,0 +1,36 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guide/Display modes" />
+
+# Display modes
+
+Switch them with the **Display** toolbar item. Only colour tokens change per
+mode; if a component needs a per-mode rule, a token is missing.
+
+| Mode     | Surfaces                  | Shadows | Touch target | Notes                                     |
+| -------- | ------------------------- | ------- | ------------ | ----------------------------------------- |
+| Default  | Paper, ink, oxide         | Raised  | 44 px        | The design is made here first             |
+| Night    | Dark paper, lighter oxide | Raised  | 48 px        | No pure white; faceplate darkest          |
+| Sunlight | White and black only      | None    | 48 px        | Secondary ink is black; borders are black |
+| E-paper  | Black and white, no greys | None    | 48 px        | No animation; LEDs are black              |
+
+See **Foundations › Display modes** for the same composition in all four.
+
+## Structure of the repository
+
+```
+src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
+src/styles/index.css      Tailwind, base text and focus
+src/lib/cn.ts             class merging
+src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
+src/widgets/              instrument widgets (meter, chain block, scene pad …)
+src/patterns/             page patterns (app shell, settings page, rig surface …)
+src/screens/              every product screen rebuilt with fixture data
+src/guide/                these pages
+docs/guide.md             the written guide; docs/migration.md maps product files to replacements
+scripts/sync.mjs          copies styles, ui, widgets and patterns into the product
+```
+
+A component is one file with its variants in `cva`, its own stories for every
+state and a test for behaviour. Widgets compose primitives; patterns compose
+widgets; screens compose patterns. Nothing imports upward.

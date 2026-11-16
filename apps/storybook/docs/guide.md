@@ -1,0 +1,100 @@
+# Oxidal design guide
+
+The rules for building Oxidal's interface. Storybook shows the same pages
+under **Guide**, next to the live components. When a rule and a component
+disagree, the rule wins and the component gets fixed.
+
+## 1. Principles
+
+1. **Readout first.** Every screen is an instrument readout: strong type,
+   aligned values, thin rules, generous touch targets, few controls in view.
+2. **Paper, ink, one oxide.** Oxide marks what is live or committed (playing,
+   unsaved, Save). Category colour appears only as block LEDs. Selection
+   inverts ink and paper. The design works in black and white first.
+3. **One of each.** One button, one chip, one meter, one dialog, one sheet,
+   one caption. A second variant needs a rule here first.
+4. **Container ladder.** Inline → popover → dropdown → sheet → dialog → page.
+   Use the smallest container that holds the task.
+5. **Phone is the first viewport.** Design at 393 px, then widen. No
+   horizontal scrolling except the chain strip and the set list.
+6. **Type does the hierarchy.** Small caps for labels, the display face for
+   the name of the thing, mono for values, sans for everything read.
+7. **Say the state.** Playing, cued, stale, disconnected, unsaved, protected
+   are words and badges; colour and shape only reinforce them.
+8. **No decoration.** Graphs show data; motion only confirms an action and
+   stops under reduced motion.
+
+## 2. The voice of the type
+
+| Voice   | Use                                                             | How                                                  |
+| ------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| Label   | Eyebrows, section and table heads, block categories, chips, nav | `small-caps` utility or `<Eyebrow>`; never uppercase |
+| Name    | The preset, song, rig or page on screen                         | `<Title>`: display face, semibold, tight tracking    |
+| Value   | Anything measured: levels, times, buffers, tempo, tuner         | `<Readout>`: mono, tabular numbers                   |
+| Body    | Sentences                                                       | sans, `text-base`                                    |
+| Caption | Secondary line under a title or control                         | `<Caption>`: `text-sm` muted ink                     |
+
+Sizes come from the scale only (`text-2xs` … `text-display`). On stage the
+name goes to `text-3xl` or `text-display`; in dense lists captions drop to
+`text-xs`; nothing else changes size per screen.
+
+## 3. Container ladder
+
+| Need                                              | Container     | Example                               |
+| ------------------------------------------------- | ------------- | ------------------------------------- |
+| Change a value in place                           | Inline        | Fader under the selected block        |
+| A short choice or a small form, context must stay | Popover       | Add block, sort, pick a scene colour  |
+| A list of actions on one thing                    | Dropdown menu | Rename, Duplicate, Delete… on a track |
+| Edit many controls while the screen stays visible | Sheet         | Block controls, the player, stems     |
+| A decision that must be answered before going on  | Dialog        | Confirm delete, audio buffer change   |
+| A workspace of its own                            | Page          | Library, Settings, the rig editor     |
+
+Phones get bottom sheets; laptops get side sheets. Dialogs never stack on
+dialogs. A sheet may open a popover or a confirm dialog, nothing more.
+
+## 4. Writing
+
+- Plain words, the specific thing: "Audio stopped unexpectedly", not "Error".
+- Buttons are verbs: Save, Open, Split, Cue. "Delete…" with an ellipsis when a
+  confirm follows. Never "OK".
+- Captions explain the consequence, not the mechanism: "Stops the track that
+  is playing", not "Transport will be reset".
+- States are words: Playing, Cued, Stale, Disconnected, Unsaved, Protected.
+- Numbers keep their unit and sign: −12.0 dB, 48 × 3 · 6 ms, 120 BPM.
+- Titles are sentence case. Small caps carry labels, so no uppercase strings.
+
+## 5. Display modes
+
+| Mode     | Surfaces                  | Shadows | Touch target | Notes                                     |
+| -------- | ------------------------- | ------- | ------------ | ----------------------------------------- |
+| Default  | Paper, ink, oxide         | Raised  | 44 px        | The design is made here first             |
+| Night    | Dark paper, lighter oxide | Raised  | 48 px        | No pure white; faceplate darkest          |
+| Sunlight | White and black only      | None    | 48 px        | Secondary ink is black; borders are black |
+| E-paper  | Black and white, no greys | None    | 48 px        | No animation; LEDs are black              |
+
+Only colour tokens change per mode. If a component needs a per-mode rule, it
+is a token that is missing.
+
+## 6. Structure of the repository
+
+```
+src/styles/theme.css      tokens (colour per mode; type, space, radius, layers, motion in @theme)
+src/styles/index.css      Tailwind, base text and focus
+src/lib/cn.ts             class merging
+src/components/ui/        primitives: <name>.tsx + .stories.tsx + .test.tsx
+src/widgets/              instrument widgets (meter, chain block, scene pad …)
+src/patterns/             page patterns (app shell, settings page, rig surface …)
+src/screens/              every product screen rebuilt with fixture data
+src/guide/                these pages as MDX for Storybook
+docs/guide.md             this file; docs/migration.md maps product files to replacements
+scripts/sync.mjs          copies styles, ui, widgets and patterns into the product
+```
+
+A component is one file with its variants in `cva`, its own stories for
+every state and a test for behaviour. Widgets compose primitives; patterns
+compose widgets; screens compose patterns. Nothing imports upward.
+
+## 7. Component table
+
+Filled in as components land (Phase 2): purpose, when, when not, variants,
+keyboard, touch, display-mode notes, and the product files it replaces.

@@ -399,6 +399,7 @@ if (mode === 'bootstrap') {
     run('pnpm', ['lint:tooling']);
     run('pnpm', ['contract:check']);
     run('pnpm', ['--dir', 'apps/web', 'check']);
+    run('pnpm', ['--dir', 'apps/storybook', 'check']);
     run('sh', ['os/scripts/check.sh']);
     run('node', [
       '--test',

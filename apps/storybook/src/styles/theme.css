@@ -1,0 +1,325 @@
+/* Oxidal identity — paper, ink and one oxide accent.
+   Oxide (brand) means live or committed state only: playing, unsaved edits, Save/Keep.
+   Category colour appears only as block LEDs. Selection inverts ink and paper.
+   One 4px radius (8px for pads and tiles), 1px rules, one raised step for sheets and
+   popovers, no gradients. Touch targets stay at least 44px.
+   Colour lives on :root so the four display modes can override it; everything that
+   does not change per mode (type, space, radius, layers, motion) lives in @theme so
+   Tailwind utilities and hand-written CSS read the same variable. */
+
+/* ---------- Colour (per display mode) ---------- */
+:root {
+  color-scheme: light;
+  --background: #f3f1ec;
+  --foreground: #1b1a17;
+  --card: #fbfaf7;
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-raised);
+  --popover-foreground: var(--foreground);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --brand: #a8401a;
+  --brand-foreground: #ffffff;
+  --control-accent: var(--foreground);
+  --readout-foreground: var(--foreground);
+  --secondary: #e8e5dd;
+  --secondary-foreground: var(--foreground);
+  --muted: #e8e5dd;
+  --muted-foreground: #64615a;
+  --accent: #e8e5dd;
+  --accent-foreground: var(--foreground);
+  --destructive: var(--foreground);
+  --destructive-foreground: var(--background);
+  /* Destructive labels and icons only; never a fill. */
+  --danger-ink: #8a2a12;
+  --border: #d6d2c8;
+  --input: var(--foreground);
+  --ring: var(--foreground);
+  --success: var(--brand);
+  --warning: #e8e5dd;
+  --warning-foreground: var(--foreground);
+  --wire: #8a867c;
+  /* The one raised step: sheets, popovers, menus, the notice tray. */
+  --surface-raised: #ffffff;
+  --shadow-raised:
+    0 1px 2px rgb(27 26 23 / 0.08), 0 8px 24px rgb(27 26 23 / 0.1);
+  --tuner-surface: #0d0b08;
+  --tuner-amber: #edbd70;
+  --tuner-green: #7fd694;
+  --tuner-day-surface: #ffffff;
+  --tuner-day-ink: #000000;
+  --tuner-day-green: #0b6b2e;
+
+  /* Block LEDs, shared with footswitch LEDs. Never used as fills. */
+  --led-amp: #d08a1a;
+  --led-pedal: #3f8f3a;
+  --led-cab: #7d7a70;
+  --led-time: #2f6fb0;
+  --led-lv2: #23807a;
+  --led-mod: #7a5ea8;
+
+  /* The ink faceplate (header) and the readout panel. */
+  --enclosure: #1b1a17;
+  --enclosure-foreground: #f3f1ec;
+  --enclosure-border: #3a3832;
+  --lcd: var(--background);
+  --lcd-foreground: var(--foreground);
+  --lcd-muted: var(--muted-foreground);
+  --lcd-border: var(--border);
+  --lcd-card: var(--card);
+  --lcd-action: var(--brand);
+  --lcd-action-foreground: var(--brand-foreground);
+  --lcd-shadow: none;
+  --panel-shadow: none;
+  --effect-shadow: none;
+  --effect-accent: var(--foreground);
+  --chart-secondary: var(--wire);
+
+  /* Named sizes the product's CSS already uses. Kept as aliases of the scale. */
+  --content-width: 80rem;
+  --page-space: clamp(0.75rem, 2vw, 1.5rem);
+  --panel-space: clamp(0.75rem, 1.5vw, 1.125rem);
+  --control-gap: 0.75rem;
+  --action-gap: 0.5rem;
+  --touch-target: 2.75rem;
+  --title-size: clamp(1.5rem, 2.5vw, 2rem);
+  --readout-size: 2rem;
+  --rack-gap: 0.5rem;
+  --selected-edge: 2px;
+  --panel-radius: var(--radius);
+  --display-radius: var(--radius);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Night (stored as `stage`): dark stage, no pure white, darkest faceplate. */
+:root[data-display='stage'] {
+  color-scheme: dark;
+  --background: #161513;
+  --foreground: #ece9e2;
+  --card: #1c1b18;
+  --brand: #e07a45;
+  --brand-foreground: #161513;
+  --secondary: #24221e;
+  --muted: #24221e;
+  --muted-foreground: #a29e94;
+  --accent: #24221e;
+  --danger-ink: #f0906c;
+  --border: #36342f;
+  --wire: #6f6b62;
+  --surface-raised: #24221e;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.5);
+  --led-amp: #c99140;
+  --led-pedal: #62a35a;
+  --led-cab: #8f8b80;
+  --led-time: #5d8fc8;
+  --led-lv2: #45a198;
+  --led-mod: #9d86c9;
+  --enclosure: #0c0c0b;
+  --enclosure-foreground: #ece9e2;
+  --enclosure-border: #36342f;
+}
+
+/* Sunlight: pure black on white; secondary text stays black; no shadows. */
+:root[data-display='sunlight'] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --brand: #8a3212;
+  --secondary: #ffffff;
+  --muted: #ffffff;
+  --muted-foreground: #000000;
+  --accent: #ffffff;
+  --danger-ink: #000000;
+  --border: #000000;
+  --wire: #000000;
+  --surface-raised: #ffffff;
+  --shadow-raised: none;
+  --led-amp: #a86200;
+  --led-pedal: #1d6a19;
+  --led-cab: #4d4d4d;
+  --led-time: #0b4f99;
+  --led-lv2: #00625b;
+  --led-mod: #5a3d8c;
+  --enclosure: #000000;
+  --enclosure-foreground: #ffffff;
+  --enclosure-border: #000000;
+  --chart-secondary: #000000;
+}
+
+/* E-paper (BOOX): black and white only; no greys that dither; no shadows. */
+:root[data-display='epaper'] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --brand: #000000;
+  --tuner-surface: #ffffff;
+  --tuner-amber: #000000;
+  --tuner-green: #000000;
+  --tuner-day-green: #000000;
+  --secondary: #ffffff;
+  --muted: #ffffff;
+  --muted-foreground: #000000;
+  --accent: #ffffff;
+  --danger-ink: #000000;
+  --border: #000000;
+  --wire: #000000;
+  --surface-raised: #ffffff;
+  --shadow-raised: none;
+  --led-amp: #000000;
+  --led-pedal: #000000;
+  --led-cab: #000000;
+  --led-time: #000000;
+  --led-lv2: #000000;
+  --led-mod: #000000;
+  --enclosure: #000000;
+  --enclosure-foreground: #ffffff;
+  --enclosure-border: #000000;
+  --chart-secondary: #000000;
+}
+:root[data-display='sunlight'],
+:root[data-display='stage'],
+:root[data-display='epaper'] {
+  --touch-target: 3rem;
+}
+
+/* ---------- Everything that does not change per mode ---------- */
+@theme {
+  /* Type. Every text size comes from here; do not add one-off sizes.
+     Utilities: text-2xs … text-display. Each carries its line height. */
+  --text-*: initial;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.3;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.45;
+  --text-md: 1rem;
+  --text-md--line-height: 1.4;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.3;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.25;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.15;
+  --text-display: clamp(2rem, 6vw, 3.5rem);
+  --text-display--line-height: 1.05;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  /* Proposed (D-6): a serif display face for the preset name and the stage. */
+  --font-display:
+    ui-serif, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  /* Small caps carry a little tracking so they read as labels, not shouting. */
+  --tracking-caps: 0.06em;
+  --tracking-eyebrow: 0.08em;
+
+  /* Space: a 4px scale (gap-1 = 4px … gap-12 = 48px) plus named steps. */
+  --spacing: 0.25rem;
+  --spacing-page: clamp(0.75rem, 2vw, 1.5rem);
+  --spacing-panel: clamp(0.75rem, 1.5vw, 1.125rem);
+  --spacing-touch: 2.75rem;
+
+  /* Radius: one 4px radius; pads and tiles use 8px. */
+  --radius: 0.25rem;
+  --radius-*: initial;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-pad: 0.5rem;
+  --radius-full: 9999px;
+
+  /* Layers: z-strip … z-tray. Nothing picks its own number. */
+  --z-index-strip: 10;
+  --z-index-sheet: 20;
+  --z-index-popover: 30;
+  --z-index-dialog: 40;
+  --z-index-tray: 50;
+
+  /* Elevation: one raised step (shadow-raised); none elsewhere. */
+  --shadow-*: initial;
+  --shadow-raised: var(--shadow-raised);
+
+  /* Motion: transform and opacity only; off under reduced motion. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+
+  /* Breakpoints: sm 640, md 768, lg 1024, xl 1280. Nothing else. */
+  --breakpoint-*: initial;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+}
+
+/* Colour names for utilities (bg-card, text-muted-foreground …) read the
+   per-mode variables above. `inline` so a mode switch needs no recompute. */
+@theme inline {
+  --color-*: initial;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-danger-ink: var(--danger-ink);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-wire: var(--wire);
+  --color-raised: var(--surface-raised);
+  --color-enclosure: var(--enclosure);
+  --color-enclosure-foreground: var(--enclosure-foreground);
+  --color-enclosure-border: var(--enclosure-border);
+  --color-led-amp: var(--led-amp);
+  --color-led-pedal: var(--led-pedal);
+  --color-led-cab: var(--led-cab);
+  --color-led-time: var(--led-time);
+  --color-led-lv2: var(--led-lv2);
+  --color-led-mod: var(--led-mod);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+}
+
+/* Small caps: the system's label voice (section heads, eyebrows, block
+   categories, table heads, nav labels, chip text). Real small caps from the
+   system font, synthesised where the face has none; never uppercase text. */
+@utility small-caps {
+  font-variant-caps: all-small-caps;
+  font-feature-settings: 'c2sc', 'smcp';
+  letter-spacing: var(--tracking-caps);
+}
+
+/* Stage landscape (phone sideways on a stand): the one extra media feature. */
+@custom-media --stage-landscape (orientation: landscape) and (max-height: 500px);
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+  }
+}

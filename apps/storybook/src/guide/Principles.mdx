@@ -1,0 +1,37 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guide/Principles" />
+
+# Principles
+
+The rules for building Oxidal's interface. When a rule and a component
+disagree, the rule wins and the component gets fixed. The full guide is
+`docs/guide.md` in this repository.
+
+1. **Readout first.** Every screen is an instrument readout: strong type,
+   aligned values, thin rules, generous touch targets, few controls in view.
+2. **Paper, ink, one oxide.** Oxide marks what is live or committed. Category
+   colour appears only as block LEDs. Selection inverts ink and paper. The
+   design works in black and white first.
+3. **One of each.** One button, one chip, one meter, one dialog, one sheet,
+   one caption. A second variant needs a rule here first.
+4. **Container ladder.** Inline → popover → dropdown → sheet → dialog → page.
+   Use the smallest container that holds the task.
+5. **Phone is the first viewport.** Design at 393 px, then widen. No
+   horizontal scrolling except the chain strip and the set list.
+6. **Type does the hierarchy.** Small caps for labels, the display face for
+   the name of the thing, mono for values, sans for everything read.
+7. **Say the state.** Playing, cued, stale, disconnected, unsaved, protected
+   are words and badges; colour and shape only reinforce them.
+8. **No decoration.** Graphs show data; motion only confirms an action and
+   stops under reduced motion.
+
+## The voice of the type
+
+| Voice   | Use                                                             | How                                                  |
+| ------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| Label   | Eyebrows, section and table heads, block categories, chips, nav | `small-caps` utility or `<Eyebrow>`; never uppercase |
+| Name    | The preset, song, rig or page on screen                         | `<Title>`: display face, semibold, tight tracking    |
+| Value   | Anything measured: levels, times, buffers, tempo, tuner         | `<Readout>`: mono, tabular numbers                   |
+| Body    | Sentences                                                       | sans, `text-base`                                    |
+| Caption | Secondary line under a title or control                         | `<Caption>`: `text-sm` muted ink                     |
