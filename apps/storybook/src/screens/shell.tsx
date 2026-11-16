@@ -8,7 +8,9 @@ export function Screen({
   destination,
   children,
   playing = 'Rhythm section · Scene 2',
+  status,
 }: {
+  status?: 'simple' | 'detailed';
   destination: Destination;
   children: ReactNode;
   playing?: string | null;
@@ -19,6 +21,7 @@ export function Screen({
       destination={where}
       onNavigate={setWhere}
       readings={READINGS}
+      status={status}
       nowPlaying={
         playing && (
           <span className="inline-flex items-center gap-2">

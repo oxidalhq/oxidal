@@ -168,3 +168,40 @@ export const GUITARS = [
   { id: 'g2', name: 'Les Paul', caption: 'Humbuckers · −10 dB trim' },
   { id: 'g3', name: 'P-Bass', caption: 'Bass · −8 dB trim' },
 ];
+
+/** Usage for sorting and favourites, by item id. */
+const USAGE: Record<string, Partial<LibraryItem>> = {
+  p1: { lastUsed: 9, plays: 41, added: 3, favourite: true },
+  p2: { lastUsed: 7, plays: 12, added: 5 },
+  p3: { lastUsed: 8, plays: 25, added: 6, favourite: true },
+  p4: { lastUsed: 2, plays: 3, added: 1 },
+  p5: { lastUsed: 5, plays: 7, added: 2 },
+  p6: { lastUsed: 1, plays: 1, added: 4 },
+  t1: { lastUsed: 9, plays: 30, added: 2, favourite: true },
+  t2: { lastUsed: 4, plays: 8, added: 1 },
+  t3: { lastUsed: 6, plays: 11, added: 3 },
+  t4: { lastUsed: 8, plays: 28, added: 2, favourite: true },
+  t5: { lastUsed: 3, plays: 2, added: 4 },
+  t6: { lastUsed: 0, plays: 0, added: 9 },
+  b1: { lastUsed: 9, plays: 19, added: 2, favourite: true },
+  b2: { lastUsed: 6, plays: 9, added: 3 },
+  b3: { lastUsed: 2, plays: 4, added: 1 },
+  b4: { lastUsed: 1, plays: 0, added: 5 },
+};
+
+export function withUsage(
+  items: LibraryItem[],
+  favourites?: Set<string>,
+): LibraryItem[] {
+  return items.map((item) => ({
+    ...item,
+    ...USAGE[item.id],
+    ...(favourites ? { favourite: favourites.has(item.id) } : {}),
+  }));
+}
+
+export const STARTING_FAVOURITES = new Set(
+  Object.entries(USAGE)
+    .filter(([, u]) => u.favourite)
+    .map(([id]) => id),
+);

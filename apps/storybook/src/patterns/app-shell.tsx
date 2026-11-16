@@ -15,6 +15,7 @@ import {
   type ResourceReadings,
   type ResourceState,
 } from '../widgets/resource-strip';
+import { HealthStatus } from '../widgets/health-status';
 
 export type Destination = 'rig' | 'guitars' | 'library' | 'levels' | 'settings';
 
@@ -34,9 +35,10 @@ const DESTINATIONS: {
  * The frame every screen sits in (D-3): the ink masthead with the wordmark,
  * what is playing, and the five destinations as ghost buttons on `md+`;
  * below `md` the destinations move to a bottom bar with icon and label,
- * the masthead keeps the wordmark and the now-playing line. The resource
- * strip sits under the masthead on every screen; the notice tray floats
- * under it.
+ * the masthead keeps the wordmark and the now-playing line. By default the
+ * masthead shows the device health in one word (R-7); with `status="detailed"`
+ * the full resource strip sits under the masthead instead. The notice tray
+ * floats under it.
  */
 export function AppShell({
   destination,
@@ -44,6 +46,7 @@ export function AppShell({
   nowPlaying,
   readings,
   resourceState = 'live',
+  status = 'simple',
   children,
   className,
 }: {
@@ -52,6 +55,8 @@ export function AppShell({
   nowPlaying?: React.ReactNode;
   readings: ResourceReadings;
   resourceState?: ResourceState;
+  /** Simple shows one health word in the masthead; Detailed shows the full strip. */
+  status?: 'simple' | 'detailed';
   children: React.ReactNode;
   className?: string;
 }) {
@@ -75,6 +80,13 @@ export function AppShell({
         <div className="min-w-0 flex-1 truncate text-sm text-enclosure-foreground/80">
           {nowPlaying}
         </div>
+        {status === 'simple' && (
+          <HealthStatus
+            readings={readings}
+            state={resourceState}
+            className="shrink-0 border-enclosure-border bg-enclosure text-enclosure-foreground hover:bg-enclosure-border"
+          />
+        )}
         <nav
           aria-label="Instrument navigation"
           className="hidden items-center gap-1 md:flex"
@@ -95,7 +107,9 @@ export function AppShell({
         </nav>
       </header>
       <div className="sticky top-0 z-strip">
-        <ResourceStrip readings={readings} state={resourceState} />
+        {status === 'detailed' && (
+          <ResourceStrip readings={readings} state={resourceState} />
+        )}
         <NoticeTray />
       </div>
       <main className="pb-[calc(var(--safe-bottom)+4.5rem)] md:pb-page">

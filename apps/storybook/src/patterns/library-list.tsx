@@ -1,11 +1,20 @@
 import * as React from 'react';
-import { DotsThree, MagnifyingGlass, Play, X } from '@phosphor-icons/react';
+import {
+  ArrowsDownUp,
+  DotsThree,
+  MagnifyingGlass,
+  Play,
+  Star,
+  X,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -14,6 +23,7 @@ import { List, ListRow } from '../components/ui/list-row';
 import { Segment, SegmentedControl } from '../components/ui/segmented';
 import { EmptyState } from '../components/ui/states';
 import { Caption } from '../components/ui/text';
+import { Toggle } from '../components/ui/toggle';
 import type { BlockKind } from '../widgets/chain';
 
 export type LibraryItem = {
@@ -24,7 +34,32 @@ export type LibraryItem = {
   artwork?: string;
   badge?: { text: string; tone?: 'neutral' | 'live' | 'warning' | 'selected' };
   playable?: boolean;
+  favourite?: boolean;
+  /** For sorting: when it was last used, how often, when it was added (any increasing numbers). */
+  lastUsed?: number;
+  plays?: number;
+  added?: number;
 };
+
+const SORTS = [
+  { id: 'recent', label: 'Recently used' },
+  { id: 'name', label: 'Name' },
+  { id: 'plays', label: 'Most played' },
+  { id: 'added', label: 'Newest' },
+] as const;
+type SortId = (typeof SORTS)[number]['id'];
+
+function sortItems(items: LibraryItem[], sort: SortId) {
+  const by = (pick: (i: LibraryItem) => number) =>
+    [...items].sort(
+      (a, b) => pick(b) - pick(a) || a.title.localeCompare(b.title),
+    );
+  if (sort === 'name')
+    return [...items].sort((a, b) => a.title.localeCompare(b.title));
+  if (sort === 'recent') return by((i) => i.lastUsed ?? 0);
+  if (sort === 'plays') return by((i) => i.plays ?? 0);
+  return by((i) => i.added ?? 0);
+}
 
 export type RowAction = {
   label: string;
@@ -36,6 +71,10 @@ export type RowAction = {
  * A Library section: search, a filter row, List or Artwork, and the items
  * as rows (or cards) that open on tap, play from their leading button and
  * carry their actions in one menu. The empty state names the way in.
+ *
+ * Sorted libraries (everything but the set list) are not dragged: the Sort
+ * menu orders them by Recently used, Name, Most played or Newest, and the
+ * star keeps favourites one tap away with the Favourites filter.
  */
 export function LibraryList({
   items,
@@ -52,6 +91,8 @@ export function LibraryList({
   actions = [],
   empty,
   primary,
+  sortable = true,
+  onFavourite,
   className,
 }: {
   items: LibraryItem[];
@@ -69,15 +110,26 @@ export function LibraryList({
   empty: { title: string; text?: string };
   /** The one action for this section: New preset, Import…, Split a track… */
   primary?: React.ReactNode;
+  /** Offer the Sort menu (off for lists the player orders by hand). */
+  sortable?: boolean;
+  /** Offer the favourite star and the Favourites filter. */
+  onFavourite?: (id: string, on: boolean) => void;
   className?: string;
 }) {
-  const shown = items.filter(
-    (item) =>
-      !query ||
-      `${item.title} ${item.caption ?? ''}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+  const [sort, setSort] = React.useState<SortId>(
+    items.some((i) => i.lastUsed) ? 'recent' : 'name',
   );
+  const [favouritesOnly, setFavouritesOnly] = React.useState(false);
+  const filtered = items.filter(
+    (item) =>
+      (!favouritesOnly || item.favourite) &&
+      (!query ||
+        `${item.title} ${item.caption ?? ''}`
+          .toLowerCase()
+          .includes(query.toLowerCase())),
+  );
+  const shown = sortable ? sortItems(filtered, sort) : filtered;
+  const sortLabel = SORTS.find((s) => s.id === sort)!.label;
   const menu = (item: LibraryItem) =>
     actions.length > 0 && (
       <DropdownMenu>
@@ -145,7 +197,7 @@ export function LibraryList({
         </label>
         {primary}
       </div>
-      {(filters || onView) && (
+      {(filters || onView || sortable || onFavourite) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {filters && onFilter && (
             <SegmentedControl
@@ -161,22 +213,66 @@ export function LibraryList({
               ))}
             </SegmentedControl>
           )}
-          {onView && (
-            <SegmentedControl
-              size="sm"
-              value={view}
-              onValueChange={(v) => onView(v as 'list' | 'artwork')}
-              aria-label="View"
-            >
-              <Segment value="list">List</Segment>
-              <Segment value="artwork">Artwork</Segment>
-            </SegmentedControl>
-          )}
+          <span className="flex flex-wrap items-center gap-2">
+            {onFavourite && (
+              <Toggle
+                size="sm"
+                pressed={favouritesOnly}
+                onPressedChange={setFavouritesOnly}
+              >
+                <Star weight={favouritesOnly ? 'fill' : 'regular'} /> Favourites
+              </Toggle>
+            )}
+            {sortable && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    <ArrowsDownUp /> {sortLabel}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                  {SORTS.map((s) => (
+                    <DropdownMenuCheckboxItem
+                      key={s.id}
+                      checked={sort === s.id}
+                      onSelect={() => setSort(s.id)}
+                    >
+                      {s.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {onView && (
+              <SegmentedControl
+                size="sm"
+                value={view}
+                onValueChange={(v) => onView(v as 'list' | 'artwork')}
+                aria-label="View"
+              >
+                <Segment value="list">List</Segment>
+                <Segment value="artwork">Artwork</Segment>
+              </SegmentedControl>
+            )}
+          </span>
         </div>
       )}
       {shown.length === 0 ? (
-        <EmptyState title={query ? `Nothing matches “${query}”` : empty.title}>
-          {query ? 'Try fewer letters.' : empty.text}
+        <EmptyState
+          title={
+            query
+              ? `Nothing matches “${query}”`
+              : favouritesOnly
+                ? 'No favourites here yet'
+                : empty.title
+          }
+        >
+          {query
+            ? 'Try fewer letters.'
+            : favouritesOnly
+              ? 'Tap the star on anything you reach for often.'
+              : empty.text}
         </EmptyState>
       ) : view === 'artwork' ? (
         <ul
@@ -269,6 +365,21 @@ export function LibraryList({
                     >
                       {item.badge.text}
                     </Badge>
+                  )}
+                  {onFavourite && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-pressed={!!item.favourite}
+                      aria-label={`Favourite ${item.title}`}
+                      onClick={() => onFavourite(item.id, !item.favourite)}
+                      className={cn(
+                        item.id === selected &&
+                          'text-background hover:text-foreground',
+                      )}
+                    >
+                      <Star weight={item.favourite ? 'fill' : 'regular'} />
+                    </Button>
                   )}
                   {menu(item)}
                 </>

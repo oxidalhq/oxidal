@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Caption } from '../components/ui/text';
 import { Meter, StereoMeter } from './meter';
 import { PresetStepper } from './preset-step';
+import { expect, userEvent, within } from 'storybook/test';
+import { HealthStatus } from './health-status';
 import { ResourceStrip } from './resource-strip';
 import { ScenePads } from './scene-pad';
 import { TunerFace } from './tuner-face';
@@ -168,6 +170,42 @@ export const Strip: StoryObj = {
       <ResourceStrip state="disconnected" readings={{}} />
     </div>
   ),
+};
+
+const CALM = {
+  dsp: { p95: 0.42, peak: 0.61 },
+  cpu: 37,
+  ram: { used: 2300, total: 8192 },
+  xruns: 0,
+  clips: 0,
+  temperature: 58,
+};
+
+/**
+ * The default status at the top of every screen: one word and a dot. Tap it
+ * for advice and the numbers in plain sentences. Detailed players switch to
+ * the full strip in Settings › Display.
+ */
+export const Health: StoryObj = {
+  name: 'Health in one word',
+  render: () => (
+    <div className="flex flex-wrap gap-2">
+      <HealthStatus readings={CALM} />
+      <HealthStatus readings={{ ...CALM, dsp: { p95: 0.75, peak: 0.86 } }} />
+      <HealthStatus readings={{ ...CALM, xruns: 3 }} />
+      <HealthStatus readings={{ ...CALM, clips: 2 }} />
+      <HealthStatus readings={{ ...CALM, temperature: 82 }} />
+      <HealthStatus readings={{}} state="stopped" />
+      <HealthStatus readings={{}} state="disconnected" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: /^Dropouts/ }));
+    await expect(await page.findByText(/A larger buffer/)).toBeVisible();
+    await expect(page.getByText(/3 dropouts and 0 clips/)).toBeVisible();
+  },
 };
 
 function Tuning({ day, size }: { day?: boolean; size?: 'md' | 'lg' }) {

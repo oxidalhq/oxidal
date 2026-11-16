@@ -10,7 +10,16 @@ import { Workspace } from '../patterns/workspace';
 import { LIBRARY_SECTIONS } from './library.sections';
 import { Songbook } from './songbook';
 import { SetListSection } from './set-list-section';
-import { DI, PRESETS, SOUNDS, STEM_SONGS, TONES, TRACKS } from './fixtures';
+import {
+  DI,
+  PRESETS,
+  SOUNDS,
+  STARTING_FAVOURITES,
+  STEM_SONGS,
+  TONES,
+  TRACKS,
+  withUsage,
+} from './fixtures';
 
 /**
  * Library: eight sections in one workspace, each a LibraryList with its
@@ -23,6 +32,15 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
   const [view, setView] = useState<'list' | 'artwork'>('list');
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>('p1');
+  const [favourites, setFavourites] = useState(STARTING_FAVOURITES);
+  const favourite = (id: string, on: boolean) =>
+    setFavourites((all) => {
+      const next = new Set(all);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const use = (items: LibraryItem[]) => withUsage(items, favourites);
   const { ask, dialog } = useConfirm();
   const remove = (items: LibraryItem[]) => async (id: string) => {
     const item = items.find((i) => i.id === id);
@@ -33,7 +51,13 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
       destructive: true,
     });
   };
-  const common = { query, onQuery: setQuery, selected, onOpen: setSelected };
+  const common = {
+    query,
+    onQuery: setQuery,
+    selected,
+    onOpen: setSelected,
+    onFavourite: favourite,
+  };
   const byKind = (items: LibraryItem[]) =>
     filter === 'all' ? items : items.filter((i) => i.kind === filter);
   return (
@@ -56,7 +80,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'mine' && (
           <LibraryList
             {...common}
-            items={PRESETS}
+            items={use(PRESETS)}
             view={view}
             onView={setView}
             primary={
@@ -80,7 +104,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'oxidal' && (
           <LibraryList
             {...common}
-            items={SOUNDS}
+            items={use(SOUNDS)}
             view={view}
             onView={setView}
             filters={[
@@ -130,7 +154,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'tones' && (
           <LibraryList
             {...common}
-            items={byKind(TONES)}
+            items={use(byKind(TONES))}
             filters={[
               { id: 'all', label: 'All' },
               { id: 'amp', label: 'Amps' },
@@ -159,7 +183,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'backing' && (
           <LibraryList
             {...common}
-            items={TRACKS}
+            items={use(TRACKS)}
             onPlay={() => {}}
             primary={
               <Button variant="outline">
@@ -181,7 +205,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'stems' && (
           <LibraryList
             {...common}
-            items={STEM_SONGS}
+            items={use(STEM_SONGS)}
             onPlay={() => {}}
             primary={
               <>
@@ -207,7 +231,7 @@ export function Library({ section: initial = 'mine' }: { section?: string }) {
         {section === 'di' && (
           <LibraryList
             {...common}
-            items={DI}
+            items={use(DI)}
             onPlay={() => {}}
             primary={
               <Button>

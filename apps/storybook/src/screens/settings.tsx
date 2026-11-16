@@ -238,6 +238,7 @@ function Effects() {
 
 function Display() {
   const [mode, setMode] = useState('default');
+  const [status, setStatus] = useState('simple');
   return (
     <>
       <SettingGroup title="Look">
@@ -256,6 +257,27 @@ function Display() {
             <Segment value="stage">Night</Segment>
             <Segment value="sunlight">Sunlight</Segment>
             <Segment value="epaper">E-paper</Segment>
+          </SegmentedControl>
+        </SettingRow>
+      </SettingGroup>
+      <SettingGroup title="Device status">
+        <SettingRow
+          label="Status at the top"
+          caption={
+            status === 'simple'
+              ? 'One word: All good, Busy, Dropouts or Running hot. Tap it for the numbers.'
+              : 'The full strip: processing, CPU, memory, temperature, dropouts and clips.'
+          }
+          stacked
+        >
+          <SegmentedControl
+            value={status}
+            onValueChange={setStatus}
+            aria-label="Status at the top"
+            className="w-full"
+          >
+            <Segment value="simple">Simple</Segment>
+            <Segment value="detailed">Detailed</Segment>
           </SegmentedControl>
         </SettingRow>
       </SettingGroup>
