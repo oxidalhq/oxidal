@@ -1,5 +1,9 @@
 import * as React from 'react';
-import { ArrowsClockwise, Faders } from '@phosphor-icons/react';
+import {
+  ArrowsClockwise,
+  Faders,
+  ArrowsLeftRight,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { Badge, Led } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -64,6 +68,7 @@ export function BlockQuickEditor({
   onToggle,
   onSource,
   onAll,
+  onSwap,
   layout = 'popover',
   className,
 }: {
@@ -72,6 +77,8 @@ export function BlockQuickEditor({
   onToggle: (on: boolean) => void;
   onSource?: (value: string | null) => void;
   onAll: () => void;
+  /** Open the sheet that tries other models or turns the block into another type. */
+  onSwap?: () => void;
   /**
    * `sheet` (phones) draws the main values as full-width sliders with
    * readouts, so a thumb sets them without the keyboard taking the screen;
@@ -172,14 +179,21 @@ export function BlockQuickEditor({
       )}
       <div className="flex items-center justify-between gap-2">
         {block.unsaved ? <Badge tone="warning">Unsaved</Badge> : <span />}
-        <Button size="sm" variant="ghost" onClick={onAll}>
-          <Faders /> All controls
-          {block.controls.length > main.length && (
-            <span className="text-muted-foreground">
-              · {block.controls.length}
-            </span>
+        <span className="flex flex-wrap justify-end gap-1">
+          {onSwap && (
+            <Button size="sm" variant="ghost" onClick={onSwap}>
+              <ArrowsLeftRight /> Change…
+            </Button>
           )}
-        </Button>
+          <Button size="sm" variant="ghost" onClick={onAll}>
+            <Faders /> All controls
+            {block.controls.length > main.length && (
+              <span className="text-muted-foreground">
+                · {block.controls.length}
+              </span>
+            )}
+          </Button>
+        </span>
       </div>
     </div>
   );
@@ -256,6 +270,7 @@ export function BlockEditor({
   onToggle,
   onSource,
   onReset,
+  onSwap,
 }: {
   block: BlockModel | null;
   open: boolean;
@@ -265,6 +280,7 @@ export function BlockEditor({
   onToggle: (block: string, on: boolean) => void;
   onSource?: (block: string, value: string | null) => void;
   onReset?: (block: string) => void;
+  onSwap?: (block: string) => void;
 }) {
   const [full, setFull] = React.useState(false);
   const [phone, setPhone] = React.useState(false);
@@ -286,6 +302,14 @@ export function BlockEditor({
         onOpenChange(false);
         setFull(true);
       }}
+      onSwap={
+        onSwap
+          ? () => {
+              onOpenChange(false);
+              onSwap(block.id);
+            }
+          : undefined
+      }
       layout={phone ? 'sheet' : 'popover'}
     />
   );

@@ -9,6 +9,7 @@ import {
   PencilSimple,
   SquaresFour,
   Trash,
+  ArrowsLeftRight,
 } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { previewOf } from '../lib/preview';
@@ -56,6 +57,12 @@ import {
   type PresetVersion,
 } from '../widgets/versions';
 import { CabMics } from '../widgets/cab-mics';
+import {
+  SwapSheet,
+  type BlockType,
+  type ModelChoice,
+  type Trial,
+} from './swap-sheet';
 import { VisualControl } from '../widgets/visual-control';
 import { MidiTarget } from '../widgets/midi';
 import { scaleFromMidi } from '../lib/midi';
@@ -121,6 +128,8 @@ export function RigSurface({
   inputLevel,
   onAudition,
   onAdd,
+  models,
+  blockTypes,
   className,
 }: {
   presetName: string;
@@ -144,9 +153,15 @@ export function RigSurface({
   inputLevel?: number;
   onAudition?: (id: string | null) => void;
   onAdd?: (path: ListPath, index: number) => void;
+  /** Models on the device and from TONE3000 that amps, cabs and pedals can try. */
+  models?: ModelChoice[];
+  /** Block types a block can turn into, keeping its place. */
+  blockTypes?: BlockType[];
   className?: string;
 }) {
   const phone = usePhone();
+  const [swap, setSwap] = React.useState(false);
+  const before = React.useRef<BlockModel | null>(null);
   const [compare, setCompare] = React.useState<'edited' | 'saved'>('edited');
   const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
   const [editing, setEditing] = React.useState(false);
@@ -192,6 +207,45 @@ export function RigSurface({
         at.path,
         delta < 0 ? Math.max(0, at.index - 1) : at.index + 2,
       ),
+    );
+  };
+
+  const canSwap = Boolean(models?.length || blockTypes?.length);
+  const openSwap = (id: string) => {
+    before.current = blocksOf(route).find((b) => b.id === id) ?? null;
+    setSelected(id);
+    setSwap(true);
+  };
+  const trySwap = (trial: Trial) => {
+    const was = before.current;
+    if (!was) return;
+    onRoute(
+      updateBlock(route, was.id, (b) => {
+        if (trial.kind === 'type')
+          return { ...trial.type.make(was.id), on: was.on, unsaved: true };
+        const { choice } = trial;
+        const options = b.source?.options ?? [];
+        return {
+          ...b,
+          label: choice.label,
+          caption: choice.caption,
+          unsaved: true,
+          source: b.source && {
+            ...b.source,
+            value: choice.id,
+            options: options.some((o) => o.value === choice.id)
+              ? options
+              : [
+                  ...options,
+                  {
+                    value: choice.id,
+                    label: choice.label,
+                    caption: choice.caption,
+                  },
+                ],
+          },
+        };
+      }),
     );
   };
 
@@ -348,7 +402,7 @@ export function RigSurface({
           className="hidden gap-x-6 gap-y-3 border-t border-border px-page py-3 md:grid md:grid-cols-[16rem_minmax(0,1fr)]"
         >
           <div className="grid gap-1.5">
-            <div className="flex items-baseline justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
               <div className="flex min-w-0 items-baseline gap-2">
                 <Title as="h2" size="sm" className="truncate">
                   {block.label}
@@ -357,26 +411,39 @@ export function RigSurface({
                   {block.caption ?? block.kind}
                 </Caption>
               </div>
-              <MidiTarget
-                id={`${block.id}:on`}
-                label={`${block.label} · on/off`}
-                kind="switch"
-                group="Blocks"
-                onMidi={(m) =>
-                  (m.kind === 'pc' || m.value > 0) &&
-                  toggle(block.id, !block.on)
-                }
-              >
-                <Toggle
-                  size="sm"
-                  pressed={block.on}
-                  onPressedChange={(on) => toggle(block.id, on)}
-                  disabled={reading}
+              <span className="flex items-center gap-1">
+                {canSwap && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={reading}
+                    onClick={() => openSwap(block.id)}
+                    aria-label={`Change ${block.label}`}
+                  >
+                    <ArrowsLeftRight /> Change…
+                  </Button>
+                )}
+                <MidiTarget
+                  id={`${block.id}:on`}
+                  label={`${block.label} · on/off`}
+                  kind="switch"
+                  group="Blocks"
+                  onMidi={(m) =>
+                    (m.kind === 'pc' || m.value > 0) &&
+                    toggle(block.id, !block.on)
+                  }
                 >
-                  <span className="sr-only">{block.label} </span>
-                  {block.on ? 'On' : 'Off'}
-                </Toggle>
-              </MidiTarget>
+                  <Toggle
+                    size="sm"
+                    pressed={block.on}
+                    onPressedChange={(on) => toggle(block.id, on)}
+                    disabled={reading}
+                  >
+                    <span className="sr-only">{block.label} </span>
+                    {block.on ? 'On' : 'Off'}
+                  </Toggle>
+                </MidiTarget>
+              </span>
             </div>
             {block.mics ? (
               <CabMics
@@ -458,6 +525,22 @@ export function RigSurface({
           anchor={null}
           onControl={control}
           onToggle={toggle}
+          onSwap={canSwap ? openSwap : undefined}
+        />
+      )}
+
+      {canSwap && (
+        <SwapSheet
+          block={block}
+          open={swap}
+          onOpenChange={setSwap}
+          models={models ?? []}
+          types={blockTypes ?? []}
+          onTry={trySwap}
+          onBack={() => {
+            const was = before.current;
+            if (was) onRoute(updateBlock(route, was.id, () => was));
+          }}
         />
       )}
 

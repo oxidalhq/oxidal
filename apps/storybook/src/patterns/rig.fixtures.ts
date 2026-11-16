@@ -5,7 +5,7 @@ import type { ChainLaneModel } from '../widgets/chain';
 
 type RigLane = Omit<ChainLaneModel, 'blocks'> & { blocks: BlockModel[] };
 
-const AMPS = [
+export const AMPS = [
   { value: 'plexi', label: 'Plexi 50', caption: 'NAM · 48 kHz' },
   { value: 'jcm', label: 'JCM 800 crunch', caption: 'NAM · 48 kHz' },
   { value: 'ac30', label: 'AC30 top boost', caption: 'NAM A2 · 48 kHz' },
@@ -13,14 +13,14 @@ const AMPS = [
   { value: 'b15', label: 'B15 bass', caption: 'NAM · 48 kHz' },
 ];
 
-const CABS = [
+export const CABS = [
   { value: 'gb412', label: '4×12 Greenback', caption: 'IR · SM57 · 2 cm' },
   { value: 'v30', label: '4×12 V30', caption: 'IR · R121 · 5 cm' },
   { value: 'blue212', label: '2×12 Blue', caption: 'IR · SM57 · edge' },
   { value: 'tweed112', label: '1×12 Tweed', caption: 'IR · MD421' },
 ];
 
-const amp = (
+export const amp = (
   id: string,
   label: string,
   model: string,
@@ -90,7 +90,7 @@ const amp = (
   ],
 });
 
-const cab = (
+export const cab = (
   id: string,
   label: string,
   ir: string,
@@ -205,7 +205,7 @@ const cab = (
   ],
 });
 
-const delay = (id: string): BlockModel => ({
+export const delay = (id: string): BlockModel => ({
   id,
   label: 'Echo',
   kind: 'time',
@@ -275,7 +275,7 @@ const delay = (id: string): BlockModel => ({
   ],
 });
 
-const reverb = (id: string, caption: string): BlockModel => ({
+export const reverb = (id: string, caption: string): BlockModel => ({
   id,
   label: 'Bloom',
   kind: 'time',
@@ -346,7 +346,7 @@ const reverb = (id: string, caption: string): BlockModel => ({
   ],
 });
 
-const drive = (id: string): BlockModel => ({
+export const drive = (id: string): BlockModel => ({
   id,
   label: 'TS9',
   kind: 'pedal',
@@ -360,7 +360,7 @@ const drive = (id: string): BlockModel => ({
   ],
 });
 
-const gate = (id: string): BlockModel => ({
+export const gate = (id: string): BlockModel => ({
   id,
   label: 'Gate',
   kind: 'lv2',
@@ -390,7 +390,7 @@ const gate = (id: string): BlockModel => ({
   ],
 });
 
-const mod = (id: string): BlockModel => ({
+export const mod = (id: string): BlockModel => ({
   id,
   label: 'Motion',
   kind: 'mod',

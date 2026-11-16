@@ -10,6 +10,8 @@ import {
 import { RouteView } from '../widgets/route-view';
 import { PARALLEL_ROUTE, SCENES, SERIAL, SERIAL_ROUTE } from './rig.fixtures';
 import { RigSurface, type RigRoute } from './rig-surface';
+import { bigRig } from './big-rig.fixtures';
+import { BLOCK_TYPES, MODELS } from './swap.fixtures';
 import { useRigDemo } from './use-rig-demo';
 
 /**
@@ -25,11 +27,19 @@ const meta: Meta = {
 };
 export default meta;
 
-function Rig({ initial }: { initial: RigRoute }) {
+function Rig({
+  initial,
+  swap = false,
+  name = 'Rhythm section',
+}: {
+  initial: RigRoute;
+  swap?: boolean;
+  name?: string;
+}) {
   const rig = useRigDemo(initial);
   return (
     <RigSurface
-      presetName="Rhythm section"
+      presetName={name}
       playing
       route={rig.route}
       saved={rig.saved}
@@ -48,6 +58,8 @@ function Rig({ initial }: { initial: RigRoute }) {
       inputLevel={rig.input}
       onAudition={rig.onAudition}
       onAdd={rig.onAdd}
+      models={swap ? MODELS : undefined}
+      blockTypes={swap ? BLOCK_TYPES : undefined}
     />
   );
 }
@@ -251,4 +263,74 @@ Serial.play = async ({ canvasElement }) => {
     expect(canvas.getByRole('button', { name: /Friday gig/ })).toBeVisible(),
   );
   await expect(canvas.queryByRole('button', { name: /1 change/ })).toBeNull();
+};
+
+/**
+ * Tone chasing on a big rig: seven amp branches, nested splits, a shared
+ * delay and a reverb split. Select any block and press Change… to try
+ * other models from the device or TONE3000, or turn it into another type
+ * (a delay into a reverb). It plays at once; Back returns to what it was.
+ */
+export const ToneChasing: StoryObj = {
+  name: 'Complex chain · tone chasing',
+  render: () => <Rig initial={bigRig(7)} swap name="Stage rig" />,
+};
+
+ToneChasing.play = async ({ canvasElement }) => {
+  const canvas = within(canvasElement);
+  const page = within(canvasElement.ownerDocument.body);
+  const phone = canvasElement.ownerDocument.defaultView!.innerWidth < 768;
+  const change = async (name: RegExp, label: string) => {
+    await userEvent.click(canvas.getAllByRole('button', { name })[0]!);
+    if (phone) {
+      const sheet = await page.findByRole('dialog');
+      await userEvent.click(
+        within(sheet).getByRole('button', { name: /Change…/ }),
+      );
+    } else {
+      await userEvent.click(
+        canvas.getByRole('button', { name: `Change ${label}` }),
+      );
+    }
+    return within(await page.findByRole('dialog', { name: `Change ${label}` }));
+  };
+
+  // Swap the clean amp for another capture, fetch one from TONE3000, then go back.
+  let sheet = await change(/^Twin clean/, 'Twin clean');
+  await userEvent.click(
+    sheet.getByRole('button', { name: 'Try AC30 top boost' }),
+  );
+  await expect(
+    canvas.getAllByRole('button', {
+      name: /^AC30 top boost/,
+      hidden: true,
+    }).length,
+  ).toBeGreaterThan(1);
+  await userEvent.click(
+    sheet.getByRole('button', { name: 'Get and try High gain lead' }),
+  );
+  await expect(
+    await sheet.findByRole(
+      'button',
+      { name: 'AC30 top boost' },
+      { timeout: 3000 },
+    ),
+  ).toBeVisible();
+  await expect(
+    sheet.getByRole('button', { name: 'High gain lead', pressed: true }),
+  ).toBeVisible();
+  await userEvent.click(
+    sheet.getByRole('button', { name: /Back to Twin clean/ }),
+  );
+  await userEvent.click(sheet.getByRole('button', { name: 'Done' }));
+  await waitFor(() => expect(page.queryByRole('dialog')).toBeNull());
+
+  // Turn the delay into a shimmer reverb in the same place.
+  sheet = await change(/^Echo/, 'Echo');
+  await userEvent.click(sheet.getByRole('button', { name: 'Shimmer' }));
+  await userEvent.click(sheet.getByRole('button', { name: 'Keep' }));
+  await waitFor(() => expect(page.queryByRole('dialog')).toBeNull());
+  await expect(
+    canvas.getAllByRole('button', { name: /^Shimmer/ }).length,
+  ).toBeGreaterThan(0);
 };
