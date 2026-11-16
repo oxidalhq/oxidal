@@ -6,6 +6,7 @@ import { Card, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { List, ListRow } from '../components/ui/list-row';
 import { NumberField } from '../components/ui/number-field';
 import { StepProgress } from '../components/ui/states';
+import { EvenOut, LevelMatch, SoundCheck } from '../patterns/guitar-tools';
 import { Caption, Readout } from '../components/ui/text';
 import { PageHeading } from '../patterns/app-shell';
 import { Meter } from '../widgets/meter';
@@ -83,9 +84,10 @@ export function Guitars() {
           </div>
         </Card>
         <div className="grid content-start gap-4">
+          <SoundCheck />
           <Card>
             <CardHeader>
-              <CardTitle>Sound check</CardTitle>
+              <CardTitle>Input level</CardTitle>
               <Readout size="sm">{level.toFixed(1)} dB</Readout>
             </CardHeader>
             <Meter
@@ -114,20 +116,8 @@ export function Guitars() {
               </CardFooter>
             )}
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Even out</CardTitle>
-              <Badge>Last run 96 × 3</Badge>
-            </CardHeader>
-            <Caption>
-              Plays every preset for a moment and matches their loudness so no
-              preset jumps out on stage. Takes about a minute per ten presets.
-            </Caption>
-            <CardFooter>
-              <Button variant="outline">Even out all</Button>
-              <Button variant="ghost">Level match…</Button>
-            </CardFooter>
-          </Card>
+          <LevelMatch />
+          <EvenOut />
         </div>
       </div>
     </>
