@@ -57,6 +57,8 @@ import {
 } from '../widgets/block-editor';
 import { RouteView } from '../widgets/route-view';
 import { ScenePads, type Scene } from '../widgets/scene-pad';
+import { SceneEditor, type SceneModel } from '../widgets/scene-editor';
+import { applyScene, sceneDifferences, splitSceneEdit } from '../lib/scene';
 import {
   ChangeList,
   CompareToggle,
@@ -148,6 +150,7 @@ export function RigSurface({
   activeScene,
   onScene,
   sceneChanged,
+  sceneSettings,
   levels,
   inputLevel,
   onAudition,
@@ -174,6 +177,8 @@ export function RigSurface({
   activeScene: string | null;
   onScene: (id: string) => void;
   sceneChanged?: string[];
+  /** What each scene plays, for the scene editor; scenes without settings start from the preset. */
+  sceneSettings?: SceneModel[];
   levels?: Record<string, number>;
   inputLevel?: number;
   onAudition?: (id: string | null) => void;
@@ -197,9 +202,35 @@ export function RigSurface({
   const [scope, setScope] = React.useState<'scene' | 'preset'>('preset');
   const [editing, setEditing] = React.useState(false);
   const [showScenes, setShowScenes] = React.useState(false);
+  const [sceneEditor, setSceneEditor] = React.useState(false);
+  const [sceneModels, setSceneModels] = React.useState<SceneModel[]>(() =>
+    scenes.map(
+      (s) =>
+        sceneSettings?.find((m) => m.id === s.id) ?? {
+          id: s.id,
+          name: s.name,
+          on: {},
+          levels: {},
+        },
+    ),
+  );
   const [sheet, setSheet] = React.useState(false);
   const [full, setFull] = React.useState(false);
-  const shown = compare === 'saved' ? saved : route;
+  const sceneModel =
+    scope === 'scene' && compare !== 'saved'
+      ? sceneModels.find((m) => m.id === activeScene)
+      : undefined;
+  const shown = compare === 'saved' ? saved : applyScene(route, sceneModel);
+  // In "This scene", on or off and branch levels go to the playing scene;
+  // settings, moves and new blocks still change the whole preset.
+  const change = (next: RigRoute) => {
+    if (!sceneModel) return onRoute(next);
+    const edit = splitSceneEdit(next, route, sceneModel);
+    setSceneModels((all) =>
+      all.map((m) => (m.id === sceneModel.id ? edit.scene : m)),
+    );
+    onRoute(edit.route);
+  };
   const blocks = blocksOf(shown);
   const [selected, setSelected] = React.useState<string | null>(
     blocks[2]?.id ?? blocks[0]?.id ?? null,
@@ -226,7 +257,7 @@ export function RigSurface({
     onRoute(next);
   };
   const toggle = (id: string, on: boolean) =>
-    onRoute(updateBlock(route, id, (b) => ({ ...b, on })));
+    change(updateBlock(shown, id, (b) => ({ ...b, on })));
   const shift = (delta: -1 | 1) => {
     if (!selected) return;
     const at = locate(route, selected);
@@ -390,26 +421,42 @@ export function RigSurface({
             <Segment value="scene">This scene</Segment>
             <Segment value="preset">Whole preset</Segment>
           </SegmentedControl>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setSceneEditor(true)}
+          >
+            <SquaresFour /> Edit scenes…
+          </Button>
           {reading && <Badge tone="selected">Hearing the saved version</Badge>}
+          {sceneModel && (
+            <Caption as="p" role="status" className="basis-full text-xs">
+              Editing {sceneModel.name}: switching a block on or off and branch
+              levels change this scene only. Settings and moves change the whole
+              preset; for other settings in one scene, duplicate the block.
+            </Caption>
+          )}
         </div>
       </header>
 
       {showScenes && (
-        <div className="px-page">
+        <div className="grid gap-2 px-page">
           <ScenePads scenes={scenes} active={activeScene} onSelect={onScene} />
         </div>
       )}
 
       <RouteView
         route={withPreview(shown)}
-        onChange={(next) => onRoute(next)}
+        onChange={change}
         selected={selected}
         onSelect={select}
         editing={editing && !reading}
         levels={levels}
         inputLevel={inputLevel}
         onAudition={onAudition}
-        sceneChanged={sceneChanged}
+        sceneChanged={
+          sceneModel ? sceneDifferences(route, sceneModel) : sceneChanged
+        }
         onAdd={effects ? (path, index) => setAdding({ path, index }) : onAdd}
       />
 
@@ -628,6 +675,28 @@ export function RigSurface({
           }}
         />
       )}
+
+      <Sheet open={sceneEditor} onOpenChange={setSceneEditor}>
+        <SheetContent
+          onOpenChange={setSceneEditor}
+          className="md:w-[min(56rem,100vw)]"
+        >
+          <SheetHeader
+            title="Edit scenes"
+            description={`What each scene of ${presetName} plays. Tap a scene name to hear it.`}
+          />
+          <SheetBody>
+            <SceneEditor
+              route={route}
+              onRoute={onRoute}
+              scenes={sceneModels}
+              onScenes={setSceneModels}
+              active={activeScene}
+              onSelect={onScene}
+            />
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
 
       {canSwap && (
         <SwapSheet

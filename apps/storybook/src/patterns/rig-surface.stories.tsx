@@ -14,6 +14,7 @@ import { bigRig } from './big-rig.fixtures';
 import { BLOCK_TYPES, MODELS } from './swap.fixtures';
 import { EFFECTS } from './block-chooser.data';
 import { useRigDemo } from './use-rig-demo';
+import { FOUR_JOBS, FOUR_SCENES } from '../widgets/scene-editor.fixtures';
 
 /**
  * The rig: shape a sound. Try: hold a block to hear the rig without it;
@@ -338,4 +339,59 @@ ToneChasing.play = async ({ canvasElement }) => {
   await expect(
     canvas.getAllByRole('button', { name: /^Shimmer/ }).length,
   ).toBeGreaterThan(0);
+};
+
+function ScenesRig() {
+  const rig = useRigDemo(FOUR_JOBS);
+  const [scene, setScene] = useState('verse');
+  return (
+    <RigSurface
+      presetName="Worship rig"
+      playing
+      route={rig.route}
+      saved={rig.saved}
+      onRoute={rig.onRoute}
+      versions={rig.versions}
+      currentVersion={rig.current}
+      onVersion={rig.onVersion}
+      onSaveVersion={rig.onSaveVersion}
+      onSaveVersionAs={rig.onSaveVersionAs}
+      onMakeDefault={rig.onMakeDefault}
+      scenes={FOUR_SCENES.map((s, i) => ({ ...s, number: i + 1 }))}
+      sceneSettings={FOUR_SCENES}
+      activeScene={scene}
+      onScene={setScene}
+      levels={rig.levels}
+      inputLevel={rig.input}
+    />
+  );
+}
+
+/**
+ * Two ways to edit a scene. Edit scenes… opens the grid: every block and
+ * branch against every scene (here Lead is brought in under Chorus). Or
+ * choose This scene and work in the chain: on or off and branch levels go
+ * to the playing scene.
+ */
+export const EditingScenes: StoryObj = {
+  name: 'Editing scenes',
+  render: () => <ScenesRig />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Edit scenes…' }));
+    const sheet = within(
+      await page.findByRole('dialog', { name: 'Edit scenes' }),
+    );
+    const lead = sheet.getByRole('switch', { name: 'Lead branch in Chorus' });
+    await userEvent.click(lead);
+    await expect(lead).toHaveAttribute('aria-checked', 'true');
+    await userEvent.keyboard('{Escape}');
+
+    // The same thing from the chain: This scene, then switch a block off.
+    await userEvent.click(canvas.getByRole('radio', { name: 'This scene' }));
+    await expect(
+      await canvas.findByText(/Editing Verse: switching a block/),
+    ).toBeVisible();
+  },
 };
